@@ -54,17 +54,21 @@
 - [x] Page layout with h-screen + flex-col + overflow-hidden for proper virtual scroll
 - [x] API fix: volume field parseInt() conversion for single and bulk import
 
-#### 1b-interact: NOT STARTED — NEXT PRIORITY
-- [ ] Drag-to-reorder rows
-- [ ] Removed Terms overlay
+#### 1b-interact: COMPLETE
+- [x] Drag-to-reorder rows via ⁞ handle with blue line drop indicators
+- [x] Reorder persists to database (batch PATCH sortOrder with error handling)
+- [x] Removed Terms overlay (archive on remove, 🗑 button with badge, full overlay, ↩ restore, Escape to close)
+- [x] Bulk remove archives all selected rows
 
-#### 1b-tags: NOT STARTED
-- [ ] Inline tag editing (click pill to edit, click empty space to add)
-- [ ] Batch tag operations (add/remove tags across selected rows)
+#### 1b-tags: COMPLETE
+- [x] Inline tag editing (click pill to edit, click + to add, clear to delete)
+- [x] Batch tag operations (add/remove tags propagated across all selected rows)
+- [x] Right-click tag pill to filter, left-click to edit
+- [x] TagCell separate component with own editing state
 
-#### 1b-controls: NOT STARTED
-- [ ] Copy Table Data button
-- [ ] CSV download
+#### 1b-controls: IN PROGRESS — NEXT PRIORITY
+- [x] Copy Table Data button (copies visible rows as TSV to clipboard)
+- [x] CSV download button (downloads all keywords as CSV file)
 - [ ] Column resize drag handles
 
 ### 1c. MT + TIF Tables: NOT STARTED
