@@ -592,3 +592,27 @@
   color: var(--accent, #1f6feb);
   background: var(--accent-light, #ddf4ff);
 }
+/* ── Cell Borders (gridlines) ───────────────────────────── */
+.ast-tbl th,
+.ast-tbl td {
+  border: 1px solid var(--border, #d1d5db);
+}
+
+/* ── Column Resize Handles (full table height) ──────────── */
+.ast-tbl thead th {
+  overflow: visible;
+}
+.ast-col-resize {
+  position: absolute;
+  top: 0;
+  right: -2px;
+  width: 5px;
+  height: 3000px;
+  cursor: col-resize;
+  z-index: 2;
+  background: transparent;
+}
+.ast-col-resize:hover {
+  background: var(--accent, #3b82f6);
+  opacity: 0.4;
+}

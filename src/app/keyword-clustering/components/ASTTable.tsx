@@ -83,6 +83,8 @@ export default function ASTTable({
   const [dropTarget, setDropTarget] = useState<{ id: string; pos: 'above' | 'below' } | null>(null);
   const [removedTerms, setRemovedTerms] = useState<RemovedKeyword[]>([]);
   const [showRemovedOverlay, setShowRemovedOverlay] = useState(false);
+  const [colWidths, setColWidths] = useState([22, 160, 80, 110, 90, 100, 110]);
+  const resizeRef = useRef<{ col: number; startX: number; startW: number } | null>(null);
 
   const visible = useMemo(() => {
     return keywords.filter(k => {
@@ -297,6 +299,31 @@ export default function ASTTable({
   }
   function googleSearch(kw: string) { window.open('https://www.google.com/search?q=' + kw.trim().split(/\s+/).join('+'), '_blank'); }
 
+  function handleColResize(e: React.MouseEvent, colIdx: number) {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX;
+    const startW = colWidths[colIdx];
+    resizeRef.current = { col: colIdx, startX, startW };
+    function onMove(ev: MouseEvent) {
+      if (!resizeRef.current) return;
+      const delta = ev.clientX - resizeRef.current.startX;
+      const newW = Math.max(30, resizeRef.current.startW + delta);
+      setColWidths(prev => { const next = [...prev]; next[resizeRef.current!.col] = newW; return next; });
+    }
+    function onUp() {
+      resizeRef.current = null;
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  }
+
   function handleDragStart(e: React.DragEvent, id: string) {
     setDragId(id); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', id);
     const tr = (e.target as HTMLElement).closest('tr');
@@ -364,23 +391,23 @@ export default function ASTTable({
       </div>
       <div className="ast-frame" ref={frameRef} onScroll={handleScroll}>
         {loading ? (<div className="ast-empty"><div className="ast-empty-icon">⏳</div><div>Loading keywords…</div></div>) : (
-          <table className="ast-tbl">
+          <table className="ast-tbl" style={{ tableLayout: 'fixed' }}>
             <colgroup>
-              <col style={{ width: 22 }} /><col style={{ width: 160 }} />
-              <col style={{ width: 80 }} className={showVol ? '' : 'ast-col-hidden'} />
-              <col style={{ width: 110 }} />
-              <col style={{ width: 90 }} className={showTags ? '' : 'ast-col-hidden'} />
-              <col style={{ width: 100 }} className={showTopics ? '' : 'ast-col-hidden'} />
-              <col style={{ width: 110 }} className={showTopicDesc ? '' : 'ast-col-hidden'} />
+              <col style={{ width: colWidths[0] }} /><col style={{ width: colWidths[1] }} />
+              <col style={{ width: colWidths[2] }} className={showVol ? '' : 'ast-col-hidden'} />
+              <col style={{ width: colWidths[3] }} />
+              <col style={{ width: colWidths[4] }} className={showTags ? '' : 'ast-col-hidden'} />
+              <col style={{ width: colWidths[5] }} className={showTopics ? '' : 'ast-col-hidden'} />
+              <col style={{ width: colWidths[6] }} className={showTopicDesc ? '' : 'ast-col-hidden'} />
             </colgroup>
             <thead><tr>
-              <th style={{ width: 22, textAlign: 'center', padding: '3px 2px' }}><input ref={selectAllRef} type="checkbox" checked={selectAllState === 'all'} onChange={e => handleToggleAll(e.target.checked)} style={{ width: 11, height: 11, accentColor: 'var(--accent)', cursor: 'pointer' }} /></th>
-              <th><div className="th-inner">Keyword <span className="ast-chip">{visible.length}</span></div></th>
-              <th className={showVol ? '' : 'ast-col-hidden'}><div className="th-inner">Volume <span className="ast-chip">{showVol ? fmtV(volSum) : '—'}</span></div></th>
-              <th><div className="th-inner">Sorting Status</div></th>
-              <th className={showTags ? '' : 'ast-col-hidden'}><div className="th-inner">Tags<input type="text" className="ast-search-inp" placeholder="search tags…" value={tagQ} onChange={e => setTagQ(e.target.value)} onClick={e => e.stopPropagation()} style={{ width: 72, fontSize: 8, marginLeft: 3 }} /></div></th>
-              <th className={showTopics ? '' : 'ast-col-hidden'}><div className="th-inner">Topics<input type="text" className="ast-search-inp" placeholder="search topics…" value={topicQ} onChange={e => setTopicQ(e.target.value)} onClick={e => e.stopPropagation()} style={{ width: 72, fontSize: 8, marginLeft: 3 }} /></div></th>
-              <th className={showTopicDesc ? '' : 'ast-col-hidden'}><div className="th-inner">Topic Descriptions</div></th>
+              <th style={{ width: colWidths[0], textAlign: 'center', padding: '3px 2px' }}><input ref={selectAllRef} type="checkbox" checked={selectAllState === 'all'} onChange={e => handleToggleAll(e.target.checked)} style={{ width: 11, height: 11, accentColor: 'var(--accent)', cursor: 'pointer' }} /></th>
+              <th style={{ position: 'relative' }}><div className="th-inner">Keyword <span className="ast-chip">{visible.length}</span></div><div className="ast-col-resize" onMouseDown={e => handleColResize(e, 1)} /></th>
+              <th className={showVol ? '' : 'ast-col-hidden'} style={{ position: 'relative' }}><div className="th-inner">Volume <span className="ast-chip">{showVol ? fmtV(volSum) : '—'}</span></div><div className="ast-col-resize" onMouseDown={e => handleColResize(e, 2)} /></th>
+              <th style={{ position: 'relative' }}><div className="th-inner">Sorting Status</div><div className="ast-col-resize" onMouseDown={e => handleColResize(e, 3)} /></th>
+              <th className={showTags ? '' : 'ast-col-hidden'} style={{ position: 'relative' }}><div className="th-inner">Tags<input type="text" className="ast-search-inp" placeholder="search tags…" value={tagQ} onChange={e => setTagQ(e.target.value)} onClick={e => e.stopPropagation()} style={{ width: 72, fontSize: 8, marginLeft: 3 }} /></div><div className="ast-col-resize" onMouseDown={e => handleColResize(e, 4)} /></th>
+              <th className={showTopics ? '' : 'ast-col-hidden'} style={{ position: 'relative' }}><div className="th-inner">Topics<input type="text" className="ast-search-inp" placeholder="search topics…" value={topicQ} onChange={e => setTopicQ(e.target.value)} onClick={e => e.stopPropagation()} style={{ width: 72, fontSize: 8, marginLeft: 3 }} /></div><div className="ast-col-resize" onMouseDown={e => handleColResize(e, 5)} /></th>
+              <th className={showTopicDesc ? '' : 'ast-col-hidden'} style={{ position: 'relative' }}><div className="th-inner">Topic Descriptions</div><div className="ast-col-resize" onMouseDown={e => handleColResize(e, 6)} /></th>
             </tr></thead>
             <tbody>
               <tr style={{ height: topPad }} aria-hidden="true"><td colSpan={7} style={{ padding: 0, border: 'none' }} /></tr>
