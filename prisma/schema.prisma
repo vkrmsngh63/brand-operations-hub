@@ -1,0 +1,107 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Keyword {
+  id             String   @id @default(uuid())
+  projectId      String
+  keyword        String
+  volume         Int      @default(0)
+  sortingStatus  String   @default("Unsorted")
+  tags           String   @default("")
+  topic          String   @default("")
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+model CanvasNode {
+  id                Int      @id
+  projectId         String
+  title             String   @default("")
+  description       String   @default("")
+  x                 Float    @default(0)
+  y                 Float    @default(0)
+  w                 Float    @default(220)
+  h                 Float    @default(120)
+  baseY             Float    @default(0)
+  pathwayId         Int?
+  parentId          Int?
+  relationshipType  String   @default("")
+  linkedKwIds       Json     @default("[]")
+  kwPlacements      Json     @default("{}")
+  collapsedLinear   Boolean  @default(false)
+  collapsedNested   Boolean  @default(false)
+  narrativeBridge   String   @default("")
+  altTitles         Json     @default("[]")
+  userMinH          Float?
+  connCP            Json?
+  connOutOff        Json?
+  connInOff         Json?
+  sortOrder         Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  project           Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+model Pathway {
+  id        Int      @id
+  projectId String
+  createdAt DateTime @default(now())
+
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+model SisterLink {
+  id        String   @id @default(uuid())
+  projectId String
+  nodeA     Int
+  nodeB     Int
+  createdAt DateTime @default(now())
+
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+model CanvasState {
+  id             String  @id @default(uuid())
+  projectId      String  @unique
+  nextNodeId     Int     @default(1)
+  nextPathwayId  Int     @default(1)
+  viewX          Float   @default(0)
+  viewY          Float   @default(0)
+  zoom           Float   @default(1)
+
+  project        Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model Project {
+  id          String        @id @default(uuid())
+  userId      String
+  name        String        @default("Untitled Project")
+  workflow    String        @default("keyword-clustering")
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  keywords    Keyword[]
+  canvasNodes CanvasNode[]
+  pathways    Pathway[]
+  sisterLinks SisterLink[]
+  canvasState CanvasState?
+}
