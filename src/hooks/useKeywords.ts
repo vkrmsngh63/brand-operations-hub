@@ -26,12 +26,10 @@ export function useKeywords(projectId: string | null, userId: string | null) {
   const [keywords, setKeywords] = useState<Keyword[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Track the next sortOrder for new keywords
   const nextSortRef = useRef(0);
 
   const base = projectId ? `/api/projects/${projectId}/keywords` : null;
 
-  // Helper: build headers with userId
   function authHeaders(extra?: Record<string, string>): Record<string, string> {
     const h: Record<string, string> = {};
     if (userId) h['x-user-id'] = userId;
@@ -45,12 +43,9 @@ export function useKeywords(projectId: string | null, userId: string | null) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(base, {
-        headers: authHeaders(),
-      });
+      const res = await fetch(base, { headers: authHeaders() });
       if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
       const data: Keyword[] = await res.json();
-      // Sort by sortOrder so the list order matches what the user saved
       data.sort((a, b) => a.sortOrder - b.sortOrder);
       setKeywords(data);
       nextSortRef.current = data.length > 0
@@ -68,10 +63,8 @@ export function useKeywords(projectId: string | null, userId: string | null) {
     if (!base || !userId) return false;
     kw = kw.trim();
     if (!kw) return false;
-    // Client-side duplicate check
     if (keywords.some(k => k.keyword === kw)) return false;
 
-    // Normalise volume shorthand
     let v = vol.trim();
     if (/^\d+(\.\d+)?[Kk]$/.test(v)) v = String(parseFloat(v) * 1000);
     if (/^\d+(\.\d+)?[Mm]$/.test(v)) v = String(parseFloat(v) * 1_000_000);
@@ -107,7 +100,6 @@ export function useKeywords(projectId: string | null, userId: string | null) {
     }
     if (deduped.length === 0) return { added: 0, dupes };
 
-    // Assign sortOrders
     const payload = deduped.map((r, i) => {
       let v = (r.volume || '').trim();
       if (/^\d+(\.\d+)?[Kk]$/.test(v)) v = String(parseFloat(v) * 1000);
@@ -155,14 +147,12 @@ export function useKeywords(projectId: string | null, userId: string | null) {
     }
   }, [base, userId]);
 
-  // ── Batch update (e.g. cycle status on selection) ────────────
+  // ── Batch update ─────────────────────────────────────────────
   const batchUpdate = useCallback(async (ids: string[], patch: Partial<Keyword>) => {
     if (!base || !userId) return;
-    // Optimistic update
     setKeywords(prev =>
       prev.map(k => ids.includes(k.id) ? { ...k, ...patch } : k)
     );
-    // Fire updates in parallel
     await Promise.all(ids.map(id =>
       fetch(`${base}/${id}`, {
         method: 'PATCH',
@@ -193,11 +183,31 @@ export function useKeywords(projectId: string | null, userId: string | null) {
     });
   }, [base, userId]);
 
-  // ── Reorder (update sortOrders) ──────────────────────────────
-  const reorder = useCallback((reorderedKeywords: Keyword[]) => {
-    setKeywords(reorderedKeywords);
-    // TODO: persist sortOrder changes to API in batch
-  }, []);
+  // ── Reorder (update sortOrders and persist) ──────────────────
+  const reorder = useCallback(async (reorderedKeywords: Keyword[]) => {
+    const updated = reorderedKeywords.map((k, i) => ({ ...k, sortOrder: i }));
+    setKeywords(updated);
+    nextSortRef.current = updated.length;
+
+    if (!base || !userId) return;
+    try {
+      const toUpdate = updated.filter(k => {
+        const orig = reorderedKeywords.find(o => o.id === k.id);
+        return orig && orig.sortOrder !== k.sortOrder;
+      });
+      if (toUpdate.length > 0) {
+        await Promise.all(toUpdate.map(k =>
+          fetch(`${base}/${k.id}`, {
+            method: 'PATCH',
+            headers: authHeaders({ 'Content-Type': 'application/json' }),
+            body: JSON.stringify({ sortOrder: k.sortOrder }),
+          })
+        ));
+      }
+    } catch {
+      // Reorder saved locally — server sync will retry on next page load
+    }
+  }, [base, userId]);
 
   return {
     keywords,

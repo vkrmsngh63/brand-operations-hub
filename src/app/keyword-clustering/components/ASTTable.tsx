@@ -26,6 +26,16 @@ function fmtV(v: string | number): string {
   return String(n);
 }
 
+// ── Removed keyword record ─────────────────────────────────────
+interface RemovedKeyword {
+  id: string;
+  keyword: string;
+  volume: string;
+  sortingStatus: SortingStatus;
+  tags: string;
+  removedAt: number;
+}
+
 // ── Props ──────────────────────────────────────────────────────
 interface ASTTableProps {
   keywords: Keyword[];
@@ -59,9 +69,9 @@ export default function ASTTable({
   const [showTags, setShowTags] = useState(true);
   const [showTopics, setShowTopics] = useState(true);
   const [showTopicDesc, setShowTopicDesc] = useState(true);
-  const [tagFilter, setTagFilter] = useState('');   // active tag pill filter
-  const [tagQ, setTagQ] = useState('');              // tag header search
-  const [topicQ, setTopicQ] = useState('');           // topic header search
+  const [tagFilter, setTagFilter] = useState('');
+  const [tagQ, setTagQ] = useState('');
+  const [topicQ, setTopicQ] = useState('');
 
   // ── Selection ──────────────────────────────────────────────
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -87,15 +97,21 @@ export default function ASTTable({
   const kwInputRef = useRef<HTMLInputElement>(null);
   const volInputRef = useRef<HTMLInputElement>(null);
 
+  // ── Drag-to-reorder state ──────────────────────────────────
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<{ id: string; pos: 'above' | 'below' } | null>(null);
+
+  // ── Removed Terms state ────────────────────────────────────
+  const [removedTerms, setRemovedTerms] = useState<RemovedKeyword[]>([]);
+  const [showRemovedOverlay, setShowRemovedOverlay] = useState(false);
+
   // ── Filtered / visible keywords ────────────────────────────
   const visible = useMemo(() => {
     return keywords.filter(k => {
-      // Status filters
       if ((k.sortingStatus === 'Completely Sorted' || k.sortingStatus === 'AI-Sorted') && !showSorted) return false;
       if (k.sortingStatus === 'Partially Sorted' && !showPartial) return false;
       if (k.sortingStatus === 'Unsorted' && !showUnsorted) return false;
 
-      // Keyword search (all words must match as whole words)
       if (searchQ) {
         const words = searchQ.trim().split(/\s+/).filter(Boolean);
         const kl = k.keyword.toLowerCase();
@@ -105,13 +121,11 @@ export default function ASTTable({
         })) return false;
       }
 
-      // Tag pill filter
       if (tagFilter) {
         const tags = (k.tags || '').split(',').map(t => t.trim().toLowerCase());
         if (!tags.includes(tagFilter.toLowerCase())) return false;
       }
 
-      // Tag header search
       if (tagQ) {
         const words = tagQ.trim().split(/\s+/).filter(Boolean);
         const tagsStr = (k.tags || '').toLowerCase();
@@ -121,7 +135,6 @@ export default function ASTTable({
         })) return false;
       }
 
-      // Topic header search (exact pill match)
       if (topicQ) {
         const pills = (k.topic || '').split('|').map(t => t.trim()).filter(Boolean);
         if (!pills.some(p => p.toLowerCase() === topicQ.toLowerCase())) return false;
@@ -187,6 +200,17 @@ export default function ASTTable({
     }
   }, [selectAllState]);
 
+  // ── Close overlay on Escape ────────────────────────────────
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape' && showRemovedOverlay) {
+        setShowRemovedOverlay(false);
+      }
+    }
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [showRemovedOverlay]);
+
   // ── Handlers ───────────────────────────────────────────────
 
   function handleToggleAll(checked: boolean) {
@@ -215,16 +239,50 @@ export default function ASTTable({
     }
   }
 
+  // ── Remove: archives to Removed Terms, then deletes ────────
   async function handleRemove(k: Keyword) {
     if (selected.has(k.id) && selected.size > 0) {
       const ids = [...selected];
+      const toArchive = keywords.filter(kw => ids.includes(kw.id));
+      setRemovedTerms(prev => [
+        ...toArchive.map(kw => ({
+          id: kw.id,
+          keyword: kw.keyword,
+          volume: kw.volume,
+          sortingStatus: 'Unsorted' as SortingStatus,
+          tags: '',
+          removedAt: Date.now(),
+        })),
+        ...prev,
+      ]);
       await onBulkDelete(ids);
       setSelected(new Set());
-      showToast(`✓ Removed ${ids.length} selected keyword${ids.length !== 1 ? 's' : ''}.`);
+      showToast(`✓ Removed ${ids.length} keyword${ids.length !== 1 ? 's' : ''} → Removed Terms.`);
     } else {
+      setRemovedTerms(prev => [{
+        id: k.id,
+        keyword: k.keyword,
+        volume: k.volume,
+        sortingStatus: 'Unsorted',
+        tags: '',
+        removedAt: Date.now(),
+      }, ...prev]);
       await onDeleteKeyword(k.id);
       setSelected(prev => { const n = new Set(prev); n.delete(k.id); return n; });
-      showToast('Keyword removed.');
+      showToast(`Keyword removed → Removed Terms.`);
+    }
+  }
+
+  // ── Restore keyword from Removed Terms ─────────────────────
+  async function handleRestore(rm: RemovedKeyword) {
+    if (keywords.some(k => k.keyword === rm.keyword)) {
+      showToast(`⚠ "${rm.keyword}" already exists in All Search Terms.`);
+      return;
+    }
+    const ok = await onAddKeyword(rm.keyword, String(rm.volume || ''));
+    if (ok) {
+      setRemovedTerms(prev => prev.filter(r => r !== rm));
+      showToast(`✓ "${rm.keyword}" restored to All Search Terms.`);
     }
   }
 
@@ -294,7 +352,6 @@ export default function ASTTable({
   }
 
   function handleSearch() {
-    // searchQ is already reactive; this just confirms Enter key
     if (frameRef.current) frameRef.current.scrollTop = 0;
     setScrollTop(0);
   }
@@ -303,12 +360,85 @@ export default function ASTTable({
     window.open('https://www.google.com/search?q=' + kw.trim().split(/\s+/).join('+'), '_blank');
   }
 
+  // ── Drag-to-reorder handlers ───────────────────────────────
+  function handleDragStart(e: React.DragEvent, id: string) {
+    setDragId(id);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', id);
+    const tr = (e.target as HTMLElement).closest('tr');
+    if (tr) {
+      requestAnimationFrame(() => tr.classList.add('ast-dragging'));
+    }
+  }
+
+  function handleDragEnd() {
+    setDragId(null);
+    setDropTarget(null);
+    document.querySelectorAll('.ast-dragging, .ast-drop-above, .ast-drop-below').forEach(el => {
+      el.classList.remove('ast-dragging', 'ast-drop-above', 'ast-drop-below');
+    });
+  }
+
+  function handleDragOver(e: React.DragEvent, id: string) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (!dragId || id === dragId) {
+      setDropTarget(null);
+      return;
+    }
+    const tr = (e.target as HTMLElement).closest('tr');
+    if (!tr) return;
+    const rect = tr.getBoundingClientRect();
+    const pos = e.clientY < rect.top + rect.height / 2 ? 'above' : 'below';
+    setDropTarget({ id, pos });
+
+    document.querySelectorAll('.ast-drop-above, .ast-drop-below').forEach(el => {
+      el.classList.remove('ast-drop-above', 'ast-drop-below');
+    });
+    tr.classList.add(pos === 'above' ? 'ast-drop-above' : 'ast-drop-below');
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    if (!dragId || !dropTarget || dragId === dropTarget.id) {
+      handleDragEnd();
+      return;
+    }
+
+    const srcIdx = keywords.findIndex(k => k.id === dragId);
+    const destIdx = keywords.findIndex(k => k.id === dropTarget.id);
+    if (srcIdx === -1 || destIdx === -1) {
+      handleDragEnd();
+      return;
+    }
+
+    const reordered = [...keywords];
+    const [moved] = reordered.splice(srcIdx, 1);
+    const newDestIdx = reordered.findIndex(k => k.id === dropTarget.id);
+    const insertAt = dropTarget.pos === 'below' ? newDestIdx + 1 : newDestIdx;
+    reordered.splice(insertAt, 0, moved);
+
+    onReorder(reordered);
+    handleDragEnd();
+  }
+
   // ── Render ─────────────────────────────────────────────────
   return (
     <div className="ast-panel" style={{ fontSize: `${fontSize}px` }}>
       {/* Panel header */}
       <div className="ast-ph">
         <span>All Search Terms</span>
+        {/* Removed Terms button */}
+        <button
+          className="ast-btn-rm"
+          onClick={() => { setShowRemovedOverlay(true); }}
+          title="Show removed keywords"
+        >
+          🗑 Removed Terms
+          {removedTerms.length > 0 && (
+            <span className="ast-rm-badge">{removedTerms.length}</span>
+          )}
+        </button>
       </div>
 
       {/* Control bar */}
@@ -486,11 +616,16 @@ export default function ASTTable({
                     key={k.id}
                     kw={k}
                     isSelected={selected.has(k.id)}
+                    isDragging={dragId === k.id}
                     onToggle={() => handleToggleRow(k.id)}
                     onCycleStatus={() => handleCycleStatus(k)}
                     onRemove={() => handleRemove(k)}
                     onGoogleSearch={() => googleSearch(k.keyword)}
                     onTagClick={(tag: string) => setTagFilter(tag)}
+                    onDragStart={(e) => handleDragStart(e, k.id)}
+                    onDragEnd={handleDragEnd}
+                    onDragOver={(e) => handleDragOver(e, k.id)}
+                    onDrop={handleDrop}
                     showVol={showVol}
                     showTags={showTags}
                     showTopics={showTopics}
@@ -536,6 +671,93 @@ export default function ASTTable({
 
       {/* Toast */}
       <div className={`ast-toast${toast ? ' on' : ''}`}>{toast}</div>
+
+      {/* ── Removed Terms Overlay ─────────────────────────────── */}
+      {showRemovedOverlay && (
+        <div className="ast-rm-overlay" onClick={() => setShowRemovedOverlay(false)}>
+          <div className="ast-rm-card" onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className="ast-rm-hdr">
+              <span className="ast-rm-title">
+                🗑 All Removed Search Terms&nbsp;
+                <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--text-l)', textTransform: 'none', letterSpacing: 0 }}>
+                  ({removedTerms.length} term{removedTerms.length !== 1 ? 's' : ''})
+                </span>
+              </span>
+              <button className="ast-rm-close" onClick={() => setShowRemovedOverlay(false)} title="Close">✕</button>
+            </div>
+            {/* Table */}
+            <div className="ast-rm-frame">
+              <table className="ast-tbl" style={{ width: '100%' }}>
+                <colgroup>
+                  <col style={{ minWidth: 180 }} />
+                  <col style={{ width: 96 }} />
+                  <col style={{ width: 110 }} />
+                  <col style={{ width: 90 }} />
+                  <col style={{ width: 70 }} />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th><div className="th-inner">Keyword</div></th>
+                    <th><div className="th-inner">Volume</div></th>
+                    <th><div className="th-inner">Sorting Status</div></th>
+                    <th><div className="th-inner">Tags</div></th>
+                    <th style={{ textAlign: 'center' }}><div className="th-inner">Actions</div></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {removedTerms.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} style={{ textAlign: 'center', padding: 24, color: 'var(--text-l)', fontSize: 11 }}>
+                        No removed search terms yet.
+                      </td>
+                    </tr>
+                  ) : (
+                    removedTerms.map((rm, idx) => {
+                      const pillCls =
+                        rm.sortingStatus === 'Completely Sorted' ? 'ast-pill ast-pill-c' :
+                        rm.sortingStatus === 'AI-Sorted'         ? 'ast-pill ast-pill-ai' :
+                        rm.sortingStatus === 'Partially Sorted'  ? 'ast-pill ast-pill-p' :
+                                                                    'ast-pill ast-pill-u';
+                      return (
+                        <tr key={`${rm.keyword}-${idx}`}>
+                          <td>
+                            <div className="ast-kw-cell">
+                              <span className="ast-kw-txt" title={rm.keyword}>{rm.keyword}</span>
+                              <button
+                                className="ast-gs-btn"
+                                style={{ opacity: 1 }}
+                                title="Google this keyword"
+                                onClick={() => googleSearch(rm.keyword)}
+                              >?</button>
+                            </div>
+                          </td>
+                          <td style={{ textAlign: 'right', paddingRight: 6 }}>
+                            {rm.volume ? fmtV(rm.volume) : ''}
+                          </td>
+                          <td>
+                            <span className={pillCls}>{rm.sortingStatus}</span>
+                          </td>
+                          <td style={{ fontSize: 9, color: 'var(--text-m)' }}>
+                            {rm.tags || ''}
+                          </td>
+                          <td style={{ textAlign: 'center' }}>
+                            <button
+                              className="ast-restore-btn"
+                              title="Restore this keyword back to All Search Terms"
+                              onClick={() => handleRestore(rm)}
+                            >↩</button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -544,11 +766,16 @@ export default function ASTTable({
 interface ASTRowProps {
   kw: Keyword;
   isSelected: boolean;
+  isDragging: boolean;
   onToggle: () => void;
   onCycleStatus: () => void;
   onRemove: () => void;
   onGoogleSearch: () => void;
   onTagClick: (tag: string) => void;
+  onDragStart: (e: React.DragEvent) => void;
+  onDragEnd: () => void;
+  onDragOver: (e: React.DragEvent) => void;
+  onDrop: (e: React.DragEvent) => void;
   showVol: boolean;
   showTags: boolean;
   showTopics: boolean;
@@ -556,7 +783,8 @@ interface ASTRowProps {
 }
 
 const ASTRow = React.memo(function ASTRow({
-  kw, isSelected, onToggle, onCycleStatus, onRemove, onGoogleSearch, onTagClick,
+  kw, isSelected, isDragging, onToggle, onCycleStatus, onRemove, onGoogleSearch, onTagClick,
+  onDragStart, onDragEnd, onDragOver, onDrop,
   showVol, showTags, showTopics, showTopicDesc,
 }: ASTRowProps) {
   const pillClass =
@@ -568,8 +796,25 @@ const ASTRow = React.memo(function ASTRow({
   const tags = (kw.tags || '').split(',').map(t => t.trim()).filter(Boolean);
   const topics = (kw.topic || '').split('|').map(t => t.trim()).filter(Boolean);
 
+  const trRef = useRef<HTMLTableRowElement>(null);
+
+  function onHandleMouseDown() {
+    if (trRef.current) trRef.current.draggable = true;
+  }
+  function onHandleMouseUp() {
+    if (trRef.current) trRef.current.draggable = false;
+  }
+
   return (
-    <tr className={isSelected ? 'ast-sel' : ''}>
+    <tr
+      ref={trRef}
+      className={`${isSelected ? 'ast-sel' : ''} ${isDragging ? 'ast-dragging' : ''}`}
+      draggable={false}
+      onDragStart={onDragStart}
+      onDragEnd={(e) => { if (trRef.current) trRef.current.draggable = false; onDragEnd(); }}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+    >
       {/* Checkbox */}
       <td style={{ textAlign: 'center' }}>
         <input
@@ -584,7 +829,12 @@ const ASTRow = React.memo(function ASTRow({
       {/* Keyword */}
       <td>
         <div className="ast-kw-cell">
-          <span className="ast-drag-handle" title="Drag to reorder">⁞</span>
+          <span
+            className="ast-drag-handle"
+            title="Drag to reorder"
+            onMouseDown={onHandleMouseDown}
+            onMouseUp={onHandleMouseUp}
+          >⁞</span>
           <span
             className="ast-kw-txt"
             title={kw.keyword}

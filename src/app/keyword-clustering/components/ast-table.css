@@ -162,20 +162,20 @@
 .ast-tbl thead {
   position: sticky;
   top: 0;
-  z-index: 2;
+  z-index: 3;
+  background: var(--bg-surface, #f0f2f5);
 }
-.ast-tbl th {
-  background: var(--th-bg, #e8ecf0);
-  color: var(--th-fg, #4a5568);
-  font-size: 10px;
-  font-weight: 700;
+.ast-tbl thead th {
   padding: 4px 6px;
   text-align: left;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-m, #57606a);
   border-bottom: 2px solid var(--border-mid, #d0d7de);
   white-space: nowrap;
   user-select: none;
 }
-.ast-tbl th .th-inner {
+.th-inner {
   display: flex;
   align-items: center;
   gap: 4px;
@@ -426,4 +426,132 @@
 }
 .ast-tbl tbody tr.ast-drop-below td {
   border-bottom: 2px solid var(--accent, #1f6feb) !important;
+}
+
+/* ── NEW: Drag-to-reorder row opacity ────────────────────────── */
+.ast-tbl tbody tr.ast-dragging {
+  opacity: 0.35;
+}
+
+/* ── NEW: Removed Terms button in panel header ───────────────── */
+.ast-btn-rm {
+  margin-left: auto;
+  font-size: 10px;
+  font-family: var(--fn-ui, 'IBM Plex Sans', sans-serif);
+  padding: 2px 8px;
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ph-text, #c9d1d9);
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.ast-btn-rm:hover {
+  background: rgba(255,255,255,0.08);
+  border-color: rgba(255,255,255,0.25);
+}
+.ast-rm-badge {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--danger, #f85149);
+  color: #fff;
+  line-height: 16px;
+}
+
+/* ── NEW: Removed Terms Overlay ──────────────────────────────── */
+.ast-rm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  background: rgba(13, 17, 23, 0.88);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: ast-overlay-in 0.18s ease;
+}
+@keyframes ast-overlay-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.ast-rm-card {
+  width: min(92vw, 860px);
+  height: min(88vh, 680px);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-surface, #f0f2f5);
+  border: 1px solid var(--border-dark, #30363d);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.7);
+}
+
+.ast-rm-hdr {
+  background: var(--ph-bg, #21262d);
+  padding: 7px 12px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.ast-rm-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ph-text, #c9d1d9);
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+}
+.ast-rm-close {
+  background: none;
+  border: 1px solid #555;
+  border-radius: 5px;
+  color: var(--ph-text, #c9d1d9);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px 8px;
+  line-height: 1.4;
+}
+.ast-rm-close:hover {
+  background: var(--danger, #f85149);
+  border-color: var(--danger, #f85149);
+  color: #fff;
+}
+
+.ast-rm-frame {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: auto;
+  background: #fff;
+}
+
+/* ── NEW: Restore button ─────────────────────────────────────── */
+.ast-restore-btn {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  background: #10b981;
+  border: none;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: transform 0.1s;
+}
+.ast-restore-btn:hover {
+  background: #059669;
+  transform: scale(1.15);
 }
