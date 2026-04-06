@@ -113,6 +113,7 @@ export default function DashboardPage() {
     title: string;
   }) {
     if (workflow.badge === "active") {
+      router.push(`/${workflow.id}`);
       setToast(`Opening ${workflow.title}…`);
       setTimeout(() => setToast(""), 2000);
     } else {
