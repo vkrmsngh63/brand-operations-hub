@@ -29,11 +29,43 @@
 - [x] Dashboard Keyword Clustering card wired to navigate to /keyword-clustering
 - [x] Keyword Clustering page shell with project selector (create, open, delete projects)
 
-### 1b. AST Table: NOT STARTED
-- [ ] All Search Terms table as React component
-- [ ] Virtual scrolling, search, filters, sorting status
-- [ ] Drag-reorder, zoom, CSV download
+### 1b. AST Table: IN PROGRESS
+
+#### 1b-core: COMPLETE
+- [x] ASTTable React component with all 7 columns (checkbox, keyword, volume, sorting status, tags, topics, topic descriptions)
+- [x] Virtual scrolling (tested with 2330+ rows)
+- [x] Keyword search with whole-word matching
+- [x] Status filter checkboxes (Sorted, Partial, Unsorted)
+- [x] Column visibility toggles (Vol, Tags, Topics, Topic Descriptions)
+- [x] Status pills with color coding (gray/orange/green/blue) and click-to-cycle
+- [x] Add row (type keyword + Enter)
+- [x] Excel paste — bulk import with duplicate/header row detection
+- [x] Row selection (checkbox + keyword click), select-all with indeterminate state
+- [x] Remove keyword (single + bulk when rows selected)
+- [x] Google search button per row
+- [x] Tag pill click to filter + yellow filter bar
+- [x] Tag header search + topic header search
+- [x] Sort by Volume button
+- [x] Show All reset button
+- [x] Zoom controls (7–18px range)
+- [x] Toast notifications
+- [x] useKeywords hook (fetch, add, bulkImport, update, batchUpdate, delete, bulkDelete, reorder)
+- [x] KeywordWorkspace wrapper connecting ASTTable to API
+- [x] Page layout with h-screen + flex-col + overflow-hidden for proper virtual scroll
+- [x] API fix: volume field parseInt() conversion for single and bulk import
+
+#### 1b-interact: NOT STARTED — NEXT PRIORITY
+- [ ] Drag-to-reorder rows
 - [ ] Removed Terms overlay
+
+#### 1b-tags: NOT STARTED
+- [ ] Inline tag editing (click pill to edit, click empty space to add)
+- [ ] Batch tag operations (add/remove tags across selected rows)
+
+#### 1b-controls: NOT STARTED
+- [ ] Copy Table Data button
+- [ ] CSV download
+- [ ] Column resize drag handles
 
 ### 1c. MT + TIF Tables: NOT STARTED
 - [ ] Main Terms table
