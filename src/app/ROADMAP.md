@@ -18,16 +18,16 @@
 
 ## Phase 1 — Keyword Clustering Migration: IN PROGRESS
 
-### 1a. Data Layer: IN PROGRESS
+### 1a. Data Layer: COMPLETE
 - [x] Prisma 6 installed and configured
 - [x] Database schema defined (6 tables: Project, Keyword, CanvasNode, Pathway, SisterLink, CanvasState)
 - [x] Schema pushed to Supabase (tables created)
 - [x] Prisma client helper created (src/lib/db.ts)
-- [ ] API routes for Project CRUD
-- [ ] API routes for Keyword CRUD (create, read, update, delete, bulk import)
-- [ ] API routes for Canvas CRUD (nodes, pathways, sister links, canvas state)
-- [ ] Wire up dashboard Keyword Clustering card to navigate to the workflow page
-- [ ] Create blank Keyword Clustering page shell
+- [x] API routes for Project CRUD (list, create, get, update, delete)
+- [x] API routes for Keyword CRUD (create, read, update, delete, bulk import, bulk delete)
+- [x] API routes for Canvas CRUD (nodes, pathways, sister links, canvas state)
+- [x] Dashboard Keyword Clustering card wired to navigate to /keyword-clustering
+- [x] Keyword Clustering page shell with project selector (create, open, delete projects)
 
 ### 1b. AST Table: NOT STARTED
 - [ ] All Search Terms table as React component
