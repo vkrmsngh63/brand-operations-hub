@@ -66,10 +66,10 @@
 - [x] Right-click tag pill to filter, left-click to edit
 - [x] TagCell separate component with own editing state
 
-#### 1b-controls: IN PROGRESS — NEXT PRIORITY
+#### 1b-controls: COMPLETE
 - [x] Copy Table Data button (copies visible rows as TSV to clipboard)
 - [x] CSV download button (downloads all keywords as CSV file)
-- [ ] Column resize drag handles
+- [x] Column resize drag handles
 
 ### 1c. MT + TIF Tables: NOT STARTED
 - [ ] Main Terms table

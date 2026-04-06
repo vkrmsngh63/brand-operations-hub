@@ -73,12 +73,13 @@
 - Right-click a tag pill → filters by that tag (left-click edits, right-click filters)
 - TagCell is a separate React component with its own editing state
 
-### Phase 1b-controls — Copy & CSV: PARTIALLY COMPLETE
+### Phase 1b-controls — Copy, CSV & Column Resize: COMPLETE
 - Copy Table Data button — copies visible rows as TSV to clipboard (respects column visibility for Vol/Tags)
 - CSV Download button — downloads ALL keywords as CSV file (keyword_sorting_data.csv)
+- Column resize drag handles — drag right edge of any column border to resize, full-height gridlines on all cells
 - REMAINING: Column resize drag handles
 
-### NEXT STEP: Phase 1b-controls (column resize), then Phase 1c (MT + TIF tables)
+### NEXT STEP: Phase 1c (MT + TIF tables)
 
 ### Database Tables (defined in prisma/schema.prisma)
 - **Project** — container for each keyword clustering project (userId, name, workflow)
