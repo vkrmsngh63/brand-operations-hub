@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
+import KeywordWorkspace from './components/KeywordWorkspace';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -88,7 +89,7 @@ export default function KeywordClusteringPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 text-gray-100">
+    <div className="h-screen flex flex-col overflow-hidden bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 text-gray-100">
       {/* Topbar */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
         <div className="flex items-center gap-4">
@@ -115,12 +116,12 @@ export default function KeywordClusteringPage() {
       </div>
 
       {/* Content area */}
-      <div className="p-6">
+      <div className="flex-1 flex flex-col overflow-hidden">
         {loading ? (
-          <p className="text-gray-400">Loading projects…</p>
+          <p className="text-gray-400 p-6">Loading projects…</p>
         ) : !activeProjectId ? (
           /* ── Project Selector ── */
-          <div className="max-w-2xl mx-auto mt-12">
+          <div className="max-w-2xl mx-auto mt-12 p-6">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-lg font-medium">Your Projects</h2>
               <button
@@ -193,9 +194,9 @@ export default function KeywordClusteringPage() {
             )}
           </div>
         ) : (
-          /* ── Active Project Workspace (placeholder for AST table + canvas) ── */
-          <div>
-            <div className="flex items-center gap-4 mb-6">
+          /* ── Active Project Workspace ── */
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="flex items-center gap-4 px-6 py-3 border-b border-gray-800">
               <button
                 onClick={() => setActiveProjectId(null)}
                 className="text-sm text-gray-400 hover:text-white transition-colors"
@@ -207,25 +208,7 @@ export default function KeywordClusteringPage() {
                 {projects.find((p) => p.id === activeProjectId)?.name}
               </span>
             </div>
-
-            {/* This is where the AST table, MT table, TIF table, and Canvas will go */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Left panel placeholder */}
-              <div className="rounded-xl border border-gray-700/60 bg-gray-800/30 p-8 text-center text-gray-500">
-                <p className="text-4xl mb-4">📋</p>
-                <p className="font-medium text-gray-400 mb-2">Keywords Panel</p>
-                <p className="text-sm">AST + MT + TIF tables will go here</p>
-                <p className="text-xs mt-2 text-gray-600">Phase 1b–1c</p>
-              </div>
-
-              {/* Right panel placeholder */}
-              <div className="rounded-xl border border-gray-700/60 bg-gray-800/30 p-8 text-center text-gray-500">
-                <p className="text-4xl mb-4">🗺️</p>
-                <p className="font-medium text-gray-400 mb-2">Topics Layout Canvas</p>
-                <p className="text-sm">Mindmap / Table canvas will go here</p>
-                <p className="text-xs mt-2 text-gray-600">Phase 1d–1e</p>
-              </div>
-            </div>
+            <KeywordWorkspace projectId={activeProjectId} userId={userId!} />
           </div>
         )}
       </div>

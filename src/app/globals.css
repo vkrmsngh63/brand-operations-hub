@@ -8,6 +8,33 @@
   --accent-h: #1158c7;
   --text-light: #8b949e;
   --text-bright: #e6edf3;
+  --bg-surface: #f0f2f5;
+  --bg-table: #ffffff;
+  --border-mid: #d0d7de;
+  --border-light: #eaedf0;
+  --accent-light: #ddf4ff;
+  --text-d: #1c2128;
+  --text-m: #57606a;
+  --text-l: #8b949e;
+  --ph-bg: #21262d;
+  --ph-text: #c9d1d9;
+  --th-bg: #e8ecf0;
+  --th-fg: #4a5568;
+  --row-alt: #f8fafc;
+  --row-hover: #e8f4fd;
+  --row-sel: #cae8ff;
+  --s-u-bg: #f3f4f6;
+  --s-u-fg: #6b7280;
+  --s-p-bg: #ffedd5;
+  --s-p-fg: #c2410c;
+  --s-c-bg: #d1fae5;
+  --s-c-fg: #065f46;
+  --s-ai-bg: #dbeafe;
+  --s-ai-fg: #1e40af;
+  --danger: #f85149;
+  --success: #3fb950;
+  --fn-ui: 'IBM Plex Sans', sans-serif;
+  --fn-dt: 'IBM Plex Mono', monospace;
 }
 
 html, body {

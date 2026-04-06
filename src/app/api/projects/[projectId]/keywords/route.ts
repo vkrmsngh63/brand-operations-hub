@@ -43,7 +43,7 @@ export async function POST(
       const data = body.keywords.map((kw: { keyword: string; volume?: number }) => ({
         projectId,
         keyword: kw.keyword.trim(),
-        volume: kw.volume ?? 0,
+        volume: parseInt(kw.volume) || 0,
         sortOrder: nextSort++,
       }));
 
@@ -63,7 +63,7 @@ export async function POST(
       data: {
         projectId,
         keyword: (body.keyword || '').trim(),
-        volume: body.volume ?? 0,
+        volume: parseInt(body.volume) || 0,
         sortOrder: nextSort,
       },
     });

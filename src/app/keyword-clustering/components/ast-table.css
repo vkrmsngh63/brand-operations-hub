@@ -1,0 +1,429 @@
+/* ─── AST Table ────────────────────────────────────────────── */
+/* All classes prefixed with ast- to avoid collisions             */
+
+/* ── Panel ──────────────────────────────────────────────────── */
+.ast-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1.4;
+  min-height: 0;
+  font-family: var(--fn-ui, 'IBM Plex Sans', sans-serif);
+}
+
+/* ── Panel header ───────────────────────────────────────────── */
+.ast-ph {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  background: var(--ph-bg, #21262d);
+  color: var(--ph-text, #c9d1d9);
+  font-size: 11px;
+  font-weight: 700;
+  border-bottom: 1px solid var(--border-dark, #30363d);
+  user-select: none;
+  flex-shrink: 0;
+}
+
+/* ── Control bar ────────────────────────────────────────────── */
+.ast-ctrl {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px 8px;
+  background: var(--bg-surface, #f0f2f5);
+  border-bottom: 1px solid var(--border-mid, #d0d7de);
+  font-size: 10px;
+  flex-shrink: 0;
+}
+
+.ast-ctrl-div {
+  width: 1px;
+  height: 16px;
+  background: var(--border-mid, #d0d7de);
+  flex-shrink: 0;
+}
+
+/* ── Search ─────────────────────────────────────────────────── */
+.ast-search-wrap {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+}
+
+.ast-search-inp {
+  font-size: 10px;
+  font-family: var(--fn-ui, 'IBM Plex Sans', sans-serif);
+  padding: 2px 6px;
+  border: 1px solid var(--border-mid, #d0d7de);
+  border-radius: 4px;
+  outline: none;
+  width: 140px;
+  background: #fff;
+  color: var(--text-d, #1c2128);
+}
+.ast-search-inp:focus {
+  border-color: var(--accent, #1f6feb);
+  box-shadow: 0 0 0 2px rgba(31, 111, 235, 0.15);
+}
+
+.ast-search-btn {
+  font-size: 13px;
+  padding: 1px 5px;
+  border: 1px solid var(--border-mid, #d0d7de);
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+  color: var(--text-m, #57606a);
+}
+.ast-search-btn:hover { background: var(--accent-light, #ddf4ff); }
+
+/* ── Checkbox labels ────────────────────────────────────────── */
+.ast-cb-label {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-m, #57606a);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+.ast-cb-label input[type="checkbox"] {
+  width: 11px;
+  height: 11px;
+  accent-color: var(--accent, #1f6feb);
+  cursor: pointer;
+}
+
+/* ── Action buttons ─────────────────────────────────────────── */
+.ast-btn {
+  font-size: 10px;
+  font-family: var(--fn-ui, 'IBM Plex Sans', sans-serif);
+  padding: 2px 8px;
+  border: 1px solid var(--border-mid, #d0d7de);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--text-d, #1c2128);
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+}
+.ast-btn:hover { background: var(--accent-light, #ddf4ff); color: var(--accent, #1f6feb); }
+
+/* ── Tag filter bar ─────────────────────────────────────────── */
+.ast-tag-filter-bar {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  background: #fffde7;
+  border-bottom: 1px solid #f9e076;
+  font-size: 10px;
+  color: #5a4e00;
+  flex-shrink: 0;
+}
+.ast-tag-filter-bar.on { display: flex; }
+
+.ast-tag-filter-clear {
+  font-size: 10px;
+  padding: 1px 6px;
+  border: 1px solid #f9e076;
+  border-radius: 3px;
+  background: #fff8c4;
+  cursor: pointer;
+  color: #5a4e00;
+}
+.ast-tag-filter-clear:hover { background: #fff3a0; }
+
+/* ── Scrollable table frame ─────────────────────────────────── */
+.ast-frame {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: auto;
+  min-height: 0;
+  position: relative;
+  background: #ffffff;
+  color: var(--text-d, #1c2128);
+}
+
+/* ── Table ───────────────────────────────────────────────────── */
+.ast-tbl {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: auto;
+  font-size: 11px;
+  color: var(--text-d, #1c2128);
+}
+
+/* ── Header ──────────────────────────────────────────────────── */
+.ast-tbl thead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+.ast-tbl th {
+  background: var(--th-bg, #e8ecf0);
+  color: var(--th-fg, #4a5568);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 4px 6px;
+  text-align: left;
+  border-bottom: 2px solid var(--border-mid, #d0d7de);
+  white-space: nowrap;
+  user-select: none;
+}
+.ast-tbl th .th-inner {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ── Count chip in header ────────────────────────────────────── */
+.ast-chip {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--accent, #1f6feb);
+  color: #fff;
+  line-height: 16px;
+}
+
+/* ── Body rows ───────────────────────────────────────────────── */
+.ast-tbl td {
+  padding: 3px 6px;
+  border-bottom: 1px solid var(--border-light, #eaedf0);
+  vertical-align: middle;
+  font-size: inherit;
+}
+
+.ast-tbl tbody tr:nth-child(even) {
+  background: var(--row-alt, #f8fafc);
+}
+.ast-tbl tbody tr:hover {
+  background: var(--row-hover, #e8f4fd);
+}
+.ast-tbl tbody tr.ast-sel {
+  background: var(--row-sel, #cae8ff);
+}
+
+/* ── Footer add-row ──────────────────────────────────────────── */
+.ast-tbl tfoot {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+}
+.ast-tbl tfoot td {
+  background: #fff;
+  border-top: 2px solid var(--border-mid, #d0d7de);
+  padding: 3px 6px;
+}
+.ast-add-inp {
+  width: 100%;
+  font-size: 10px;
+  font-family: var(--fn-ui, 'IBM Plex Sans', sans-serif);
+  padding: 2px 4px;
+  border: 1px solid var(--border-light, #eaedf0);
+  border-radius: 3px;
+  outline: none;
+  background: #fff;
+  color: var(--text-d, #1c2128);
+}
+.ast-add-inp:focus {
+  border-color: var(--accent, #1f6feb);
+}
+.ast-add-inp::placeholder {
+  color: var(--text-l, #8b949e);
+}
+
+/* ── Keyword cell ────────────────────────────────────────────── */
+.ast-kw-cell {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.ast-kw-txt {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  font-family: var(--fn-dt, 'IBM Plex Mono', monospace);
+  font-size: 0.92em;
+}
+.ast-kw-txt:hover { color: var(--accent, #1f6feb); }
+
+/* Google search button */
+.ast-gs-btn {
+  flex-shrink: 0;
+  width: 16px; height: 16px;
+  font-size: 9px; font-weight: 700;
+  border: 1px solid var(--border-mid, #d0d7de);
+  border-radius: 3px;
+  background: #fff;
+  color: var(--accent, #1f6feb);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.ast-kw-cell:hover .ast-gs-btn,
+.ast-kw-cell:hover .ast-rm-btn { opacity: 1; }
+.ast-gs-btn:hover { background: var(--accent-light, #ddf4ff); }
+
+/* Remove button */
+.ast-rm-btn {
+  flex-shrink: 0;
+  width: 16px; height: 16px;
+  font-size: 12px; font-weight: 700;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--danger, #f85149);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.ast-rm-btn:hover { background: #fdd; border-color: var(--danger, #f85149); }
+
+/* ── Drag handle ─────────────────────────────────────────────── */
+.ast-drag-handle {
+  flex-shrink: 0;
+  cursor: grab;
+  font-size: 11px;
+  color: var(--text-l, #8b949e);
+  user-select: none;
+  line-height: 1;
+  padding: 0 2px;
+}
+.ast-drag-handle:hover { color: var(--accent, #1f6feb); }
+
+/* ── Status pills ────────────────────────────────────────────── */
+.ast-pill {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 600;
+  padding: 1px 8px;
+  border-radius: 9px;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  transition: filter 0.1s;
+}
+.ast-pill:hover { filter: brightness(0.92); }
+
+.ast-pill-u  { background: var(--s-u-bg, #f3f4f6); color: var(--s-u-fg, #6b7280); }
+.ast-pill-p  { background: var(--s-p-bg, #ffedd5); color: var(--s-p-fg, #c2410c); }
+.ast-pill-c  { background: var(--s-c-bg, #d1fae5); color: var(--s-c-fg, #065f46); }
+.ast-pill-ai { background: var(--s-ai-bg, #dbeafe); color: var(--s-ai-fg, #1e40af); }
+
+/* ── Tag pills ───────────────────────────────────────────────── */
+.ast-tag-cell-inner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  align-items: center;
+  min-height: 18px;
+}
+.ast-tag-pill {
+  font-size: 9px;
+  padding: 0 5px;
+  border-radius: 3px;
+  background: #e8ecf0;
+  color: var(--text-d, #1c2128);
+  border: 1px solid var(--border-light, #eaedf0);
+  cursor: pointer;
+  white-space: nowrap;
+  line-height: 16px;
+}
+.ast-tag-pill:hover { background: var(--accent-light, #ddf4ff); color: var(--accent, #1f6feb); }
+
+/* ── Topic pills ─────────────────────────────────────────────── */
+.ast-topic-pill {
+  font-size: 9px;
+  padding: 0 5px;
+  border-radius: 3px;
+  background: #dbeafe;
+  color: #1e40af;
+  border: none;
+  white-space: nowrap;
+  line-height: 16px;
+  display: inline-block;
+  margin: 1px 2px;
+}
+
+/* ── Toast notification ──────────────────────────────────────── */
+.ast-toast {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%) translateY(60px);
+  background: #1c2128;
+  color: #fff;
+  padding: 8px 20px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-family: var(--fn-ui, 'IBM Plex Sans', sans-serif);
+  z-index: 9999;
+  opacity: 0;
+  transition: transform 0.25s ease, opacity 0.25s ease;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.ast-toast.on {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+}
+
+/* ── Column visibility ───────────────────────────────────────── */
+.ast-col-hidden { display: none !important; }
+
+/* ── Zoom scaling ────────────────────────────────────────────── */
+.ast-zoom-btn {
+  width: 22px;
+  height: 22px;
+  font-size: 14px;
+  border: 1px solid var(--border-mid, #d0d7de);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--text-d, #1c2128);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.ast-zoom-btn:hover { background: var(--accent-light, #ddf4ff); }
+
+/* ── Loading / empty states ──────────────────────────────────── */
+.ast-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 40px 20px;
+  color: var(--text-l, #8b949e);
+  font-size: 12px;
+}
+.ast-empty-icon {
+  font-size: 28px;
+  opacity: 0.5;
+}
+
+/* ── Drop indicators for drag-reorder ────────────────────────── */
+.ast-tbl tbody tr.ast-drop-above td {
+  border-top: 2px solid var(--accent, #1f6feb) !important;
+}
+.ast-tbl tbody tr.ast-drop-below td {
+  border-bottom: 2px solid var(--accent, #1f6feb) !important;
+}
