@@ -555,3 +555,40 @@
   background: #059669;
   transform: scale(1.15);
 }
+
+/* ── NEW: Inline tag editing input ───────────────────────────── */
+.ast-tag-inp {
+  font-size: 9px;
+  font-family: var(--fn-ui, 'IBM Plex Sans', sans-serif);
+  padding: 1px 4px;
+  border: 1px solid var(--accent, #1f6feb);
+  border-radius: 3px;
+  outline: none;
+  background: #fff;
+  width: 80px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+/* ── NEW: Add tag trigger (+) ────────────────────────────────── */
+.ast-tag-add-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-l, #8b949e);
+  cursor: pointer;
+  border-radius: 3px;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.ast-tag-cell-inner:hover .ast-tag-add-trigger {
+  opacity: 1;
+}
+.ast-tag-add-trigger:hover {
+  color: var(--accent, #1f6feb);
+  background: var(--accent-light, #ddf4ff);
+}
