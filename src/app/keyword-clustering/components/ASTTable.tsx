@@ -255,6 +255,46 @@ export default function ASTTable({
   }
 
   function handleSearch() { if (frameRef.current) frameRef.current.scrollTop = 0; setScrollTop(0); }
+  
+  function handleCopyTableData() {
+    if (visible.length === 0) { showToast('⚠ No visible rows to copy.'); return; }
+    const header = ['Keyword'];
+    if (showVol) header.push('Volume');
+    header.push('Sorting Status');
+    if (showTags) header.push('Tags');
+    const rows = [header.join('\t')];
+    visible.forEach(k => {
+      const row = [k.keyword];
+      if (showVol) row.push(k.volume ? fmtV(k.volume) : '');
+      row.push(k.sortingStatus);
+      if (showTags) row.push(k.tags || '');
+      rows.push(row.join('\t'));
+    });
+    navigator.clipboard.writeText(rows.join('\n')).then(
+      () => showToast(`✓ Copied ${visible.length} row${visible.length !== 1 ? 's' : ''} to clipboard. Paste into Excel.`),
+      () => showToast('⚠ Clipboard write failed. Please try again.')
+    );
+  }
+
+  function handleDownloadCSV() {
+    if (keywords.length === 0) { showToast('⚠ No keywords to download.'); return; }
+    const hdr = 'Keyword,Volume,Sorting Status,Tags\n';
+    const rows = keywords.map(k =>
+      [k.keyword, k.volume, k.sortingStatus, k.tags]
+        .map(v => `"${String(v || '').replace(/"/g, '""')}"`)
+        .join(',')
+    ).join('\n');
+    const blob = new Blob([hdr + rows], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'keyword_sorting_data.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('✓ Downloaded keyword_sorting_data.csv');
+  }
   function googleSearch(kw: string) { window.open('https://www.google.com/search?q=' + kw.trim().split(/\s+/).join('+'), '_blank'); }
 
   function handleDragStart(e: React.DragEvent, id: string) {
@@ -311,6 +351,8 @@ export default function ASTTable({
         <div className="ast-ctrl-div" />
         <button className="ast-btn" onClick={handleSortByVol}>▼ Sort by Vol.</button>
         <button className="ast-btn" onClick={handleShowAll}>↺ Show All</button>
+        <button className="ast-btn" onClick={handleCopyTableData} title="Copy visible table data as tab-separated text for Excel">Copy Table Data</button>
+        <button className="ast-btn" onClick={handleDownloadCSV} title="Download all keywords as CSV file">⬇ CSV</button>
         <div style={{ flex: 1 }} />
         <button className="ast-zoom-btn" onClick={() => setFontSize(f => Math.max(7, f - 1))}>－</button>
         <span style={{ fontSize: '9px', color: 'var(--text-m)', minWidth: 30, textAlign: 'center' }}>{Math.round((fontSize / 11) * 100)}%</span>
