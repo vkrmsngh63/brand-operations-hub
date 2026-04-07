@@ -354,15 +354,20 @@
   align-items: center;
   gap: 4px;
   padding: 2px 5px;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid #d6dce4;
   min-height: 22px;
   font-size: 0.95em;
+  transition: background 0.1s;
 }
 .mt-kw-item:last-child {
-  border-bottom: none;
+  border-bottom: 1px solid #e9edf2;
 }
 .mt-kw-checked {
   background: #eff6ff;
+}
+/* Sub-row hover: warm amber tint stands out from blue row/selection */
+.mt-kw-item:hover {
+  background: #fef9c3 !important;
 }
 .mt-kw-text {
   flex: 1;
