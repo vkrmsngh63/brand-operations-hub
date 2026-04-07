@@ -71,8 +71,12 @@
 - [x] CSV download button (downloads all keywords as CSV file)
 - [x] Column resize drag handles
 
-### 1c. MT + TIF Tables: NOT STARTED
-- [ ] Main Terms table
+### 1c. MT + TIF Tables: IN PROGRESS
+- [x] Main Terms table — basic shell (8 columns, add/paste import, search, filters, column visibility, zoom, column resize, copy table data)
+- [x] Main Terms table — three view modes (comma/vertical/single-line), header click to cycle all rows
+- [x] Main Terms table — vertical view with per-keyword checkboxes, SV, Tags, Topics columns
+- [x] Main Terms table — row checkbox auto-switches to vertical view and checks all keywords
+- [ ] Main Terms table — drag-to-reorder, mark status, bulk tag operations, remove selected
 - [ ] Terms In Focus table
 
 ### 1d. Topics Layout Canvas: NOT STARTED

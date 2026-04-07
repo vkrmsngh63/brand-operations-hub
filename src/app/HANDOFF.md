@@ -79,7 +79,26 @@
 - Column resize drag handles — drag right edge of any column border to resize, full-height gridlines on all cells
 - REMAINING: Column resize drag handles
 
-### NEXT STEP: Phase 1c (MT + TIF tables)
+### Phase 1c — MT Table: IN PROGRESS
+- MTTable.tsx component (598 lines) with mt-table.css
+- 8 columns: Checkbox, Main Terms, MT SV, Associated Keywords, Assoc KW SV, Tags, Topics, Topic Descriptions
+- Data model: MTEntry = { id, mainTerm, keywords[] } — stored in React state (session-only, not persisted to database yet)
+- Auto-detects associated keywords from AST by whole-word matching all words of the main term
+- Re-syncs associated keywords whenever AST keywords change
+- Three view modes per row (0=comma, 1=vertical, 2=single-line), cycled by clicking "Associated Keywords" column header
+- Vertical view shows per-keyword sub-rows with checkboxes, SV, Tags, and Topics
+- Row checkbox auto-switches to vertical view and checks all keywords; unchecking clears keyword selections
+- Keyword selection state tracked in kwSel Map<string, Set<string>>
+- Add main term (type + Enter) with duplicate checking
+- Paste import: plain text (one per line) and tab-delimited (Excel)
+- Search main terms, column visibility toggles, status filters, Sort by Vol, Remove Empty Rows, Copy Table Data
+- Zoom controls (7–18px range)
+- Column resize drag handles with full-height gridlines
+- Toast notifications
+- All CSS uses hardcoded light colors (not CSS variables) to prevent dark theme bleed from page
+- REMAINING: drag-to-reorder rows, mark status on selected keywords, bulk tag operations, remove selected terms, associated keyword search
+
+### NEXT STEP: Phase 1c continued (MT Step 3 actions/interactions, then TIF table)
 
 ### Database Tables (defined in prisma/schema.prisma)
 - **Project** — container for each keyword clustering project (userId, name, workflow)
