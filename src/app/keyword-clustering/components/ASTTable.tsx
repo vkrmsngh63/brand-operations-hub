@@ -70,6 +70,7 @@ export default function ASTTable({
   const [tagFilter, setTagFilter] = useState('');
   const [tagQ, setTagQ] = useState('');
   const [topicQ, setTopicQ] = useState('');
+  const [topicFilter, setTopicFilter] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const frameRef = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
@@ -120,9 +121,13 @@ export default function ASTTable({
         const pills = (k.topic || '').split('|').map(t => t.trim()).filter(Boolean);
         if (!pills.some(p => p.toLowerCase() === topicQ.toLowerCase())) return false;
       }
+      if (topicFilter) {
+        const pills = (k.topic || '').split('|').map(t => t.trim()).filter(Boolean);
+        if (!pills.some(p => p.toLowerCase() === topicFilter.toLowerCase())) return false;
+      }
       return true;
     });
-  }, [keywords, searchQ, showSorted, showPartial, showUnsorted, tagFilter, tagQ, topicQ]);
+  }, [keywords, searchQ, showSorted, showPartial, showUnsorted, tagFilter, tagQ, topicQ, topicFilter]);
 
   const volSum = useMemo(() => visible.reduce((s, k) => s + (parseFloat(k.volume) || 0), 0), [visible]);
   const total = visible.length;
@@ -294,7 +299,7 @@ export default function ASTTable({
   }
 
   function handleShowAll() {
-    setSearchQ(''); setTagFilter(''); setTagQ(''); setTopicQ('');
+    setSearchQ(''); setTagFilter(''); setTagQ(''); setTopicQ(''); setTopicFilter('');
     setShowVol(true); setShowSorted(true); setShowPartial(true); setShowUnsorted(true); setShowTags(true); setShowTopics(true);
   }
 
@@ -431,6 +436,10 @@ export default function ASTTable({
         <span>🏷 Filtering by tag:</span><strong>{tagFilter}</strong>
         <button className="ast-tag-filter-clear" onClick={() => setTagFilter('')}>✕ Clear filter</button>
       </div>
+      <div className={`ast-tag-filter-bar${topicFilter ? ' on' : ''}`}>
+        <span>📌 Filtering by topic:</span><strong>{topicFilter}</strong>
+        <button className="ast-tag-filter-clear" onClick={() => setTopicFilter('')}>✕ Clear filter</button>
+      </div>
       <div className="ast-frame" ref={frameRef} onScroll={handleScroll}>
         {loading ? (<div className="ast-empty"><div className="ast-empty-icon">⏳</div><div>Loading keywords…</div></div>) : (
           <table className="ast-tbl" style={{ tableLayout: 'fixed' }}>
@@ -460,7 +469,7 @@ export default function ASTTable({
                     onRemove={() => handleRemove(k)} onGoogleSearch={() => googleSearch(k.keyword)}
                     onTagClick={(tag: string) => setTagFilter(tag)} onTagEdit={(o, n) => handleTagEdit(k.id, o, n)}
                     onTopicEdit={(o, n) => handleTopicEdit(k.id, o, n)}
-                    onTopicClick={(topic: string) => setTopicQ(topic)}
+                    onTopicClick={(topic: string) => setTopicFilter(prev => prev === topic ? '' : topic)}
                     onDragStart={e => handleDragStart(e, k.id)} onDragEnd={handleDragEnd}
                     onDragOver={e => handleDragOver(e, k.id)} onDrop={handleDrop}
                     showVol={showVol} showTags={showTags} showTopics={showTopics} showTopicDesc={showTopicDesc} />

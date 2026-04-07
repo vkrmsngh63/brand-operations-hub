@@ -71,10 +71,9 @@ function parseTopics(str: string): string[] {
 }
 
 // ── Inline Topic Pills (editable) ─────────────────────────────
-function MtTopicPills({ kwStr, astKeywords, onUpdateKeyword, checkedKws, onTopicFilter }: {
+function MtTopicPills({ kwStr, astKeywords, onTopicEdit, onTopicFilter }: {
   kwStr: string; astKeywords: Keyword[];
-  onUpdateKeyword: (id: string, patch: Partial<Keyword>) => Promise<void>;
-  checkedKws: Set<string>;
+  onTopicEdit: (oldTopics: string, newTopics: string) => void;
   onTopicFilter: (topic: string) => void;
 }) {
   const [editIdx, setEditIdx] = useState<number | null>(null);
@@ -85,37 +84,26 @@ function MtTopicPills({ kwStr, astKeywords, onUpdateKeyword, checkedKws, onTopic
   const addRef = useRef<HTMLInputElement>(null);
 
   const rec = getKwRec(kwStr, astKeywords);
-  const topicList = parseTopics(rec?.topic || '');
+  const topicStr = rec?.topic || '';
+  const topicList = parseTopics(topicStr);
 
   useEffect(() => { if (editIdx !== null && editRef.current) { editRef.current.focus(); editRef.current.select(); } }, [editIdx]);
   useEffect(() => { if (addMode && addRef.current) addRef.current.focus(); }, [addMode]);
 
-  function saveBatch(oldList: string[], newList: string[]) {
-    const added = newList.filter(t => !oldList.includes(t));
-    const removed = oldList.filter(t => !newList.includes(t));
-    if (checkedKws.has(kwStr) && checkedKws.size > 1 && (added.length > 0 || removed.length > 0)) {
-      checkedKws.forEach(kw => {
-        const r = getKwRec(kw, astKeywords);
-        if (!r) return;
-        let existing = parseTopics(r.topic);
-        added.forEach(t => { if (!existing.includes(t)) existing.push(t); });
-        removed.forEach(t => { existing = existing.filter(x => x !== t); });
-        onUpdateKeyword(r.id, { topic: existing.join(' | ') });
-      });
-    } else if (rec) {
-      onUpdateKeyword(rec.id, { topic: newList.join(' | ') });
-    }
-  }
   function commitEdit() {
     if (editIdx === null) return;
     const newList = [...topicList];
     if (editVal.trim() === '') newList.splice(editIdx, 1); else newList[editIdx] = editVal.trim();
-    saveBatch(topicList, newList);
+    const newStr = newList.join(' | ');
+    if (newStr !== topicStr) onTopicEdit(topicStr, newStr);
     setEditIdx(null); setEditVal('');
   }
   function commitAdd() {
     const v = addVal.trim();
-    if (v && !topicList.includes(v)) saveBatch(topicList, [...topicList, v]);
+    if (v && !topicList.includes(v)) {
+      const newStr = [...topicList, v].join(' | ');
+      onTopicEdit(topicStr, newStr);
+    }
     setAddMode(false); setAddVal('');
   }
 
@@ -154,6 +142,7 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
   const [kwSearchQ, setKwSearchQ] = useState('');
   const [kwTagQ, setKwTagQ] = useState('');
   const [kwTopicQ, setKwTopicQ] = useState('');
+  const [kwTopicFilter, setKwTopicFilter] = useState('');
   const [showMtSv, setShowMtSv] = useState(true);
   const [showKwSv, setShowKwSv] = useState(true);
   const [showTags, setShowTags] = useState(true);
@@ -243,8 +232,15 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
         return topics.some(t => t.toLowerCase().includes(q));
       });
     }
+    if (kwTopicFilter) {
+      result = result.filter(kw => {
+        const rec = getKwRec(kw, astKeywords);
+        const topics = (rec?.topic || '').split('|').map(t => t.trim()).filter(Boolean);
+        return topics.some(t => t.toLowerCase() === kwTopicFilter.toLowerCase());
+      });
+    }
     return result;
-  }, [kwSearchQ, kwTagQ, kwTopicQ, astKeywords]);
+  }, [kwSearchQ, kwTagQ, kwTopicQ, kwTopicFilter, astKeywords]);
 
   // ── Select all logic ───────────────────────────────────────
   const selCount = useMemo(() => visible.filter(m => selected.has(m.id)).length, [visible, selected]);
@@ -462,6 +458,31 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
   }
 
   // ── Apply Main Term As Tag ─────────────────────────────────
+  // ── Topic edit with batch propagation ───────────────────────
+  function handleMtTopicEdit(kwStr: string, oldTopicStr: string, newTopicStr: string) {
+    const oldTopics = parseTopics(oldTopicStr);
+    const newTopics = parseTopics(newTopicStr);
+    const addedTopics = newTopics.filter(t => !oldTopics.includes(t));
+    const removedTopics = oldTopics.filter(t => !newTopics.includes(t));
+    if (allCheckedKws.has(kwStr) && allCheckedKws.size > 1 && (addedTopics.length > 0 || removedTopics.length > 0)) {
+      const promises: Promise<void>[] = [];
+      allCheckedKws.forEach(kw => {
+        const rec = getKwRec(kw, astKeywords);
+        if (!rec) return;
+        let existing = parseTopics(rec.topic);
+        addedTopics.forEach(t => { if (!existing.includes(t)) existing.push(t); });
+        removedTopics.forEach(t => { existing = existing.filter(x => x !== t); });
+        promises.push(onUpdateKeyword(rec.id, { topic: existing.join(' | ') }));
+      });
+      Promise.all(promises).then(() => {
+        showToast(`✓ Topics updated on ${allCheckedKws.size} checked keywords.`);
+      });
+    } else {
+      const rec = getKwRec(kwStr, astKeywords);
+      if (rec) onUpdateKeyword(rec.id, { topic: newTopicStr });
+    }
+  }
+
   function handleApplyMtAsTag() {
     if (totalKwSel === 0) { showToast('⚠ No keywords checked.'); return; }
     let count = 0;
@@ -535,6 +556,7 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
     setKwSearchQ('');
     setKwTagQ('');
     setKwTopicQ('');
+    setKwTopicFilter('');
     setShowMtSv(true); setShowKwSv(true); setShowTags(true); setShowTopics(true);
     setShowSorted(true); setShowPartial(true); setShowUnsorted(true);
   }
@@ -754,8 +776,9 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
             {kwList.map(kwStr => {
               return (
                 <div key={kwStr} className="mt-kw-item">
-                  <MtTopicPills kwStr={kwStr} astKeywords={astKeywords} onUpdateKeyword={onUpdateKeyword}
-                    checkedKws={allCheckedKws} onTopicFilter={t => setKwTopicQ(t)} />
+                  <MtTopicPills kwStr={kwStr} astKeywords={astKeywords}
+                    onTopicEdit={(o, n) => handleMtTopicEdit(kwStr, o, n)}
+                    onTopicFilter={t => setKwTopicFilter(prev => prev === t ? '' : t)} />
                 </div>
               );
             })}
@@ -861,6 +884,13 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
         <span style={{ fontSize: '9px', color: '#64748b', minWidth: 30, textAlign: 'center' }}>{Math.round((fontSize / 10) * 100)}%</span>
         <button className="mt-zoom-btn" onClick={() => setFontSize(f => Math.min(18, f + 1))}>＋</button>
       </div>
+
+      {kwTopicFilter && (
+        <div style={{ background: '#fef9c3', padding: '3px 8px', fontSize: 10, display: 'flex', alignItems: 'center', gap: 6, borderBottom: '1px solid #fde68a' }}>
+          <span>📌 Filtering by topic:</span><strong>{kwTopicFilter}</strong>
+          <button onClick={() => setKwTopicFilter('')} style={{ background: 'none', border: '1px solid #d97706', borderRadius: 3, padding: '1px 6px', fontSize: 9, cursor: 'pointer', color: '#92400e' }}>✕ Clear</button>
+        </div>
+      )}
 
       <div className="mt-frame">
         <table className="mt-tbl" style={{ tableLayout: 'fixed' }}>

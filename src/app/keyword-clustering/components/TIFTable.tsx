@@ -36,11 +36,10 @@ function getKwRec(kwStr: string, astKeywords: Keyword[]): Keyword | undefined {
 }
 
 // ── Inline Topic Pills (editable) for TIF ─────────────────────
-function TifTopicPills({ kwStr, astKeywords, onUpdateKeyword, onFilterTopic, selectedKws }: {
+function TifTopicPills({ kwStr, astKeywords, onTopicEdit, onFilterTopic }: {
   kwStr: string; astKeywords: Keyword[];
-  onUpdateKeyword: (id: string, patch: Partial<Keyword>) => Promise<void>;
+  onTopicEdit: (oldTopics: string, newTopics: string) => void;
   onFilterTopic: (topic: string) => void;
-  selectedKws: Set<string>;
 }) {
   const [editIdx, setEditIdx] = useState<number | null>(null);
   const [editVal, setEditVal] = useState('');
@@ -50,37 +49,23 @@ function TifTopicPills({ kwStr, astKeywords, onUpdateKeyword, onFilterTopic, sel
   const addRef = useRef<HTMLInputElement>(null);
 
   const rec = getKwRec(kwStr, astKeywords);
-  const topicList = parseTopics(rec?.topic || '');
+  const topicStr = rec?.topic || '';
+  const topicList = parseTopics(topicStr);
 
   useEffect(() => { if (editIdx !== null && editRef.current) { editRef.current.focus(); editRef.current.select(); } }, [editIdx]);
   useEffect(() => { if (addMode && addRef.current) addRef.current.focus(); }, [addMode]);
 
-  function saveBatch(oldList: string[], newList: string[]) {
-    const added = newList.filter(t => !oldList.includes(t));
-    const removed = oldList.filter(t => !newList.includes(t));
-    if (selectedKws.has(kwStr) && selectedKws.size > 1 && (added.length > 0 || removed.length > 0)) {
-      selectedKws.forEach(kw => {
-        const r = getKwRec(kw, astKeywords);
-        if (!r) return;
-        let existing = parseTopics(r.topic);
-        added.forEach(t => { if (!existing.includes(t)) existing.push(t); });
-        removed.forEach(t => { existing = existing.filter(x => x !== t); });
-        onUpdateKeyword(r.id, { topic: existing.join(' | ') });
-      });
-    } else if (rec) {
-      onUpdateKeyword(rec.id, { topic: newList.join(' | ') });
-    }
-  }
   function commitEdit() {
     if (editIdx === null) return;
     const newList = [...topicList];
     if (editVal.trim() === '') newList.splice(editIdx, 1); else newList[editIdx] = editVal.trim();
-    saveBatch(topicList, newList);
+    const newStr = newList.join(' | ');
+    if (newStr !== topicStr) onTopicEdit(topicStr, newStr);
     setEditIdx(null); setEditVal('');
   }
   function commitAdd() {
     const v = addVal.trim();
-    if (v && !topicList.includes(v)) saveBatch(topicList, [...topicList, v]);
+    if (v && !topicList.includes(v)) onTopicEdit(topicStr, [...topicList, v].join(' | '));
     setAddMode(false); setAddVal('');
   }
 
@@ -225,6 +210,28 @@ export default function TIFTable({ astKeywords, tifKeywords, onSetTifKeywords, o
     onSetTifKeywords([]);
     setSelected(new Set());
     showToast('Terms In Focus cleared.');
+  }
+
+  function handleTifTopicEdit(kwStr: string, oldTopicStr: string, newTopicStr: string) {
+    const oldTopics = parseTopics(oldTopicStr);
+    const newTopics = parseTopics(newTopicStr);
+    const addedTopics = newTopics.filter(t => !oldTopics.includes(t));
+    const removedTopics = oldTopics.filter(t => !newTopics.includes(t));
+    if (selected.has(kwStr) && selected.size > 1 && (addedTopics.length > 0 || removedTopics.length > 0)) {
+      const promises: Promise<void>[] = [];
+      selected.forEach(kw => {
+        const rec = getKwRec(kw, astKeywords);
+        if (!rec) return;
+        let existing = parseTopics(rec.topic);
+        addedTopics.forEach(t => { if (!existing.includes(t)) existing.push(t); });
+        removedTopics.forEach(t => { existing = existing.filter(x => x !== t); });
+        promises.push(onUpdateKeyword(rec.id, { topic: existing.join(' | ') }));
+      });
+      Promise.all(promises);
+    } else {
+      const rec = getKwRec(kwStr, astKeywords);
+      if (rec) onUpdateKeyword(rec.id, { topic: newTopicStr });
+    }
   }
 
   function handleMarkStatus(status: 'Unsorted' | 'Partially Sorted' | 'Completely Sorted' | 'AI-Sorted') {
@@ -453,8 +460,9 @@ export default function TIFTable({ astKeywords, tifKeywords, onSetTifKeywords, o
                     {tags.map((t, i) => <span key={i} className="tif-tag-pill">{t}</span>)}
                   </td>
                   <td className={showTopics ? '' : 'tif-col-hidden'}>
-                    <TifTopicPills kwStr={kw} astKeywords={astKeywords} onUpdateKeyword={onUpdateKeyword}
-                      onFilterTopic={t => setTopicFilter(prev => prev === t ? '' : t)} selectedKws={selected} />
+                    <TifTopicPills kwStr={kw} astKeywords={astKeywords}
+                      onTopicEdit={(o, n) => handleTifTopicEdit(kw, o, n)}
+                      onFilterTopic={t => setTopicFilter(prev => prev === t ? '' : t)} />
                   </td>
                 </tr>
               );
