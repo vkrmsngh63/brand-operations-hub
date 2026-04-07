@@ -69,6 +69,7 @@ function parseTags(str: string): string[] {
 export default function MTTable({ astKeywords, onUpdateKeyword }: MTTableProps) {
   const [entries, setEntries] = useState<MTEntry[]>([]);
   const [searchQ, setSearchQ] = useState('');
+  const [kwSearchQ, setKwSearchQ] = useState('');
   const [showMtSv, setShowMtSv] = useState(true);
   const [showKwSv, setShowKwSv] = useState(true);
   const [showTags, setShowTags] = useState(true);
@@ -119,9 +120,13 @@ export default function MTTable({ astKeywords, onUpdateKeyword }: MTTableProps) 
         });
         if (m.keywords.length > 0 && !hasMatch) return false;
       }
+      if (kwSearchQ) {
+        const kq = kwSearchQ.toLowerCase();
+        if (!m.keywords.some(kw => kw.toLowerCase().includes(kq))) return false;
+      }
       return true;
     });
-  }, [entries, searchQ, showSorted, showPartial, showUnsorted, astKeywords]);
+  }, [entries, searchQ, showSorted, showPartial, showUnsorted, astKeywords, kwSearchQ]);
 
   // ── Select all logic ───────────────────────────────────────
   const selCount = useMemo(() => visible.filter(m => selected.has(m.id)).length, [visible, selected]);
@@ -192,7 +197,6 @@ export default function MTTable({ astKeywords, onUpdateKeyword }: MTTableProps) 
       willSelect ? next.add(m.id) : next.delete(m.id);
       return next;
     });
-    // Selecting a row switches to vertical view and checks all keywords
     if (willSelect) {
       setViewMode(prev => { const next = new Map(prev); next.set(m.id, 1); return next; });
       setKwSel(prev => { const next = new Map(prev); next.set(m.id, new Set(m.keywords)); return next; });
@@ -268,6 +272,18 @@ export default function MTTable({ astKeywords, onUpdateKeyword }: MTTableProps) 
     showToast(`"${m.mainTerm}" removed from Main Terms.`);
   }
 
+  function handleRemoveSelected() {
+    const count = selected.size;
+    if (count === 0) { showToast('⚠ No rows selected.'); return; }
+    setEntries(prev => prev.filter(m => !selected.has(m.id)));
+    selected.forEach(id => {
+      setViewMode(prev => { const n = new Map(prev); n.delete(id); return n; });
+      setKwSel(prev => { const n = new Map(prev); n.delete(id); return n; });
+    });
+    setSelected(new Set());
+    showToast(`✓ Removed ${count} selected main term${count !== 1 ? 's' : ''}.`);
+  }
+
   function handleSortByVol() {
     setEntries(prev => [...prev].sort((a, b) =>
       calcMtVolume(b.keywords, astKeywords) - calcMtVolume(a.keywords, astKeywords)
@@ -283,6 +299,7 @@ export default function MTTable({ astKeywords, onUpdateKeyword }: MTTableProps) 
 
   function handleShowAll() {
     setSearchQ('');
+    setKwSearchQ('');
     setShowMtSv(true); setShowKwSv(true); setShowTags(true); setShowTopics(true);
     setShowSorted(true); setShowPartial(true); setShowUnsorted(true);
   }
@@ -343,13 +360,11 @@ export default function MTTable({ astKeywords, onUpdateKeyword }: MTTableProps) 
 
     return (
       <tr key={m.id} className={`${isSelected ? 'mt-sel' : ''} ${mode === 1 ? 'mt-row-vertical' : ''}`}>
-        {/* Col 0: Checkbox */}
         <td style={{ textAlign: 'center', verticalAlign: 'top', paddingTop: 4 }}>
           <input type="checkbox" checked={isSelected} onChange={() => handleToggleRow(m)}
             title="Select row (also switches to vertical view and checks all keywords)"
             style={{ width: 11, height: 11, accentColor: '#3b82f6', cursor: 'pointer' }} />
         </td>
-        {/* Col 1: Main Term */}
         <td style={{ verticalAlign: 'top' }}>
           <div className="mt-term-cell">
             <span className="mt-term-txt" title={m.mainTerm}>{m.mainTerm}</span>
@@ -357,11 +372,9 @@ export default function MTTable({ astKeywords, onUpdateKeyword }: MTTableProps) 
             <button className="mt-rm-btn" title="Remove this main term row" onClick={() => handleRemoveRow(m)}>−</button>
           </div>
         </td>
-        {/* Col 2: MT SV */}
         <td className={showMtSv ? '' : 'mt-col-hidden'} style={{ textAlign: 'right', paddingRight: 6, verticalAlign: 'top' }}>
           {fmtMtV(totalVol)}
         </td>
-        {/* Cols 3–7 depend on view mode */}
         {mode === 0 ? renderCommaView(m, viewLabel) : mode === 1 ? renderVerticalView(m, viewLabel) : renderAppendedView(m, viewLabel)}
       </tr>
     );
@@ -411,9 +424,7 @@ export default function MTTable({ astKeywords, onUpdateKeyword }: MTTableProps) 
 
     return (
       <>
-        {/* Associated Keywords column — vertical list */}
         <td className="mt-kw-td">
-          {/* Master checkbox row */}
           <div className="mt-kw-master">
             <input type="checkbox" checked={allChecked}
               onChange={() => toggleAllKw(m.id, kwList)}
@@ -423,7 +434,6 @@ export default function MTTable({ astKeywords, onUpdateKeyword }: MTTableProps) 
               {kwList.length} keyword{kwList.length !== 1 ? 's' : ''}
             </span>
           </div>
-          {/* One row per keyword */}
           <div className="mt-kw-list">
             {kwList.map(kwStr => (
               <div key={kwStr} className={`mt-kw-item ${isKwSelected(m.id, kwStr) ? 'mt-kw-checked' : ''}`}>
@@ -436,7 +446,6 @@ export default function MTTable({ astKeywords, onUpdateKeyword }: MTTableProps) 
             ))}
           </div>
         </td>
-        {/* Assoc KW SV — vertical list */}
         <td className={showKwSv ? 'mt-sv-td' : 'mt-col-hidden'}>
           <div className="mt-kw-spacer">&nbsp;</div>
           <div className="mt-kw-list">
@@ -450,7 +459,6 @@ export default function MTTable({ astKeywords, onUpdateKeyword }: MTTableProps) 
             })}
           </div>
         </td>
-        {/* Tags — vertical list */}
         <td className={showTags ? 'mt-tags-td' : 'mt-col-hidden'}>
           <div className="mt-kw-spacer">&nbsp;</div>
           <div className="mt-kw-list">
@@ -467,7 +475,6 @@ export default function MTTable({ astKeywords, onUpdateKeyword }: MTTableProps) 
             })}
           </div>
         </td>
-        {/* Topics — vertical list */}
         <td className={showTopics ? 'mt-topics-td' : 'mt-col-hidden'}>
           <div className="mt-kw-spacer">&nbsp;</div>
           <div className="mt-kw-list">
@@ -484,7 +491,6 @@ export default function MTTable({ astKeywords, onUpdateKeyword }: MTTableProps) 
             })}
           </div>
         </td>
-        {/* Topic Descriptions — placeholder */}
         <td className={showTopicDesc ? '' : 'mt-col-hidden'}></td>
       </>
     );
@@ -504,6 +510,13 @@ export default function MTTable({ astKeywords, onUpdateKeyword }: MTTableProps) 
           <button className="mt-search-btn" title="Search">⌕</button>
         </div>
         <div className="mt-ctrl-div" />
+        <div className="mt-search-wrap">
+          <input className="mt-search-inp" type="text" placeholder="Search keywords…"
+            value={kwSearchQ} onChange={e => setKwSearchQ(e.target.value)}
+            style={{ width: 105 }} />
+          <button className="mt-search-btn" title="Search associated keywords">⌕</button>
+        </div>
+        <div className="mt-ctrl-div" />
         <label className="mt-cb-label"><input type="checkbox" checked={showMtSv} onChange={e => setShowMtSv(e.target.checked)} /> MT SV</label>
         <label className="mt-cb-label"><input type="checkbox" checked={showKwSv} onChange={e => setShowKwSv(e.target.checked)} /> KW SV</label>
         <label className="mt-cb-label"><input type="checkbox" checked={showTags} onChange={e => setShowTags(e.target.checked)} /> Tags</label>
@@ -517,6 +530,7 @@ export default function MTTable({ astKeywords, onUpdateKeyword }: MTTableProps) 
         <button className="mt-btn" onClick={handleShowAll}>↺ Show All</button>
         <button className="mt-btn" onClick={handleSortByVol}>▼ Sort by Vol.</button>
         <button className="mt-btn" onClick={handleRemoveEmpty} title="Remove all rows with no associated keywords">Remove Empty</button>
+        <button className="mt-btn" onClick={handleRemoveSelected} title="Remove all selected main term rows" style={selected.size > 0 ? { color: '#e74c3c', borderColor: '#fca5a5' } : {}}>− Remove ({selected.size})</button>
         <button className="mt-btn" onClick={handleCopyTableData} title="Copy visible rows as tab-separated text">Copy Table Data</button>
         <div style={{ flex: 1 }} />
         <button className="mt-zoom-btn" onClick={() => setFontSize(f => Math.max(7, f - 1))}>－</button>
@@ -580,7 +594,7 @@ export default function MTTable({ astKeywords, onUpdateKeyword }: MTTableProps) 
                     ? 'No main terms yet. Type a term below or paste from Excel.'
                     : 'No main terms match the current filters.'
                   }</div>
-                </div>
+                </div>curl -s http://localhost:3000 | head -5
               </td></tr>
             ) : visible.map(m => renderRow(m))}
           </tbody>
