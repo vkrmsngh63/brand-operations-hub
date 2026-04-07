@@ -66,6 +66,71 @@ function parseTags(str: string): string[] {
   return (str || '').split(',').map(t => t.trim()).filter(Boolean);
 }
 
+function parseTopics(str: string): string[] {
+  return (str || '').split('|').map(t => t.trim()).filter(Boolean);
+}
+
+// ── Inline Topic Pills (editable) ─────────────────────────────
+function MtTopicPills({ kwStr, astKeywords, onUpdateKeyword }: {
+  kwStr: string; astKeywords: Keyword[]; onUpdateKeyword: (id: string, patch: Partial<Keyword>) => Promise<void>;
+}) {
+  const [editIdx, setEditIdx] = useState<number | null>(null);
+  const [editVal, setEditVal] = useState('');
+  const [addMode, setAddMode] = useState(false);
+  const [addVal, setAddVal] = useState('');
+  const editRef = useRef<HTMLInputElement>(null);
+  const addRef = useRef<HTMLInputElement>(null);
+
+  const rec = getKwRec(kwStr, astKeywords);
+  const topicList = parseTopics(rec?.topic || '');
+
+  useEffect(() => { if (editIdx !== null && editRef.current) { editRef.current.focus(); editRef.current.select(); } }, [editIdx]);
+  useEffect(() => { if (addMode && addRef.current) addRef.current.focus(); }, [addMode]);
+
+  function save(newList: string[]) {
+    if (!rec) return;
+    onUpdateKeyword(rec.id, { topic: newList.join(' | ') });
+  }
+  function commitEdit() {
+    if (editIdx === null) return;
+    const newList = [...topicList];
+    if (editVal.trim() === '') newList.splice(editIdx, 1); else newList[editIdx] = editVal.trim();
+    save(newList);
+    setEditIdx(null); setEditVal('');
+  }
+  function commitAdd() {
+    const v = addVal.trim();
+    if (v && !topicList.includes(v)) save([...topicList, v]);
+    setAddMode(false); setAddVal('');
+  }
+
+  return (
+    <div className="mt-topic-pills">
+      {topicList.map((t, i) =>
+        editIdx === i ? (
+          <input key={i} ref={editRef} className="mt-topic-inp" type="text" value={editVal}
+            onChange={e => setEditVal(e.target.value)} onClick={e => e.stopPropagation()} onBlur={commitEdit}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); (e.target as HTMLInputElement).blur(); } if (e.key === 'Escape') { setEditIdx(null); setEditVal(''); } }}
+            style={{ width: 70, height: 16, fontSize: '0.85em', padding: '0 3px', border: '1px solid #c4b5fd', borderRadius: 3 }} />
+        ) : (
+          <span key={i} className="mt-topic-pill" style={{ cursor: 'pointer' }}
+            onClick={e => { e.stopPropagation(); setEditIdx(i); setEditVal(t); setAddMode(false); }}
+            title="Click to edit topic">{t}</span>
+        )
+      )}
+      {addMode ? (
+        <input ref={addRef} className="mt-topic-inp" type="text" placeholder="topic…" value={addVal}
+          onChange={e => setAddVal(e.target.value)} onClick={e => e.stopPropagation()} onBlur={commitAdd}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); (e.target as HTMLInputElement).blur(); } if (e.key === 'Escape') { setAddMode(false); setAddVal(''); } }}
+          style={{ width: 60, height: 16, fontSize: '0.85em', padding: '0 3px', border: '1px solid #c4b5fd', borderRadius: 3 }} />
+      ) : (
+        <span className="mt-topic-add" onClick={e => { e.stopPropagation(); setAddMode(true); setAddVal(''); }}
+          style={{ cursor: 'pointer', color: '#8b5cf6', fontSize: '0.85em', fontWeight: 600 }} title="Add topic">+</span>
+      )}
+    </div>
+  );
+}
+
 // ── Component ──────────────────────────────────────────────────
 export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MTTableProps) { {
   const [entries, setEntries] = useState<MTEntry[]>([]);
@@ -666,13 +731,9 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
           <div className="mt-kw-spacer">&nbsp;</div>
           <div className="mt-kw-list">
             {kwList.map(kwStr => {
-              const rec = getKwRec(kwStr, astKeywords);
-              const topics = (rec?.topic || '').split('|').map(t => t.trim()).filter(Boolean);
               return (
                 <div key={kwStr} className="mt-kw-item">
-                  <div className="mt-topic-pills">
-                    {topics.map((t, i) => <span key={i} className="mt-topic-pill">{t}</span>)}
-                  </div>
+                  <MtTopicPills kwStr={kwStr} astKeywords={astKeywords} onUpdateKeyword={onUpdateKeyword} />
                 </div>
               );
             })}

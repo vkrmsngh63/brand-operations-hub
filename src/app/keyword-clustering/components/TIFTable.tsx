@@ -27,8 +27,76 @@ function parseTags(str: string): string[] {
   return (str || '').split(',').map(t => t.trim()).filter(Boolean);
 }
 
+function parseTopics(str: string): string[] {
+  return (str || '').split('|').map(t => t.trim()).filter(Boolean);
+}
+
 function getKwRec(kwStr: string, astKeywords: Keyword[]): Keyword | undefined {
   return astKeywords.find(k => k.keyword === kwStr);
+}
+
+// ── Inline Topic Pills (editable) for TIF ─────────────────────
+function TifTopicPills({ kwStr, astKeywords, onUpdateKeyword, onFilterTopic }: {
+  kwStr: string; astKeywords: Keyword[];
+  onUpdateKeyword: (id: string, patch: Partial<Keyword>) => Promise<void>;
+  onFilterTopic: (topic: string) => void;
+}) {
+  const [editIdx, setEditIdx] = useState<number | null>(null);
+  const [editVal, setEditVal] = useState('');
+  const [addMode, setAddMode] = useState(false);
+  const [addVal, setAddVal] = useState('');
+  const editRef = useRef<HTMLInputElement>(null);
+  const addRef = useRef<HTMLInputElement>(null);
+
+  const rec = getKwRec(kwStr, astKeywords);
+  const topicList = parseTopics(rec?.topic || '');
+
+  useEffect(() => { if (editIdx !== null && editRef.current) { editRef.current.focus(); editRef.current.select(); } }, [editIdx]);
+  useEffect(() => { if (addMode && addRef.current) addRef.current.focus(); }, [addMode]);
+
+  function save(newList: string[]) {
+    if (!rec) return;
+    onUpdateKeyword(rec.id, { topic: newList.join(' | ') });
+  }
+  function commitEdit() {
+    if (editIdx === null) return;
+    const newList = [...topicList];
+    if (editVal.trim() === '') newList.splice(editIdx, 1); else newList[editIdx] = editVal.trim();
+    save(newList);
+    setEditIdx(null); setEditVal('');
+  }
+  function commitAdd() {
+    const v = addVal.trim();
+    if (v && !topicList.includes(v)) save([...topicList, v]);
+    setAddMode(false); setAddVal('');
+  }
+
+  return (
+    <>
+      {topicList.map((t, i) =>
+        editIdx === i ? (
+          <input key={i} ref={editRef} className="tif-topic-inp" type="text" value={editVal}
+            onChange={e => setEditVal(e.target.value)} onClick={e => e.stopPropagation()} onBlur={commitEdit}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); (e.target as HTMLInputElement).blur(); } if (e.key === 'Escape') { setEditIdx(null); setEditVal(''); } }}
+            style={{ width: 70, height: 16, fontSize: '0.85em', padding: '0 3px', border: '1px solid #c4b5fd', borderRadius: 3, display: 'inline-block', margin: '0 1px' }} />
+        ) : (
+          <span key={i} className="tif-topic-pill" style={{ cursor: 'pointer' }}
+            onClick={e => { e.stopPropagation(); setEditIdx(i); setEditVal(t); setAddMode(false); }}
+            onContextMenu={e => { e.preventDefault(); onFilterTopic(t); }}
+            title={`Click to edit · Right-click to filter by "${t}"`}>{t}</span>
+        )
+      )}
+      {addMode ? (
+        <input ref={addRef} className="tif-topic-inp" type="text" placeholder="topic…" value={addVal}
+          onChange={e => setAddVal(e.target.value)} onClick={e => e.stopPropagation()} onBlur={commitAdd}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); (e.target as HTMLInputElement).blur(); } if (e.key === 'Escape') { setAddMode(false); setAddVal(''); } }}
+          style={{ width: 60, height: 16, fontSize: '0.85em', padding: '0 3px', border: '1px solid #c4b5fd', borderRadius: 3, display: 'inline-block', margin: '0 1px' }} />
+      ) : (
+        <span className="tif-topic-add" onClick={e => { e.stopPropagation(); setAddMode(true); setAddVal(''); }}
+          style={{ cursor: 'pointer', color: '#8b5cf6', fontSize: '0.85em', fontWeight: 600, marginLeft: 2 }} title="Add topic">+</span>
+      )}
+    </>
+  );
 }
 
 export default function TIFTable({ astKeywords, tifKeywords, onSetTifKeywords, onUpdateKeyword, tifActive, onSetTifActive }: TIFTableProps) {
@@ -57,7 +125,6 @@ export default function TIFTable({ astKeywords, tifKeywords, onSetTifKeywords, o
     toastTimer.current = setTimeout(() => setToast(''), 3200);
   }, []);
 
-  // ── Filtering ──────────────────────────────────────────────
   const visible = useMemo(() => {
     const q = searchQ.trim().toLowerCase();
     return tifKeywords.filter(kw => {
@@ -83,24 +150,22 @@ export default function TIFTable({ astKeywords, tifKeywords, onSetTifKeywords, o
         })) return false;
       }
       if (topicQ) {
-        const pills = (rec?.topic || '').split('|').map(t => t.trim()).filter(Boolean);
+        const pills = parseTopics(rec?.topic || '');
         if (!pills.some(p => p.toLowerCase() === topicQ.toLowerCase())) return false;
       }
       if (topicFilter) {
-        const pills = (rec?.topic || '').split('|').map(t => t.trim()).filter(Boolean);
+        const pills = parseTopics(rec?.topic || '');
         if (!pills.some(p => p.toLowerCase() === topicFilter.toLowerCase())) return false;
       }
       return true;
     });
   }, [tifKeywords, searchQ, showSorted, showPartial, showUnsorted, astKeywords, tagQ, topicQ, topicFilter]);
 
-  // ── Select all ─────────────────────────────────────────────
   const selCount = useMemo(() => visible.filter(kw => selected.has(kw)).length, [visible, selected]);
   const selectAllState: 'none' | 'some' | 'all' = selCount === 0 ? 'none' : selCount === visible.length ? 'all' : 'some';
   const selectAllRef = useRef<HTMLInputElement>(null);
   useEffect(() => { if (selectAllRef.current) selectAllRef.current.indeterminate = selectAllState === 'some'; }, [selectAllState]);
 
-  // ── Handlers ───────────────────────────────────────────────
   function handleToggleAll(checked: boolean) {
     setSelected(prev => {
       const next = new Set(prev);
@@ -238,7 +303,7 @@ export default function TIFTable({ astKeywords, tifKeywords, onSetTifKeywords, o
     if (st === 'Partially Sorted') return 'tif-st-p';
     return 'tif-st-u';
   }
-  // ── Render ─────────────────────────────────────────────────
+
   return (
     <div className="tif-panel" style={{ fontSize: `${fontSize}px` }}>
       <div className="tif-ph">
@@ -285,7 +350,7 @@ export default function TIFTable({ astKeywords, tifKeywords, onSetTifKeywords, o
         <span style={{ fontSize: '9px', color: '#64748b', minWidth: 30, textAlign: 'center' }}>{Math.round((fontSize / 10) * 100)}%</span>
         <button className="tif-zoom-btn" onClick={() => setFontSize(f => Math.min(18, f + 1))}>＋</button>
       </div>
-{topicFilter && (
+      {topicFilter && (
         <div style={{ background: '#fef9c3', padding: '3px 8px', fontSize: 10, display: 'flex', alignItems: 'center', gap: 6, borderBottom: '1px solid #fde68a' }}>
           <span>🏷 Filtering by topic:</span><strong>{topicFilter}</strong>
           <button onClick={() => setTopicFilter('')} style={{ background: 'none', border: '1px solid #d97706', borderRadius: 3, padding: '1px 6px', fontSize: 9, cursor: 'pointer', color: '#92400e' }}>✕ Clear</button>
@@ -346,7 +411,6 @@ export default function TIFTable({ astKeywords, tifKeywords, onSetTifKeywords, o
               const rec = getKwRec(kw, astKeywords);
               const st = rec ? rec.sortingStatus : 'Unsorted';
               const tags = parseTags(rec ? rec.tags : '');
-              const topics = (rec?.topic || '').split('|').map(t => t.trim()).filter(Boolean);
               const isSelected = selected.has(kw);
               return (
                 <tr key={kw} className={isSelected ? 'tif-sel' : ''}
@@ -376,7 +440,8 @@ export default function TIFTable({ astKeywords, tifKeywords, onSetTifKeywords, o
                     {tags.map((t, i) => <span key={i} className="tif-tag-pill">{t}</span>)}
                   </td>
                   <td className={showTopics ? '' : 'tif-col-hidden'}>
-                    {topics.map((t, i) => <span key={i} className="tif-topic-pill" style={{ cursor: 'pointer' }} onClick={() => setTopicFilter(prev => prev === t ? '' : t)} title={`Click to filter by "${t}"`}>{t}</span>)}
+                    <TifTopicPills kwStr={kw} astKeywords={astKeywords} onUpdateKeyword={onUpdateKeyword}
+                      onFilterTopic={t => setTopicFilter(prev => prev === t ? '' : t)} />
                   </td>
                 </tr>
               );

@@ -29,6 +29,10 @@ function parseTags(str: string): string[] {
   return (str || '').split(',').map(t => t.trim()).filter(Boolean);
 }
 
+function parseTopics(str: string): string[] {
+  return (str || '').split('|').map(t => t.trim()).filter(Boolean);
+}
+
 interface RemovedKeyword {
   id: string;
   keyword: string;
@@ -220,6 +224,28 @@ export default function ASTTable({
       showToast(`✓ Tags updated on ${ids.length} selected rows.`);
     } else {
       await onUpdateKeyword(kwId, { tags: newTagsStr });
+    }
+  }
+
+  async function handleTopicEdit(kwId: string, oldTopicStr: string, newTopicStr: string) {
+    const oldTopics = parseTopics(oldTopicStr);
+    const newTopics = parseTopics(newTopicStr);
+    const addedTopics = newTopics.filter(t => !oldTopics.includes(t));
+    const removedTopics = oldTopics.filter(t => !newTopics.includes(t));
+    if (selected.has(kwId) && selected.size > 1 && (addedTopics.length > 0 || removedTopics.length > 0)) {
+      const ids = [...selected];
+      const updates = ids.map(id => {
+        const kw = keywords.find(k => k.id === id);
+        if (!kw) return null;
+        let existing = parseTopics(kw.topic);
+        addedTopics.forEach(t => { if (!existing.includes(t)) existing.push(t); });
+        removedTopics.forEach(t => { existing = existing.filter(x => x !== t); });
+        return { id, topic: existing.join(' | ') };
+      }).filter(Boolean) as { id: string; topic: string }[];
+      await Promise.all(updates.map(u => onUpdateKeyword(u.id, { topic: u.topic })));
+      showToast(`✓ Topics updated on ${ids.length} selected rows.`);
+    } else {
+      await onUpdateKeyword(kwId, { topic: newTopicStr });
     }
   }
 
@@ -433,6 +459,7 @@ export default function ASTTable({
                     onToggle={() => handleToggleRow(k.id)} onCycleStatus={() => handleCycleStatus(k)}
                     onRemove={() => handleRemove(k)} onGoogleSearch={() => googleSearch(k.keyword)}
                     onTagClick={(tag: string) => setTagFilter(tag)} onTagEdit={(o, n) => handleTagEdit(k.id, o, n)}
+                    onTopicEdit={(o, n) => handleTopicEdit(k.id, o, n)}
                     onDragStart={e => handleDragStart(e, k.id)} onDragEnd={handleDragEnd}
                     onDragOver={e => handleDragOver(e, k.id)} onDrop={handleDrop}
                     showVol={showVol} showTags={showTags} showTopics={showTopics} showTopicDesc={showTopicDesc} />
@@ -542,21 +569,80 @@ function TagCell({ tags, onTagClick, onTagEdit, hidden }: TagCellProps) {
   );
 }
 
+// ── Topic Cell Component ────────────────────────────────────────
+interface TopicCellProps { topics: string; onTopicEdit: (oldTopics: string, newTopics: string) => void; hidden: boolean; }
+
+function TopicCell({ topics, onTopicEdit, hidden }: TopicCellProps) {
+  const [editIdx, setEditIdx] = useState<number | null>(null);
+  const [editValue, setEditValue] = useState('');
+  const [addMode, setAddMode] = useState(false);
+  const [addValue, setAddValue] = useState('');
+  const editRef = useRef<HTMLInputElement>(null);
+  const addRef = useRef<HTMLInputElement>(null);
+  const topicList = parseTopics(topics);
+
+  useEffect(() => { if (editIdx !== null && editRef.current) { editRef.current.focus(); editRef.current.select(); } }, [editIdx]);
+  useEffect(() => { if (addMode && addRef.current) addRef.current.focus(); }, [addMode]);
+
+  function startEdit(idx: number, value: string, e: React.MouseEvent) { e.stopPropagation(); setEditIdx(idx); setEditValue(value); setAddMode(false); }
+  function commitEdit() {
+    if (editIdx === null) return;
+    const newList = [...topicList];
+    if (editValue.trim() === '') newList.splice(editIdx, 1); else newList[editIdx] = editValue.trim();
+    const newStr = newList.join(' | ');
+    if (newStr !== topics) onTopicEdit(topics, newStr);
+    setEditIdx(null); setEditValue('');
+  }
+  function cancelEdit() { setEditIdx(null); setEditValue(''); }
+  function startAdd(e: React.MouseEvent) { e.stopPropagation(); setAddMode(true); setAddValue(''); setEditIdx(null); }
+  function commitAdd() {
+    const v = addValue.trim();
+    if (v && !topicList.includes(v)) onTopicEdit(topics, [...topicList, v].join(' | '));
+    setAddMode(false); setAddValue('');
+  }
+  function cancelAdd() { setAddMode(false); setAddValue(''); }
+
+  if (hidden) return <td className="ast-col-hidden" />;
+  return (
+    <td>
+      <div className="ast-tag-cell-inner">
+        {topicList.map((topic, i) =>
+          editIdx === i ? (
+            <input key={i} ref={editRef} className="ast-tag-inp" type="text" value={editValue}
+              onChange={e => setEditValue(e.target.value)} onClick={e => e.stopPropagation()} onBlur={commitEdit}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); (e.target as HTMLInputElement).blur(); } if (e.key === 'Escape') cancelEdit(); }} />
+          ) : (
+            <span key={i} className="ast-topic-pill" onClick={e => startEdit(i, topic, e)}
+              title={`Click to edit topic`}>{topic}</span>
+          )
+        )}
+        {addMode ? (
+          <input ref={addRef} className="ast-tag-inp" type="text" placeholder="New topic…" value={addValue}
+            onChange={e => setAddValue(e.target.value)} onClick={e => e.stopPropagation()} onBlur={commitAdd}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); (e.target as HTMLInputElement).blur(); } if (e.key === 'Escape') cancelAdd(); }} />
+        ) : (
+          <span className="ast-tag-add-trigger" onClick={startAdd} title="Click to add a new topic">+</span>
+        )}
+      </div>
+    </td>
+  );
+}
+
 // ── Row component (memoized for virtual scroll perf) ─────────
 interface ASTRowProps {
   kw: Keyword; isSelected: boolean; isDragging: boolean;
   onToggle: () => void; onCycleStatus: () => void; onRemove: () => void; onGoogleSearch: () => void;
   onTagClick: (tag: string) => void; onTagEdit: (oldTags: string, newTags: string) => void;
+  onTopicEdit: (oldTopics: string, newTopics: string) => void;
   onDragStart: (e: React.DragEvent) => void; onDragEnd: () => void; onDragOver: (e: React.DragEvent) => void; onDrop: (e: React.DragEvent) => void;
   showVol: boolean; showTags: boolean; showTopics: boolean; showTopicDesc: boolean;
 }
 
 const ASTRow = React.memo(function ASTRow({
   kw, isSelected, isDragging, onToggle, onCycleStatus, onRemove, onGoogleSearch, onTagClick,
-  onTagEdit, onDragStart, onDragEnd, onDragOver, onDrop, showVol, showTags, showTopics, showTopicDesc,
+  onTagEdit, onTopicEdit, onDragStart, onDragEnd, onDragOver, onDrop, showVol, showTags, showTopics, showTopicDesc,
 }: ASTRowProps) {
   const pillClass = kw.sortingStatus === 'Completely Sorted' ? 'ast-pill ast-pill-c' : kw.sortingStatus === 'AI-Sorted' ? 'ast-pill ast-pill-ai' : kw.sortingStatus === 'Partially Sorted' ? 'ast-pill ast-pill-p' : 'ast-pill ast-pill-u';
-  const topics = (kw.topic || '').split('|').map(t => t.trim()).filter(Boolean);
   const trRef = useRef<HTMLTableRowElement>(null);
 
   return (
@@ -576,7 +662,7 @@ const ASTRow = React.memo(function ASTRow({
       <td className={showVol ? '' : 'ast-col-hidden'} style={{ textAlign: 'right', paddingRight: 6 }}>{kw.volume ? fmtV(kw.volume) : ''}</td>
       <td style={{ cursor: 'pointer' }} title="Click to cycle status" onClick={onCycleStatus}><span className={pillClass}>{kw.sortingStatus}</span></td>
       <TagCell tags={kw.tags} onTagClick={onTagClick} onTagEdit={onTagEdit} hidden={!showTags} />
-      <td className={showTopics ? '' : 'ast-col-hidden'}>{topics.map((t, i) => <span key={i} className="ast-topic-pill">{t}</span>)}</td>
+      <TopicCell topics={kw.topic || ''} onTopicEdit={onTopicEdit} hidden={!showTopics} />
       <td className={showTopicDesc ? '' : 'ast-col-hidden'}></td>
     </tr>
   );
