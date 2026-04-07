@@ -318,3 +318,122 @@
   background: #3b82f6;
   opacity: 0.4;
 }
+/* ── Vertical View Mode ─────────────────────────────────── */
+.mt-row-vertical td {
+  vertical-align: top;
+}
+.mt-kw-td, .mt-sv-td, .mt-tags-td, .mt-topics-td {
+  padding: 0 !important;
+}
+.mt-kw-master {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 5px;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+  font-size: 0.85em;
+  color: #64748b;
+}
+.mt-kw-master-label {
+  font-weight: 600;
+  font-size: 0.9em;
+}
+.mt-kw-spacer {
+  padding: 3px 5px;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: 0.85em;
+  visibility: hidden;
+}
+.mt-kw-list {
+  display: flex;
+  flex-direction: column;
+}
+.mt-kw-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 5px;
+  border-bottom: 1px solid #f1f5f9;
+  min-height: 22px;
+  font-size: 0.95em;
+}
+.mt-kw-item:last-child {
+  border-bottom: none;
+}
+.mt-kw-checked {
+  background: #eff6ff;
+}
+.mt-kw-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #1e293b;
+}
+.mt-kw-gs {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  border: 1px solid #b3c6e0;
+  border-radius: 2px;
+  background: #fff;
+  color: #3b82f6;
+  font-size: 9px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.mt-kw-item:hover .mt-kw-gs { opacity: 1; }
+.mt-kw-sv-item {
+  justify-content: flex-end;
+  padding-right: 6px;
+  color: #475569;
+  font-size: 0.9em;
+}
+
+/* Tag & Topic pills in vertical view */
+.mt-tag-pills, .mt-topic-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+.mt-tag-pill {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: #dbeafe;
+  color: #1e40af;
+  font-size: 0.85em;
+  white-space: nowrap;
+}
+.mt-topic-pill {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: #e0e7ff;
+  color: #3730a3;
+  font-size: 0.85em;
+  white-space: nowrap;
+}
+
+/* Appended / single-line view */
+.mt-ak-appended {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #64748b;
+  font-size: 0.95em;
+}
+
+/* Empty keywords text */
+.mt-empty-kw {
+  color: #94a3b8;
+  font-style: italic;
+  font-size: 0.9em;
+}
