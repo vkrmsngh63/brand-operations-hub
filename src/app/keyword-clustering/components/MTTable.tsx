@@ -126,6 +126,11 @@ export default function MTTable({ astKeywords, onUpdateKeyword }: MTTableProps) 
 
   // ── Select all logic ───────────────────────────────────────
   const selCount = useMemo(() => visible.filter(m => selected.has(m.id)).length, [visible, selected]);
+  const totalKwSel = useMemo(() => {
+    let count = 0;
+    kwSel.forEach(s => { count += s.size; });
+    return count;
+  }, [kwSel]);
   const selectAllState: 'none' | 'some' | 'all' = selCount === 0 ? 'none' : selCount === visible.length ? 'all' : 'some';
   const selectAllRef = useRef<HTMLInputElement>(null);
   useEffect(() => { if (selectAllRef.current) selectAllRef.current.indeterminate = selectAllState === 'some'; }, [selectAllState]);
@@ -268,6 +273,24 @@ export default function MTTable({ astKeywords, onUpdateKeyword }: MTTableProps) 
     showToast(`"${m.mainTerm}" removed from Main Terms.`);
   }
 
+  
+  function handleMarkStatus(status: 'Unsorted' | 'Partially Sorted' | 'Completely Sorted' | 'AI-Sorted') {
+    if (totalKwSel === 0) { showToast('⚠ No keywords checked.'); return; }
+    let count = 0;
+    const promises: Promise<void>[] = [];
+    kwSel.forEach((kwSet) => {
+      kwSet.forEach(kwStr => {
+        const rec = getKwRec(kwStr, astKeywords);
+        if (rec) {
+          promises.push(onUpdateKeyword(rec.id, { sortingStatus: status }));
+          count++;
+        }
+      });
+    });
+    Promise.all(promises).then(() => {
+      showToast(`✓ Marked ${count} keyword${count !== 1 ? 's' : ''} as ${status}.`);
+    });
+  }
   function handleRemoveSelected() {
     const count = selected.size;
     if (count === 0) { showToast('⚠ No rows selected.'); return; }
@@ -498,6 +521,14 @@ export default function MTTable({ astKeywords, onUpdateKeyword }: MTTableProps) 
     <div className="mt-panel" style={{ fontSize: `${fontSize}px` }}>
       <div className="mt-ph">
         <span>Main Terms</span>
+        {totalKwSel > 0 && (
+          <div style={{ display: 'flex', gap: 3, alignItems: 'center', marginLeft: 8 }}>
+            <span style={{ fontSize: 9, color: '#64748b', marginRight: 2 }}>{totalKwSel} kw checked →</span>
+            <button className="mt-btn" style={{ color: '#6b7280', borderColor: '#d1d5db' }} onClick={() => handleMarkStatus('Unsorted')}>Unsorted</button>
+            <button className="mt-btn" style={{ color: '#f59e0b', borderColor: '#fbbf24' }} onClick={() => handleMarkStatus('Partially Sorted')}>Partial</button>
+            <button className="mt-btn" style={{ color: '#22c55e', borderColor: '#86efac' }} onClick={() => handleMarkStatus('Completely Sorted')}>Sorted</button>
+          </div>
+        )}
       </div>
       <div className="mt-ctrl">
         <div className="mt-search-wrap">
