@@ -36,10 +36,11 @@ function getKwRec(kwStr: string, astKeywords: Keyword[]): Keyword | undefined {
 }
 
 // ── Inline Topic Pills (editable) for TIF ─────────────────────
-function TifTopicPills({ kwStr, astKeywords, onUpdateKeyword, onFilterTopic }: {
+function TifTopicPills({ kwStr, astKeywords, onUpdateKeyword, onFilterTopic, selectedKws }: {
   kwStr: string; astKeywords: Keyword[];
   onUpdateKeyword: (id: string, patch: Partial<Keyword>) => Promise<void>;
   onFilterTopic: (topic: string) => void;
+  selectedKws: Set<string>;
 }) {
   const [editIdx, setEditIdx] = useState<number | null>(null);
   const [editVal, setEditVal] = useState('');
@@ -54,20 +55,32 @@ function TifTopicPills({ kwStr, astKeywords, onUpdateKeyword, onFilterTopic }: {
   useEffect(() => { if (editIdx !== null && editRef.current) { editRef.current.focus(); editRef.current.select(); } }, [editIdx]);
   useEffect(() => { if (addMode && addRef.current) addRef.current.focus(); }, [addMode]);
 
-  function save(newList: string[]) {
-    if (!rec) return;
-    onUpdateKeyword(rec.id, { topic: newList.join(' | ') });
+  function saveBatch(oldList: string[], newList: string[]) {
+    const added = newList.filter(t => !oldList.includes(t));
+    const removed = oldList.filter(t => !newList.includes(t));
+    if (selectedKws.has(kwStr) && selectedKws.size > 1 && (added.length > 0 || removed.length > 0)) {
+      selectedKws.forEach(kw => {
+        const r = getKwRec(kw, astKeywords);
+        if (!r) return;
+        let existing = parseTopics(r.topic);
+        added.forEach(t => { if (!existing.includes(t)) existing.push(t); });
+        removed.forEach(t => { existing = existing.filter(x => x !== t); });
+        onUpdateKeyword(r.id, { topic: existing.join(' | ') });
+      });
+    } else if (rec) {
+      onUpdateKeyword(rec.id, { topic: newList.join(' | ') });
+    }
   }
   function commitEdit() {
     if (editIdx === null) return;
     const newList = [...topicList];
     if (editVal.trim() === '') newList.splice(editIdx, 1); else newList[editIdx] = editVal.trim();
-    save(newList);
+    saveBatch(topicList, newList);
     setEditIdx(null); setEditVal('');
   }
   function commitAdd() {
     const v = addVal.trim();
-    if (v && !topicList.includes(v)) save([...topicList, v]);
+    if (v && !topicList.includes(v)) saveBatch(topicList, [...topicList, v]);
     setAddMode(false); setAddVal('');
   }
 
@@ -441,7 +454,7 @@ export default function TIFTable({ astKeywords, tifKeywords, onSetTifKeywords, o
                   </td>
                   <td className={showTopics ? '' : 'tif-col-hidden'}>
                     <TifTopicPills kwStr={kw} astKeywords={astKeywords} onUpdateKeyword={onUpdateKeyword}
-                      onFilterTopic={t => setTopicFilter(prev => prev === t ? '' : t)} />
+                      onFilterTopic={t => setTopicFilter(prev => prev === t ? '' : t)} selectedKws={selected} />
                   </td>
                 </tr>
               );

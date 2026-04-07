@@ -71,8 +71,11 @@ function parseTopics(str: string): string[] {
 }
 
 // ── Inline Topic Pills (editable) ─────────────────────────────
-function MtTopicPills({ kwStr, astKeywords, onUpdateKeyword }: {
-  kwStr: string; astKeywords: Keyword[]; onUpdateKeyword: (id: string, patch: Partial<Keyword>) => Promise<void>;
+function MtTopicPills({ kwStr, astKeywords, onUpdateKeyword, checkedKws, onTopicFilter }: {
+  kwStr: string; astKeywords: Keyword[];
+  onUpdateKeyword: (id: string, patch: Partial<Keyword>) => Promise<void>;
+  checkedKws: Set<string>;
+  onTopicFilter: (topic: string) => void;
 }) {
   const [editIdx, setEditIdx] = useState<number | null>(null);
   const [editVal, setEditVal] = useState('');
@@ -87,20 +90,32 @@ function MtTopicPills({ kwStr, astKeywords, onUpdateKeyword }: {
   useEffect(() => { if (editIdx !== null && editRef.current) { editRef.current.focus(); editRef.current.select(); } }, [editIdx]);
   useEffect(() => { if (addMode && addRef.current) addRef.current.focus(); }, [addMode]);
 
-  function save(newList: string[]) {
-    if (!rec) return;
-    onUpdateKeyword(rec.id, { topic: newList.join(' | ') });
+  function saveBatch(oldList: string[], newList: string[]) {
+    const added = newList.filter(t => !oldList.includes(t));
+    const removed = oldList.filter(t => !newList.includes(t));
+    if (checkedKws.has(kwStr) && checkedKws.size > 1 && (added.length > 0 || removed.length > 0)) {
+      checkedKws.forEach(kw => {
+        const r = getKwRec(kw, astKeywords);
+        if (!r) return;
+        let existing = parseTopics(r.topic);
+        added.forEach(t => { if (!existing.includes(t)) existing.push(t); });
+        removed.forEach(t => { existing = existing.filter(x => x !== t); });
+        onUpdateKeyword(r.id, { topic: existing.join(' | ') });
+      });
+    } else if (rec) {
+      onUpdateKeyword(rec.id, { topic: newList.join(' | ') });
+    }
   }
   function commitEdit() {
     if (editIdx === null) return;
     const newList = [...topicList];
     if (editVal.trim() === '') newList.splice(editIdx, 1); else newList[editIdx] = editVal.trim();
-    save(newList);
+    saveBatch(topicList, newList);
     setEditIdx(null); setEditVal('');
   }
   function commitAdd() {
     const v = addVal.trim();
-    if (v && !topicList.includes(v)) save([...topicList, v]);
+    if (v && !topicList.includes(v)) saveBatch(topicList, [...topicList, v]);
     setAddMode(false); setAddVal('');
   }
 
@@ -115,7 +130,8 @@ function MtTopicPills({ kwStr, astKeywords, onUpdateKeyword }: {
         ) : (
           <span key={i} className="mt-topic-pill" style={{ cursor: 'pointer' }}
             onClick={e => { e.stopPropagation(); setEditIdx(i); setEditVal(t); setAddMode(false); }}
-            title="Click to edit topic">{t}</span>
+            onContextMenu={e => { e.preventDefault(); onTopicFilter(t); }}
+            title={`Click to edit · Right-click to filter by "${t}"`}>{t}</span>
         )
       )}
       {addMode ? (
@@ -236,6 +252,11 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
     let count = 0;
     kwSel.forEach(s => { count += s.size; });
     return count;
+  }, [kwSel]);
+  const allCheckedKws = useMemo(() => {
+    const s = new Set<string>();
+    kwSel.forEach(kwSet => kwSet.forEach(kw => s.add(kw)));
+    return s;
   }, [kwSel]);
   const selectAllState: 'none' | 'some' | 'all' = selCount === 0 ? 'none' : selCount === visible.length ? 'all' : 'some';
   const selectAllRef = useRef<HTMLInputElement>(null);
@@ -733,7 +754,8 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
             {kwList.map(kwStr => {
               return (
                 <div key={kwStr} className="mt-kw-item">
-                  <MtTopicPills kwStr={kwStr} astKeywords={astKeywords} onUpdateKeyword={onUpdateKeyword} />
+                  <MtTopicPills kwStr={kwStr} astKeywords={astKeywords} onUpdateKeyword={onUpdateKeyword}
+                    checkedKws={allCheckedKws} onTopicFilter={t => setKwTopicQ(t)} />
                 </div>
               );
             })}

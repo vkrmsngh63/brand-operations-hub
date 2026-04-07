@@ -460,6 +460,7 @@ export default function ASTTable({
                     onRemove={() => handleRemove(k)} onGoogleSearch={() => googleSearch(k.keyword)}
                     onTagClick={(tag: string) => setTagFilter(tag)} onTagEdit={(o, n) => handleTagEdit(k.id, o, n)}
                     onTopicEdit={(o, n) => handleTopicEdit(k.id, o, n)}
+                    onTopicClick={(topic: string) => setTopicQ(topic)}
                     onDragStart={e => handleDragStart(e, k.id)} onDragEnd={handleDragEnd}
                     onDragOver={e => handleDragOver(e, k.id)} onDrop={handleDrop}
                     showVol={showVol} showTags={showTags} showTopics={showTopics} showTopicDesc={showTopicDesc} />
@@ -570,9 +571,9 @@ function TagCell({ tags, onTagClick, onTagEdit, hidden }: TagCellProps) {
 }
 
 // ── Topic Cell Component ────────────────────────────────────────
-interface TopicCellProps { topics: string; onTopicEdit: (oldTopics: string, newTopics: string) => void; hidden: boolean; }
+interface TopicCellProps { topics: string; onTopicEdit: (oldTopics: string, newTopics: string) => void; onTopicClick: (topic: string) => void; hidden: boolean; }
 
-function TopicCell({ topics, onTopicEdit, hidden }: TopicCellProps) {
+function TopicCell({ topics, onTopicEdit, onTopicClick, hidden }: TopicCellProps) {
   const [editIdx, setEditIdx] = useState<number | null>(null);
   const [editValue, setEditValue] = useState('');
   const [addMode, setAddMode] = useState(false);
@@ -613,7 +614,8 @@ function TopicCell({ topics, onTopicEdit, hidden }: TopicCellProps) {
               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); (e.target as HTMLInputElement).blur(); } if (e.key === 'Escape') cancelEdit(); }} />
           ) : (
             <span key={i} className="ast-topic-pill" onClick={e => startEdit(i, topic, e)}
-              title={`Click to edit topic`}>{topic}</span>
+              onContextMenu={e => { e.preventDefault(); onTopicClick(topic); }}
+              title={`Click to edit · Right-click to filter by "${topic}"`}>{topic}</span>
           )
         )}
         {addMode ? (
@@ -634,13 +636,14 @@ interface ASTRowProps {
   onToggle: () => void; onCycleStatus: () => void; onRemove: () => void; onGoogleSearch: () => void;
   onTagClick: (tag: string) => void; onTagEdit: (oldTags: string, newTags: string) => void;
   onTopicEdit: (oldTopics: string, newTopics: string) => void;
+  onTopicClick: (topic: string) => void;
   onDragStart: (e: React.DragEvent) => void; onDragEnd: () => void; onDragOver: (e: React.DragEvent) => void; onDrop: (e: React.DragEvent) => void;
   showVol: boolean; showTags: boolean; showTopics: boolean; showTopicDesc: boolean;
 }
 
 const ASTRow = React.memo(function ASTRow({
   kw, isSelected, isDragging, onToggle, onCycleStatus, onRemove, onGoogleSearch, onTagClick,
-  onTagEdit, onTopicEdit, onDragStart, onDragEnd, onDragOver, onDrop, showVol, showTags, showTopics, showTopicDesc,
+  onTagEdit, onTopicEdit, onTopicClick, onDragStart, onDragEnd, onDragOver, onDrop, showVol, showTags, showTopics, showTopicDesc,
 }: ASTRowProps) {
   const pillClass = kw.sortingStatus === 'Completely Sorted' ? 'ast-pill ast-pill-c' : kw.sortingStatus === 'AI-Sorted' ? 'ast-pill ast-pill-ai' : kw.sortingStatus === 'Partially Sorted' ? 'ast-pill ast-pill-p' : 'ast-pill ast-pill-u';
   const trRef = useRef<HTMLTableRowElement>(null);
@@ -662,7 +665,7 @@ const ASTRow = React.memo(function ASTRow({
       <td className={showVol ? '' : 'ast-col-hidden'} style={{ textAlign: 'right', paddingRight: 6 }}>{kw.volume ? fmtV(kw.volume) : ''}</td>
       <td style={{ cursor: 'pointer' }} title="Click to cycle status" onClick={onCycleStatus}><span className={pillClass}>{kw.sortingStatus}</span></td>
       <TagCell tags={kw.tags} onTagClick={onTagClick} onTagEdit={onTagEdit} hidden={!showTags} />
-      <TopicCell topics={kw.topic || ''} onTopicEdit={onTopicEdit} hidden={!showTopics} />
+      <TopicCell topics={kw.topic || ''} onTopicEdit={onTopicEdit} onTopicClick={onTopicClick} hidden={!showTopics} />
       <td className={showTopicDesc ? '' : 'ast-col-hidden'}></td>
     </tr>
   );
