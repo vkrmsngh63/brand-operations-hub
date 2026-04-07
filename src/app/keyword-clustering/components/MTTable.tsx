@@ -456,7 +456,7 @@ export default function MTTable({ astKeywords, onUpdateKeyword }: MTTableProps) 
     return (
       <tr key={m.id} className={`${isSelected ? 'mt-sel' : ''} ${mode === 1 ? 'mt-row-vertical' : ''}`}
         onDragOver={e => handleDragOver(e, visible.indexOf(m))}
-        style={dropIdx === visible.indexOf(m) && dragId !== m.id ? { borderTop: '2px solid #3b82f6' } : undefined}
+        style={dropIdx === visible.indexOf(m) && dragId !== m.id ? { borderTop: '3px solid #3b82f6', boxShadow: '0 -2px 4px rgba(59,130,246,0.5)' } : undefined}
       >
         {/* Drag handle */}
         <td style={{ textAlign: 'center', verticalAlign: 'top', paddingTop: 4, cursor: 'grab', color: '#94a3b8', fontSize: '1.1em', userSelect: 'none' }}
