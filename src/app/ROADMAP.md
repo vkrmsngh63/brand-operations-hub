@@ -76,8 +76,18 @@
 - [x] Main Terms table — three view modes (comma/vertical/single-line), header click to cycle all rows
 - [x] Main Terms table — vertical view with per-keyword checkboxes, SV, Tags, Topics columns
 - [x] Main Terms table — row checkbox auto-switches to vertical view and checks all keywords
-- [ ] Main Terms table — drag-to-reorder, mark status, bulk tag operations, remove selected
-- [ ] Terms In Focus table
+- [x] Main Terms table — drag-to-reorder rows with blue drop indicator
+- [x] Main Terms table — mark status on checked keywords (Unsorted/Partial/Sorted)
+- [x] Main Terms table — bulk tag operations (add/remove tags on checked keywords)
+- [x] Main Terms table — remove selected rows button
+- [x] Main Terms table — associated keyword search (filters sub-rows in vertical view)
+- [x] Main Terms table — sticky footer input row
+- [x] Terms In Focus table — component created with search, filters, column visibility, zoom, column resize
+- [x] Terms In Focus table — drag-to-reorder, mark status, remove selected, clear all, copy table data
+- [x] Terms In Focus table — active/paused toggle
+- [x] Terms In Focus table — wired into KeywordWorkspace (3 tables stacked: AST + MT + TIF)
+- [ ] Terms In Focus table — wire up "add to TIF" from AST and MT checked keywords
+- [ ] Terms In Focus table — tag search, topic search, topic pill filter
 
 ### 1d. Topics Layout Canvas: NOT STARTED
 - [ ] Mindmap canvas with nodes, connectors, drag-drop
