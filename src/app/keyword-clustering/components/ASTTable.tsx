@@ -48,11 +48,12 @@ interface ASTTableProps {
   onBulkDelete: (ids: string[]) => Promise<void>;
   onReorder: (reordered: Keyword[]) => void;
   loading?: boolean;
+  onAddToTif?: (kws: string[]) => void;
 }
 
 export default function ASTTable({
   keywords, onAddKeyword, onBulkImport, onUpdateKeyword, onBatchUpdate,
-  onDeleteKeyword, onBulkDelete, onReorder, loading,
+  onDeleteKeyword, onBulkDelete, onReorder, loading, onAddToTif,
 }: ASTTableProps) {
   const [searchQ, setSearchQ] = useState('');
   const [showVol, setShowVol] = useState(true);

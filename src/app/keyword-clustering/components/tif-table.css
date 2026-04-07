@@ -1,0 +1,322 @@
+/* ── TIF Table Panel ─────────────────────────────────────── */
+.tif-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  background: #f8fafc;
+  font-family: var(--fn-ui, 'IBM Plex Sans', system-ui, sans-serif);
+  position: relative;
+  color: #1e293b;
+}
+.tif-ph {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px;
+  background: #e2e8f0;
+  border-bottom: 1px solid #d1d5db;
+  font-size: 11px;
+  font-weight: 700;
+  color: #334155;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.tif-ctrl {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px;
+  background: #f1f5f9;
+  border-bottom: 1px solid #d1d5db;
+  font-size: 10px;
+  color: #334155;
+}
+.tif-ctrl-div {
+  width: 1px;
+  height: 14px;
+  background: #d1d5db;
+  margin: 0 2px;
+}
+.tif-search-inp {
+  width: 115px;
+  font-size: 10px;
+  font-family: var(--fn-ui);
+  padding: 2px 5px;
+  border: 1px solid #b3c6e0;
+  border-radius: 3px;
+  outline: none;
+  background: #fff;
+  color: #1e293b;
+}
+.tif-search-inp:focus { border-color: #3b82f6; }
+.tif-cb-label {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 10px;
+  color: #64748b;
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+}
+.tif-cb-label input { width: 11px; height: 11px; accent-color: #3b82f6; cursor: pointer; }
+.tif-btn {
+  font-size: 9px;
+  font-family: var(--fn-ui);
+  padding: 2px 6px;
+  border: 1px solid #b3c6e0;
+  border-radius: 3px;
+  background: #fff;
+  color: #64748b;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.tif-btn:hover { background: #e0ecff; border-color: #3b82f6; color: #3b82f6; }
+.tif-zoom-btn {
+  font-size: 11px;
+  width: 20px;
+  height: 18px;
+  border: 1px solid #b3c6e0;
+  border-radius: 3px;
+  background: #fff;
+  color: #3b82f6;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.tif-frame {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+  background: #fff;
+}
+.tif-tbl {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 1em;
+}
+.tif-tbl th,
+.tif-tbl td {
+  border: 1px solid #d1d5db;
+}
+.tif-tbl thead {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+}
+.tif-tbl thead th {
+  background: #e2e8f0;
+  color: #64748b;
+  font-size: 0.9em;
+  font-weight: 600;
+  text-align: left;
+  padding: 3px 5px;
+  white-space: nowrap;
+  overflow: visible;
+  position: relative;
+}
+.tif-tbl .th-inner {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.tif-tbl tbody td {
+  padding: 2px 5px;
+  font-size: 1em;
+  color: #1e293b;
+  vertical-align: top;
+  background: #fff;
+}
+.tif-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 14px;
+  padding: 0 4px;
+  border-radius: 7px;
+  font-size: 9px;
+  font-weight: 700;
+  background: #3b82f6;
+  color: #fff;
+}
+.tif-col-hidden {
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  overflow: hidden;
+  visibility: hidden;
+}
+.tif-kw-cell {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.tif-kw-txt {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+  cursor: pointer;
+  color: #1e293b;
+}
+.tif-gs-btn {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  border: 1px solid #b3c6e0;
+  border-radius: 3px;
+  background: #fff;
+  color: #3b82f6;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.tif-tbl tbody tr:hover .tif-gs-btn { opacity: 1; }
+.tif-sel td {
+  background: #dbeafe !important;
+}
+.tif-tbl tbody tr:hover td {
+  background: #f0f4ff;
+}
+.tif-status {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.85em;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.tif-st-u { background: #e5e7eb; color: #6b7280; }
+.tif-st-p { background: #fef3c7; color: #d97706; }
+.tif-st-c { background: #d1fae5; color: #059669; }
+.tif-st-ai { background: #dbeafe; color: #2563eb; }
+.tif-tag-pill {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: #dbeafe;
+  color: #1e40af;
+  font-size: 0.85em;
+  white-space: nowrap;
+  margin: 1px;
+}
+.tif-topic-pill {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: #e0e7ff;
+  color: #3730a3;
+  font-size: 0.85em;
+  white-space: nowrap;
+  margin: 1px;
+}
+.tif-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+  color: #94a3b8;
+  font-size: 11px;
+  text-align: center;
+}
+.tif-empty-icon {
+  font-size: 28px;
+  margin-bottom: 8px;
+}
+.tif-toast {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%) translateY(8px);
+  background: #1e293b;
+  color: #f1f5f9;
+  padding: 5px 14px;
+  border-radius: 6px;
+  font-size: 10px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s, transform 0.2s;
+  z-index: 10;
+}
+.tif-toast.on {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+.tif-col-resize {
+  position: absolute;
+  top: 0;
+  right: -2px;
+  width: 5px;
+  height: 3000px;
+  cursor: col-resize;
+  z-index: 2;
+  background: transparent;
+}
+.tif-col-resize:hover {
+  background: #3b82f6;
+  opacity: 0.4;
+}
+.tif-toggle {
+  position: relative;
+  display: inline-block;
+  width: 28px;
+  height: 14px;
+  vertical-align: middle;
+  margin-left: 6px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.tif-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+.tif-toggle .tif-slider {
+  position: absolute;
+  inset: 0;
+  border-radius: 14px;
+  background: #e74c3c;
+  transition: background 0.25s;
+}
+.tif-toggle .tif-slider::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.25s;
+}
+.tif-toggle input:checked + .tif-slider {
+  background: #27ae60;
+}
+.tif-toggle input:checked + .tif-slider::before {
+  transform: translateX(14px);
+}
+.tif-toggle-label {
+  font-size: 9px;
+  font-weight: 500;
+  color: #64748b;
+  margin-left: 3px;
+  vertical-align: middle;
+  letter-spacing: 0;
+  text-transform: none;
+}

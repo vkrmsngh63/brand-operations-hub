@@ -16,6 +16,7 @@ interface MTEntry {
 interface MTTableProps {
   astKeywords: Keyword[]; // full AST keywords list for matching & volume lookups
   onUpdateKeyword: (id: string, patch: Partial<Keyword>) => Promise<void>;
+  onAddToTif?: (kws: string[]) => void;
 }
 
 // ── Helpers ────────────────────────────────────────────────────
@@ -66,7 +67,7 @@ function parseTags(str: string): string[] {
 }
 
 // ── Component ──────────────────────────────────────────────────
-export default function MTTable({ astKeywords, onUpdateKeyword }: MTTableProps) {
+export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MTTableProps) { {
   const [entries, setEntries] = useState<MTEntry[]>([]);
   const [searchQ, setSearchQ] = useState('');
   const [kwSearchQ, setKwSearchQ] = useState('');
@@ -728,4 +729,5 @@ export default function MTTable({ astKeywords, onUpdateKeyword }: MTTableProps) 
       <div className={`mt-toast${toast ? ' on' : ''}`}>{toast}</div>
     </div>
   );
+  }
 }

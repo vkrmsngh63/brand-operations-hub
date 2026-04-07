@@ -1,7 +1,8 @@
 'use client';
-import { useEffect } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import ASTTable from './ASTTable';
 import MTTable from './MTTable';
+import TIFTable from './TIFTable';
 import { useKeywords } from '@/hooks/useKeywords';
 
 interface KeywordWorkspaceProps {
@@ -23,6 +24,19 @@ export default function KeywordWorkspace({ projectId, userId }: KeywordWorkspace
     reorder,
   } = useKeywords(projectId, userId);
 
+  const [tifKeywords, setTifKeywords] = useState<string[]>([]);
+  const [tifActive, setTifActive] = useState(true);
+
+  const addToTif = useCallback((kws: string[]) => {
+    if (!tifActive) return;
+    setTifKeywords(prev => {
+      const existing = new Set(prev);
+      const toAdd = kws.filter(kw => !existing.has(kw));
+      if (toAdd.length === 0) return prev;
+      return [...toAdd.reverse(), ...prev];
+    });
+  }, [tifActive]);
+
   // Fetch keywords when project changes
   useEffect(() => {
     fetchKeywords();
@@ -35,7 +49,7 @@ export default function KeywordWorkspace({ projectId, userId }: KeywordWorkspace
       minHeight: 0,
       overflow: 'hidden',
     }}>
-      {/* Left panel: AST + MT stacked vertically */}
+      {/* Left panel: AST + MT + TIF stacked vertically */}
       <div style={{
         display: 'flex',
         flexDirection: 'column',
@@ -43,7 +57,7 @@ export default function KeywordWorkspace({ projectId, userId }: KeywordWorkspace
         minHeight: 0,
         borderRight: '1px solid var(--border-dark, #30363d)',
       }}>
-        {/* AST table — top half */}
+        {/* AST table — top third */}
         <div style={{
           display: 'flex',
           flexDirection: 'column',
@@ -61,17 +75,34 @@ export default function KeywordWorkspace({ projectId, userId }: KeywordWorkspace
             onBulkDelete={bulkDelete}
             onReorder={reorder}
             loading={loading}
+            onAddToTif={addToTif}
           />
         </div>
-        {/* MT table — bottom half */}
+        {/* MT table — middle third */}
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          flex: 1,
+          minHeight: 0,
+          borderBottom: '2px solid var(--border-dark, #30363d)',
+        }}>
+          <MTTable
+            astKeywords={keywords}
+            onUpdateKeyword={updateKeyword}
+            onAddToTif={addToTif}
+          />
+        </div>
+        {/* TIF table — bottom third */}
         <div style={{
           display: 'flex',
           flexDirection: 'column',
           flex: 1,
           minHeight: 0,
         }}>
-          <MTTable
+          <TIFTable
             astKeywords={keywords}
+            tifKeywords={tifKeywords}
+            onSetTifKeywords={setTifKeywords}
             onUpdateKeyword={updateKeyword}
           />
         </div>
