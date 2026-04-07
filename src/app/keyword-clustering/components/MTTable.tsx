@@ -274,6 +274,55 @@ export default function MTTable({ astKeywords, onUpdateKeyword }: MTTableProps) 
   }
 
   
+  
+  function handleAddTag() {
+    if (totalKwSel === 0) { showToast('⚠ No keywords checked.'); return; }
+    const tag = prompt('Enter tag to ADD to checked keywords:');
+    if (!tag || !tag.trim()) return;
+    const tagVal = tag.trim();
+    let count = 0;
+    const promises: Promise<void>[] = [];
+    kwSel.forEach((kwSet) => {
+      kwSet.forEach(kwStr => {
+        const rec = getKwRec(kwStr, astKeywords);
+        if (rec) {
+          const existing = parseTags(rec.tags);
+          if (!existing.some(t => t.toLowerCase() === tagVal.toLowerCase())) {
+            promises.push(onUpdateKeyword(rec.id, { tags: [...existing, tagVal].join(', ') }));
+            count++;
+          }
+        }
+      });
+    });
+    Promise.all(promises).then(() => {
+      showToast(`✓ Added tag "${tagVal}" to ${count} keyword${count !== 1 ? 's' : ''}.`);
+    });
+  }
+
+  function handleRemoveTag() {
+    if (totalKwSel === 0) { showToast('⚠ No keywords checked.'); return; }
+    const tag = prompt('Enter tag to REMOVE from checked keywords:');
+    if (!tag || !tag.trim()) return;
+    const tagVal = tag.trim().toLowerCase();
+    let count = 0;
+    const promises: Promise<void>[] = [];
+    kwSel.forEach((kwSet) => {
+      kwSet.forEach(kwStr => {
+        const rec = getKwRec(kwStr, astKeywords);
+        if (rec) {
+          const existing = parseTags(rec.tags);
+          const filtered = existing.filter(t => t.toLowerCase() !== tagVal);
+          if (filtered.length !== existing.length) {
+            promises.push(onUpdateKeyword(rec.id, { tags: filtered.join(', ') }));
+            count++;
+          }
+        }
+      });
+    });
+    Promise.all(promises).then(() => {
+      showToast(`✓ Removed tag "${tag!.trim()}" from ${count} keyword${count !== 1 ? 's' : ''}.`);
+    });
+  }
   function handleMarkStatus(status: 'Unsorted' | 'Partially Sorted' | 'Completely Sorted' | 'AI-Sorted') {
     if (totalKwSel === 0) { showToast('⚠ No keywords checked.'); return; }
     let count = 0;
@@ -527,6 +576,9 @@ export default function MTTable({ astKeywords, onUpdateKeyword }: MTTableProps) 
             <button className="mt-btn" style={{ color: '#6b7280', borderColor: '#d1d5db' }} onClick={() => handleMarkStatus('Unsorted')}>Unsorted</button>
             <button className="mt-btn" style={{ color: '#f59e0b', borderColor: '#fbbf24' }} onClick={() => handleMarkStatus('Partially Sorted')}>Partial</button>
             <button className="mt-btn" style={{ color: '#22c55e', borderColor: '#86efac' }} onClick={() => handleMarkStatus('Completely Sorted')}>Sorted</button>
+            <span style={{ width: 1, height: 12, background: '#d1d5db', margin: '0 3px' }} />
+            <button className="mt-btn" style={{ color: '#3b82f6', borderColor: '#93c5fd' }} onClick={handleAddTag}>+ Tag</button>
+            <button className="mt-btn" style={{ color: '#ef4444', borderColor: '#fca5a5' }} onClick={handleRemoveTag}>− Tag</button>
           </div>
         )}
       </div>
