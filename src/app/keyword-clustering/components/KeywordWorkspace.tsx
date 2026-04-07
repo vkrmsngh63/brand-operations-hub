@@ -104,6 +104,8 @@ export default function KeywordWorkspace({ projectId, userId }: KeywordWorkspace
             tifKeywords={tifKeywords}
             onSetTifKeywords={setTifKeywords}
             onUpdateKeyword={updateKeyword}
+            tifActive={tifActive}
+            onSetTifActive={setTifActive}
           />
         </div>
       </div>

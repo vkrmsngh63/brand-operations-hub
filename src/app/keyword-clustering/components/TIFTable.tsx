@@ -11,6 +11,8 @@ interface TIFTableProps {
   tifKeywords: string[];
   onSetTifKeywords: (kws: string[]) => void;
   onUpdateKeyword: (id: string, patch: Partial<Keyword>) => Promise<void>;
+  tifActive: boolean;
+  onSetTifActive: (active: boolean) => void;
 }
 
 function fmtV(v: string | number): string {
@@ -29,7 +31,7 @@ function getKwRec(kwStr: string, astKeywords: Keyword[]): Keyword | undefined {
   return astKeywords.find(k => k.keyword === kwStr);
 }
 
-export default function TIFTable({ astKeywords, tifKeywords, onSetTifKeywords, onUpdateKeyword }: TIFTableProps) {
+export default function TIFTable({ astKeywords, tifKeywords, onSetTifKeywords, onUpdateKeyword, tifActive, onSetTifActive }: TIFTableProps) {
   const [searchQ, setSearchQ] = useState('');
   const [showVol, setShowVol] = useState(true);
   const [showTags, setShowTags] = useState(true);
@@ -38,7 +40,6 @@ export default function TIFTable({ astKeywords, tifKeywords, onSetTifKeywords, o
   const [showPartial, setShowPartial] = useState(true);
   const [showUnsorted, setShowUnsorted] = useState(true);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [active, setActive] = useState(true);
   const [tagQ, setTagQ] = useState('');
   const [topicQ, setTopicQ] = useState('');
   const [topicFilter, setTopicFilter] = useState('');
@@ -245,10 +246,10 @@ export default function TIFTable({ astKeywords, tifKeywords, onSetTifKeywords, o
           <span>Terms In Focus</span>
           <span className="tif-chip">{tifKeywords.length}</span>
           <label className="tif-toggle">
-            <input type="checkbox" checked={active} onChange={e => setActive(e.target.checked)} />
+            <input type="checkbox" checked={tifActive} onChange={e => onSetTifActive(e.target.checked)} />
             <span className="tif-slider"></span>
           </label>
-          <span className="tif-toggle-label">{active ? 'Active' : 'Paused'}</span>
+          <span className="tif-toggle-label">{tifActive ? 'Active' : 'Paused'}</span>
         </div>
         <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
           {selCount > 0 && (
