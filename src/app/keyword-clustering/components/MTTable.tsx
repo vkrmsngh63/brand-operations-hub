@@ -71,6 +71,8 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
   const [entries, setEntries] = useState<MTEntry[]>([]);
   const [searchQ, setSearchQ] = useState('');
   const [kwSearchQ, setKwSearchQ] = useState('');
+  const [kwTagQ, setKwTagQ] = useState('');
+  const [kwTopicQ, setKwTopicQ] = useState('');
   const [showMtSv, setShowMtSv] = useState(true);
   const [showKwSv, setShowKwSv] = useState(true);
   const [showTags, setShowTags] = useState(true);
@@ -90,6 +92,16 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
   const [colWidths, setColWidths] = useState([22, 180, 80, 160, 70, 100, 100, 110]);
   const resizeRef = useRef<{ col: number; startX: number; startW: number } | null>(null);
   const addInputRef = useRef<HTMLInputElement>(null);
+
+  // ── Inline tag input state (replaces prompt() dialogs) ─────
+  const [tagInputMode, setTagInputMode] = useState<'add' | 'remove' | null>(null);
+  const [tagInputVal, setTagInputVal] = useState('');
+  const tagInputRef = useRef<HTMLInputElement>(null);
+
+  // Focus input when tag input mode activates
+  useEffect(() => {
+    if (tagInputMode && tagInputRef.current) tagInputRef.current.focus();
+  }, [tagInputMode]);
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -126,6 +138,32 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
       return true;
     });
   }, [entries, searchQ, showSorted, showPartial, showUnsorted, astKeywords]);
+
+  // ── Helper: filter keyword sub-rows by kw search + tag search + topic search ──
+  const filterKwList = useCallback((kwList: string[]): string[] => {
+    let result = kwList;
+    if (kwSearchQ) {
+      const q = kwSearchQ.toLowerCase();
+      result = result.filter(kw => kw.toLowerCase().includes(q));
+    }
+    if (kwTagQ) {
+      const q = kwTagQ.toLowerCase();
+      result = result.filter(kw => {
+        const rec = getKwRec(kw, astKeywords);
+        const tags = parseTags(rec ? rec.tags : '');
+        return tags.some(t => t.toLowerCase().includes(q));
+      });
+    }
+    if (kwTopicQ) {
+      const q = kwTopicQ.toLowerCase();
+      result = result.filter(kw => {
+        const rec = getKwRec(kw, astKeywords);
+        const topics = (rec?.topic || '').split('|').map(t => t.trim()).filter(Boolean);
+        return topics.some(t => t.toLowerCase().includes(q));
+      });
+    }
+    return result;
+  }, [kwSearchQ, kwTagQ, kwTopicQ, astKeywords]);
 
   // ── Select all logic ───────────────────────────────────────
   const selCount = useMemo(() => visible.filter(m => selected.has(m.id)).length, [visible, selected]);
@@ -276,16 +314,71 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
     showToast(`"${m.mainTerm}" removed from Main Terms.`);
   }
 
-  
-  
-  function handleAddTag() {
+  // ── Tag operations (inline input replaces prompt()) ────────
+  function handleTagApply() {
+    const tagVal = tagInputVal.trim();
+    if (!tagVal) { setTagInputMode(null); setTagInputVal(''); return; }
+    if (totalKwSel === 0) { showToast('⚠ No keywords checked.'); setTagInputMode(null); setTagInputVal(''); return; }
+
+    if (tagInputMode === 'add') {
+      let count = 0;
+      const promises: Promise<void>[] = [];
+      kwSel.forEach((kwSet) => {
+        kwSet.forEach(kwStr => {
+          const rec = getKwRec(kwStr, astKeywords);
+          if (rec) {
+            const existing = parseTags(rec.tags);
+            if (!existing.some(t => t.toLowerCase() === tagVal.toLowerCase())) {
+              promises.push(onUpdateKeyword(rec.id, { tags: [...existing, tagVal].join(', ') }));
+              count++;
+            }
+          }
+        });
+      });
+      Promise.all(promises).then(() => {
+        showToast(`✓ Added tag "${tagVal}" to ${count} keyword${count !== 1 ? 's' : ''}.`);
+      });
+    } else if (tagInputMode === 'remove') {
+      const tagLower = tagVal.toLowerCase();
+      let count = 0;
+      const promises: Promise<void>[] = [];
+      kwSel.forEach((kwSet) => {
+        kwSet.forEach(kwStr => {
+          const rec = getKwRec(kwStr, astKeywords);
+          if (rec) {
+            const existing = parseTags(rec.tags);
+            const filtered = existing.filter(t => t.toLowerCase() !== tagLower);
+            if (filtered.length !== existing.length) {
+              promises.push(onUpdateKeyword(rec.id, { tags: filtered.join(', ') }));
+              count++;
+            }
+          }
+        });
+      });
+      Promise.all(promises).then(() => {
+        showToast(`✓ Removed tag "${tagVal}" from ${count} keyword${count !== 1 ? 's' : ''}.`);
+      });
+    }
+    setTagInputMode(null);
+    setTagInputVal('');
+  }
+
+  function handleTagInputKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Enter') { handleTagApply(); }
+    else if (e.key === 'Escape') { setTagInputMode(null); setTagInputVal(''); }
+  }
+
+  // ── Apply Main Term As Tag ─────────────────────────────────
+  function handleApplyMtAsTag() {
     if (totalKwSel === 0) { showToast('⚠ No keywords checked.'); return; }
-    const tag = prompt('Enter tag to ADD to checked keywords:');
-    if (!tag || !tag.trim()) return;
-    const tagVal = tag.trim();
     let count = 0;
     const promises: Promise<void>[] = [];
-    kwSel.forEach((kwSet) => {
+    // For each MT row that has checked keywords, use that row's mainTerm as the tag
+    entries.forEach(m => {
+      const kwSet = kwSel.get(m.id);
+      if (!kwSet || kwSet.size === 0) return;
+      const tagVal = m.mainTerm.trim();
+      if (!tagVal) return;
       kwSet.forEach(kwStr => {
         const rec = getKwRec(kwStr, astKeywords);
         if (rec) {
@@ -298,34 +391,10 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
       });
     });
     Promise.all(promises).then(() => {
-      showToast(`✓ Added tag "${tagVal}" to ${count} keyword${count !== 1 ? 's' : ''}.`);
+      showToast(`✓ Applied main term as tag to ${count} keyword${count !== 1 ? 's' : ''}.`);
     });
   }
 
-  function handleRemoveTag() {
-    if (totalKwSel === 0) { showToast('⚠ No keywords checked.'); return; }
-    const tag = prompt('Enter tag to REMOVE from checked keywords:');
-    if (!tag || !tag.trim()) return;
-    const tagVal = tag.trim().toLowerCase();
-    let count = 0;
-    const promises: Promise<void>[] = [];
-    kwSel.forEach((kwSet) => {
-      kwSet.forEach(kwStr => {
-        const rec = getKwRec(kwStr, astKeywords);
-        if (rec) {
-          const existing = parseTags(rec.tags);
-          const filtered = existing.filter(t => t.toLowerCase() !== tagVal);
-          if (filtered.length !== existing.length) {
-            promises.push(onUpdateKeyword(rec.id, { tags: filtered.join(', ') }));
-            count++;
-          }
-        }
-      });
-    });
-    Promise.all(promises).then(() => {
-      showToast(`✓ Removed tag "${tag!.trim()}" from ${count} keyword${count !== 1 ? 's' : ''}.`);
-    });
-  }
   function handleMarkStatus(status: 'Unsorted' | 'Partially Sorted' | 'Completely Sorted' | 'AI-Sorted') {
     if (totalKwSel === 0) { showToast('⚠ No keywords checked.'); return; }
     let count = 0;
@@ -371,6 +440,8 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
   function handleShowAll() {
     setSearchQ('');
     setKwSearchQ('');
+    setKwTagQ('');
+    setKwTopicQ('');
     setShowMtSv(true); setShowKwSv(true); setShowTags(true); setShowTopics(true);
     setShowSorted(true); setShowPartial(true); setShowUnsorted(true);
   }
@@ -488,13 +559,14 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
 
   // ── Comma view (mode 0) ────────────────────────────────────
   function renderCommaView(m: MTEntry, viewLabel: string) {
+    const kwList = filterKwList(m.keywords);
     return (
       <>
         <td style={{ wordBreak: 'break-word' }}>
-          {m.keywords.length > 0 ? (
-            <div style={{ lineHeight: '1.6' }}>{(kwSearchQ ? m.keywords.filter(kw => kw.toLowerCase().includes(kwSearchQ.toLowerCase())) : m.keywords).join(', ')}</div>
+          {kwList.length > 0 ? (
+            <div style={{ lineHeight: '1.6' }}>{kwList.join(', ')}</div>
           ) : (
-            <span className="mt-empty-kw">(no matching keywords)</span>
+            <span className="mt-empty-kw">{m.keywords.length === 0 ? '(no matching keywords)' : '(no keywords match filters)'}</span>
           )}
         </td>
         <td className={showKwSv ? '' : 'mt-col-hidden'}></td>
@@ -507,11 +579,12 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
 
   // ── Appended / single-line view (mode 2) ───────────────────
   function renderAppendedView(m: MTEntry, viewLabel: string) {
+    const kwList = filterKwList(m.keywords);
     return (
       <>
         <td style={{ overflow: 'hidden' }}>
           <span className="mt-ak-appended">
-            {m.keywords.length > 0 ? (kwSearchQ ? m.keywords.filter(kw => kw.toLowerCase().includes(kwSearchQ.toLowerCase())) : m.keywords).join(', ') : '(no keywords)'}
+            {kwList.length > 0 ? kwList.join(', ') : '(no keywords)'}
           </span>
         </td>
         <td className={showKwSv ? '' : 'mt-col-hidden'}></td>
@@ -524,8 +597,7 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
 
   // ── Vertical view (mode 1) ─────────────────────────────────
   function renderVerticalView(m: MTEntry, viewLabel: string) {
-    const kwListFull = m.keywords;
-    const kwList = kwSearchQ ? kwListFull.filter(kw => kw.toLowerCase().includes(kwSearchQ.toLowerCase())) : kwListFull;
+    const kwList = filterKwList(m.keywords);
     const mtKwSelSet = kwSel.get(m.id) || new Set();
     const allChecked = kwList.length > 0 && kwList.every(k => mtKwSelSet.has(k));
 
@@ -539,6 +611,7 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
               style={{ width: 10, height: 10, accentColor: '#3b82f6', cursor: 'pointer' }} />
             <span className="mt-kw-master-label">
               {kwList.length} keyword{kwList.length !== 1 ? 's' : ''}
+              {kwList.length !== m.keywords.length && <span style={{ color: '#f59e0b', marginLeft: 4 }}>(filtered from {m.keywords.length})</span>}
             </span>
           </div>
           <div className="mt-kw-list">
@@ -609,14 +682,48 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
       <div className="mt-ph">
         <span>Main Terms</span>
         {totalKwSel > 0 && (
-          <div style={{ display: 'flex', gap: 3, alignItems: 'center', marginLeft: 8 }}>
+          <div style={{ display: 'flex', gap: 3, alignItems: 'center', marginLeft: 8, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 9, color: '#64748b', marginRight: 2 }}>{totalKwSel} kw checked →</span>
             <button className="mt-btn" style={{ color: '#6b7280', borderColor: '#d1d5db' }} onClick={() => handleMarkStatus('Unsorted')}>Unsorted</button>
             <button className="mt-btn" style={{ color: '#f59e0b', borderColor: '#fbbf24' }} onClick={() => handleMarkStatus('Partially Sorted')}>Partial</button>
             <button className="mt-btn" style={{ color: '#22c55e', borderColor: '#86efac' }} onClick={() => handleMarkStatus('Completely Sorted')}>Sorted</button>
             <span style={{ width: 1, height: 12, background: '#d1d5db', margin: '0 3px' }} />
-            <button className="mt-btn" style={{ color: '#3b82f6', borderColor: '#93c5fd' }} onClick={handleAddTag}>+ Tag</button>
-            <button className="mt-btn" style={{ color: '#ef4444', borderColor: '#fca5a5' }} onClick={handleRemoveTag}>− Tag</button>
+            {/* Inline tag input or buttons */}
+            {tagInputMode ? (
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                <span style={{ fontSize: 9, color: tagInputMode === 'add' ? '#3b82f6' : '#ef4444' }}>
+                  {tagInputMode === 'add' ? '+ Tag:' : '− Tag:'}
+                </span>
+                <input
+                  ref={tagInputRef}
+                  type="text"
+                  value={tagInputVal}
+                  onChange={e => setTagInputVal(e.target.value)}
+                  onKeyDown={handleTagInputKeyDown}
+                  placeholder="tag name…"
+                  style={{
+                    width: 90, height: 18, fontSize: 9, padding: '0 4px',
+                    border: '1px solid ' + (tagInputMode === 'add' ? '#93c5fd' : '#fca5a5'),
+                    borderRadius: 3, outline: 'none', background: '#fff',
+                  }}
+                />
+                <button className="mt-btn" style={{ color: '#22c55e', borderColor: '#86efac', fontWeight: 600 }} onClick={handleTagApply}>Apply</button>
+                <button className="mt-btn" style={{ color: '#94a3b8', borderColor: '#d1d5db' }} onClick={() => { setTagInputMode(null); setTagInputVal(''); }}>✕</button>
+              </div>
+            ) : (
+              <>
+                <button className="mt-btn" style={{ color: '#3b82f6', borderColor: '#93c5fd' }}
+                  onClick={() => { if (totalKwSel === 0) { showToast('⚠ No keywords checked.'); return; } setTagInputMode('add'); setTagInputVal(''); }}
+                >+ Tag</button>
+                <button className="mt-btn" style={{ color: '#ef4444', borderColor: '#fca5a5' }}
+                  onClick={() => { if (totalKwSel === 0) { showToast('⚠ No keywords checked.'); return; } setTagInputMode('remove'); setTagInputVal(''); }}
+                >− Tag</button>
+                <button className="mt-btn" style={{ color: '#0ea5e9', borderColor: '#7dd3fc' }}
+                  onClick={handleApplyMtAsTag}
+                  title="Add each row's main term as a tag to its checked keywords"
+                >MT → Tag</button>
+              </>
+            )}
             {onAddToTif && (
               <><span style={{ width: 1, height: 12, background: '#d1d5db', margin: '0 3px' }} />
               <button className="mt-btn" style={{ color: '#8b5cf6', borderColor: '#c4b5fd', fontWeight: 600 }}
@@ -637,6 +744,17 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
           <input className="mt-search-inp" type="text" placeholder="Search keywords…"
             value={kwSearchQ} onChange={e => setKwSearchQ(e.target.value)}
             style={{ width: 105 }} />
+        </div>
+        <div className="mt-ctrl-div" />
+        <div className="mt-search-wrap">
+          <input className="mt-search-inp" type="text" placeholder="Search kw tags…"
+            value={kwTagQ} onChange={e => setKwTagQ(e.target.value)}
+            style={{ width: 95 }} />
+        </div>
+        <div className="mt-search-wrap">
+          <input className="mt-search-inp" type="text" placeholder="Search kw topics…"
+            value={kwTopicQ} onChange={e => setKwTopicQ(e.target.value)}
+            style={{ width: 100 }} />
         </div>
         <div className="mt-ctrl-div" />
         <label className="mt-cb-label"><input type="checkbox" checked={showMtSv} onChange={e => setShowMtSv(e.target.checked)} /> MT SV</label>
