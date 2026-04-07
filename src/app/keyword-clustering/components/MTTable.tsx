@@ -617,6 +617,12 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
             <span style={{ width: 1, height: 12, background: '#d1d5db', margin: '0 3px' }} />
             <button className="mt-btn" style={{ color: '#3b82f6', borderColor: '#93c5fd' }} onClick={handleAddTag}>+ Tag</button>
             <button className="mt-btn" style={{ color: '#ef4444', borderColor: '#fca5a5' }} onClick={handleRemoveTag}>− Tag</button>
+            {onAddToTif && (
+              <><span style={{ width: 1, height: 12, background: '#d1d5db', margin: '0 3px' }} />
+              <button className="mt-btn" style={{ color: '#8b5cf6', borderColor: '#c4b5fd', fontWeight: 600 }}
+                onClick={() => { const kws: string[] = []; kwSel.forEach(s => s.forEach(k => kws.push(k))); if (kws.length === 0) return; onAddToTif(kws); showToast(`✓ Sent ${kws.length} keyword${kws.length !== 1 ? 's' : ''} to Terms In Focus.`); }}
+                title="Send checked keywords to Terms In Focus">▶ TIF ({totalKwSel})</button></>
+            )}
           </div>
         )}
       </div>

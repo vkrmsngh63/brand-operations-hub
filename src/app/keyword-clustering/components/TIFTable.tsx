@@ -39,6 +39,9 @@ export default function TIFTable({ astKeywords, tifKeywords, onSetTifKeywords, o
   const [showUnsorted, setShowUnsorted] = useState(true);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [active, setActive] = useState(true);
+  const [tagQ, setTagQ] = useState('');
+  const [topicQ, setTopicQ] = useState('');
+  const [topicFilter, setTopicFilter] = useState('');
   const [fontSize, setFontSize] = useState(10);
   const [toast, setToast] = useState('');
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -70,9 +73,25 @@ export default function TIFTable({ astKeywords, tifKeywords, onSetTifKeywords, o
           return new RegExp('\\b' + esc + '\\b', 'i').test(kwLc);
         })) return false;
       }
+      if (tagQ) {
+        const tagsStr = (rec ? rec.tags : '').toLowerCase();
+        const words = tagQ.trim().split(/\s+/).filter(Boolean);
+        if (!words.every(w => {
+          const esc = w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          return new RegExp('\\b' + esc + '\\b', 'i').test(tagsStr);
+        })) return false;
+      }
+      if (topicQ) {
+        const pills = (rec?.topic || '').split('|').map(t => t.trim()).filter(Boolean);
+        if (!pills.some(p => p.toLowerCase() === topicQ.toLowerCase())) return false;
+      }
+      if (topicFilter) {
+        const pills = (rec?.topic || '').split('|').map(t => t.trim()).filter(Boolean);
+        if (!pills.some(p => p.toLowerCase() === topicFilter.toLowerCase())) return false;
+      }
       return true;
     });
-  }, [tifKeywords, searchQ, showSorted, showPartial, showUnsorted, astKeywords]);
+  }, [tifKeywords, searchQ, showSorted, showPartial, showUnsorted, astKeywords, tagQ, topicQ, topicFilter]);
 
   // ── Select all ─────────────────────────────────────────────
   const selCount = useMemo(() => visible.filter(kw => selected.has(kw)).length, [visible, selected]);
@@ -98,7 +117,7 @@ export default function TIFTable({ astKeywords, tifKeywords, onSetTifKeywords, o
   }
 
   function handleShowAll() {
-    setSearchQ('');
+    setSearchQ(''); setTagQ(''); setTopicQ(''); setTopicFilter('');
     setShowVol(true); setShowTags(true); setShowTopics(true);
     setShowSorted(true); setShowPartial(true); setShowUnsorted(true);
   }
@@ -265,6 +284,12 @@ export default function TIFTable({ astKeywords, tifKeywords, onSetTifKeywords, o
         <span style={{ fontSize: '9px', color: '#64748b', minWidth: 30, textAlign: 'center' }}>{Math.round((fontSize / 10) * 100)}%</span>
         <button className="tif-zoom-btn" onClick={() => setFontSize(f => Math.min(18, f + 1))}>＋</button>
       </div>
+{topicFilter && (
+        <div style={{ background: '#fef9c3', padding: '3px 8px', fontSize: 10, display: 'flex', alignItems: 'center', gap: 6, borderBottom: '1px solid #fde68a' }}>
+          <span>🏷 Filtering by topic:</span><strong>{topicFilter}</strong>
+          <button onClick={() => setTopicFilter('')} style={{ background: 'none', border: '1px solid #d97706', borderRadius: 3, padding: '1px 6px', fontSize: 9, cursor: 'pointer', color: '#92400e' }}>✕ Clear</button>
+        </div>
+      )}
 
       <div className="tif-frame">
         <table className="tif-tbl" style={{ tableLayout: 'fixed' }}>
@@ -297,11 +322,11 @@ export default function TIFTable({ astKeywords, tifKeywords, onSetTifKeywords, o
               <div className="tif-col-resize" onMouseDown={e => handleColResize(e, 4)} />
             </th>
             <th className={showTags ? '' : 'tif-col-hidden'} style={{ position: 'relative' }}>
-              <div className="th-inner">Tags</div>
+              <div className="th-inner">Tags<input type="text" className="tif-search-inp" placeholder="search tags…" value={tagQ} onChange={e => setTagQ(e.target.value)} onClick={e => e.stopPropagation()} style={{ width: 72, fontSize: 8, marginLeft: 3 }} /></div>
               <div className="tif-col-resize" onMouseDown={e => handleColResize(e, 5)} />
             </th>
             <th className={showTopics ? '' : 'tif-col-hidden'} style={{ position: 'relative' }}>
-              <div className="th-inner">Topics</div>
+              <div className="th-inner">Topics<input type="text" className="tif-search-inp" placeholder="search topics…" value={topicQ} onChange={e => setTopicQ(e.target.value)} onClick={e => e.stopPropagation()} style={{ width: 72, fontSize: 8, marginLeft: 3 }} /></div>
               <div className="tif-col-resize" onMouseDown={e => handleColResize(e, 6)} />
             </th>
           </tr></thead>
@@ -350,7 +375,7 @@ export default function TIFTable({ astKeywords, tifKeywords, onSetTifKeywords, o
                     {tags.map((t, i) => <span key={i} className="tif-tag-pill">{t}</span>)}
                   </td>
                   <td className={showTopics ? '' : 'tif-col-hidden'}>
-                    {topics.map((t, i) => <span key={i} className="tif-topic-pill">{t}</span>)}
+                    {topics.map((t, i) => <span key={i} className="tif-topic-pill" style={{ cursor: 'pointer' }} onClick={() => setTopicFilter(prev => prev === t ? '' : t)} title={`Click to filter by "${t}"`}>{t}</span>)}
                   </td>
                 </tr>
               );
