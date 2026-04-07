@@ -201,6 +201,7 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
     return s ? s.has(kwStr) : false;
   }
   function toggleKwSel(mtId: string, kwStr: string) {
+    const wasChecked = kwSel.get(mtId)?.has(kwStr) || false;
     setKwSel(prev => {
       const next = new Map(prev);
       const s = new Set(next.get(mtId) || []);
@@ -208,6 +209,8 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
       next.set(mtId, s);
       return next;
     });
+    // Auto-add to TIF when checking (not unchecking)
+    if (!wasChecked && onAddToTif) onAddToTif([kwStr]);
   }
   function toggleAllKw(mtId: string, kwList: string[]) {
     setKwSel(prev => {
@@ -218,6 +221,8 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
         next.set(mtId, new Set());
       } else {
         next.set(mtId, new Set(kwList));
+        // Auto-add to TIF when checking all
+        if (onAddToTif && kwList.length > 0) onAddToTif(kwList);
       }
       return next;
     });
@@ -242,6 +247,8 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
     if (willSelect) {
       setViewMode(prev => { const next = new Map(prev); next.set(m.id, 1); return next; });
       setKwSel(prev => { const next = new Map(prev); next.set(m.id, new Set(m.keywords)); return next; });
+      // Auto-add all keywords to TIF when selecting row
+      if (onAddToTif && m.keywords.length > 0) onAddToTif(m.keywords);
     } else {
       setKwSel(prev => { const next = new Map(prev); next.set(m.id, new Set()); return next; });
     }
@@ -723,12 +730,6 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
                   title="Add each row's main term as a tag to its checked keywords"
                 >MT → Tag</button>
               </>
-            )}
-            {onAddToTif && (
-              <><span style={{ width: 1, height: 12, background: '#d1d5db', margin: '0 3px' }} />
-              <button className="mt-btn" style={{ color: '#8b5cf6', borderColor: '#c4b5fd', fontWeight: 600 }}
-                onClick={() => { const kws: string[] = []; kwSel.forEach(s => s.forEach(k => kws.push(k))); if (kws.length === 0) return; onAddToTif(kws); showToast(`✓ Sent ${kws.length} keyword${kws.length !== 1 ? 's' : ''} to Terms In Focus.`); }}
-                title="Send checked keywords to Terms In Focus">▶ TIF ({totalKwSel})</button></>
             )}
           </div>
         )}

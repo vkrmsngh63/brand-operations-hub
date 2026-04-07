@@ -157,8 +157,23 @@ export default function ASTTable({
     return () => document.removeEventListener('keydown', onKey);
   }, [showRemovedOverlay]);
 
-  function handleToggleAll(checked: boolean) { setSelected(prev => { const next = new Set(prev); visible.forEach(k => checked ? next.add(k.id) : next.delete(k.id)); return next; }); }
-  function handleToggleRow(id: string) { setSelected(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; }); }
+  function handleToggleAll(checked: boolean) {
+    setSelected(prev => { const next = new Set(prev); visible.forEach(k => checked ? next.add(k.id) : next.delete(k.id)); return next; });
+    // Auto-add to TIF when checking all
+    if (checked && onAddToTif) {
+      const kws = visible.map(k => k.keyword);
+      if (kws.length > 0) onAddToTif(kws);
+    }
+  }
+  function handleToggleRow(id: string) {
+    const wasSelected = selected.has(id);
+    setSelected(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
+    // Auto-add to TIF when checking (not unchecking)
+    if (!wasSelected && onAddToTif) {
+      const kw = keywords.find(k => k.id === id);
+      if (kw) onAddToTif([kw.keyword]);
+    }
+  }
   async function handleCycleStatus(k: Keyword) {
     const next = cycleStatus(k.sortingStatus);
     if (selected.has(k.id) && selected.size > 1) await onBatchUpdate([...selected], { sortingStatus: next });
@@ -381,11 +396,6 @@ export default function ASTTable({
         <button className="ast-btn" onClick={handleShowAll}>↺ Show All</button>
         <button className="ast-btn" onClick={handleCopyTableData} title="Copy visible table data as tab-separated text for Excel">Copy Table Data</button>
         <button className="ast-btn" onClick={handleDownloadCSV} title="Download all keywords as CSV file">⬇ CSV</button>
-        {onAddToTif && selected.size > 0 && (
-          <button className="ast-btn" style={{ color: '#8b5cf6', borderColor: '#c4b5fd', fontWeight: 600 }}
-            onClick={() => { const kws = keywords.filter(k => selected.has(k.id)).map(k => k.keyword); onAddToTif(kws); showToast(`✓ Sent ${kws.length} keyword${kws.length !== 1 ? 's' : ''} to Terms In Focus.`); }}
-            title="Send selected keywords to Terms In Focus">▶ TIF ({selected.size})</button>
-        )}
         <div style={{ flex: 1 }} />
         <button className="ast-zoom-btn" onClick={() => setFontSize(f => Math.max(7, f - 1))}>－</button>
         <span style={{ fontSize: '9px', color: 'var(--text-m)', minWidth: 30, textAlign: 'center' }}>{Math.round((fontSize / 11) * 100)}%</span>
