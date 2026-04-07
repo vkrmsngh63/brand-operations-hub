@@ -437,3 +437,13 @@
   font-style: italic;
   font-size: 0.9em;
 }
+/* Sticky footer input row */
+.mt-tbl tfoot {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+}
+.mt-tbl tfoot td {
+  background: #f1f5f9 !important;
+  border-top: 2px solid #b3c6e0;
+}

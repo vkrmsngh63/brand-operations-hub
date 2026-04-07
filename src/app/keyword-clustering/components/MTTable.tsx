@@ -120,13 +120,9 @@ export default function MTTable({ astKeywords, onUpdateKeyword }: MTTableProps) 
         });
         if (m.keywords.length > 0 && !hasMatch) return false;
       }
-      if (kwSearchQ) {
-        const kq = kwSearchQ.toLowerCase();
-        if (!m.keywords.some(kw => kw.toLowerCase().includes(kq))) return false;
-      }
       return true;
     });
-  }, [entries, searchQ, showSorted, showPartial, showUnsorted, astKeywords, kwSearchQ]);
+  }, [entries, searchQ, showSorted, showPartial, showUnsorted, astKeywords]);
 
   // ── Select all logic ───────────────────────────────────────
   const selCount = useMemo(() => visible.filter(m => selected.has(m.id)).length, [visible, selected]);
@@ -386,7 +382,7 @@ export default function MTTable({ astKeywords, onUpdateKeyword }: MTTableProps) 
       <>
         <td style={{ wordBreak: 'break-word' }}>
           {m.keywords.length > 0 ? (
-            <div style={{ lineHeight: '1.6' }}>{m.keywords.join(', ')}</div>
+            <div style={{ lineHeight: '1.6' }}>{(kwSearchQ ? m.keywords.filter(kw => kw.toLowerCase().includes(kwSearchQ.toLowerCase())) : m.keywords).join(', ')}</div>
           ) : (
             <span className="mt-empty-kw">(no matching keywords)</span>
           )}
@@ -405,7 +401,7 @@ export default function MTTable({ astKeywords, onUpdateKeyword }: MTTableProps) 
       <>
         <td style={{ overflow: 'hidden' }}>
           <span className="mt-ak-appended">
-            {m.keywords.length > 0 ? m.keywords.join(', ') : '(no keywords)'}
+            {m.keywords.length > 0 ? (kwSearchQ ? m.keywords.filter(kw => kw.toLowerCase().includes(kwSearchQ.toLowerCase())) : m.keywords).join(', ') : '(no keywords)'}
           </span>
         </td>
         <td className={showKwSv ? '' : 'mt-col-hidden'}></td>
@@ -418,7 +414,8 @@ export default function MTTable({ astKeywords, onUpdateKeyword }: MTTableProps) 
 
   // ── Vertical view (mode 1) ─────────────────────────────────
   function renderVerticalView(m: MTEntry, viewLabel: string) {
-    const kwList = m.keywords;
+    const kwListFull = m.keywords;
+    const kwList = kwSearchQ ? kwListFull.filter(kw => kw.toLowerCase().includes(kwSearchQ.toLowerCase())) : kwListFull;
     const mtKwSelSet = kwSel.get(m.id) || new Set();
     const allChecked = kwList.length > 0 && kwList.every(k => mtKwSelSet.has(k));
 
@@ -507,14 +504,12 @@ export default function MTTable({ astKeywords, onUpdateKeyword }: MTTableProps) 
           <input className="mt-search-inp" type="text" placeholder="Search main terms…"
             value={searchQ} onChange={e => setSearchQ(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') { /* scroll to top */ } }} />
-          <button className="mt-search-btn" title="Search">⌕</button>
         </div>
         <div className="mt-ctrl-div" />
         <div className="mt-search-wrap">
           <input className="mt-search-inp" type="text" placeholder="Search keywords…"
             value={kwSearchQ} onChange={e => setKwSearchQ(e.target.value)}
             style={{ width: 105 }} />
-          <button className="mt-search-btn" title="Search associated keywords">⌕</button>
         </div>
         <div className="mt-ctrl-div" />
         <label className="mt-cb-label"><input type="checkbox" checked={showMtSv} onChange={e => setShowMtSv(e.target.checked)} /> MT SV</label>
