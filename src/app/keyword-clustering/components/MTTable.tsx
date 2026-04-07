@@ -84,6 +84,8 @@ export default function MTTable({ astKeywords, onUpdateKeyword }: MTTableProps) 
   const [fontSize, setFontSize] = useState(10);
   const [toast, setToast] = useState('');
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dropIdx, setDropIdx] = useState<number | null>(null);
   const [colWidths, setColWidths] = useState([22, 180, 80, 160, 70, 100, 100, 110]);
   const resizeRef = useRef<{ col: number; startX: number; startW: number } | null>(null);
   const addInputRef = useRef<HTMLInputElement>(null);
@@ -390,6 +392,31 @@ export default function MTTable({ astKeywords, onUpdateKeyword }: MTTableProps) 
     );
   }
 
+  
+  function handleDragStart(e: React.DragEvent, id: string) {
+    setDragId(id);
+    e.dataTransfer.effectAllowed = 'move';
+  }
+  function handleDragOver(e: React.DragEvent, idx: number) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDropIdx(idx);
+  }
+  function handleDragEnd() {
+    if (dragId != null && dropIdx != null) {
+      setEntries(prev => {
+        const arr = [...prev];
+        const fromIdx = arr.findIndex(m => m.id === dragId);
+        if (fromIdx === -1 || fromIdx === dropIdx) return prev;
+        const [item] = arr.splice(fromIdx, 1);
+        const toIdx = dropIdx > fromIdx ? dropIdx - 1 : dropIdx;
+        arr.splice(toIdx, 0, item);
+        return arr;
+      });
+    }
+    setDragId(null);
+    setDropIdx(null);
+  }
   function handleColResize(e: React.MouseEvent, colIdx: number) {
     e.preventDefault();
     e.stopPropagation();
@@ -427,7 +454,17 @@ export default function MTTable({ astKeywords, onUpdateKeyword }: MTTableProps) 
     const viewLabel = mode === 0 ? 'comma → vertical → single-line' : mode === 1 ? 'vertical → single-line → comma' : 'single-line → comma → vertical';
 
     return (
-      <tr key={m.id} className={`${isSelected ? 'mt-sel' : ''} ${mode === 1 ? 'mt-row-vertical' : ''}`}>
+      <tr key={m.id} className={`${isSelected ? 'mt-sel' : ''} ${mode === 1 ? 'mt-row-vertical' : ''}`}
+        onDragOver={e => handleDragOver(e, visible.indexOf(m))}
+        style={dropIdx === visible.indexOf(m) && dragId !== m.id ? { borderTop: '2px solid #3b82f6' } : undefined}
+      >
+        {/* Drag handle */}
+        <td style={{ textAlign: 'center', verticalAlign: 'top', paddingTop: 4, cursor: 'grab', color: '#94a3b8', fontSize: '1.1em', userSelect: 'none' }}
+          draggable
+          onDragStart={e => handleDragStart(e, m.id)}
+          onDragOver={e => handleDragOver(e, visible.indexOf(m))}
+          onDragEnd={handleDragEnd}
+        >⁞</td>
         <td style={{ textAlign: 'center', verticalAlign: 'top', paddingTop: 4 }}>
           <input type="checkbox" checked={isSelected} onChange={() => handleToggleRow(m)}
             title="Select row (also switches to vertical view and checks all keywords)"
@@ -619,6 +656,7 @@ export default function MTTable({ astKeywords, onUpdateKeyword }: MTTableProps) 
       <div className="mt-frame">
         <table className="mt-tbl" style={{ tableLayout: 'fixed' }}>
           <colgroup>
+            <col style={{ width: 18 }} />
             <col style={{ width: colWidths[0] }} />
             <col style={{ width: colWidths[1] }} />
             <col style={{ width: colWidths[2] }} className={showMtSv ? '' : 'mt-col-hidden'} />
@@ -629,6 +667,7 @@ export default function MTTable({ astKeywords, onUpdateKeyword }: MTTableProps) 
             <col style={{ width: colWidths[7] }} className={showTopicDesc ? '' : 'mt-col-hidden'} />
           </colgroup>
           <thead><tr>
+            <th style={{ width: 18, padding: '3px 0', textAlign: 'center', color: '#94a3b8', fontSize: '0.8em' }}>⁞</th>
             <th style={{ width: colWidths[0], textAlign: 'center', padding: '3px 2px' }}>
               <input ref={selectAllRef} type="checkbox" checked={selectAllState === 'all'}
                 onChange={e => handleToggleAll(e.target.checked)}
@@ -665,7 +704,7 @@ export default function MTTable({ astKeywords, onUpdateKeyword }: MTTableProps) 
           </tr></thead>
           <tbody>
             {visible.length === 0 ? (
-              <tr><td colSpan={8}>
+              <tr><td colSpan={9}>
                 <div className="mt-empty">
                   <div className="mt-empty-icon">{entries.length === 0 ? '📋' : '🔍'}</div>
                   <div>{entries.length === 0
@@ -678,7 +717,7 @@ export default function MTTable({ astKeywords, onUpdateKeyword }: MTTableProps) 
           </tbody>
           <tfoot><tr>
             <td style={{ textAlign: 'center', fontSize: 11, color: '#3b82f6', fontWeight: 700, padding: '2px' }}>＋</td>
-            <td colSpan={7}>
+            <td colSpan={8}>
               <input ref={addInputRef} className="mt-add-inp" type="text"
                 placeholder="Paste terms here, or type a main term + Enter"
                 onPaste={handlePaste} onKeyDown={handleAddTerm} />
