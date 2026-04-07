@@ -71,6 +71,17 @@
 - [x] CSV download button (downloads all keywords as CSV file)
 - [x] Column resize drag handles with full-height gridlines on all cells
 
+#### 1b-topics: COMPLETE
+- [x] Inline topic pill editing in AST (TopicCell — click pill to edit, click + to add, clear to delete, pipe '|' delimiter)
+- [x] Batch topic editing across selected rows in AST (delta propagation — same logic as tag batch editing)
+- [x] Right-click topic pill to filter in AST (yellow "📌 Filtering by topic" bar with toggle and ✕ clear)
+- [x] Topic editing in MT vertical view (MtTopicPills — editable pills per keyword sub-row)
+- [x] Batch topic editing in MT (parent handleMtTopicEdit — delta applied to all checked keywords)
+- [x] Right-click topic pill to filter in MT (yellow filter bar with ✕ clear)
+- [x] Topic editing in TIF (TifTopicPills — editable pills per row)
+- [x] Batch topic editing in TIF (parent handleTifTopicEdit — delta applied to all selected rows)
+- [x] Right-click topic pill to filter in TIF (toggle topic filter)
+
 ### 1c. MT + TIF Tables: COMPLETE
 - [x] Main Terms table — basic shell (8 columns, add/paste import, search, filters, column visibility, zoom, column resize, copy table data)
 - [x] Main Terms table — three view modes (comma/vertical/single-line), header click to cycle all rows
@@ -82,29 +93,27 @@
 - [x] Main Terms table — remove selected rows button
 - [x] Main Terms table — associated keyword search (filters sub-rows in vertical view)
 - [x] Main Terms table — sticky footer input row
+- [x] Main Terms table — visible sub-row borders and synchronized amber hover across all columns
+- [x] Main Terms table — Topic Descriptions column has sub-rows participating in hover sync
 - [x] Terms In Focus table — component created with search, filters, column visibility, zoom, column resize
 - [x] Terms In Focus table — drag-to-reorder, mark status, remove selected, clear all, copy table data
-- [x] Terms In Focus table — active/paused toggle
+- [x] Terms In Focus table — active/paused toggle (state lifted to KeywordWorkspace)
 - [x] Terms In Focus table — wired into KeywordWorkspace (3 tables stacked: AST + MT + TIF)
-- [x] Terms In Focus table — "add to TIF" from AST and MT checked keywords (▶ TIF button)
 - [x] Terms In Focus table — tag search, topic search, topic pill click-to-filter
 
-### 1c-mt-extras. MT Additional Features: NOT STARTED
-- [ ] Apply Main Term As Tag button (adds main term text as tag to all checked keywords in that row)
-- [ ] Bulk tag input field in control bar (replace prompt() dialogs with inline text input + Apply button)
-- [ ] Keyword tag search in vertical view header (mt-kw-tag-q — filter keyword sub-rows by tags)
-- [ ] Keyword topic search in vertical view header (mt-kw-topic-q — filter keyword sub-rows by topics)
+### 1c-mt-extras. MT Additional Features: COMPLETE
+- [x] Apply Main Term As Tag button (adds main term text as tag to all checked keywords in that row)
+- [x] Inline tag input field in header bar (replaces prompt() dialogs with inline text input + Apply/✕)
+- [x] Keyword tag search in control bar (Search kw tags… — filter keyword sub-rows by tags)
+- [x] Keyword topic search in control bar (Search kw topics… — filter keyword sub-rows by topics)
 
-### 1c-behavior. TIF Auto-Add Behavior: NOT STARTED
-- [ ] Decision: keep current ▶ TIF button approach OR match original auto-add-on-checkbox behavior
-- [ ] If auto-add: wire AST checkbox change to automatically call addToTif
-- [ ] If auto-add: wire MT vertical view checkbox change to automatically call addToTif
-
-### 1b-topics. Topic Editing (AST, MT, TIF): NOT STARTED
-- [ ] Inline topic pill editing in AST (click pill to edit, click empty cell to add new, clear to delete, pipe '|' delimiter)
-- [ ] Batch topic editing across selected rows (delta propagation — same logic as tag batch editing)
-- [ ] Topic editing in MT vertical view (Topics column shows editable pills per keyword sub-row)
-- [ ] Topic editing in TIF (same inline editing as AST)
+### 1c-behavior. TIF Auto-Add Behavior: COMPLETE
+- [x] Decision: auto-add-on-checkbox (matching original HTML tool behavior)
+- [x] AST checkbox change automatically calls addToTif
+- [x] MT vertical view checkbox change automatically calls addToTif
+- [x] MT row checkbox (select all keywords) automatically calls addToTif
+- [x] ▶ TIF buttons removed from AST and MT
+- [x] TIF Active/Paused toggle state lifted to KeywordWorkspace parent
 
 ### 1b-split. Split Topics View (AST, MT, TIF): NOT STARTED
 - [ ] Split/Combined view toggle on Topics column header (click header to toggle, "Split" badge when active)

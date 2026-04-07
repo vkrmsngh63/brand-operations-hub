@@ -12,6 +12,7 @@
 **Repository:** GitHub (private) — `brand-operations-hub`
 **Live URL:** https://brand-operations-hub-green.vercel.app and https://vklf.com
 **Development:** GitHub Codespaces (browser-based, no local installs)
+**Codespace path:** `/workspaces/brand-operations-hub`
 
 ---
 
@@ -78,22 +79,54 @@
 - CSV Download button — downloads ALL keywords as CSV file (keyword_sorting_data.csv)
 - Column resize drag handles — drag right edge of any column border to resize, full-height gridlines on all cells
 
+### Phase 1b-topics — Inline Topic Editing (AST, MT, TIF): COMPLETE
+- AST: TopicCell component — click pill to edit, + to add, clear to delete, pipe | delimiter
+- AST: Batch topic propagation — edit a topic with multiple rows selected → delta applied to all selected
+- AST: Right-click topic pill → yellow "📌 Filtering by topic" bar with toggle and ✕ clear
+- MT: MtTopicPills component in vertical view — click pill to edit, + to add, clear to delete
+- MT: Batch topic propagation via parent handleMtTopicEdit — edit topic on one checked keyword → delta applied to all checked keywords
+- MT: Right-click topic pill → yellow topic filter bar with ✕ clear
+- TIF: TifTopicPills component — click pill to edit, + to add, clear to delete
+- TIF: Batch topic propagation via parent handleTifTopicEdit — edit topic on one selected row → delta applied to all selected
+- TIF: Right-click topic pill → toggles topic filter (existing yellow bar)
+
 ### Phase 1c — MT + TIF Tables: COMPLETE
-- MTTable.tsx (732 lines) with mt-table.css — fully functional
+- MTTable.tsx with mt-table.css — fully functional
 - 8 columns, 3 view modes, keyword matching, drag-to-reorder, mark status, bulk tag add/remove, remove selected, keyword search (filters sub-rows), sticky footer
-- TIFTable.tsx (~310 lines) with tif-table.css — fully functional
+- TIFTable.tsx with tif-table.css — fully functional
 - 7 columns: checkbox, drag handle, focus term, volume, status, tags, topics
 - Search, status filters, column visibility, zoom, column resize, sort by vol, drag reorder, mark status, remove selected, clear all, copy table data, active/paused toggle
 - Tag search in Tags column header, topic search in Topics column header
 - Topic pill click-to-filter with yellow topic filter bar
-- KeywordWorkspace.tsx updated: AST + MT + TIF stacked vertically in left panel
-- "Add to TIF" wired: purple ▶ TIF button appears in AST control bar when keywords are selected; purple ▶ TIF button appears in MT header when keywords are checked in vertical view
+- KeywordWorkspace.tsx: AST + MT + TIF stacked vertically in left panel
+
+### Phase 1c-mt-extras — MT Additional Features: COMPLETE
+- "MT → Tag" button — adds each row's main term as tag to its checked keywords
+- Inline tag input field — replaces prompt() dialogs with inline text input + Apply/✕ for both add and remove
+- Keyword tag search in control bar — "Search kw tags…" filters vertical view sub-rows by tag content
+- Keyword topic search in control bar — "Search kw topics…" filters vertical view sub-rows by topic content
+- All four search fields cleared by ↺ Show All
+- Vertical view header shows "(filtered from N)" when filters reduce the keyword count
+
+### Phase 1c-behavior — TIF Auto-Add: COMPLETE
+- Decision: auto-add-on-checkbox (matching original HTML tool behavior)
+- AST: checking a keyword checkbox auto-adds it to TIF
+- AST: checking select-all auto-adds all visible keywords to TIF
+- MT: checking a keyword in vertical view auto-adds it to TIF
+- MT: selecting a row checkbox (which checks all keywords) auto-adds all keywords to TIF
+- Unchecking does NOT remove from TIF
+- ▶ TIF buttons removed from both AST and MT
+- TIF Active/Paused toggle properly controls auto-add (state lifted to KeywordWorkspace)
+
+### MT Vertical View Sub-Row Enhancements: COMPLETE
+- Visible borders between sub-rows (solid #d6dce4 gray dividers)
+- Synchronized hover highlighting across all columns — hovering any sub-row cell highlights the entire keyword row across Associated Keywords, KW SV, Tags, Topics, and Topic Descriptions columns
+- Amber hover color (#fef9c3) stands out against white default and blue selection backgrounds
+- Topic Descriptions column has matching sub-rows with spacer header (content placeholder for 1b-split phase)
+- React `hoveredKw` state tracks hovered keyword string, `mt-kw-hover` CSS class applied across all columns
 
 ### NEXT STEPS (see ROADMAP.md for full details):
-Multiple sub-phases remain before the canvas work begins:
-- **1c-mt-extras** — Apply Main Term As Tag, bulk tag input field, MT keyword tag/topic search
-- **1c-behavior** — Decide on TIF auto-add-on-checkbox vs current button approach
-- **1b-topics** — Inline topic editing in AST/MT/TIF (editable topic pills)
+Three sub-phases remain before the canvas work begins:
 - **1b-split** — Split Topics View with per-topic sub-rows, topic descriptions editing
 - **1-ui** — Resizable panel dividers, panel visibility checkboxes, horizontal scroll arrows
 - **1-detach** — Detach/floating window overlays for AST/MT/TIF/Canvas
@@ -124,13 +157,10 @@ src/app/api/projects/
       [keywordId]/
         route.ts                    — PATCH (update) + DELETE (single)
     canvas/
-      route.ts                      — GET (state+pathways+links) + PATCH (state)
-      nodes/
-        route.ts                    — GET (list) + POST (create) + PATCH (bulk update)
-      pathways/
-        route.ts                    — POST (create) + DELETE
-      sister-links/
-        route.ts                    — POST (create) + DELETE
+      nodes/route.ts                — GET + POST + PATCH (batch)
+      pathways/route.ts             — GET + POST + DELETE
+      sister-links/route.ts         — GET + POST + DELETE
+      state/route.ts                — GET + PUT
 ```
 
 ---
@@ -155,13 +185,13 @@ brand-operations-hub/
       keyword-clustering/
         page.tsx        # Keyword Clustering — project selector + workspace
         components/
-          ASTTable.tsx          # All Search Terms table (virtual scroll, filters, drag-reorder, tags, removed terms, copy/CSV, column resize, ▶ TIF button)
+          ASTTable.tsx          # All Search Terms table (virtual scroll, filters, drag-reorder, tags, topics with TopicCell, removed terms, copy/CSV, column resize, auto-add to TIF on checkbox)
           ast-table.css         # AST table styles (light theme table on dark page)
-          MTTable.tsx           # Main Terms table (3 view modes, keyword matching, vertical sub-rows, drag-reorder, mark status, bulk tags, keyword search, sticky footer, ▶ TIF button)
-          mt-table.css          # MT table styles (hardcoded light colors)
-          TIFTable.tsx          # Terms In Focus table (search, filters, drag-reorder, mark status, remove, clear, active/paused toggle, tag search, topic search, topic pill filter)
+          MTTable.tsx           # Main Terms table (3 view modes, keyword matching, vertical sub-rows with synced hover, drag-reorder, mark status, inline tag input, MT→Tag, keyword tag/topic search, MtTopicPills with batch, auto-add to TIF)
+          mt-table.css          # MT table styles (visible sub-row borders, synced amber hover, hardcoded light colors)
+          TIFTable.tsx          # Terms In Focus table (search, filters, drag-reorder, mark status, remove, clear, active/paused toggle, TifTopicPills with batch, tag search, topic search, topic pill filter)
           tif-table.css         # TIF table styles (hardcoded light colors)
-          KeywordWorkspace.tsx  # Connects AST + MT + TIF tables to API, stacked vertically in left panel, manages tifKeywords state and addToTif callback
+          KeywordWorkspace.tsx  # Connects AST + MT + TIF tables to API, stacked vertically in left panel, manages tifKeywords + tifActive state, addToTif callback
       api/
         projects/       # All API routes (see API Routes section above)
     hooks/
@@ -193,15 +223,19 @@ brand-operations-hub/
 - **Drag-to-reorder:** Only the ⁞ handle initiates drag (via onMouseDown setting tr.draggable=true). The row itself has draggable=false by default. Reorder persists sortOrder to API with try/catch error handling.
 - **Removed Terms:** Stored in React state (session-only, not persisted to database yet). Keywords are archived on remove with status reset to Unsorted and tags cleared. Future: add removedAt column to database.
 - **Tag editing:** TagCell is a separate component (not memoized) with its own editing state. Batch tag edits propagate deltas (added/removed tags) to all selected rows via individual PATCH calls. Left-click edits a pill, right-click filters by it.
+- **Topic editing:** TopicCell (AST), MtTopicPills (MT), TifTopicPills (TIF) — all follow same pattern as tags but use pipe `|` delimiter. Batch propagation uses parent-level handler functions (handleTopicEdit, handleMtTopicEdit, handleTifTopicEdit) that have direct access to selection state. Child components call parent callbacks with (oldTopicStr, newTopicStr) and parent computes deltas and applies to all selected/checked keywords. Right-click filters via dedicated topicFilter state with yellow filter bar.
 - **Reorder persistence:** The reorder function assigns sequential sortOrder (0, 1, 2...) and PATCHes only changed rows. Wrapped in try/catch — if network fails, local order is still correct.
 - **MT Table CSS:** Uses hardcoded light color values (#fff, #f8fafc, #e2e8f0, etc.) instead of CSS variables to prevent dark theme bleed from the page-level dark theme.
 - **MT view mode cycling:** Triggered by clicking the "Associated Keywords" column header, which cycles ALL visible rows together. Individual cells do not cycle on click.
 - **MT keyword matching:** Uses whole-word boundary regex matching — all words in the main term must appear as whole words in the keyword string.
-- **MT keyword search:** Filters individual keyword sub-rows within each MT row (not the MT rows themselves). Works across all view modes (comma, vertical, single-line).
+- **MT keyword search:** Filters individual keyword sub-rows within each MT row (not the MT rows themselves). Works across all view modes (comma, vertical, single-line). Additional kw tag search and kw topic search also filter sub-rows.
+- **MT inline tag input:** Replaces browser prompt() dialogs. Clicking +Tag or −Tag shows inline input with Apply/✕ buttons. Enter applies, Escape cancels.
+- **MT sub-row hover sync:** React `hoveredKw` state tracks which keyword is hovered. `mt-kw-hover` CSS class applied to all corresponding sub-row items across all 5 columns (Keywords, SV, Tags, Topics, Topic Desc). Amber highlight (#fef9c3) distinguishes sub-row hover from blue row selection.
 - **MT data persistence:** Session-only (React state). Not yet saved to database. MT entries disappear on logout/tab close.
-- **TIF data persistence:** Session-only (React state). Keywords added via ▶ TIF button from AST/MT. Not yet saved to database.
+- **TIF data persistence:** Session-only (React state). Keywords auto-added via checkbox from AST/MT. Not yet saved to database.
+- **TIF Active/Paused state:** Lifted to KeywordWorkspace parent. tifActive and onSetTifActive passed as props to TIFTable. The addToTif callback checks tifActive before adding.
+- **Auto-add to TIF:** Checking a keyword checkbox in AST or MT vertical view auto-adds it to TIF (matching original HTML tool). Unchecking does NOT remove from TIF. TIF Active/Paused toggle controls whether adds are accepted.
 - **TIF tag/topic search:** Tag search in header uses whole-word matching on tag strings. Topic search matches exact topic pill text (pipe-delimited). Topic pill click-to-filter shows yellow filter bar with clear button.
-- **Add to TIF mechanism:** Uses a ▶ TIF button (appears when keywords are selected in AST, or when keywords are checked in MT vertical view). Original HTML tool auto-adds on checkbox — decision pending on which approach to keep (see Phase 1c-behavior in ROADMAP.md).
 
 ---
 
