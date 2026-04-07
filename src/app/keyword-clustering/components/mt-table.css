@@ -322,7 +322,7 @@
 .mt-row-vertical td {
   vertical-align: top;
 }
-.mt-kw-td, .mt-sv-td, .mt-tags-td, .mt-topics-td {
+.mt-kw-td, .mt-sv-td, .mt-tags-td, .mt-topics-td, .mt-topicdesc-td {
   padding: 0 !important;
 }
 .mt-kw-master {
@@ -365,8 +365,9 @@
 .mt-kw-checked {
   background: #eff6ff;
 }
-/* Sub-row hover: warm amber tint stands out from blue row/selection */
-.mt-kw-item:hover {
+/* Synchronized sub-row hover: warm amber across all columns */
+.mt-kw-item:hover,
+.mt-kw-hover {
   background: #fef9c3 !important;
 }
 .mt-kw-text {

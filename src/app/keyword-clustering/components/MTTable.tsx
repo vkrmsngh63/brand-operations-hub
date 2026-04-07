@@ -158,6 +158,7 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
   const [toast, setToast] = useState('');
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
+  const [hoveredKw, setHoveredKw] = useState<string | null>(null);
   const [dropIdx, setDropIdx] = useState<number | null>(null);
   const [colWidths, setColWidths] = useState([22, 180, 80, 160, 70, 100, 100, 110]);
   const resizeRef = useRef<{ col: number; startX: number; startW: number } | null>(null);
@@ -731,7 +732,9 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
           </div>
           <div className="mt-kw-list">
             {kwList.map(kwStr => (
-              <div key={kwStr} className={`mt-kw-item ${isKwSelected(m.id, kwStr) ? 'mt-kw-checked' : ''}`}>
+              <div key={kwStr}
+                className={`mt-kw-item ${isKwSelected(m.id, kwStr) ? 'mt-kw-checked' : ''} ${hoveredKw === kwStr ? 'mt-kw-hover' : ''}`}
+                onMouseEnter={() => setHoveredKw(kwStr)} onMouseLeave={() => setHoveredKw(null)}>
                 <input type="checkbox" checked={isKwSelected(m.id, kwStr)}
                   onChange={() => toggleKwSel(m.id, kwStr)}
                   style={{ width: 10, height: 10, accentColor: '#3b82f6', cursor: 'pointer', flexShrink: 0 }} />
@@ -747,7 +750,9 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
             {kwList.map(kwStr => {
               const rec = getKwRec(kwStr, astKeywords);
               return (
-                <div key={kwStr} className="mt-kw-item mt-kw-sv-item">
+                <div key={kwStr}
+                  className={`mt-kw-item mt-kw-sv-item ${hoveredKw === kwStr ? 'mt-kw-hover' : ''}`}
+                  onMouseEnter={() => setHoveredKw(kwStr)} onMouseLeave={() => setHoveredKw(null)}>
                   {rec ? fmtV(rec.volume) : ''}
                 </div>
               );
@@ -761,7 +766,9 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
               const rec = getKwRec(kwStr, astKeywords);
               const tags = parseTags(rec ? rec.tags : '');
               return (
-                <div key={kwStr} className="mt-kw-item">
+                <div key={kwStr}
+                  className={`mt-kw-item ${hoveredKw === kwStr ? 'mt-kw-hover' : ''}`}
+                  onMouseEnter={() => setHoveredKw(kwStr)} onMouseLeave={() => setHoveredKw(null)}>
                   <div className="mt-tag-pills">
                     {tags.map((t, i) => <span key={i} className="mt-tag-pill">{t}</span>)}
                   </div>
@@ -775,7 +782,9 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
           <div className="mt-kw-list">
             {kwList.map(kwStr => {
               return (
-                <div key={kwStr} className="mt-kw-item">
+                <div key={kwStr}
+                  className={`mt-kw-item ${hoveredKw === kwStr ? 'mt-kw-hover' : ''}`}
+                  onMouseEnter={() => setHoveredKw(kwStr)} onMouseLeave={() => setHoveredKw(null)}>
                   <MtTopicPills kwStr={kwStr} astKeywords={astKeywords}
                     onTopicEdit={(o, n) => handleMtTopicEdit(kwStr, o, n)}
                     onTopicFilter={t => setKwTopicFilter(prev => prev === t ? '' : t)} />
@@ -784,7 +793,17 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
             })}
           </div>
         </td>
-        <td className={showTopicDesc ? '' : 'mt-col-hidden'}></td>
+        <td className={showTopicDesc ? 'mt-topicdesc-td' : 'mt-col-hidden'}>
+          <div className="mt-kw-spacer">&nbsp;</div>
+          <div className="mt-kw-list">
+            {kwList.map(kwStr => (
+              <div key={kwStr}
+                className={`mt-kw-item ${hoveredKw === kwStr ? 'mt-kw-hover' : ''}`}
+                onMouseEnter={() => setHoveredKw(kwStr)} onMouseLeave={() => setHoveredKw(null)}>
+              </div>
+            ))}
+          </div>
+        </td>
       </>
     );
   }
