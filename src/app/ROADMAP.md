@@ -29,7 +29,7 @@
 - [x] Dashboard Keyword Clustering card wired to navigate to /keyword-clustering
 - [x] Keyword Clustering page shell with project selector (create, open, delete projects)
 
-### 1b. AST Table: IN PROGRESS
+### 1b. AST Table: COMPLETE
 
 #### 1b-core: COMPLETE
 - [x] ASTTable React component with all 7 columns (checkbox, keyword, volume, sorting status, tags, topics, topic descriptions)
@@ -69,9 +69,9 @@
 #### 1b-controls: COMPLETE
 - [x] Copy Table Data button (copies visible rows as TSV to clipboard)
 - [x] CSV download button (downloads all keywords as CSV file)
-- [x] Column resize drag handles
+- [x] Column resize drag handles with full-height gridlines on all cells
 
-### 1c. MT + TIF Tables: IN PROGRESS
+### 1c. MT + TIF Tables: COMPLETE
 - [x] Main Terms table — basic shell (8 columns, add/paste import, search, filters, column visibility, zoom, column resize, copy table data)
 - [x] Main Terms table — three view modes (comma/vertical/single-line), header click to cycle all rows
 - [x] Main Terms table — vertical view with per-keyword checkboxes, SV, Tags, Topics columns
@@ -86,28 +86,79 @@
 - [x] Terms In Focus table — drag-to-reorder, mark status, remove selected, clear all, copy table data
 - [x] Terms In Focus table — active/paused toggle
 - [x] Terms In Focus table — wired into KeywordWorkspace (3 tables stacked: AST + MT + TIF)
-- [ ] Terms In Focus table — wire up "add to TIF" from AST and MT checked keywords
-- [ ] Terms In Focus table — tag search, topic search, topic pill filter
+- [x] Terms In Focus table — "add to TIF" from AST and MT checked keywords (▶ TIF button)
+- [x] Terms In Focus table — tag search, topic search, topic pill click-to-filter
+
+### 1c-mt-extras. MT Additional Features: NOT STARTED
+- [ ] Apply Main Term As Tag button (adds main term text as tag to all checked keywords in that row)
+- [ ] Bulk tag input field in control bar (replace prompt() dialogs with inline text input + Apply button)
+- [ ] Keyword tag search in vertical view header (mt-kw-tag-q — filter keyword sub-rows by tags)
+- [ ] Keyword topic search in vertical view header (mt-kw-topic-q — filter keyword sub-rows by topics)
+
+### 1c-behavior. TIF Auto-Add Behavior: NOT STARTED
+- [ ] Decision: keep current ▶ TIF button approach OR match original auto-add-on-checkbox behavior
+- [ ] If auto-add: wire AST checkbox change to automatically call addToTif
+- [ ] If auto-add: wire MT vertical view checkbox change to automatically call addToTif
+
+### 1b-topics. Topic Editing (AST, MT, TIF): NOT STARTED
+- [ ] Inline topic pill editing in AST (click pill to edit, click empty cell to add new, clear to delete, pipe '|' delimiter)
+- [ ] Batch topic editing across selected rows (delta propagation — same logic as tag batch editing)
+- [ ] Topic editing in MT vertical view (Topics column shows editable pills per keyword sub-row)
+- [ ] Topic editing in TIF (same inline editing as AST)
+
+### 1b-split. Split Topics View (AST, MT, TIF): NOT STARTED
+- [ ] Split/Combined view toggle on Topics column header (click header to toggle, "Split" badge when active)
+- [ ] Split view: one sub-row per topic with checkbox + drag handle + editable topic pill
+- [ ] Topic Descriptions editing in split view (click description text → inline textarea, Ctrl+Enter save, Escape cancel, blur save)
+- [ ] Description stored in keyword record (canvasLoc field — per-keyword, per-topic text)
+- [ ] Batch propagation via topic checkboxes (edit one topic → propagate to all checked topics)
+- [ ] Batch propagation via description checkboxes (edit one description → propagate to all checked descriptions)
+- [ ] Cross-highlight between topic and description sub-rows on hover
+- [ ] Height sync between topic and description sub-row columns
+- [ ] Topic pill drag handle for dragging topics to canvas (wires into Phase 1d)
+
+### 1-ui. UI Layout Features: NOT STARTED
+- [ ] Resizable horizontal dividers between AST↔MT and MT↔TIF (drag to resize panel heights)
+- [ ] Resizable vertical divider between left panel and canvas (drag to resize panel widths)
+- [ ] Panel visibility checkboxes in topbar (show/hide AST, MT, TIF, Canvas — hiding redistributes space)
+- [ ] Dividers auto-hide when adjacent panels are hidden
+- [ ] Horizontal scroll arrows on table frames (auto-appear when content overflows)
+
+### 1-detach. Detach / Floating Window Overlays: NOT STARTED
+- [ ] AST detach overlay (⊞ button → full-screen view with all AST functionality, synced state, ✕ close)
+- [ ] MT detach overlay (⊞ button → full-screen view with all MT functionality)
+- [ ] TIF detach overlay (⊞ button → full-screen view with all TIF functionality)
+- [ ] Canvas detach overlay (⊞ button → full-screen canvas view)
+- [ ] Overlays are draggable by header and resizable
+- [ ] State syncs between inline panel and overlay on close
 
 ### 1d. Topics Layout Canvas: NOT STARTED
 - [ ] Mindmap canvas with nodes, connectors, drag-drop
 - [ ] Edit panel, collapse/expand, sister links, auto-layout
+- [ ] Drag keywords from AST/MT/TIF onto canvas to link them to nodes
+- [ ] Drag topic pills from Split View onto canvas
 
 ### 1e. Canvas Table Mode: NOT STARTED
 - [ ] 9-column funnel table, edit mode
 - [ ] TSV import/export
 
 ### 1f. AI Mode + KAS + TVT: NOT STARTED
-- [ ] AI Actions Pane, four-way toggle
-- [ ] Keywords Analysis Table
-- [ ] Topics View Table
+- [ ] Manual/AI mode toggle in topbar
+- [ ] AI Actions Pane with four-way toggle (Normal/Common/Analysis/Topics)
+- [ ] Keywords Analysis Table (KAS) — derived view showing keyword-to-topic mapping with upstream hierarchy
+- [ ] Topics View Table (TVT) — depth-first tree view of canvas data with drag-reorder, expand/collapse, depth filter, zoom
 
 ### 1g. Auto-Analyze System: NOT STARTED
 - [ ] Claude API integration (server-side)
+- [ ] AI Prompt Popover (Generate AI Prompt, Upload AI Prompt Response)
 - [ ] Streaming, batch processing, validation, delta merge
+- [ ] Adaptive/Classic processing modes, batch tiers, hybrid full-table/delta
+- [ ] Post-apply verification, checkpoint persistence
 
 ### 1h. Download/Upload Work: NOT STARTED
-- [ ] Export/import from database
+- [ ] Export complete .kst JSON file (all data, selections, filters, UI state, AI state, canvas state)
+- [ ] Import/restore from .kst file (exact state restoration)
+- [ ] Reset Tool function (clear all data and reset to fresh state)
 
 ---
 
@@ -134,3 +185,4 @@ Each workflow follows: spec -> data model -> API -> frontend -> AI integration.
 - Original features: docs/legacy/KST_Features_Tour_v15.md
 - Pipeline spec: docs/legacy/KST_Pipeline_Spec_v1.md
 - Migration plan: docs/legacy/Migration_Master_Plan_v1.md
+- Gap analysis: docs/legacy/ROADMAP_GAP_ANALYSIS.md

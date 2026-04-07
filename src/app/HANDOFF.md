@@ -77,18 +77,27 @@
 - Copy Table Data button — copies visible rows as TSV to clipboard (respects column visibility for Vol/Tags)
 - CSV Download button — downloads ALL keywords as CSV file (keyword_sorting_data.csv)
 - Column resize drag handles — drag right edge of any column border to resize, full-height gridlines on all cells
-- REMAINING: Column resize drag handles
 
-### Phase 1c — MT + TIF Tables: IN PROGRESS
+### Phase 1c — MT + TIF Tables: COMPLETE
 - MTTable.tsx (732 lines) with mt-table.css — fully functional
 - 8 columns, 3 view modes, keyword matching, drag-to-reorder, mark status, bulk tag add/remove, remove selected, keyword search (filters sub-rows), sticky footer
-- TIFTable.tsx (363 lines) with tif-table.css — core complete
+- TIFTable.tsx (~310 lines) with tif-table.css — fully functional
 - 7 columns: checkbox, drag handle, focus term, volume, status, tags, topics
 - Search, status filters, column visibility, zoom, column resize, sort by vol, drag reorder, mark status, remove selected, clear all, copy table data, active/paused toggle
+- Tag search in Tags column header, topic search in Topics column header
+- Topic pill click-to-filter with yellow topic filter bar
 - KeywordWorkspace.tsx updated: AST + MT + TIF stacked vertically in left panel
-- REMAINING: wire "add to TIF" from AST/MT, TIF tag search, topic search, topic pill filter
+- "Add to TIF" wired: purple ▶ TIF button appears in AST control bar when keywords are selected; purple ▶ TIF button appears in MT header when keywords are checked in vertical view
 
-### NEXT STEP: Wire up "add to TIF" from AST/MT, then TIF tag/topic search
+### NEXT STEPS (see ROADMAP.md for full details):
+Multiple sub-phases remain before the canvas work begins:
+- **1c-mt-extras** — Apply Main Term As Tag, bulk tag input field, MT keyword tag/topic search
+- **1c-behavior** — Decide on TIF auto-add-on-checkbox vs current button approach
+- **1b-topics** — Inline topic editing in AST/MT/TIF (editable topic pills)
+- **1b-split** — Split Topics View with per-topic sub-rows, topic descriptions editing
+- **1-ui** — Resizable panel dividers, panel visibility checkboxes, horizontal scroll arrows
+- **1-detach** — Detach/floating window overlays for AST/MT/TIF/Canvas
+- **1d** — Topics Layout Canvas (mindmap mode)
 
 ### Database Tables (defined in prisma/schema.prisma)
 - **Project** — container for each keyword clustering project (userId, name, workflow)
@@ -146,9 +155,13 @@ brand-operations-hub/
       keyword-clustering/
         page.tsx        # Keyword Clustering — project selector + workspace
         components/
-          ASTTable.tsx          # All Search Terms table (virtual scroll, filters, drag-reorder, tags, removed terms, copy/CSV)
+          ASTTable.tsx          # All Search Terms table (virtual scroll, filters, drag-reorder, tags, removed terms, copy/CSV, column resize, ▶ TIF button)
           ast-table.css         # AST table styles (light theme table on dark page)
-          KeywordWorkspace.tsx  # Connects ASTTable to API via useKeywords hook
+          MTTable.tsx           # Main Terms table (3 view modes, keyword matching, vertical sub-rows, drag-reorder, mark status, bulk tags, keyword search, sticky footer, ▶ TIF button)
+          mt-table.css          # MT table styles (hardcoded light colors)
+          TIFTable.tsx          # Terms In Focus table (search, filters, drag-reorder, mark status, remove, clear, active/paused toggle, tag search, topic search, topic pill filter)
+          tif-table.css         # TIF table styles (hardcoded light colors)
+          KeywordWorkspace.tsx  # Connects AST + MT + TIF tables to API, stacked vertically in left panel, manages tifKeywords state and addToTif callback
       api/
         projects/       # All API routes (see API Routes section above)
     hooks/
@@ -160,7 +173,7 @@ brand-operations-hub/
   .env                  # DATABASE_URL + DIRECT_URL (for Prisma CLI)
   .env.local            # NEXT_PUBLIC_SUPABASE_URL + ANON_KEY + DATABASE_URL + DIRECT_URL
   HANDOFF.md            # THIS FILE
-  ROADMAP.md            # Development roadmap
+  ROADMAP.md            # Development roadmap (includes gap analysis results)
 ```
 
 ---
@@ -181,6 +194,14 @@ brand-operations-hub/
 - **Removed Terms:** Stored in React state (session-only, not persisted to database yet). Keywords are archived on remove with status reset to Unsorted and tags cleared. Future: add removedAt column to database.
 - **Tag editing:** TagCell is a separate component (not memoized) with its own editing state. Batch tag edits propagate deltas (added/removed tags) to all selected rows via individual PATCH calls. Left-click edits a pill, right-click filters by it.
 - **Reorder persistence:** The reorder function assigns sequential sortOrder (0, 1, 2...) and PATCHes only changed rows. Wrapped in try/catch — if network fails, local order is still correct.
+- **MT Table CSS:** Uses hardcoded light color values (#fff, #f8fafc, #e2e8f0, etc.) instead of CSS variables to prevent dark theme bleed from the page-level dark theme.
+- **MT view mode cycling:** Triggered by clicking the "Associated Keywords" column header, which cycles ALL visible rows together. Individual cells do not cycle on click.
+- **MT keyword matching:** Uses whole-word boundary regex matching — all words in the main term must appear as whole words in the keyword string.
+- **MT keyword search:** Filters individual keyword sub-rows within each MT row (not the MT rows themselves). Works across all view modes (comma, vertical, single-line).
+- **MT data persistence:** Session-only (React state). Not yet saved to database. MT entries disappear on logout/tab close.
+- **TIF data persistence:** Session-only (React state). Keywords added via ▶ TIF button from AST/MT. Not yet saved to database.
+- **TIF tag/topic search:** Tag search in header uses whole-word matching on tag strings. Topic search matches exact topic pill text (pipe-delimited). Topic pill click-to-filter shows yellow filter bar with clear button.
+- **Add to TIF mechanism:** Uses a ▶ TIF button (appears when keywords are selected in AST, or when keywords are checked in MT vertical view). Original HTML tool auto-adds on checkbox — decision pending on which approach to keep (see Phase 1c-behavior in ROADMAP.md).
 
 ---
 
@@ -214,12 +235,19 @@ brand-operations-hub/
 
 ---
 
+## Known Development Environment Issues
+
+### Port Forwarding in GitHub Codespaces
+The PORTS tab in Codespaces may not show port 3000 even when the dev server is running. This is a known recurring issue. Do NOT spend time troubleshooting it. Instead, for testing: push code to GitHub with `git add -A && git commit -m "message" && git push`, wait 1–2 min for deploy, then hard-refresh (Ctrl+Shift+R) at https://vklf.com. As a secondary option, try the direct URL `https://CODESPACE-NAME-3000.app.github.dev` (get the codespace name from the Codespace address bar).
+
+---
+
 ## For New Chat Sessions
 
 1. Read this file (HANDOFF.md) for current architecture
 2. Read ROADMAP.md for what is done and what is next
 3. The original single-file tool docs can be provided for reference when needed
-4. Upload keyword_sorting_tool_v18.html when building UI components (AST table, canvas)
+4. Upload keyword_sorting_tool_v18.html when building UI components
 5. Ask the user what they want to work on
 
 ## Important User Preferences
