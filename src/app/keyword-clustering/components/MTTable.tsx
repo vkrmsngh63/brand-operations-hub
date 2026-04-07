@@ -594,7 +594,7 @@ export default function MTTable({ astKeywords, onUpdateKeyword }: MTTableProps) 
                     ? 'No main terms yet. Type a term below or paste from Excel.'
                     : 'No main terms match the current filters.'
                   }</div>
-                </div>curl -s http://localhost:3000 | head -5
+                </div>
               </td></tr>
             ) : visible.map(m => renderRow(m))}
           </tbody>
