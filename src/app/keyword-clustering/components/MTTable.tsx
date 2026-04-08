@@ -7,7 +7,7 @@ import type { Keyword } from '@/hooks/useKeywords';
 import './mt-table.css';
 
 // ── Types ──────────────────────────────────────────────────────
-interface MTEntry {
+export interface MTEntry {
   id: string;
   mainTerm: string;
   keywords: string[]; // matched keyword strings from AST
@@ -17,6 +17,8 @@ interface MTTableProps {
   astKeywords: Keyword[]; // full AST keywords list for matching & volume lookups
   onUpdateKeyword: (id: string, patch: Partial<Keyword>) => Promise<void>;
   onAddToTif?: (kws: string[]) => void;
+  entries?: MTEntry[];
+  onSetEntries?: React.Dispatch<React.SetStateAction<MTEntry[]>>;
 }
 
 // ── Split selection helpers ────────────────────────────────────
@@ -332,8 +334,10 @@ function MtSplitDescPills({ kw, splitDescSel, setSplitDescSel, onSplitDescEdit }
 }
 
 // ── Component ──────────────────────────────────────────────────
-export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MTTableProps) { {
-  const [entries, setEntries] = useState<MTEntry[]>([]);
+export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif, entries: propEntries, onSetEntries }: MTTableProps) {
+  const [_intEntries, _setIntEntries] = useState<MTEntry[]>([]);
+  const entries = propEntries ?? _intEntries;
+  const setEntries = onSetEntries ?? _setIntEntries;
   const [searchQ, setSearchQ] = useState('');
   const [kwSearchQ, setKwSearchQ] = useState('');
   const [kwTagQ, setKwTagQ] = useState('');
@@ -1304,4 +1308,3 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
     </div>
   );
   }
-}

@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import ASTTable from './ASTTable';
 import MTTable from './MTTable';
+import type { MTEntry } from './MTTable';
 import TIFTable from './TIFTable';
 import CanvasPanel from './CanvasPanel';
 import ScrollArrows from './ScrollArrows';
@@ -55,6 +56,7 @@ export default function KeywordWorkspace({ projectId, userId }: KeywordWorkspace
   } = useKeywords(projectId, userId);
 
   const [tifKeywords, setTifKeywords] = useState<string[]>([]);
+  const [mtEntries, setMtEntries] = useState<MTEntry[]>([]);
   const [tifActive, setTifActive] = useState(true);
 
   // ── Panel visibility ─────────────────────────────────────────
