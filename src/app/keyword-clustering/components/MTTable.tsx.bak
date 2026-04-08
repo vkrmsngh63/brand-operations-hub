@@ -19,26 +19,6 @@ interface MTTableProps {
   onAddToTif?: (kws: string[]) => void;
 }
 
-// ── Split selection helpers ────────────────────────────────────
-type SplitSelMap = Map<string, Set<string>>;
-
-function splitIsChecked(map: SplitSelMap, kwId: string, topic: string): boolean {
-  const s = map.get(kwId); return s ? s.has(topic) : false;
-}
-function splitSetChecked(map: SplitSelMap, kwId: string, topic: string, val: boolean): SplitSelMap {
-  const next = new Map(map);
-  if (!next.has(kwId)) next.set(kwId, new Set());
-  const s = new Set(next.get(kwId)!);
-  if (val) s.add(topic); else s.delete(topic);
-  if (s.size === 0) next.delete(kwId); else next.set(kwId, s);
-  return next;
-}
-function splitAllChecked(map: SplitSelMap): { kwId: string; topic: string }[] {
-  const res: { kwId: string; topic: string }[] = [];
-  map.forEach((topics, kwId) => topics.forEach(tp => res.push({ kwId, topic: tp })));
-  return res;
-}
-
 // ── Helpers ────────────────────────────────────────────────────
 let _mtNextId = 1;
 function genId(): string { return 'mt-' + (_mtNextId++); }
@@ -90,7 +70,7 @@ function parseTopics(str: string): string[] {
   return (str || '').split('|').map(t => t.trim()).filter(Boolean);
 }
 
-// ── Inline Topic Pills (Combined view, editable) ──────────────
+// ── Inline Topic Pills (editable) ─────────────────────────────
 function MtTopicPills({ kwStr, astKeywords, onTopicEdit, onTopicFilter }: {
   kwStr: string; astKeywords: Keyword[];
   onTopicEdit: (oldTopics: string, newTopics: string) => void;
@@ -155,138 +135,6 @@ function MtTopicPills({ kwStr, astKeywords, onTopicEdit, onTopicFilter }: {
   );
 }
 
-// ── Split Topic Pills per keyword (for MT vertical view) ──────
-function MtSplitTopicPills({ kw, splitTopicSel, setSplitTopicSel, onSplitTopicEdit, onSplitTopicAdd, onSplitApprovalToggle, hoveredKw }: {
-  kw: Keyword;
-  splitTopicSel: SplitSelMap;
-  setSplitTopicSel: React.Dispatch<React.SetStateAction<SplitSelMap>>;
-  onSplitTopicEdit: (kwId: string, oldTopic: string, newTopic: string) => void;
-  onSplitTopicAdd: (kwId: string, newTopic: string) => void;
-  onSplitApprovalToggle: (kwId: string, topic: string) => void;
-  hoveredKw: string | null;
-}) {
-  const [editTopic, setEditTopic] = useState<string | null>(null);
-  const [editValue, setEditValue] = useState('');
-  const [addMode, setAddMode] = useState(false);
-  const [addValue, setAddValue] = useState('');
-  const editRef = useRef<HTMLInputElement>(null);
-  const addRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => { if (editTopic !== null && editRef.current) { editRef.current.focus(); editRef.current.select(); } }, [editTopic]);
-  useEffect(() => { if (addMode && addRef.current) addRef.current.focus(); }, [addMode]);
-
-  const topics = parseTopics(kw.topic);
-
-  return (
-    <div className="mt-split-topic-wrap">
-      {topics.length === 0 ? (
-        <div className="mt-split-topic-item" />
-      ) : (
-        topics.map(topic => {
-          const isChecked = splitIsChecked(splitTopicSel, kw.id, topic);
-          const approved = kw.topicApproved && kw.topicApproved[topic];
-          return (
-            <div key={topic} className="mt-split-topic-item" data-topic={topic}>
-              <span className="mt-split-drag" title="Drag to canvas">⁞</span>
-              <input type="checkbox" checked={isChecked}
-                onChange={e => setSplitTopicSel(prev => splitSetChecked(prev, kw.id, topic, e.target.checked))}
-                onClick={e => e.stopPropagation()}
-                style={{ width: 10, height: 10, accentColor: '#3b82f6', cursor: 'pointer', flexShrink: 0 }} />
-              {editTopic === topic ? (
-                <input ref={editRef} className="mt-topic-inp" type="text" value={editValue}
-                  onChange={e => setEditValue(e.target.value)} onClick={e => e.stopPropagation()}
-                  onBlur={() => { const v = editValue.trim(); if (v !== editTopic) onSplitTopicEdit(kw.id, editTopic, v); setEditTopic(null); setEditValue(''); }}
-                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); (e.target as HTMLInputElement).blur(); } if (e.key === 'Escape') { setEditTopic(null); setEditValue(''); } }}
-                  style={{ width: 80, flexShrink: 0, fontSize: '0.85em', padding: '0 3px', border: '1px solid #c4b5fd', borderRadius: 3 }} />
-              ) : (
-                <span className="mt-topic-pill" style={{ flexShrink: 0, cursor: 'pointer' }}
-                  onClick={e => { e.stopPropagation(); setEditTopic(topic); setEditValue(topic); setAddMode(false); }}
-                  title={`Click to edit "${topic}"`}>{topic}</span>
-              )}
-              <button className={`mt-split-status ${approved ? 'mt-split-ok' : 'mt-split-x'}`}
-                onClick={e => { e.stopPropagation(); onSplitApprovalToggle(kw.id, topic); }}
-                title={approved ? 'Approved' : 'Unapproved'}>
-                {approved ? '✓' : '✕'}
-              </button>
-            </div>
-          );
-        })
-      )}
-      <div className="mt-split-topic-item mt-split-topic-add"
-        onClick={e => { e.stopPropagation(); setAddMode(true); setAddValue(''); }}>
-        {addMode ? (
-          <input ref={addRef} className="mt-topic-inp" type="text" placeholder="New topic…" value={addValue}
-            onChange={e => setAddValue(e.target.value)} onClick={e => e.stopPropagation()}
-            onBlur={() => { const v = addValue.trim(); if (v) onSplitTopicAdd(kw.id, v); setAddMode(false); setAddValue(''); }}
-            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); (e.target as HTMLInputElement).blur(); } if (e.key === 'Escape') { setAddMode(false); setAddValue(''); } }}
-            style={{ width: 90, flexShrink: 0, fontSize: '0.85em', padding: '0 3px', border: '1px solid #c4b5fd', borderRadius: 3 }} />
-        ) : (
-          <span style={{ cursor: 'pointer', color: '#8b5cf6', fontSize: '0.75em', opacity: 0.55 }}>⊕ add</span>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ── Split Description Pills per keyword (for MT vertical view) ─
-function MtSplitDescPills({ kw, splitDescSel, setSplitDescSel, onSplitDescEdit }: {
-  kw: Keyword;
-  splitDescSel: SplitSelMap;
-  setSplitDescSel: React.Dispatch<React.SetStateAction<SplitSelMap>>;
-  onSplitDescEdit: (kwId: string, topic: string, newDesc: string) => void;
-}) {
-  const [editTopic, setEditTopic] = useState<string | null>(null);
-  const [editValue, setEditValue] = useState('');
-  const taRef = useRef<HTMLTextAreaElement>(null);
-
-  useEffect(() => {
-    if (editTopic !== null && taRef.current) {
-      taRef.current.focus();
-      taRef.current.setSelectionRange(taRef.current.value.length, taRef.current.value.length);
-    }
-  }, [editTopic]);
-
-  const topics = parseTopics(kw.topic);
-
-  return (
-    <div className="mt-split-desc-wrap">
-      {topics.length === 0 ? (
-        <div className="mt-split-topic-item" style={{ padding: 2 }} />
-      ) : (
-        topics.map(topic => {
-          const isChecked = splitIsChecked(splitDescSel, kw.id, topic);
-          const desc = (kw.canvasLoc && kw.canvasLoc[topic]) || '';
-          return (
-            <div key={topic} className="mt-split-topic-item" style={{ alignItems: 'flex-start', whiteSpace: 'normal' }}>
-              <input type="checkbox" checked={isChecked}
-                onChange={e => setSplitDescSel(prev => splitSetChecked(prev, kw.id, topic, e.target.checked))}
-                onClick={e => e.stopPropagation()}
-                style={{ width: 10, height: 10, accentColor: '#3b82f6', cursor: 'pointer', flexShrink: 0, marginTop: 2 }} />
-              {editTopic === topic ? (
-                <textarea ref={taRef} className="mt-split-desc-ta" value={editValue}
-                  onChange={e => setEditValue(e.target.value)}
-                  placeholder={`Description for "${topic}"…`}
-                  onBlur={() => { onSplitDescEdit(kw.id, editTopic, editValue.trim()); setEditTopic(null); setEditValue(''); }}
-                  onKeyDown={e => {
-                    if (e.key === 'Escape') { e.preventDefault(); setEditTopic(null); setEditValue(''); }
-                    if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); onSplitDescEdit(kw.id, editTopic, editValue.trim()); setEditTopic(null); setEditValue(''); }
-                  }} />
-              ) : (
-                <span className={`mt-split-desc-text${desc ? '' : ' empty'}`}
-                  onClick={() => { setEditTopic(topic); setEditValue(desc); }}
-                  title={`Click to edit description for "${topic}"`}
-                  style={{ flex: 1 }}>
-                  {desc || '+ desc…'}
-                </span>
-              )}
-            </div>
-          );
-        })
-      )}
-    </div>
-  );
-}
-
 // ── Component ──────────────────────────────────────────────────
 export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MTTableProps) { {
   const [entries, setEntries] = useState<MTEntry[]>([]);
@@ -316,16 +164,12 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
   const resizeRef = useRef<{ col: number; startX: number; startW: number } | null>(null);
   const addInputRef = useRef<HTMLInputElement>(null);
 
-  // ── Inline tag input state ─────────────────────────────────
+  // ── Inline tag input state (replaces prompt() dialogs) ─────
   const [tagInputMode, setTagInputMode] = useState<'add' | 'remove' | null>(null);
   const [tagInputVal, setTagInputVal] = useState('');
   const tagInputRef = useRef<HTMLInputElement>(null);
 
-  // ── Split Topics View state ────────────────────────────────
-  const [splitTopics, setSplitTopics] = useState(false);
-  const [splitTopicSel, setSplitTopicSel] = useState<SplitSelMap>(new Map());
-  const [splitDescSel, setSplitDescSel] = useState<SplitSelMap>(new Map());
-
+  // Focus input when tag input mode activates
   useEffect(() => {
     if (tagInputMode && tagInputRef.current) tagInputRef.current.focus();
   }, [tagInputMode]);
@@ -336,6 +180,7 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
     toastTimer.current = setTimeout(() => setToast(''), 3200);
   }, []);
 
+  // Re-sync associated keywords whenever AST keywords change
   useEffect(() => {
     setEntries(prev => prev.map(m => ({
       ...m,
@@ -343,6 +188,7 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
     })));
   }, [astKeywords]);
 
+  // ── Filtering ──────────────────────────────────────────────
   const visible = useMemo(() => {
     return entries.filter(m => {
       if (searchQ) {
@@ -364,6 +210,7 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
     });
   }, [entries, searchQ, showSorted, showPartial, showUnsorted, astKeywords]);
 
+  // ── Helper: filter keyword sub-rows by kw search + tag search + topic search ──
   const filterKwList = useCallback((kwList: string[]): string[] => {
     let result = kwList;
     if (kwSearchQ) {
@@ -396,6 +243,7 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
     return result;
   }, [kwSearchQ, kwTagQ, kwTopicQ, kwTopicFilter, astKeywords]);
 
+  // ── Select all logic ───────────────────────────────────────
   const selCount = useMemo(() => visible.filter(m => selected.has(m.id)).length, [visible, selected]);
   const totalKwSel = useMemo(() => {
     let count = 0;
@@ -411,6 +259,7 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
   const selectAllRef = useRef<HTMLInputElement>(null);
   useEffect(() => { if (selectAllRef.current) selectAllRef.current.indeterminate = selectAllState === 'some'; }, [selectAllState]);
 
+  // ── View mode helpers ──────────────────────────────────────
   function getViewMode(id: string): number { return viewMode.get(id) || 0; }
   function cycleAllViews() {
     setViewMode(prev => {
@@ -421,7 +270,15 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
       return next;
     });
   }
+  function cycleView(id: string) {
+    setViewMode(prev => {
+      const next = new Map(prev);
+      next.set(id, ((next.get(id) || 0) + 1) % 3);
+      return next;
+    });
+  }
 
+  // ── Keyword selection helpers ──────────────────────────────
   function isKwSelected(mtId: string, kwStr: string): boolean {
     const s = kwSel.get(mtId);
     return s ? s.has(kwStr) : false;
@@ -435,6 +292,7 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
       next.set(mtId, s);
       return next;
     });
+    // Auto-add to TIF when checking (not unchecking)
     if (!wasChecked && onAddToTif) onAddToTif([kwStr]);
   }
   function toggleAllKw(mtId: string, kwList: string[]) {
@@ -446,12 +304,14 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
         next.set(mtId, new Set());
       } else {
         next.set(mtId, new Set(kwList));
+        // Auto-add to TIF when checking all
         if (onAddToTif && kwList.length > 0) onAddToTif(kwList);
       }
       return next;
     });
   }
 
+  // ── Handlers ───────────────────────────────────────────────
   function handleToggleAll(checked: boolean) {
     setSelected(prev => {
       const next = new Set(prev);
@@ -470,6 +330,7 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
     if (willSelect) {
       setViewMode(prev => { const next = new Map(prev); next.set(m.id, 1); return next; });
       setKwSel(prev => { const next = new Map(prev); next.set(m.id, new Set(m.keywords)); return next; });
+      // Auto-add all keywords to TIF when selecting row
       if (onAddToTif && m.keywords.length > 0) onAddToTif(m.keywords);
     } else {
       setKwSel(prev => { const next = new Map(prev); next.set(m.id, new Set()); return next; });
@@ -543,10 +404,12 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
     showToast(`"${m.mainTerm}" removed from Main Terms.`);
   }
 
+  // ── Tag operations (inline input replaces prompt()) ────────
   function handleTagApply() {
     const tagVal = tagInputVal.trim();
     if (!tagVal) { setTagInputMode(null); setTagInputVal(''); return; }
     if (totalKwSel === 0) { showToast('⚠ No keywords checked.'); setTagInputMode(null); setTagInputVal(''); return; }
+
     if (tagInputMode === 'add') {
       let count = 0;
       const promises: Promise<void>[] = [];
@@ -562,7 +425,9 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
           }
         });
       });
-      Promise.all(promises).then(() => showToast(`✓ Added tag "${tagVal}" to ${count} keyword${count !== 1 ? 's' : ''}.`));
+      Promise.all(promises).then(() => {
+        showToast(`✓ Added tag "${tagVal}" to ${count} keyword${count !== 1 ? 's' : ''}.`);
+      });
     } else if (tagInputMode === 'remove') {
       const tagLower = tagVal.toLowerCase();
       let count = 0;
@@ -580,9 +445,12 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
           }
         });
       });
-      Promise.all(promises).then(() => showToast(`✓ Removed tag "${tagVal}" from ${count} keyword${count !== 1 ? 's' : ''}.`));
+      Promise.all(promises).then(() => {
+        showToast(`✓ Removed tag "${tagVal}" from ${count} keyword${count !== 1 ? 's' : ''}.`);
+      });
     }
-    setTagInputMode(null); setTagInputVal('');
+    setTagInputMode(null);
+    setTagInputVal('');
   }
 
   function handleTagInputKeyDown(e: React.KeyboardEvent) {
@@ -590,6 +458,8 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
     else if (e.key === 'Escape') { setTagInputMode(null); setTagInputVal(''); }
   }
 
+  // ── Apply Main Term As Tag ─────────────────────────────────
+  // ── Topic edit with batch propagation ───────────────────────
   function handleMtTopicEdit(kwStr: string, oldTopicStr: string, newTopicStr: string) {
     const oldTopics = parseTopics(oldTopicStr);
     const newTopics = parseTopics(newTopicStr);
@@ -605,7 +475,9 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
         removedTopics.forEach(t => { existing = existing.filter(x => x !== t); });
         promises.push(onUpdateKeyword(rec.id, { topic: existing.join(' | ') }));
       });
-      Promise.all(promises).then(() => showToast(`✓ Topics updated on ${allCheckedKws.size} checked keywords.`));
+      Promise.all(promises).then(() => {
+        showToast(`✓ Topics updated on ${allCheckedKws.size} checked keywords.`);
+      });
     } else {
       const rec = getKwRec(kwStr, astKeywords);
       if (rec) onUpdateKeyword(rec.id, { topic: newTopicStr });
@@ -616,6 +488,7 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
     if (totalKwSel === 0) { showToast('⚠ No keywords checked.'); return; }
     let count = 0;
     const promises: Promise<void>[] = [];
+    // For each MT row that has checked keywords, use that row's mainTerm as the tag
     entries.forEach(m => {
       const kwSet = kwSel.get(m.id);
       if (!kwSet || kwSet.size === 0) return;
@@ -632,118 +505,9 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
         }
       });
     });
-    Promise.all(promises).then(() => showToast(`✓ Applied main term as tag to ${count} keyword${count !== 1 ? 's' : ''}.`));
-  }
-
-  // ── Split view handlers ──────────────────────────────────────
-  async function handleSplitTopicEdit(kwId: string, oldTopic: string, newTopic: string) {
-    const kw = astKeywords.find(k => k.id === kwId);
-    if (!kw) return;
-    const isChecked = splitIsChecked(splitTopicSel, kwId, oldTopic);
-    if (isChecked) {
-      const allChk = splitAllChecked(splitTopicSel);
-      const sameText = allChk.every(d => d.topic === oldTopic);
-      if (sameText) {
-        const promises: Promise<void>[] = [];
-        for (const d of allChk) {
-          const rec = astKeywords.find(k => k.id === d.kwId);
-          if (!rec) continue;
-          const arr = parseTopics(rec.topic);
-          const idx = arr.indexOf(d.topic);
-          if (idx === -1) continue;
-          if (newTopic === '') arr.splice(idx, 1); else arr[idx] = newTopic;
-          const cl = { ...(rec.canvasLoc || {}) };
-          const ta = { ...(rec.topicApproved || {}) };
-          if (newTopic === '') { delete cl[d.topic]; delete ta[d.topic]; }
-          else if (newTopic !== d.topic) {
-            if (cl[d.topic] !== undefined) { cl[newTopic] = cl[d.topic]; delete cl[d.topic]; }
-            if (ta[d.topic] !== undefined) { ta[newTopic] = ta[d.topic]; delete ta[d.topic]; }
-          }
-          promises.push(onUpdateKeyword(rec.id, { topic: arr.join(' | '), canvasLoc: cl, topicApproved: ta }));
-        }
-        await Promise.all(promises);
-        setSplitTopicSel(new Map());
-        return;
-      }
-    }
-    const arr = parseTopics(kw.topic);
-    const idx = arr.indexOf(oldTopic);
-    if (idx === -1) return;
-    if (newTopic === '') arr.splice(idx, 1); else arr[idx] = newTopic;
-    const cl = { ...(kw.canvasLoc || {}) };
-    const ta = { ...(kw.topicApproved || {}) };
-    if (newTopic === '') { delete cl[oldTopic]; delete ta[oldTopic]; }
-    else if (newTopic !== oldTopic) {
-      if (cl[oldTopic] !== undefined) { cl[newTopic] = cl[oldTopic]; delete cl[oldTopic]; }
-      if (ta[oldTopic] !== undefined) { ta[newTopic] = ta[oldTopic]; delete ta[oldTopic]; }
-    }
-    await onUpdateKeyword(kw.id, { topic: arr.join(' | '), canvasLoc: cl, topicApproved: ta });
-  }
-
-  async function handleSplitTopicAdd(kwId: string, newTopic: string) {
-    const kw = astKeywords.find(k => k.id === kwId);
-    if (!kw) return;
-    const arr = parseTopics(kw.topic);
-    if (!arr.includes(newTopic)) {
-      arr.push(newTopic);
-      await onUpdateKeyword(kw.id, { topic: arr.join(' | ') });
-    }
-  }
-
-  async function handleSplitApprovalToggle(kwId: string, topic: string) {
-    const kw = astKeywords.find(k => k.id === kwId);
-    if (!kw) return;
-    const ta = { ...(kw.topicApproved || {}) };
-    const newState = !ta[topic];
-    if (newState) ta[topic] = true; else delete ta[topic];
-    if (splitIsChecked(splitTopicSel, kwId, topic)) {
-      const allChk = splitAllChecked(splitTopicSel);
-      const promises: Promise<void>[] = [];
-      for (const d of allChk) {
-        if (d.kwId === kwId && d.topic === topic) continue;
-        const rec = astKeywords.find(k => k.id === d.kwId);
-        if (!rec) continue;
-        const rta = { ...(rec.topicApproved || {}) };
-        if (newState) rta[d.topic] = true; else delete rta[d.topic];
-        promises.push(onUpdateKeyword(rec.id, { topicApproved: rta }));
-      }
-      await Promise.all([onUpdateKeyword(kw.id, { topicApproved: ta }), ...promises]);
-    } else {
-      await onUpdateKeyword(kw.id, { topicApproved: ta });
-    }
-  }
-
-  async function handleSplitDescEdit(kwId: string, topic: string, newDesc: string) {
-    const kw = astKeywords.find(k => k.id === kwId);
-    if (!kw) return;
-    const cl = { ...(kw.canvasLoc || {}) };
-    const origVal = cl[topic] || '';
-    if (newDesc === '') delete cl[topic]; else cl[topic] = newDesc;
-    const promises: Promise<void>[] = [];
-    if (splitIsChecked(splitTopicSel, kwId, topic)) {
-      for (const d of splitAllChecked(splitTopicSel)) {
-        if (d.kwId === kwId && d.topic === topic) continue;
-        const rec = astKeywords.find(k => k.id === d.kwId);
-        if (!rec) continue;
-        const rcl = { ...(rec.canvasLoc || {}) };
-        if (newDesc === '') delete rcl[d.topic]; else rcl[d.topic] = newDesc;
-        promises.push(onUpdateKeyword(rec.id, { canvasLoc: rcl }));
-      }
-    }
-    if (splitIsChecked(splitDescSel, kwId, topic)) {
-      for (const d of splitAllChecked(splitDescSel)) {
-        if (d.kwId === kwId && d.topic === topic) continue;
-        const rec = astKeywords.find(k => k.id === d.kwId);
-        if (!rec) continue;
-        const rOrigVal = (rec.canvasLoc || {})[d.topic] || '';
-        if (rOrigVal === origVal) {
-          const rcl = { ...(rec.canvasLoc || {}) };
-          if (newDesc === '') delete rcl[d.topic]; else rcl[d.topic] = newDesc;
-          promises.push(onUpdateKeyword(rec.id, { canvasLoc: rcl }));
-        }
-      }
-    }
-    await Promise.all([onUpdateKeyword(kw.id, { canvasLoc: cl }), ...promises]);
+    Promise.all(promises).then(() => {
+      showToast(`✓ Applied main term as tag to ${count} keyword${count !== 1 ? 's' : ''}.`);
+    });
   }
 
   function handleMarkStatus(status: 'Unsorted' | 'Partially Sorted' | 'Completely Sorted' | 'AI-Sorted') {
@@ -753,12 +517,16 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
     kwSel.forEach((kwSet) => {
       kwSet.forEach(kwStr => {
         const rec = getKwRec(kwStr, astKeywords);
-        if (rec) { promises.push(onUpdateKeyword(rec.id, { sortingStatus: status })); count++; }
+        if (rec) {
+          promises.push(onUpdateKeyword(rec.id, { sortingStatus: status }));
+          count++;
+        }
       });
     });
-    Promise.all(promises).then(() => showToast(`✓ Marked ${count} keyword${count !== 1 ? 's' : ''} as ${status}.`));
+    Promise.all(promises).then(() => {
+      showToast(`✓ Marked ${count} keyword${count !== 1 ? 's' : ''} as ${status}.`);
+    });
   }
-
   function handleRemoveSelected() {
     const count = selected.size;
     if (count === 0) { showToast('⚠ No rows selected.'); return; }
@@ -785,7 +553,11 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
   }
 
   function handleShowAll() {
-    setSearchQ(''); setKwSearchQ(''); setKwTagQ(''); setKwTopicQ(''); setKwTopicFilter('');
+    setSearchQ('');
+    setKwSearchQ('');
+    setKwTagQ('');
+    setKwTopicQ('');
+    setKwTopicFilter('');
     setShowMtSv(true); setShowKwSv(true); setShowTags(true); setShowTopics(true);
     setShowSorted(true); setShowPartial(true); setShowUnsorted(true);
   }
@@ -808,8 +580,16 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
     );
   }
 
-  function handleDragStart(e: React.DragEvent, id: string) { setDragId(id); e.dataTransfer.effectAllowed = 'move'; }
-  function handleDragOver(e: React.DragEvent, idx: number) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDropIdx(idx); }
+  
+  function handleDragStart(e: React.DragEvent, id: string) {
+    setDragId(id);
+    e.dataTransfer.effectAllowed = 'move';
+  }
+  function handleDragOver(e: React.DragEvent, idx: number) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDropIdx(idx);
+  }
   function handleDragEnd() {
     if (dragId != null && dropIdx != null) {
       setEntries(prev => {
@@ -822,10 +602,12 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
         return arr;
       });
     }
-    setDragId(null); setDropIdx(null);
+    setDragId(null);
+    setDropIdx(null);
   }
   function handleColResize(e: React.MouseEvent, colIdx: number) {
-    e.preventDefault(); e.stopPropagation();
+    e.preventDefault();
+    e.stopPropagation();
     const startX = e.clientX;
     const startW = colWidths[colIdx];
     resizeRef.current = { col: colIdx, startX, startW };
@@ -839,11 +621,13 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
       resizeRef.current = null;
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
-      document.body.style.cursor = ''; document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
     }
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
-    document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
   }
 
   function googleSearch(kw: string) {
@@ -862,8 +646,12 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
         onDragOver={e => handleDragOver(e, visible.indexOf(m))}
         style={dropIdx === visible.indexOf(m) && dragId !== m.id ? { borderTop: '3px solid #3b82f6', boxShadow: '0 -2px 4px rgba(59,130,246,0.5)' } : undefined}
       >
+        {/* Drag handle */}
         <td style={{ textAlign: 'center', verticalAlign: 'top', paddingTop: 4, cursor: 'grab', color: '#94a3b8', fontSize: '1.1em', userSelect: 'none' }}
-          draggable onDragStart={e => handleDragStart(e, m.id)} onDragOver={e => handleDragOver(e, visible.indexOf(m))} onDragEnd={handleDragEnd}
+          draggable
+          onDragStart={e => handleDragStart(e, m.id)}
+          onDragOver={e => handleDragOver(e, visible.indexOf(m))}
+          onDragEnd={handleDragEnd}
         >⁞</td>
         <td style={{ textAlign: 'center', verticalAlign: 'top', paddingTop: 4 }}>
           <input type="checkbox" checked={isSelected} onChange={() => handleToggleRow(m)}
@@ -885,6 +673,7 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
     );
   }
 
+  // ── Comma view (mode 0) ────────────────────────────────────
   function renderCommaView(m: MTEntry, viewLabel: string) {
     const kwList = filterKwList(m.keywords);
     return (
@@ -904,6 +693,7 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
     );
   }
 
+  // ── Appended / single-line view (mode 2) ───────────────────
   function renderAppendedView(m: MTEntry, viewLabel: string) {
     const kwList = filterKwList(m.keywords);
     return (
@@ -921,6 +711,7 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
     );
   }
 
+  // ── Vertical view (mode 1) ─────────────────────────────────
   function renderVerticalView(m: MTEntry, viewLabel: string) {
     const kwList = filterKwList(m.keywords);
     const mtKwSelSet = kwSel.get(m.id) || new Set();
@@ -990,21 +781,13 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
           <div className="mt-kw-spacer">&nbsp;</div>
           <div className="mt-kw-list">
             {kwList.map(kwStr => {
-              const rec = getKwRec(kwStr, astKeywords);
               return (
                 <div key={kwStr}
                   className={`mt-kw-item ${hoveredKw === kwStr ? 'mt-kw-hover' : ''}`}
                   onMouseEnter={() => setHoveredKw(kwStr)} onMouseLeave={() => setHoveredKw(null)}>
-                  {splitTopics && rec ? (
-                    <MtSplitTopicPills kw={rec}
-                      splitTopicSel={splitTopicSel} setSplitTopicSel={setSplitTopicSel}
-                      onSplitTopicEdit={handleSplitTopicEdit} onSplitTopicAdd={handleSplitTopicAdd}
-                      onSplitApprovalToggle={handleSplitApprovalToggle} hoveredKw={hoveredKw} />
-                  ) : (
-                    <MtTopicPills kwStr={kwStr} astKeywords={astKeywords}
-                      onTopicEdit={(o, n) => handleMtTopicEdit(kwStr, o, n)}
-                      onTopicFilter={t => setKwTopicFilter(prev => prev === t ? '' : t)} />
-                  )}
+                  <MtTopicPills kwStr={kwStr} astKeywords={astKeywords}
+                    onTopicEdit={(o, n) => handleMtTopicEdit(kwStr, o, n)}
+                    onTopicFilter={t => setKwTopicFilter(prev => prev === t ? '' : t)} />
                 </div>
               );
             })}
@@ -1013,20 +796,12 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
         <td className={showTopicDesc ? 'mt-topicdesc-td' : 'mt-col-hidden'}>
           <div className="mt-kw-spacer">&nbsp;</div>
           <div className="mt-kw-list">
-            {kwList.map(kwStr => {
-              const rec = getKwRec(kwStr, astKeywords);
-              return (
-                <div key={kwStr}
-                  className={`mt-kw-item ${hoveredKw === kwStr ? 'mt-kw-hover' : ''}`}
-                  onMouseEnter={() => setHoveredKw(kwStr)} onMouseLeave={() => setHoveredKw(null)}>
-                  {splitTopics && rec ? (
-                    <MtSplitDescPills kw={rec}
-                      splitDescSel={splitDescSel} setSplitDescSel={setSplitDescSel}
-                      onSplitDescEdit={handleSplitDescEdit} />
-                  ) : null}
-                </div>
-              );
-            })}
+            {kwList.map(kwStr => (
+              <div key={kwStr}
+                className={`mt-kw-item ${hoveredKw === kwStr ? 'mt-kw-hover' : ''}`}
+                onMouseEnter={() => setHoveredKw(kwStr)} onMouseLeave={() => setHoveredKw(null)}>
+              </div>
+            ))}
           </div>
         </td>
       </>
@@ -1045,17 +820,25 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
             <button className="mt-btn" style={{ color: '#f59e0b', borderColor: '#fbbf24' }} onClick={() => handleMarkStatus('Partially Sorted')}>Partial</button>
             <button className="mt-btn" style={{ color: '#22c55e', borderColor: '#86efac' }} onClick={() => handleMarkStatus('Completely Sorted')}>Sorted</button>
             <span style={{ width: 1, height: 12, background: '#d1d5db', margin: '0 3px' }} />
+            {/* Inline tag input or buttons */}
             {tagInputMode ? (
               <div style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
                 <span style={{ fontSize: 9, color: tagInputMode === 'add' ? '#3b82f6' : '#ef4444' }}>
                   {tagInputMode === 'add' ? '+ Tag:' : '− Tag:'}
                 </span>
-                <input ref={tagInputRef} type="text" value={tagInputVal}
-                  onChange={e => setTagInputVal(e.target.value)} onKeyDown={handleTagInputKeyDown}
+                <input
+                  ref={tagInputRef}
+                  type="text"
+                  value={tagInputVal}
+                  onChange={e => setTagInputVal(e.target.value)}
+                  onKeyDown={handleTagInputKeyDown}
                   placeholder="tag name…"
-                  style={{ width: 90, height: 18, fontSize: 9, padding: '0 4px',
+                  style={{
+                    width: 90, height: 18, fontSize: 9, padding: '0 4px',
                     border: '1px solid ' + (tagInputMode === 'add' ? '#93c5fd' : '#fca5a5'),
-                    borderRadius: 3, outline: 'none', background: '#fff' }} />
+                    borderRadius: 3, outline: 'none', background: '#fff',
+                  }}
+                />
                 <button className="mt-btn" style={{ color: '#22c55e', borderColor: '#86efac', fontWeight: 600 }} onClick={handleTagApply}>Apply</button>
                 <button className="mt-btn" style={{ color: '#94a3b8', borderColor: '#d1d5db' }} onClick={() => { setTagInputMode(null); setTagInputVal(''); }}>✕</button>
               </div>
@@ -1168,11 +951,8 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
               <div className="th-inner">Tags</div>
               <div className="mt-col-resize" onMouseDown={e => handleColResize(e, 5)} />
             </th>
-            <th className={showTopics ? '' : 'mt-col-hidden'} style={{ position: 'relative', cursor: 'pointer' }}
-              onClick={() => setSplitTopics(s => !s)}
-              title="Click to toggle Split / Combined Topics view"
-            >
-              <div className="th-inner">Topics{splitTopics && <span className="mt-split-badge">Split</span>}</div>
+            <th className={showTopics ? '' : 'mt-col-hidden'} style={{ position: 'relative' }}>
+              <div className="th-inner">Topics</div>
               <div className="mt-col-resize" onMouseDown={e => handleColResize(e, 6)} />
             </th>
             <th className={showTopicDesc ? '' : 'mt-col-hidden'} style={{ position: 'relative' }}>
