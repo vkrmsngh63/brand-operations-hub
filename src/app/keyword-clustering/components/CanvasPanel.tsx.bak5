@@ -2,7 +2,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useCanvas, CanvasNode } from '@/hooks/useCanvas';
 import CanvasEditPanel from './CanvasEditPanel';
-import CanvasTableMode from './CanvasTableMode';
 import type { Keyword } from '@/hooks/useKeywords';
 import './canvas-panel.css';
 
@@ -26,7 +25,7 @@ interface CanvasPanelProps {
 
 export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanelProps) {
   const {
-    nodes, canvasState, pathways, sisterLinks, fetchCanvas,
+    nodes, canvasState, sisterLinks, fetchCanvas,
     addNode, updateNodes, deleteNode, updateCanvasState,
   } = useCanvas(projectId);
 
@@ -51,7 +50,6 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
   const [editVal, setEditVal] = useState('');
 
   const [editPanelNodeId, setEditPanelNodeId] = useState<number | null>(null);
-  const [canvasMode, setCanvasMode] = useState<"mindmap" | "table">("mindmap");
 
   /* ── Hover popover state ─────────────────────────────────────── */
   const [hoverNodeId, setHoverNodeId] = useState<number | null>(null);
@@ -443,9 +441,6 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
         <button className="cvs-btn" onClick={resetView} title="Reset view">Reset</button>
         <button className="cvs-btn" onClick={fitToScreen} title="Fit all nodes">Fit</button>
         <span className="cvs-zoom-label">{Math.round(zoom * 100)}%</span>
-        <span className="cvs-sep" />
-        <button className={`cvs-btn ${canvasMode === "mindmap" ? "cvs-btn-active" : ""}`} onClick={() => setCanvasMode("mindmap")}>Mindmap</button>
-        <button className={`cvs-btn ${canvasMode === "table" ? "cvs-btn-active" : ""}`} onClick={() => setCanvasMode("table")}>Table</button>
       </div>
 
       {linkMode && (
@@ -458,9 +453,6 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
       )}
 
       <div className="cvs-body">
-        {canvasMode === "table" ? (
-          <CanvasTableMode nodes={nodes} pathways={pathways} sisterLinks={sisterLinks} allKeywords={allKeywords} onSelectNode={id => { setSelectedId(id); setEditPanelNodeId(id); }} />
-        ) : (<>
         <div className="cvs-canvas-area" ref={canvasAreaRef} onDragOver={handleCanvasDragOver} onDrop={handleCanvasDrop}>
           <svg ref={svgRef}
             className={`cvs-svg ${isPanning ? 'cvs-panning' : ''} ${linkMode ? 'cvs-linking' : ''}`}
@@ -616,7 +608,6 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
             </div>
           )}
         </div>
-        </>)}
 
         {editPanelNode && (
           <CanvasEditPanel
