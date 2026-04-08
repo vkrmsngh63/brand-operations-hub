@@ -636,3 +636,21 @@
   text-overflow: ellipsis;
   max-width: 100%;
 }
+
+/* ── Topics column overflow in combined view ─────────────────── */
+.mt-topics-td {
+  overflow: hidden;
+}
+.mt-topics-td .mt-kw-item {
+  overflow: hidden;
+}
+.mt-topic-pills {
+  overflow: hidden;
+  flex-wrap: nowrap;
+}
+.mt-topic-pill {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
+  min-width: 0;
+}
