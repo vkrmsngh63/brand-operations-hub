@@ -190,3 +190,16 @@
   background: rgba(59,130,246,0.85) !important;
   border-color: #3b82f6 !important;
 }
+
+/* ── Fix: add space in headers for detach button ─────────────── */
+.ws-panel > .ast-panel > .ast-ph,
+.ws-panel > .sa-wrap .ast-ph {
+  padding-right: 30px !important;
+}
+.ws-panel > .sa-wrap .tif-ph {
+  padding-right: 30px !important;
+}
+.ws-detach-btn {
+  top: 2px !important;
+  right: 4px !important;
+}
