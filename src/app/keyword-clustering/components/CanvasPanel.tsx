@@ -368,7 +368,7 @@ export default function CanvasPanel({ projectId }: CanvasPanelProps) {
         {/* Grid dots */}
         <defs>
           <pattern id="cvs-grid" x={0} y={0} width={40} height={40} patternUnits="userSpaceOnUse">
-            <circle cx={20} cy={20} r={0.8} fill="#334155" opacity={0.5} />
+            <circle cx={20} cy={20} r={0.8} fill="#94a3b8" opacity={0.5} />
           </pattern>
         </defs>
         <rect x={viewX - 5000} y={viewY - 5000} width={10000} height={10000} fill="url(#cvs-grid)" />
@@ -438,7 +438,7 @@ export default function CanvasPanel({ projectId }: CanvasPanelProps) {
               <rect
                 x={0} y={0} width={node.w} height={node.h}
                 rx={CORNER_R} ry={CORNER_R}
-                fill="#1e293b" stroke={isSelected ? '#3b82f6' : '#334155'}
+                fill="#ffffff" stroke={isSelected ? '#3b82f6' : '#cbd5e1'}
                 strokeWidth={isSelected ? 1.5 / zoom : 1 / zoom}
               />
 
@@ -449,7 +449,7 @@ export default function CanvasPanel({ projectId }: CanvasPanelProps) {
                 fill={accentColor}
               />
               {/* Clip accent stripe to left side only */}
-              <rect x={ACCENT_W} y={0} width={ACCENT_W} height={node.h} fill="#1e293b" />
+              <rect x={ACCENT_W} y={0} width={ACCENT_W} height={node.h} fill="#ffffff" />
 
               {/* Title */}
               {editingId === node.id ? (

@@ -5,7 +5,7 @@
   height: 100%;
   width: 100%;
   overflow: hidden;
-  background: #0f172a;
+  background: #f1f5f9;
   position: relative;
 }
 
@@ -15,16 +15,16 @@
   align-items: center;
   gap: 4px;
   padding: 4px 8px;
-  background: #1e293b;
-  border-bottom: 1px solid #334155;
+  background: #e2e8f0;
+  border-bottom: 1px solid #cbd5e1;
   flex-shrink: 0;
   min-height: 32px;
 }
 
 .cvs-btn {
-  background: #334155;
-  color: #e2e8f0;
-  border: 1px solid #475569;
+  background: #cbd5e1;
+  color: #1e293b;
+  border: 1px solid #94a3b8;
   border-radius: 4px;
   padding: 3px 8px;
   font-size: 11px;
@@ -33,13 +33,13 @@
   transition: background 0.15s;
 }
 .cvs-btn:hover {
-  background: #475569;
+  background: #94a3b8;
 }
 
 .cvs-sep {
   width: 1px;
   height: 18px;
-  background: #475569;
+  background: #94a3b8;
   margin: 0 4px;
 }
 
@@ -63,7 +63,7 @@
 
 /* ── Node text styles ────────────────────────────────────────── */
 .cvs-node-title {
-  fill: #f1f5f9;
+  fill: #1e293b;
   font-size: 13px;
   font-weight: 600;
   font-family: system-ui, -apple-system, sans-serif;
@@ -76,7 +76,7 @@
   pointer-events: none;
 }
 .cvs-node-badge {
-  fill: #64748b;
+  fill: #94a3b8;
   font-size: 9px;
   font-family: system-ui, -apple-system, sans-serif;
   pointer-events: none;
@@ -85,7 +85,7 @@
 /* ── Title inline edit ───────────────────────────────────────── */
 .cvs-title-input {
   width: 100%;
-  background: #0f172a;
+  background: #f1f5f9;
   color: #f1f5f9;
   border: 1px solid #3b82f6;
   border-radius: 3px;
@@ -100,10 +100,10 @@
 .cvs-ctx-menu {
   position: fixed;
   z-index: 9999;
-  background: #1e293b;
-  border: 1px solid #475569;
+  background: #e2e8f0;
+  border: 1px solid #94a3b8;
   border-radius: 6px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.15);
   min-width: 140px;
   overflow: hidden;
 }
@@ -111,7 +111,7 @@
   display: block;
   width: 100%;
   background: none;
-  color: #e2e8f0;
+  color: #1e293b;
   border: none;
   padding: 8px 14px;
   font-size: 12px;
@@ -119,7 +119,7 @@
   cursor: pointer;
 }
 .cvs-ctx-menu button:hover {
-  background: #334155;
+  background: #cbd5e1;
 }
 
 /* ── Empty state ─────────────────────────────────────────────── */
@@ -128,7 +128,7 @@
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  color: #64748b;
+  color: #94a3b8;
   font-size: 14px;
   text-align: center;
   pointer-events: none;
