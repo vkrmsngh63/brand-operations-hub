@@ -115,33 +115,41 @@
 - [x] ▶ TIF buttons removed from AST and MT
 - [x] TIF Active/Paused toggle state lifted to KeywordWorkspace parent
 
-### 1b-split. Split Topics View (AST, MT, TIF): NOT STARTED
-- [ ] Split/Combined view toggle on Topics column header (click header to toggle, "Split" badge when active)
-- [ ] Split view: one sub-row per topic with checkbox + drag handle + editable topic pill
-- [ ] Topic Descriptions editing in split view (click description text → inline textarea, Ctrl+Enter save, Escape cancel, blur save)
-- [ ] Description stored in keyword record (canvasLoc field — per-keyword, per-topic text)
-- [ ] Batch propagation via topic checkboxes (edit one topic → propagate to all checked topics)
-- [ ] Batch propagation via description checkboxes (edit one description → propagate to all checked descriptions)
-- [ ] Cross-highlight between topic and description sub-rows on hover
-- [ ] Height sync between topic and description sub-row columns
-- [ ] Topic pill drag handle for dragging topics to canvas (wires into Phase 1d)
+### 1b-split. Split Topics View (AST, MT, TIF): COMPLETE
+- [x] Split/Combined view toggle on Topics column header (click header to toggle, "Split" badge when active)
+- [x] Split view: one sub-row per topic with checkbox + drag handle + editable topic pill
+- [x] Topic approval status toggle (✓/✕) per topic with batch propagation via checkboxes
+- [x] Topic Descriptions editing in split view (click description text → inline textarea, Ctrl+Enter save, Escape cancel, blur save)
+- [x] Description stored in keyword record (canvasLoc Json field — per-keyword, per-topic text)
+- [x] Batch propagation via topic checkboxes (edit one topic → propagate to all checked topics)
+- [x] Batch propagation via description checkboxes (edit one description → propagate to all checked descriptions)
+- [x] Cross-highlight between topic and description sub-rows on hover (AST, TIF: DOM traversal; MT: mtSplitHighlight helper)
+- [x] Height sync between topic and description sub-row columns (AST/TIF: useEffect; MT: two-level sync)
+- [x] "⊕ add topic" row with matching invisible spacer in descriptions column (MT)
+- [x] Pill overflow control (text-overflow: ellipsis, column boundary respected)
+- [x] Database: canvasLoc (Json) and topicApproved (Json) fields added to Keyword model
+- [x] API: PATCH route updated to handle canvasLoc and topicApproved
 
-### 1-ui. UI Layout Features: NOT STARTED
-- [ ] Resizable horizontal dividers between AST↔MT and MT↔TIF (drag to resize panel heights)
-- [ ] Resizable vertical divider between left panel and canvas (drag to resize panel widths)
-- [ ] Panel visibility checkboxes in topbar (show/hide AST, MT, TIF, Canvas — hiding redistributes space)
-- [ ] Dividers auto-hide when adjacent panels are hidden
-- [ ] Horizontal scroll arrows on table frames (auto-appear when content overflows)
+### 1-ui. UI Layout Features: COMPLETE
+- [x] Resizable horizontal dividers between AST↔MT and MT↔TIF (drag to resize panel heights)
+- [x] Resizable vertical divider between left panel and canvas (drag to resize panel widths)
+- [x] Panel visibility checkboxes in topbar (show/hide AST, MT, TIF, Canvas — hiding redistributes space)
+- [x] Dividers auto-hide when adjacent panels are hidden
+- [x] Horizontal scroll arrows on table frames (auto-appear when content overflows)
+- [x] ScrollArrows component with ResizeObserver + MutationObserver + scroll detection
 
-### 1-detach. Detach / Floating Window Overlays: NOT STARTED
-- [ ] AST detach overlay (⊞ button → full-screen view with all AST functionality, synced state, ✕ close)
-- [ ] MT detach overlay (⊞ button → full-screen view with all MT functionality)
-- [ ] TIF detach overlay (⊞ button → full-screen view with all TIF functionality)
-- [ ] Canvas detach overlay (⊞ button → full-screen canvas view)
-- [ ] Overlays are draggable by header and resizable
-- [ ] State syncs between inline panel and overlay on close
+### 1-detach. Detach / Floating Window Overlays: COMPLETE
+- [x] AST detach overlay (⊞ button → floating window with all AST functionality, synced state, ✕ close)
+- [x] MT detach overlay (⊞ button → floating window with all MT functionality)
+- [x] TIF detach overlay (⊞ button → floating window with all TIF functionality)
+- [x] Canvas detach overlay (⊞ button → floating canvas view)
+- [x] Overlays are draggable by header and resizable from all edges/corners
+- [x] State syncs between inline panel and overlay (same component, same props)
+- [x] Escape key to close overlay
+- [x] Panel visibility checkbox unchecked → overlay closes too
+- [x] FloatingPanel component with backdrop blur, drag, 8-edge resize
 
-### 1d. Topics Layout Canvas: NOT STARTED
+### 1d. Topics Layout Canvas: NOT STARTED — NEXT PRIORITY
 - [ ] Mindmap canvas with nodes, connectors, drag-drop
 - [ ] Edit panel, collapse/expand, sister links, auto-layout
 - [ ] Drag keywords from AST/MT/TIF onto canvas to link them to nodes
