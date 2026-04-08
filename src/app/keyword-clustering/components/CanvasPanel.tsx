@@ -403,7 +403,7 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
           <svg ref={svgRef}
             className={`cvs-svg ${isPanning ? 'cvs-panning' : ''} ${linkMode ? 'cvs-linking' : ''}`}
             viewBox={viewBox}
-            onMouseDown={handleBgMouseDown}
+            onMouseDown={handleBgMouseDown} onDragOver={handleCanvasDragOver} onDrop={handleCanvasDrop}
             onWheel={handleWheel}
             onContextMenu={e => e.preventDefault()}>
             <defs>
