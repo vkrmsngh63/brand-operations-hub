@@ -211,7 +211,10 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
     function onUp() {
       if (dragMoved.current && dragNodeId !== null) {
         const node = nodes.find(n => n.id === dragNodeId);
-        if (node) updateNodes([{ id: dragNodeId, x: node.x, y: node.y } as Partial<CanvasNode>]);
+        if (node) {
+          updateNodes([{ id: dragNodeId, x: node.x, y: node.y } as Partial<CanvasNode>]);
+          resolveOverlap(dragNodeId);
+        }
       }
       setDragNodeId(null);
     }
@@ -220,6 +223,32 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
     return () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dragNodeId]);
+/* ── Overlap resolution ─────────────────────────────────────── */
+  function resolveOverlap(nodeId: number) {
+    const node = nodes.find(n => n.id === nodeId);
+    if (!node) return;
+    const GAP = 20;
+    let moved = false;
+    let attempts = 0;
+    while (attempts < 50) {
+      const blocker = nodes.find(n =>
+        n.id !== nodeId &&
+        node.x < n.x + n.w + GAP && node.x + node.w + GAP > n.x &&
+        node.y < n.y + n.h + GAP && node.y + node.h + GAP > n.y
+      );
+      if (!blocker) break;
+      // Nudge right of blocker
+      node.x = blocker.x + blocker.w + GAP;
+      moved = true;
+      attempts++;
+    }
+    if (moved) {
+      const idx = nodes.findIndex(n => n.id === nodeId);
+      if (idx >= 0) nodes[idx] = { ...nodes[idx], x: node.x, y: node.y };
+      forceUpdate();
+      updateNodes([{ id: nodeId, x: node.x, y: node.y } as Partial<CanvasNode>]);
+    }
+  }
 
   const [, setTick] = useState(0);
   function forceUpdate() { setTick(t => t + 1); }
@@ -379,7 +408,10 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
     }
     function onUp() {
       const node = nodes.find(n => n.id === resizeNodeId);
-      if (node) updateNodes([{ id: resizeNodeId, w: node.w, h: node.h } as Partial<CanvasNode>]);
+      if (node) {
+        updateNodes([{ id: resizeNodeId, w: node.w, h: node.h } as Partial<CanvasNode>]);
+        if (resizeNodeId !== null) resolveOverlap(resizeNodeId);
+      }
       setResizeNodeId(null);
     }
     document.addEventListener("mousemove", onMove);
