@@ -210,10 +210,10 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
     }
     function onUp() {
       if (dragMoved.current && dragNodeId !== null) {
+        resolveOverlap(dragNodeId);
         const node = nodes.find(n => n.id === dragNodeId);
         if (node) {
           updateNodes([{ id: dragNodeId, x: node.x, y: node.y } as Partial<CanvasNode>]);
-          resolveOverlap(dragNodeId);
         }
       }
       setDragNodeId(null);
@@ -228,7 +228,6 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
     const node = nodes.find(n => n.id === nodeId);
     if (!node) return;
     const GAP = 20;
-    let moved = false;
     let attempts = 0;
     while (attempts < 100) {
       let foundBlocker = false;
@@ -244,7 +243,6 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
           } else {
             node.y = n.y + n.h + GAP;
           }
-          moved = true;
           foundBlocker = true;
           break;
         }
@@ -252,12 +250,9 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
       if (!foundBlocker) break;
       attempts++;
     }
-    if (moved) {
-      const idx = nodes.findIndex(n => n.id === nodeId);
-      if (idx >= 0) nodes[idx] = { ...nodes[idx], x: node.x, y: node.y };
-      forceUpdate();
-      updateNodes([{ id: nodeId, x: node.x, y: node.y } as Partial<CanvasNode>]);
-    }
+    const idx = nodes.findIndex(n => n.id === nodeId);
+    if (idx >= 0) nodes[idx] = { ...nodes[idx], x: node.x, y: node.y };
+    forceUpdate();
   }
 
   const [, setTick] = useState(0);
@@ -417,10 +412,10 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
       if (idx >= 0) { nodes[idx] = { ...nodes[idx], w: nw, h: nh }; forceUpdate(); }
     }
     function onUp() {
+      if (resizeNodeId !== null) resolveOverlap(resizeNodeId);
       const node = nodes.find(n => n.id === resizeNodeId);
       if (node) {
-        updateNodes([{ id: resizeNodeId, w: node.w, h: node.h } as Partial<CanvasNode>]);
-        if (resizeNodeId !== null) resolveOverlap(resizeNodeId);
+        updateNodes([{ id: resizeNodeId, w: node.w, h: node.h, x: node.x, y: node.y } as Partial<CanvasNode>]);
       }
       setResizeNodeId(null);
     }

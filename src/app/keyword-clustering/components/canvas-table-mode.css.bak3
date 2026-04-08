@@ -430,3 +430,137 @@
   padding: 10px 16px 14px;
   border-top: 1px solid #e2e8f0;
 }
+
+/* ── TSV Preview Table ───────────────────────────────────────── */
+.ctm-tsv-preview-wrap {
+  padding: 0 16px 8px;
+}
+.ctm-tsv-preview-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-bottom: 6px;
+}
+.ctm-tsv-preview-scroll {
+  max-height: 260px;
+  overflow: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+}
+.ctm-tsv-preview-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10px;
+}
+.ctm-tsv-preview-table th {
+  position: sticky;
+  top: 0;
+  background: #f1f5f9;
+  border-bottom: 1.5px solid #cbd5e1;
+  padding: 4px 6px;
+  text-align: left;
+  font-size: 9px;
+  font-weight: 700;
+  color: #475569;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.ctm-tsv-preview-table td {
+  padding: 4px 6px;
+  border-bottom: 1px solid #e2e8f0;
+  color: #334155;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ctm-tsv-row-update td {
+  background: #fefce8;
+}
+.ctm-tsv-row-new td {
+  background: #f0fdf4;
+}
+.ctm-tsv-status {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+.ctm-tsv-status-update {
+  background: #fef3c7;
+  color: #92400e;
+}
+.ctm-tsv-status-new {
+  background: #bbf7d0;
+  color: #166534;
+}
+
+/* ── Reset Button & Dialog ───────────────────────────────────── */
+.ctm-btn-danger {
+  background: #fee2e2 !important;
+  color: #dc2626 !important;
+  border-color: #fca5a5 !important;
+}
+.ctm-btn-danger:hover {
+  background: #fecaca !important;
+}
+.ctm-reset-panel {
+  width: min(440px, 90%) !important;
+}
+.ctm-reset-msg {
+  padding: 16px;
+  font-size: 12px;
+  color: #334155;
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* ── Import Choice Dialog ────────────────────────────────────── */
+.ctm-import-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 16px 12px;
+}
+.ctm-import-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 10px 14px !important;
+  text-align: left;
+  border-radius: 6px !important;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.ctm-import-btn strong {
+  font-size: 12px;
+}
+.ctm-import-btn span {
+  font-size: 10px;
+  opacity: 0.7;
+  font-weight: 400;
+}
+.ctm-import-merge {
+  background: #f0fdf4 !important;
+  border-color: #86efac !important;
+  color: #166534 !important;
+}
+.ctm-import-merge:hover {
+  background: #dcfce7 !important;
+  border-color: #4ade80 !important;
+}
+.ctm-import-overwrite {
+  background: #fef2f2 !important;
+  border-color: #fca5a5 !important;
+  color: #991b1b !important;
+}
+.ctm-import-overwrite:hover {
+  background: #fee2e2 !important;
+  border-color: #f87171 !important;
+}

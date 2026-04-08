@@ -1,5 +1,6 @@
 'use client';
 import { useMemo, useState, useCallback, useRef } from 'react';
+import * as XLSX from 'xlsx';
 import type { CanvasNode, Pathway, SisterLink } from '@/hooks/useCanvas';
 import type { Keyword } from '@/hooks/useKeywords';
 import './canvas-table-mode.css';
@@ -26,6 +27,8 @@ interface TableRow {
   keywords: { keyword: string; placement: string }[];
   description: string;
   nodeId: number;
+  x: number;
+  y: number;
 }
 
 /* ── Editable cell types ─────────────────────────────────────── */
@@ -39,6 +42,8 @@ interface ParsedTsvRow {
   description: string;
   parentTitle: string;
   keywordsRaw: string;
+  x: number | null;
+  y: number | null;
 }
 
 export default function CanvasTableMode({
@@ -61,6 +66,8 @@ export default function CanvasTableMode({
   const [tsvText, setTsvText] = useState('');
   const [tsvProcessing, setTsvProcessing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [showImportChoice, setShowImportChoice] = useState(false);
+  const [pendingTsvData, setPendingTsvData] = useState<ParsedTsvRow[]>([]);
 
   function showToast(msg: string) {
     setToast(msg);
@@ -117,6 +124,8 @@ export default function CanvasTableMode({
         keywords: kwList,
         description: node.description || '',
         nodeId: node.id,
+        x: node.x,
+        y: node.y,
       });
 
       const children = getChildren(node.id);
@@ -136,7 +145,7 @@ export default function CanvasTableMode({
 
   /* ── Copy as TSV ────────────────────────────────────────────── */
   const handleCopyTsv = useCallback(() => {
-    const header = ['Depth', 'Topic', 'Alternate Titles', 'Relationship', 'Parent Topic', 'Conversion Path', 'Sister Nodes', 'Keywords', 'Topic Description'];
+    const header = ['Depth', 'Topic', 'Alternate Titles', 'Relationship', 'Parent Topic', 'Conversion Path', 'Sister Nodes', 'Keywords', 'Topic Description', 'X', 'Y'];
     const lines = rows.map(r => [
       r.depth,
       '\u00A0'.repeat(r.depth * 4) + r.title,
@@ -147,6 +156,8 @@ export default function CanvasTableMode({
       r.sisterNodes.join(', '),
       r.keywords.map(k => k.keyword + ' [' + k.placement + ']').join(', '),
       r.description,
+      Math.round(r.x),
+      Math.round(r.y),
     ].join('\t'));
     const tsv = header.join('\t') + '\n' + lines.join('\n');
     navigator.clipboard.writeText(tsv).then(
@@ -218,7 +229,14 @@ export default function CanvasTableMode({
   /* ── Add new row ───────────────────────────────────────────── */
   async function handleAddRow() {
     if (!onAddNode) return;
-    const newNode = await onAddNode({ title: 'New Topic', x: 0, y: (nodes.length + 1) * 150, w: 220, h: 120 });
+    // Find a non-overlapping position
+    const w = 220, h = 120, gap = 30;
+    let ny = 0;
+    for (const n of nodes) {
+      const bottom = n.y + n.h + gap;
+      if (bottom > ny) ny = bottom;
+    }
+    const newNode = await onAddNode({ title: 'New Topic', x: 0, y: ny, w, h });
     if (newNode) {
       showToast('\u2713 Row added');
       setSelectedRow(newNode.id);
@@ -252,8 +270,8 @@ export default function CanvasTableMode({
     const dataLines = hasHeader ? lines.slice(1) : lines;
 
     // Column index map — defaults match our export order:
-    // Depth(0) Topic(1) AltTitles(2) Relationship(3) ParentTopic(4) ConversionPath(5) SisterNodes(6) Keywords(7) Description(8)
-    const colMap = { title: 1, altTitles: 2, relationship: 3, parentTitle: 4, keywords: 7, description: 8 };
+    // Depth(0) Topic(1) AltTitles(2) Relationship(3) ParentTopic(4) ConversionPath(5) SisterNodes(6) Keywords(7) Description(8) X(9) Y(10)
+    const colMap = { title: 1, altTitles: 2, relationship: 3, parentTitle: 4, keywords: 7, description: 8, x: 9, y: 10 };
 
     if (hasHeader) {
       const hCols = lines[0].split('\t').map(h => h.trim().toLowerCase());
@@ -264,6 +282,8 @@ export default function CanvasTableMode({
         else if (h.includes('parent')) colMap.parentTitle = i;
         else if (h.includes('keyword')) colMap.keywords = i;
         else if (h.includes('description')) colMap.description = i;
+        else if (h === 'x') colMap.x = i;
+        else if (h === 'y') colMap.y = i;
       });
     }
 
@@ -283,22 +303,36 @@ export default function CanvasTableMode({
         description: (cols[colMap.description] || '').trim(),
         parentTitle: (cols[colMap.parentTitle] || '').replace(/^[\s\u00A0]+/, '').trim(),
         keywordsRaw: (cols[colMap.keywords] || '').trim(),
+        x: cols[colMap.x] ? parseFloat(cols[colMap.x]) || null : null,
+        y: cols[colMap.y] ? parseFloat(cols[colMap.y]) || null : null,
       });
     }
     return result;
   }
 
-  async function applyTsvData(parsed: ParsedTsvRow[]) {
+  async function applyTsvData(parsed: ParsedTsvRow[], mode: 'merge' | 'overwrite' = 'merge') {
     if (parsed.length === 0) { showToast('\u26A0 No valid rows found in TSV'); return; }
     if (!onUpdateNodes || !onAddNode) { showToast('\u26A0 Edit callbacks not available'); return; }
 
     setTsvProcessing(true);
+
+    // Overwrite mode: delete all existing nodes first
+    if (mode === 'overwrite' && onDeleteNode) {
+      const allIds = nodes.map(n => n.id);
+      for (const id of allIds) {
+        onDeleteNode(id);
+      }
+      // Small delay to let state settle
+      await new Promise(r => setTimeout(r, 100));
+    }
+
     let updated = 0;
     let created = 0;
 
-    // Build title→node lookup (case-insensitive)
+    // Build title→node lookup (case-insensitive) — will be empty after overwrite
+    const currentNodes = mode === 'overwrite' ? [] : nodes;
     const titleMap = new Map<string, CanvasNode>();
-    for (const n of nodes) {
+    for (const n of currentNodes) {
       if (n.title) titleMap.set(n.title.toLowerCase(), n);
     }
 
@@ -311,18 +345,51 @@ export default function CanvasTableMode({
         const upd: Partial<CanvasNode> = { id: existing.id };
         let changed = false;
 
-        if (row.title !== (existing.title || '')) {
+        // Only update title if it differs in casing
+        if (row.title !== (existing.title || '') && row.title.toLowerCase() === (existing.title || '').toLowerCase()) {
           upd.title = row.title; changed = true;
         }
-        if (JSON.stringify(row.altTitles) !== JSON.stringify((existing.altTitles || []).filter((t: string) => t))) {
-          upd.altTitles = row.altTitles; changed = true;
+
+        // Only update alt titles if TSV has non-empty alt titles
+        if (row.altTitles.length > 0) {
+          const oldAlts = (existing.altTitles || []).filter((t: string) => t);
+          if (JSON.stringify(row.altTitles) !== JSON.stringify(oldAlts)) {
+            upd.altTitles = row.altTitles; changed = true;
+          }
         }
-        const rel = row.relationship === 'linear' || row.relationship === 'nested' ? row.relationship : '';
-        if (rel !== (existing.relationshipType || '')) {
-          upd.relationshipType = rel; changed = true;
+
+        // Only update relationship if TSV has a valid non-empty value
+        if (row.relationship === 'linear' || row.relationship === 'nested') {
+          if (row.relationship !== (existing.relationshipType || '')) {
+            upd.relationshipType = row.relationship; changed = true;
+          }
         }
+        // If TSV relationship is empty, leave existing relationship untouched
+
+        // Only update description if TSV has non-empty description
         if (row.description && row.description !== (existing.description || '')) {
           upd.description = row.description; changed = true;
+        }
+
+        // Update position if TSV has coordinates
+        if (row.x !== null && row.x !== existing.x) {
+          upd.x = row.x; changed = true;
+        }
+        if (row.y !== null && row.y !== existing.y) {
+          upd.y = row.y; changed = true;
+        }
+
+        // Only update parent if TSV has a non-empty parent title
+        if (row.parentTitle) {
+          const parent = titleMap.get(row.parentTitle.toLowerCase());
+          if (parent && parent.id !== existing.parentId) {
+            upd.parentId = parent.id;
+            // Set relationship if provided, otherwise default to nested
+            if (!upd.relationshipType && !existing.relationshipType) {
+              upd.relationshipType = 'nested';
+            }
+            changed = true;
+          }
         }
 
         // Handle keyword placements from TSV (e.g. "keyword [p], other [s]")
@@ -365,36 +432,75 @@ export default function CanvasTableMode({
       onUpdateNodes(updates);
     }
 
-    // Create new nodes
+    // Create new nodes — first pass: create all without parent links
+    // Collect all occupied positions for overlap avoidance
+    const occupied: { x: number; y: number; w: number; h: number }[] = nodes.map(n => ({ x: n.x, y: n.y, w: n.w, h: n.h }));
+
+    function findNonOverlappingY(startX: number, startY: number, w: number, h: number): { x: number; y: number } {
+      let cx = startX, cy = startY;
+      let attempts = 0;
+      while (attempts < 100) {
+        const overlaps = occupied.some(o =>
+          cx < o.x + o.w && cx + w > o.x && cy < o.y + o.h && cy + h > o.y
+        );
+        if (!overlaps) break;
+        cy += h + 30; // shift down
+        attempts++;
+      }
+      return { x: cx, y: cy };
+    }
+
     const newNodesByTitle = new Map<string, CanvasNode>();
     for (const row of toCreate) {
-      const rel = row.relationship === 'linear' || row.relationship === 'nested' ? row.relationship : '';
+      let nx = row.x ?? 0;
+      let ny = row.y ?? (nodes.length + created + 1) * 150;
+      // If no position from TSV, find a non-overlapping spot
+      if (row.x === null || row.y === null) {
+        const pos = findNonOverlappingY(nx, ny, 220, 120);
+        nx = pos.x; ny = pos.y;
+      }
       const newNode = await onAddNode({
         title: row.title,
-        description: row.description,
-        altTitles: row.altTitles,
-        relationshipType: rel,
-        x: 0,
-        y: (nodes.length + created + 1) * 150,
+        description: row.description || '',
+        altTitles: row.altTitles.length > 0 ? row.altTitles : [],
+        x: nx,
+        y: ny,
         w: 220,
         h: 120,
       });
       if (newNode) {
+        occupied.push({ x: nx, y: ny, w: 220, h: 120 });
         newNodesByTitle.set(row.title.toLowerCase(), newNode);
         created++;
       }
     }
 
-    // Set parent relationships for new nodes
+    // Second pass: set parent relationships and relationship types for new nodes
     const parentUpdates: Partial<CanvasNode>[] = [];
     for (const row of toCreate) {
-      if (!row.parentTitle) continue;
       const childNode = newNodesByTitle.get(row.title.toLowerCase());
       if (!childNode) continue;
-      const parent = titleMap.get(row.parentTitle.toLowerCase()) || newNodesByTitle.get(row.parentTitle.toLowerCase());
-      if (parent) {
-        const rel = row.relationship === 'linear' || row.relationship === 'nested' ? row.relationship : 'nested';
-        parentUpdates.push({ id: childNode.id, parentId: parent.id, relationshipType: rel } as Partial<CanvasNode>);
+
+      const rel = row.relationship === 'linear' || row.relationship === 'nested' ? row.relationship : '';
+
+      if (row.parentTitle) {
+        const parent = titleMap.get(row.parentTitle.toLowerCase()) || newNodesByTitle.get(row.parentTitle.toLowerCase());
+        if (parent) {
+          parentUpdates.push({
+            id: childNode.id,
+            parentId: parent.id,
+            relationshipType: rel || 'nested',
+          } as Partial<CanvasNode>);
+          continue; // relationship set with parent
+        }
+      }
+
+      // No parent but has relationship type — still set it
+      if (rel) {
+        parentUpdates.push({
+          id: childNode.id,
+          relationshipType: rel,
+        } as Partial<CanvasNode>);
       }
     }
     if (parentUpdates.length > 0) {
@@ -407,25 +513,93 @@ export default function CanvasTableMode({
 
   async function handleTsvPaste() {
     const parsed = parseTsv(tsvText);
-    await applyTsvData(parsed);
+    if (parsed.length === 0) { showToast('\u26A0 No valid rows found'); return; }
+    // If there are existing nodes, ask merge or overwrite
+    if (nodes.length > 0) {
+      setPendingTsvData(parsed);
+      setShowTsvOverlay(false);
+      setShowImportChoice(true);
+      return;
+    }
+    await applyTsvData(parsed, 'overwrite');
     setShowTsvOverlay(false);
+    setTsvText('');
+  }
+
+  async function handleImportChoice(mode: 'merge' | 'overwrite') {
+    setShowImportChoice(false);
+    await applyTsvData(pendingTsvData, mode);
+    setPendingTsvData([]);
     setTsvText('');
   }
 
   function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async (ev) => {
-      const text = ev.target?.result;
-      if (typeof text === 'string') {
-        const parsed = parseTsv(text);
-        await applyTsvData(parsed);
+    const ext = file.name.split('.').pop()?.toLowerCase() || '';
+
+    async function processData(parsed: ParsedTsvRow[]) {
+      if (parsed.length === 0) { showToast('\u26A0 No valid rows found'); return; }
+      if (nodes.length > 0) {
+        setPendingTsvData(parsed);
+        setShowImportChoice(true);
+      } else {
+        await applyTsvData(parsed, 'overwrite');
       }
-    };
-    reader.readAsText(file);
+    }
+
+    if (ext === 'xlsx' || ext === 'xls' || ext === 'xlsm') {
+      const reader = new FileReader();
+      reader.onload = async (ev) => {
+        const data = ev.target?.result;
+        if (!data) return;
+        try {
+          const XLSX = await import('xlsx');
+          const workbook = XLSX.read(data, { type: 'array' });
+          const sheetName = workbook.SheetNames[0];
+          const sheet = workbook.Sheets[sheetName];
+          const tsv = XLSX.utils.sheet_to_csv(sheet, { FS: '\t' });
+          const parsed = parseTsv(tsv);
+          await processData(parsed);
+        } catch (err) {
+          console.error('Excel parse error:', err);
+          showToast('\u26A0 Failed to read Excel file');
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      const reader = new FileReader();
+      reader.onload = async (ev) => {
+        const text = ev.target?.result;
+        if (typeof text === 'string') {
+          const parsed = parseTsv(text);
+          await processData(parsed);
+        }
+      };
+      reader.readAsText(file);
+    }
     if (fileInputRef.current) fileInputRef.current.value = '';
   }
+
+  /* ── Reset table (delete all nodes) ────────────────────────── */
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+
+  async function handleResetTable() {
+    if (!onDeleteNode) return;
+    const allIds = nodes.map(n => n.id);
+    for (const id of allIds) {
+      onDeleteNode(id);
+    }
+    setShowResetConfirm(false);
+    setSelectedRow(null);
+    showToast(`\u2713 Table reset — ${allIds.length} node${allIds.length !== 1 ? 's' : ''} removed`);
+  }
+
+  /* ── TSV preview rows (parsed on the fly) ──────────────────── */
+  const tsvPreviewRows = useMemo(() => {
+    if (!tsvText.trim()) return [];
+    return parseTsv(tsvText);
+  }, [tsvText]);
 
   /* ── Render editable cell or static ────────────────────────── */
   function renderCell(nodeId: number, col: NonNullable<EditCell>['col'], display: React.ReactNode, rawVal: string, className?: string) {
@@ -522,10 +696,14 @@ export default function CanvasTableMode({
         <input
           ref={fileInputRef}
           type="file"
-          accept=".tsv,.txt,.csv"
+          accept=".tsv,.txt,.csv,.xlsx,.xls,.xlsm"
           style={{ display: 'none' }}
           onChange={handleFileUpload}
         />
+        <span className="ctm-sep" />
+        <button className="ctm-btn ctm-btn-danger" onClick={() => setShowResetConfirm(true)} title="Delete all nodes and reset table">
+          🗑 Reset Table
+        </button>
         <span className="ctm-count">{rows.length} topic{rows.length !== 1 ? 's' : ''}</span>
       </div>
 
@@ -538,27 +716,118 @@ export default function CanvasTableMode({
               <button className="ctm-tsv-close" onClick={() => setShowTsvOverlay(false)}>✕</button>
             </div>
             <p className="ctm-tsv-hint">
-              Paste tab-separated data below. Rows are matched to existing topics by title.
-              New titles create new nodes. Expected columns: Depth, Topic, Alt Titles, Relationship,
-              Parent Topic, Conversion Path, Sister Nodes, Keywords, Description.
+              Paste from Excel or any tab-separated source below. Rows are matched to existing topics by title.
+              New titles create new nodes.
             </p>
             <textarea
               className="ctm-tsv-textarea"
               value={tsvText}
               onChange={e => setTsvText(e.target.value)}
-              placeholder="Paste TSV here..."
-              rows={12}
+              placeholder="Paste from Excel or TSV here..."
+              rows={4}
               autoFocus
             />
+            {/* Live table preview */}
+            {tsvPreviewRows.length > 0 && (
+              <div className="ctm-tsv-preview-wrap">
+                <div className="ctm-tsv-preview-label">{tsvPreviewRows.length} row{tsvPreviewRows.length !== 1 ? 's' : ''} detected:</div>
+                <div className="ctm-tsv-preview-scroll">
+                  <table className="ctm-tsv-preview-table">
+                    <thead>
+                      <tr>
+                        <th>#</th>
+                        <th>Topic</th>
+                        <th>Alt Titles</th>
+                        <th>Rel</th>
+                        <th>Parent</th>
+                        <th>Keywords</th>
+                        <th>Description</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tsvPreviewRows.map((pr, i) => {
+                        const isExisting = nodes.some(n => n.title && n.title.toLowerCase() === pr.title.toLowerCase());
+                        return (
+                          <tr key={i} className={isExisting ? 'ctm-tsv-row-update' : 'ctm-tsv-row-new'}>
+                            <td>{i + 1}</td>
+                            <td><strong>{pr.title}</strong></td>
+                            <td>{pr.altTitles.join(', ')}</td>
+                            <td>{pr.relationship}</td>
+                            <td>{pr.parentTitle}</td>
+                            <td>{pr.keywordsRaw}</td>
+                            <td>{pr.description.length > 60 ? pr.description.slice(0, 60) + '...' : pr.description}</td>
+                            <td>
+                              <span className={`ctm-tsv-status ${isExisting ? 'ctm-tsv-status-update' : 'ctm-tsv-status-new'}`}>
+                                {isExisting ? 'Update' : 'New'}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
             <div className="ctm-tsv-actions">
               <button className="ctm-btn" onClick={() => setShowTsvOverlay(false)}>Cancel</button>
               <button
                 className="ctm-btn ctm-btn-add"
                 onClick={handleTsvPaste}
-                disabled={!tsvText.trim() || tsvProcessing}
+                disabled={!tsvText.trim() || tsvProcessing || tsvPreviewRows.length === 0}
               >
-                {tsvProcessing ? 'Processing...' : '\u2713 Apply TSV'}
+                {tsvProcessing ? 'Processing...' : `\u2713 Apply ${tsvPreviewRows.length} Row${tsvPreviewRows.length !== 1 ? 's' : ''}`}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reset Confirm Dialog */}
+      {showResetConfirm && (
+        <div className="ctm-tsv-overlay">
+          <div className="ctm-tsv-panel ctm-reset-panel">
+            <div className="ctm-tsv-header">
+              <strong>🗑 Reset Table</strong>
+              <button className="ctm-tsv-close" onClick={() => setShowResetConfirm(false)}>✕</button>
+            </div>
+            <p className="ctm-reset-msg">
+              This will permanently delete all <strong>{nodes.length} node{nodes.length !== 1 ? 's' : ''}</strong> from the canvas. This cannot be undone.
+            </p>
+            <div className="ctm-tsv-actions">
+              <button className="ctm-btn" onClick={() => setShowResetConfirm(false)}>Cancel</button>
+              <button className="ctm-btn ctm-btn-danger" onClick={handleResetTable}>
+                🗑 Delete All Nodes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Import Mode Choice Dialog */}
+      {showImportChoice && (
+        <div className="ctm-tsv-overlay">
+          <div className="ctm-tsv-panel ctm-reset-panel">
+            <div className="ctm-tsv-header">
+              <strong>📥 Import {pendingTsvData.length} Row{pendingTsvData.length !== 1 ? 's' : ''}</strong>
+              <button className="ctm-tsv-close" onClick={() => { setShowImportChoice(false); setPendingTsvData([]); }}>✕</button>
+            </div>
+            <p className="ctm-reset-msg">
+              You have <strong>{nodes.length} existing node{nodes.length !== 1 ? 's' : ''}</strong> on the canvas. How would you like to import?
+            </p>
+            <div className="ctm-import-options">
+              <button className="ctm-btn ctm-import-btn ctm-import-merge" onClick={() => handleImportChoice('merge')}>
+                <strong>📥 Merge</strong>
+                <span>Update existing topics by name, add new ones. Keep current positions.</span>
+              </button>
+              <button className="ctm-btn ctm-import-btn ctm-import-overwrite" onClick={() => handleImportChoice('overwrite')}>
+                <strong>🔄 Overwrite All</strong>
+                <span>Delete all existing nodes and replace with imported data.</span>
+              </button>
+            </div>
+            <div className="ctm-tsv-actions">
+              <button className="ctm-btn" onClick={() => { setShowImportChoice(false); setPendingTsvData([]); }}>Cancel</button>
             </div>
           </div>
         </div>
