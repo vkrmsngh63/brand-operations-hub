@@ -555,7 +555,7 @@ export default function ASTTable({
   }
 
   function handleDragStart(e: React.DragEvent, id: string) {
-    setDragId(id); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', id); const kwIds = selected.has(id) && selected.size > 1 ? [...selected] : [id]; e.dataTransfer.setData('text/kst-kwids', JSON.stringify(kwIds));
+    setDragId(id); e.dataTransfer.effectAllowed = 'copyMove'; e.dataTransfer.setData('text/plain', id); const kwIds = selected.has(id) && selected.size > 1 ? [...selected] : [id]; e.dataTransfer.setData('text/kst-kwids', JSON.stringify(kwIds));
     const tr = (e.target as HTMLElement).closest('tr');
     if (tr) requestAnimationFrame(() => tr.classList.add('ast-dragging'));
   }

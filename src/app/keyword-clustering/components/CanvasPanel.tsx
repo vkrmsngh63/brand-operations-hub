@@ -316,7 +316,7 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
   function handleCanvasDragOver(e: React.DragEvent) {
     if (e.dataTransfer.types.includes("text/kst-kwids")) {
       e.preventDefault();
-      e.dataTransfer.dropEffect = "copy";
+      e.dataTransfer.dropEffect = "move";
     }
   }
 
