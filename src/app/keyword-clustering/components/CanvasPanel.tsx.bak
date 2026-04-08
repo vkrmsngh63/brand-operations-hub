@@ -194,7 +194,7 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
     setDragNodeId(nodeId);
     setDragOffset({ x: pos.x - node.x, y: pos.y - node.y });
     dragMoved.current = false;
-    setSelectedId(nodeId); setCtxMenu(null);
+    setSelectedId(nodeId); setEditPanelNodeId(nodeId); setCtxMenu(null);
   }
 
   useEffect(() => {
@@ -254,7 +254,6 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
     if (linkMode) return;
     const node = nodes.find(n => n.id === nodeId);
     if (!node) return;
-    setEditPanelNodeId(nodeId); setSelectedId(nodeId);
     setEditingId(nodeId); setEditVal(node.title);
   }
 
@@ -269,16 +268,8 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
 
   async function handleAddNode() {
     const rect = svgRef.current?.getBoundingClientRect();
-    let cx = rect ? (rect.width / 2) / zoom + viewX - NODE_W / 2 : viewX;
-    let cy = rect ? (rect.height / 2) / zoom + viewY - NODE_H / 2 : viewY;
-    // Avoid overlapping existing nodes
-    let attempts = 0;
-    while (attempts < 50) {
-      const overlaps = nodes.some(n => cx < n.x + n.w && cx + NODE_W > n.x && cy < n.y + n.h && cy + NODE_H > n.y);
-      if (!overlaps) break;
-      cy += NODE_H + 30;
-      attempts++;
-    }
+    const cx = rect ? (rect.width / 2) / zoom + viewX - NODE_W / 2 : viewX;
+    const cy = rect ? (rect.height / 2) / zoom + viewY - NODE_H / 2 : viewY;
     const newNode = await addNode({ x: cx, y: cy, w: NODE_W, h: NODE_H, title: 'New Topic' });
     if (newNode) { setSelectedId(newNode.id); setEditPanelNodeId(newNode.id); }
   }
@@ -468,7 +459,7 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
 
       <div className="cvs-body">
         {canvasMode === "table" ? (
-          <CanvasTableMode nodes={nodes} pathways={pathways} sisterLinks={sisterLinks} allKeywords={allKeywords} onSelectNode={id => { setSelectedId(id); }} onUpdateNodes={updateNodes} onAddNode={addNode} onDeleteNode={deleteNode} />
+          <CanvasTableMode nodes={nodes} pathways={pathways} sisterLinks={sisterLinks} allKeywords={allKeywords} onSelectNode={id => { setSelectedId(id); setEditPanelNodeId(id); }} onUpdateNodes={updateNodes} onAddNode={addNode} onDeleteNode={deleteNode} />
         ) : (<>
         <div className="cvs-canvas-area" ref={canvasAreaRef} onDragOver={handleCanvasDragOver} onDrop={handleCanvasDrop}>
           <svg ref={svgRef}

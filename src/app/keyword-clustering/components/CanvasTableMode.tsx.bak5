@@ -1,6 +1,5 @@
 'use client';
 import { useMemo, useState, useCallback, useRef } from 'react';
-import * as XLSX from 'xlsx';
 import type { CanvasNode, Pathway, SisterLink } from '@/hooks/useCanvas';
 import type { Keyword } from '@/hooks/useKeywords';
 import './canvas-table-mode.css';
@@ -27,8 +26,6 @@ interface TableRow {
   keywords: { keyword: string; placement: string }[];
   description: string;
   nodeId: number;
-  x: number;
-  y: number;
 }
 
 /* ── Editable cell types ─────────────────────────────────────── */
@@ -42,8 +39,6 @@ interface ParsedTsvRow {
   description: string;
   parentTitle: string;
   keywordsRaw: string;
-  x: number | null;
-  y: number | null;
 }
 
 export default function CanvasTableMode({
@@ -122,8 +117,6 @@ export default function CanvasTableMode({
         keywords: kwList,
         description: node.description || '',
         nodeId: node.id,
-        x: node.x,
-        y: node.y,
       });
 
       const children = getChildren(node.id);
@@ -143,7 +136,7 @@ export default function CanvasTableMode({
 
   /* ── Copy as TSV ────────────────────────────────────────────── */
   const handleCopyTsv = useCallback(() => {
-    const header = ['Depth', 'Topic', 'Alternate Titles', 'Relationship', 'Parent Topic', 'Conversion Path', 'Sister Nodes', 'Keywords', 'Topic Description', 'X', 'Y'];
+    const header = ['Depth', 'Topic', 'Alternate Titles', 'Relationship', 'Parent Topic', 'Conversion Path', 'Sister Nodes', 'Keywords', 'Topic Description'];
     const lines = rows.map(r => [
       r.depth,
       '\u00A0'.repeat(r.depth * 4) + r.title,
@@ -154,8 +147,6 @@ export default function CanvasTableMode({
       r.sisterNodes.join(', '),
       r.keywords.map(k => k.keyword + ' [' + k.placement + ']').join(', '),
       r.description,
-      Math.round(r.x),
-      Math.round(r.y),
     ].join('\t'));
     const tsv = header.join('\t') + '\n' + lines.join('\n');
     navigator.clipboard.writeText(tsv).then(
@@ -227,14 +218,7 @@ export default function CanvasTableMode({
   /* ── Add new row ───────────────────────────────────────────── */
   async function handleAddRow() {
     if (!onAddNode) return;
-    // Find a non-overlapping position
-    const w = 220, h = 120, gap = 30;
-    let ny = 0;
-    for (const n of nodes) {
-      const bottom = n.y + n.h + gap;
-      if (bottom > ny) ny = bottom;
-    }
-    const newNode = await onAddNode({ title: 'New Topic', x: 0, y: ny, w, h });
+    const newNode = await onAddNode({ title: 'New Topic', x: 0, y: (nodes.length + 1) * 150, w: 220, h: 120 });
     if (newNode) {
       showToast('\u2713 Row added');
       setSelectedRow(newNode.id);
@@ -268,8 +252,8 @@ export default function CanvasTableMode({
     const dataLines = hasHeader ? lines.slice(1) : lines;
 
     // Column index map — defaults match our export order:
-    // Depth(0) Topic(1) AltTitles(2) Relationship(3) ParentTopic(4) ConversionPath(5) SisterNodes(6) Keywords(7) Description(8) X(9) Y(10)
-    const colMap = { title: 1, altTitles: 2, relationship: 3, parentTitle: 4, keywords: 7, description: 8, x: 9, y: 10 };
+    // Depth(0) Topic(1) AltTitles(2) Relationship(3) ParentTopic(4) ConversionPath(5) SisterNodes(6) Keywords(7) Description(8)
+    const colMap = { title: 1, altTitles: 2, relationship: 3, parentTitle: 4, keywords: 7, description: 8 };
 
     if (hasHeader) {
       const hCols = lines[0].split('\t').map(h => h.trim().toLowerCase());
@@ -280,8 +264,6 @@ export default function CanvasTableMode({
         else if (h.includes('parent')) colMap.parentTitle = i;
         else if (h.includes('keyword')) colMap.keywords = i;
         else if (h.includes('description')) colMap.description = i;
-        else if (h === 'x') colMap.x = i;
-        else if (h === 'y') colMap.y = i;
       });
     }
 
@@ -301,8 +283,6 @@ export default function CanvasTableMode({
         description: (cols[colMap.description] || '').trim(),
         parentTitle: (cols[colMap.parentTitle] || '').replace(/^[\s\u00A0]+/, '').trim(),
         keywordsRaw: (cols[colMap.keywords] || '').trim(),
-        x: cols[colMap.x] ? parseFloat(cols[colMap.x]) || null : null,
-        y: cols[colMap.y] ? parseFloat(cols[colMap.y]) || null : null,
       });
     }
     return result;
@@ -355,14 +335,6 @@ export default function CanvasTableMode({
         // Only update description if TSV has non-empty description
         if (row.description && row.description !== (existing.description || '')) {
           upd.description = row.description; changed = true;
-        }
-
-        // Update position if TSV has coordinates
-        if (row.x !== null && row.x !== existing.x) {
-          upd.x = row.x; changed = true;
-        }
-        if (row.y !== null && row.y !== existing.y) {
-          upd.y = row.y; changed = true;
         }
 
         // Only update parent if TSV has a non-empty parent title
@@ -419,43 +391,18 @@ export default function CanvasTableMode({
     }
 
     // Create new nodes — first pass: create all without parent links
-    // Collect all occupied positions for overlap avoidance
-    const occupied: { x: number; y: number; w: number; h: number }[] = nodes.map(n => ({ x: n.x, y: n.y, w: n.w, h: n.h }));
-
-    function findNonOverlappingY(startX: number, startY: number, w: number, h: number): { x: number; y: number } {
-      let cx = startX, cy = startY;
-      let attempts = 0;
-      while (attempts < 100) {
-        const overlaps = occupied.some(o =>
-          cx < o.x + o.w && cx + w > o.x && cy < o.y + o.h && cy + h > o.y
-        );
-        if (!overlaps) break;
-        cy += h + 30; // shift down
-        attempts++;
-      }
-      return { x: cx, y: cy };
-    }
-
     const newNodesByTitle = new Map<string, CanvasNode>();
     for (const row of toCreate) {
-      let nx = row.x ?? 0;
-      let ny = row.y ?? (nodes.length + created + 1) * 150;
-      // If no position from TSV, find a non-overlapping spot
-      if (row.x === null || row.y === null) {
-        const pos = findNonOverlappingY(nx, ny, 220, 120);
-        nx = pos.x; ny = pos.y;
-      }
       const newNode = await onAddNode({
         title: row.title,
         description: row.description || '',
         altTitles: row.altTitles.length > 0 ? row.altTitles : [],
-        x: nx,
-        y: ny,
+        x: 0,
+        y: (nodes.length + created + 1) * 150,
         w: 220,
         h: 120,
       });
       if (newNode) {
-        occupied.push({ x: nx, y: ny, w: 220, h: 120 });
         newNodesByTitle.set(row.title.toLowerCase(), newNode);
         created++;
       }
@@ -516,10 +463,10 @@ export default function CanvasTableMode({
         const data = ev.target?.result;
         if (!data) return;
         try {
+          const XLSX = await import('xlsx');
           const workbook = XLSX.read(data, { type: 'array' });
           const sheetName = workbook.SheetNames[0];
           const sheet = workbook.Sheets[sheetName];
-          // Convert to TSV string
           const tsv = XLSX.utils.sheet_to_csv(sheet, { FS: '\t' });
           const parsed = parseTsv(tsv);
           await applyTsvData(parsed);
