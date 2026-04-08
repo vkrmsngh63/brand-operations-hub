@@ -6,29 +6,6 @@ import React, {
 import type { Keyword } from '@/hooks/useKeywords';
 import './tif-table.css';
 
-// ── Split selection helpers ────────────────────────────────────
-type SplitSelMap = Map<string, Set<string>>;
-
-function splitIsChecked(map: SplitSelMap, kwId: string, topic: string): boolean {
-  const s = map.get(kwId);
-  return s ? s.has(topic) : false;
-}
-
-function splitSetChecked(map: SplitSelMap, kwId: string, topic: string, val: boolean): SplitSelMap {
-  const next = new Map(map);
-  if (!next.has(kwId)) next.set(kwId, new Set());
-  const s = new Set(next.get(kwId)!);
-  if (val) s.add(topic); else s.delete(topic);
-  if (s.size === 0) next.delete(kwId); else next.set(kwId, s);
-  return next;
-}
-
-function splitAllChecked(map: SplitSelMap): { kwId: string; topic: string }[] {
-  const res: { kwId: string; topic: string }[] = [];
-  map.forEach((topics, kwId) => topics.forEach(tp => res.push({ kwId, topic: tp })));
-  return res;
-}
-
 interface TIFTableProps {
   astKeywords: Keyword[];
   tifKeywords: string[];
@@ -58,7 +35,7 @@ function getKwRec(kwStr: string, astKeywords: Keyword[]): Keyword | undefined {
   return astKeywords.find(k => k.keyword === kwStr);
 }
 
-// ── Inline Topic Pills (Combined view) for TIF ────────────────
+// ── Inline Topic Pills (editable) for TIF ─────────────────────
 function TifTopicPills({ kwStr, astKeywords, onTopicEdit, onFilterTopic }: {
   kwStr: string; astKeywords: Keyword[];
   onTopicEdit: (oldTopics: string, newTopics: string) => void;
@@ -120,197 +97,11 @@ function TifTopicPills({ kwStr, astKeywords, onTopicEdit, onFilterTopic }: {
   );
 }
 
-// ── Split Topic Cell for TIF ───────────────────────────────────
-function TifSplitTopicCell({ kw, splitTopicSel, setSplitTopicSel, onSplitTopicEdit, onSplitTopicAdd, onSplitApprovalToggle, hidden }: {
-  kw: Keyword;
-  splitTopicSel: SplitSelMap;
-  setSplitTopicSel: React.Dispatch<React.SetStateAction<SplitSelMap>>;
-  onSplitTopicEdit: (kwId: string, oldTopic: string, newTopic: string) => void;
-  onSplitTopicAdd: (kwId: string, newTopic: string) => void;
-  onSplitApprovalToggle: (kwId: string, topic: string) => void;
-  hidden: boolean;
-}) {
-  const [editTopic, setEditTopic] = useState<string | null>(null);
-  const [editValue, setEditValue] = useState('');
-  const [addMode, setAddMode] = useState(false);
-  const [addValue, setAddValue] = useState('');
-  const editRef = useRef<HTMLInputElement>(null);
-  const addRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => { if (editTopic !== null && editRef.current) { editRef.current.focus(); editRef.current.select(); } }, [editTopic]);
-  useEffect(() => { if (addMode && addRef.current) addRef.current.focus(); }, [addMode]);
-
-  if (hidden) return <td className="tif-col-hidden" />;
-
-  const topics = parseTopics(kw.topic);
-
-  return (
-    <td style={{ verticalAlign: 'top', padding: 0, overflow: 'visible', whiteSpace: 'nowrap' }}>
-      <div className="tif-split-list">
-        {topics.length === 0 ? (
-          <div className="tif-split-item" />
-        ) : (
-          topics.map(topic => {
-            const isChecked = splitIsChecked(splitTopicSel, kw.id, topic);
-            const approved = kw.topicApproved && kw.topicApproved[topic];
-            return (
-              <div key={topic} className="tif-split-item" data-kw-id={kw.id} data-topic={topic}
-                onMouseEnter={e => {
-                  const tr = (e.currentTarget as HTMLElement).closest('tr');
-                  if (!tr) return;
-                  const idx = Array.from(e.currentTarget.parentElement!.children).indexOf(e.currentTarget);
-                  const partner = tr.querySelectorAll('.tif-split-list')[1]?.children[idx] as HTMLElement | undefined;
-                  if (partner) partner.classList.add('tif-split-hl');
-                  e.currentTarget.classList.add('tif-split-hl');
-                }}
-                onMouseLeave={e => {
-                  const tr = (e.currentTarget as HTMLElement).closest('tr');
-                  if (!tr) return;
-                  const idx = Array.from(e.currentTarget.parentElement!.children).indexOf(e.currentTarget);
-                  const partner = tr.querySelectorAll('.tif-split-list')[1]?.children[idx] as HTMLElement | undefined;
-                  if (partner) partner.classList.remove('tif-split-hl');
-                  e.currentTarget.classList.remove('tif-split-hl');
-                }}
-              >
-                <span className="tif-split-drag" title="Drag this topic to canvas">⁞</span>
-                <input type="checkbox" checked={isChecked}
-                  onChange={e => setSplitTopicSel(prev => splitSetChecked(prev, kw.id, topic, e.target.checked))}
-                  onClick={e => e.stopPropagation()}
-                  style={{ width: 11, height: 11, accentColor: '#3b82f6', cursor: 'pointer', flexShrink: 0 }}
-                  title={topic} />
-                {editTopic === topic ? (
-                  <input ref={editRef} className="tif-topic-inp" type="text" value={editValue}
-                    onChange={e => setEditValue(e.target.value)} onClick={e => e.stopPropagation()}
-                    onBlur={() => {
-                      const v = editValue.trim();
-                      if (v !== editTopic) onSplitTopicEdit(kw.id, editTopic, v);
-                      setEditTopic(null); setEditValue('');
-                    }}
-                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); (e.target as HTMLInputElement).blur(); } if (e.key === 'Escape') { setEditTopic(null); setEditValue(''); } }}
-                    style={{ width: 100, flexShrink: 0, fontSize: '0.85em', padding: '0 3px', border: '1px solid #c4b5fd', borderRadius: 3 }} />
-                ) : (
-                  <span className="tif-topic-pill" style={{ flexShrink: 0, cursor: 'pointer' }}
-                    onClick={e => { e.stopPropagation(); setEditTopic(topic); setEditValue(topic); setAddMode(false); }}
-                    title={`Click to edit topic "${topic}"`}>{topic}</span>
-                )}
-                <button className={`tif-split-status ${approved ? 'tif-split-ok' : 'tif-split-x'}`}
-                  onClick={e => { e.stopPropagation(); onSplitApprovalToggle(kw.id, topic); }}
-                  title={approved ? 'Approved — click to unapprove' : 'Unapproved — click to approve'}>
-                  {approved ? '✓' : '✕'}
-                </button>
-              </div>
-            );
-          })
-        )}
-        <div className="tif-split-item tif-split-add"
-          onClick={e => { e.stopPropagation(); setAddMode(true); setAddValue(''); }}>
-          {addMode ? (
-            <input ref={addRef} className="tif-topic-inp" type="text" placeholder="New topic…" value={addValue}
-              onChange={e => setAddValue(e.target.value)} onClick={e => e.stopPropagation()}
-              onBlur={() => {
-                const v = addValue.trim();
-                if (v) onSplitTopicAdd(kw.id, v);
-                setAddMode(false); setAddValue('');
-              }}
-              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); (e.target as HTMLInputElement).blur(); } if (e.key === 'Escape') { setAddMode(false); setAddValue(''); } }}
-              style={{ width: 120, flexShrink: 0, fontSize: '0.85em', padding: '0 3px', border: '1px solid #c4b5fd', borderRadius: 3 }} />
-          ) : (
-            <span style={{ cursor: 'pointer', color: '#8b5cf6', fontSize: '0.8em', opacity: 0.55, userSelect: 'none' }}>⊕ add topic</span>
-          )}
-        </div>
-      </div>
-    </td>
-  );
-}
-
-// ── Split Description Cell for TIF ─────────────────────────────
-function TifSplitDescCell({ kw, splitDescSel, setSplitDescSel, onSplitDescEdit, hidden }: {
-  kw: Keyword;
-  splitDescSel: SplitSelMap;
-  setSplitDescSel: React.Dispatch<React.SetStateAction<SplitSelMap>>;
-  onSplitDescEdit: (kwId: string, topic: string, newDesc: string) => void;
-  hidden: boolean;
-}) {
-  const [editTopic, setEditTopic] = useState<string | null>(null);
-  const [editValue, setEditValue] = useState('');
-  const taRef = useRef<HTMLTextAreaElement>(null);
-
-  useEffect(() => {
-    if (editTopic !== null && taRef.current) {
-      taRef.current.focus();
-      taRef.current.setSelectionRange(taRef.current.value.length, taRef.current.value.length);
-    }
-  }, [editTopic]);
-
-  if (hidden) return <td className="tif-col-hidden" />;
-
-  const topics = parseTopics(kw.topic);
-
-  return (
-    <td style={{ verticalAlign: 'top', padding: 0, overflow: 'visible', whiteSpace: 'normal' }}>
-      <div className="tif-split-list tif-split-desc-wrap">
-        {topics.length === 0 ? (
-          <div className="tif-split-item" style={{ display: 'block', padding: 2 }} />
-        ) : (
-          topics.map(topic => {
-            const isChecked = splitIsChecked(splitDescSel, kw.id, topic);
-            const desc = (kw.canvasLoc && kw.canvasLoc[topic]) || '';
-            return (
-              <div key={topic} className="tif-split-item"
-                style={{ display: 'flex', alignItems: 'flex-start', gap: 3, padding: '2px', overflow: 'visible', whiteSpace: 'normal' }}
-                onMouseEnter={e => {
-                  const tr = (e.currentTarget as HTMLElement).closest('tr');
-                  if (!tr) return;
-                  const idx = Array.from(e.currentTarget.parentElement!.children).indexOf(e.currentTarget);
-                  const partner = tr.querySelectorAll('.tif-split-list')[0]?.children[idx] as HTMLElement | undefined;
-                  if (partner) partner.classList.add('tif-split-hl');
-                  e.currentTarget.classList.add('tif-split-hl');
-                }}
-                onMouseLeave={e => {
-                  const tr = (e.currentTarget as HTMLElement).closest('tr');
-                  if (!tr) return;
-                  const idx = Array.from(e.currentTarget.parentElement!.children).indexOf(e.currentTarget);
-                  const partner = tr.querySelectorAll('.tif-split-list')[0]?.children[idx] as HTMLElement | undefined;
-                  if (partner) partner.classList.remove('tif-split-hl');
-                  e.currentTarget.classList.remove('tif-split-hl');
-                }}
-              >
-                <input type="checkbox" checked={isChecked}
-                  onChange={e => setSplitDescSel(prev => splitSetChecked(prev, kw.id, topic, e.target.checked))}
-                  onClick={e => e.stopPropagation()}
-                  className="tif-split-desc-cb" title="Check to bulk-edit descriptions" />
-                {editTopic === topic ? (
-                  <textarea ref={taRef} className="tif-split-desc-ta" value={editValue}
-                    onChange={e => setEditValue(e.target.value)}
-                    placeholder={`Enter description for "${topic}"…`}
-                    onBlur={() => { onSplitDescEdit(kw.id, editTopic, editValue.trim()); setEditTopic(null); setEditValue(''); }}
-                    onKeyDown={e => {
-                      if (e.key === 'Escape') { e.preventDefault(); setEditTopic(null); setEditValue(''); }
-                      if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); onSplitDescEdit(kw.id, editTopic, editValue.trim()); setEditTopic(null); setEditValue(''); }
-                    }} />
-                ) : (
-                  <span className={`tif-split-desc-text${desc ? '' : ' empty'}`}
-                    onClick={() => { setEditTopic(topic); setEditValue(desc); }}
-                    title={`Click to edit description for "${topic}"`}
-                    style={{ flex: 1 }}>
-                    {desc || '+ add description…'}
-                  </span>
-                )}
-              </div>
-            );
-          })
-        )}
-      </div>
-    </td>
-  );
-}
-
 export default function TIFTable({ astKeywords, tifKeywords, onSetTifKeywords, onUpdateKeyword, tifActive, onSetTifActive }: TIFTableProps) {
   const [searchQ, setSearchQ] = useState('');
   const [showVol, setShowVol] = useState(true);
   const [showTags, setShowTags] = useState(true);
   const [showTopics, setShowTopics] = useState(true);
-  const [showTopicDesc, setShowTopicDesc] = useState(true);
   const [showSorted, setShowSorted] = useState(true);
   const [showPartial, setShowPartial] = useState(true);
   const [showUnsorted, setShowUnsorted] = useState(true);
@@ -321,16 +112,10 @@ export default function TIFTable({ astKeywords, tifKeywords, onSetTifKeywords, o
   const [fontSize, setFontSize] = useState(10);
   const [toast, setToast] = useState('');
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [colWidths, setColWidths] = useState([22, 18, 180, 70, 90, 100, 100, 110]);
+  const [colWidths, setColWidths] = useState([22, 18, 180, 70, 90, 100, 100]);
   const resizeRef = useRef<{ col: number; startX: number; startW: number } | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropIdx, setDropIdx] = useState<number | null>(null);
-
-  // ── Split Topics View state ──────────────────────────────────
-  const [splitTopics, setSplitTopics] = useState(false);
-  const [splitTopicSel, setSplitTopicSel] = useState<SplitSelMap>(new Map());
-  const [splitDescSel, setSplitDescSel] = useState<SplitSelMap>(new Map());
-  const tbodyRef = useRef<HTMLTableSectionElement>(null);
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -373,30 +158,6 @@ export default function TIFTable({ astKeywords, tifKeywords, onSetTifKeywords, o
       return true;
     });
   }, [tifKeywords, searchQ, showSorted, showPartial, showUnsorted, astKeywords, tagQ, topicQ, topicFilter]);
-
-  // ── Height sync for split view sub-rows ──────────────────────
-  useEffect(() => {
-    if (!splitTopics || !tbodyRef.current) return;
-    const tbody = tbodyRef.current;
-    requestAnimationFrame(() => {
-      tbody.querySelectorAll('tr[data-tif-kw]').forEach(tr => {
-        const lists = Array.from(tr.querySelectorAll('.tif-split-list'));
-        if (lists.length < 2) return;
-        const maxLen = Math.max(...lists.map(l => l.children.length));
-        lists.forEach(l => {
-          Array.from(l.children).forEach(el => {
-            (el as HTMLElement).style.height = '';
-            (el as HTMLElement).style.minHeight = '';
-          });
-        });
-        for (let i = 0; i < maxLen; i++) {
-          const items = lists.map(l => l.children[i]).filter(Boolean) as HTMLElement[];
-          const maxH = Math.max(...items.map(el => el.getBoundingClientRect().height));
-          if (maxH > 0) items.forEach(el => { el.style.minHeight = maxH + 'px'; });
-        }
-      });
-    });
-  }, [splitTopics, astKeywords, showTopics, showTopicDesc]);
 
   const selCount = useMemo(() => visible.filter(kw => selected.has(kw)).length, [visible, selected]);
   const selectAllState: 'none' | 'some' | 'all' = selCount === 0 ? 'none' : selCount === visible.length ? 'all' : 'some';
@@ -471,117 +232,6 @@ export default function TIFTable({ astKeywords, tifKeywords, onSetTifKeywords, o
       const rec = getKwRec(kwStr, astKeywords);
       if (rec) onUpdateKeyword(rec.id, { topic: newTopicStr });
     }
-  }
-
-  // ── Split view handlers ──────────────────────────────────────
-  async function handleSplitTopicEdit(kwId: string, oldTopic: string, newTopic: string) {
-    const kw = astKeywords.find(k => k.id === kwId);
-    if (!kw) return;
-    const isChecked = splitIsChecked(splitTopicSel, kwId, oldTopic);
-    if (isChecked) {
-      const allChecked = splitAllChecked(splitTopicSel);
-      const sameText = allChecked.every(d => d.topic === oldTopic);
-      if (sameText) {
-        const promises: Promise<void>[] = [];
-        for (const d of allChecked) {
-          const rec = astKeywords.find(k => k.id === d.kwId);
-          if (!rec) continue;
-          const arr = parseTopics(rec.topic);
-          const idx = arr.indexOf(d.topic);
-          if (idx === -1) continue;
-          if (newTopic === '') arr.splice(idx, 1); else arr[idx] = newTopic;
-          const cl = { ...(rec.canvasLoc || {}) };
-          const ta = { ...(rec.topicApproved || {}) };
-          if (newTopic === '') { delete cl[d.topic]; delete ta[d.topic]; }
-          else if (newTopic !== d.topic) {
-            if (cl[d.topic] !== undefined) { cl[newTopic] = cl[d.topic]; delete cl[d.topic]; }
-            if (ta[d.topic] !== undefined) { ta[newTopic] = ta[d.topic]; delete ta[d.topic]; }
-          }
-          promises.push(onUpdateKeyword(rec.id, { topic: arr.join(' | '), canvasLoc: cl, topicApproved: ta }));
-        }
-        await Promise.all(promises);
-        setSplitTopicSel(new Map());
-        return;
-      }
-    }
-    const arr = parseTopics(kw.topic);
-    const idx = arr.indexOf(oldTopic);
-    if (idx === -1) return;
-    if (newTopic === '') arr.splice(idx, 1); else arr[idx] = newTopic;
-    const cl = { ...(kw.canvasLoc || {}) };
-    const ta = { ...(kw.topicApproved || {}) };
-    if (newTopic === '') { delete cl[oldTopic]; delete ta[oldTopic]; }
-    else if (newTopic !== oldTopic) {
-      if (cl[oldTopic] !== undefined) { cl[newTopic] = cl[oldTopic]; delete cl[oldTopic]; }
-      if (ta[oldTopic] !== undefined) { ta[newTopic] = ta[oldTopic]; delete ta[oldTopic]; }
-    }
-    await onUpdateKeyword(kw.id, { topic: arr.join(' | '), canvasLoc: cl, topicApproved: ta });
-  }
-
-  async function handleSplitTopicAdd(kwId: string, newTopic: string) {
-    const kw = astKeywords.find(k => k.id === kwId);
-    if (!kw) return;
-    const arr = parseTopics(kw.topic);
-    if (!arr.includes(newTopic)) {
-      arr.push(newTopic);
-      await onUpdateKeyword(kw.id, { topic: arr.join(' | ') });
-    }
-  }
-
-  async function handleSplitApprovalToggle(kwId: string, topic: string) {
-    const kw = astKeywords.find(k => k.id === kwId);
-    if (!kw) return;
-    const ta = { ...(kw.topicApproved || {}) };
-    const newState = !ta[topic];
-    if (newState) ta[topic] = true; else delete ta[topic];
-    if (splitIsChecked(splitTopicSel, kwId, topic)) {
-      const allChecked = splitAllChecked(splitTopicSel);
-      const promises: Promise<void>[] = [];
-      for (const d of allChecked) {
-        if (d.kwId === kwId && d.topic === topic) continue;
-        const rec = astKeywords.find(k => k.id === d.kwId);
-        if (!rec) continue;
-        const rta = { ...(rec.topicApproved || {}) };
-        if (newState) rta[d.topic] = true; else delete rta[d.topic];
-        promises.push(onUpdateKeyword(rec.id, { topicApproved: rta }));
-      }
-      await Promise.all([onUpdateKeyword(kw.id, { topicApproved: ta }), ...promises]);
-    } else {
-      await onUpdateKeyword(kw.id, { topicApproved: ta });
-    }
-  }
-
-  async function handleSplitDescEdit(kwId: string, topic: string, newDesc: string) {
-    const kw = astKeywords.find(k => k.id === kwId);
-    if (!kw) return;
-    const cl = { ...(kw.canvasLoc || {}) };
-    const origVal = cl[topic] || '';
-    if (newDesc === '') delete cl[topic]; else cl[topic] = newDesc;
-    const promises: Promise<void>[] = [];
-    if (splitIsChecked(splitTopicSel, kwId, topic)) {
-      for (const d of splitAllChecked(splitTopicSel)) {
-        if (d.kwId === kwId && d.topic === topic) continue;
-        const rec = astKeywords.find(k => k.id === d.kwId);
-        if (!rec) continue;
-        const rcl = { ...(rec.canvasLoc || {}) };
-        if (newDesc === '') delete rcl[d.topic]; else rcl[d.topic] = newDesc;
-        promises.push(onUpdateKeyword(rec.id, { canvasLoc: rcl }));
-      }
-    }
-    if (splitIsChecked(splitDescSel, kwId, topic)) {
-      for (const d of splitAllChecked(splitDescSel)) {
-        if (d.kwId === kwId && d.topic === topic) continue;
-        const rec = astKeywords.find(k => k.id === d.kwId);
-        if (!rec) continue;
-        const rOrigVal = (rec.canvasLoc || {})[d.topic] || '';
-        if (rOrigVal === origVal) {
-          const rcl = { ...(rec.canvasLoc || {}) };
-          if (newDesc === '') delete rcl[d.topic]; else rcl[d.topic] = newDesc;
-          promises.push(onUpdateKeyword(rec.id, { canvasLoc: rcl }));
-        }
-      }
-    }
-    await Promise.all([onUpdateKeyword(kw.id, { canvasLoc: cl }), ...promises]);
   }
 
   function handleMarkStatus(status: 'Unsorted' | 'Partially Sorted' | 'Completely Sorted' | 'AI-Sorted') {
@@ -674,8 +324,6 @@ export default function TIFTable({ astKeywords, tifKeywords, onSetTifKeywords, o
     return 'tif-st-u';
   }
 
-  const colSpanCount = 8;
-
   return (
     <div className="tif-panel" style={{ fontSize: `${fontSize}px` }}>
       <div className="tif-ph">
@@ -709,7 +357,6 @@ export default function TIFTable({ astKeywords, tifKeywords, onSetTifKeywords, o
         <label className="tif-cb-label"><input type="checkbox" checked={showVol} onChange={e => setShowVol(e.target.checked)} /> Vol</label>
         <label className="tif-cb-label"><input type="checkbox" checked={showTags} onChange={e => setShowTags(e.target.checked)} /> Tags</label>
         <label className="tif-cb-label"><input type="checkbox" checked={showTopics} onChange={e => setShowTopics(e.target.checked)} /> Topics</label>
-        <label className="tif-cb-label"><input type="checkbox" checked={showTopicDesc} onChange={e => setShowTopicDesc(e.target.checked)} /> Topic Desc.</label>
         <div className="tif-ctrl-div" />
         <label className="tif-cb-label"><input type="checkbox" checked={showSorted} onChange={e => setShowSorted(e.target.checked)} /> Sorted</label>
         <label className="tif-cb-label"><input type="checkbox" checked={showPartial} onChange={e => setShowPartial(e.target.checked)} /> Partial</label>
@@ -740,7 +387,6 @@ export default function TIFTable({ astKeywords, tifKeywords, onSetTifKeywords, o
             <col style={{ width: colWidths[4] }} />
             <col style={{ width: colWidths[5] }} className={showTags ? '' : 'tif-col-hidden'} />
             <col style={{ width: colWidths[6] }} className={showTopics ? '' : 'tif-col-hidden'} />
-            <col style={{ width: colWidths[7] }} className={showTopicDesc ? '' : 'tif-col-hidden'} />
           </colgroup>
           <thead><tr>
             <th style={{ width: colWidths[0], textAlign: 'center', padding: '3px 2px' }}>
@@ -765,21 +411,14 @@ export default function TIFTable({ astKeywords, tifKeywords, onSetTifKeywords, o
               <div className="th-inner">Tags<input type="text" className="tif-search-inp" placeholder="search tags…" value={tagQ} onChange={e => setTagQ(e.target.value)} onClick={e => e.stopPropagation()} style={{ width: 72, fontSize: 8, marginLeft: 3 }} /></div>
               <div className="tif-col-resize" onMouseDown={e => handleColResize(e, 5)} />
             </th>
-            <th className={showTopics ? '' : 'tif-col-hidden'} style={{ position: 'relative', cursor: 'pointer' }}
-              onClick={() => setSplitTopics(s => !s)}
-              title="Click to toggle Split / Combined Topics view"
-            >
-              <div className="th-inner">Topics{splitTopics && <span className="tif-split-badge">Split</span>}<input type="text" className="tif-search-inp" placeholder="search topics…" value={topicQ} onChange={e => setTopicQ(e.target.value)} onClick={e => e.stopPropagation()} style={{ width: 72, fontSize: 8, marginLeft: 3 }} /></div>
+            <th className={showTopics ? '' : 'tif-col-hidden'} style={{ position: 'relative' }}>
+              <div className="th-inner">Topics<input type="text" className="tif-search-inp" placeholder="search topics…" value={topicQ} onChange={e => setTopicQ(e.target.value)} onClick={e => e.stopPropagation()} style={{ width: 72, fontSize: 8, marginLeft: 3 }} /></div>
               <div className="tif-col-resize" onMouseDown={e => handleColResize(e, 6)} />
             </th>
-            <th className={showTopicDesc ? '' : 'tif-col-hidden'} style={{ position: 'relative' }}>
-              <div className="th-inner">Topic Descriptions</div>
-              <div className="tif-col-resize" onMouseDown={e => handleColResize(e, 7)} />
-            </th>
           </tr></thead>
-          <tbody ref={tbodyRef}>
+          <tbody>
             {visible.length === 0 ? (
-              <tr><td colSpan={colSpanCount}>
+              <tr><td colSpan={7}>
                 <div className="tif-empty">
                   <div className="tif-empty-icon">{tifKeywords.length === 0 ? '🎯' : '🔍'}</div>
                   <div>{tifKeywords.length === 0
@@ -794,7 +433,7 @@ export default function TIFTable({ astKeywords, tifKeywords, onSetTifKeywords, o
               const tags = parseTags(rec ? rec.tags : '');
               const isSelected = selected.has(kw);
               return (
-                <tr key={kw} className={isSelected ? 'tif-sel' : ''} data-tif-kw={kw}
+                <tr key={kw} className={isSelected ? 'tif-sel' : ''}
                   onDragOver={e => handleDragOver(e, idx)}
                   style={dropIdx === idx && dragId !== kw ? { borderTop: '3px solid #3b82f6', boxShadow: '0 -2px 4px rgba(59,130,246,0.5)' } : undefined}
                 >
@@ -820,23 +459,11 @@ export default function TIFTable({ astKeywords, tifKeywords, onSetTifKeywords, o
                   <td className={showTags ? '' : 'tif-col-hidden'}>
                     {tags.map((t, i) => <span key={i} className="tif-tag-pill">{t}</span>)}
                   </td>
-                  {splitTopics && showTopics && rec ? (
-                    <TifSplitTopicCell kw={rec} splitTopicSel={splitTopicSel} setSplitTopicSel={setSplitTopicSel}
-                      onSplitTopicEdit={handleSplitTopicEdit} onSplitTopicAdd={handleSplitTopicAdd}
-                      onSplitApprovalToggle={handleSplitApprovalToggle} hidden={!showTopics} />
-                  ) : (
-                    <td className={showTopics ? '' : 'tif-col-hidden'}>
-                      {rec && <TifTopicPills kwStr={kw} astKeywords={astKeywords}
-                        onTopicEdit={(o, n) => handleTifTopicEdit(kw, o, n)}
-                        onFilterTopic={t => setTopicFilter(prev => prev === t ? '' : t)} />}
-                    </td>
-                  )}
-                  {splitTopics && showTopicDesc && rec ? (
-                    <TifSplitDescCell kw={rec} splitDescSel={splitDescSel} setSplitDescSel={setSplitDescSel}
-                      onSplitDescEdit={handleSplitDescEdit} hidden={!showTopicDesc} />
-                  ) : (
-                    <td className={showTopicDesc ? '' : 'tif-col-hidden'}></td>
-                  )}
+                  <td className={showTopics ? '' : 'tif-col-hidden'}>
+                    <TifTopicPills kwStr={kw} astKeywords={astKeywords}
+                      onTopicEdit={(o, n) => handleTifTopicEdit(kw, o, n)}
+                      onFilterTopic={t => setTopicFilter(prev => prev === t ? '' : t)} />
+                  </td>
                 </tr>
               );
             })}
