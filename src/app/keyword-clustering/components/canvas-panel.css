@@ -19,6 +19,7 @@
   border-bottom: 1px solid #cbd5e1;
   flex-shrink: 0;
   min-height: 32px;
+  flex-wrap: wrap;
 }
 
 .cvs-btn {
@@ -30,10 +31,16 @@
   font-size: 11px;
   cursor: pointer;
   white-space: nowrap;
-  transition: background 0.15s;
+  transition: background 0.15s, box-shadow 0.15s;
 }
 .cvs-btn:hover {
   background: #94a3b8;
+}
+.cvs-btn-active {
+  background: #3b82f6 !important;
+  color: #ffffff !important;
+  border-color: #2563eb !important;
+  box-shadow: 0 0 0 2px rgba(59,130,246,0.3);
 }
 
 .cvs-sep {
@@ -45,9 +52,35 @@
 
 .cvs-zoom-label {
   font-size: 10px;
-  color: #94a3b8;
+  color: #64748b;
   margin-left: 4px;
   min-width: 32px;
+}
+
+/* ── Link mode indicator bar ─────────────────────────────────── */
+.cvs-link-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 12px;
+  background: #fef3c7;
+  border-bottom: 1px solid #f59e0b;
+  font-size: 11px;
+  font-weight: 600;
+  color: #92400e;
+  flex-shrink: 0;
+}
+.cvs-link-bar button {
+  background: none;
+  border: 1px solid #d97706;
+  border-radius: 4px;
+  color: #92400e;
+  font-size: 10px;
+  cursor: pointer;
+  padding: 2px 8px;
+}
+.cvs-link-bar button:hover {
+  background: #fde68a;
 }
 
 /* ── SVG canvas area ─────────────────────────────────────────── */
@@ -60,6 +93,9 @@
 .cvs-svg.cvs-panning {
   cursor: grabbing;
 }
+.cvs-svg.cvs-linking {
+  cursor: crosshair;
+}
 
 /* ── Node text styles ────────────────────────────────────────── */
 .cvs-node-title {
@@ -70,7 +106,7 @@
   pointer-events: none;
 }
 .cvs-node-desc {
-  fill: #94a3b8;
+  fill: #64748b;
   font-size: 10px;
   font-family: system-ui, -apple-system, sans-serif;
   pointer-events: none;
@@ -85,8 +121,8 @@
 /* ── Title inline edit ───────────────────────────────────────── */
 .cvs-title-input {
   width: 100%;
-  background: #f1f5f9;
-  color: #f1f5f9;
+  background: #f8fafc;
+  color: #1e293b;
   border: 1px solid #3b82f6;
   border-radius: 3px;
   padding: 2px 6px;
@@ -100,11 +136,11 @@
 .cvs-ctx-menu {
   position: fixed;
   z-index: 9999;
-  background: #e2e8f0;
-  border: 1px solid #94a3b8;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
   border-radius: 6px;
   box-shadow: 0 8px 24px rgba(0,0,0,0.15);
-  min-width: 140px;
+  min-width: 170px;
   overflow: hidden;
 }
 .cvs-ctx-menu button {
@@ -119,7 +155,41 @@
   cursor: pointer;
 }
 .cvs-ctx-menu button:hover {
-  background: #cbd5e1;
+  background: #f1f5f9;
+}
+.cvs-ctx-divider {
+  height: 1px;
+  background: #e2e8f0;
+  margin: 2px 0;
+}
+.cvs-ctx-danger {
+  color: #dc2626 !important;
+}
+.cvs-ctx-danger:hover {
+  background: #fef2f2 !important;
+}
+
+/* ── Toast ────────────────────────────────────────────────────── */
+.cvs-toast {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: #1e293b;
+  color: #f1f5f9;
+  padding: 6px 16px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s, transform 0.2s;
+  white-space: nowrap;
+  z-index: 100;
+}
+.cvs-toast.on {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
 }
 
 /* ── Empty state ─────────────────────────────────────────────── */
@@ -134,5 +204,5 @@
   pointer-events: none;
 }
 .cvs-empty strong {
-  color: #94a3b8;
+  color: #64748b;
 }

@@ -50,6 +50,19 @@ export default function CanvasPanel({ projectId }: CanvasPanelProps) {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editVal, setEditVal] = useState('');
 
+  /* ── Link mode state ─────────────────────────────────────────── */
+  const [linkMode, setLinkMode] = useState<'linear' | 'nested' | null>(null);
+  const [linkSource, setLinkSource] = useState<number | null>(null);
+
+  /* ── Toast state ─────────────────────────────────────────────── */
+  const [toast, setToast] = useState('');
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function showToast(msg: string) {
+    setToast(msg);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(''), 3000);
+  }
+
   /* ── Load canvas data ────────────────────────────────────────── */
   useEffect(() => { fetchCanvas(); }, [fetchCanvas]);
 
@@ -84,8 +97,14 @@ export default function CanvasPanel({ projectId }: CanvasPanelProps) {
   /* ── PAN handlers ────────────────────────────────────────────── */
   function handleBgMouseDown(e: React.MouseEvent) {
     if (e.button !== 0) return;
-    // Only pan if clicking the SVG background (not a node)
     if ((e.target as Element).closest('.cvs-node-group')) return;
+    // If in link mode, clicking background cancels it
+    if (linkMode) {
+      setLinkMode(null);
+      setLinkSource(null);
+      showToast('Link cancelled');
+      return;
+    }
     setIsPanning(true);
     panStart.current = { x: e.clientX, y: e.clientY, vx: viewX, vy: viewY };
     setCtxMenu(null);
@@ -124,7 +143,6 @@ export default function CanvasPanel({ projectId }: CanvasPanelProps) {
     e.preventDefault();
     const factor = e.deltaY < 0 ? 1.1 : 0.9;
     const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom * factor));
-    // Zoom toward cursor
     const rect = svgRef.current?.getBoundingClientRect();
     if (rect) {
       const mx = (e.clientX - rect.left) / zoom + viewX;
@@ -141,10 +159,102 @@ export default function CanvasPanel({ projectId }: CanvasPanelProps) {
     }
   }
 
+  /* ══════════════════════════════════════════════════════════════
+     LINK MODE — P→C (nested) and P→P (linear) connection
+     ══════════════════════════════════════════════════════════════ */
+
+  /* Check if nodeId is a descendant of ancestorId */
+  function isDescendant(nodeId: number, ancestorId: number): boolean {
+    let current = nodes.find(n => n.id === nodeId);
+    while (current && current.parentId !== null) {
+      if (current.parentId === ancestorId) return true;
+      current = nodes.find(n => n.id === current!.parentId);
+    }
+    return false;
+  }
+
+  function handleLinkClick(nodeId: number) {
+    if (!linkMode) return;
+
+    if (linkSource === null) {
+      // First click: set source
+      setLinkSource(nodeId);
+      setSelectedId(nodeId);
+      showToast(`Now click the ${linkMode === 'nested' ? 'child' : 'second'} node`);
+      return;
+    }
+
+    // Second click: set target
+    if (nodeId === linkSource) {
+      showToast('Cannot link a node to itself');
+      return;
+    }
+
+    if (linkMode === 'nested') {
+      // P→C: source = parent, nodeId = child
+      // Prevent circular: child can't already be an ancestor of parent
+      if (isDescendant(linkSource, nodeId)) {
+        showToast('Cannot create circular link');
+        setLinkMode(null);
+        setLinkSource(null);
+        return;
+      }
+      updateNodes([{
+        id: nodeId,
+        parentId: linkSource,
+        relationshipType: 'nested',
+      } as Partial<CanvasNode>]);
+      showToast('✓ Parent→Child link created');
+    } else {
+      // P→P: source = parent, nodeId = sibling child with linear relationship
+      if (isDescendant(linkSource, nodeId)) {
+        showToast('Cannot create circular link');
+        setLinkMode(null);
+        setLinkSource(null);
+        return;
+      }
+      updateNodes([{
+        id: nodeId,
+        parentId: linkSource,
+        relationshipType: 'linear',
+      } as Partial<CanvasNode>]);
+      showToast('✓ Parent→Parent link created');
+    }
+
+    setLinkMode(null);
+    setLinkSource(null);
+  }
+
+  /* ── Detach selected node from parent ────────────────────────── */
+  function handleDetachNode() {
+    if (selectedId === null) {
+      showToast('Select a node first');
+      return;
+    }
+    const node = nodes.find(n => n.id === selectedId);
+    if (!node || node.parentId === null) {
+      showToast('Node has no parent to detach from');
+      return;
+    }
+    updateNodes([{
+      id: selectedId,
+      parentId: null,
+      relationshipType: '',
+    } as Partial<CanvasNode>]);
+    showToast('✓ Node detached from parent');
+  }
+
   /* ── NODE DRAG handlers ──────────────────────────────────────── */
   function handleNodeMouseDown(e: React.MouseEvent, nodeId: number) {
     if (e.button !== 0) return;
     e.stopPropagation();
+
+    // If in link mode, handle link click instead of drag
+    if (linkMode) {
+      handleLinkClick(nodeId);
+      return;
+    }
+
     const node = nodes.find(n => n.id === nodeId);
     if (!node) return;
     const pos = screenToCanvas(e.clientX, e.clientY);
@@ -162,12 +272,9 @@ export default function CanvasPanel({ projectId }: CanvasPanelProps) {
       const pos = screenToCanvas(e.clientX, e.clientY);
       const nx = pos.x - dragOffset.x;
       const ny = pos.y - dragOffset.y;
-      // Update locally for instant feedback
       const idx = nodes.findIndex(n => n.id === dragNodeId);
       if (idx >= 0) {
         nodes[idx] = { ...nodes[idx], x: nx, y: ny };
-        // Force re-render by triggering state update
-        // We directly mutate and then trigger via a dummy state
         forceUpdate();
       }
     }
@@ -203,7 +310,6 @@ export default function CanvasPanel({ projectId }: CanvasPanelProps) {
 
   function handleDeleteNode() {
     if (ctxMenu) {
-      // Also un-parent any children
       const childUpdates = nodes
         .filter(n => n.parentId === ctxMenu.nodeId)
         .map(n => ({ id: n.id, parentId: null, relationshipType: '' }));
@@ -216,8 +322,22 @@ export default function CanvasPanel({ projectId }: CanvasPanelProps) {
     }
   }
 
+  function handleCtxDetach() {
+    if (ctxMenu) {
+      const node = nodes.find(n => n.id === ctxMenu.nodeId);
+      if (node && node.parentId !== null) {
+        updateNodes([{ id: ctxMenu.nodeId, parentId: null, relationshipType: '' } as Partial<CanvasNode>]);
+        showToast('✓ Node detached from parent');
+      } else {
+        showToast('Node has no parent');
+      }
+      setCtxMenu(null);
+    }
+  }
+
   /* ── Double-click to edit title ──────────────────────────────── */
   function handleNodeDblClick(nodeId: number) {
+    if (linkMode) return; // Don't edit while linking
     const node = nodes.find(n => n.id === nodeId);
     if (!node) return;
     setEditingId(nodeId);
@@ -286,7 +406,18 @@ export default function CanvasPanel({ projectId }: CanvasPanelProps) {
   /* ── Keyboard: Delete, Escape ────────────────────────────────── */
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Delete' && selectedId !== null && editingId === null) {
+      if (e.key === 'Escape') {
+        if (linkMode) {
+          setLinkMode(null);
+          setLinkSource(null);
+          showToast('Link cancelled');
+          return;
+        }
+        setCtxMenu(null);
+        if (editingId !== null) { setEditingId(null); }
+        else { setSelectedId(null); }
+      }
+      if (e.key === 'Delete' && selectedId !== null && editingId === null && !linkMode) {
         const childUpdates = nodes
           .filter(n => n.parentId === selectedId)
           .map(n => ({ id: n.id, parentId: null, relationshipType: '' }));
@@ -296,21 +427,15 @@ export default function CanvasPanel({ projectId }: CanvasPanelProps) {
         deleteNode(selectedId);
         setSelectedId(null);
       }
-      if (e.key === 'Escape') {
-        setCtxMenu(null);
-        if (editingId !== null) { setEditingId(null); }
-        else { setSelectedId(null); }
-      }
     }
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [selectedId, editingId, nodes, updateNodes, deleteNode]);
+  }, [selectedId, editingId, nodes, updateNodes, deleteNode, linkMode]);
 
   /* ── Connector path builder ──────────────────────────────────── */
   function buildConnectorPath(parent: CanvasNode, child: CanvasNode): { d: string; color: string } {
     const rel = child.relationshipType || 'linear';
     if (rel === 'nested') {
-      // Nested: parent bottom-center → elbow → child left-center
       const x1 = parent.x + parent.w / 2;
       const y1 = parent.y + parent.h;
       const x2 = child.x;
@@ -321,7 +446,6 @@ export default function CanvasPanel({ projectId }: CanvasPanelProps) {
         color: '#e07020',
       };
     } else {
-      // Linear: parent bottom-left → elbow → child top-left
       const x1 = parent.x;
       const y1 = parent.y + parent.h;
       const x2 = child.x;
@@ -348,6 +472,28 @@ export default function CanvasPanel({ projectId }: CanvasPanelProps) {
       {/* ── Action bar ───────────────────────────────────────── */}
       <div className="cvs-actions">
         <button className="cvs-btn" onClick={handleAddNode} title="Add a new topic node">＋ Add Node</button>
+        <button
+          className="cvs-btn"
+          onClick={handleDetachNode}
+          title="Detach selected node from its parent"
+        >⊟ Detach</button>
+        <span className="cvs-sep" />
+        <button
+          className={`cvs-btn ${linkMode === 'linear' ? 'cvs-btn-active' : ''}`}
+          onClick={() => {
+            if (linkMode === 'linear') { setLinkMode(null); setLinkSource(null); }
+            else { setLinkMode('linear'); setLinkSource(null); showToast('Click the first (parent) node'); }
+          }}
+          title="Parent-Parent link: click two nodes to connect as siblings"
+        >↔ P–P Link</button>
+        <button
+          className={`cvs-btn ${linkMode === 'nested' ? 'cvs-btn-active' : ''}`}
+          onClick={() => {
+            if (linkMode === 'nested') { setLinkMode(null); setLinkSource(null); }
+            else { setLinkMode('nested'); setLinkSource(null); showToast('Click the parent node first'); }
+          }}
+          title="Parent-Child link: click parent then child to nest"
+        >↓ P–C Link</button>
         <span className="cvs-sep" />
         <button className="cvs-btn" onClick={zoomIn} title="Zoom in">＋ Zoom</button>
         <button className="cvs-btn" onClick={zoomOut} title="Zoom out">− Zoom</button>
@@ -356,10 +502,23 @@ export default function CanvasPanel({ projectId }: CanvasPanelProps) {
         <span className="cvs-zoom-label">{Math.round(zoom * 100)}%</span>
       </div>
 
+      {/* ── Link mode indicator bar ──────────────────────────── */}
+      {linkMode && (
+        <div className="cvs-link-bar">
+          <span>
+            🔗 {linkMode === 'nested' ? 'P→C' : 'P→P'} Link Mode
+            {linkSource !== null
+              ? ` — Source: "${nodes.find(n => n.id === linkSource)?.title || '?'}" → click target node`
+              : ' — Click the first node'}
+          </span>
+          <button onClick={() => { setLinkMode(null); setLinkSource(null); }}>✕ Cancel</button>
+        </div>
+      )}
+
       {/* ── SVG Canvas ───────────────────────────────────────── */}
       <svg
         ref={svgRef}
-        className={`cvs-svg ${isPanning ? 'cvs-panning' : ''}`}
+        className={`cvs-svg ${isPanning ? 'cvs-panning' : ''} ${linkMode ? 'cvs-linking' : ''}`}
         viewBox={viewBox}
         onMouseDown={handleBgMouseDown}
         onWheel={handleWheel}
@@ -382,8 +541,11 @@ export default function CanvasPanel({ projectId }: CanvasPanelProps) {
           return (
             <g key={`conn-${child.id}`}>
               <path d={d} fill="none" stroke={color} strokeWidth={2 / zoom} strokeLinejoin="round" strokeLinecap="round" />
-              {/* Arrow at end */}
-              <circle cx={child.relationshipType === 'nested' ? child.x : child.x} cy={child.relationshipType === 'nested' ? child.y + child.h / 2 : child.y} r={3 / zoom} fill={color} />
+              <circle
+                cx={child.relationshipType === 'nested' ? child.x : child.x}
+                cy={child.relationshipType === 'nested' ? child.y + child.h / 2 : child.y}
+                r={3 / zoom} fill={color}
+              />
             </g>
           );
         })}
@@ -408,6 +570,7 @@ export default function CanvasPanel({ projectId }: CanvasPanelProps) {
         {/* Nodes */}
         {nodes.map(node => {
           const isSelected = node.id === selectedId;
+          const isLinkSource = node.id === linkSource;
           const isDragging = node.id === dragNodeId;
           const accentColor = getPathwayColor(node.pathwayId);
           const kwCount = (node.linkedKwIds || []).length;
@@ -421,10 +584,22 @@ export default function CanvasPanel({ projectId }: CanvasPanelProps) {
               onMouseDown={e => handleNodeMouseDown(e, node.id)}
               onContextMenu={e => handleNodeContextMenu(e, node.id)}
               onDoubleClick={() => handleNodeDblClick(node.id)}
-              style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
+              style={{ cursor: linkMode ? 'crosshair' : isDragging ? 'grabbing' : 'grab' }}
             >
+              {/* Link source highlight */}
+              {isLinkSource && (
+                <rect
+                  x={-4 / zoom} y={-4 / zoom}
+                  width={node.w + 8 / zoom} height={node.h + 8 / zoom}
+                  rx={(CORNER_R + 3) / zoom} ry={(CORNER_R + 3) / zoom}
+                  fill="none" stroke={linkMode === 'nested' ? '#e07020' : '#1f6feb'}
+                  strokeWidth={3 / zoom}
+                  opacity={0.8}
+                />
+              )}
+
               {/* Selection outline */}
-              {isSelected && (
+              {isSelected && !isLinkSource && (
                 <rect
                   x={-3 / zoom} y={-3 / zoom}
                   width={node.w + 6 / zoom} height={node.h + 6 / zoom}
@@ -438,8 +613,8 @@ export default function CanvasPanel({ projectId }: CanvasPanelProps) {
               <rect
                 x={0} y={0} width={node.w} height={node.h}
                 rx={CORNER_R} ry={CORNER_R}
-                fill="#ffffff" stroke={isSelected ? '#3b82f6' : '#cbd5e1'}
-                strokeWidth={isSelected ? 1.5 / zoom : 1 / zoom}
+                fill="#ffffff" stroke={isLinkSource ? (linkMode === 'nested' ? '#e07020' : '#1f6feb') : isSelected ? '#3b82f6' : '#cbd5e1'}
+                strokeWidth={isSelected || isLinkSource ? 1.5 / zoom : 1 / zoom}
               />
 
               {/* Accent stripe */}
@@ -448,7 +623,6 @@ export default function CanvasPanel({ projectId }: CanvasPanelProps) {
                 rx={CORNER_R} ry={CORNER_R}
                 fill={accentColor}
               />
-              {/* Clip accent stripe to left side only */}
               <rect x={ACCENT_W} y={0} width={ACCENT_W} height={node.h} fill="#ffffff" />
 
               {/* Title */}
@@ -502,14 +676,31 @@ export default function CanvasPanel({ projectId }: CanvasPanelProps) {
       {/* ── Context menu ─────────────────────────────────────── */}
       {ctxMenu && (
         <div className="cvs-ctx-menu" style={{ left: ctxMenu.x, top: ctxMenu.y }}>
-          <button onClick={handleDeleteNode}>🗑 Delete Node</button>
           <button onClick={() => {
             handleNodeDblClick(ctxMenu.nodeId);
             setCtxMenu(null);
           }}>✏️ Rename</button>
+          <button onClick={handleCtxDetach}>⊟ Detach from Parent</button>
+          <button onClick={() => {
+            setLinkMode('nested');
+            setLinkSource(ctxMenu.nodeId);
+            setCtxMenu(null);
+            showToast('Now click the child node');
+          }}>↓ Make Parent of…</button>
+          <button onClick={() => {
+            setLinkMode('linear');
+            setLinkSource(ctxMenu.nodeId);
+            setCtxMenu(null);
+            showToast('Now click the sibling node');
+          }}>↔ Link as Sibling to…</button>
+          <div className="cvs-ctx-divider" />
+          <button className="cvs-ctx-danger" onClick={handleDeleteNode}>🗑 Delete Node</button>
           <button onClick={() => setCtxMenu(null)}>✕ Cancel</button>
         </div>
       )}
+
+      {/* ── Toast ─────────────────────────────────────────────── */}
+      <div className={`cvs-toast ${toast ? 'on' : ''}`}>{toast}</div>
 
       {/* ── Empty state ──────────────────────────────────────── */}
       {nodes.length === 0 && !isPanning && (
