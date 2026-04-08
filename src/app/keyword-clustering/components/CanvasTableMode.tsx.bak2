@@ -31,16 +31,6 @@ interface TableRow {
 /* ── Editable cell types ─────────────────────────────────────── */
 type EditCell = { nodeId: number; col: 'title' | 'altTitles' | 'relationship' | 'description' } | null;
 
-/* ── Parsed TSV row ──────────────────────────────────────────── */
-interface ParsedTsvRow {
-  title: string;
-  altTitles: string[];
-  relationship: string;
-  description: string;
-  parentTitle: string;
-  keywordsRaw: string;
-}
-
 export default function CanvasTableMode({
   nodes, pathways, sisterLinks, allKeywords,
   onSelectNode, onUpdateNodes, onAddNode, onDeleteNode,
@@ -55,12 +45,6 @@ export default function CanvasTableMode({
   const [editMode, setEditMode] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-
-  /* ── TSV import state ───────────────────────────────────────── */
-  const [showTsvOverlay, setShowTsvOverlay] = useState(false);
-  const [tsvText, setTsvText] = useState('');
-  const [tsvProcessing, setTsvProcessing] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   function showToast(msg: string) {
     setToast(msg);
@@ -168,10 +152,11 @@ export default function CanvasTableMode({
   }
 
   /* ── Start editing a cell ──────────────────────────────────── */
-  function startEdit(nodeId: number, col: NonNullable<EditCell>['col'], currentVal: string) {
+  function startEdit(nodeId: number, col: EditCell extends null ? never : NonNullable<EditCell>['col'], currentVal: string) {
     if (!editMode) return;
     setEditCell({ nodeId, col });
     setEditVal(currentVal);
+    // Focus will happen via useEffect or autoFocus
   }
 
   /* ── Commit an edit ────────────────────────────────────────── */
@@ -207,8 +192,12 @@ export default function CanvasTableMode({
     setEditCell(null);
   }
 
-  function cancelEdit() { setEditCell(null); }
+  /* ── Cancel edit ───────────────────────────────────────────── */
+  function cancelEdit() {
+    setEditCell(null);
+  }
 
+  /* ── Key handler for edit inputs ───────────────────────────── */
   function handleEditKey(e: React.KeyboardEvent) {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commitEdit(); }
     if (e.key === 'Escape') { cancelEdit(); }
@@ -229,6 +218,7 @@ export default function CanvasTableMode({
   function handleDeleteRow(nodeId: number, e: React.MouseEvent) {
     e.stopPropagation();
     if (!onDeleteNode) return;
+    // Detach children first (reparent to null)
     const children = nodes.filter(n => n.parentId === nodeId);
     if (children.length > 0 && onUpdateNodes) {
       onUpdateNodes(children.map(c => ({ id: c.id, parentId: null, relationshipType: '' } as Partial<CanvasNode>)));
@@ -236,195 +226,6 @@ export default function CanvasTableMode({
     onDeleteNode(nodeId);
     if (selectedRow === nodeId) setSelectedRow(null);
     showToast('\u2713 Row deleted');
-  }
-
-  /* ══════════════════════════════════════════════════════════════
-     TSV IMPORT — Parse, match by title, update/create
-     ══════════════════════════════════════════════════════════════ */
-
-  function parseTsv(raw: string): ParsedTsvRow[] {
-    const lines = raw.split('\n').map(l => l.replace(/\r$/, ''));
-    if (lines.length === 0) return [];
-
-    // Detect and skip header row
-    const firstLower = lines[0].toLowerCase();
-    const hasHeader = firstLower.includes('topic') || firstLower.includes('depth');
-    const dataLines = hasHeader ? lines.slice(1) : lines;
-
-    // Column index map — defaults match our export order:
-    // Depth(0) Topic(1) AltTitles(2) Relationship(3) ParentTopic(4) ConversionPath(5) SisterNodes(6) Keywords(7) Description(8)
-    const colMap = { title: 1, altTitles: 2, relationship: 3, parentTitle: 4, keywords: 7, description: 8 };
-
-    if (hasHeader) {
-      const hCols = lines[0].split('\t').map(h => h.trim().toLowerCase());
-      hCols.forEach((h, i) => {
-        if (h.includes('topic') && !h.includes('parent') && !h.includes('description') && !h.includes('sister')) colMap.title = i;
-        else if (h.includes('alternate') || h.includes('alt title')) colMap.altTitles = i;
-        else if (h.includes('relationship') || h === 'rel') colMap.relationship = i;
-        else if (h.includes('parent')) colMap.parentTitle = i;
-        else if (h.includes('keyword')) colMap.keywords = i;
-        else if (h.includes('description')) colMap.description = i;
-      });
-    }
-
-    const result: ParsedTsvRow[] = [];
-    for (const line of dataLines) {
-      if (!line.trim()) continue;
-      const cols = line.split('\t');
-      const rawTitle = (cols[colMap.title] || '').replace(/^[\s\u00A0]+/, '').trim();
-      if (!rawTitle) continue;
-
-      result.push({
-        title: rawTitle,
-        altTitles: (cols[colMap.altTitles] || '').trim()
-          ? (cols[colMap.altTitles] || '').split(',').map(s => s.trim()).filter(Boolean)
-          : [],
-        relationship: (cols[colMap.relationship] || '').trim().toLowerCase(),
-        description: (cols[colMap.description] || '').trim(),
-        parentTitle: (cols[colMap.parentTitle] || '').replace(/^[\s\u00A0]+/, '').trim(),
-        keywordsRaw: (cols[colMap.keywords] || '').trim(),
-      });
-    }
-    return result;
-  }
-
-  async function applyTsvData(parsed: ParsedTsvRow[]) {
-    if (parsed.length === 0) { showToast('\u26A0 No valid rows found in TSV'); return; }
-    if (!onUpdateNodes || !onAddNode) { showToast('\u26A0 Edit callbacks not available'); return; }
-
-    setTsvProcessing(true);
-    let updated = 0;
-    let created = 0;
-
-    // Build title→node lookup (case-insensitive)
-    const titleMap = new Map<string, CanvasNode>();
-    for (const n of nodes) {
-      if (n.title) titleMap.set(n.title.toLowerCase(), n);
-    }
-
-    const updates: Partial<CanvasNode>[] = [];
-    const toCreate: ParsedTsvRow[] = [];
-
-    for (const row of parsed) {
-      const existing = titleMap.get(row.title.toLowerCase());
-      if (existing) {
-        const upd: Partial<CanvasNode> = { id: existing.id };
-        let changed = false;
-
-        if (row.title !== (existing.title || '')) {
-          upd.title = row.title; changed = true;
-        }
-        if (JSON.stringify(row.altTitles) !== JSON.stringify((existing.altTitles || []).filter((t: string) => t))) {
-          upd.altTitles = row.altTitles; changed = true;
-        }
-        const rel = row.relationship === 'linear' || row.relationship === 'nested' ? row.relationship : '';
-        if (rel !== (existing.relationshipType || '')) {
-          upd.relationshipType = rel; changed = true;
-        }
-        if (row.description && row.description !== (existing.description || '')) {
-          upd.description = row.description; changed = true;
-        }
-
-        // Handle keyword placements from TSV (e.g. "keyword [p], other [s]")
-        if (row.keywordsRaw) {
-          const kwEntries = row.keywordsRaw.split(',').map(s => s.trim()).filter(Boolean);
-          const newPlacements: Record<string, string> = { ...(existing.kwPlacements || {}) };
-          let linkedIds = [...(existing.linkedKwIds || []) as string[]];
-          let kwChanged = false;
-          for (const entry of kwEntries) {
-            const match = entry.match(/^(.+?)\s*\[([ps])\]\s*$/);
-            const kwText = match ? match[1].trim() : entry.replace(/\s*\[[ps]\]\s*$/, '').trim();
-            const placement = match ? match[2] : 'p';
-            const kwObj = allKeywords.find(k => k.keyword.toLowerCase() === kwText.toLowerCase());
-            if (kwObj) {
-              if (newPlacements[kwObj.id] !== placement) {
-                newPlacements[kwObj.id] = placement;
-                kwChanged = true;
-              }
-              if (!linkedIds.includes(kwObj.id)) {
-                linkedIds.push(kwObj.id);
-                kwChanged = true;
-              }
-            }
-          }
-          if (kwChanged) {
-            upd.linkedKwIds = linkedIds;
-            upd.kwPlacements = newPlacements;
-            changed = true;
-          }
-        }
-
-        if (changed) { updates.push(upd); updated++; }
-      } else {
-        toCreate.push(row);
-      }
-    }
-
-    // Batch update existing nodes
-    if (updates.length > 0) {
-      onUpdateNodes(updates);
-    }
-
-    // Create new nodes
-    const newNodesByTitle = new Map<string, CanvasNode>();
-    for (const row of toCreate) {
-      const rel = row.relationship === 'linear' || row.relationship === 'nested' ? row.relationship : '';
-      const newNode = await onAddNode({
-        title: row.title,
-        description: row.description,
-        altTitles: row.altTitles,
-        relationshipType: rel,
-        x: 0,
-        y: (nodes.length + created + 1) * 150,
-        w: 220,
-        h: 120,
-      });
-      if (newNode) {
-        newNodesByTitle.set(row.title.toLowerCase(), newNode);
-        created++;
-      }
-    }
-
-    // Set parent relationships for new nodes
-    const parentUpdates: Partial<CanvasNode>[] = [];
-    for (const row of toCreate) {
-      if (!row.parentTitle) continue;
-      const childNode = newNodesByTitle.get(row.title.toLowerCase());
-      if (!childNode) continue;
-      const parent = titleMap.get(row.parentTitle.toLowerCase()) || newNodesByTitle.get(row.parentTitle.toLowerCase());
-      if (parent) {
-        const rel = row.relationship === 'linear' || row.relationship === 'nested' ? row.relationship : 'nested';
-        parentUpdates.push({ id: childNode.id, parentId: parent.id, relationshipType: rel } as Partial<CanvasNode>);
-      }
-    }
-    if (parentUpdates.length > 0) {
-      onUpdateNodes(parentUpdates);
-    }
-
-    setTsvProcessing(false);
-    showToast(`\u2713 TSV imported: ${updated} updated, ${created} created`);
-  }
-
-  async function handleTsvPaste() {
-    const parsed = parseTsv(tsvText);
-    await applyTsvData(parsed);
-    setShowTsvOverlay(false);
-    setTsvText('');
-  }
-
-  function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async (ev) => {
-      const text = ev.target?.result;
-      if (typeof text === 'string') {
-        const parsed = parseTsv(text);
-        await applyTsvData(parsed);
-      }
-    };
-    reader.readAsText(file);
-    if (fileInputRef.current) fileInputRef.current.value = '';
   }
 
   /* ── Render editable cell or static ────────────────────────── */
@@ -482,6 +283,7 @@ export default function CanvasTableMode({
       );
     }
 
+    // Static cell — double-click or single-click in edit mode to start editing
     return (
       <td
         className={`${className || ''} ${editMode ? 'ctm-editable' : ''}`}
@@ -512,57 +314,8 @@ export default function CanvasTableMode({
             + Add Row
           </button>
         )}
-        <span className="ctm-sep" />
-        <button className="ctm-btn" onClick={() => { setShowTsvOverlay(true); setTsvText(''); }} title="Paste TSV data to update canvas">
-          📋 Paste TSV
-        </button>
-        <button className="ctm-btn" onClick={() => fileInputRef.current?.click()} title="Upload a TSV file to update canvas">
-          📁 Upload TSV
-        </button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".tsv,.txt,.csv"
-          style={{ display: 'none' }}
-          onChange={handleFileUpload}
-        />
         <span className="ctm-count">{rows.length} topic{rows.length !== 1 ? 's' : ''}</span>
       </div>
-
-      {/* TSV Paste Overlay */}
-      {showTsvOverlay && (
-        <div className="ctm-tsv-overlay">
-          <div className="ctm-tsv-panel">
-            <div className="ctm-tsv-header">
-              <strong>Paste TSV Data</strong>
-              <button className="ctm-tsv-close" onClick={() => setShowTsvOverlay(false)}>✕</button>
-            </div>
-            <p className="ctm-tsv-hint">
-              Paste tab-separated data below. Rows are matched to existing topics by title.
-              New titles create new nodes. Expected columns: Depth, Topic, Alt Titles, Relationship,
-              Parent Topic, Conversion Path, Sister Nodes, Keywords, Description.
-            </p>
-            <textarea
-              className="ctm-tsv-textarea"
-              value={tsvText}
-              onChange={e => setTsvText(e.target.value)}
-              placeholder="Paste TSV here..."
-              rows={12}
-              autoFocus
-            />
-            <div className="ctm-tsv-actions">
-              <button className="ctm-btn" onClick={() => setShowTsvOverlay(false)}>Cancel</button>
-              <button
-                className="ctm-btn ctm-btn-add"
-                onClick={handleTsvPaste}
-                disabled={!tsvText.trim() || tsvProcessing}
-              >
-                {tsvProcessing ? 'Processing...' : '\u2713 Apply TSV'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Table */}
       <div className="ctm-table-wrap">
@@ -595,6 +348,7 @@ export default function CanvasTableMode({
                   className={selectedRow === r.nodeId ? 'ctm-row-sel' : ''}
                   onClick={() => handleRowClick(r.nodeId)}
                 >
+                  {/* Delete button (edit mode only) */}
                   {editMode && (
                     <td className="ctm-td-actions">
                       <button
@@ -605,10 +359,12 @@ export default function CanvasTableMode({
                     </td>
                   )}
 
+                  {/* Depth (not editable — derived) */}
                   <td className="ctm-td-depth" style={{ color: depthColor(r.depth) }}>
                     {r.depth}
                   </td>
 
+                  {/* Topic (editable) */}
                   {renderCell(r.nodeId, 'title', (
                     <>
                       <span className="ctm-indent" style={{ width: r.depth * 16 }} />
@@ -617,8 +373,10 @@ export default function CanvasTableMode({
                     </>
                   ), r.title, 'ctm-td-topic')}
 
+                  {/* Alt Titles (editable — comma-separated) */}
                   {renderCell(r.nodeId, 'altTitles', r.altTitles.join(', '), r.altTitles.join(', '), 'ctm-td-alt')}
 
+                  {/* Relationship (editable — dropdown) */}
                   {renderCell(r.nodeId, 'relationship', (
                     r.relationship ? (
                       <span className={`ctm-rel-badge ctm-rel-${r.relationship}`}>
@@ -627,10 +385,16 @@ export default function CanvasTableMode({
                     ) : null
                   ), r.relationship, 'ctm-td-rel')}
 
+                  {/* Parent Topic (not editable — derived from tree structure) */}
                   <td className="ctm-td-parent">{r.parentTitle}</td>
+
+                  {/* Conversion Path (not editable — derived) */}
                   <td className="ctm-td-path">{r.conversionPath}</td>
+
+                  {/* Sister Nodes (not editable — managed via canvas links) */}
                   <td className="ctm-td-sister">{r.sisterNodes.join(', ')}</td>
 
+                  {/* Keywords (not editable — managed via drag-drop) */}
                   <td className="ctm-td-kw">
                     {r.keywords.map((k, i) => (
                       <span key={i} className={`ctm-kw-pill ${k.placement === 's' ? 'ctm-kw-sec' : ''}`}>
@@ -640,6 +404,7 @@ export default function CanvasTableMode({
                     ))}
                   </td>
 
+                  {/* Description (editable) */}
                   {renderCell(r.nodeId, 'description', r.description, r.description, 'ctm-td-desc')}
                 </tr>
               ))
