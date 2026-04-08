@@ -23,7 +23,7 @@ interface CanvasPanelProps {
 
 export default function CanvasPanel({ projectId }: CanvasPanelProps) {
   const {
-    nodes, canvasState, fetchCanvas,
+    nodes, canvasState, sisterLinks, fetchCanvas,
     addNode, updateNodes, deleteNode, updateCanvasState,
   } = useCanvas(projectId);
 
