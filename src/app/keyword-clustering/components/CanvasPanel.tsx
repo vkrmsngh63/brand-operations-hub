@@ -459,7 +459,7 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
 
       <div className="cvs-body">
         {canvasMode === "table" ? (
-          <CanvasTableMode nodes={nodes} pathways={pathways} sisterLinks={sisterLinks} allKeywords={allKeywords} onSelectNode={id => { setSelectedId(id); setEditPanelNodeId(id); }} />
+          <CanvasTableMode nodes={nodes} pathways={pathways} sisterLinks={sisterLinks} allKeywords={allKeywords} onSelectNode={id => { setSelectedId(id); setEditPanelNodeId(id); }} onUpdateNodes={updateNodes} onAddNode={addNode} onDeleteNode={deleteNode} />
         ) : (<>
         <div className="cvs-canvas-area" ref={canvasAreaRef} onDragOver={handleCanvasDragOver} onDrop={handleCanvasDrop}>
           <svg ref={svgRef}

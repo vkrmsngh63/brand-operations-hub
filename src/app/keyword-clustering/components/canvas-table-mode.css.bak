@@ -33,25 +33,6 @@
 .ctm-btn:hover {
   background: #94a3b8;
 }
-.ctm-btn-active {
-  background: #3b82f6 !important;
-  color: #fff !important;
-  border-color: #2563eb !important;
-}
-.ctm-btn-add {
-  background: #bbf7d0;
-  border-color: #86efac;
-  color: #166534;
-}
-.ctm-btn-add:hover {
-  background: #86efac;
-}
-.ctm-sep {
-  width: 1px;
-  height: 16px;
-  background: #94a3b8;
-  flex-shrink: 0;
-}
 .ctm-count {
   font-size: 10px;
   color: #64748b;
@@ -111,7 +92,6 @@
 .ctm-th-sister { min-width: 80px; }
 .ctm-th-kw { min-width: 160px; }
 .ctm-th-desc { min-width: 160px; }
-.ctm-th-actions { width: 30px; text-align: center; }
 
 /* ── Depth cell ──────────────────────────────────────────────── */
 .ctm-td-depth {
@@ -254,105 +234,4 @@
 .ctm-toast.on {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
-}
-
-/* ── Edit Mode Styles ────────────────────────────────────────── */
-
-/* Editable cell hover hint */
-.ctm-editable {
-  cursor: text;
-  position: relative;
-}
-.ctm-editable:hover {
-  outline: 1px dashed #93c5fd;
-  outline-offset: -1px;
-  background: #eff6ff !important;
-}
-
-/* Active editing cell */
-.ctm-editing {
-  padding: 2px 4px !important;
-}
-
-/* Edit input */
-.ctm-edit-input {
-  width: 100%;
-  padding: 3px 6px;
-  font-size: 11px;
-  font-family: inherit;
-  border: 1.5px solid #3b82f6;
-  border-radius: 3px;
-  outline: none;
-  background: #fff;
-  color: #1e293b;
-  box-sizing: border-box;
-}
-.ctm-edit-input:focus {
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
-}
-
-/* Edit textarea (for description) */
-.ctm-edit-textarea {
-  width: 100%;
-  padding: 3px 6px;
-  font-size: 10px;
-  font-family: inherit;
-  border: 1.5px solid #3b82f6;
-  border-radius: 3px;
-  outline: none;
-  background: #fff;
-  color: #1e293b;
-  resize: vertical;
-  min-height: 40px;
-  line-height: 1.4;
-  box-sizing: border-box;
-}
-.ctm-edit-textarea:focus {
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
-}
-
-/* Edit select (for relationship) */
-.ctm-edit-select {
-  width: 100%;
-  padding: 3px 4px;
-  font-size: 10px;
-  font-family: inherit;
-  border: 1.5px solid #3b82f6;
-  border-radius: 3px;
-  outline: none;
-  background: #fff;
-  color: #1e293b;
-  cursor: pointer;
-  box-sizing: border-box;
-}
-.ctm-edit-select:focus {
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
-}
-
-/* Actions column (delete button) */
-.ctm-td-actions {
-  text-align: center;
-  width: 30px;
-  padding: 4px 2px !important;
-}
-.ctm-del-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  border: none;
-  border-radius: 3px;
-  background: transparent;
-  color: #94a3b8;
-  font-size: 11px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-  padding: 0;
-  line-height: 1;
-}
-.ctm-del-btn:hover {
-  background: #fee2e2;
-  color: #dc2626;
 }
