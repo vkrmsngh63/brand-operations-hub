@@ -47,7 +47,7 @@
 - [x] Tag header search + topic header search
 - [x] Sort by Volume button
 - [x] Show All reset button
-- [x] Zoom controls (7–18px range)
+- [x] Zoom controls (7–18px range, CSS zoom)
 - [x] Toast notifications
 - [x] useKeywords hook (fetch, add, bulkImport, update, batchUpdate, delete, bulkDelete, reorder)
 - [x] KeywordWorkspace wrapper connecting ASTTable to API
@@ -73,91 +73,44 @@
 
 #### 1b-topics: COMPLETE
 - [x] Inline topic pill editing in AST (TopicCell — click pill to edit, click + to add, clear to delete, pipe '|' delimiter)
-- [x] Batch topic editing across selected rows in AST (delta propagation — same logic as tag batch editing)
-- [x] Right-click topic pill to filter in AST (yellow "📌 Filtering by topic" bar with toggle and ✕ clear)
-- [x] Topic editing in MT vertical view (MtTopicPills — editable pills per keyword sub-row)
-- [x] Batch topic editing in MT (parent handleMtTopicEdit — delta applied to all checked keywords)
-- [x] Right-click topic pill to filter in MT (yellow filter bar with ✕ clear)
-- [x] Topic editing in TIF (TifTopicPills — editable pills per row)
-- [x] Batch topic editing in TIF (parent handleTifTopicEdit — delta applied to all selected rows)
-- [x] Right-click topic pill to filter in TIF (toggle topic filter)
+- [x] Batch topic editing across selected rows in AST (delta propagation)
+- [x] Right-click topic pill to filter in AST (yellow filter bar)
+- [x] Topic editing in MT vertical view, TIF
+- [x] Batch topic editing in MT and TIF
 
 ### 1c. MT + TIF Tables: COMPLETE
-- [x] Main Terms table — basic shell (8 columns, add/paste import, search, filters, column visibility, zoom, column resize, copy table data)
-- [x] Main Terms table — three view modes (comma/vertical/single-line), header click to cycle all rows
-- [x] Main Terms table — vertical view with per-keyword checkboxes, SV, Tags, Topics columns
-- [x] Main Terms table — row checkbox auto-switches to vertical view and checks all keywords
-- [x] Main Terms table — drag-to-reorder rows with blue drop indicator
-- [x] Main Terms table — mark status on checked keywords (Unsorted/Partial/Sorted)
-- [x] Main Terms table — bulk tag operations (add/remove tags on checked keywords)
-- [x] Main Terms table — remove selected rows button
-- [x] Main Terms table — associated keyword search (filters sub-rows in vertical view)
-- [x] Main Terms table — sticky footer input row
-- [x] Main Terms table — visible sub-row borders and synchronized amber hover across all columns
-- [x] Main Terms table — Topic Descriptions column has sub-rows participating in hover sync
-- [x] Terms In Focus table — component created with search, filters, column visibility, zoom, column resize
-- [x] Terms In Focus table — drag-to-reorder, mark status, remove selected, clear all, copy table data
-- [x] Terms In Focus table — active/paused toggle (state lifted to KeywordWorkspace)
-- [x] Terms In Focus table — wired into KeywordWorkspace (3 tables stacked: AST + MT + TIF)
-- [x] Terms In Focus table — tag search, topic search, topic pill click-to-filter
+- [x] Main Terms table — all features (3 view modes, vertical view, drag-reorder, bulk operations, etc.)
+- [x] Terms In Focus table — all features (search, filters, drag-reorder, active/paused toggle, etc.)
+- [x] MT entries state lifted to KeywordWorkspace to survive detach/reattach
 
 ### 1c-mt-extras. MT Additional Features: COMPLETE
-- [x] Apply Main Term As Tag button (adds main term text as tag to all checked keywords in that row)
-- [x] Inline tag input field in header bar (replaces prompt() dialogs with inline text input + Apply/✕)
-- [x] Keyword tag search in control bar (Search kw tags… — filter keyword sub-rows by tags)
-- [x] Keyword topic search in control bar (Search kw topics… — filter keyword sub-rows by topics)
+- [x] Apply Main Term As Tag button
+- [x] Inline tag input field in header bar
+- [x] Keyword tag search + topic search in control bar
 
 ### 1c-behavior. TIF Auto-Add Behavior: COMPLETE
-- [x] Decision: auto-add-on-checkbox (matching original HTML tool behavior)
-- [x] AST checkbox change automatically calls addToTif
-- [x] MT vertical view checkbox change automatically calls addToTif
-- [x] MT row checkbox (select all keywords) automatically calls addToTif
-- [x] ▶ TIF buttons removed from AST and MT
-- [x] TIF Active/Paused toggle state lifted to KeywordWorkspace parent
+- [x] Auto-add-on-checkbox matching original tool behavior
 
 ### 1b-split. Split Topics View (AST, MT, TIF): COMPLETE
-- [x] Split/Combined view toggle on Topics column header (click header to toggle, "Split" badge when active)
-- [x] Split view: one sub-row per topic with checkbox + drag handle + editable topic pill
-- [x] Topic approval status toggle (✓/✕) per topic with batch propagation via checkboxes
-- [x] Topic Descriptions editing in split view (click description text → inline textarea, Ctrl+Enter save, Escape cancel, blur save)
-- [x] Description stored in keyword record (canvasLoc Json field — per-keyword, per-topic text)
-- [x] Batch propagation via topic checkboxes (edit one topic → propagate to all checked topics)
-- [x] Batch propagation via description checkboxes (edit one description → propagate to all checked descriptions)
-- [x] Cross-highlight between topic and description sub-rows on hover (AST, TIF: DOM traversal; MT: mtSplitHighlight helper)
-- [x] Height sync between topic and description sub-row columns (AST/TIF: useEffect; MT: two-level sync)
-- [x] "⊕ add topic" row with matching invisible spacer in descriptions column (MT)
-- [x] Pill overflow control (text-overflow: ellipsis, column boundary respected)
-- [x] Database: canvasLoc (Json) and topicApproved (Json) fields added to Keyword model
-- [x] API: PATCH route updated to handle canvasLoc and topicApproved
+- [x] All split view features (per-topic sub-rows, approval toggle, description editing, batch propagation, height sync)
 
 ### 1-ui. UI Layout Features: COMPLETE
-- [x] Resizable horizontal dividers between AST↔MT and MT↔TIF (drag to resize panel heights)
-- [x] Resizable vertical divider between left panel and canvas (drag to resize panel widths)
-- [x] Panel visibility checkboxes in topbar (show/hide AST, MT, TIF, Canvas — hiding redistributes space)
-- [x] Dividers auto-hide when adjacent panels are hidden
-- [x] Horizontal scroll arrows on table frames (auto-appear when content overflows)
-- [x] ScrollArrows component with ResizeObserver + MutationObserver + scroll detection
+- [x] Resizable dividers, panel visibility checkboxes, scroll arrows
 
 ### 1-detach. Detach / Floating Window Overlays: COMPLETE
-- [x] AST detach overlay (⊞ button → floating window with all AST functionality, synced state, ✕ close)
-- [x] MT detach overlay (⊞ button → floating window with all MT functionality)
-- [x] TIF detach overlay (⊞ button → floating window with all TIF functionality)
-- [x] Canvas detach overlay (⊞ button → floating canvas view)
-- [x] Overlays are draggable by header and resizable from all edges/corners
-- [x] State syncs between inline panel and overlay (same component, same props)
-- [x] Escape key to close overlay
-- [x] Panel visibility checkbox unchecked → overlay closes too
-- [x] FloatingPanel component with backdrop blur, drag, 8-edge resize
+- [x] All panels detachable with synced state
 
-### 1d. Topics Layout Canvas: NOT STARTED — NEXT PRIORITY
-- [ ] Mindmap canvas with nodes, connectors, drag-drop
-- [ ] Edit panel, collapse/expand, sister links, auto-layout
-- [ ] Drag keywords from AST/MT/TIF onto canvas to link them to nodes
-- [ ] Drag topic pills from Split View onto canvas
+### 1d. Topics Layout Canvas: COMPLETE
+- [x] **1d-core**: SVG canvas with nodes, pan (drag background), zoom (scroll wheel + buttons), drag nodes, add/delete/rename nodes, reset/fit view, grid dots, pathway-colored accent stripes
+- [x] **1d-connect**: P→C (nested) and P→P (linear) link modes with visual feedback, detach node from parent, expanded context menu (Rename, Detach, Make Parent of…, Link as Sibling to…, Delete)
+- [x] **1d-edit**: Edit panel drawer (320px right side) with title, description, alternate titles, linked keywords list with p/s placement toggle, hover popover for full description
+- [x] **1d-link**: Drag keywords from AST/TIF onto canvas nodes to link them (HTML5 drag/drop with text/kst-kwids data type, hit-test on drop)
+- [x] **1d-polish**: Node resize (drag grip handle, min 140×60), collapse/expand child nodes (▼/▶ toggle on parent nodes, hides descendants + connectors + sister links)
 
-### 1e. Canvas Table Mode: NOT STARTED
-- [ ] 9-column funnel table, edit mode
-- [ ] TSV import/export
+### 1e. Canvas Table Mode: IN PROGRESS — NEXT PRIORITY
+- [x] **1e-table**: 9-column funnel table view (Depth, Topic, Alt Titles, Relationship, Parent Topic, Conversion Path, Sister Nodes, Keywords, Description), mode toggle (Mindmap/Table), depth-first tree walk ordering, TSV copy, row click opens edit panel
+- [ ] **1e-edit**: Edit mode (editable cells, add/remove rows, save back to canvas)
+- [ ] **1e-tsv**: TSV upload/paste to update canvas data
 
 ### 1f. AI Mode + KAS + TVT: NOT STARTED
 - [ ] Manual/AI mode toggle in topbar
