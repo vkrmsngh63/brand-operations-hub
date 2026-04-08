@@ -459,7 +459,7 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
         }
       });
     });
-  });
+  }, [splitTopics, astKeywords, showTopics, showTopicDesc, visible, viewMode]);
 
   const filterKwList = useCallback((kwList: string[]): string[] => {
     let result = kwList;
@@ -930,7 +930,7 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
       if (!resizeRef.current) return;
       const delta = ev.clientX - resizeRef.current.startX;
       const newW = Math.max(30, resizeRef.current.startW + delta);
-      setColWidths(prev => { const next = [...prev]; next[resizeRef.current!.col] = newW; return next; });
+      setColWidths(prev => { if (!resizeRef.current) return prev; const next = [...prev]; next[resizeRef.current.col] = newW; return next; });
     }
     function onUp() {
       resizeRef.current = null;
