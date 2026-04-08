@@ -644,7 +644,7 @@ export default function TIFTable({ astKeywords, tifKeywords, onSetTifKeywords, o
   }
 
   function handleDragStart(e: React.DragEvent, kw: string) {
-    setDragId(kw); e.dataTransfer.effectAllowed = 'move'; const dragKws = selected.has(kw) && selected.size > 1 ? [...selected] : [kw]; const kwIds = dragKws.map(k => astKeywords.find(ak => ak.keyword === k)?.id).filter(Boolean); e.dataTransfer.setData('text/kst-kwids', JSON.stringify(kwIds));
+    setDragId(kw); e.dataTransfer.effectAllowed = 'move';
   }
   function handleDragOver(e: React.DragEvent, idx: number) {
     e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDropIdx(idx);

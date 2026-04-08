@@ -312,39 +312,6 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
     return () => document.removeEventListener('keydown', onKey);
   }, [selectedId, editingId, nodes, updateNodes, deleteNode, linkMode, editPanelNodeId]);
 
-  /* ── Canvas drop handler (keywords from tables) ───────────── */
-  function handleCanvasDragOver(e: React.DragEvent) {
-    if (e.dataTransfer.types.includes("text/kst-kwids")) {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = "copy";
-    }
-  }
-
-  function handleCanvasDrop(e: React.DragEvent) {
-    const raw = e.dataTransfer.getData("text/kst-kwids");
-    if (!raw) return;
-    e.preventDefault();
-    let kwIds: string[] = [];
-    try { kwIds = JSON.parse(raw); } catch { return; }
-    if (kwIds.length === 0) return;
-    const rect = svgRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const wx = (e.clientX - rect.left) / zoom + viewX;
-    const wy = (e.clientY - rect.top) / zoom + viewY;
-    const hit = nodes.find(n => wx >= n.x && wx <= n.x + n.w && wy >= n.y && wy <= n.y + n.h);
-    if (hit) {
-      const existing = new Set((hit.linkedKwIds || []) as string[]);
-      const newIds = kwIds.filter(id => !existing.has(id));
-      if (newIds.length === 0) { showToast("Keywords already linked"); return; }
-      const merged = [...(hit.linkedKwIds || []) as string[], ...newIds];
-      updateNodes([{ id: hit.id, linkedKwIds: merged } as Partial<CanvasNode>]);
-      showToast(`\u2713 Linked ${newIds.length} keyword${newIds.length > 1 ? "s" : ""} to "${hit.title}"`);
-      setSelectedId(hit.id); setEditPanelNodeId(hit.id);
-    } else {
-      showToast("Drop on a node to link keywords");
-    }
-  }
-
   function buildConnectorPath(parent: CanvasNode, child: CanvasNode): { d: string; color: string } {
     const rel = child.relationshipType || 'linear';
     if (rel === 'nested') {
@@ -399,7 +366,7 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
       )}
 
       <div className="cvs-body">
-        <div className="cvs-canvas-area" ref={canvasAreaRef} onDragOver={handleCanvasDragOver} onDrop={handleCanvasDrop}>
+        <div className="cvs-canvas-area" ref={canvasAreaRef}>
           <svg ref={svgRef}
             className={`cvs-svg ${isPanning ? 'cvs-panning' : ''} ${linkMode ? 'cvs-linking' : ''}`}
             viewBox={viewBox}
