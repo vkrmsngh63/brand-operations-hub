@@ -144,6 +144,8 @@ export default function KeywordWorkspace({ projectId, userId }: KeywordWorkspace
       <ScrollArrows>
         <MTTable
           astKeywords={keywords}
+          entries={mtEntries}
+          onSetEntries={setMtEntries}
           onUpdateKeyword={updateKeyword}
           onAddToTif={addToTif}
         />
