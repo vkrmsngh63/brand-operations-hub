@@ -625,3 +625,14 @@
 .mt-kw-item:has(.mt-split-desc-wrap) {
   align-items: flex-start !important;
 }
+
+/* ── MT Split pill overflow + consistent sub-item heights ────── */
+.mt-split-topic-wrap > .mt-split-topic-item {
+  overflow: hidden;
+  white-space: nowrap;
+}
+.mt-split-topic-wrap > .mt-split-topic-item .mt-topic-pill {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}

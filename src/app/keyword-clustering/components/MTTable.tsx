@@ -323,6 +323,10 @@ function MtSplitDescPills({ kw, splitDescSel, setSplitDescSel, onSplitDescEdit }
           );
         })
       )}
+      {/* Spacer to match ⊕ add row in Topics column */}
+      <div className="mt-split-topic-item mt-split-topic-add" style={{ visibility: 'hidden' }}>
+        <span style={{ fontSize: '0.75em' }}>&nbsp;</span>
+      </div>
     </div>
   );
 }
@@ -405,24 +409,49 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
     });
   }, [entries, searchQ, showSorted, showPartial, showUnsorted, astKeywords]);
 
-  // ── Height sync for split view: sync mt-kw-item heights across columns ──
+  // ── Height sync for split view: two-level sync ──────────────
+  // Level 1: sync mt-kw-item heights across all columns per keyword index
+  // Level 2: sync mt-split-topic-item heights between Topics and Descriptions per topic index
   useEffect(() => {
     if (!splitTopics || !tbodyRef.current) return;
     const tbody = tbodyRef.current;
     requestAnimationFrame(() => {
-      // For each vertical-view row, sync kw-item heights across all columns
       tbody.querySelectorAll('tr.mt-row-vertical').forEach(tr => {
         const allLists = Array.from(tr.querySelectorAll('.mt-kw-list'));
         if (allLists.length < 2) return;
         const maxLen = Math.max(...allLists.map(l => l.children.length));
-        // Clear
+
+        // Clear ALL heights (keyword items + topic sub-items)
         allLists.forEach(l => {
-          Array.from(l.children).forEach(el => {
-            (el as HTMLElement).style.height = '';
-            (el as HTMLElement).style.minHeight = '';
+          Array.from(l.children).forEach(kwItem => {
+            (kwItem as HTMLElement).style.height = '';
+            (kwItem as HTMLElement).style.minHeight = '';
+            // Clear topic sub-item heights too
+            kwItem.querySelectorAll('.mt-split-topic-item').forEach(ti => {
+              (ti as HTMLElement).style.height = '';
+              (ti as HTMLElement).style.minHeight = '';
+            });
           });
         });
-        // Measure and sync per keyword index
+
+        // Level 2: For each keyword index, sync topic sub-items between Topics & Desc wraps
+        for (let kwIdx = 0; kwIdx < maxLen; kwIdx++) {
+          const kwItems = allLists.map(l => l.children[kwIdx]).filter(Boolean) as HTMLElement[];
+          // Find all split wraps in these keyword items
+          const splitWraps = kwItems
+            .map(ki => ki.querySelector('.mt-split-topic-wrap, .mt-split-desc-wrap'))
+            .filter(Boolean) as HTMLElement[];
+          if (splitWraps.length >= 2) {
+            const subMaxLen = Math.max(...splitWraps.map(w => w.children.length));
+            for (let tIdx = 0; tIdx < subMaxLen; tIdx++) {
+              const subItems = splitWraps.map(w => w.children[tIdx]).filter(Boolean) as HTMLElement[];
+              const subMaxH = Math.max(...subItems.map(el => el.getBoundingClientRect().height));
+              if (subMaxH > 0) subItems.forEach(el => { el.style.minHeight = subMaxH + 'px'; });
+            }
+          }
+        }
+
+        // Level 1: Sync keyword-level heights across all columns
         for (let i = 0; i < maxLen; i++) {
           const items = allLists.map(l => l.children[i]).filter(Boolean) as HTMLElement[];
           const maxH = Math.max(...items.map(el => el.getBoundingClientRect().height));
@@ -430,7 +459,7 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
         }
       });
     });
-  }, [splitTopics, astKeywords, showTopics, showTopicDesc]);
+  });
 
   const filterKwList = useCallback((kwList: string[]): string[] => {
     let result = kwList;
@@ -1060,7 +1089,7 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
             {kwList.map(kwStr => {
               const rec = getKwRec(kwStr, astKeywords);
               return (
-                <div key={kwStr} className={`mt-kw-item${!splitTopics && hoveredKw === kwStr ? ' mt-kw-hover' : ''}`}
+                <div key={kwStr} className={`mt-kw-item${splitTopics ? ' mt-kw-split' : ''}${!splitTopics && hoveredKw === kwStr ? ' mt-kw-hover' : ''}`}
                   onMouseEnter={splitTopics ? undefined : () => setHoveredKw(kwStr)}
                   onMouseLeave={splitTopics ? undefined : () => setHoveredKw(null)}>
                   {splitTopics && rec ? (
