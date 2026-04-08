@@ -226,7 +226,7 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
 
   function handleNodeContextMenu(e: React.MouseEvent, nodeId: number) {
     e.preventDefault(); e.stopPropagation();
-    setCtxMenu({ x: e.clientX, y: e.clientY, nodeId }); setSelectedId(nodeId);
+    setCtxMenu({ x: e.clientX, y: e.clientY, nodeId }); setSelectedId(nodeId); setEditPanelNodeId(nodeId);
   }
 
   function handleDeleteNode() {
@@ -254,7 +254,6 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
     if (linkMode) return;
     const node = nodes.find(n => n.id === nodeId);
     if (!node) return;
-    setEditPanelNodeId(nodeId); setSelectedId(nodeId);
     setEditingId(nodeId); setEditVal(node.title);
   }
 
@@ -269,18 +268,15 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
 
   async function handleAddNode() {
     const rect = svgRef.current?.getBoundingClientRect();
-    let cx = rect ? (rect.width / 2) / zoom + viewX - NODE_W / 2 : viewX;
+    const cx = rect ? (rect.width / 2) / zoom + viewX - NODE_W / 2 : viewX;
     let cy = rect ? (rect.height / 2) / zoom + viewY - NODE_H / 2 : viewY;
-    // Avoid overlapping existing nodes
-    let attempts = 0;
-    while (attempts < 50) {
-      const overlaps = nodes.some(n => cx < n.x + n.w && cx + NODE_W > n.x && cy < n.y + n.h && cy + NODE_H > n.y);
-      if (!overlaps) break;
-      cy += NODE_H + 30;
-      attempts++;
+    // Place below the lowest existing node to avoid overlap
+    for (const n of nodes) {
+      const bottom = n.y + n.h + 30;
+      if (bottom > cy) cy = bottom;
     }
     const newNode = await addNode({ x: cx, y: cy, w: NODE_W, h: NODE_H, title: 'New Topic' });
-    if (newNode) { setSelectedId(newNode.id); setEditPanelNodeId(newNode.id); }
+    if (newNode) { setSelectedId(newNode.id); }
   }
 
   function zoomIn() { const nz = Math.min(MAX_ZOOM, zoom * 1.2); setZoom(nz); saveViewport(viewX, viewY, nz); }
