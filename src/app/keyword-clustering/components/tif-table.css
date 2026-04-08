@@ -439,3 +439,32 @@
   background: #fff;
   color: #1e293b;
 }
+
+/* ── TIF Split alignment fixes (matching MT fixes) ───────────── */
+.tif-split-list {
+  width: 100%;
+  box-sizing: border-box;
+}
+.tif-split-item {
+  width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.tif-split-item .tif-topic-pill {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.tif-split-desc-wrap > .tif-split-item {
+  width: 100%;
+  box-sizing: border-box;
+  white-space: normal;
+}
+/* Combined view overflow */
+.tif-topic-pill {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
+  min-width: 0;
+}

@@ -166,3 +166,27 @@
 .ws-panel:hover .ws-detach-btn {
   opacity: 0.8 !important;
 }
+
+/* ── Detach button position + color fixes ────────────────────── */
+.ws-detach-btn {
+  right: 32px !important;
+}
+/* Dark header panels (AST) — white icon */
+.ast-panel .ws-detach-btn {
+  color: #fff !important;
+  border-color: rgba(255,255,255,0.3) !important;
+  background: rgba(33,38,45,0.9) !important;
+}
+/* Light header panels (MT, TIF) — darker icon */
+.mt-panel .ws-detach-btn,
+.tif-panel .ws-detach-btn {
+  color: #1e293b !important;
+  border-color: #94a3b8 !important;
+  background: rgba(226,232,240,0.9) !important;
+}
+.mt-panel .ws-detach-btn:hover,
+.tif-panel .ws-detach-btn:hover {
+  color: #fff !important;
+  background: rgba(59,130,246,0.85) !important;
+  border-color: #3b82f6 !important;
+}

@@ -743,3 +743,36 @@
 .ast-split-desc-ta:focus {
   box-shadow: 0 0 0 2px rgba(31, 111, 235, 0.15);
 }
+
+/* ── AST Split alignment fixes (matching MT fixes) ───────────── */
+.ast-split-list {
+  width: 100%;
+  box-sizing: border-box;
+}
+.ast-split-item {
+  width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.ast-split-item .ast-topic-pill {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.ast-split-desc-wrap > .ast-split-item {
+  width: 100%;
+  box-sizing: border-box;
+  white-space: normal;
+}
+/* Combined view overflow */
+.ast-tag-cell-inner {
+  overflow: hidden;
+  flex-wrap: nowrap;
+}
+.ast-topic-pill {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
+  min-width: 0;
+}
