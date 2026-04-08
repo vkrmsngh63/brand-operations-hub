@@ -55,9 +55,6 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
   const [hoverNodeId, setHoverNodeId] = useState<number | null>(null);
   const [hoverPos, setHoverPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  /* ── Node resize state ──────────────────────────────────────── */
-  const [resizeNodeId, setResizeNodeId] = useState<number | null>(null);
-  const resizeStart = useRef<{ w: number; h: number; mx: number; my: number }>({ w: 0, h: 0, mx: 0, my: 0 });
 
   const [linkMode, setLinkMode] = useState<'linear' | 'nested' | null>(null);
   const [linkSource, setLinkSource] = useState<number | null>(null);
@@ -348,37 +345,6 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
     }
   }
 
-  /* ── Node resize handlers ──────────────────────────────────── */
-  function handleResizeStart(e: React.MouseEvent, nodeId: number) {
-    e.stopPropagation();
-    e.preventDefault();
-    const node = nodes.find(n => n.id === nodeId);
-    if (!node) return;
-    setResizeNodeId(nodeId);
-    resizeStart.current = { w: node.w, h: node.h, mx: e.clientX, my: e.clientY };
-  }
-
-  useEffect(() => {
-    if (resizeNodeId === null) return;
-    function onMove(e: MouseEvent) {
-      const dx = (e.clientX - resizeStart.current.mx) / zoom;
-      const dy = (e.clientY - resizeStart.current.my) / zoom;
-      const nw = Math.max(140, resizeStart.current.w + dx);
-      const nh = Math.max(60, resizeStart.current.h + dy);
-      const idx = nodes.findIndex(n => n.id === resizeNodeId);
-      if (idx >= 0) { nodes[idx] = { ...nodes[idx], w: nw, h: nh }; forceUpdate(); }
-    }
-    function onUp() {
-      const node = nodes.find(n => n.id === resizeNodeId);
-      if (node) updateNodes([{ id: resizeNodeId, w: node.w, h: node.h } as Partial<CanvasNode>]);
-      setResizeNodeId(null);
-    }
-    document.addEventListener("mousemove", onMove);
-    document.addEventListener("mouseup", onUp);
-    return () => { document.removeEventListener("mousemove", onMove); document.removeEventListener("mouseup", onUp); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resizeNodeId]);
-
   function buildConnectorPath(parent: CanvasNode, child: CanvasNode): { d: string; color: string } {
     const rel = child.relationshipType || 'linear';
     if (rel === 'nested') {
@@ -557,7 +523,7 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
                     {kwCount > 0 ? `${kwCount}kw` : ''}{kwCount > 0 && childCount > 0 ? ' \u00b7 ' : ''}{childCount > 0 ? `${childCount}ch` : ''}
                   </text>
 
-                  <rect x={node.w - 14} y={node.h - 14} width={12} height={12} fill="transparent" style={{ cursor: "nwse-resize" }} onMouseDown={e => handleResizeStart(e, node.id)} /><circle cx={node.w - 6} cy={node.h - 6} r={2.5} fill="#475569" opacity={0.6} style={{ pointerEvents: "none" }} />
+                  <circle cx={node.w - 6} cy={node.h - 6} r={2.5} fill="#475569" opacity={0.5} />
                 </g>
               );
             })}
