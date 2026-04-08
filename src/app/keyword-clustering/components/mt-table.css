@@ -567,3 +567,33 @@
   background: #c8dff5 !important;
   border-radius: 3px;
 }
+
+/* ── MT Split alignment fixes ────────────────────────────────── */
+/* Remove padding on kw-item when it contains split content */
+.mt-kw-item:has(.mt-split-topic-wrap),
+.mt-kw-item:has(.mt-split-desc-wrap) {
+  padding: 0 !important;
+}
+/* Ensure split wraps fill full cell width */
+.mt-split-topic-wrap,
+.mt-split-desc-wrap {
+  width: 100%;
+  box-sizing: border-box;
+}
+/* Ensure sub-items fill full width with borders edge-to-edge */
+.mt-split-topic-item {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 3px 2px;
+}
+/* Desc sub-items match topic sub-items */
+.mt-split-desc-wrap > .mt-split-topic-item {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 3px 2px;
+}
+/* Topics and Desc td cells: remove padding when split is active */
+.mt-topics-td:has(.mt-split-topic-wrap),
+.mt-topicdesc-td:has(.mt-split-desc-wrap) {
+  padding: 0 !important;
+}
