@@ -157,3 +157,12 @@
   color: #fff;
   border-color: #3b82f6;
 }
+
+/* Fix: ensure detach button sits above all panel content */
+.ws-detach-btn {
+  z-index: 20 !important;
+  opacity: 0.4 !important;
+}
+.ws-panel:hover .ws-detach-btn {
+  opacity: 0.8 !important;
+}
