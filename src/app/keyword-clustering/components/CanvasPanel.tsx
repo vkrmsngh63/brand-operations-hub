@@ -230,16 +230,26 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
     const GAP = 20;
     let moved = false;
     let attempts = 0;
-    while (attempts < 50) {
-      const blocker = nodes.find(n =>
-        n.id !== nodeId &&
-        node.x < n.x + n.w + GAP && node.x + node.w + GAP > n.x &&
-        node.y < n.y + n.h + GAP && node.y + node.h + GAP > n.y
-      );
-      if (!blocker) break;
-      // Nudge right of blocker
-      node.x = blocker.x + blocker.w + GAP;
-      moved = true;
+    while (attempts < 100) {
+      let foundBlocker = false;
+      for (const n of nodes) {
+        if (n.id === nodeId) continue;
+        const overlapX = node.x < n.x + n.w + GAP && node.x + node.w + GAP > n.x;
+        const overlapY = node.y < n.y + n.h + GAP && node.y + node.h + GAP > n.y;
+        if (overlapX && overlapY) {
+          const nudgeRight = (n.x + n.w + GAP) - node.x;
+          const nudgeDown = (n.y + n.h + GAP) - node.y;
+          if (nudgeRight <= nudgeDown) {
+            node.x = n.x + n.w + GAP;
+          } else {
+            node.y = n.y + n.h + GAP;
+          }
+          moved = true;
+          foundBlocker = true;
+          break;
+        }
+      }
+      if (!foundBlocker) break;
       attempts++;
     }
     if (moved) {

@@ -66,8 +66,6 @@ export default function CanvasTableMode({
   const [tsvText, setTsvText] = useState('');
   const [tsvProcessing, setTsvProcessing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [showImportChoice, setShowImportChoice] = useState(false);
-  const [pendingTsvData, setPendingTsvData] = useState<ParsedTsvRow[]>([]);
 
   function showToast(msg: string) {
     setToast(msg);
@@ -310,29 +308,17 @@ export default function CanvasTableMode({
     return result;
   }
 
-  async function applyTsvData(parsed: ParsedTsvRow[], mode: 'merge' | 'overwrite' = 'merge') {
+  async function applyTsvData(parsed: ParsedTsvRow[]) {
     if (parsed.length === 0) { showToast('\u26A0 No valid rows found in TSV'); return; }
     if (!onUpdateNodes || !onAddNode) { showToast('\u26A0 Edit callbacks not available'); return; }
 
     setTsvProcessing(true);
-
-    // Overwrite mode: delete all existing nodes first
-    if (mode === 'overwrite' && onDeleteNode) {
-      const allIds = nodes.map(n => n.id);
-      for (const id of allIds) {
-        onDeleteNode(id);
-      }
-      // Small delay to let state settle
-      await new Promise(r => setTimeout(r, 100));
-    }
-
     let updated = 0;
     let created = 0;
 
-    // Build title→node lookup (case-insensitive) — will be empty after overwrite
-    const currentNodes = mode === 'overwrite' ? [] : nodes;
+    // Build title→node lookup (case-insensitive)
     const titleMap = new Map<string, CanvasNode>();
-    for (const n of currentNodes) {
+    for (const n of nodes) {
       if (n.title) titleMap.set(n.title.toLowerCase(), n);
     }
 
@@ -513,23 +499,8 @@ export default function CanvasTableMode({
 
   async function handleTsvPaste() {
     const parsed = parseTsv(tsvText);
-    if (parsed.length === 0) { showToast('\u26A0 No valid rows found'); return; }
-    // If there are existing nodes, ask merge or overwrite
-    if (nodes.length > 0) {
-      setPendingTsvData(parsed);
-      setShowTsvOverlay(false);
-      setShowImportChoice(true);
-      return;
-    }
-    await applyTsvData(parsed, 'overwrite');
+    await applyTsvData(parsed);
     setShowTsvOverlay(false);
-    setTsvText('');
-  }
-
-  async function handleImportChoice(mode: 'merge' | 'overwrite') {
-    setShowImportChoice(false);
-    await applyTsvData(pendingTsvData, mode);
-    setPendingTsvData([]);
     setTsvText('');
   }
 
@@ -538,29 +509,20 @@ export default function CanvasTableMode({
     if (!file) return;
     const ext = file.name.split('.').pop()?.toLowerCase() || '';
 
-    async function processData(parsed: ParsedTsvRow[]) {
-      if (parsed.length === 0) { showToast('\u26A0 No valid rows found'); return; }
-      if (nodes.length > 0) {
-        setPendingTsvData(parsed);
-        setShowImportChoice(true);
-      } else {
-        await applyTsvData(parsed, 'overwrite');
-      }
-    }
-
     if (ext === 'xlsx' || ext === 'xls' || ext === 'xlsm') {
+      // Read as binary for Excel files
       const reader = new FileReader();
       reader.onload = async (ev) => {
         const data = ev.target?.result;
         if (!data) return;
         try {
-          const XLSX = await import('xlsx');
           const workbook = XLSX.read(data, { type: 'array' });
           const sheetName = workbook.SheetNames[0];
           const sheet = workbook.Sheets[sheetName];
+          // Convert to TSV string
           const tsv = XLSX.utils.sheet_to_csv(sheet, { FS: '\t' });
           const parsed = parseTsv(tsv);
-          await processData(parsed);
+          await applyTsvData(parsed);
         } catch (err) {
           console.error('Excel parse error:', err);
           showToast('\u26A0 Failed to read Excel file');
@@ -568,12 +530,13 @@ export default function CanvasTableMode({
       };
       reader.readAsArrayBuffer(file);
     } else {
+      // Read as text for TSV/CSV/TXT
       const reader = new FileReader();
       reader.onload = async (ev) => {
         const text = ev.target?.result;
         if (typeof text === 'string') {
           const parsed = parseTsv(text);
-          await processData(parsed);
+          await applyTsvData(parsed);
         }
       };
       reader.readAsText(file);
@@ -800,34 +763,6 @@ export default function CanvasTableMode({
               <button className="ctm-btn ctm-btn-danger" onClick={handleResetTable}>
                 🗑 Delete All Nodes
               </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Import Mode Choice Dialog */}
-      {showImportChoice && (
-        <div className="ctm-tsv-overlay">
-          <div className="ctm-tsv-panel ctm-reset-panel">
-            <div className="ctm-tsv-header">
-              <strong>📥 Import {pendingTsvData.length} Row{pendingTsvData.length !== 1 ? 's' : ''}</strong>
-              <button className="ctm-tsv-close" onClick={() => { setShowImportChoice(false); setPendingTsvData([]); }}>✕</button>
-            </div>
-            <p className="ctm-reset-msg">
-              You have <strong>{nodes.length} existing node{nodes.length !== 1 ? 's' : ''}</strong> on the canvas. How would you like to import?
-            </p>
-            <div className="ctm-import-options">
-              <button className="ctm-btn ctm-import-btn ctm-import-merge" onClick={() => handleImportChoice('merge')}>
-                <strong>📥 Merge</strong>
-                <span>Update existing topics by name, add new ones. Keep current positions.</span>
-              </button>
-              <button className="ctm-btn ctm-import-btn ctm-import-overwrite" onClick={() => handleImportChoice('overwrite')}>
-                <strong>🔄 Overwrite All</strong>
-                <span>Delete all existing nodes and replace with imported data.</span>
-              </button>
-            </div>
-            <div className="ctm-tsv-actions">
-              <button className="ctm-btn" onClick={() => { setShowImportChoice(false); setPendingTsvData([]); }}>Cancel</button>
             </div>
           </div>
         </div>
