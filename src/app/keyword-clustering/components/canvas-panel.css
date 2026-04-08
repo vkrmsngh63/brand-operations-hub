@@ -84,6 +84,18 @@
 }
 
 /* ── SVG canvas area ─────────────────────────────────────────── */
+.cvs-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  overflow: hidden;
+}
+.cvs-canvas-area {
+  flex: 1;
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+}
 .cvs-svg {
   flex: 1;
   width: 100%;

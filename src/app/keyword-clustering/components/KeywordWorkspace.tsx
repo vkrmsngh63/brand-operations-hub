@@ -169,7 +169,7 @@ export default function KeywordWorkspace({ projectId, userId }: KeywordWorkspace
   }
 
   function renderCanvasContent() {
-    return <CanvasPanel projectId={projectId} />;
+    return <CanvasPanel projectId={projectId} allKeywords={keywords} />;
   }
 
   // ── Compute visible inline panels ────────────────────────────

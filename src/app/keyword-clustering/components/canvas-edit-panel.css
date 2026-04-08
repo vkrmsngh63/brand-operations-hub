@@ -1,0 +1,277 @@
+/* ── Canvas Edit Panel (right-side drawer) ───────────────────── */
+.ep-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 320px;
+  min-width: 280px;
+  background: #ffffff;
+  border-left: 1px solid #cbd5e1;
+  box-shadow: -4px 0 18px rgba(0,0,0,0.08);
+  font-family: system-ui, -apple-system, sans-serif;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+/* ── Header ──────────────────────────────────────────────────── */
+.ep-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: #f1f5f9;
+  border-bottom: 1px solid #e2e8f0;
+  flex-shrink: 0;
+}
+.ep-header-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #1e293b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 240px;
+}
+.ep-close {
+  background: none;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  color: #64748b;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 8px;
+  line-height: 1.3;
+  transition: background 0.12s;
+  flex-shrink: 0;
+}
+.ep-close:hover {
+  background: #fee2e2;
+  border-color: #fca5a5;
+  color: #dc2626;
+}
+
+/* ── Body (scrollable) ───────────────────────────────────────── */
+.ep-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* ── Labels ──────────────────────────────────────────────────── */
+.ep-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-top: 8px;
+}
+.ep-label:first-child {
+  margin-top: 0;
+}
+
+/* ── Inputs ──────────────────────────────────────────────────── */
+.ep-input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e293b;
+  background: #f8fafc;
+  outline: none;
+  transition: border-color 0.15s;
+  box-sizing: border-box;
+}
+.ep-input:focus {
+  border-color: #3b82f6;
+  background: #ffffff;
+}
+
+.ep-textarea {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  font-size: 11px;
+  color: #334155;
+  background: #f8fafc;
+  outline: none;
+  resize: vertical;
+  min-height: 60px;
+  font-family: inherit;
+  line-height: 1.5;
+  box-sizing: border-box;
+}
+.ep-textarea:focus {
+  border-color: #3b82f6;
+  background: #ffffff;
+}
+
+/* ── Alternate Titles ────────────────────────────────────────── */
+.ep-alt-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.ep-alt-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.ep-alt-input {
+  flex: 1;
+  padding: 4px 6px;
+  border: 1px solid #e2e8f0;
+  border-radius: 3px;
+  font-size: 11px;
+  color: #334155;
+  background: #f8fafc;
+  outline: none;
+  box-sizing: border-box;
+}
+.ep-alt-input:focus {
+  border-color: #3b82f6;
+  background: #ffffff;
+}
+.ep-alt-new {
+  border-style: dashed;
+  color: #94a3b8;
+}
+.ep-alt-new:focus {
+  color: #334155;
+  border-style: solid;
+}
+.ep-alt-rm {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+.ep-alt-rm:hover {
+  color: #dc2626;
+}
+
+/* ── Keywords section ────────────────────────────────────────── */
+.ep-kw-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+  padding: 6px 0;
+  border-top: 1px solid #e2e8f0;
+  font-size: 11px;
+  font-weight: 700;
+  color: #475569;
+}
+
+.ep-kw-list {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 60px;
+  max-height: 300px;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  background: #fafbfc;
+}
+
+.ep-kw-empty {
+  padding: 16px 12px;
+  text-align: center;
+  font-size: 10px;
+  color: #94a3b8;
+  line-height: 1.6;
+}
+
+.ep-kw-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 11px;
+  transition: background 0.1s;
+}
+.ep-kw-row:hover {
+  background: #f1f5f9;
+}
+.ep-kw-row:last-child {
+  border-bottom: none;
+}
+
+.ep-kw-placement {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  border: none;
+  font-size: 8px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-transform: uppercase;
+}
+.ep-kw-placement.pri {
+  background: #dbeafe;
+  color: #2563eb;
+}
+.ep-kw-placement.sec {
+  background: #ede9fe;
+  color: #7c3aed;
+}
+.ep-kw-placement:hover {
+  opacity: 0.8;
+}
+
+.ep-kw-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #1e293b;
+  font-weight: 500;
+}
+.ep-kw-sec {
+  font-style: italic;
+  color: #7c3aed;
+}
+
+.ep-kw-vol {
+  flex-shrink: 0;
+  font-size: 9px;
+  color: #94a3b8;
+  min-width: 32px;
+  text-align: right;
+}
+
+.ep-kw-rm {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: #cbd5e1;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+}
+.ep-kw-rm:hover {
+  color: #dc2626;
+}
+
+/* ── Node info footer ────────────────────────────────────────── */
+.ep-info {
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid #e2e8f0;
+  font-size: 9px;
+  color: #94a3b8;
+}
