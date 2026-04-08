@@ -58,8 +58,6 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
   /* ── Node resize state ──────────────────────────────────────── */
   const [resizeNodeId, setResizeNodeId] = useState<number | null>(null);
   const resizeStart = useRef<{ w: number; h: number; mx: number; my: number }>({ w: 0, h: 0, mx: 0, my: 0 });
-  /* ── Collapse/expand state ──────────────────────────────────── */
-  const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
 
   const [linkMode, setLinkMode] = useState<'linear' | 'nested' | null>(null);
   const [linkSource, setLinkSource] = useState<number | null>(null);
@@ -381,24 +379,6 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resizeNodeId]);
 
-  /* ── Collapse/expand helpers ────────────────────────────────── */
-  function toggleCollapse(nodeId: number) {
-    setCollapsed(prev => {
-      const next = new Set(prev);
-      if (next.has(nodeId)) next.delete(nodeId); else next.add(nodeId);
-      return next;
-    });
-  }
-
-  function isHiddenByCollapse(nodeId: number): boolean {
-    let current = nodes.find(n => n.id === nodeId);
-    while (current && current.parentId !== null) {
-      if (collapsed.has(current.parentId)) return true;
-      current = nodes.find(n => n.id === current!.parentId);
-    }
-    return false;
-  }
-
   function buildConnectorPath(parent: CanvasNode, child: CanvasNode): { d: string; color: string } {
     const rel = child.relationshipType || 'linear';
     if (rel === 'nested') {
@@ -469,7 +449,6 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
 
             {nodes.map(child => {
               if (!child.parentId) return null;
-              if (isHiddenByCollapse(child.id)) return null;
               const parent = nodes.find(n => n.id === child.parentId);
               if (!parent) return null;
               const { d, color } = buildConnectorPath(parent, child);
@@ -487,7 +466,6 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
               const a = nodes.find(n => n.id === sl.nodeA);
               const b = nodes.find(n => n.id === sl.nodeB);
               if (!a || !b) return null;
-              if (isHiddenByCollapse(sl.nodeA) || isHiddenByCollapse(sl.nodeB)) return null;
               return (
                 <line key={`sl-${sl.id}`}
                   x1={a.x + a.w / 2} y1={a.y + a.h / 2}
@@ -498,7 +476,6 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
             })}
 
             {nodes.map(node => {
-              if (isHiddenByCollapse(node.id)) return null;
               const isSelected = node.id === selectedId;
               const isLinkSource = node.id === linkSource;
               const isDragging = node.id === dragNodeId;
@@ -547,16 +524,6 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
                     strokeWidth={isSelected || isLinkSource ? 1.5 / zoom : 1 / zoom} />
                   <rect x={0} y={0} width={ACCENT_W} height={node.h} rx={CORNER_R} ry={CORNER_R} fill={accentColor} />
                   <rect x={ACCENT_W} y={0} width={ACCENT_W} height={node.h} fill="#ffffff" />
-                  {/* Collapse/expand toggle */}
-                  {childCount > 0 && (
-                    <g onClick={e => { e.stopPropagation(); toggleCollapse(node.id); }}
-                      style={{ cursor: "pointer" }}>
-                      <rect x={node.w - 20} y={2} width={16} height={14} rx={3} fill="#e2e8f0" stroke="#cbd5e1" strokeWidth={0.5} />
-                      <text x={node.w - 12} y={12} textAnchor="middle" fill="#475569" fontSize={9} style={{ pointerEvents: "none" }}>
-                        {collapsed.has(node.id) ? "u25b6" : "u25bc"}
-                      </text>
-                    </g>
-                  )}
 
                   {editingId === node.id ? (
                     <foreignObject x={ACCENT_W + 8} y={6} width={node.w - ACCENT_W - 16} height={28}>
