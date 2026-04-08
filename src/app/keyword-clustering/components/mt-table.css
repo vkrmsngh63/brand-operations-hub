@@ -619,3 +619,9 @@
   margin: 0;
   padding: 0;
 }
+
+/* ── Force top-alignment on split kw-items ───────────────────── */
+.mt-kw-item:has(.mt-split-topic-wrap),
+.mt-kw-item:has(.mt-split-desc-wrap) {
+  align-items: flex-start !important;
+}
