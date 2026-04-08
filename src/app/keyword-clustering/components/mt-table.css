@@ -563,3 +563,7 @@
   background: #fff;
   color: #1e293b;
 }
+.mt-split-hl {
+  background: #c8dff5 !important;
+  border-radius: 3px;
+}

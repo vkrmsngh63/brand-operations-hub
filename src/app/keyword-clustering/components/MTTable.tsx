@@ -90,6 +90,41 @@ function parseTopics(str: string): string[] {
   return (str || '').split('|').map(t => t.trim()).filter(Boolean);
 }
 
+// ── Cross-highlight helper for split topic/desc sub-items ──────
+function mtSplitHighlight(el: HTMLElement, add: boolean) {
+  const item = el.closest('.mt-split-topic-item') as HTMLElement | null;
+  if (!item) return;
+  const wrap = item.parentElement;
+  if (!wrap) return;
+  const topicIdx = Array.from(wrap.children).indexOf(item);
+  const kwItem = wrap.closest('.mt-kw-item') as HTMLElement | null;
+  if (!kwItem) return;
+  const kwList = kwItem.parentElement;
+  if (!kwList) return;
+  const kwIdx = Array.from(kwList.children).indexOf(kwItem);
+  const tr = kwItem.closest('tr');
+  if (!tr) return;
+
+  // Find all mt-kw-list containers in this row
+  const allLists = tr.querySelectorAll('.mt-kw-list');
+  // Topics column list and Descriptions column list are the last two
+  allLists.forEach(list => {
+    if (list === kwList) return; // skip own column
+    const partnerKwItem = list.children[kwIdx] as HTMLElement | undefined;
+    if (!partnerKwItem) return;
+    const partnerWrap = partnerKwItem.querySelector('.mt-split-topic-wrap, .mt-split-desc-wrap');
+    if (!partnerWrap) return;
+    const partnerItem = partnerWrap.children[topicIdx] as HTMLElement | undefined;
+    if (partnerItem) {
+      if (add) partnerItem.classList.add('mt-split-hl');
+      else partnerItem.classList.remove('mt-split-hl');
+    }
+  });
+
+  if (add) item.classList.add('mt-split-hl');
+  else item.classList.remove('mt-split-hl');
+}
+
 // ── Inline Topic Pills (Combined view, editable) ──────────────
 function MtTopicPills({ kwStr, astKeywords, onTopicEdit, onTopicFilter }: {
   kwStr: string; astKeywords: Keyword[];
@@ -156,14 +191,13 @@ function MtTopicPills({ kwStr, astKeywords, onTopicEdit, onTopicFilter }: {
 }
 
 // ── Split Topic Pills per keyword (for MT vertical view) ──────
-function MtSplitTopicPills({ kw, splitTopicSel, setSplitTopicSel, onSplitTopicEdit, onSplitTopicAdd, onSplitApprovalToggle, hoveredKw }: {
+function MtSplitTopicPills({ kw, splitTopicSel, setSplitTopicSel, onSplitTopicEdit, onSplitTopicAdd, onSplitApprovalToggle }: {
   kw: Keyword;
   splitTopicSel: SplitSelMap;
   setSplitTopicSel: React.Dispatch<React.SetStateAction<SplitSelMap>>;
   onSplitTopicEdit: (kwId: string, oldTopic: string, newTopic: string) => void;
   onSplitTopicAdd: (kwId: string, newTopic: string) => void;
   onSplitApprovalToggle: (kwId: string, topic: string) => void;
-  hoveredKw: string | null;
 }) {
   const [editTopic, setEditTopic] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
@@ -186,7 +220,10 @@ function MtSplitTopicPills({ kw, splitTopicSel, setSplitTopicSel, onSplitTopicEd
           const isChecked = splitIsChecked(splitTopicSel, kw.id, topic);
           const approved = kw.topicApproved && kw.topicApproved[topic];
           return (
-            <div key={topic} className="mt-split-topic-item" data-topic={topic}>
+            <div key={topic} className="mt-split-topic-item" data-topic={topic}
+              onMouseEnter={e => mtSplitHighlight(e.currentTarget, true)}
+              onMouseLeave={e => mtSplitHighlight(e.currentTarget, false)}
+            >
               <span className="mt-split-drag" title="Drag to canvas">⁞</span>
               <input type="checkbox" checked={isChecked}
                 onChange={e => setSplitTopicSel(prev => splitSetChecked(prev, kw.id, topic, e.target.checked))}
@@ -257,7 +294,10 @@ function MtSplitDescPills({ kw, splitDescSel, setSplitDescSel, onSplitDescEdit }
           const isChecked = splitIsChecked(splitDescSel, kw.id, topic);
           const desc = (kw.canvasLoc && kw.canvasLoc[topic]) || '';
           return (
-            <div key={topic} className="mt-split-topic-item" style={{ alignItems: 'flex-start', whiteSpace: 'normal' }}>
+            <div key={topic} className="mt-split-topic-item" style={{ alignItems: 'flex-start', whiteSpace: 'normal' }}
+              onMouseEnter={e => mtSplitHighlight(e.currentTarget, true)}
+              onMouseLeave={e => mtSplitHighlight(e.currentTarget, false)}
+            >
               <input type="checkbox" checked={isChecked}
                 onChange={e => setSplitDescSel(prev => splitSetChecked(prev, kw.id, topic, e.target.checked))}
                 onClick={e => e.stopPropagation()}
@@ -315,6 +355,7 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
   const [colWidths, setColWidths] = useState([22, 180, 80, 160, 70, 100, 100, 110]);
   const resizeRef = useRef<{ col: number; startX: number; startW: number } | null>(null);
   const addInputRef = useRef<HTMLInputElement>(null);
+  const tbodyRef = useRef<HTMLTableSectionElement>(null);
 
   // ── Inline tag input state ─────────────────────────────────
   const [tagInputMode, setTagInputMode] = useState<'add' | 'remove' | null>(null);
@@ -363,6 +404,33 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
       return true;
     });
   }, [entries, searchQ, showSorted, showPartial, showUnsorted, astKeywords]);
+
+  // ── Height sync for split view: sync mt-kw-item heights across columns ──
+  useEffect(() => {
+    if (!splitTopics || !tbodyRef.current) return;
+    const tbody = tbodyRef.current;
+    requestAnimationFrame(() => {
+      // For each vertical-view row, sync kw-item heights across all columns
+      tbody.querySelectorAll('tr.mt-row-vertical').forEach(tr => {
+        const allLists = Array.from(tr.querySelectorAll('.mt-kw-list'));
+        if (allLists.length < 2) return;
+        const maxLen = Math.max(...allLists.map(l => l.children.length));
+        // Clear
+        allLists.forEach(l => {
+          Array.from(l.children).forEach(el => {
+            (el as HTMLElement).style.height = '';
+            (el as HTMLElement).style.minHeight = '';
+          });
+        });
+        // Measure and sync per keyword index
+        for (let i = 0; i < maxLen; i++) {
+          const items = allLists.map(l => l.children[i]).filter(Boolean) as HTMLElement[];
+          const maxH = Math.max(...items.map(el => el.getBoundingClientRect().height));
+          if (maxH > 0) items.forEach(el => { el.style.minHeight = maxH + 'px'; });
+        }
+      });
+    });
+  }, [splitTopics, astKeywords, showTopics, showTopicDesc]);
 
   const filterKwList = useCallback((kwList: string[]): string[] => {
     let result = kwList;
@@ -992,14 +1060,14 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
             {kwList.map(kwStr => {
               const rec = getKwRec(kwStr, astKeywords);
               return (
-                <div key={kwStr}
-                  className={`mt-kw-item ${hoveredKw === kwStr ? 'mt-kw-hover' : ''}`}
-                  onMouseEnter={() => setHoveredKw(kwStr)} onMouseLeave={() => setHoveredKw(null)}>
+                <div key={kwStr} className={`mt-kw-item${!splitTopics && hoveredKw === kwStr ? ' mt-kw-hover' : ''}`}
+                  onMouseEnter={splitTopics ? undefined : () => setHoveredKw(kwStr)}
+                  onMouseLeave={splitTopics ? undefined : () => setHoveredKw(null)}>
                   {splitTopics && rec ? (
                     <MtSplitTopicPills kw={rec}
                       splitTopicSel={splitTopicSel} setSplitTopicSel={setSplitTopicSel}
                       onSplitTopicEdit={handleSplitTopicEdit} onSplitTopicAdd={handleSplitTopicAdd}
-                      onSplitApprovalToggle={handleSplitApprovalToggle} hoveredKw={hoveredKw} />
+                      onSplitApprovalToggle={handleSplitApprovalToggle} />
                   ) : (
                     <MtTopicPills kwStr={kwStr} astKeywords={astKeywords}
                       onTopicEdit={(o, n) => handleMtTopicEdit(kwStr, o, n)}
@@ -1016,9 +1084,9 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
             {kwList.map(kwStr => {
               const rec = getKwRec(kwStr, astKeywords);
               return (
-                <div key={kwStr}
-                  className={`mt-kw-item ${hoveredKw === kwStr ? 'mt-kw-hover' : ''}`}
-                  onMouseEnter={() => setHoveredKw(kwStr)} onMouseLeave={() => setHoveredKw(null)}>
+                <div key={kwStr} className={`mt-kw-item${!splitTopics && hoveredKw === kwStr ? ' mt-kw-hover' : ''}`}
+                  onMouseEnter={splitTopics ? undefined : () => setHoveredKw(kwStr)}
+                  onMouseLeave={splitTopics ? undefined : () => setHoveredKw(null)}>
                   {splitTopics && rec ? (
                     <MtSplitDescPills kw={rec}
                       splitDescSel={splitDescSel} setSplitDescSel={setSplitDescSel}
@@ -1180,7 +1248,7 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif }: MT
               <div className="mt-col-resize" onMouseDown={e => handleColResize(e, 7)} />
             </th>
           </tr></thead>
-          <tbody>
+          <tbody ref={tbodyRef}>
             {visible.length === 0 ? (
               <tr><td colSpan={9}>
                 <div className="mt-empty">
