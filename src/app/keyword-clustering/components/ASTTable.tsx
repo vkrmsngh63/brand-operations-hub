@@ -42,6 +42,29 @@ interface RemovedKeyword {
   removedAt: number;
 }
 
+// ── Split selection helpers (kwId → Set of topic strings) ──────
+type SplitSelMap = Map<string, Set<string>>;
+
+function splitIsChecked(map: SplitSelMap, kwId: string, topic: string): boolean {
+  const s = map.get(kwId);
+  return s ? s.has(topic) : false;
+}
+
+function splitSetChecked(map: SplitSelMap, kwId: string, topic: string, val: boolean): SplitSelMap {
+  const next = new Map(map);
+  if (!next.has(kwId)) next.set(kwId, new Set());
+  const s = new Set(next.get(kwId)!);
+  if (val) s.add(topic); else s.delete(topic);
+  if (s.size === 0) next.delete(kwId); else next.set(kwId, s);
+  return next;
+}
+
+function splitAllChecked(map: SplitSelMap): { kwId: string; topic: string }[] {
+  const res: { kwId: string; topic: string }[] = [];
+  map.forEach((topics, kwId) => topics.forEach(tp => res.push({ kwId, topic: tp })));
+  return res;
+}
+
 interface ASTTableProps {
   keywords: Keyword[];
   onAddKeyword: (kw: string, vol: string) => Promise<boolean>;
@@ -92,6 +115,12 @@ export default function ASTTable({
   const [colWidths, setColWidths] = useState([22, 160, 80, 110, 90, 100, 110]);
   const resizeRef = useRef<{ col: number; startX: number; startW: number } | null>(null);
 
+  // ── Split Topics View state ──────────────────────────────────
+  const [splitTopics, setSplitTopics] = useState(false);
+  const [splitTopicSel, setSplitTopicSel] = useState<SplitSelMap>(new Map());
+  const [splitDescSel, setSplitDescSel] = useState<SplitSelMap>(new Map());
+  const tbodyRef = useRef<HTMLTableSectionElement>(null);
+
   const visible = useMemo(() => {
     return keywords.filter(k => {
       if ((k.sortingStatus === 'Completely Sorted' || k.sortingStatus === 'AI-Sorted') && !showSorted) return false;
@@ -132,11 +161,14 @@ export default function ASTTable({
   const volSum = useMemo(() => visible.reduce((s, k) => s + (parseFloat(k.volume) || 0), 0), [visible]);
   const total = visible.length;
   const viewH = frameH || 400;
+
+  // Virtual scrolling — disabled when split mode is on (variable row heights)
+  const useVirtualScroll = !splitTopics;
   const minVisible = Math.ceil(viewH / ROW_HEIGHT) + VS_BUFFER * 2 + 4;
-  const startIdx = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - VS_BUFFER);
-  const endIdx = Math.min(total, Math.max(startIdx + minVisible, Math.ceil((scrollTop + viewH) / ROW_HEIGHT) + VS_BUFFER + 1));
-  const topPad = startIdx * ROW_HEIGHT;
-  const bottomPad = Math.max(0, (total - endIdx) * ROW_HEIGHT);
+  const startIdx = useVirtualScroll ? Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - VS_BUFFER) : 0;
+  const endIdx = useVirtualScroll ? Math.min(total, Math.max(startIdx + minVisible, Math.ceil((scrollTop + viewH) / ROW_HEIGHT) + VS_BUFFER + 1)) : total;
+  const topPad = useVirtualScroll ? startIdx * ROW_HEIGHT : 0;
+  const bottomPad = useVirtualScroll ? Math.max(0, (total - endIdx) * ROW_HEIGHT) : 0;
   const slicedRows = visible.slice(startIdx, endIdx);
 
   const rafRef = useRef<number | null>(null);
@@ -156,6 +188,32 @@ export default function ASTTable({
     return () => ro.disconnect();
   }, []);
 
+  // ── Height sync for split view sub-rows ──────────────────────
+  useEffect(() => {
+    if (!splitTopics || !tbodyRef.current) return;
+    const tbody = tbodyRef.current;
+    requestAnimationFrame(() => {
+      tbody.querySelectorAll('tr[data-kw-id]').forEach(tr => {
+        const lists = Array.from(tr.querySelectorAll('.ast-split-list'));
+        if (lists.length < 2) return;
+        const maxLen = Math.max(...lists.map(l => l.children.length));
+        // Clear heights
+        lists.forEach(l => {
+          Array.from(l.children).forEach(el => {
+            (el as HTMLElement).style.height = '';
+            (el as HTMLElement).style.minHeight = '';
+          });
+        });
+        // Measure and sync
+        for (let i = 0; i < maxLen; i++) {
+          const items = lists.map(l => l.children[i]).filter(Boolean) as HTMLElement[];
+          const maxH = Math.max(...items.map(el => el.getBoundingClientRect().height));
+          if (maxH > 0) items.forEach(el => { el.style.minHeight = maxH + 'px'; });
+        }
+      });
+    });
+  });
+
   const selCount = useMemo(() => visible.filter(k => selected.has(k.id)).length, [visible, selected]);
   const selectAllState: 'none' | 'some' | 'all' = selCount === 0 ? 'none' : selCount === visible.length ? 'all' : 'some';
   const selectAllRef = useRef<HTMLInputElement>(null);
@@ -168,7 +226,6 @@ export default function ASTTable({
 
   function handleToggleAll(checked: boolean) {
     setSelected(prev => { const next = new Set(prev); visible.forEach(k => checked ? next.add(k.id) : next.delete(k.id)); return next; });
-    // Auto-add to TIF when checking all
     if (checked && onAddToTif) {
       const kws = visible.map(k => k.keyword);
       if (kws.length > 0) onAddToTif(kws);
@@ -177,7 +234,6 @@ export default function ASTTable({
   function handleToggleRow(id: string) {
     const wasSelected = selected.has(id);
     setSelected(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
-    // Auto-add to TIF when checking (not unchecking)
     if (!wasSelected && onAddToTif) {
       const kw = keywords.find(k => k.id === id);
       if (kw) onAddToTif([kw.keyword]);
@@ -254,6 +310,132 @@ export default function ASTTable({
     }
   }
 
+  // ── Split view: edit a single topic pill with batch propagation ──
+  async function handleSplitTopicEdit(kwId: string, oldTopic: string, newTopic: string) {
+    const kw = keywords.find(k => k.id === kwId);
+    if (!kw) return;
+    const isChecked = splitIsChecked(splitTopicSel, kwId, oldTopic);
+    if (isChecked) {
+      const allChecked = splitAllChecked(splitTopicSel);
+      const sameText = allChecked.every(d => d.topic === oldTopic);
+      if (sameText) {
+        // Batch: rename/delete this topic on all checked keywords
+        const promises: Promise<void>[] = [];
+        for (const d of allChecked) {
+          const rec = keywords.find(k => k.id === d.kwId);
+          if (!rec) continue;
+          const arr = parseTopics(rec.topic);
+          const idx = arr.indexOf(d.topic);
+          if (idx === -1) continue;
+          if (newTopic === '') arr.splice(idx, 1); else arr[idx] = newTopic;
+          // Also update canvasLoc and topicApproved keys
+          const cl = { ...(rec.canvasLoc || {}) };
+          const ta = { ...(rec.topicApproved || {}) };
+          if (newTopic === '') {
+            delete cl[d.topic]; delete ta[d.topic];
+          } else if (newTopic !== d.topic) {
+            if (cl[d.topic] !== undefined) { cl[newTopic] = cl[d.topic]; delete cl[d.topic]; }
+            if (ta[d.topic] !== undefined) { ta[newTopic] = ta[d.topic]; delete ta[d.topic]; }
+          }
+          promises.push(onUpdateKeyword(rec.id, { topic: arr.join(' | '), canvasLoc: cl, topicApproved: ta }));
+        }
+        await Promise.all(promises);
+        setSplitTopicSel(new Map());
+        return;
+      }
+    }
+    // Single edit
+    const arr = parseTopics(kw.topic);
+    const idx = arr.indexOf(oldTopic);
+    if (idx === -1) return;
+    if (newTopic === '') arr.splice(idx, 1); else arr[idx] = newTopic;
+    const cl = { ...(kw.canvasLoc || {}) };
+    const ta = { ...(kw.topicApproved || {}) };
+    if (newTopic === '') {
+      delete cl[oldTopic]; delete ta[oldTopic];
+    } else if (newTopic !== oldTopic) {
+      if (cl[oldTopic] !== undefined) { cl[newTopic] = cl[oldTopic]; delete cl[oldTopic]; }
+      if (ta[oldTopic] !== undefined) { ta[newTopic] = ta[oldTopic]; delete ta[oldTopic]; }
+    }
+    await onUpdateKeyword(kw.id, { topic: arr.join(' | '), canvasLoc: cl, topicApproved: ta });
+  }
+
+  // ── Split view: add a new topic ──
+  async function handleSplitTopicAdd(kwId: string, newTopic: string) {
+    const kw = keywords.find(k => k.id === kwId);
+    if (!kw) return;
+    const arr = parseTopics(kw.topic);
+    if (!arr.includes(newTopic)) {
+      arr.push(newTopic);
+      await onUpdateKeyword(kw.id, { topic: arr.join(' | ') });
+    }
+  }
+
+  // ── Split view: toggle topic approved status ──
+  async function handleSplitApprovalToggle(kwId: string, topic: string) {
+    const kw = keywords.find(k => k.id === kwId);
+    if (!kw) return;
+    const ta = { ...(kw.topicApproved || {}) };
+    const cur = !!ta[topic];
+    const newState = !cur;
+    if (newState) ta[topic] = true; else delete ta[topic];
+    // Propagate via checked topic pills
+    if (splitIsChecked(splitTopicSel, kwId, topic)) {
+      const allChecked = splitAllChecked(splitTopicSel);
+      const promises: Promise<void>[] = [];
+      for (const d of allChecked) {
+        if (d.kwId === kwId && d.topic === topic) continue;
+        const rec = keywords.find(k => k.id === d.kwId);
+        if (!rec) continue;
+        const rta = { ...(rec.topicApproved || {}) };
+        if (newState) rta[d.topic] = true; else delete rta[d.topic];
+        promises.push(onUpdateKeyword(rec.id, { topicApproved: rta }));
+      }
+      await Promise.all([onUpdateKeyword(kw.id, { topicApproved: ta }), ...promises]);
+    } else {
+      await onUpdateKeyword(kw.id, { topicApproved: ta });
+    }
+  }
+
+  // ── Split view: edit description with batch propagation ──
+  async function handleSplitDescEdit(kwId: string, topic: string, newDesc: string) {
+    const kw = keywords.find(k => k.id === kwId);
+    if (!kw) return;
+    const cl = { ...(kw.canvasLoc || {}) };
+    const origVal = cl[topic] || '';
+    if (newDesc === '') delete cl[topic]; else cl[topic] = newDesc;
+
+    // Propagate via topic checkboxes
+    const promises: Promise<void>[] = [];
+    if (splitIsChecked(splitTopicSel, kwId, topic)) {
+      const allChecked = splitAllChecked(splitTopicSel);
+      for (const d of allChecked) {
+        if (d.kwId === kwId && d.topic === topic) continue;
+        const rec = keywords.find(k => k.id === d.kwId);
+        if (!rec) continue;
+        const rcl = { ...(rec.canvasLoc || {}) };
+        if (newDesc === '') delete rcl[d.topic]; else rcl[d.topic] = newDesc;
+        promises.push(onUpdateKeyword(rec.id, { canvasLoc: rcl }));
+      }
+    }
+    // Propagate via desc checkboxes
+    if (splitIsChecked(splitDescSel, kwId, topic)) {
+      const allDescChecked = splitAllChecked(splitDescSel);
+      for (const d of allDescChecked) {
+        if (d.kwId === kwId && d.topic === topic) continue;
+        const rec = keywords.find(k => k.id === d.kwId);
+        if (!rec) continue;
+        const rOrigVal = (rec.canvasLoc || {})[d.topic] || '';
+        if (rOrigVal === origVal) {
+          const rcl = { ...(rec.canvasLoc || {}) };
+          if (newDesc === '') delete rcl[d.topic]; else rcl[d.topic] = newDesc;
+          promises.push(onUpdateKeyword(rec.id, { canvasLoc: rcl }));
+        }
+      }
+    }
+    await Promise.all([onUpdateKeyword(kw.id, { canvasLoc: cl }), ...promises]);
+  }
+
   async function handleAddKeyword(e: React.KeyboardEvent) {
     if (e.key !== 'Enter') return;
     const kw = kwInputRef.current?.value || '';
@@ -304,7 +486,7 @@ export default function ASTTable({
   }
 
   function handleSearch() { if (frameRef.current) frameRef.current.scrollTop = 0; setScrollTop(0); }
-  
+
   function handleCopyTableData() {
     if (visible.length === 0) { showToast('⚠ No visible rows to copy.'); return; }
     const header = ['Keyword'];
@@ -457,11 +639,14 @@ export default function ASTTable({
               <th className={showVol ? '' : 'ast-col-hidden'} style={{ position: 'relative' }}><div className="th-inner">Volume <span className="ast-chip">{showVol ? fmtV(volSum) : '—'}</span></div><div className="ast-col-resize" onMouseDown={e => handleColResize(e, 2)} /></th>
               <th style={{ position: 'relative' }}><div className="th-inner">Sorting Status</div><div className="ast-col-resize" onMouseDown={e => handleColResize(e, 3)} /></th>
               <th className={showTags ? '' : 'ast-col-hidden'} style={{ position: 'relative' }}><div className="th-inner">Tags<input type="text" className="ast-search-inp" placeholder="search tags…" value={tagQ} onChange={e => setTagQ(e.target.value)} onClick={e => e.stopPropagation()} style={{ width: 72, fontSize: 8, marginLeft: 3 }} /></div><div className="ast-col-resize" onMouseDown={e => handleColResize(e, 4)} /></th>
-              <th className={showTopics ? '' : 'ast-col-hidden'} style={{ position: 'relative' }}><div className="th-inner">Topics<input type="text" className="ast-search-inp" placeholder="search topics…" value={topicQ} onChange={e => setTopicQ(e.target.value)} onClick={e => e.stopPropagation()} style={{ width: 72, fontSize: 8, marginLeft: 3 }} /></div><div className="ast-col-resize" onMouseDown={e => handleColResize(e, 5)} /></th>
+              <th className={showTopics ? '' : 'ast-col-hidden'} style={{ position: 'relative', cursor: 'pointer' }}
+                onClick={() => setSplitTopics(s => !s)}
+                title="Click to toggle Split / Combined Topics view"
+              ><div className="th-inner">Topics{splitTopics && <span className="ast-split-badge">Split</span>}<input type="text" className="ast-search-inp" placeholder="search topics…" value={topicQ} onChange={e => setTopicQ(e.target.value)} onClick={e => e.stopPropagation()} style={{ width: 72, fontSize: 8, marginLeft: 3 }} /></div><div className="ast-col-resize" onMouseDown={e => handleColResize(e, 5)} /></th>
               <th className={showTopicDesc ? '' : 'ast-col-hidden'} style={{ position: 'relative' }}><div className="th-inner">Topic Descriptions</div><div className="ast-col-resize" onMouseDown={e => handleColResize(e, 6)} /></th>
             </tr></thead>
-            <tbody>
-              <tr style={{ height: topPad }} aria-hidden="true"><td colSpan={7} style={{ padding: 0, border: 'none' }} /></tr>
+            <tbody ref={tbodyRef}>
+              {useVirtualScroll && <tr style={{ height: topPad }} aria-hidden="true"><td colSpan={7} style={{ padding: 0, border: 'none' }} /></tr>}
               {total === 0 && !loading ? (<tr><td colSpan={7}><div className="ast-empty"><div className="ast-empty-icon">📋</div><div>No keywords yet. Add keywords below or paste from Excel.</div></div></td></tr>) : (
                 slicedRows.map(k => (
                   <ASTRow key={k.id} kw={k} isSelected={selected.has(k.id)} isDragging={dragId === k.id}
@@ -472,10 +657,18 @@ export default function ASTTable({
                     onTopicClick={(topic: string) => setTopicFilter(prev => prev === topic ? '' : topic)}
                     onDragStart={e => handleDragStart(e, k.id)} onDragEnd={handleDragEnd}
                     onDragOver={e => handleDragOver(e, k.id)} onDrop={handleDrop}
-                    showVol={showVol} showTags={showTags} showTopics={showTopics} showTopicDesc={showTopicDesc} />
+                    showVol={showVol} showTags={showTags} showTopics={showTopics} showTopicDesc={showTopicDesc}
+                    splitTopics={splitTopics}
+                    splitTopicSel={splitTopicSel} setSplitTopicSel={setSplitTopicSel}
+                    splitDescSel={splitDescSel} setSplitDescSel={setSplitDescSel}
+                    onSplitTopicEdit={handleSplitTopicEdit}
+                    onSplitTopicAdd={handleSplitTopicAdd}
+                    onSplitApprovalToggle={handleSplitApprovalToggle}
+                    onSplitDescEdit={handleSplitDescEdit}
+                  />
                 ))
               )}
-              <tr style={{ height: bottomPad }} aria-hidden="true"><td colSpan={7} style={{ padding: 0, border: 'none' }} /></tr>
+              {useVirtualScroll && <tr style={{ height: bottomPad }} aria-hidden="true"><td colSpan={7} style={{ padding: 0, border: 'none' }} /></tr>}
             </tbody>
             <tfoot><tr>
               <td style={{ textAlign: 'center', fontSize: 11, color: 'var(--accent)', fontWeight: 700, padding: '2px' }}>＋</td>
@@ -579,7 +772,7 @@ function TagCell({ tags, onTagClick, onTagEdit, hidden }: TagCellProps) {
   );
 }
 
-// ── Topic Cell Component ────────────────────────────────────────
+// ── Topic Cell Component (Combined view) ────────────────────────
 interface TopicCellProps { topics: string; onTopicEdit: (oldTopics: string, newTopics: string) => void; onTopicClick: (topic: string) => void; hidden: boolean; }
 
 function TopicCell({ topics, onTopicEdit, onTopicClick, hidden }: TopicCellProps) {
@@ -639,6 +832,233 @@ function TopicCell({ topics, onTopicEdit, onTopicClick, hidden }: TopicCellProps
   );
 }
 
+// ── Split Topic Cell (one sub-row per topic) ───────────────────
+interface SplitTopicCellProps {
+  kw: Keyword;
+  splitTopicSel: SplitSelMap;
+  setSplitTopicSel: React.Dispatch<React.SetStateAction<SplitSelMap>>;
+  onSplitTopicEdit: (kwId: string, oldTopic: string, newTopic: string) => void;
+  onSplitTopicAdd: (kwId: string, newTopic: string) => void;
+  onSplitApprovalToggle: (kwId: string, topic: string) => void;
+  hidden: boolean;
+}
+
+function SplitTopicCell({ kw, splitTopicSel, setSplitTopicSel, onSplitTopicEdit, onSplitTopicAdd, onSplitApprovalToggle, hidden }: SplitTopicCellProps) {
+  const [editTopic, setEditTopic] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
+  const [addMode, setAddMode] = useState(false);
+  const [addValue, setAddValue] = useState('');
+  const editRef = useRef<HTMLInputElement>(null);
+  const addRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { if (editTopic !== null && editRef.current) { editRef.current.focus(); editRef.current.select(); } }, [editTopic]);
+  useEffect(() => { if (addMode && addRef.current) addRef.current.focus(); }, [addMode]);
+
+  if (hidden) return <td className="ast-col-hidden" />;
+
+  const topics = parseTopics(kw.topic);
+
+  function handleCheckbox(topic: string, checked: boolean) {
+    setSplitTopicSel(prev => splitSetChecked(prev, kw.id, topic, checked));
+  }
+
+  function startEdit(topic: string, e: React.MouseEvent) {
+    e.stopPropagation();
+    setEditTopic(topic);
+    setEditValue(topic);
+    setAddMode(false);
+  }
+
+  function commitEdit() {
+    if (editTopic === null) return;
+    const newVal = editValue.trim();
+    if (newVal !== editTopic) {
+      onSplitTopicEdit(kw.id, editTopic, newVal);
+    }
+    setEditTopic(null); setEditValue('');
+  }
+
+  function commitAdd() {
+    const v = addValue.trim();
+    if (v) onSplitTopicAdd(kw.id, v);
+    setAddMode(false); setAddValue('');
+  }
+
+  return (
+    <td style={{ verticalAlign: 'top', padding: 0, overflow: 'visible', whiteSpace: 'nowrap' }}>
+      <div className="ast-split-list">
+        {topics.length === 0 ? (
+          <div className="ast-split-item" />
+        ) : (
+          topics.map(topic => {
+            const isChecked = splitIsChecked(splitTopicSel, kw.id, topic);
+            const approved = kw.topicApproved && kw.topicApproved[topic];
+            return (
+              <div key={topic} className="ast-split-item" data-kw-id={kw.id} data-topic={topic}
+                onMouseEnter={e => {
+                  const tr = (e.currentTarget as HTMLElement).closest('tr');
+                  if (!tr) return;
+                  const idx = Array.from(e.currentTarget.parentElement!.children).indexOf(e.currentTarget);
+                  const partner = tr.querySelectorAll('.ast-split-list')[1]?.children[idx] as HTMLElement | undefined;
+                  if (partner) partner.classList.add('ast-split-hl');
+                  e.currentTarget.classList.add('ast-split-hl');
+                }}
+                onMouseLeave={e => {
+                  const tr = (e.currentTarget as HTMLElement).closest('tr');
+                  if (!tr) return;
+                  const idx = Array.from(e.currentTarget.parentElement!.children).indexOf(e.currentTarget);
+                  const partner = tr.querySelectorAll('.ast-split-list')[1]?.children[idx] as HTMLElement | undefined;
+                  if (partner) partner.classList.remove('ast-split-hl');
+                  e.currentTarget.classList.remove('ast-split-hl');
+                }}
+              >
+                <span className="ast-split-drag" title="Drag this topic to canvas">⁞</span>
+                <input type="checkbox" checked={isChecked}
+                  onChange={e => handleCheckbox(topic, e.target.checked)}
+                  onClick={e => e.stopPropagation()}
+                  style={{ width: 11, height: 11, accentColor: 'var(--accent)', cursor: 'pointer', flexShrink: 0 }}
+                  title={topic} />
+                {editTopic === topic ? (
+                  <input ref={editRef} className="ast-tag-inp" type="text" value={editValue}
+                    onChange={e => setEditValue(e.target.value)} onClick={e => e.stopPropagation()}
+                    onBlur={commitEdit}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); (e.target as HTMLInputElement).blur(); } if (e.key === 'Escape') { setEditTopic(null); setEditValue(''); } }}
+                    style={{ width: 100, flexShrink: 0 }} />
+                ) : (
+                  <span className="ast-topic-pill" style={{ flexShrink: 0, cursor: 'pointer' }}
+                    onClick={e => startEdit(topic, e)}
+                    title={`Click to edit topic "${topic}"`}>{topic}</span>
+                )}
+                <button className={`ast-split-status ${approved ? 'ast-split-ok' : 'ast-split-x'}`}
+                  onClick={e => { e.stopPropagation(); onSplitApprovalToggle(kw.id, topic); }}
+                  title={approved ? 'Approved — click to unapprove' : 'Unapproved — click to approve'}>
+                  {approved ? '✓' : '✕'}
+                </button>
+              </div>
+            );
+          })
+        )}
+        <div className="ast-split-item ast-split-add"
+          onClick={e => { e.stopPropagation(); setAddMode(true); setAddValue(''); }}>
+          {addMode ? (
+            <input ref={addRef} className="ast-tag-inp" type="text" placeholder="New topic…" value={addValue}
+              onChange={e => setAddValue(e.target.value)} onClick={e => e.stopPropagation()}
+              onBlur={commitAdd}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); (e.target as HTMLInputElement).blur(); } if (e.key === 'Escape') { setAddMode(false); setAddValue(''); } }}
+              style={{ width: 120, flexShrink: 0 }} />
+          ) : (
+            <span style={{ cursor: 'pointer', color: 'var(--accent)', fontSize: '0.8em', opacity: 0.55, userSelect: 'none' }}>⊕ add topic</span>
+          )}
+        </div>
+      </div>
+    </td>
+  );
+}
+
+// ── Split Description Cell (one sub-row per topic) ─────────────
+interface SplitDescCellProps {
+  kw: Keyword;
+  splitDescSel: SplitSelMap;
+  setSplitDescSel: React.Dispatch<React.SetStateAction<SplitSelMap>>;
+  onSplitDescEdit: (kwId: string, topic: string, newDesc: string) => void;
+  hidden: boolean;
+}
+
+function SplitDescCell({ kw, splitDescSel, setSplitDescSel, onSplitDescEdit, hidden }: SplitDescCellProps) {
+  const [editTopic, setEditTopic] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
+  const taRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (editTopic !== null && taRef.current) {
+      taRef.current.focus();
+      taRef.current.setSelectionRange(taRef.current.value.length, taRef.current.value.length);
+    }
+  }, [editTopic]);
+
+  if (hidden) return <td className="ast-col-hidden" />;
+
+  const topics = parseTopics(kw.topic);
+
+  function handleCheckbox(topic: string, checked: boolean) {
+    setSplitDescSel(prev => splitSetChecked(prev, kw.id, topic, checked));
+  }
+
+  function startEditor(topic: string) {
+    const val = (kw.canvasLoc && kw.canvasLoc[topic]) || '';
+    setEditTopic(topic);
+    setEditValue(val);
+  }
+
+  function commitEdit() {
+    if (editTopic === null) return;
+    onSplitDescEdit(kw.id, editTopic, editValue.trim());
+    setEditTopic(null); setEditValue('');
+  }
+
+  function cancelEdit() {
+    setEditTopic(null); setEditValue('');
+  }
+
+  return (
+    <td style={{ verticalAlign: 'top', padding: 0, overflow: 'visible', whiteSpace: 'normal' }}>
+      <div className="ast-split-list ast-split-desc-wrap">
+        {topics.length === 0 ? (
+          <div className="ast-split-item" style={{ display: 'block', padding: 2 }} />
+        ) : (
+          topics.map(topic => {
+            const isChecked = splitIsChecked(splitDescSel, kw.id, topic);
+            const desc = (kw.canvasLoc && kw.canvasLoc[topic]) || '';
+            return (
+              <div key={topic} className="ast-split-item"
+                style={{ display: 'flex', alignItems: 'flex-start', gap: 3, padding: '2px', overflow: 'visible', whiteSpace: 'normal' }}
+                onMouseEnter={e => {
+                  const tr = (e.currentTarget as HTMLElement).closest('tr');
+                  if (!tr) return;
+                  const idx = Array.from(e.currentTarget.parentElement!.children).indexOf(e.currentTarget);
+                  const partner = tr.querySelectorAll('.ast-split-list')[0]?.children[idx] as HTMLElement | undefined;
+                  if (partner) partner.classList.add('ast-split-hl');
+                  e.currentTarget.classList.add('ast-split-hl');
+                }}
+                onMouseLeave={e => {
+                  const tr = (e.currentTarget as HTMLElement).closest('tr');
+                  if (!tr) return;
+                  const idx = Array.from(e.currentTarget.parentElement!.children).indexOf(e.currentTarget);
+                  const partner = tr.querySelectorAll('.ast-split-list')[0]?.children[idx] as HTMLElement | undefined;
+                  if (partner) partner.classList.remove('ast-split-hl');
+                  e.currentTarget.classList.remove('ast-split-hl');
+                }}
+              >
+                <input type="checkbox" checked={isChecked}
+                  onChange={e => handleCheckbox(topic, e.target.checked)}
+                  onClick={e => e.stopPropagation()}
+                  className="ast-split-desc-cb" title="Check to bulk-edit descriptions" />
+                {editTopic === topic ? (
+                  <textarea ref={taRef} className="ast-split-desc-ta" value={editValue}
+                    onChange={e => setEditValue(e.target.value)}
+                    placeholder={`Enter description for "${topic}"…`}
+                    onBlur={commitEdit}
+                    onKeyDown={e => {
+                      if (e.key === 'Escape') { e.preventDefault(); cancelEdit(); }
+                      if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); commitEdit(); }
+                    }} />
+                ) : (
+                  <span className={`ast-split-desc-text${desc ? '' : ' empty'}`}
+                    onClick={() => startEditor(topic)}
+                    title={`Click to edit description for "${topic}"`}
+                    style={{ flex: 1 }}>
+                    {desc || '+ add description…'}
+                  </span>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+    </td>
+  );
+}
+
 // ── Row component (memoized for virtual scroll perf) ─────────
 interface ASTRowProps {
   kw: Keyword; isSelected: boolean; isDragging: boolean;
@@ -648,17 +1068,27 @@ interface ASTRowProps {
   onTopicClick: (topic: string) => void;
   onDragStart: (e: React.DragEvent) => void; onDragEnd: () => void; onDragOver: (e: React.DragEvent) => void; onDrop: (e: React.DragEvent) => void;
   showVol: boolean; showTags: boolean; showTopics: boolean; showTopicDesc: boolean;
+  splitTopics: boolean;
+  splitTopicSel: SplitSelMap; setSplitTopicSel: React.Dispatch<React.SetStateAction<SplitSelMap>>;
+  splitDescSel: SplitSelMap; setSplitDescSel: React.Dispatch<React.SetStateAction<SplitSelMap>>;
+  onSplitTopicEdit: (kwId: string, oldTopic: string, newTopic: string) => void;
+  onSplitTopicAdd: (kwId: string, newTopic: string) => void;
+  onSplitApprovalToggle: (kwId: string, topic: string) => void;
+  onSplitDescEdit: (kwId: string, topic: string, newDesc: string) => void;
 }
 
 const ASTRow = React.memo(function ASTRow({
   kw, isSelected, isDragging, onToggle, onCycleStatus, onRemove, onGoogleSearch, onTagClick,
   onTagEdit, onTopicEdit, onTopicClick, onDragStart, onDragEnd, onDragOver, onDrop, showVol, showTags, showTopics, showTopicDesc,
+  splitTopics, splitTopicSel, setSplitTopicSel, splitDescSel, setSplitDescSel,
+  onSplitTopicEdit, onSplitTopicAdd, onSplitApprovalToggle, onSplitDescEdit,
 }: ASTRowProps) {
   const pillClass = kw.sortingStatus === 'Completely Sorted' ? 'ast-pill ast-pill-c' : kw.sortingStatus === 'AI-Sorted' ? 'ast-pill ast-pill-ai' : kw.sortingStatus === 'Partially Sorted' ? 'ast-pill ast-pill-p' : 'ast-pill ast-pill-u';
   const trRef = useRef<HTMLTableRowElement>(null);
 
   return (
-    <tr ref={trRef} className={`${isSelected ? 'ast-sel' : ''} ${isDragging ? 'ast-dragging' : ''}`}
+    <tr ref={trRef} data-kw-id={kw.id}
+      className={`${isSelected ? 'ast-sel' : ''} ${isDragging ? 'ast-dragging' : ''}`}
       draggable={false} onDragStart={onDragStart}
       onDragEnd={() => { if (trRef.current) trRef.current.draggable = false; onDragEnd(); }}
       onDragOver={onDragOver} onDrop={onDrop}>
@@ -674,8 +1104,19 @@ const ASTRow = React.memo(function ASTRow({
       <td className={showVol ? '' : 'ast-col-hidden'} style={{ textAlign: 'right', paddingRight: 6 }}>{kw.volume ? fmtV(kw.volume) : ''}</td>
       <td style={{ cursor: 'pointer' }} title="Click to cycle status" onClick={onCycleStatus}><span className={pillClass}>{kw.sortingStatus}</span></td>
       <TagCell tags={kw.tags} onTagClick={onTagClick} onTagEdit={onTagEdit} hidden={!showTags} />
-      <TopicCell topics={kw.topic || ''} onTopicEdit={onTopicEdit} onTopicClick={onTopicClick} hidden={!showTopics} />
-      <td className={showTopicDesc ? '' : 'ast-col-hidden'}></td>
+      {splitTopics && showTopics ? (
+        <SplitTopicCell kw={kw} splitTopicSel={splitTopicSel} setSplitTopicSel={setSplitTopicSel}
+          onSplitTopicEdit={onSplitTopicEdit} onSplitTopicAdd={onSplitTopicAdd}
+          onSplitApprovalToggle={onSplitApprovalToggle} hidden={!showTopics} />
+      ) : (
+        <TopicCell topics={kw.topic || ''} onTopicEdit={onTopicEdit} onTopicClick={onTopicClick} hidden={!showTopics} />
+      )}
+      {splitTopics && showTopicDesc ? (
+        <SplitDescCell kw={kw} splitDescSel={splitDescSel} setSplitDescSel={setSplitDescSel}
+          onSplitDescEdit={onSplitDescEdit} hidden={!showTopicDesc} />
+      ) : (
+        <td className={showTopicDesc ? '' : 'ast-col-hidden'}></td>
+      )}
     </tr>
   );
 });

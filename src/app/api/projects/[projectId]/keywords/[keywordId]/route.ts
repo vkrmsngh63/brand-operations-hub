@@ -19,6 +19,8 @@ export async function PATCH(
         ...(body.tags !== undefined && { tags: body.tags }),
         ...(body.topic !== undefined && { topic: body.topic }),
         ...(body.sortOrder !== undefined && { sortOrder: body.sortOrder }),
+          ...(body.canvasLoc !== undefined && { canvasLoc: body.canvasLoc }),
+          ...(body.topicApproved !== undefined && { topicApproved: body.topicApproved }),
       },
     });
 

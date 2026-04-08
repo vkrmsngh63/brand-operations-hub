@@ -16,6 +16,8 @@ model Keyword {
   sortingStatus  String   @default("Unsorted")
   tags           String   @default("")
   topic          String   @default("")
+  canvasLoc      Json     @default("{}")
+  topicApproved  Json     @default("{}")
   sortOrder      Int      @default(0)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt

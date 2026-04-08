@@ -11,6 +11,8 @@ export interface Keyword {
   tags: string;
   topic: string;
   sortOrder: number;
+    canvasLoc: Record<string, string>;
+    topicApproved: Record<string, boolean>;
   projectId: string;
 }
 
