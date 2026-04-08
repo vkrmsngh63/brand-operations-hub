@@ -585,7 +585,7 @@ export default function ASTTable({
   }
 
   return (
-    <div className="ast-panel" style={{ fontSize: `${fontSize}px` }}>
+    <div className="ast-panel" style={{ zoom: fontSize / 11 }}>
       <div className="ast-ph">
         <span>All Search Terms</span>
         <button className="ast-btn-rm" onClick={() => setShowRemovedOverlay(true)} title="Show removed keywords">
