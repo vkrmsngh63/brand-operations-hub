@@ -163,12 +163,13 @@ export default function ASTTable({
   const viewH = frameH || 400;
 
   // Virtual scrolling — disabled when split mode is on (variable row heights)
-  const useVirtualScroll = !splitTopics;
-  const minVisible = Math.ceil(viewH / ROW_HEIGHT) + VS_BUFFER * 2 + 4;
-  const startIdx = useVirtualScroll ? Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - VS_BUFFER) : 0;
-  const endIdx = useVirtualScroll ? Math.min(total, Math.max(startIdx + minVisible, Math.ceil((scrollTop + viewH) / ROW_HEIGHT) + VS_BUFFER + 1)) : total;
-  const topPad = useVirtualScroll ? startIdx * ROW_HEIGHT : 0;
-  const bottomPad = useVirtualScroll ? Math.max(0, (total - endIdx) * ROW_HEIGHT) : 0;
+  const splitRowH = splitTopics ? 80 : ROW_HEIGHT;
+  const useVirtualScroll = true;
+  const minVisible = Math.ceil(viewH / splitRowH) + VS_BUFFER * 2 + 4;
+  const startIdx = useVirtualScroll ? Math.max(0, Math.floor(scrollTop / splitRowH) - VS_BUFFER) : 0;
+  const endIdx = useVirtualScroll ? Math.min(total, Math.max(startIdx + minVisible, Math.ceil((scrollTop + viewH) / splitRowH) + VS_BUFFER + 1)) : total;
+  const topPad = useVirtualScroll ? startIdx * splitRowH : 0;
+  const bottomPad = useVirtualScroll ? Math.max(0, (total - endIdx) * splitRowH) : 0;
   const slicedRows = visible.slice(startIdx, endIdx);
 
   const rafRef = useRef<number | null>(null);
@@ -212,7 +213,7 @@ export default function ASTTable({
         }
       });
     });
-  });
+  }, [splitTopics, keywords, showTopics, showTopicDesc]);
 
   const selCount = useMemo(() => visible.filter(k => selected.has(k.id)).length, [visible, selected]);
   const selectAllState: 'none' | 'some' | 'all' = selCount === 0 ? 'none' : selCount === visible.length ? 'all' : 'some';
