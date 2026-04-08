@@ -597,3 +597,25 @@
 .mt-topicdesc-td:has(.mt-split-desc-wrap) {
   padding: 0 !important;
 }
+
+/* ── MT Split vertical alignment fix ─────────────────────────── */
+/* Both topic and desc sub-items align content at top consistently */
+.mt-split-topic-wrap > .mt-split-topic-item,
+.mt-split-desc-wrap > .mt-split-topic-item {
+  align-items: flex-start !important;
+  padding-top: 3px !important;
+  padding-bottom: 3px !important;
+}
+/* Spacer divs in Topics and Desc columns must match exactly */
+.mt-topics-td .mt-kw-spacer,
+.mt-topicdesc-td .mt-kw-spacer {
+  padding: 3px 5px;
+  box-sizing: border-box;
+}
+/* Ensure mt-kw-list in both columns has no extra margin/gap */
+.mt-topics-td .mt-kw-list,
+.mt-topicdesc-td .mt-kw-list {
+  gap: 0;
+  margin: 0;
+  padding: 0;
+}
