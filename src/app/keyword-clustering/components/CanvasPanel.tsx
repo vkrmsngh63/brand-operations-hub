@@ -5,7 +5,6 @@ import CanvasEditPanel from './CanvasEditPanel';
 import type { Keyword } from '@/hooks/useKeywords';
 import './canvas-panel.css';
 
-/* ── Constants ─────────────────────────────────────────────────── */
 const MIN_ZOOM = 0.15;
 const MAX_ZOOM = 3;
 const NODE_W = 220;
@@ -34,34 +33,32 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasAreaRef = useRef<HTMLDivElement>(null);
 
-  /* ── Viewport state ──────────────────────────────────────────── */
   const [viewX, setViewX] = useState(0);
   const [viewY, setViewY] = useState(0);
   const [zoom, setZoom] = useState(1);
   const [isPanning, setIsPanning] = useState(false);
   const panStart = useRef({ x: 0, y: 0, vx: 0, vy: 0 });
 
-  /* ── Drag node state ─────────────────────────────────────────── */
   const [dragNodeId, setDragNodeId] = useState<number | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const dragMoved = useRef(false);
 
-  /* ── Selection & context menu ────────────────────────────────── */
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; nodeId: number } | null>(null);
 
-  /* ── Edit-in-place state ─────────────────────────────────────── */
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editVal, setEditVal] = useState('');
 
-  /* ── Edit panel (right drawer) state ─────────────────────────── */
   const [editPanelNodeId, setEditPanelNodeId] = useState<number | null>(null);
 
-  /* ── Link mode state ─────────────────────────────────────────── */
+  /* ── Hover popover state ─────────────────────────────────────── */
+  const [hoverNodeId, setHoverNodeId] = useState<number | null>(null);
+  const [hoverPos, setHoverPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const [linkMode, setLinkMode] = useState<'linear' | 'nested' | null>(null);
   const [linkSource, setLinkSource] = useState<number | null>(null);
 
-  /* ── Toast state ─────────────────────────────────────────────── */
   const [toast, setToast] = useState('');
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   function showToast(msg: string) {
@@ -70,10 +67,8 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
     toastTimer.current = setTimeout(() => setToast(''), 3000);
   }
 
-  /* ── Load canvas data ────────────────────────────────────────── */
   useEffect(() => { fetchCanvas(); }, [fetchCanvas]);
 
-  /* ── Sync viewport from DB on first load ─────────────────────── */
   useEffect(() => {
     if (canvasState) {
       setViewX(canvasState.viewX);
@@ -82,7 +77,6 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
     }
   }, [canvasState]);
 
-  /* ── Save viewport to DB (debounced) ─────────────────────────── */
   const viewSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveViewport = useCallback((vx: number, vy: number, z: number) => {
     if (viewSaveTimer.current) clearTimeout(viewSaveTimer.current);
@@ -91,7 +85,6 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
     }, 500);
   }, [updateCanvasState]);
 
-  /* ── Screen coords → canvas coords ──────────────────────────── */
   function screenToCanvas(sx: number, sy: number) {
     const rect = svgRef.current?.getBoundingClientRect();
     if (!rect) return { x: 0, y: 0 };
@@ -101,21 +94,13 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
     };
   }
 
-  /* ── PAN handlers ────────────────────────────────────────────── */
   function handleBgMouseDown(e: React.MouseEvent) {
     if (e.button !== 0) return;
     if ((e.target as Element).closest('.cvs-node-group')) return;
-    if (linkMode) {
-      setLinkMode(null);
-      setLinkSource(null);
-      showToast('Link cancelled');
-      return;
-    }
+    if (linkMode) { setLinkMode(null); setLinkSource(null); showToast('Link cancelled'); return; }
     setIsPanning(true);
     panStart.current = { x: e.clientX, y: e.clientY, vx: viewX, vy: viewY };
-    setCtxMenu(null);
-    setSelectedId(null);
-    setEditPanelNodeId(null);
+    setCtxMenu(null); setSelectedId(null); setEditPanelNodeId(null);
     e.preventDefault();
   }
 
@@ -124,10 +109,8 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
     function onMove(e: MouseEvent) {
       const dx = (e.clientX - panStart.current.x) / zoom;
       const dy = (e.clientY - panStart.current.y) / zoom;
-      const nvx = panStart.current.vx - dx;
-      const nvy = panStart.current.vy - dy;
-      setViewX(nvx);
-      setViewY(nvy);
+      setViewX(panStart.current.vx - dx);
+      setViewY(panStart.current.vy - dy);
     }
     function onUp(e: MouseEvent) {
       setIsPanning(false);
@@ -139,13 +122,9 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
     }
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
-    return () => {
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-    };
+    return () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
   }, [isPanning, zoom, saveViewport]);
 
-  /* ── ZOOM handler ────────────────────────────────────────────── */
   function handleWheel(e: React.WheelEvent) {
     e.preventDefault();
     const factor = e.deltaY < 0 ? 1.1 : 0.9;
@@ -156,19 +135,10 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
       const my = (e.clientY - rect.top) / zoom + viewY;
       const nvx = mx - (e.clientX - rect.left) / newZoom;
       const nvy = my - (e.clientY - rect.top) / newZoom;
-      setViewX(nvx);
-      setViewY(nvy);
-      setZoom(newZoom);
-      saveViewport(nvx, nvy, newZoom);
-    } else {
-      setZoom(newZoom);
-      saveViewport(viewX, viewY, newZoom);
-    }
+      setViewX(nvx); setViewY(nvy); setZoom(newZoom); saveViewport(nvx, nvy, newZoom);
+    } else { setZoom(newZoom); saveViewport(viewX, viewY, newZoom); }
   }
 
-  /* ══════════════════════════════════════════════════════════════
-     LINK MODE
-     ══════════════════════════════════════════════════════════════ */
   function isDescendant(nodeId: number, ancestorId: number): boolean {
     let current = nodes.find(n => n.id === nodeId);
     while (current && current.parentId !== null) {
@@ -181,22 +151,20 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
   function handleLinkClick(nodeId: number) {
     if (!linkMode) return;
     if (linkSource === null) {
-      setLinkSource(nodeId);
-      setSelectedId(nodeId);
+      setLinkSource(nodeId); setSelectedId(nodeId);
       showToast(`Now click the ${linkMode === 'nested' ? 'child' : 'second'} node`);
       return;
     }
     if (nodeId === linkSource) { showToast('Cannot link a node to itself'); return; }
     if (isDescendant(linkSource, nodeId)) {
-      showToast('Cannot create circular link');
-      setLinkMode(null); setLinkSource(null); return;
+      showToast('Cannot create circular link'); setLinkMode(null); setLinkSource(null); return;
     }
     if (linkMode === 'nested') {
       updateNodes([{ id: nodeId, parentId: linkSource, relationshipType: 'nested' } as Partial<CanvasNode>]);
-      showToast('✓ Parent→Child link created');
+      showToast('\u2713 Parent\u2192Child link created');
     } else {
       updateNodes([{ id: nodeId, parentId: linkSource, relationshipType: 'linear' } as Partial<CanvasNode>]);
-      showToast('✓ Parent→Parent link created');
+      showToast('\u2713 Parent\u2192Parent link created');
     }
     setLinkMode(null); setLinkSource(null);
   }
@@ -206,10 +174,9 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
     const node = nodes.find(n => n.id === selectedId);
     if (!node || node.parentId === null) { showToast('Node has no parent to detach from'); return; }
     updateNodes([{ id: selectedId, parentId: null, relationshipType: '' } as Partial<CanvasNode>]);
-    showToast('✓ Node detached from parent');
+    showToast('\u2713 Node detached from parent');
   }
 
-  /* ── NODE DRAG handlers ──────────────────────────────────────── */
   function handleNodeMouseDown(e: React.MouseEvent, nodeId: number) {
     if (e.button !== 0) return;
     e.stopPropagation();
@@ -220,9 +187,7 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
     setDragNodeId(nodeId);
     setDragOffset({ x: pos.x - node.x, y: pos.y - node.y });
     dragMoved.current = false;
-    setSelectedId(nodeId);
-    setEditPanelNodeId(nodeId);
-    setCtxMenu(null);
+    setSelectedId(nodeId); setEditPanelNodeId(nodeId); setCtxMenu(null);
   }
 
   useEffect(() => {
@@ -230,11 +195,9 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
     function onMove(e: MouseEvent) {
       dragMoved.current = true;
       const pos = screenToCanvas(e.clientX, e.clientY);
-      const nx = pos.x - dragOffset.x;
-      const ny = pos.y - dragOffset.y;
       const idx = nodes.findIndex(n => n.id === dragNodeId);
       if (idx >= 0) {
-        nodes[idx] = { ...nodes[idx], x: nx, y: ny };
+        nodes[idx] = { ...nodes[idx], x: pos.x - dragOffset.x, y: pos.y - dragOffset.y };
         forceUpdate();
       }
     }
@@ -254,17 +217,15 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
   const [, setTick] = useState(0);
   function forceUpdate() { setTick(t => t + 1); }
 
-  /* ── Context menu ────────────────────────────────────────────── */
   function handleNodeContextMenu(e: React.MouseEvent, nodeId: number) {
     e.preventDefault(); e.stopPropagation();
-    setCtxMenu({ x: e.clientX, y: e.clientY, nodeId });
-    setSelectedId(nodeId);
+    setCtxMenu({ x: e.clientX, y: e.clientY, nodeId }); setSelectedId(nodeId);
   }
 
   function handleDeleteNode() {
     if (ctxMenu) {
-      const childUpdates = nodes.filter(n => n.parentId === ctxMenu.nodeId).map(n => ({ id: n.id, parentId: null, relationshipType: '' }));
-      if (childUpdates.length > 0) updateNodes(childUpdates as Partial<CanvasNode>[]);
+      const ch = nodes.filter(n => n.parentId === ctxMenu.nodeId).map(n => ({ id: n.id, parentId: null, relationshipType: '' }));
+      if (ch.length > 0) updateNodes(ch as Partial<CanvasNode>[]);
       deleteNode(ctxMenu.nodeId);
       if (editPanelNodeId === ctxMenu.nodeId) setEditPanelNodeId(null);
       setCtxMenu(null); setSelectedId(null);
@@ -276,13 +237,12 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
       const node = nodes.find(n => n.id === ctxMenu.nodeId);
       if (node && node.parentId !== null) {
         updateNodes([{ id: ctxMenu.nodeId, parentId: null, relationshipType: '' } as Partial<CanvasNode>]);
-        showToast('✓ Node detached from parent');
+        showToast('\u2713 Node detached from parent');
       } else { showToast('Node has no parent'); }
       setCtxMenu(null);
     }
   }
 
-  /* ── Double-click to edit title ──────────────────────────────── */
   function handleNodeDblClick(nodeId: number) {
     if (linkMode) return;
     const node = nodes.find(n => n.id === nodeId);
@@ -297,12 +257,8 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
     }
   }
 
-  /* ── Edit panel save handler ───────────────────────────────── */
-  function handleEditPanelSave(updates: Partial<CanvasNode>) {
-    updateNodes([updates]);
-  }
+  function handleEditPanelSave(updates: Partial<CanvasNode>) { updateNodes([updates]); }
 
-  /* ── Add node ────────────────────────────────────────────────── */
   async function handleAddNode() {
     const rect = svgRef.current?.getBoundingClientRect();
     const cx = rect ? (rect.width / 2) / zoom + viewX - NODE_W / 2 : viewX;
@@ -311,7 +267,6 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
     if (newNode) { setSelectedId(newNode.id); setEditPanelNodeId(newNode.id); }
   }
 
-  /* ── Zoom buttons ────────────────────────────────────────────── */
   function zoomIn() { const nz = Math.min(MAX_ZOOM, zoom * 1.2); setZoom(nz); saveViewport(viewX, viewY, nz); }
   function zoomOut() { const nz = Math.max(MIN_ZOOM, zoom / 1.2); setZoom(nz); saveViewport(viewX, viewY, nz); }
   function resetView() { setViewX(0); setViewY(0); setZoom(1); saveViewport(0, 0, 1); }
@@ -334,7 +289,6 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
     return () => document.removeEventListener('click', close);
   }, [ctxMenu]);
 
-  /* ── Keyboard ────────────────────────────────────────────────── */
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') {
@@ -347,8 +301,8 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
       if (e.key === 'Delete' && selectedId !== null && editingId === null && !linkMode) {
         const active = document.activeElement;
         if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) return;
-        const childUpdates = nodes.filter(n => n.parentId === selectedId).map(n => ({ id: n.id, parentId: null, relationshipType: '' }));
-        if (childUpdates.length > 0) updateNodes(childUpdates as Partial<CanvasNode>[]);
+        const ch = nodes.filter(n => n.parentId === selectedId).map(n => ({ id: n.id, parentId: null, relationshipType: '' }));
+        if (ch.length > 0) updateNodes(ch as Partial<CanvasNode>[]);
         deleteNode(selectedId);
         if (editPanelNodeId === selectedId) setEditPanelNodeId(null);
         setSelectedId(null);
@@ -358,7 +312,6 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
     return () => document.removeEventListener('keydown', onKey);
   }, [selectedId, editingId, nodes, updateNodes, deleteNode, linkMode, editPanelNodeId]);
 
-  /* ── Connector path builder ──────────────────────────────────── */
   function buildConnectorPath(parent: CanvasNode, child: CanvasNode): { d: string; color: string } {
     const rel = child.relationshipType || 'linear';
     if (rel === 'nested') {
@@ -379,42 +332,39 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
     return PATHWAY_COLORS[(pathwayId - 1) % PATHWAY_COLORS.length];
   }
 
-  /* ── Render ──────────────────────────────────────────────────── */
   const viewBox = `${viewX} ${viewY} ${(canvasAreaRef.current?.clientWidth || containerRef.current?.clientWidth || 800) / zoom} ${(canvasAreaRef.current?.clientHeight || containerRef.current?.clientHeight || 600) / zoom}`;
   const editPanelNode = editPanelNodeId !== null ? nodes.find(n => n.id === editPanelNodeId) ?? null : null;
+  const hoverNode = hoverNodeId !== null ? nodes.find(n => n.id === hoverNodeId) ?? null : null;
 
   return (
     <div className="cvs-root" ref={containerRef}>
-      {/* ── Action bar ───────────────────────────────────────── */}
       <div className="cvs-actions">
-        <button className="cvs-btn" onClick={handleAddNode} title="Add a new topic node">＋ Add Node</button>
-        <button className="cvs-btn" onClick={handleDetachNode} title="Detach selected node from its parent">⊟ Detach</button>
+        <button className="cvs-btn" onClick={handleAddNode} title="Add a new topic node">+ Add Node</button>
+        <button className="cvs-btn" onClick={handleDetachNode} title="Detach selected node from its parent">Detach</button>
         <span className="cvs-sep" />
         <button className={`cvs-btn ${linkMode === 'linear' ? 'cvs-btn-active' : ''}`}
           onClick={() => { if (linkMode === 'linear') { setLinkMode(null); setLinkSource(null); } else { setLinkMode('linear'); setLinkSource(null); showToast('Click the first (parent) node'); } }}
-          title="Parent-Parent link: click two nodes to connect as siblings">↔ P–P Link</button>
+          title="Parent-Parent link">P-P Link</button>
         <button className={`cvs-btn ${linkMode === 'nested' ? 'cvs-btn-active' : ''}`}
           onClick={() => { if (linkMode === 'nested') { setLinkMode(null); setLinkSource(null); } else { setLinkMode('nested'); setLinkSource(null); showToast('Click the parent node first'); } }}
-          title="Parent-Child link: click parent then child to nest">↓ P–C Link</button>
+          title="Parent-Child link">P-C Link</button>
         <span className="cvs-sep" />
-        <button className="cvs-btn" onClick={zoomIn} title="Zoom in">＋ Zoom</button>
-        <button className="cvs-btn" onClick={zoomOut} title="Zoom out">− Zoom</button>
-        <button className="cvs-btn" onClick={resetView} title="Reset view">⊙ Reset</button>
-        <button className="cvs-btn" onClick={fitToScreen} title="Fit all nodes">⛶ Fit</button>
+        <button className="cvs-btn" onClick={zoomIn} title="Zoom in">+ Zoom</button>
+        <button className="cvs-btn" onClick={zoomOut} title="Zoom out">- Zoom</button>
+        <button className="cvs-btn" onClick={resetView} title="Reset view">Reset</button>
+        <button className="cvs-btn" onClick={fitToScreen} title="Fit all nodes">Fit</button>
         <span className="cvs-zoom-label">{Math.round(zoom * 100)}%</span>
       </div>
 
-      {/* ── Link mode indicator bar ──────────────────────────── */}
       {linkMode && (
         <div className="cvs-link-bar">
-          <span>🔗 {linkMode === 'nested' ? 'P→C' : 'P→P'} Link Mode
-            {linkSource !== null ? ` — Source: "${nodes.find(n => n.id === linkSource)?.title || '?'}" → click target node` : ' — Click the first node'}
+          <span>Link Mode: {linkMode === 'nested' ? 'P->C' : 'P->P'}
+            {linkSource !== null ? ` | Source: "${nodes.find(n => n.id === linkSource)?.title || '?'}" -> click target` : ' | Click the first node'}
           </span>
-          <button onClick={() => { setLinkMode(null); setLinkSource(null); }}>✕ Cancel</button>
+          <button onClick={() => { setLinkMode(null); setLinkSource(null); }}>Cancel</button>
         </div>
       )}
 
-      {/* ── Body: SVG canvas + optional edit panel ───────────── */}
       <div className="cvs-body">
         <div className="cvs-canvas-area" ref={canvasAreaRef}>
           <svg ref={svgRef}
@@ -430,7 +380,6 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
             </defs>
             <rect x={viewX - 5000} y={viewY - 5000} width={10000} height={10000} fill="url(#cvs-grid)" />
 
-            {/* Connectors */}
             {nodes.map(child => {
               if (!child.parentId) return null;
               const parent = nodes.find(n => n.id === child.parentId);
@@ -446,7 +395,6 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
               );
             })}
 
-            {/* Sister links */}
             {sisterLinks.map(sl => {
               const a = nodes.find(n => n.id === sl.nodeA);
               const b = nodes.find(n => n.id === sl.nodeB);
@@ -460,7 +408,6 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
               );
             })}
 
-            {/* Nodes */}
             {nodes.map(node => {
               const isSelected = node.id === selectedId;
               const isLinkSource = node.id === linkSource;
@@ -468,12 +415,29 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
               const accentColor = getPathwayColor(node.pathwayId);
               const kwCount = (node.linkedKwIds || []).length;
               const childCount = nodes.filter(n => n.parentId === node.id).length;
+              const hasAlts = (node.altTitles || []).length > 0;
+              const descY = hasAlts ? 42 : 32;
+              const descH = node.h - descY - 20;
               return (
                 <g key={node.id} className="cvs-node-group"
                   transform={`translate(${node.x}, ${node.y})`}
                   onMouseDown={e => handleNodeMouseDown(e, node.id)}
                   onContextMenu={e => handleNodeContextMenu(e, node.id)}
                   onDoubleClick={() => handleNodeDblClick(node.id)}
+                  onMouseEnter={e => {
+                    if (node.description) {
+                      const r = (e.currentTarget as SVGGElement).getBoundingClientRect();
+                      if (hoverTimer.current) clearTimeout(hoverTimer.current);
+                      hoverTimer.current = setTimeout(() => {
+                        setHoverNodeId(node.id);
+                        setHoverPos({ x: r.left + r.width / 2, y: r.top - 8 });
+                      }, 350);
+                    }
+                  }}
+                  onMouseLeave={() => {
+                    if (hoverTimer.current) clearTimeout(hoverTimer.current);
+                    setHoverNodeId(null);
+                  }}
                   style={{ cursor: linkMode ? 'crosshair' : isDragging ? 'grabbing' : 'grab' }}>
                   {isLinkSource && (
                     <rect x={-4 / zoom} y={-4 / zoom} width={node.w + 8 / zoom} height={node.h + 8 / zoom}
@@ -495,7 +459,7 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
                   <rect x={ACCENT_W} y={0} width={ACCENT_W} height={node.h} fill="#ffffff" />
 
                   {editingId === node.id ? (
-                    <foreignObject x={ACCENT_W + 8} y={8} width={node.w - ACCENT_W - 16} height={28}>
+                    <foreignObject x={ACCENT_W + 8} y={6} width={node.w - ACCENT_W - 16} height={28}>
                       <input className="cvs-title-input" value={editVal}
                         onChange={e => setEditVal(e.target.value)}
                         onBlur={commitEdit}
@@ -503,17 +467,27 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
                         autoFocus />
                     </foreignObject>
                   ) : (
-                    <text x={ACCENT_W + 10} y={24} className="cvs-node-title" fontSize={13 / zoom > 13 ? 13 : undefined}>
+                    <text x={ACCENT_W + 10} y={20} className="cvs-node-title">
                       {node.title || '(untitled)'}
                     </text>
                   )}
 
-                  <text x={ACCENT_W + 10} y={44} className="cvs-node-desc" fontSize={10 / zoom > 10 ? 10 : undefined}>
-                    {(node.description || '').slice(0, 50)}{node.description && node.description.length > 50 ? '…' : ''}
-                  </text>
+                  {hasAlts && (
+                    <text x={ACCENT_W + 10} y={33} className="cvs-node-alt">
+                      {(node.altTitles as string[]).slice(0, 2).join(', ')}{(node.altTitles as string[]).length > 2 ? ', ...' : ''}
+                    </text>
+                  )}
 
-                  <text x={node.w - 8} y={node.h - 8} className="cvs-node-badge" textAnchor="end" fontSize={9 / zoom > 9 ? 9 : undefined}>
-                    {kwCount > 0 ? `${kwCount}kw` : ''}{kwCount > 0 && childCount > 0 ? ' · ' : ''}{childCount > 0 ? `${childCount}ch` : ''}
+                  {node.description && descH > 10 && (
+                    <foreignObject x={ACCENT_W + 8} y={descY} width={node.w - ACCENT_W - 16} height={descH}>
+                      <div className="cvs-node-desc-wrap">
+                        {node.description}
+                      </div>
+                    </foreignObject>
+                  )}
+
+                  <text x={node.w - 8} y={node.h - 8} className="cvs-node-badge" textAnchor="end">
+                    {kwCount > 0 ? `${kwCount}kw` : ''}{kwCount > 0 && childCount > 0 ? ' \u00b7 ' : ''}{childCount > 0 ? `${childCount}ch` : ''}
                   </text>
 
                   <circle cx={node.w - 6} cy={node.h - 6} r={2.5} fill="#475569" opacity={0.5} />
@@ -523,12 +497,18 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
           </svg>
 
           {nodes.length === 0 && !isPanning && (
-            <div className="cvs-empty">Click <strong>＋ Add Node</strong> to create your first topic node</div>
+            <div className="cvs-empty">Click <strong>+ Add Node</strong> to create your first topic node</div>
           )}
           <div className={`cvs-toast ${toast ? 'on' : ''}`}>{toast}</div>
+
+          {hoverNode && hoverNode.description && (
+            <div className="cvs-popover" style={{ left: hoverPos.x, top: hoverPos.y }}>
+              <div className="cvs-popover-title">{hoverNode.title}</div>
+              <div className="cvs-popover-desc">{hoverNode.description}</div>
+            </div>
+          )}
         </div>
 
-        {/* ── Edit panel drawer ──────────────────────────────── */}
         {editPanelNode && (
           <CanvasEditPanel
             node={editPanelNode}
@@ -539,16 +519,15 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
         )}
       </div>
 
-      {/* ── Context menu ─────────────────────────────────────── */}
       {ctxMenu && (
         <div className="cvs-ctx-menu" style={{ left: ctxMenu.x, top: ctxMenu.y }}>
-          <button onClick={() => { handleNodeDblClick(ctxMenu.nodeId); setCtxMenu(null); }}>✏️ Rename</button>
-          <button onClick={handleCtxDetach}>⊟ Detach from Parent</button>
-          <button onClick={() => { setLinkMode('nested'); setLinkSource(ctxMenu.nodeId); setCtxMenu(null); showToast('Now click the child node'); }}>↓ Make Parent of…</button>
-          <button onClick={() => { setLinkMode('linear'); setLinkSource(ctxMenu.nodeId); setCtxMenu(null); showToast('Now click the sibling node'); }}>↔ Link as Sibling to…</button>
+          <button onClick={() => { handleNodeDblClick(ctxMenu.nodeId); setCtxMenu(null); }}>Rename</button>
+          <button onClick={handleCtxDetach}>Detach from Parent</button>
+          <button onClick={() => { setLinkMode('nested'); setLinkSource(ctxMenu.nodeId); setCtxMenu(null); showToast('Now click the child node'); }}>Make Parent of...</button>
+          <button onClick={() => { setLinkMode('linear'); setLinkSource(ctxMenu.nodeId); setCtxMenu(null); showToast('Now click the sibling node'); }}>Link as Sibling to...</button>
           <div className="cvs-ctx-divider" />
-          <button className="cvs-ctx-danger" onClick={handleDeleteNode}>🗑 Delete Node</button>
-          <button onClick={() => setCtxMenu(null)}>✕ Cancel</button>
+          <button className="cvs-ctx-danger" onClick={handleDeleteNode}>Delete Node</button>
+          <button onClick={() => setCtxMenu(null)}>Cancel</button>
         </div>
       )}
     </div>
