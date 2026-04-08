@@ -1,0 +1,121 @@
+/* ── Keyword Workspace Layout ────────────────────────────────── */
+
+.ws-root {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── Topbar with panel visibility checkboxes ─────────────────── */
+.ws-topbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 3px 10px;
+  background: var(--ph-bg, #21262d);
+  border-bottom: 1px solid var(--border-dark, #30363d);
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.ws-topbar-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--ph-text, #c9d1d9);
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  font-family: var(--fn-ui, 'IBM Plex Sans', sans-serif);
+}
+
+.ws-topbar-cb {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 500;
+  color: #8b949e;
+  font-family: var(--fn-ui, 'IBM Plex Sans', sans-serif);
+}
+.ws-topbar-cb input {
+  width: 12px;
+  height: 12px;
+  accent-color: #3b82f6;
+  cursor: pointer;
+}
+.ws-topbar-cb:hover span {
+  color: #c9d1d9;
+}
+
+/* ── Main workspace area (horizontal split) ──────────────────── */
+.ws-main {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── Left panel (vertical stack of tables) ───────────────────── */
+.ws-left {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 200px;
+  overflow: hidden;
+}
+
+/* ── Individual panel wrapper ────────────────────────────────── */
+.ws-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── Right panel (canvas) ────────────────────────────────────── */
+.ws-right {
+  flex: 1;
+  display: flex;
+  min-width: 100px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.ws-canvas-placeholder {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-l, #8b949e);
+  font-size: 13px;
+  font-family: var(--fn-ui, 'IBM Plex Sans', sans-serif);
+  background: var(--bg-panel, #161b22);
+}
+
+/* ── Draggable dividers ──────────────────────────────────────── */
+.ws-divider {
+  flex-shrink: 0;
+  background: var(--border-dark, #30363d);
+  transition: background 0.15s;
+  z-index: 5;
+}
+
+.ws-divider:hover {
+  background: #3b82f6;
+}
+
+/* Horizontal divider (between AST↔MT, MT↔TIF) */
+.ws-divider-horizontal {
+  height: 4px;
+  cursor: row-resize;
+  width: 100%;
+}
+
+/* Vertical divider (left panel ↔ canvas) */
+.ws-divider-vertical {
+  width: 4px;
+  cursor: col-resize;
+  height: 100%;
+}
