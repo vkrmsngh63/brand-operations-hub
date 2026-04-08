@@ -311,43 +311,18 @@ export default function CanvasTableMode({
         const upd: Partial<CanvasNode> = { id: existing.id };
         let changed = false;
 
-        // Only update title if it differs in casing
-        if (row.title !== (existing.title || '') && row.title.toLowerCase() === (existing.title || '').toLowerCase()) {
+        if (row.title !== (existing.title || '')) {
           upd.title = row.title; changed = true;
         }
-
-        // Only update alt titles if TSV has non-empty alt titles
-        if (row.altTitles.length > 0) {
-          const oldAlts = (existing.altTitles || []).filter((t: string) => t);
-          if (JSON.stringify(row.altTitles) !== JSON.stringify(oldAlts)) {
-            upd.altTitles = row.altTitles; changed = true;
-          }
+        if (JSON.stringify(row.altTitles) !== JSON.stringify((existing.altTitles || []).filter((t: string) => t))) {
+          upd.altTitles = row.altTitles; changed = true;
         }
-
-        // Only update relationship if TSV has a valid non-empty value
-        if (row.relationship === 'linear' || row.relationship === 'nested') {
-          if (row.relationship !== (existing.relationshipType || '')) {
-            upd.relationshipType = row.relationship; changed = true;
-          }
+        const rel = row.relationship === 'linear' || row.relationship === 'nested' ? row.relationship : '';
+        if (rel !== (existing.relationshipType || '')) {
+          upd.relationshipType = rel; changed = true;
         }
-        // If TSV relationship is empty, leave existing relationship untouched
-
-        // Only update description if TSV has non-empty description
         if (row.description && row.description !== (existing.description || '')) {
           upd.description = row.description; changed = true;
-        }
-
-        // Only update parent if TSV has a non-empty parent title
-        if (row.parentTitle) {
-          const parent = titleMap.get(row.parentTitle.toLowerCase());
-          if (parent && parent.id !== existing.parentId) {
-            upd.parentId = parent.id;
-            // Set relationship if provided, otherwise default to nested
-            if (!upd.relationshipType && !existing.relationshipType) {
-              upd.relationshipType = 'nested';
-            }
-            changed = true;
-          }
         }
 
         // Handle keyword placements from TSV (e.g. "keyword [p], other [s]")
@@ -390,13 +365,15 @@ export default function CanvasTableMode({
       onUpdateNodes(updates);
     }
 
-    // Create new nodes — first pass: create all without parent links
+    // Create new nodes
     const newNodesByTitle = new Map<string, CanvasNode>();
     for (const row of toCreate) {
+      const rel = row.relationship === 'linear' || row.relationship === 'nested' ? row.relationship : '';
       const newNode = await onAddNode({
         title: row.title,
-        description: row.description || '',
-        altTitles: row.altTitles.length > 0 ? row.altTitles : [],
+        description: row.description,
+        altTitles: row.altTitles,
+        relationshipType: rel,
         x: 0,
         y: (nodes.length + created + 1) * 150,
         w: 220,
@@ -408,32 +385,16 @@ export default function CanvasTableMode({
       }
     }
 
-    // Second pass: set parent relationships and relationship types for new nodes
+    // Set parent relationships for new nodes
     const parentUpdates: Partial<CanvasNode>[] = [];
     for (const row of toCreate) {
+      if (!row.parentTitle) continue;
       const childNode = newNodesByTitle.get(row.title.toLowerCase());
       if (!childNode) continue;
-
-      const rel = row.relationship === 'linear' || row.relationship === 'nested' ? row.relationship : '';
-
-      if (row.parentTitle) {
-        const parent = titleMap.get(row.parentTitle.toLowerCase()) || newNodesByTitle.get(row.parentTitle.toLowerCase());
-        if (parent) {
-          parentUpdates.push({
-            id: childNode.id,
-            parentId: parent.id,
-            relationshipType: rel || 'nested',
-          } as Partial<CanvasNode>);
-          continue; // relationship set with parent
-        }
-      }
-
-      // No parent but has relationship type — still set it
-      if (rel) {
-        parentUpdates.push({
-          id: childNode.id,
-          relationshipType: rel,
-        } as Partial<CanvasNode>);
+      const parent = titleMap.get(row.parentTitle.toLowerCase()) || newNodesByTitle.get(row.parentTitle.toLowerCase());
+      if (parent) {
+        const rel = row.relationship === 'linear' || row.relationship === 'nested' ? row.relationship : 'nested';
+        parentUpdates.push({ id: childNode.id, parentId: parent.id, relationshipType: rel } as Partial<CanvasNode>);
       }
     }
     if (parentUpdates.length > 0) {
@@ -454,40 +415,15 @@ export default function CanvasTableMode({
   function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const ext = file.name.split('.').pop()?.toLowerCase() || '';
-
-    if (ext === 'xlsx' || ext === 'xls' || ext === 'xlsm') {
-      // Read as binary for Excel files
-      const reader = new FileReader();
-      reader.onload = async (ev) => {
-        const data = ev.target?.result;
-        if (!data) return;
-        try {
-          const XLSX = await import('xlsx');
-          const workbook = XLSX.read(data, { type: 'array' });
-          const sheetName = workbook.SheetNames[0];
-          const sheet = workbook.Sheets[sheetName];
-          const tsv = XLSX.utils.sheet_to_csv(sheet, { FS: '\t' });
-          const parsed = parseTsv(tsv);
-          await applyTsvData(parsed);
-        } catch (err) {
-          console.error('Excel parse error:', err);
-          showToast('\u26A0 Failed to read Excel file');
-        }
-      };
-      reader.readAsArrayBuffer(file);
-    } else {
-      // Read as text for TSV/CSV/TXT
-      const reader = new FileReader();
-      reader.onload = async (ev) => {
-        const text = ev.target?.result;
-        if (typeof text === 'string') {
-          const parsed = parseTsv(text);
-          await applyTsvData(parsed);
-        }
-      };
-      reader.readAsText(file);
-    }
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      const text = ev.target?.result;
+      if (typeof text === 'string') {
+        const parsed = parseTsv(text);
+        await applyTsvData(parsed);
+      }
+    };
+    reader.readAsText(file);
     if (fileInputRef.current) fileInputRef.current.value = '';
   }
 
@@ -606,7 +542,7 @@ export default function CanvasTableMode({
         <input
           ref={fileInputRef}
           type="file"
-          accept=".tsv,.txt,.csv,.xlsx,.xls,.xlsm"
+          accept=".tsv,.txt,.csv"
           style={{ display: 'none' }}
           onChange={handleFileUpload}
         />
