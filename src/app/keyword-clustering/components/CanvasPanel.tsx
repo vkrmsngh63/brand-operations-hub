@@ -551,9 +551,9 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
                   {childCount > 0 && (
                     <g onClick={e => { e.stopPropagation(); toggleCollapse(node.id); }}
                       style={{ cursor: "pointer" }}>
-                      <rect x={node.w - 20} y={2} width={16} height={14} rx={3} fill="#e2e8f0" stroke="#cbd5e1" strokeWidth={0.5} />
-                      <text x={node.w - 12} y={12} textAnchor="middle" fill="#475569" fontSize={9} style={{ pointerEvents: "none" }}>
-                        {collapsed.has(node.id) ? "u25b6" : "u25bc"}
+                      <rect x={node.w - 20} y={2} width={16} height={14} rx={3} fill="#cbd5e1" stroke="#94a3b8" strokeWidth={0.5} />
+                      <text x={node.w - 12} y={12} textAnchor="middle" fill="#1e293b" fontSize={9} fontWeight={700} style={{ pointerEvents: "none" }}>
+                        {collapsed.has(node.id) ? "▶" : "▼"}
                       </text>
                     </g>
                   )}
