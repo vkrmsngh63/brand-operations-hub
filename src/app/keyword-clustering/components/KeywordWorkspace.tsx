@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import ASTTable from './ASTTable';
 import MTTable from './MTTable';
 import TIFTable from './TIFTable';
+import CanvasPanel from './CanvasPanel';
 import ScrollArrows from './ScrollArrows';
 import FloatingPanel from './FloatingPanel';
 import { useKeywords } from '@/hooks/useKeywords';
@@ -164,11 +165,7 @@ export default function KeywordWorkspace({ projectId, userId }: KeywordWorkspace
   }
 
   function renderCanvasContent() {
-    return (
-      <div className="ws-canvas-placeholder">
-        Topics Layout Canvas — coming in Phase 1d
-      </div>
-    );
+    return <CanvasPanel projectId={projectId} />;
   }
 
   // ── Compute visible inline panels ────────────────────────────

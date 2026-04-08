@@ -1,0 +1,138 @@
+/* ── Canvas Panel ─────────────────────────────────────────────── */
+.cvs-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  background: #0f172a;
+  position: relative;
+}
+
+/* ── Action bar ──────────────────────────────────────────────── */
+.cvs-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: #1e293b;
+  border-bottom: 1px solid #334155;
+  flex-shrink: 0;
+  min-height: 32px;
+}
+
+.cvs-btn {
+  background: #334155;
+  color: #e2e8f0;
+  border: 1px solid #475569;
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+.cvs-btn:hover {
+  background: #475569;
+}
+
+.cvs-sep {
+  width: 1px;
+  height: 18px;
+  background: #475569;
+  margin: 0 4px;
+}
+
+.cvs-zoom-label {
+  font-size: 10px;
+  color: #94a3b8;
+  margin-left: 4px;
+  min-width: 32px;
+}
+
+/* ── SVG canvas area ─────────────────────────────────────────── */
+.cvs-svg {
+  flex: 1;
+  width: 100%;
+  cursor: grab;
+  user-select: none;
+}
+.cvs-svg.cvs-panning {
+  cursor: grabbing;
+}
+
+/* ── Node text styles ────────────────────────────────────────── */
+.cvs-node-title {
+  fill: #f1f5f9;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: system-ui, -apple-system, sans-serif;
+  pointer-events: none;
+}
+.cvs-node-desc {
+  fill: #94a3b8;
+  font-size: 10px;
+  font-family: system-ui, -apple-system, sans-serif;
+  pointer-events: none;
+}
+.cvs-node-badge {
+  fill: #64748b;
+  font-size: 9px;
+  font-family: system-ui, -apple-system, sans-serif;
+  pointer-events: none;
+}
+
+/* ── Title inline edit ───────────────────────────────────────── */
+.cvs-title-input {
+  width: 100%;
+  background: #0f172a;
+  color: #f1f5f9;
+  border: 1px solid #3b82f6;
+  border-radius: 3px;
+  padding: 2px 6px;
+  font-size: 13px;
+  font-weight: 600;
+  outline: none;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+/* ── Context menu ────────────────────────────────────────────── */
+.cvs-ctx-menu {
+  position: fixed;
+  z-index: 9999;
+  background: #1e293b;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  min-width: 140px;
+  overflow: hidden;
+}
+.cvs-ctx-menu button {
+  display: block;
+  width: 100%;
+  background: none;
+  color: #e2e8f0;
+  border: none;
+  padding: 8px 14px;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.cvs-ctx-menu button:hover {
+  background: #334155;
+}
+
+/* ── Empty state ─────────────────────────────────────────────── */
+.cvs-empty {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: #64748b;
+  font-size: 14px;
+  text-align: center;
+  pointer-events: none;
+}
+.cvs-empty strong {
+  color: #94a3b8;
+}

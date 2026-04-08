@@ -8,12 +8,10 @@ export async function GET(
 ) {
   try {
     const { projectId } = await params;
-
     const nodes = await prisma.canvasNode.findMany({
       where: { projectId },
       orderBy: { sortOrder: 'asc' },
     });
-
     return NextResponse.json(nodes);
   } catch (error) {
     console.error('GET canvas nodes error:', error);
@@ -57,13 +55,12 @@ export async function POST(
       },
     });
 
-    // Increment nextNodeId
-    if (canvasState) {
-      await prisma.canvasState.update({
-        where: { projectId },
-        data: { nextNodeId: nodeId + 1 },
-      });
-    }
+    // Increment nextNodeId (upsert in case canvasState didn't exist yet)
+    await prisma.canvasState.upsert({
+      where: { projectId },
+      update: { nextNodeId: nodeId + 1 },
+      create: { projectId, nextNodeId: nodeId + 1 },
+    });
 
     return NextResponse.json(node, { status: 201 });
   } catch (error) {
@@ -99,6 +96,7 @@ export async function PATCH(
             ...(n.h !== undefined && { h: n.h as number }),
             ...(n.parentId !== undefined && { parentId: n.parentId as number | null }),
             ...(n.pathwayId !== undefined && { pathwayId: n.pathwayId as number | null }),
+            ...(n.relationshipType !== undefined && { relationshipType: n.relationshipType as string }),
             ...(n.linkedKwIds !== undefined && { linkedKwIds: n.linkedKwIds as unknown as import('@prisma/client').Prisma.InputJsonValue }),
             ...(n.kwPlacements !== undefined && { kwPlacements: n.kwPlacements as unknown as import('@prisma/client').Prisma.InputJsonValue }),
             ...(n.altTitles !== undefined && { altTitles: n.altTitles as unknown as import('@prisma/client').Prisma.InputJsonValue }),
@@ -112,5 +110,31 @@ export async function PATCH(
   } catch (error) {
     console.error('PATCH canvas nodes error:', error);
     return NextResponse.json({ error: 'Failed to update nodes' }, { status: 500 });
+  }
+}
+
+// DELETE /api/projects/[projectId]/canvas/nodes — delete node(s)
+// Send { ids: [1, 2, 3] } or { id: 1 }
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ projectId: string }> }
+) {
+  try {
+    const { projectId } = await params;
+    const body = await req.json();
+
+    const ids: number[] = body.ids || (body.id !== undefined ? [body.id] : []);
+    if (ids.length === 0) {
+      return NextResponse.json({ error: 'Provide id or ids' }, { status: 400 });
+    }
+
+    await prisma.canvasNode.deleteMany({
+      where: { id: { in: ids }, projectId },
+    });
+
+    return NextResponse.json({ success: true, deleted: ids });
+  } catch (error) {
+    console.error('DELETE canvas nodes error:', error);
+    return NextResponse.json({ error: 'Failed to delete nodes' }, { status: 500 });
   }
 }
