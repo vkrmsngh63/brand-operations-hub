@@ -343,6 +343,12 @@
 .ai-act-btn-accent:hover {
   background: rgba(245,158,11,0.3);
 }
+.ai-act-hint {
+  font-size: 10px;
+  color: #6e7681;
+  font-style: italic;
+  font-family: var(--fn-ui, 'IBM Plex Sans', sans-serif);
+}
 
 /* ── KAS / TVT Placeholders ──────────────────────────────────── */
 .kas-placeholder {

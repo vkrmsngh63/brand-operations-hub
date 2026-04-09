@@ -5,6 +5,7 @@ import MTTable from './MTTable';
 import type { MTEntry } from './MTTable';
 import TIFTable from './TIFTable';
 import CanvasPanel from './CanvasPanel';
+import TVTTable from './TVTTable';
 import ScrollArrows from './ScrollArrows';
 import FloatingPanel from './FloatingPanel';
 import { useKeywords } from '@/hooks/useKeywords';
@@ -66,19 +67,6 @@ function KASTable({ keywords }: { keywords: any[] }) {
   );
 }
 
-// ── TVT Placeholder ────────────────────────────────────────────
-function TVTTable({ projectId }: { projectId: string }) {
-  return (
-    <div className="kas-placeholder">
-      <div className="kas-placeholder-inner">
-        <span className="kas-placeholder-icon">🌳</span>
-        <span className="kas-placeholder-title">Topics View Table</span>
-        <span className="kas-placeholder-sub">Coming in Phase 1f — depth-first tree view of canvas data with drag-reorder</span>
-      </div>
-    </div>
-  );
-}
-
 // ── AI Actions Pane ────────────────────────────────────────────
 function AIActionsPane({ view, onSetView }: {
   view: AITableView;
@@ -128,12 +116,7 @@ function AIActionsPane({ view, onSetView }: {
           </>
         )}
         {view === 'topics' && (
-          <>
-            <button className="ai-act-btn" title="Expand All">▼ Expand All</button>
-            <button className="ai-act-btn" title="Collapse All">▶ Collapse All</button>
-            <button className="ai-act-btn" title="Check All">☑ Check All</button>
-            <button className="ai-act-btn" title="Uncheck All">☐ Uncheck All</button>
-          </>
+          <span className="ai-act-hint">Controls in table below</span>
         )}
       </div>
     </div>
@@ -285,7 +268,7 @@ export default function KeywordWorkspace({ projectId, userId, aiMode }: KeywordW
       case 'normal': return renderAST();
       case 'common': return renderMT();
       case 'analysis': return <KASTable keywords={keywords} />;
-      case 'topics': return <TVTTable projectId={projectId} />;
+      case 'topics': return <TVTTable projectId={projectId} allKeywords={keywords} />;
     }
   }
 
