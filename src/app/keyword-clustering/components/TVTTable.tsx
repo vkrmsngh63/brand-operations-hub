@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
-import { useCanvas, CanvasNode } from '@/hooks/useCanvas';
+import type { CanvasNode } from '@/hooks/useCanvas';
 import type { Keyword } from '@/hooks/useKeywords';
 import './tvt-table.css';
 
@@ -12,7 +12,8 @@ interface TVTRow {
 }
 
 interface TVTTableProps {
-  projectId: string;
+  nodes: CanvasNode[];
+  updateNodes: (updates: Partial<CanvasNode>[]) => Promise<void>;
   allKeywords: Keyword[];
 }
 
@@ -32,11 +33,7 @@ function depthColor(d: number) {
 }
 
 /* ── Component ───────────────────────────────────────────────── */
-export default function TVTTable({ projectId, allKeywords }: TVTTableProps) {
-  const {
-    nodes, fetchCanvas, updateNodes,
-  } = useCanvas(projectId);
-
+export default function TVTTable({ nodes, updateNodes, allKeywords }: TVTTableProps) {
   const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [showDesc, setShowDesc] = useState(true);
@@ -51,8 +48,6 @@ export default function TVTTable({ projectId, allKeywords }: TVTTableProps) {
   // ── Drag state ─────────────────────────────────────────────
   const [dragNodeId, setDragNodeId] = useState<number | null>(null);
   const [dropTarget, setDropTarget] = useState<{ nodeId: number; mode: 'before' | 'after' | 'child' } | null>(null);
-
-  useEffect(() => { fetchCanvas(); }, [fetchCanvas]);
 
   // ── Build keyword lookup ───────────────────────────────────
   const kwMap = useMemo(() => {

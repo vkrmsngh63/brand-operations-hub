@@ -9,6 +9,7 @@ import TVTTable from './TVTTable';
 import ScrollArrows from './ScrollArrows';
 import FloatingPanel from './FloatingPanel';
 import { useKeywords } from '@/hooks/useKeywords';
+import { useCanvas } from '@/hooks/useCanvas';
 import './workspace.css';
 
 interface KeywordWorkspaceProps {
@@ -129,6 +130,8 @@ export default function KeywordWorkspace({ projectId, userId, aiMode }: KeywordW
     updateKeyword, batchUpdate, deleteKeyword, bulkDelete, reorder,
   } = useKeywords(projectId, userId);
 
+  const canvas = useCanvas(projectId);
+
   const [tifKeywords, setTifKeywords] = useState<string[]>([]);
   const [mtEntries, setMtEntries] = useState<MTEntry[]>([]);
   const [tifActive, setTifActive] = useState(true);
@@ -246,7 +249,7 @@ export default function KeywordWorkspace({ projectId, userId, aiMode }: KeywordW
   }
 
   function renderCanvasContent() {
-    return <CanvasPanel projectId={projectId} allKeywords={keywords} />;
+    return <CanvasPanel projectId={projectId} allKeywords={keywords} canvas={canvas} />;
   }
 
   // ── Compute visible inline panels ────────────────────────────
@@ -268,7 +271,7 @@ export default function KeywordWorkspace({ projectId, userId, aiMode }: KeywordW
       case 'normal': return renderAST();
       case 'common': return renderMT();
       case 'analysis': return <KASTable keywords={keywords} />;
-      case 'topics': return <TVTTable projectId={projectId} allKeywords={keywords} />;
+      case 'topics': return <TVTTable nodes={canvas.nodes} updateNodes={canvas.updateNodes} allKeywords={keywords} />;
     }
   }
 

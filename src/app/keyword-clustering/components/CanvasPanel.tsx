@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { useCanvas, CanvasNode } from '@/hooks/useCanvas';
+import { type CanvasNode, type useCanvas } from '@/hooks/useCanvas';
 import CanvasEditPanel from './CanvasEditPanel';
 import CanvasTableMode from './CanvasTableMode';
 import type { Keyword } from '@/hooks/useKeywords';
@@ -22,13 +22,14 @@ const PATHWAY_COLORS = [
 interface CanvasPanelProps {
   projectId: string;
   allKeywords?: Keyword[];
+  canvas: ReturnType<typeof useCanvas>;
 }
 
-export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanelProps) {
+export default function CanvasPanel({ projectId, allKeywords = [], canvas }: CanvasPanelProps) {
   const {
     nodes, canvasState, pathways, sisterLinks, fetchCanvas,
     addNode, updateNodes, deleteNode, updateCanvasState,
-  } = useCanvas(projectId);
+  } = canvas;
 
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
