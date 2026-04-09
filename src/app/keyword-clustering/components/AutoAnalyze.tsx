@@ -151,12 +151,14 @@ interface AutoAnalyzeProps {
   onDeleteNode: (id: number) => Promise<void> | void;
   onBatchUpdateKeywords: (updates: { id: string; [key: string]: unknown }[]) => void;
   projectId: string;
+  onRefreshCanvas: () => Promise<void>;
+  onRefreshKeywords: () => Promise<void>;
 }
 
 /* ── Component ─────────────────────────────────────────────── */
 export default function AutoAnalyze({
   open, onClose, allKeywords, nodes, pathways, sisterLinks,
-  onUpdateNodes, onAddNode, onDeleteNode, onBatchUpdateKeywords, projectId,
+  onUpdateNodes, onAddNode, onDeleteNode, onBatchUpdateKeywords, projectId, onRefreshCanvas, onRefreshKeywords,
 }: AutoAnalyzeProps) {
 
   /* ── Config state ──────────────────────────────────────────── */
@@ -921,6 +923,10 @@ export default function AutoAnalyze({
       }
     }
     if (kwUpdates.length > 0) await onUpdateNodes(kwUpdates);
+
+    // Refresh canvas + keywords to sync UI
+    await onRefreshCanvas();
+    await onRefreshKeywords();
 
     // 6. Create sister links (TODO: implement via API when ready)
 
