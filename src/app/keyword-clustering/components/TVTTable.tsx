@@ -307,8 +307,9 @@ export default function TVTTable({ projectId, allKeywords }: TVTTableProps) {
     <div className="tvt-panel" style={{ fontSize: `${fontSize}px` }}>
       {/* ── Action Bar ─────────────────────────────────────── */}
       <div className="tvt-action-bar">
-        <button className="tvt-act-btn" onClick={expandAll}>▼ Expand All</button>
-        <button className="tvt-act-btn" onClick={collapseAll}>▶ Collapse All</button>
+        <button className="tvt-act-btn" onClick={() => { collapsed.size === 0 ? collapseAll() : expandAll(); }}>
+          {collapsed.size === 0 ? '▶ Collapse All' : '▼ Expand All'}
+        </button>
         <button className="tvt-act-btn" onClick={selectAll}>☑ Check All</button>
         <button className="tvt-act-btn" onClick={deselectAll}>☐ Uncheck All</button>
 
