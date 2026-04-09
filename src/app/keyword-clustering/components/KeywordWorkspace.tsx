@@ -7,6 +7,7 @@ import TIFTable from './TIFTable';
 import CanvasPanel from './CanvasPanel';
 import TVTTable from './TVTTable';
 import KASTable from './KASTable';
+import AutoAnalyze from './AutoAnalyze';
 import ScrollArrows from './ScrollArrows';
 import FloatingPanel from './FloatingPanel';
 import { useKeywords } from '@/hooks/useKeywords';
@@ -56,9 +57,10 @@ function Divider({ direction, onDrag }: {
 }
 
 // ── AI Actions Pane ────────────────────────────────────────────
-function AIActionsPane({ view, onSetView }: {
+function AIActionsPane({ view, onSetView, onOpenAA }: {
   view: AITableView;
   onSetView: (v: AITableView) => void;
+  onOpenAA: () => void;
 }) {
   const views: { key: AITableView; label: string }[] = [
     { key: 'normal', label: 'Normal' },
@@ -88,7 +90,7 @@ function AIActionsPane({ view, onSetView }: {
             <button className="ai-act-btn" title="Check First 15">☑ Check First 15</button>
             <button className="ai-act-btn ai-act-btn-primary" title="Generate AI Prompt">🤖 Generate AI Prompt</button>
             <button className="ai-act-btn" title="Upload AI Prompt Response">📋 Upload Response</button>
-            <button className="ai-act-btn ai-act-btn-accent" title="Auto-Analyze">⚡ Auto-Analyze</button>
+            <button className="ai-act-btn ai-act-btn-accent" title="Auto-Analyze" onClick={onOpenAA}>⚡ Auto-Analyze</button>
           </>
         )}
         {view === 'common' && (
@@ -123,6 +125,7 @@ export default function KeywordWorkspace({ projectId, userId, aiMode }: KeywordW
 
   // ── AI Mode state ────────────────────────────────────────────
   const [aiTableView, setAiTableView] = useState<AITableView>('normal');
+  const [aaOpen, setAaOpen] = useState(false);
 
   // ── Panel visibility ─────────────────────────────────────────
   const [showAST, setShowAST] = useState(true);
@@ -352,7 +355,7 @@ export default function KeywordWorkspace({ projectId, userId, aiMode }: KeywordW
               className="ws-left ws-ai-left"
               style={{ flex: inlineCanvas ? `0 0 ${leftFrac * 100}%` : '1' }}
             >
-              <AIActionsPane view={aiTableView} onSetView={setAiTableView} />
+              <AIActionsPane view={aiTableView} onSetView={setAiTableView} onOpenAA={() => setAaOpen(true)} />
               <div className="ws-panel ws-ai-table-area" style={{ flex: 1, minHeight: 0 }}>
                 {renderAITableContent()}
               </div>
@@ -389,6 +392,19 @@ export default function KeywordWorkspace({ projectId, userId, aiMode }: KeywordW
           {renderTIFContent()}
         </FloatingPanel>
       )}
+      <AutoAnalyze
+        open={aaOpen}
+        onClose={() => setAaOpen(false)}
+        allKeywords={keywords}
+        nodes={canvas.nodes}
+        pathways={canvas.pathways}
+        sisterLinks={canvas.sisterLinks}
+        onUpdateNodes={canvas.updateNodes}
+        onAddNode={canvas.addNode}
+        onDeleteNode={canvas.deleteNode}
+        onBatchUpdateKeywords={(updates) => updates.forEach(u => updateKeyword(u.id, u))}
+        projectId={projectId}
+      />
       {detachedCanvas && showCanvas && (
         <FloatingPanel title="Topics Layout Canvas" onClose={() => setDetachedCanvas(false)}>
           {renderCanvasContent()}
