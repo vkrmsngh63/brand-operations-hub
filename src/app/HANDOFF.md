@@ -3,41 +3,55 @@
 
 ---
 
-## 0. SESSION SUMMARY (Latest)
+## 0. SESSION SUMMARY (Latest — Phase 1g Auto-Analyze)
 
 **Completed this session:**
-- Phase 1f: Manual/AI mode toggle wired to existing topbar button in page.tsx
-- Phase 1f: AI Actions Pane with four-way toggle (Normal / Common Terms / Analysis / Topics)
-- Phase 1f: Keywords Analysis Table (KAS) — 9-column derived view showing keyword-to-topic mapping with upstream hierarchy, alternating group colors, copy TSV
-- Phase 1f: Topics View Table (TVT) — light theme, depth-first tree walk, single expand/collapse toggle, drag-reorder, depth filter, zoom, description popover, ancestry highlighting
-- Lifted `useCanvas` hook from CanvasPanel to KeywordWorkspace for shared state — Canvas and TVT/KAS now sync in real-time
-- Canvas multi-select: shift+click to toggle nodes, shift+drag for selection box, group drag
-- Canvas auto-pan: viewport auto-scrolls when dragging nodes or selection box near edges
-- Delete key removes all selected nodes
-- "N selected" indicator in toolbar
+- Phase 1g (partial): Auto-Analyze system with full processing engine
+- Server-side API proxy route (`/api/ai/analyze`) with 5-min Vercel timeout
+- Direct browser→Anthropic API mode (no timeout, user provides API key)
+- User can choose between "Direct" and "Server proxy" modes in the overlay
+- Auto-Analyze overlay UI: configuration panel, prompt section, batch list, progress bar, activity log, control buttons (Start/Pause/Resume/Cancel)
+- Full batch processing loop: queue building, adaptive batch sizing, streaming SSE, stall/error retries, delta mode auto-switch
+- Prompt assembly with system prompt + primer + output instructions (Mode A full table / Mode B delta)
+- Response parsing: delimited block extraction, delta merge, KAT mapping
+- Validation engine: 5 hard checks (result exists, table present, keywords placed, no deletions, no keyword losses) + soft warnings
+- Canvas apply logic: overwrite/rebuild approach — delete all nodes, parse TSV, create nodes with auto-layout, set parent relationships
+- Pathway creation for depth-0 nodes with pathwayId assigned to all descendants
+- Depth-0 node chaining with linear connections for conversion funnel flow
+- Keyword linking to nodes with [p]/[s] placement parsing
+- Keyword `topic` and `canvasLoc` fields updated when linked to nodes
+- Post-apply refresh: `fetchCanvas()` + `fetchKeywords()` to sync UI
+- AI-Sorted status marking with post-apply verification
+- Node title overflow fix (foreignObject with text-overflow ellipsis)
+- Keyword preview section at bottom of canvas nodes (up to 5 keywords shown)
+- Keyword popover (dark floating panel anchored to node, shows all keywords with volume and placement)
+- Node layout zones: title → alt titles → description → keyword preview → badge
+
+**Known issues to fix in next session:**
+- **Keyword preview not displaying in topic nodes** — the layout code and popover are in place but keywords are not rendering in the preview section. This is the first thing to debug in the next chat.
+- Depth-0 linear chain connections not yet tested (requires fresh auto-analyze run)
+- Pathway colors not yet tested (requires fresh auto-analyze run)
+- Copy activity log button not yet added
+- Help icons (ⓘ) with tooltips on config elements not yet added
 
 **Key architectural decisions:**
-- `useCanvas` is now called in KeywordWorkspace and passed as a prop (`canvas`) to CanvasPanel and as individual props (`nodes`, `updateNodes`) to TVT/KAS
-- CanvasPanel no longer calls `useCanvas` internally — it destructures from `canvas` prop
-- TVT and KAS are purely derived views that accept `nodes` and `allKeywords` as props (no own data fetching)
-- AI mode state (`aiMode`) lives in page.tsx and is passed as a prop to KeywordWorkspace
-- `aiTableView` state lives in KeywordWorkspace (controls which table is shown in AI mode)
-- Multi-select uses `selectedIds: Set<number>` instead of old `selectedId: number | null`
-- Selection box and node drag use `viewXRef`/`viewYRef`/`zoomRef` refs to avoid stale closure values during drag operations
-- Auto-pan uses EDGE_ZONE=40px and PAN_SPEED=8 canvas units per mouse event
-
-**Files modified this session:**
-- `src/app/keyword-clustering/page.tsx` (~226 lines) — Added `aiMode` state, wired Manual/AI toggle, passes `aiMode` prop to KeywordWorkspace
-- `src/app/keyword-clustering/components/KeywordWorkspace.tsx` (~399 lines) — Lifted useCanvas, AI mode layout, four-way toggle, AI Actions Pane, imports KAS + TVT
-- `src/app/keyword-clustering/components/workspace.css` (~386 lines) — AI mode toggle styles, actions pane styles, placeholder styles
-- `src/app/keyword-clustering/components/CanvasPanel.tsx` (~884 lines) — Accepts canvas prop, multi-select, selection box, group drag, auto-pan
-- `src/app/keyword-clustering/components/canvas-panel.css` — Added `.cvs-multi-label` style
+- Auto-Analyze uses overwrite/rebuild approach for canvas apply (matches original tool behavior) — all nodes deleted and recreated each batch
+- Direct browser API mode calls `api.anthropic.com` with `anthropic-dangerous-direct-browser-access` header — no timeout limits
+- Server proxy mode uses `/api/ai/analyze` route with `maxDuration = 300` (5 min Vercel limit, 15 min on Pro)
+- `AutoAnalyze` component receives all data and callbacks as props from `KeywordWorkspace`
+- Async run loop uses refs (`runningRef`, `abortRef`, `batchesRef`, `currentIdxRef`, etc.) to avoid stale closures
+- `kwPopoverNodeId` state in CanvasPanel controls which node's keyword popover is shown
+- Node vertical layout: title (22px) → alt titles (14px if present) → description (flexible) → keyword preview (36px if keywords exist) → badge (18px)
 
 **Files created this session:**
-- `src/app/keyword-clustering/components/TVTTable.tsx` (~479 lines) — Topics View Table component
-- `src/app/keyword-clustering/components/tvt-table.css` (~327 lines) — TVT light theme styles
-- `src/app/keyword-clustering/components/KASTable.tsx` (~281 lines) — Keywords Analysis Table component
-- `src/app/keyword-clustering/components/kas-table.css` (~172 lines) — KAS light theme styles
+- `src/app/api/ai/analyze/route.ts` (~55 lines) — Server-side API proxy
+- `src/app/keyword-clustering/components/AutoAnalyze.tsx` (~1380 lines) — Full auto-analyze component
+- `src/app/keyword-clustering/components/auto-analyze.css` (~325 lines) — Auto-analyze overlay styles
+
+**Files modified this session:**
+- `src/app/keyword-clustering/components/KeywordWorkspace.tsx` (~415 lines) — Added AutoAnalyze import, aaOpen state, wired ⚡ button, passed props
+- `src/app/keyword-clustering/components/CanvasPanel.tsx` (~920 lines) — Added kwPopoverNodeId state, keyword preview in nodes, keyword popover, title overflow fix, layout zone calculation
+- `src/app/keyword-clustering/components/canvas-panel.css` — Added keyword preview, popover, title wrap styles
 
 ---
 
@@ -109,6 +123,7 @@ model CanvasNode {
 
 | Route | Method | Purpose |
 |-------|--------|---------|
+| `/api/ai/analyze` | POST | Server-side proxy to Anthropic API (streaming SSE) |
 | `/api/projects/[projectId]/keywords` | GET | List all keywords |
 | `/api/projects/[projectId]/keywords` | POST | Create single or bulk `{ keywords: [...] }` |
 | `/api/projects/[projectId]/keywords` | DELETE | Bulk delete `{ ids: [...] }` |
@@ -134,7 +149,7 @@ model CanvasNode {
 - Passes `aiMode` prop to KeywordWorkspace
 - Manual/AI toggle button in top-right of page topbar
 
-### KeywordWorkspace.tsx (~399 lines, main layout)
+### KeywordWorkspace.tsx (~415 lines, main layout)
 - Calls `useCanvas(projectId)` — single source of truth for canvas data
 - Calls `useKeywords(projectId, userId)` — single source of truth for keywords
 - Passes `canvas` prop (full useCanvas return) to CanvasPanel
@@ -142,94 +157,132 @@ model CanvasNode {
 - **Manual mode:** 3-panel left (AST + MT + TIF) + Canvas right, panel visibility checkboxes, detach buttons, resizable dividers
 - **AI mode:** AI Actions Pane (four-way toggle) + single table view + Canvas right
 - AI table views: Normal→AST, Common→MT, Analysis→KAS, Topics→TVT
-- State: tifKeywords, mtEntries (lifted), panel visibility, detached state, panel flex sizes, aiTableView
+- Contains `aaOpen` state, renders `<AutoAnalyze />` with all props
+- State: tifKeywords, mtEntries (lifted), panel visibility, detached state, panel flex sizes, aiTableView, aaOpen
 
-### CanvasPanel.tsx (~884 lines)
+### AIActionsPane (inside KeywordWorkspace)
+- Four-way toggle: Normal / Common Terms / Analysis / Topics
+- Buttons per view; Normal view has ⚡ Auto-Analyze button that calls `onOpenAA` prop
+- Props: `view`, `onSetView`, `onOpenAA`
+
+### AutoAnalyze.tsx (~1380 lines)
+- Full auto-analyze overlay with configuration, prompt management, batch processing
+- Two API modes: Direct (browser→Anthropic, no timeout) and Server (browser→Vercel→Anthropic, 5min/15min timeout)
+- State machine: IDLE → RUNNING → PAUSED/BATCH_REVIEW/API_ERROR → ALL_COMPLETE
+- Adaptive batch sizing: Foundation (8) → Expansion (12) → Placement (18)
+- Full table → Delta auto-switch on truncation
+- 5 hard validation checks + soft warnings
+- Canvas apply: overwrite/rebuild with auto-layout, pathway creation, keyword linking
+- Props: open, onClose, allKeywords, nodes, pathways, sisterLinks, onUpdateNodes, onAddNode, onDeleteNode, onBatchUpdateKeywords, projectId, onRefreshCanvas, onRefreshKeywords
+
+### CanvasPanel.tsx (~920 lines)
 - Accepts `canvas: ReturnType<typeof useCanvas>` as prop (no internal useCanvas call)
 - **Mindmap mode**: SVG-based canvas with pan, zoom, node drag, connectors
 - **Table mode**: Renders CanvasTableMode component
 - **Multi-select**: `selectedIds: Set<number>` replaces old `selectedId`
-  - Shift+click toggles node in selection
-  - Shift+drag on background draws selection box (blue dashed rectangle)
-  - All selected nodes drag together as a group
-  - Delete key removes all selected nodes
-  - "N selected" label in toolbar when >1 selected
-- **Auto-pan**: Viewport scrolls when mouse is within 40px of edge during node drag or selection box drag
-- Uses `viewXRef`/`viewYRef`/`zoomRef` refs alongside state to avoid stale closures in drag/selection handlers
+- **Auto-pan**: Viewport scrolls when mouse near edge during drag
+- **Keyword preview**: Bottom section of each node showing up to 5 keywords
+- **Keyword popover**: `kwPopoverNodeId` state, dark floating panel with all keywords
+- **Node layout zones**: title (22px) → alt titles (14px) → description (flexible) → kw preview (36px) → badge (18px)
 - Right-click opens context menu + edit panel
 - Double-click renames inline
 - Single-click selects only (no edit panel)
 - `resolveOverlap()` runs BEFORE `updateNodes()` save
 
 ### TVTTable.tsx (~479 lines)
+- Topics View Table: depth-first tree walk, expand/collapse, drag-reorder
 - Accepts `nodes`, `updateNodes`, `allKeywords` as props
-- Light/white theme, depth-first tree walk ordering
-- Single expand/collapse toggle button (cycles between states)
-- 20px/level indentation, 7 depth-based title colors
-- Primary keywords bold, secondary italic purple, volume badges
-- Drag-and-drop reorder (before/after/child drop modes)
-- Ancestry orange highlight chain on row hover
-- Description popover on topic title hover (250ms)
-- Depth filter dropdown (Show All + individual depth 0–6)
-- Zoom ±1px (7–18 range)
-- Deduplicated keyword count
 
 ### KASTable.tsx (~281 lines)
-- Accepts `nodes`, `allKeywords` as props
-- 9-column table: Keyword, Main Topic, Main Topic Title, Main Topic Description, Main Topic Location, Upstream Topic, UT Title, UT Description, UT Location
-- Derived from canvas nodes — walks tree, builds reverse keyword→topic mapping, walks up hierarchy for each topic
-- Alternating blue/green keyword group colors
-- Group separators (thick border between keyword groups, dashed between topic blocks)
-- Copy Table Data button (TSV to clipboard)
-- Light theme matching TVT
+- Keywords Analysis Table: 9-column derived view
+- Accepts `nodes`, `updateNodes`, `allKeywords` as props
 
-### CanvasTableMode.tsx (~924 lines)
-- 9-column funnel table: Depth, Topic, Alt Titles, Relationship, Parent, Conversion Path, Sister Nodes, Keywords, Description
-- Edit Mode, Add Row, Delete Row, Reset Table
-- TSV paste/upload with live preview, merge/overwrite dialog
-- `xlsx` loaded via dynamic `await import('xlsx')`
-
-### CanvasEditPanel.tsx
-- Right-side drawer (320px) with title, description, alt titles, linked keywords
-- Auto-saves on blur
-
-### ASTTable.tsx (~1123 lines)
-- Virtual scrolling, split topics view, drag-to-reorder
-- All column features (volume, status, tags, topics, descriptions)
-- Keyword drag to canvas via `text/kst-kwids` data type
-
-### MTTable.tsx (~1310 lines), TIFTable.tsx (~849 lines)
-- Main Terms and Terms In Focus tables with full feature sets
-- MT entries state lifted to KeywordWorkspace
-
-### State pattern (same across AST, MT, TIF)
-```typescript
-type SplitSelMap = Map<string, Set<string>>; // kwId → Set of topic strings
-const [splitTopics, setSplitTopics] = useState(false);
-const [splitTopicSel, setSplitTopicSel] = useState<SplitSelMap>(new Map());
-const [splitDescSel, setSplitDescSel] = useState<SplitSelMap>(new Map());
-```
-
-### Batch propagation rules
-- Edit topic pill with checkbox checked → rename/delete on all checked topics with same text
-- Edit description with topic checkbox checked → propagate to all checked topics
-- Toggle approval with topic checkbox checked → propagate to all checked topics
-
-### Height sync
-- AST/TIF: useEffect syncs `.ast-split-list` / `.tif-split-list` children heights within same `<tr>`
-- MT: Two-level sync — Level 1 syncs `mt-kw-item` across columns, Level 2 syncs `mt-split-topic-item`
+### Other components unchanged: ASTTable, MTTable, TIFTable, CanvasTableMode, CanvasEditPanel, ScrollArrows, FloatingPanel
 
 ---
 
-## 7. CANVAS IMPLEMENTATION DETAILS
+## 5. AUTO-ANALYZE SYSTEM DETAILS
+
+### State Machine
+```
+IDLE → RUNNING → PAUSED (user pause)
+                → BATCH_REVIEW (review mode)
+                → API_ERROR (retryable)
+                → VALIDATION_ERROR (retryable)
+                → ALL_COMPLETE
+```
+
+### Processing Flow
+1. User configures: model, seed words, scope, processing mode, thinking, prompts
+2. `buildQueue()` creates batches from unsorted keywords
+3. `runLoop()` processes batches sequentially
+4. Each batch: `assemblePrompt()` → `buildRequestBody()` → `callApi()` (streaming SSE)
+5. Response parsed: `extractBlock()` for delimited sections
+6. `validateResult()` — 5 hard checks, retry on failure
+7. `doApply()` — delete all nodes, rebuild from TSV, create pathways, link keywords
+8. `onRefreshCanvas()` + `onRefreshKeywords()` to sync UI
+9. Mark placed keywords as AI-Sorted
+
+### API Modes
+- **Direct**: Browser calls `api.anthropic.com` with `anthropic-dangerous-direct-browser-access` header. User provides API key. No timeout.
+- **Server**: Browser calls `/api/ai/analyze` which proxies to Anthropic. API key from `ANTHROPIC_API_KEY` env var. 5-min timeout (free) / 15-min (Pro).
+
+### Batch Tiers (Adaptive Mode)
+- Foundation: 8 keywords per batch (starting)
+- Expansion: 12 (when rolling 3-batch avg new topics < 2)
+- Placement: 18 (when rolling 5-batch avg new topics < 1.5)
+
+### Output Modes
+- Mode A (Full Table): Complete TSV with all topics, used early
+- Mode B (Delta): Only ADD/UPDATE rows, auto-switches when full table hits max_tokens
+
+### Validation (5 Hard Checks)
+1. Result exists
+2. Topics Layout Table present and parseable
+3. All batch keywords placed in some topic
+4. No existing topics deleted
+5. No previously-assigned keywords lost
+
+### Canvas Apply (doApply)
+1. Delete all existing nodes
+2. Parse TSV rows (depth, title, altTitles, relationship, parent, keywords, description)
+3. Create nodes with auto-layout (horizontal spread by depth, vertical stacking)
+4. Create pathways for depth-0 nodes, assign pathwayId to descendants
+5. Chain depth-0 nodes with linear parent→child relationships
+6. Set parent relationships for all child nodes
+7. Link keywords to nodes (linkedKwIds + kwPlacements)
+8. Update keyword records (topic field + canvasLoc)
+9. Refresh canvas + keywords
+10. Verify placement, mark AI-Sorted
+
+---
+
+## 6. CANVAS IMPLEMENTATION DETAILS
 
 ### Node rendering
 - SVG `<g>` groups with `transform={translate(x,y)}`
 - Accent stripe (5px left bar) colored by pathwayId
-- Title text, alt titles (smaller italic), description (foreignObject with line clamp)
+- Title in foreignObject with text-overflow ellipsis
+- Alt titles (smaller italic text)
+- Description (foreignObject with line clamp)
+- Keyword preview (foreignObject, 36px, up to 5 keywords + expand button)
 - Badge showing keyword count + child count
 - Resize grip in bottom-right corner
 - Collapse toggle (▼/▶) when node has children
+
+### Node layout zones (top to bottom)
+- Title: y=4, 22px height
+- Alt titles: y=28, 14px (only if present)
+- Description: from descY to kwPreviewY (flexible, shrinks when keywords present)
+- Keyword preview: kwPreviewY, 36px (only if keywords linked)
+- Badge: bottom 18px
+
+### Keyword popover
+- `kwPopoverNodeId` state in CanvasPanel
+- Dark floating panel positioned at node's right edge
+- Shows all keywords with volume and [p]/[s] placement
+- Primary keywords in blue, secondary in purple italic
+- Close via ✕ button or clicking the ▲ button on the node
 
 ### Node interaction
 - **Single-click**: Selects node (blue dashed outline), no edit panel
@@ -238,27 +291,6 @@ const [splitDescSel, setSplitDescSel] = useState<SplitSelMap>(new Map());
 - **Double-click**: Opens inline title rename input
 - **Drag**: Move node(s); on release, resolveOverlap() auto-nudges if overlapping
 - **Shift+drag background**: Draws selection box, selects all overlapping nodes
-
-### Multi-select behavior
-- `selectedIds: Set<number>` tracks all selected nodes
-- Clicking a non-selected node (no shift) clears selection and selects only that node
-- Clicking a selected node starts group drag of all selected nodes
-- Shift+click toggles individual nodes in/out of selection
-- Selection box adds to existing selection (does not clear first)
-- Delete key deletes all selected nodes (reparents their children)
-- Toolbar shows "N selected" when multiple nodes selected
-
-### Auto-pan during drag
-- When mouse is within 40px of viewport edge, canvas auto-scrolls
-- Works for both node dragging and selection box drawing
-- Uses `viewXRef`/`viewYRef`/`zoomRef` refs to avoid stale React closure values
-- PAN_SPEED = 8 canvas units per mouse event
-
-### Overlap resolution
-- `resolveOverlap(nodeId)` checks all other nodes for overlap (with 20px gap)
-- Uses smallest-nudge: compares distance to nudge right vs down, picks shorter
-- Loops up to 100 times to resolve cascading overlaps
-- Runs BEFORE save — fixes position locally, then one `updateNodes()` call saves final position
 
 ### Connectors
 - Linear (P→P): Blue L-shaped elbow lines
@@ -272,7 +304,7 @@ const [splitDescSel, setSplitDescSel] = useState<SplitSelMap>(new Map());
 
 ---
 
-## 8. KNOWN PATTERNS & GOTCHAS
+## 7. KNOWN PATTERNS & GOTCHAS
 
 - `canvasLoc` and `topicApproved` are JSON objects on Keyword. Always spread-copy: `const cl = { ...(kw.canvasLoc || {}) }`
 - Topic delimiter is pipe `|` not comma: `"Topic A | Topic B"`
@@ -290,10 +322,13 @@ const [splitDescSel, setSplitDescSel] = useState<SplitSelMap>(new Map());
 - `useCanvas` is now called in KeywordWorkspace, NOT in CanvasPanel — CanvasPanel receives it as `canvas` prop
 - Multi-select uses `selectedIds: Set<number>` — all old `selectedId` references were converted
 - Selection box and node drag use ref-based viewport tracking (`viewXRef`, `viewYRef`, `zoomRef`) to avoid stale React closure values during mouse event handlers
+- AutoAnalyze async loop uses refs alongside state to avoid stale closures in the while loop
+- Python one-liners with `!` characters fail in bash due to history expansion — use `cat > /tmp/fix.py << 'PYEOF'` heredoc pattern instead
+- Vercel free plan has 5-minute function timeout; Pro has 15 minutes — use Direct API mode for long-running Opus calls
 
 ---
 
-## 9. MANDATORY SAFETY PROTOCOL
+## 8. MANDATORY SAFETY PROTOCOL
 
 ### Rules for Claude (every chat must follow these)
 
@@ -334,6 +369,16 @@ The user is a complete novice with no programming knowledge. For every action:
 - Confirm each step before moving to the next
 - When asking them to edit files manually, show the exact text to find and the exact replacement text
 - Verify their edits by asking them to paste back the relevant section
+- Never just provide commands without context and instructions
+
+**RULE 8 — USE HEREDOC PATTERN FOR PYTHON SCRIPTS**
+Bash interprets `!` in double-quoted strings (history expansion). When writing Python scripts that contain `!`, always use the heredoc pattern:
+```bash
+cd /workspaces/brand-operations-hub && cat > /tmp/fix.py << 'PYEOF'
+# python code here
+PYEOF
+python3 /tmp/fix.py
+```
 
 ### Recovery commands (for the user)
 - Restore a backup: `cp path/to/file.bak path/to/file`
@@ -344,9 +389,12 @@ The user is a complete novice with no programming knowledge. For every action:
 
 ---
 
-## 10. FILE LISTING
+## 9. FILE LISTING
 
 ```
+src/app/api/ai/analyze/
+├── route.ts                   (~55 lines)
+
 src/app/keyword-clustering/
 ├── page.tsx                    (~226 lines)
 
@@ -357,7 +405,7 @@ src/app/keyword-clustering/components/
 ├── mt-table.css
 ├── TIFTable.tsx                (~849 lines)
 ├── tif-table.css
-├── CanvasPanel.tsx             (~884 lines)
+├── CanvasPanel.tsx             (~920 lines)
 ├── canvas-panel.css
 ├── CanvasEditPanel.tsx
 ├── canvas-edit-panel.css
@@ -367,8 +415,10 @@ src/app/keyword-clustering/components/
 ├── tvt-table.css               (~327 lines)
 ├── KASTable.tsx                (~281 lines)
 ├── kas-table.css               (~172 lines)
-├── KeywordWorkspace.tsx        (~399 lines)
+├── KeywordWorkspace.tsx        (~415 lines)
 ├── workspace.css               (~386 lines)
+├── AutoAnalyze.tsx             (~1380 lines)
+├── auto-analyze.css            (~325 lines)
 ├── ScrollArrows.tsx
 ├── scroll-arrows.css
 ├── FloatingPanel.tsx

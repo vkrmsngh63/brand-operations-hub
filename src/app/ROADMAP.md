@@ -122,12 +122,27 @@
 - [x] Topics View Table (TVT) — light theme, depth-first tree walk, single expand/collapse toggle, drag-reorder, depth filter, zoom, description popover, ancestry highlighting
 - [x] Shared useCanvas lifted to KeywordWorkspace for real-time sync between Canvas, TVT, and KAS
 
-### 1g. Auto-Analyze System: NOT STARTED — NEXT PRIORITY
-- [ ] Claude API integration (server-side)
-- [ ] AI Prompt Popover (Generate AI Prompt, Upload AI Prompt Response)
-- [ ] Streaming, batch processing, validation, delta merge
-- [ ] Adaptive/Classic processing modes, batch tiers, hybrid full-table/delta
-- [ ] Post-apply verification, checkpoint persistence
+### 1g. Auto-Analyze System: IN PROGRESS — CURRENT PRIORITY
+- [x] Server-side API proxy route (`/api/ai/analyze`)
+- [x] Direct browser→Anthropic API mode (no timeout limit)
+- [x] Auto-Analyze overlay UI (config, prompts, batch list, progress, log, controls)
+- [x] Full batch processing loop (queue, adaptive sizing, streaming SSE, retries)
+- [x] Prompt assembly (system + primer + output instructions, Mode A/B)
+- [x] Response parsing (delimited blocks, delta merge, KAT mapping)
+- [x] Validation engine (5 hard checks + soft warnings)
+- [x] Canvas apply (overwrite/rebuild, auto-layout, pathway creation, keyword linking)
+- [x] Post-apply UI refresh (fetchCanvas + fetchKeywords)
+- [x] AI-Sorted status marking with verification
+- [x] Node title overflow fix
+- [x] Keyword popover (floating panel with all keywords)
+- [ ] **FIX: Keyword preview not rendering in node boxes** ← NEXT
+- [ ] Copy activity log button
+- [ ] Help icons (ⓘ) with tooltips on overlay config elements
+- [ ] Checkpoint persistence (save/resume interrupted runs)
+- [ ] Sister link creation during apply
+- [ ] Test: depth-0 linear chain connections (fresh run needed)
+- [ ] Test: pathway colors on nodes (fresh run needed)
+- [ ] Test: full multi-batch run end-to-end
 
 ### 1h. Download/Upload Work: NOT STARTED
 - [ ] Export complete .kst JSON file (all data, selections, filters, UI state, AI state, canvas state)
