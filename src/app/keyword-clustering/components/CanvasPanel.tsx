@@ -9,7 +9,7 @@ import './canvas-panel.css';
 const MIN_ZOOM = 0.15;
 const MAX_ZOOM = 3;
 const NODE_W = 220;
-const NODE_H = 120;
+const NODE_H = 160;
 const ELBOW_GAP = 40;
 const NESTED_INDENT = 30;
 const ACCENT_W = 5;
@@ -741,7 +741,7 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
               const kwCount = (node.linkedKwIds || []).length;
               const childCount = nodes.filter(n => n.parentId === node.id).length;
               const hasAlts = (node.altTitles || []).length > 0;
-              const KW_PREVIEW_H = kwCount > 0 ? 36 : 0;
+              const KW_PREVIEW_H = 36;
               const BADGE_H = 18;
               const descY = hasAlts ? 42 : 32;
               const descH = Math.max(0, node.h - descY - KW_PREVIEW_H - BADGE_H);
