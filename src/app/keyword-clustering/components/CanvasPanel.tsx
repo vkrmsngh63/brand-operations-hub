@@ -737,6 +737,7 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
               const isSelected = selectedIds.has(node.id);
               const isLinkSource = node.id === linkSource;
               const isDragging = node.id === dragNodeId;
+              const renderH = Math.max(node.h, NODE_H);
               const accentColor = getPathwayColor(node.pathwayId);
               const kwCount = (node.linkedKwIds || []).length;
               const childCount = nodes.filter(n => n.parentId === node.id).length;
@@ -744,7 +745,7 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
               const KW_PREVIEW_H = 36;
               const BADGE_H = 18;
               const descY = hasAlts ? 42 : 32;
-              const descH = Math.max(0, node.h - descY - KW_PREVIEW_H - BADGE_H);
+              const descH = Math.max(0, renderH - descY - KW_PREVIEW_H - BADGE_H);
               const kwPreviewY = descY + descH;
               return (
                 <g key={node.id} className="cvs-node-group"
@@ -768,23 +769,23 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
                   }}
                   style={{ cursor: linkMode ? 'crosshair' : isDragging ? 'grabbing' : 'grab' }}>
                   {isLinkSource && (
-                    <rect x={-4 / zoom} y={-4 / zoom} width={node.w + 8 / zoom} height={node.h + 8 / zoom}
+                    <rect x={-4 / zoom} y={-4 / zoom} width={node.w + 8 / zoom} height={renderH + 8 / zoom}
                       rx={(CORNER_R + 3) / zoom} ry={(CORNER_R + 3) / zoom}
                       fill="none" stroke={linkMode === 'nested' ? '#e07020' : '#1f6feb'}
                       strokeWidth={3 / zoom} opacity={0.8} />
                   )}
                   {isSelected && !isLinkSource && (
-                    <rect x={-3 / zoom} y={-3 / zoom} width={node.w + 6 / zoom} height={node.h + 6 / zoom}
+                    <rect x={-3 / zoom} y={-3 / zoom} width={node.w + 6 / zoom} height={renderH + 6 / zoom}
                       rx={(CORNER_R + 2) / zoom} ry={(CORNER_R + 2) / zoom}
                       fill="none" stroke="#3b82f6" strokeWidth={2 / zoom}
                       strokeDasharray={`${4 / zoom} ${3 / zoom}`} />
                   )}
-                  <rect x={0} y={0} width={node.w} height={node.h} rx={CORNER_R} ry={CORNER_R}
+                  <rect x={0} y={0} width={node.w} height={renderH} rx={CORNER_R} ry={CORNER_R}
                     fill="#ffffff"
                     stroke={isLinkSource ? (linkMode === 'nested' ? '#e07020' : '#1f6feb') : isSelected ? '#3b82f6' : '#cbd5e1'}
                     strokeWidth={isSelected || isLinkSource ? 1.5 / zoom : 1 / zoom} />
-                  <rect x={0} y={0} width={ACCENT_W} height={node.h} rx={CORNER_R} ry={CORNER_R} fill={accentColor} />
-                  <rect x={ACCENT_W} y={0} width={ACCENT_W} height={node.h} fill="#ffffff" />
+                  <rect x={0} y={0} width={ACCENT_W} height={renderH} rx={CORNER_R} ry={CORNER_R} fill={accentColor} />
+                  <rect x={ACCENT_W} y={0} width={ACCENT_W} height={renderH} fill="#ffffff" />
                   {childCount > 0 && (
                     <g onClick={e => { e.stopPropagation(); toggleCollapse(node.id); }}
                       style={{ cursor: "pointer" }}>
@@ -847,11 +848,11 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
                       </foreignObject>
                     );
                   })()}
-                  <text x={node.w - 8} y={node.h - 8} className="cvs-node-badge" textAnchor="end">
+                  <text x={node.w - 8} y={renderH - 8} className="cvs-node-badge" textAnchor="end">
                     {kwCount > 0 ? `${kwCount}kw` : ''}{kwCount > 0 && childCount > 0 ? ' \u00b7 ' : ''}{childCount > 0 ? `${childCount}ch` : ''}
                   </text>
 
-                  <rect x={node.w - 14} y={node.h - 14} width={12} height={12} fill="transparent" style={{ cursor: "nwse-resize" }} onMouseDown={e => handleResizeStart(e, node.id)} /><circle cx={node.w - 6} cy={node.h - 6} r={2.5} fill="#475569" opacity={0.6} style={{ pointerEvents: "none" }} />
+                  <rect x={node.w - 14} y={renderH - 14} width={12} height={12} fill="transparent" style={{ cursor: "nwse-resize" }} onMouseDown={e => handleResizeStart(e, node.id)} /><circle cx={node.w - 6} cy={renderH - 6} r={2.5} fill="#475569" opacity={0.6} style={{ pointerEvents: "none" }} />
                 </g>
               );
             })}
