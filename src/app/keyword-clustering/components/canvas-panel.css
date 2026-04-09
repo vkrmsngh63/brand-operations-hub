@@ -123,20 +123,85 @@
 }
 .cvs-node-kw-preview {
   display: flex;
-  flex-wrap: wrap;
-  gap: 2px 4px;
+  align-items: flex-start;
+  gap: 4px;
   overflow: hidden;
   font-size: 9px;
   line-height: 1.3;
+  padding: 2px 0;
 }
-.cvs-kw-primary {
-  color: #1e40af;
-  font-weight: 500;
+.cvs-kw-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 4px;
+  flex: 1;
+  overflow: hidden;
 }
-.cvs-kw-secondary {
-  color: #7c3aed;
-  font-style: italic;
+.cvs-kw-expand-btn {
+  background: none;
+  border: 1px solid #cbd5e1;
+  border-radius: 3px;
+  color: #475569;
+  font-size: 8px;
+  padding: 1px 4px;
+  cursor: pointer;
+  flex-shrink: 0;
+  line-height: 1.3;
+  white-space: nowrap;
 }
+.cvs-kw-expand-btn:hover {
+  background: #e2e8f0;
+  color: #1e293b;
+}
+.cvs-kw-popover {
+  position: fixed;
+  z-index: 9500;
+  background: #1e293b;
+  color: #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  width: 320px;
+  max-height: 400px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.cvs-kw-popover-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid #334155;
+  font-size: 11px;
+  font-weight: 600;
+}
+.cvs-kw-popover-close {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0 4px;
+}
+.cvs-kw-popover-close:hover { color: #e2e8f0; }
+.cvs-kw-popover-list {
+  overflow-y: auto;
+  padding: 6px 0;
+  flex: 1;
+}
+.cvs-kw-popover-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 12px;
+  font-size: 10px;
+}
+.cvs-kw-popover-item:hover { background: #334155; }
+.cvs-kw-popover-item.primary .cvs-kw-popover-kw { color: #60a5fa; font-weight: 500; }
+.cvs-kw-popover-item.secondary .cvs-kw-popover-kw { color: #a78bfa; font-style: italic; }
+.cvs-kw-popover-kw { flex: 1; }
+.cvs-kw-popover-vol { color: #64748b; font-size: 9px; min-width: 45px; text-align: right; }
+.cvs-kw-popover-pl { color: #64748b; font-size: 9px; min-width: 18px; }
 .cvs-kw-more {
   color: #64748b;
   font-size: 8px;

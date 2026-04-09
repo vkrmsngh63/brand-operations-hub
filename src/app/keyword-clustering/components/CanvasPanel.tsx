@@ -69,6 +69,7 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
 
   /* ── Hover popover state ─────────────────────────────────────── */
   const [hoverNodeId, setHoverNodeId] = useState<number | null>(null);
+  const [kwPopoverNodeId, setKwPopoverNodeId] = useState<number | null>(null);
   const [hoverPos, setHoverPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /* ── Node resize state ──────────────────────────────────────── */
@@ -740,8 +741,11 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
               const kwCount = (node.linkedKwIds || []).length;
               const childCount = nodes.filter(n => n.parentId === node.id).length;
               const hasAlts = (node.altTitles || []).length > 0;
+              const KW_PREVIEW_H = kwCount > 0 ? 36 : 0;
+              const BADGE_H = 18;
               const descY = hasAlts ? 42 : 32;
-              const descH = node.h - descY - 20;
+              const descH = Math.max(0, node.h - descY - KW_PREVIEW_H - BADGE_H);
+              const kwPreviewY = descY + descH;
               return (
                 <g key={node.id} className="cvs-node-group"
                   transform={`translate(${node.x}, ${node.y})`}
@@ -824,19 +828,21 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
                     const placements = (node.kwPlacements || {}) as Record<string, string>;
                     const primaryKws = kwIds.filter(id => (placements[id] || 'p') === 'p').map(id => allKeywords.find(k => k.id === id)).filter(Boolean);
                     const secondaryKws = kwIds.filter(id => placements[id] === 's').map(id => allKeywords.find(k => k.id === id)).filter(Boolean);
-                    const kwY = Math.min(descY + Math.max(descH, 0), node.h - 36);
-                    const kwH = node.h - kwY - 18;
-                    if (kwH < 10) return null;
                     return (
-                      <foreignObject x={ACCENT_W + 8} y={kwY} width={node.w - ACCENT_W - 16} height={kwH}>
+                      <foreignObject x={ACCENT_W + 8} y={kwPreviewY} width={node.w - ACCENT_W - 16} height={KW_PREVIEW_H}>
                         <div className="cvs-node-kw-preview">
-                          {primaryKws.slice(0, 3).map((k, i) => (
-                            <span key={i} className="cvs-kw-primary">{k!.keyword}</span>
-                          ))}
-                          {secondaryKws.slice(0, 2).map((k, i) => (
-                            <span key={'s' + i} className="cvs-kw-secondary">{k!.keyword}</span>
-                          ))}
-                          {kwIds.length > 5 && <span className="cvs-kw-more">+{kwIds.length - 5} more</span>}
+                          <div className="cvs-kw-list">
+                            {primaryKws.slice(0, 3).map((k, i) => (
+                              <span key={i} className="cvs-kw-primary">{k!.keyword}</span>
+                            ))}
+                            {secondaryKws.slice(0, 2).map((k, i) => (
+                              <span key={'s' + i} className="cvs-kw-secondary">{k!.keyword}</span>
+                            ))}
+                            {kwIds.length > 5 && <span className="cvs-kw-more">+{kwIds.length - 5} more</span>}
+                          </div>
+                          <button className="cvs-kw-expand-btn" onClick={e => { e.stopPropagation(); setKwPopoverNodeId(kwPopoverNodeId === node.id ? null : node.id); }}>
+                            {kwPopoverNodeId === node.id ? '▲' : '▼'} {kwIds.length}
+                          </button>
                         </div>
                       </foreignObject>
                     );
@@ -877,6 +883,39 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
               <div className="cvs-popover-desc">{hoverNode.description}</div>
             </div>
           )}
+          {kwPopoverNodeId !== null && (() => {
+            const popNode = nodes.find(n => n.id === kwPopoverNodeId);
+            if (!popNode) return null;
+            const kwIds = (popNode.linkedKwIds || []) as string[];
+            const placements = (popNode.kwPlacements || {}) as Record<string, string>;
+            const canvasArea = canvasAreaRef.current;
+            if (!canvasArea || kwIds.length === 0) return null;
+            const rect = canvasArea.getBoundingClientRect();
+            const popLeft = (popNode.x + popNode.w - viewX) * zoom + rect.left + 8;
+            const popTop = (popNode.y - viewY) * zoom + rect.top;
+            return (
+              <div className="cvs-kw-popover" style={{ left: popLeft, top: popTop }} onClick={e => e.stopPropagation()}>
+                <div className="cvs-kw-popover-header">
+                  <span>{popNode.title} — {kwIds.length} keywords</span>
+                  <button className="cvs-kw-popover-close" onClick={() => setKwPopoverNodeId(null)}>✕</button>
+                </div>
+                <div className="cvs-kw-popover-list">
+                  {kwIds.map(id => {
+                    const kw = allKeywords.find(k => k.id === id);
+                    if (!kw) return null;
+                    const pl = placements[id] || 'p';
+                    return (
+                      <div key={id} className={`cvs-kw-popover-item ${pl === 's' ? 'secondary' : 'primary'}`}>
+                        <span className="cvs-kw-popover-kw">{kw.keyword}</span>
+                        <span className="cvs-kw-popover-vol">{Number(kw.volume).toLocaleString()}</span>
+                        <span className="cvs-kw-popover-pl">[{pl}]</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
         </div>
         </>)}
 
