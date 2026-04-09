@@ -6,6 +6,7 @@ import type { MTEntry } from './MTTable';
 import TIFTable from './TIFTable';
 import CanvasPanel from './CanvasPanel';
 import TVTTable from './TVTTable';
+import KASTable from './KASTable';
 import ScrollArrows from './ScrollArrows';
 import FloatingPanel from './FloatingPanel';
 import { useKeywords } from '@/hooks/useKeywords';
@@ -54,20 +55,6 @@ function Divider({ direction, onDrag }: {
   );
 }
 
-// ── KAS Placeholder ────────────────────────────────────────────
-function KASTable({ keywords }: { keywords: any[] }) {
-  return (
-    <div className="kas-placeholder">
-      <div className="kas-placeholder-inner">
-        <span className="kas-placeholder-icon">📊</span>
-        <span className="kas-placeholder-title">Keywords Analysis Table</span>
-        <span className="kas-placeholder-sub">Coming in Phase 1f — keyword-to-topic mapping with upstream hierarchy</span>
-        <span className="kas-placeholder-count">{keywords.length} keywords loaded</span>
-      </div>
-    </div>
-  );
-}
-
 // ── AI Actions Pane ────────────────────────────────────────────
 function AIActionsPane({ view, onSetView }: {
   view: AITableView;
@@ -112,9 +99,7 @@ function AIActionsPane({ view, onSetView }: {
           </>
         )}
         {view === 'analysis' && (
-          <>
-            <button className="ai-act-btn" title="Copy Table Data">📋 Copy Table Data</button>
-          </>
+          <span className="ai-act-hint">Controls in table below</span>
         )}
         {view === 'topics' && (
           <span className="ai-act-hint">Controls in table below</span>
@@ -270,7 +255,7 @@ export default function KeywordWorkspace({ projectId, userId, aiMode }: KeywordW
     switch (aiTableView) {
       case 'normal': return renderAST();
       case 'common': return renderMT();
-      case 'analysis': return <KASTable keywords={keywords} />;
+      case 'analysis': return <KASTable nodes={canvas.nodes} allKeywords={keywords} />;
       case 'topics': return <TVTTable nodes={canvas.nodes} updateNodes={canvas.updateNodes} allKeywords={keywords} />;
     }
   }

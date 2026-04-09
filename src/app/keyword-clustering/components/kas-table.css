@@ -1,0 +1,172 @@
+/* ═══════════════════════════════════════════════════════════════
+   Keywords Analysis Table (KAS) — Light Theme
+   ═══════════════════════════════════════════════════════════════ */
+
+.kas-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: #ffffff;
+  font-family: var(--fn-ui, 'IBM Plex Sans', sans-serif);
+}
+
+/* ── Header ──────────────────────────────────────────────────── */
+.kas-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  background: #f1f5f9;
+  border-bottom: 1px solid #e2e8f0;
+  flex-shrink: 0;
+}
+.kas-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #1e293b;
+}
+.kas-chip {
+  font-size: 10px;
+  font-weight: 700;
+  background: #3b82f6;
+  color: #fff;
+  border-radius: 8px;
+  padding: 0 6px;
+  min-width: 18px;
+  text-align: center;
+  line-height: 18px;
+}
+.kas-chip-label {
+  font-size: 9px;
+  color: #64748b;
+}
+.kas-copy-btn {
+  margin-left: auto;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  font-family: inherit;
+  border: 1px solid #cbd5e1;
+  border-radius: 3px;
+  cursor: pointer;
+  background: #fff;
+  color: #334155;
+  transition: background 0.15s;
+}
+.kas-copy-btn:hover {
+  background: #e2e8f0;
+}
+
+/* ── Table ────────────────────────────────────────────────────── */
+.kas-scroll {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+}
+
+.kas-table {
+  border-collapse: collapse;
+  table-layout: auto;
+  font-size: 10px;
+  width: 100%;
+}
+
+/* ── Header cells ─────────────────────────────────────────────── */
+.kas-th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: #e2e8f0;
+  color: #334155;
+  padding: 4px 5px;
+  text-align: left;
+  font-size: 10px;
+  font-weight: 700;
+  border-bottom: 2px solid #c8d0dc;
+  border-right: 1px solid #c8d0dc;
+  white-space: nowrap;
+}
+.kas-th:last-child { border-right: none; }
+
+/* ── Cells ─────────────────────────────────────────────────────── */
+.kas-table td {
+  padding: 4px 5px;
+  border-bottom: 1px solid #eef1f5;
+  border-right: 1px solid #dde1e7;
+  vertical-align: top;
+  font-size: 10px;
+  word-wrap: break-word;
+}
+.kas-table td:last-child { border-right: none; }
+
+/* ── Group separators ──────────────────────────────────────────── */
+.kas-row.kas-kw-first td {
+  border-top: 2px solid #8da4c2;
+}
+.kas-row.kas-mt-first td {
+  border-top: 1px dashed #b0bdd0;
+}
+.kas-row.kas-kw-first.kas-mt-first td {
+  border-top: 2px solid #8da4c2;
+}
+
+/* ── Keyword column ────────────────────────────────────────────── */
+td.kas-kw-primary {
+  background: #e8eef8;
+  font-weight: 600;
+  color: #1f2d3d;
+}
+td.kas-kw-cont {
+  background: #f3f6fb;
+  font-weight: 400;
+  color: #8b9bb5;
+  font-style: italic;
+  font-size: 9px;
+}
+
+/* ── Main Topic columns ────────────────────────────────────────── */
+td.kas-mt-primary {
+  background: #f5f8fd;
+  font-weight: 500;
+  color: #2c3e50;
+}
+td.kas-mt-cont {
+  background: #fafbfd;
+  font-weight: 400;
+  color: #9aa8bc;
+  font-style: italic;
+  font-size: 9px;
+}
+
+/* ── Upstream Topic columns ────────────────────────────────────── */
+td.kas-ut-cell {
+  background: #fff;
+  color: #334155;
+}
+td.kas-ut-empty {
+  background: #fafafa;
+  color: #c5cdd8;
+}
+
+/* ── Alternating keyword groups ────────────────────────────────── */
+.kas-grp-even td.kas-kw-primary,
+.kas-grp-even td.kas-kw-cont { background: #eef3e8; }
+.kas-grp-even td.kas-mt-primary { background: #f5f8f0; }
+.kas-grp-even td.kas-mt-cont { background: #f9fbf5; }
+.kas-grp-even td.kas-ut-cell { background: #fcfdf9; }
+
+/* ── Row hover ─────────────────────────────────────────────────── */
+.kas-row:hover td {
+  background: #dbeafe !important;
+}
+
+/* ── Empty state ───────────────────────────────────────────────── */
+.kas-empty {
+  text-align: center;
+  color: #94a3b8;
+  padding: 24px 5px !important;
+  font-style: italic;
+  border: none !important;
+}
