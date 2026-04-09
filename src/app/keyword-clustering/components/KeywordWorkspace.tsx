@@ -13,6 +13,7 @@ import './workspace.css';
 interface KeywordWorkspaceProps {
   projectId: string;
   userId: string;
+  aiMode: boolean;
 }
 
 type AITableView = 'normal' | 'common' | 'analysis' | 'topics';
@@ -139,7 +140,7 @@ function AIActionsPane({ view, onSetView }: {
   );
 }
 
-export default function KeywordWorkspace({ projectId, userId }: KeywordWorkspaceProps) {
+export default function KeywordWorkspace({ projectId, userId, aiMode }: KeywordWorkspaceProps) {
   const {
     keywords, loading, fetchKeywords, addKeyword, bulkImport,
     updateKeyword, batchUpdate, deleteKeyword, bulkDelete, reorder,
@@ -150,7 +151,6 @@ export default function KeywordWorkspace({ projectId, userId }: KeywordWorkspace
   const [tifActive, setTifActive] = useState(true);
 
   // ── AI Mode state ────────────────────────────────────────────
-  const [aiMode, setAiMode] = useState(false);
   const [aiTableView, setAiTableView] = useState<AITableView>('normal');
 
   // ── Panel visibility ─────────────────────────────────────────
@@ -314,24 +314,6 @@ export default function KeywordWorkspace({ projectId, userId }: KeywordWorkspace
           <input type="checkbox" checked={showCanvas} onChange={e => { setShowCanvas(e.target.checked); if (!e.target.checked) setDetachedCanvas(false); }} />
           <span>Canvas</span>
         </label>
-
-        <div className="ws-topbar-spacer" />
-
-        {/* ── Manual / AI toggle ─────────────────────────────── */}
-        <div className="ws-mode-toggle">
-          <button
-            className={`ws-mode-btn${!aiMode ? ' ws-mode-btn-active' : ''}`}
-            onClick={() => setAiMode(false)}
-          >
-            Manual
-          </button>
-          <button
-            className={`ws-mode-btn${aiMode ? ' ws-mode-btn-active' : ''}`}
-            onClick={() => setAiMode(true)}
-          >
-            AI
-          </button>
-        </div>
       </div>
 
       {/* ── Main workspace area ───────────────────────────────── */}
