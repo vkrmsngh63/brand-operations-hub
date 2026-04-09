@@ -276,3 +276,11 @@
 .cvs-empty strong {
   color: #64748b;
 }
+
+/* Multi-select label */
+.cvs-multi-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: #93c5fd;
+  font-family: var(--fn-ui, "IBM Plex Sans", sans-serif);
+}

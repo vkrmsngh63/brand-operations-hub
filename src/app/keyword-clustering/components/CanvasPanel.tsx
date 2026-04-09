@@ -45,8 +45,16 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const dragMoved = useRef(false);
 
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  /* ── Multi-select state ──────────────────────────────────────── */
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; nodeId: number } | null>(null);
+
+  /* ── Selection box state (shift+drag on background) ──────────── */
+  const [selBox, setSelBox] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
+  const selBoxStart = useRef<{ cx: number; cy: number } | null>(null);
+
+  /* ── Multi-drag: offsets for all selected nodes ──────────────── */
+  const multiDragOffsets = useRef<Map<number, { dx: number; dy: number }>>(new Map());
 
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editVal, setEditVal] = useState('');
@@ -102,15 +110,66 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
     };
   }
 
+  /* ── Background mouse down: pan or selection box ──────────────── */
   function handleBgMouseDown(e: React.MouseEvent) {
     if (e.button !== 0) return;
     if ((e.target as Element).closest('.cvs-node-group')) return;
     if (linkMode) { setLinkMode(null); setLinkSource(null); showToast('Link cancelled'); return; }
+
+    // Shift+drag on background = selection box
+    if (e.shiftKey) {
+      const pos = screenToCanvas(e.clientX, e.clientY);
+      setSelBox({ x1: pos.x, y1: pos.y, x2: pos.x, y2: pos.y });
+      selBoxStart.current = { cx: e.clientX, cy: e.clientY };
+      e.preventDefault();
+      return;
+    }
+
+    // Normal drag on background = pan
     setIsPanning(true);
     panStart.current = { x: e.clientX, y: e.clientY, vx: viewX, vy: viewY };
-    setCtxMenu(null); setSelectedId(null); setEditPanelNodeId(null);
+    setCtxMenu(null); setSelectedIds(new Set()); setEditPanelNodeId(null);
     e.preventDefault();
   }
+
+  /* ── Selection box drag ──────────────────────────────────────── */
+  useEffect(() => {
+    if (!selBox || !selBoxStart.current) return;
+    function onMove(e: MouseEvent) {
+      const pos = screenToCanvas(e.clientX, e.clientY);
+      setSelBox(prev => prev ? { ...prev, x2: pos.x, y2: pos.y } : null);
+    }
+    function onUp(e: MouseEvent) {
+      // Find all nodes inside the selection box
+      if (selBox) {
+        const minX = Math.min(selBox.x1, selBox.x2);
+        const maxX = Math.max(selBox.x1, selBox.x2);
+        const minY = Math.min(selBox.y1, selBox.y2);
+        const maxY = Math.max(selBox.y1, selBox.y2);
+        const hits = new Set<number>();
+        nodes.forEach(n => {
+          // Node is selected if it overlaps with box
+          if (n.x + n.w > minX && n.x < maxX && n.y + n.h > minY && n.y < maxY) {
+            if (!isHiddenByCollapse(n.id)) hits.add(n.id);
+          }
+        });
+        if (hits.size > 0) {
+          setSelectedIds(prev => {
+            const next = new Set(prev);
+            hits.forEach(id => next.add(id));
+            return next;
+          });
+          showToast(`Selected ${hits.size} node${hits.size > 1 ? 's' : ''}`);
+        }
+      }
+      setSelBox(null);
+      selBoxStart.current = null;
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    return () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selBox ? `${selBox.x1},${selBox.y1}` : null]);
 
   useEffect(() => {
     if (!isPanning) return;
@@ -159,7 +218,7 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
   function handleLinkClick(nodeId: number) {
     if (!linkMode) return;
     if (linkSource === null) {
-      setLinkSource(nodeId); setSelectedId(nodeId);
+      setLinkSource(nodeId); setSelectedIds(new Set([nodeId]));
       showToast(`Now click the ${linkMode === 'nested' ? 'child' : 'second'} node`);
       return;
     }
@@ -178,10 +237,11 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
   }
 
   function handleDetachNode() {
-    if (selectedId === null) { showToast('Select a node first'); return; }
-    const node = nodes.find(n => n.id === selectedId);
+    if (selectedIds.size === 0) { showToast('Select a node first'); return; }
+    const id = [...selectedIds][0];
+    const node = nodes.find(n => n.id === id);
     if (!node || node.parentId === null) { showToast('Node has no parent to detach from'); return; }
-    updateNodes([{ id: selectedId, parentId: null, relationshipType: '' } as Partial<CanvasNode>]);
+    updateNodes([{ id, parentId: null, relationshipType: '' } as Partial<CanvasNode>]);
     showToast('\u2713 Node detached from parent');
   }
 
@@ -192,30 +252,68 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
     const node = nodes.find(n => n.id === nodeId);
     if (!node) return;
     const pos = screenToCanvas(e.clientX, e.clientY);
+
+    // Shift+click = toggle in multi-select
+    if (e.shiftKey) {
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        if (next.has(nodeId)) next.delete(nodeId);
+        else next.add(nodeId);
+        return next;
+      });
+      setCtxMenu(null);
+      return;
+    }
+
+    // If clicking a node that's already in the selection, drag the whole group
+    const isInSelection = selectedIds.has(nodeId);
+    if (!isInSelection) {
+      // Normal click = select only this node
+      setSelectedIds(new Set([nodeId]));
+    }
+
+    // Start drag — compute offsets for all selected nodes
+    const dragSet = isInSelection ? selectedIds : new Set([nodeId]);
+    const offsets = new Map<number, { dx: number; dy: number }>();
+    dragSet.forEach(id => {
+      const n = nodes.find(n => n.id === id);
+      if (n) offsets.set(id, { dx: pos.x - n.x, dy: pos.y - n.y });
+    });
+    multiDragOffsets.current = offsets;
+
     setDragNodeId(nodeId);
     setDragOffset({ x: pos.x - node.x, y: pos.y - node.y });
     dragMoved.current = false;
-    setSelectedId(nodeId); setCtxMenu(null);
+    setCtxMenu(null);
   }
 
   useEffect(() => {
     if (dragNodeId === null) return;
+    const offsets = multiDragOffsets.current;
+
     function onMove(e: MouseEvent) {
       dragMoved.current = true;
       const pos = screenToCanvas(e.clientX, e.clientY);
-      const idx = nodes.findIndex(n => n.id === dragNodeId);
-      if (idx >= 0) {
-        nodes[idx] = { ...nodes[idx], x: pos.x - dragOffset.x, y: pos.y - dragOffset.y };
-        forceUpdate();
-      }
+      // Move all nodes in the drag set
+      offsets.forEach(({ dx, dy }, id) => {
+        const idx = nodes.findIndex(n => n.id === id);
+        if (idx >= 0) {
+          nodes[idx] = { ...nodes[idx], x: pos.x - dx, y: pos.y - dy };
+        }
+      });
+      forceUpdate();
     }
     function onUp() {
-      if (dragMoved.current && dragNodeId !== null) {
-        resolveOverlap(dragNodeId);
-        const node = nodes.find(n => n.id === dragNodeId);
-        if (node) {
-          updateNodes([{ id: dragNodeId, x: node.x, y: node.y } as Partial<CanvasNode>]);
-        }
+      if (dragMoved.current && offsets.size > 0) {
+        // Resolve overlap for each dragged node
+        offsets.forEach((_, id) => resolveOverlap(id));
+        // Save all dragged nodes
+        const updates: Partial<CanvasNode>[] = [];
+        offsets.forEach((_, id) => {
+          const node = nodes.find(n => n.id === id);
+          if (node) updates.push({ id, x: node.x, y: node.y } as Partial<CanvasNode>);
+        });
+        if (updates.length > 0) updateNodes(updates);
       }
       setDragNodeId(null);
     }
@@ -224,7 +322,8 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
     return () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dragNodeId]);
-/* ── Overlap resolution ─────────────────────────────────────── */
+
+  /* ── Overlap resolution ─────────────────────────────────────── */
   function resolveOverlap(nodeId: number) {
     const node = nodes.find(n => n.id === nodeId);
     if (!node) return;
@@ -261,7 +360,10 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
 
   function handleNodeContextMenu(e: React.MouseEvent, nodeId: number) {
     e.preventDefault(); e.stopPropagation();
-    setCtxMenu({ x: e.clientX, y: e.clientY, nodeId }); setSelectedId(nodeId); setEditPanelNodeId(nodeId);
+    setCtxMenu({ x: e.clientX, y: e.clientY, nodeId });
+    // Add to selection if not already selected
+    if (!selectedIds.has(nodeId)) setSelectedIds(new Set([nodeId]));
+    setEditPanelNodeId(nodeId);
   }
 
   function handleDeleteNode() {
@@ -270,7 +372,8 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
       if (ch.length > 0) updateNodes(ch as Partial<CanvasNode>[]);
       deleteNode(ctxMenu.nodeId);
       if (editPanelNodeId === ctxMenu.nodeId) setEditPanelNodeId(null);
-      setCtxMenu(null); setSelectedId(null);
+      setCtxMenu(null);
+      setSelectedIds(prev => { const next = new Set(prev); next.delete(ctxMenu.nodeId); return next; });
     }
   }
 
@@ -305,13 +408,12 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
     const rect = svgRef.current?.getBoundingClientRect();
     const cx = rect ? (rect.width / 2) / zoom + viewX - NODE_W / 2 : viewX;
     let cy = rect ? (rect.height / 2) / zoom + viewY - NODE_H / 2 : viewY;
-    // Place below the lowest existing node to avoid overlap
     for (const n of nodes) {
       const bottom = n.y + n.h + 30;
       if (bottom > cy) cy = bottom;
     }
     const newNode = await addNode({ x: cx, y: cy, w: NODE_W, h: NODE_H, title: 'New Topic' });
-    if (newNode) { setSelectedId(newNode.id); }
+    if (newNode) { setSelectedIds(new Set([newNode.id])); }
   }
 
   function zoomIn() { const nz = Math.min(MAX_ZOOM, zoom * 1.2); setZoom(nz); saveViewport(viewX, viewY, nz); }
@@ -342,22 +444,25 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
         if (linkMode) { setLinkMode(null); setLinkSource(null); showToast('Link cancelled'); return; }
         setCtxMenu(null);
         if (editingId !== null) { setEditingId(null); }
-        else if (editPanelNodeId !== null) { setEditPanelNodeId(null); setSelectedId(null); }
-        else { setSelectedId(null); }
+        else if (editPanelNodeId !== null) { setEditPanelNodeId(null); setSelectedIds(new Set()); }
+        else { setSelectedIds(new Set()); }
       }
-      if (e.key === 'Delete' && selectedId !== null && editingId === null && !linkMode) {
+      if (e.key === 'Delete' && selectedIds.size > 0 && editingId === null && !linkMode) {
         const active = document.activeElement;
         if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) return;
-        const ch = nodes.filter(n => n.parentId === selectedId).map(n => ({ id: n.id, parentId: null, relationshipType: '' }));
-        if (ch.length > 0) updateNodes(ch as Partial<CanvasNode>[]);
-        deleteNode(selectedId);
-        if (editPanelNodeId === selectedId) setEditPanelNodeId(null);
-        setSelectedId(null);
+        // Delete all selected nodes
+        selectedIds.forEach(id => {
+          const ch = nodes.filter(n => n.parentId === id).map(n => ({ id: n.id, parentId: null, relationshipType: '' }));
+          if (ch.length > 0) updateNodes(ch as Partial<CanvasNode>[]);
+          deleteNode(id);
+        });
+        if (editPanelNodeId !== null && selectedIds.has(editPanelNodeId)) setEditPanelNodeId(null);
+        setSelectedIds(new Set());
       }
     }
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [selectedId, editingId, nodes, updateNodes, deleteNode, linkMode, editPanelNodeId]);
+  }, [selectedIds, editingId, nodes, updateNodes, deleteNode, linkMode, editPanelNodeId]);
 
   /* ── Canvas drop handler (keywords from tables) ───────────── */
   function handleCanvasDragOver(e: React.DragEvent) {
@@ -386,7 +491,7 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
       const merged = [...(hit.linkedKwIds || []) as string[], ...newIds];
       updateNodes([{ id: hit.id, linkedKwIds: merged } as Partial<CanvasNode>]);
       showToast(`\u2713 Linked ${newIds.length} keyword${newIds.length > 1 ? "s" : ""} to "${hit.title}"`);
-      setSelectedId(hit.id); setEditPanelNodeId(hit.id);
+      setSelectedIds(new Set([hit.id])); setEditPanelNodeId(hit.id);
     } else {
       showToast("Drop on a node to link keywords");
     }
@@ -468,6 +573,9 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
   const editPanelNode = editPanelNodeId !== null ? nodes.find(n => n.id === editPanelNodeId) ?? null : null;
   const hoverNode = hoverNodeId !== null ? nodes.find(n => n.id === hoverNodeId) ?? null : null;
 
+  /* Helper: first selected ID for edit panel etc. */
+  const firstSelectedId = selectedIds.size > 0 ? [...selectedIds][0] : null;
+
   return (
     <div className="cvs-root" ref={containerRef}>
       <div className="cvs-actions">
@@ -489,6 +597,12 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
         <span className="cvs-sep" />
         <button className={`cvs-btn ${canvasMode === "mindmap" ? "cvs-btn-active" : ""}`} onClick={() => setCanvasMode("mindmap")}>Mindmap</button>
         <button className={`cvs-btn ${canvasMode === "table" ? "cvs-btn-active" : ""}`} onClick={() => setCanvasMode("table")}>Table</button>
+        {selectedIds.size > 1 && (
+          <>
+            <span className="cvs-sep" />
+            <span className="cvs-multi-label">{selectedIds.size} selected</span>
+          </>
+        )}
       </div>
 
       {linkMode && (
@@ -502,7 +616,7 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
 
       <div className="cvs-body">
         {canvasMode === "table" ? (
-          <CanvasTableMode nodes={nodes} pathways={pathways} sisterLinks={sisterLinks} allKeywords={allKeywords} onSelectNode={id => { setSelectedId(id); }} onUpdateNodes={updateNodes} onAddNode={addNode} onDeleteNode={deleteNode} />
+          <CanvasTableMode nodes={nodes} pathways={pathways} sisterLinks={sisterLinks} allKeywords={allKeywords} onSelectNode={id => { setSelectedIds(new Set([id])); }} onUpdateNodes={updateNodes} onAddNode={addNode} onDeleteNode={deleteNode} />
         ) : (<>
         <div className="cvs-canvas-area" ref={canvasAreaRef} onDragOver={handleCanvasDragOver} onDrop={handleCanvasDrop}>
           <svg ref={svgRef}
@@ -550,7 +664,7 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
 
             {nodes.map(node => {
               if (isHiddenByCollapse(node.id)) return null;
-              const isSelected = node.id === selectedId;
+              const isSelected = selectedIds.has(node.id);
               const isLinkSource = node.id === linkSource;
               const isDragging = node.id === dragNodeId;
               const accentColor = getPathwayColor(node.pathwayId);
@@ -598,7 +712,6 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
                     strokeWidth={isSelected || isLinkSource ? 1.5 / zoom : 1 / zoom} />
                   <rect x={0} y={0} width={ACCENT_W} height={node.h} rx={CORNER_R} ry={CORNER_R} fill={accentColor} />
                   <rect x={ACCENT_W} y={0} width={ACCENT_W} height={node.h} fill="#ffffff" />
-                  {/* Collapse/expand toggle */}
                   {childCount > 0 && (
                     <g onClick={e => { e.stopPropagation(); toggleCollapse(node.id); }}
                       style={{ cursor: "pointer" }}>
@@ -645,6 +758,21 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
                 </g>
               );
             })}
+
+            {/* ── Selection box rectangle ──────────────────────── */}
+            {selBox && (
+              <rect
+                x={Math.min(selBox.x1, selBox.x2)}
+                y={Math.min(selBox.y1, selBox.y2)}
+                width={Math.abs(selBox.x2 - selBox.x1)}
+                height={Math.abs(selBox.y2 - selBox.y1)}
+                fill="rgba(59, 130, 246, 0.1)"
+                stroke="#3b82f6"
+                strokeWidth={1.5 / zoom}
+                strokeDasharray={`${5 / zoom} ${3 / zoom}`}
+                rx={2 / zoom}
+              />
+            )}
           </svg>
 
           {nodes.length === 0 && !isPanning && (
@@ -666,7 +794,7 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
             node={editPanelNode}
             allKeywords={allKeywords}
             onSave={handleEditPanelSave}
-            onClose={() => { setEditPanelNodeId(null); setSelectedId(null); }}
+            onClose={() => { setEditPanelNodeId(null); setSelectedIds(new Set()); }}
           />
         )}
       </div>

@@ -1,7 +1,8 @@
 'use client';
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { useCanvas, CanvasNode } from '@/hooks/useCanvas';
+import { type CanvasNode, type useCanvas } from '@/hooks/useCanvas';
 import CanvasEditPanel from './CanvasEditPanel';
+import CanvasTableMode from './CanvasTableMode';
 import type { Keyword } from '@/hooks/useKeywords';
 import './canvas-panel.css';
 
@@ -21,13 +22,14 @@ const PATHWAY_COLORS = [
 interface CanvasPanelProps {
   projectId: string;
   allKeywords?: Keyword[];
+  canvas: ReturnType<typeof useCanvas>;
 }
 
-export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanelProps) {
+export default function CanvasPanel({ projectId, allKeywords = [], canvas }: CanvasPanelProps) {
   const {
-    nodes, canvasState, sisterLinks, fetchCanvas,
+    nodes, canvasState, pathways, sisterLinks, fetchCanvas,
     addNode, updateNodes, deleteNode, updateCanvasState,
-  } = useCanvas(projectId);
+  } = canvas;
 
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -50,11 +52,17 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
   const [editVal, setEditVal] = useState('');
 
   const [editPanelNodeId, setEditPanelNodeId] = useState<number | null>(null);
+  const [canvasMode, setCanvasMode] = useState<"mindmap" | "table">("mindmap");
 
   /* ── Hover popover state ─────────────────────────────────────── */
   const [hoverNodeId, setHoverNodeId] = useState<number | null>(null);
   const [hoverPos, setHoverPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /* ── Node resize state ──────────────────────────────────────── */
+  const [resizeNodeId, setResizeNodeId] = useState<number | null>(null);
+  const resizeStart = useRef<{ w: number; h: number; mx: number; my: number }>({ w: 0, h: 0, mx: 0, my: 0 });
+  /* ── Collapse/expand state ──────────────────────────────────── */
+  const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
 
   const [linkMode, setLinkMode] = useState<'linear' | 'nested' | null>(null);
   const [linkSource, setLinkSource] = useState<number | null>(null);
@@ -187,7 +195,7 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
     setDragNodeId(nodeId);
     setDragOffset({ x: pos.x - node.x, y: pos.y - node.y });
     dragMoved.current = false;
-    setSelectedId(nodeId); setEditPanelNodeId(nodeId); setCtxMenu(null);
+    setSelectedId(nodeId); setCtxMenu(null);
   }
 
   useEffect(() => {
@@ -203,8 +211,11 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
     }
     function onUp() {
       if (dragMoved.current && dragNodeId !== null) {
+        resolveOverlap(dragNodeId);
         const node = nodes.find(n => n.id === dragNodeId);
-        if (node) updateNodes([{ id: dragNodeId, x: node.x, y: node.y } as Partial<CanvasNode>]);
+        if (node) {
+          updateNodes([{ id: dragNodeId, x: node.x, y: node.y } as Partial<CanvasNode>]);
+        }
       }
       setDragNodeId(null);
     }
@@ -213,13 +224,44 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
     return () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dragNodeId]);
+/* ── Overlap resolution ─────────────────────────────────────── */
+  function resolveOverlap(nodeId: number) {
+    const node = nodes.find(n => n.id === nodeId);
+    if (!node) return;
+    const GAP = 20;
+    let attempts = 0;
+    while (attempts < 100) {
+      let foundBlocker = false;
+      for (const n of nodes) {
+        if (n.id === nodeId) continue;
+        const overlapX = node.x < n.x + n.w + GAP && node.x + node.w + GAP > n.x;
+        const overlapY = node.y < n.y + n.h + GAP && node.y + node.h + GAP > n.y;
+        if (overlapX && overlapY) {
+          const nudgeRight = (n.x + n.w + GAP) - node.x;
+          const nudgeDown = (n.y + n.h + GAP) - node.y;
+          if (nudgeRight <= nudgeDown) {
+            node.x = n.x + n.w + GAP;
+          } else {
+            node.y = n.y + n.h + GAP;
+          }
+          foundBlocker = true;
+          break;
+        }
+      }
+      if (!foundBlocker) break;
+      attempts++;
+    }
+    const idx = nodes.findIndex(n => n.id === nodeId);
+    if (idx >= 0) nodes[idx] = { ...nodes[idx], x: node.x, y: node.y };
+    forceUpdate();
+  }
 
   const [, setTick] = useState(0);
   function forceUpdate() { setTick(t => t + 1); }
 
   function handleNodeContextMenu(e: React.MouseEvent, nodeId: number) {
     e.preventDefault(); e.stopPropagation();
-    setCtxMenu({ x: e.clientX, y: e.clientY, nodeId }); setSelectedId(nodeId);
+    setCtxMenu({ x: e.clientX, y: e.clientY, nodeId }); setSelectedId(nodeId); setEditPanelNodeId(nodeId);
   }
 
   function handleDeleteNode() {
@@ -262,9 +304,14 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
   async function handleAddNode() {
     const rect = svgRef.current?.getBoundingClientRect();
     const cx = rect ? (rect.width / 2) / zoom + viewX - NODE_W / 2 : viewX;
-    const cy = rect ? (rect.height / 2) / zoom + viewY - NODE_H / 2 : viewY;
+    let cy = rect ? (rect.height / 2) / zoom + viewY - NODE_H / 2 : viewY;
+    // Place below the lowest existing node to avoid overlap
+    for (const n of nodes) {
+      const bottom = n.y + n.h + 30;
+      if (bottom > cy) cy = bottom;
+    }
     const newNode = await addNode({ x: cx, y: cy, w: NODE_W, h: NODE_H, title: 'New Topic' });
-    if (newNode) { setSelectedId(newNode.id); setEditPanelNodeId(newNode.id); }
+    if (newNode) { setSelectedId(newNode.id); }
   }
 
   function zoomIn() { const nz = Math.min(MAX_ZOOM, zoom * 1.2); setZoom(nz); saveViewport(viewX, viewY, nz); }
@@ -345,6 +392,58 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
     }
   }
 
+  /* ── Node resize handlers ──────────────────────────────────── */
+  function handleResizeStart(e: React.MouseEvent, nodeId: number) {
+    e.stopPropagation();
+    e.preventDefault();
+    const node = nodes.find(n => n.id === nodeId);
+    if (!node) return;
+    setResizeNodeId(nodeId);
+    resizeStart.current = { w: node.w, h: node.h, mx: e.clientX, my: e.clientY };
+  }
+
+  useEffect(() => {
+    if (resizeNodeId === null) return;
+    function onMove(e: MouseEvent) {
+      const dx = (e.clientX - resizeStart.current.mx) / zoom;
+      const dy = (e.clientY - resizeStart.current.my) / zoom;
+      const nw = Math.max(140, resizeStart.current.w + dx);
+      const nh = Math.max(60, resizeStart.current.h + dy);
+      const idx = nodes.findIndex(n => n.id === resizeNodeId);
+      if (idx >= 0) { nodes[idx] = { ...nodes[idx], w: nw, h: nh }; forceUpdate(); }
+    }
+    function onUp() {
+      if (resizeNodeId !== null) resolveOverlap(resizeNodeId);
+      const node = nodes.find(n => n.id === resizeNodeId);
+      if (node) {
+        updateNodes([{ id: resizeNodeId, w: node.w, h: node.h, x: node.x, y: node.y } as Partial<CanvasNode>]);
+      }
+      setResizeNodeId(null);
+    }
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+    return () => { document.removeEventListener("mousemove", onMove); document.removeEventListener("mouseup", onUp); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resizeNodeId]);
+
+  /* ── Collapse/expand helpers ────────────────────────────────── */
+  function toggleCollapse(nodeId: number) {
+    setCollapsed(prev => {
+      const next = new Set(prev);
+      if (next.has(nodeId)) next.delete(nodeId); else next.add(nodeId);
+      return next;
+    });
+  }
+
+  function isHiddenByCollapse(nodeId: number): boolean {
+    let current = nodes.find(n => n.id === nodeId);
+    while (current && current.parentId !== null) {
+      if (collapsed.has(current.parentId)) return true;
+      current = nodes.find(n => n.id === current!.parentId);
+    }
+    return false;
+  }
+
   function buildConnectorPath(parent: CanvasNode, child: CanvasNode): { d: string; color: string } {
     const rel = child.relationshipType || 'linear';
     if (rel === 'nested') {
@@ -387,6 +486,9 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
         <button className="cvs-btn" onClick={resetView} title="Reset view">Reset</button>
         <button className="cvs-btn" onClick={fitToScreen} title="Fit all nodes">Fit</button>
         <span className="cvs-zoom-label">{Math.round(zoom * 100)}%</span>
+        <span className="cvs-sep" />
+        <button className={`cvs-btn ${canvasMode === "mindmap" ? "cvs-btn-active" : ""}`} onClick={() => setCanvasMode("mindmap")}>Mindmap</button>
+        <button className={`cvs-btn ${canvasMode === "table" ? "cvs-btn-active" : ""}`} onClick={() => setCanvasMode("table")}>Table</button>
       </div>
 
       {linkMode && (
@@ -399,6 +501,9 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
       )}
 
       <div className="cvs-body">
+        {canvasMode === "table" ? (
+          <CanvasTableMode nodes={nodes} pathways={pathways} sisterLinks={sisterLinks} allKeywords={allKeywords} onSelectNode={id => { setSelectedId(id); }} onUpdateNodes={updateNodes} onAddNode={addNode} onDeleteNode={deleteNode} />
+        ) : (<>
         <div className="cvs-canvas-area" ref={canvasAreaRef} onDragOver={handleCanvasDragOver} onDrop={handleCanvasDrop}>
           <svg ref={svgRef}
             className={`cvs-svg ${isPanning ? 'cvs-panning' : ''} ${linkMode ? 'cvs-linking' : ''}`}
@@ -415,6 +520,7 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
 
             {nodes.map(child => {
               if (!child.parentId) return null;
+              if (isHiddenByCollapse(child.id)) return null;
               const parent = nodes.find(n => n.id === child.parentId);
               if (!parent) return null;
               const { d, color } = buildConnectorPath(parent, child);
@@ -432,6 +538,7 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
               const a = nodes.find(n => n.id === sl.nodeA);
               const b = nodes.find(n => n.id === sl.nodeB);
               if (!a || !b) return null;
+              if (isHiddenByCollapse(sl.nodeA) || isHiddenByCollapse(sl.nodeB)) return null;
               return (
                 <line key={`sl-${sl.id}`}
                   x1={a.x + a.w / 2} y1={a.y + a.h / 2}
@@ -442,6 +549,7 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
             })}
 
             {nodes.map(node => {
+              if (isHiddenByCollapse(node.id)) return null;
               const isSelected = node.id === selectedId;
               const isLinkSource = node.id === linkSource;
               const isDragging = node.id === dragNodeId;
@@ -490,6 +598,16 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
                     strokeWidth={isSelected || isLinkSource ? 1.5 / zoom : 1 / zoom} />
                   <rect x={0} y={0} width={ACCENT_W} height={node.h} rx={CORNER_R} ry={CORNER_R} fill={accentColor} />
                   <rect x={ACCENT_W} y={0} width={ACCENT_W} height={node.h} fill="#ffffff" />
+                  {/* Collapse/expand toggle */}
+                  {childCount > 0 && (
+                    <g onClick={e => { e.stopPropagation(); toggleCollapse(node.id); }}
+                      style={{ cursor: "pointer" }}>
+                      <rect x={node.w - 20} y={2} width={16} height={14} rx={3} fill="#cbd5e1" stroke="#94a3b8" strokeWidth={0.5} />
+                      <text x={node.w - 12} y={12} textAnchor="middle" fill="#1e293b" fontSize={9} fontWeight={700} style={{ pointerEvents: "none" }}>
+                        {collapsed.has(node.id) ? "▶" : "▼"}
+                      </text>
+                    </g>
+                  )}
 
                   {editingId === node.id ? (
                     <foreignObject x={ACCENT_W + 8} y={6} width={node.w - ACCENT_W - 16} height={28}>
@@ -523,7 +641,7 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
                     {kwCount > 0 ? `${kwCount}kw` : ''}{kwCount > 0 && childCount > 0 ? ' \u00b7 ' : ''}{childCount > 0 ? `${childCount}ch` : ''}
                   </text>
 
-                  <circle cx={node.w - 6} cy={node.h - 6} r={2.5} fill="#475569" opacity={0.5} />
+                  <rect x={node.w - 14} y={node.h - 14} width={12} height={12} fill="transparent" style={{ cursor: "nwse-resize" }} onMouseDown={e => handleResizeStart(e, node.id)} /><circle cx={node.w - 6} cy={node.h - 6} r={2.5} fill="#475569" opacity={0.6} style={{ pointerEvents: "none" }} />
                 </g>
               );
             })}
@@ -541,6 +659,7 @@ export default function CanvasPanel({ projectId, allKeywords = [] }: CanvasPanel
             </div>
           )}
         </div>
+        </>)}
 
         {editPanelNode && (
           <CanvasEditPanel
