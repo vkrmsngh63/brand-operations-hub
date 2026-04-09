@@ -15,6 +15,8 @@ interface KeywordWorkspaceProps {
   userId: string;
 }
 
+type AITableView = 'normal' | 'common' | 'analysis' | 'topics';
+
 // ── Draggable divider (horizontal or vertical) ─────────────────
 function Divider({ direction, onDrag }: {
   direction: 'horizontal' | 'vertical';
@@ -49,6 +51,94 @@ function Divider({ direction, onDrag }: {
   );
 }
 
+// ── KAS Placeholder ────────────────────────────────────────────
+function KASTable({ keywords }: { keywords: any[] }) {
+  return (
+    <div className="kas-placeholder">
+      <div className="kas-placeholder-inner">
+        <span className="kas-placeholder-icon">📊</span>
+        <span className="kas-placeholder-title">Keywords Analysis Table</span>
+        <span className="kas-placeholder-sub">Coming in Phase 1f — keyword-to-topic mapping with upstream hierarchy</span>
+        <span className="kas-placeholder-count">{keywords.length} keywords loaded</span>
+      </div>
+    </div>
+  );
+}
+
+// ── TVT Placeholder ────────────────────────────────────────────
+function TVTTable({ projectId }: { projectId: string }) {
+  return (
+    <div className="kas-placeholder">
+      <div className="kas-placeholder-inner">
+        <span className="kas-placeholder-icon">🌳</span>
+        <span className="kas-placeholder-title">Topics View Table</span>
+        <span className="kas-placeholder-sub">Coming in Phase 1f — depth-first tree view of canvas data with drag-reorder</span>
+      </div>
+    </div>
+  );
+}
+
+// ── AI Actions Pane ────────────────────────────────────────────
+function AIActionsPane({ view, onSetView }: {
+  view: AITableView;
+  onSetView: (v: AITableView) => void;
+}) {
+  const views: { key: AITableView; label: string }[] = [
+    { key: 'normal', label: 'Normal' },
+    { key: 'common', label: 'Common Terms' },
+    { key: 'analysis', label: 'Analysis' },
+    { key: 'topics', label: 'Topics' },
+  ];
+
+  return (
+    <div className="ai-actions-pane">
+      <div className="ai-actions-toggle">
+        {views.map(v => (
+          <button
+            key={v.key}
+            className={`ai-actions-tab${view === v.key ? ' ai-actions-tab-active' : ''}`}
+            onClick={() => onSetView(v.key)}
+          >
+            {v.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="ai-actions-buttons">
+        {view === 'normal' && (
+          <>
+            <button className="ai-act-btn" title="Uncheck All">☐ Uncheck All</button>
+            <button className="ai-act-btn" title="Check First 15">☑ Check First 15</button>
+            <button className="ai-act-btn ai-act-btn-primary" title="Generate AI Prompt">🤖 Generate AI Prompt</button>
+            <button className="ai-act-btn" title="Upload AI Prompt Response">📋 Upload Response</button>
+            <button className="ai-act-btn ai-act-btn-accent" title="Auto-Analyze">⚡ Auto-Analyze</button>
+          </>
+        )}
+        {view === 'common' && (
+          <>
+            <button className="ai-act-btn" title="Create Smaller Clusters">✂ Smaller Clusters</button>
+            <button className="ai-act-btn ai-act-btn-primary" title="Generate AI Prompt">🤖 Generate AI Prompt</button>
+            <button className="ai-act-btn" title="Upload AI Prompt Response">📋 Upload Response</button>
+          </>
+        )}
+        {view === 'analysis' && (
+          <>
+            <button className="ai-act-btn" title="Copy Table Data">📋 Copy Table Data</button>
+          </>
+        )}
+        {view === 'topics' && (
+          <>
+            <button className="ai-act-btn" title="Expand All">▼ Expand All</button>
+            <button className="ai-act-btn" title="Collapse All">▶ Collapse All</button>
+            <button className="ai-act-btn" title="Check All">☑ Check All</button>
+            <button className="ai-act-btn" title="Uncheck All">☐ Uncheck All</button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function KeywordWorkspace({ projectId, userId }: KeywordWorkspaceProps) {
   const {
     keywords, loading, fetchKeywords, addKeyword, bulkImport,
@@ -58,6 +148,10 @@ export default function KeywordWorkspace({ projectId, userId }: KeywordWorkspace
   const [tifKeywords, setTifKeywords] = useState<string[]>([]);
   const [mtEntries, setMtEntries] = useState<MTEntry[]>([]);
   const [tifActive, setTifActive] = useState(true);
+
+  // ── AI Mode state ────────────────────────────────────────────
+  const [aiMode, setAiMode] = useState(false);
+  const [aiTableView, setAiTableView] = useState<AITableView>('normal');
 
   // ── Panel visibility ─────────────────────────────────────────
   const [showAST, setShowAST] = useState(true);
@@ -185,80 +279,144 @@ export default function KeywordWorkspace({ projectId, userId }: KeywordWorkspace
 
   const showLeftPanel = panelMap.length > 0;
 
+  // ── AI mode: render the selected table view ──────────────────
+  function renderAITableContent() {
+    switch (aiTableView) {
+      case 'normal': return renderAST();
+      case 'common': return renderMT();
+      case 'analysis': return <KASTable keywords={keywords} />;
+      case 'topics': return <TVTTable projectId={projectId} />;
+    }
+  }
+
   return (
     <div className="ws-root">
       {/* ── Topbar ─────────────────────────────────────────────── */}
       <div className="ws-topbar">
-        <span className="ws-topbar-label">Panels:</span>
-        <label className="ws-topbar-cb">
-          <input type="checkbox" checked={showAST} onChange={e => { setShowAST(e.target.checked); if (!e.target.checked) setDetachedAST(false); }} />
-          <span>AST</span>
-        </label>
-        <label className="ws-topbar-cb">
-          <input type="checkbox" checked={showMT} onChange={e => { setShowMT(e.target.checked); if (!e.target.checked) setDetachedMT(false); }} />
-          <span>MT</span>
-        </label>
-        <label className="ws-topbar-cb">
-          <input type="checkbox" checked={showTIF} onChange={e => { setShowTIF(e.target.checked); if (!e.target.checked) setDetachedTIF(false); }} />
-          <span>TIF</span>
-        </label>
+        {!aiMode && (
+          <>
+            <span className="ws-topbar-label">Panels:</span>
+            <label className="ws-topbar-cb">
+              <input type="checkbox" checked={showAST} onChange={e => { setShowAST(e.target.checked); if (!e.target.checked) setDetachedAST(false); }} />
+              <span>AST</span>
+            </label>
+            <label className="ws-topbar-cb">
+              <input type="checkbox" checked={showMT} onChange={e => { setShowMT(e.target.checked); if (!e.target.checked) setDetachedMT(false); }} />
+              <span>MT</span>
+            </label>
+            <label className="ws-topbar-cb">
+              <input type="checkbox" checked={showTIF} onChange={e => { setShowTIF(e.target.checked); if (!e.target.checked) setDetachedTIF(false); }} />
+              <span>TIF</span>
+            </label>
+          </>
+        )}
         <label className="ws-topbar-cb">
           <input type="checkbox" checked={showCanvas} onChange={e => { setShowCanvas(e.target.checked); if (!e.target.checked) setDetachedCanvas(false); }} />
           <span>Canvas</span>
         </label>
+
+        <div className="ws-topbar-spacer" />
+
+        {/* ── Manual / AI toggle ─────────────────────────────── */}
+        <div className="ws-mode-toggle">
+          <button
+            className={`ws-mode-btn${!aiMode ? ' ws-mode-btn-active' : ''}`}
+            onClick={() => setAiMode(false)}
+          >
+            Manual
+          </button>
+          <button
+            className={`ws-mode-btn${aiMode ? ' ws-mode-btn-active' : ''}`}
+            onClick={() => setAiMode(true)}
+          >
+            AI
+          </button>
+        </div>
       </div>
 
       {/* ── Main workspace area ───────────────────────────────── */}
       <div className="ws-main" ref={containerRef}>
-        {showLeftPanel && (
-          <div
-            className="ws-left"
-            ref={leftPanelRef}
-            style={{ flex: inlineCanvas ? `0 0 ${leftFrac * 100}%` : '1' }}
-          >
-            {panelMap.map((p, i) => (
-              <div key={p.key} style={{ display: 'contents' }}>
-                {i > 0 && (
-                  <Divider
-                    direction="horizontal"
-                    onDrag={(d) => handleHDividerDrag(panelMap[i - 1].idx, d)}
-                  />
-                )}
-                <div className="ws-panel" style={{ flex: p.flex, minHeight: 0 }}>
-                  {/* Detach button */}
+
+        {/* ════════ MANUAL MODE ════════ */}
+        {!aiMode && (
+          <>
+            {showLeftPanel && (
+              <div
+                className="ws-left"
+                ref={leftPanelRef}
+                style={{ flex: inlineCanvas ? `0 0 ${leftFrac * 100}%` : '1' }}
+              >
+                {panelMap.map((p, i) => (
+                  <div key={p.key} style={{ display: 'contents' }}>
+                    {i > 0 && (
+                      <Divider
+                        direction="horizontal"
+                        onDrag={(d) => handleHDividerDrag(panelMap[i - 1].idx, d)}
+                      />
+                    )}
+                    <div className="ws-panel" style={{ flex: p.flex, minHeight: 0 }}>
+                      <button
+                        className="ws-detach-btn"
+                        onClick={() => {
+                          if (p.key === 'ast') setDetachedAST(true);
+                          if (p.key === 'mt') setDetachedMT(true);
+                          if (p.key === 'tif') setDetachedTIF(true);
+                        }}
+                        title="Detach to floating window"
+                      >⊞</button>
+                      {p.key === 'ast' && renderAST()}
+                      {p.key === 'mt' && renderMT()}
+                      {p.key === 'tif' && renderTIFContent()}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {showLeftPanel && inlineCanvas && (
+              <Divider direction="vertical" onDrag={handleVDividerDrag} />
+            )}
+
+            {inlineCanvas && (
+              <div className="ws-right" style={{ flex: showLeftPanel ? undefined : 1 }}>
+                <div className="ws-panel" style={{ flex: 1 }}>
                   <button
                     className="ws-detach-btn"
-                    onClick={() => {
-                      if (p.key === 'ast') setDetachedAST(true);
-                      if (p.key === 'mt') setDetachedMT(true);
-                      if (p.key === 'tif') setDetachedTIF(true);
-                    }}
+                    onClick={() => setDetachedCanvas(true)}
                     title="Detach to floating window"
                   >⊞</button>
-                  {p.key === 'ast' && renderAST()}
-                  {p.key === 'mt' && renderMT()}
-                  {p.key === 'tif' && renderTIFContent()}
+                  {renderCanvasContent()}
                 </div>
               </div>
-            ))}
-          </div>
+            )}
+          </>
         )}
 
-        {showLeftPanel && inlineCanvas && (
-          <Divider direction="vertical" onDrag={handleVDividerDrag} />
-        )}
-
-        {inlineCanvas && (
-          <div className="ws-right" style={{ flex: showLeftPanel ? undefined : 1 }}>
-            <div className="ws-panel" style={{ flex: 1 }}>
-              <button
-                className="ws-detach-btn"
-                onClick={() => setDetachedCanvas(true)}
-                title="Detach to floating window"
-              >⊞</button>
-              {renderCanvasContent()}
+        {/* ════════ AI MODE ════════ */}
+        {aiMode && (
+          <>
+            <div
+              className="ws-left ws-ai-left"
+              style={{ flex: inlineCanvas ? `0 0 ${leftFrac * 100}%` : '1' }}
+            >
+              <AIActionsPane view={aiTableView} onSetView={setAiTableView} />
+              <div className="ws-panel ws-ai-table-area" style={{ flex: 1, minHeight: 0 }}>
+                {renderAITableContent()}
+              </div>
             </div>
-          </div>
+
+            {inlineCanvas && (
+              <Divider direction="vertical" onDrag={handleVDividerDrag} />
+            )}
+
+            {inlineCanvas && (
+              <div className="ws-right" style={{ flex: 1 }}>
+                <div className="ws-panel" style={{ flex: 1 }}>
+                  {renderCanvasContent()}
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 

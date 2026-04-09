@@ -107,12 +107,14 @@
 - [x] **1d-link**: Drag keywords from AST/TIF onto canvas nodes to link them (HTML5 drag/drop with text/kst-kwids data type, hit-test on drop)
 - [x] **1d-polish**: Node resize (drag grip handle, min 140×60), collapse/expand child nodes (▼/▶ toggle on parent nodes, hides descendants + connectors + sister links)
 
-### 1e. Canvas Table Mode: IN PROGRESS — NEXT PRIORITY
+### 1e. Canvas Table Mode: COMPLETE
 - [x] **1e-table**: 9-column funnel table view (Depth, Topic, Alt Titles, Relationship, Parent Topic, Conversion Path, Sister Nodes, Keywords, Description), mode toggle (Mindmap/Table), depth-first tree walk ordering, TSV copy, row click opens edit panel
-- [ ] **1e-edit**: Edit mode (editable cells, add/remove rows, save back to canvas)
-- [ ] **1e-tsv**: TSV upload/paste to update canvas data
+- [x] **1e-edit**: Edit Mode toggle with editable cells (Title, Alt Titles, Relationship dropdown, Description textarea), Add Row, Delete Row, Reset Table with confirmation
+- [x] **1e-tsv**: TSV paste with live table preview (Update/New status), TSV/XLSX file upload, X/Y position preservation in TSV export, Merge vs Overwrite choice dialog
+- [x] **1e-overlap**: Node overlap auto-resolution on drag, resize, and add node (smallest-nudge strategy)
+- [x] **1e-interaction**: Single-click selects only, right-click opens edit panel, double-click renames, Add Node avoids stacking
 
-### 1f. AI Mode + KAS + TVT: NOT STARTED
+### 1f. AI Mode + KAS + TVT: NOT STARTED — NEXT PRIORITY
 - [ ] Manual/AI mode toggle in topbar
 - [ ] AI Actions Pane with four-way toggle (Normal/Common/Analysis/Topics)
 - [ ] Keywords Analysis Table (KAS) — derived view showing keyword-to-topic mapping with upstream hierarchy

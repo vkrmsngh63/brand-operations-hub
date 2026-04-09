@@ -6,40 +6,35 @@
 ## 0. SESSION SUMMARY (Latest)
 
 **Completed this session:**
-- Phase 1d-core: Canvas panel with nodes, pan, zoom, drag, add/delete/rename
-- Phase 1d-connect: P→C and P→P link modes, detach node, expanded context menu
-- Phase 1d-edit: Edit panel drawer (title, description, alt titles, keyword list, hover popover)
-- Phase 1d-link: Drag keywords from AST/TIF onto canvas nodes to link them
-- Phase 1d-polish: Node resize (drag grip handle), collapse/expand child nodes
-- Phase 1e-table: Canvas Table Mode with 9-column funnel view, mode toggle, TSV copy
-- Bug fixes: MT detach data loss (lifted entries state), AST zoom (CSS zoom), canvas CSS restoration
-- Safety protocol added to HANDOFF.md
+- Phase 1e-edit: Editable cells in Canvas Table Mode (Title, Alt Titles, Relationship, Description)
+- Phase 1e-edit: Edit Mode toggle, Add Row, Delete Row buttons
+- Phase 1e-edit: Reset Table button with confirmation dialog
+- Phase 1e-tsv: Copy as TSV with X/Y position columns for position preservation
+- Phase 1e-tsv: Paste TSV with live table preview (shows Update/New status per row)
+- Phase 1e-tsv: Upload TSV/XLSX file support (xlsx library, dynamic import)
+- Phase 1e-tsv: Merge vs Overwrite choice dialog when importing over existing data
+- Canvas: Node overlap auto-resolution on drag, resize, and add node
+- Canvas: Add Node places below lowest existing node (no stacking)
+- Canvas: Single-click selects node only; right-click opens edit panel; double-click renames
+- Installed `xlsx` npm package for Excel file reading
 
 **Key architectural decisions:**
-- Canvas uses SVG (not HTML5 Canvas) for node rendering — enables React event handling per node
-- Edit panel is a sibling flex child alongside the SVG canvas area, not an overlay
-- CanvasPanel accepts `allKeywords` prop from KeywordWorkspace to show keyword data in edit panel
-- MT entries state lifted to KeywordWorkspace (same pattern as TIF) to survive detach/reattach
-- AST zoom uses CSS `zoom` property instead of `fontSize` (hardcoded px in CSS overrode fontSize)
-- Keyword drag-to-canvas uses HTML5 drag/drop with `text/kst-kwids` data transfer type
-- Canvas Table Mode is a separate `CanvasTableMode` component rendered conditionally via `canvasMode` state
-- Collapse state is local to CanvasPanel (not persisted to DB yet)
-
-**Files created this session:**
-- `src/hooks/useCanvas.ts` — Canvas data hook (fetch, add, update, delete nodes; update canvas state)
-- `src/app/keyword-clustering/components/CanvasPanel.tsx` (~644 lines) — Main canvas component
-- `src/app/keyword-clustering/components/canvas-panel.css` — Canvas styles
-- `src/app/keyword-clustering/components/CanvasEditPanel.tsx` — Edit panel drawer
-- `src/app/keyword-clustering/components/canvas-edit-panel.css` — Edit panel styles
-- `src/app/keyword-clustering/components/CanvasTableMode.tsx` (~241 lines) — Table mode view
-- `src/app/keyword-clustering/components/canvas-table-mode.css` — Table mode styles
+- `xlsx` library loaded via dynamic `await import('xlsx')` inside handlers to avoid SSR errors
+- TSV export includes hidden X/Y columns (last 2) so positions survive copy→reset→paste round-trip
+- TSV import has two modes: "Merge" (update by title match, keep positions, add new) and "Overwrite" (delete all first, import fresh)
+- Empty TSV cells never overwrite existing node data (only non-empty values update)
+- `resolveOverlap()` runs BEFORE `updateNodes()` save — fixes position locally first, then saves once to prevent bounce-back
+- Overlap resolution uses smallest-nudge strategy: compares nudge-right vs nudge-down distance, picks shorter
+- New nodes created via TSV import get auto-positioned to avoid overlaps when no X/Y in TSV data
+- Parent relationships for TSV-imported nodes are set in a second pass after all nodes are created
 
 **Files modified this session:**
-- `src/app/keyword-clustering/components/KeywordWorkspace.tsx` — Added CanvasPanel import, MT entries lift, allKeywords prop
-- `src/app/keyword-clustering/components/ASTTable.tsx` — Added kst-kwids to drag data, CSS zoom fix
-- `src/app/keyword-clustering/components/TIFTable.tsx` — Added kst-kwids to drag data
-- `src/app/keyword-clustering/components/MTTable.tsx` — Exported MTEntry type, lifted entries state to props
-- `src/app/api/projects/[projectId]/canvas/nodes/route.ts` — Added DELETE handler
+- `src/app/keyword-clustering/components/CanvasTableMode.tsx` (~924 lines) — Added edit mode, TSV paste/upload/preview, merge/overwrite dialog, reset table, xlsx support
+- `src/app/keyword-clustering/components/canvas-table-mode.css` (~566 lines) — Added edit mode styles, TSV preview table, import choice dialog, reset button styles
+- `src/app/keyword-clustering/components/CanvasPanel.tsx` (~660 lines) — Added resolveOverlap(), fixed Add Node overlap, single-click vs right-click vs double-click behavior
+
+**npm packages added:**
+- `xlsx` — for reading .xlsx/.xls/.xlsm files in Upload TSV
 
 ---
 
@@ -137,30 +132,41 @@ model CanvasNode {
 - Passes `allKeywords={keywords}` to CanvasPanel
 - Passes `entries={mtEntries}` and `onSetEntries={setMtEntries}` to MTTable
 
-### CanvasPanel.tsx (~644 lines)
+### CanvasPanel.tsx (~660 lines)
 - **Mindmap mode**: SVG-based canvas with pan, zoom, node drag, connectors
 - **Table mode**: Renders CanvasTableMode component
 - `canvasMode` state toggles between "mindmap" and "table"
 - Link mode (P→C, P→P) with visual feedback and toast messages
-- Edit panel (CanvasEditPanel) slides in from right on node click
+- Edit panel (CanvasEditPanel) slides in from right on **right-click** (not single-click)
+- Double-click a node to rename it inline
+- Single-click selects only (blue dashed outline)
 - Node resize via grip handle in bottom-right corner
 - Collapse/expand child nodes via ▼/▶ toggle
 - Hover popover shows full description
 - Drop handler accepts `text/kst-kwids` drag data from AST/TIF tables
-- Uses `useCanvas` hook for all data operations
+- `resolveOverlap()` auto-nudges nodes after drag/resize to prevent overlapping
+- `handleAddNode()` places new nodes below the lowest existing node
+- Passes `updateNodes`, `addNode`, `deleteNode` to CanvasTableMode as props
+
+### CanvasTableMode.tsx (~924 lines)
+- 9-column funnel table: Depth, Topic (indented), Alt Titles, Relationship, Parent Topic, Conversion Path, Sister Nodes, Keywords, Description
+- **Edit Mode**: Toggle button enables click-to-edit cells (Title, Alt Titles, Relationship dropdown, Description textarea)
+- **Add Row**: Creates new node positioned below existing nodes
+- **Delete Row**: Removes node, reparents children to null
+- **Copy as TSV**: Exports all rows including hidden X/Y position columns
+- **Paste TSV**: Opens overlay with textarea, live table preview showing Update/New status per row
+- **Upload TSV**: Accepts .tsv, .csv, .txt, .xlsx, .xls, .xlsm files
+- **Merge vs Overwrite**: When importing over existing data, dialog asks user to choose
+- **Reset Table**: Confirmation dialog, deletes all nodes
+- TSV parser auto-detects headers, maps columns flexibly, strips non-breaking spaces from titles
+- Empty TSV fields never overwrite existing data
+- `xlsx` loaded via dynamic `await import('xlsx')` to avoid SSR errors
 
 ### CanvasEditPanel.tsx
 - Right-side drawer (320px) with title, description, alt titles, linked keywords
 - Auto-saves on blur (title, description, alt titles)
 - Keyword list shows placement (p/s) toggle, volume, remove button
 - Close on Escape or ✕ button
-
-### CanvasTableMode.tsx (~241 lines)
-- 9-column funnel table: Depth, Topic (indented), Alt Titles, Relationship, Parent Topic, Conversion Path, Sister Nodes, Keywords, Description
-- Depth-first tree walk ordering (linear children before nested)
-- TSV copy button
-- Row click opens edit panel
-- Depth-based colors matching original tool
 
 ### ASTTable.tsx (~1123 lines)
 - Virtual scrolling, split topics view, drag-to-reorder
@@ -195,7 +201,7 @@ model CanvasNode {
 | `floating-panel.css` | Floating panel overlay, resize handles |
 | `canvas-panel.css` | Canvas SVG, action bar, nodes, connectors, link mode, popover, toast |
 | `canvas-edit-panel.css` | Edit panel drawer, fields, keyword list, alt titles |
-| `canvas-table-mode.css` | Table mode, 9-column layout, badges, keyword pills |
+| `canvas-table-mode.css` (~566 lines) | Table mode, 9-column layout, edit mode, TSV preview, import choice, reset dialog |
 
 ---
 
@@ -230,6 +236,19 @@ const [splitDescSel, setSplitDescSel] = useState<SplitSelMap>(new Map());
 - Resize grip in bottom-right corner
 - Collapse toggle (▼/▶) when node has children
 
+### Node interaction
+- **Single-click**: Selects node (blue dashed outline), no edit panel
+- **Right-click**: Opens context menu AND edit panel on right side
+- **Double-click**: Opens inline title rename input
+- **Drag**: Move node; on release, resolveOverlap() auto-nudges if overlapping
+
+### Overlap resolution
+- `resolveOverlap(nodeId)` checks all other nodes for overlap (with 20px gap)
+- Uses smallest-nudge: compares distance to nudge right vs down, picks shorter
+- Loops up to 100 times to resolve cascading overlaps
+- Runs BEFORE save — fixes position locally, then one `updateNodes()` call saves final position
+- Called after: drag drop, resize, (not during drag — only on mouseup)
+
 ### Connectors
 - Linear (P→P): Blue L-shaped elbow lines, parent bottom-left → gutter → child top-left
 - Nested (P→C): Orange L-shaped lines, parent bottom-center → elbow → child left-center
@@ -237,14 +256,18 @@ const [splitDescSel, setSplitDescSel] = useState<SplitSelMap>(new Map());
 
 ### Keyword drag-to-canvas
 - AST/TIF set `e.dataTransfer.setData('text/kst-kwids', JSON.stringify(kwIds))` on drag start
-- `effectAllowed = 'copyMove'` on drag source
 - Canvas SVG and canvas-area div both have `onDragOver` and `onDrop` handlers
 - Drop handler hit-tests nodes by position, adds keyword IDs to `linkedKwIds`
 
-### Canvas Table Mode
-- Tree walk: roots sorted by pathwayId then Y, children sorted by Y, linear before nested
-- Conversion Path = title of root node in the same pathway
-- Keywords show `[p]`/`[s]` placement annotations
+### Canvas Table Mode — TSV Import/Export
+- TSV export includes 11 columns: Depth, Topic, Alt Titles, Relationship, Parent Topic, Conversion Path, Sister Nodes, Keywords, Description, X, Y
+- X/Y columns preserve node positions through copy→reset→paste round-trips
+- TSV import parser: auto-detects header row, flexibly maps column names, strips non-breaking spaces
+- Import modes: Merge (update existing by title match, add new, keep positions) vs Overwrite (delete all, import fresh)
+- Empty TSV fields never overwrite existing data
+- New nodes without X/Y in TSV get auto-positioned to avoid overlaps
+- Parent relationships set in second pass after all nodes created
+- xlsx files read via dynamic `await import('xlsx')` to avoid SSR issues
 
 ---
 
@@ -260,6 +283,8 @@ const [splitDescSel, setSplitDescSel] = useState<SplitSelMap>(new Map());
 - Divider drag uses incremental deltas (not absolute position tracking)
 - Canvas collapse state is local (not persisted to DB yet)
 - `linkedKwIds` is stored as Json in DB but typed as `string[]` in TypeScript — always cast appropriately
+- `xlsx` must be imported dynamically (`await import('xlsx')`) inside async handlers — top-level import causes SSR build failure
+- `resolveOverlap()` must run BEFORE `updateNodes()` — running after causes bounce-back due to conflicting state updates
 
 ---
 
@@ -272,6 +297,7 @@ Before replacing ANY existing file, always run a backup first:
 ```bash
 cp path/to/file path/to/file.bak
 ```
+If multiple backups exist, use `.bak2`, `.bak3`, etc.
 
 **RULE 2 — NEVER PROVIDE PARTIAL FILES AS REPLACEMENTS**
 If replacing a file, the new file MUST contain ALL content — not just additions or changes. A partial file that overwrites a complete one destroys work. This is the #1 most dangerous mistake Claude can make on this project.
@@ -296,6 +322,14 @@ git revert HEAD             # undo the last commit
 **RULE 6 — VISUAL SPOT-CHECK ON DEPLOY**
 After every Vercel deploy, always ask the user to confirm the page looks correct before moving on to new work. Never assume a deploy succeeded just because the build passed.
 
+**RULE 7 — STEP-BY-STEP INSTRUCTIONS FOR NOVICE USER**
+The user is a complete novice with no programming knowledge. For every action:
+- Tell them exactly where to go, what to click, what to type
+- Provide exact commands to copy-paste
+- Confirm each step before moving to the next
+- When asking them to edit files manually, show the exact text to find and the exact replacement text
+- Verify their edits by asking them to paste back the relevant section
+
 ### Recovery commands (for the user)
 - Restore a backup: `cp path/to/file.bak path/to/file`
 - Undo last git commit (before push): `git reset --soft HEAD~1`
@@ -315,12 +349,12 @@ src/app/keyword-clustering/components/
 ├── mt-table.css
 ├── TIFTable.tsx              (~849 lines)
 ├── tif-table.css
-├── CanvasPanel.tsx           (~644 lines)
+├── CanvasPanel.tsx           (~660 lines)
 ├── canvas-panel.css
 ├── CanvasEditPanel.tsx
 ├── canvas-edit-panel.css
-├── CanvasTableMode.tsx       (~241 lines)
-├── canvas-table-mode.css
+├── CanvasTableMode.tsx       (~924 lines)
+├── canvas-table-mode.css     (~566 lines)
 ├── KeywordWorkspace.tsx      (~260 lines)
 ├── workspace.css
 ├── ScrollArrows.tsx
