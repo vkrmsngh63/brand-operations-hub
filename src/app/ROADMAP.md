@@ -106,6 +106,7 @@
 - [x] **1d-edit**: Edit panel drawer (320px right side) with title, description, alternate titles, linked keywords list with p/s placement toggle, hover popover for full description
 - [x] **1d-link**: Drag keywords from AST/TIF onto canvas nodes to link them (HTML5 drag/drop with text/kst-kwids data type, hit-test on drop)
 - [x] **1d-polish**: Node resize (drag grip handle, min 140×60), collapse/expand child nodes (▼/▶ toggle on parent nodes, hides descendants + connectors + sister links)
+- [x] **1d-multiselect**: Shift+click to toggle nodes in multi-selection, shift+drag background for selection box, group drag, auto-pan at viewport edges, Delete key removes all selected
 
 ### 1e. Canvas Table Mode: COMPLETE
 - [x] **1e-table**: 9-column funnel table view (Depth, Topic, Alt Titles, Relationship, Parent Topic, Conversion Path, Sister Nodes, Keywords, Description), mode toggle (Mindmap/Table), depth-first tree walk ordering, TSV copy, row click opens edit panel
@@ -114,13 +115,14 @@
 - [x] **1e-overlap**: Node overlap auto-resolution on drag, resize, and add node (smallest-nudge strategy)
 - [x] **1e-interaction**: Single-click selects only, right-click opens edit panel, double-click renames, Add Node avoids stacking
 
-### 1f. AI Mode + KAS + TVT: NOT STARTED — NEXT PRIORITY
-- [ ] Manual/AI mode toggle in topbar
-- [ ] AI Actions Pane with four-way toggle (Normal/Common/Analysis/Topics)
-- [ ] Keywords Analysis Table (KAS) — derived view showing keyword-to-topic mapping with upstream hierarchy
-- [ ] Topics View Table (TVT) — depth-first tree view of canvas data with drag-reorder, expand/collapse, depth filter, zoom
+### 1f. AI Mode + KAS + TVT: COMPLETE
+- [x] Manual/AI mode toggle wired to existing topbar button (state in page.tsx, prop to KeywordWorkspace)
+- [x] AI Actions Pane with four-way toggle (Normal/Common/Analysis/Topics)
+- [x] Keywords Analysis Table (KAS) — 9-column derived view, keyword-to-topic mapping, upstream hierarchy, alternating group colors, copy TSV
+- [x] Topics View Table (TVT) — light theme, depth-first tree walk, single expand/collapse toggle, drag-reorder, depth filter, zoom, description popover, ancestry highlighting
+- [x] Shared useCanvas lifted to KeywordWorkspace for real-time sync between Canvas, TVT, and KAS
 
-### 1g. Auto-Analyze System: NOT STARTED
+### 1g. Auto-Analyze System: NOT STARTED — NEXT PRIORITY
 - [ ] Claude API integration (server-side)
 - [ ] AI Prompt Popover (Generate AI Prompt, Upload AI Prompt Response)
 - [ ] Streaming, batch processing, validation, delta merge

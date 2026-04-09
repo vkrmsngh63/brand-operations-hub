@@ -6,35 +6,38 @@
 ## 0. SESSION SUMMARY (Latest)
 
 **Completed this session:**
-- Phase 1e-edit: Editable cells in Canvas Table Mode (Title, Alt Titles, Relationship, Description)
-- Phase 1e-edit: Edit Mode toggle, Add Row, Delete Row buttons
-- Phase 1e-edit: Reset Table button with confirmation dialog
-- Phase 1e-tsv: Copy as TSV with X/Y position columns for position preservation
-- Phase 1e-tsv: Paste TSV with live table preview (shows Update/New status per row)
-- Phase 1e-tsv: Upload TSV/XLSX file support (xlsx library, dynamic import)
-- Phase 1e-tsv: Merge vs Overwrite choice dialog when importing over existing data
-- Canvas: Node overlap auto-resolution on drag, resize, and add node
-- Canvas: Add Node places below lowest existing node (no stacking)
-- Canvas: Single-click selects node only; right-click opens edit panel; double-click renames
-- Installed `xlsx` npm package for Excel file reading
+- Phase 1f: Manual/AI mode toggle wired to existing topbar button in page.tsx
+- Phase 1f: AI Actions Pane with four-way toggle (Normal / Common Terms / Analysis / Topics)
+- Phase 1f: Keywords Analysis Table (KAS) — 9-column derived view showing keyword-to-topic mapping with upstream hierarchy, alternating group colors, copy TSV
+- Phase 1f: Topics View Table (TVT) — light theme, depth-first tree walk, single expand/collapse toggle, drag-reorder, depth filter, zoom, description popover, ancestry highlighting
+- Lifted `useCanvas` hook from CanvasPanel to KeywordWorkspace for shared state — Canvas and TVT/KAS now sync in real-time
+- Canvas multi-select: shift+click to toggle nodes, shift+drag for selection box, group drag
+- Canvas auto-pan: viewport auto-scrolls when dragging nodes or selection box near edges
+- Delete key removes all selected nodes
+- "N selected" indicator in toolbar
 
 **Key architectural decisions:**
-- `xlsx` library loaded via dynamic `await import('xlsx')` inside handlers to avoid SSR errors
-- TSV export includes hidden X/Y columns (last 2) so positions survive copy→reset→paste round-trip
-- TSV import has two modes: "Merge" (update by title match, keep positions, add new) and "Overwrite" (delete all first, import fresh)
-- Empty TSV cells never overwrite existing node data (only non-empty values update)
-- `resolveOverlap()` runs BEFORE `updateNodes()` save — fixes position locally first, then saves once to prevent bounce-back
-- Overlap resolution uses smallest-nudge strategy: compares nudge-right vs nudge-down distance, picks shorter
-- New nodes created via TSV import get auto-positioned to avoid overlaps when no X/Y in TSV data
-- Parent relationships for TSV-imported nodes are set in a second pass after all nodes are created
+- `useCanvas` is now called in KeywordWorkspace and passed as a prop (`canvas`) to CanvasPanel and as individual props (`nodes`, `updateNodes`) to TVT/KAS
+- CanvasPanel no longer calls `useCanvas` internally — it destructures from `canvas` prop
+- TVT and KAS are purely derived views that accept `nodes` and `allKeywords` as props (no own data fetching)
+- AI mode state (`aiMode`) lives in page.tsx and is passed as a prop to KeywordWorkspace
+- `aiTableView` state lives in KeywordWorkspace (controls which table is shown in AI mode)
+- Multi-select uses `selectedIds: Set<number>` instead of old `selectedId: number | null`
+- Selection box and node drag use `viewXRef`/`viewYRef`/`zoomRef` refs to avoid stale closure values during drag operations
+- Auto-pan uses EDGE_ZONE=40px and PAN_SPEED=8 canvas units per mouse event
 
 **Files modified this session:**
-- `src/app/keyword-clustering/components/CanvasTableMode.tsx` (~924 lines) — Added edit mode, TSV paste/upload/preview, merge/overwrite dialog, reset table, xlsx support
-- `src/app/keyword-clustering/components/canvas-table-mode.css` (~566 lines) — Added edit mode styles, TSV preview table, import choice dialog, reset button styles
-- `src/app/keyword-clustering/components/CanvasPanel.tsx` (~660 lines) — Added resolveOverlap(), fixed Add Node overlap, single-click vs right-click vs double-click behavior
+- `src/app/keyword-clustering/page.tsx` (~226 lines) — Added `aiMode` state, wired Manual/AI toggle, passes `aiMode` prop to KeywordWorkspace
+- `src/app/keyword-clustering/components/KeywordWorkspace.tsx` (~399 lines) — Lifted useCanvas, AI mode layout, four-way toggle, AI Actions Pane, imports KAS + TVT
+- `src/app/keyword-clustering/components/workspace.css` (~386 lines) — AI mode toggle styles, actions pane styles, placeholder styles
+- `src/app/keyword-clustering/components/CanvasPanel.tsx` (~884 lines) — Accepts canvas prop, multi-select, selection box, group drag, auto-pan
+- `src/app/keyword-clustering/components/canvas-panel.css` — Added `.cvs-multi-label` style
 
-**npm packages added:**
-- `xlsx` — for reading .xlsx/.xls/.xlsm files in Upload TSV
+**Files created this session:**
+- `src/app/keyword-clustering/components/TVTTable.tsx` (~479 lines) — Topics View Table component
+- `src/app/keyword-clustering/components/tvt-table.css` (~327 lines) — TVT light theme styles
+- `src/app/keyword-clustering/components/KASTable.tsx` (~281 lines) — Keywords Analysis Table component
+- `src/app/keyword-clustering/components/kas-table.css` (~172 lines) — KAS light theme styles
 
 ---
 
@@ -126,86 +129,78 @@ model CanvasNode {
 
 ## 4. COMPONENT ARCHITECTURE
 
-### KeywordWorkspace.tsx (main layout)
-- Imports: ASTTable, MTTable, TIFTable, CanvasPanel, ScrollArrows, FloatingPanel
-- State: tifKeywords, tifActive, mtEntries (lifted), panel visibility, detached state, panel flex sizes
-- Passes `allKeywords={keywords}` to CanvasPanel
-- Passes `entries={mtEntries}` and `onSetEntries={setMtEntries}` to MTTable
+### page.tsx (keyword-clustering page)
+- Manages: auth, project list, project selector, `aiMode` state
+- Passes `aiMode` prop to KeywordWorkspace
+- Manual/AI toggle button in top-right of page topbar
 
-### CanvasPanel.tsx (~660 lines)
+### KeywordWorkspace.tsx (~399 lines, main layout)
+- Calls `useCanvas(projectId)` — single source of truth for canvas data
+- Calls `useKeywords(projectId, userId)` — single source of truth for keywords
+- Passes `canvas` prop (full useCanvas return) to CanvasPanel
+- Passes `nodes`, `updateNodes`, `allKeywords` to TVTTable and KASTable
+- **Manual mode:** 3-panel left (AST + MT + TIF) + Canvas right, panel visibility checkboxes, detach buttons, resizable dividers
+- **AI mode:** AI Actions Pane (four-way toggle) + single table view + Canvas right
+- AI table views: Normal→AST, Common→MT, Analysis→KAS, Topics→TVT
+- State: tifKeywords, mtEntries (lifted), panel visibility, detached state, panel flex sizes, aiTableView
+
+### CanvasPanel.tsx (~884 lines)
+- Accepts `canvas: ReturnType<typeof useCanvas>` as prop (no internal useCanvas call)
 - **Mindmap mode**: SVG-based canvas with pan, zoom, node drag, connectors
 - **Table mode**: Renders CanvasTableMode component
-- `canvasMode` state toggles between "mindmap" and "table"
-- Link mode (P→C, P→P) with visual feedback and toast messages
-- Edit panel (CanvasEditPanel) slides in from right on **right-click** (not single-click)
-- Double-click a node to rename it inline
-- Single-click selects only (blue dashed outline)
-- Node resize via grip handle in bottom-right corner
-- Collapse/expand child nodes via ▼/▶ toggle
-- Hover popover shows full description
-- Drop handler accepts `text/kst-kwids` drag data from AST/TIF tables
-- `resolveOverlap()` auto-nudges nodes after drag/resize to prevent overlapping
-- `handleAddNode()` places new nodes below the lowest existing node
-- Passes `updateNodes`, `addNode`, `deleteNode` to CanvasTableMode as props
+- **Multi-select**: `selectedIds: Set<number>` replaces old `selectedId`
+  - Shift+click toggles node in selection
+  - Shift+drag on background draws selection box (blue dashed rectangle)
+  - All selected nodes drag together as a group
+  - Delete key removes all selected nodes
+  - "N selected" label in toolbar when >1 selected
+- **Auto-pan**: Viewport scrolls when mouse is within 40px of edge during node drag or selection box drag
+- Uses `viewXRef`/`viewYRef`/`zoomRef` refs alongside state to avoid stale closures in drag/selection handlers
+- Right-click opens context menu + edit panel
+- Double-click renames inline
+- Single-click selects only (no edit panel)
+- `resolveOverlap()` runs BEFORE `updateNodes()` save
+
+### TVTTable.tsx (~479 lines)
+- Accepts `nodes`, `updateNodes`, `allKeywords` as props
+- Light/white theme, depth-first tree walk ordering
+- Single expand/collapse toggle button (cycles between states)
+- 20px/level indentation, 7 depth-based title colors
+- Primary keywords bold, secondary italic purple, volume badges
+- Drag-and-drop reorder (before/after/child drop modes)
+- Ancestry orange highlight chain on row hover
+- Description popover on topic title hover (250ms)
+- Depth filter dropdown (Show All + individual depth 0–6)
+- Zoom ±1px (7–18 range)
+- Deduplicated keyword count
+
+### KASTable.tsx (~281 lines)
+- Accepts `nodes`, `allKeywords` as props
+- 9-column table: Keyword, Main Topic, Main Topic Title, Main Topic Description, Main Topic Location, Upstream Topic, UT Title, UT Description, UT Location
+- Derived from canvas nodes — walks tree, builds reverse keyword→topic mapping, walks up hierarchy for each topic
+- Alternating blue/green keyword group colors
+- Group separators (thick border between keyword groups, dashed between topic blocks)
+- Copy Table Data button (TSV to clipboard)
+- Light theme matching TVT
 
 ### CanvasTableMode.tsx (~924 lines)
-- 9-column funnel table: Depth, Topic (indented), Alt Titles, Relationship, Parent Topic, Conversion Path, Sister Nodes, Keywords, Description
-- **Edit Mode**: Toggle button enables click-to-edit cells (Title, Alt Titles, Relationship dropdown, Description textarea)
-- **Add Row**: Creates new node positioned below existing nodes
-- **Delete Row**: Removes node, reparents children to null
-- **Copy as TSV**: Exports all rows including hidden X/Y position columns
-- **Paste TSV**: Opens overlay with textarea, live table preview showing Update/New status per row
-- **Upload TSV**: Accepts .tsv, .csv, .txt, .xlsx, .xls, .xlsm files
-- **Merge vs Overwrite**: When importing over existing data, dialog asks user to choose
-- **Reset Table**: Confirmation dialog, deletes all nodes
-- TSV parser auto-detects headers, maps columns flexibly, strips non-breaking spaces from titles
-- Empty TSV fields never overwrite existing data
-- `xlsx` loaded via dynamic `await import('xlsx')` to avoid SSR errors
+- 9-column funnel table: Depth, Topic, Alt Titles, Relationship, Parent, Conversion Path, Sister Nodes, Keywords, Description
+- Edit Mode, Add Row, Delete Row, Reset Table
+- TSV paste/upload with live preview, merge/overwrite dialog
+- `xlsx` loaded via dynamic `await import('xlsx')`
 
 ### CanvasEditPanel.tsx
 - Right-side drawer (320px) with title, description, alt titles, linked keywords
-- Auto-saves on blur (title, description, alt titles)
-- Keyword list shows placement (p/s) toggle, volume, remove button
-- Close on Escape or ✕ button
+- Auto-saves on blur
 
 ### ASTTable.tsx (~1123 lines)
 - Virtual scrolling, split topics view, drag-to-reorder
-- Drag handler includes `text/kst-kwids` data for canvas drop
-- CSS zoom for font scaling (not fontSize)
+- All column features (volume, status, tags, topics, descriptions)
+- Keyword drag to canvas via `text/kst-kwids` data type
 
-### MTTable.tsx
-- Entries state lifted to KeywordWorkspace via `entries`/`onSetEntries` props
-- Exported `MTEntry` interface
-
-### TIFTable.tsx
-- Drag handler includes `text/kst-kwids` data for canvas drop
-
-### useCanvas.ts
-- `fetchCanvas()` — loads nodes + canvas state + pathways + sister links
-- `addNode()` — POST with auto-increment ID
-- `updateNodes()` — PATCH bulk update
-- `deleteNode()` — DELETE with optimistic local removal
-- `updateCanvasState()` — PATCH viewport/zoom
-
----
-
-## 5. CSS FILES
-
-| File | Purpose |
-|------|---------|
-| `ast-table.css` | AST panel, table, pills, tags, split view, column resize |
-| `mt-table.css` | MT panel, vertical view, split topic/desc, tag operations |
-| `tif-table.css` | TIF panel, split topic/desc, toggle switch |
-| `workspace.css` | Topbar, dividers, panel layout, detach button styling |
-| `scroll-arrows.css` | Scroll arrow overlay buttons |
-| `floating-panel.css` | Floating panel overlay, resize handles |
-| `canvas-panel.css` | Canvas SVG, action bar, nodes, connectors, link mode, popover, toast |
-| `canvas-edit-panel.css` | Edit panel drawer, fields, keyword list, alt titles |
-| `canvas-table-mode.css` (~566 lines) | Table mode, 9-column layout, edit mode, TSV preview, import choice, reset dialog |
-
----
-
-## 6. SPLIT TOPICS VIEW — IMPLEMENTATION DETAILS
+### MTTable.tsx (~1310 lines), TIFTable.tsx (~849 lines)
+- Main Terms and Terms In Focus tables with full feature sets
+- MT entries state lifted to KeywordWorkspace
 
 ### State pattern (same across AST, MT, TIF)
 ```typescript
@@ -238,36 +233,42 @@ const [splitDescSel, setSplitDescSel] = useState<SplitSelMap>(new Map());
 
 ### Node interaction
 - **Single-click**: Selects node (blue dashed outline), no edit panel
+- **Shift+click**: Toggles node in multi-selection
 - **Right-click**: Opens context menu AND edit panel on right side
 - **Double-click**: Opens inline title rename input
-- **Drag**: Move node; on release, resolveOverlap() auto-nudges if overlapping
+- **Drag**: Move node(s); on release, resolveOverlap() auto-nudges if overlapping
+- **Shift+drag background**: Draws selection box, selects all overlapping nodes
+
+### Multi-select behavior
+- `selectedIds: Set<number>` tracks all selected nodes
+- Clicking a non-selected node (no shift) clears selection and selects only that node
+- Clicking a selected node starts group drag of all selected nodes
+- Shift+click toggles individual nodes in/out of selection
+- Selection box adds to existing selection (does not clear first)
+- Delete key deletes all selected nodes (reparents their children)
+- Toolbar shows "N selected" when multiple nodes selected
+
+### Auto-pan during drag
+- When mouse is within 40px of viewport edge, canvas auto-scrolls
+- Works for both node dragging and selection box drawing
+- Uses `viewXRef`/`viewYRef`/`zoomRef` refs to avoid stale React closure values
+- PAN_SPEED = 8 canvas units per mouse event
 
 ### Overlap resolution
 - `resolveOverlap(nodeId)` checks all other nodes for overlap (with 20px gap)
 - Uses smallest-nudge: compares distance to nudge right vs down, picks shorter
 - Loops up to 100 times to resolve cascading overlaps
 - Runs BEFORE save — fixes position locally, then one `updateNodes()` call saves final position
-- Called after: drag drop, resize, (not during drag — only on mouseup)
 
 ### Connectors
-- Linear (P→P): Blue L-shaped elbow lines, parent bottom-left → gutter → child top-left
-- Nested (P→C): Orange L-shaped lines, parent bottom-center → elbow → child left-center
-- Arrow dot at connection point
-
-### Keyword drag-to-canvas
-- AST/TIF set `e.dataTransfer.setData('text/kst-kwids', JSON.stringify(kwIds))` on drag start
-- Canvas SVG and canvas-area div both have `onDragOver` and `onDrop` handlers
-- Drop handler hit-tests nodes by position, adds keyword IDs to `linkedKwIds`
+- Linear (P→P): Blue L-shaped elbow lines
+- Nested (P→C): Orange L-shaped lines
 
 ### Canvas Table Mode — TSV Import/Export
-- TSV export includes 11 columns: Depth, Topic, Alt Titles, Relationship, Parent Topic, Conversion Path, Sister Nodes, Keywords, Description, X, Y
-- X/Y columns preserve node positions through copy→reset→paste round-trips
-- TSV import parser: auto-detects header row, flexibly maps column names, strips non-breaking spaces
-- Import modes: Merge (update existing by title match, add new, keep positions) vs Overwrite (delete all, import fresh)
-- Empty TSV fields never overwrite existing data
-- New nodes without X/Y in TSV get auto-positioned to avoid overlaps
-- Parent relationships set in second pass after all nodes created
-- xlsx files read via dynamic `await import('xlsx')` to avoid SSR issues
+- TSV export includes 11 columns including hidden X/Y position columns
+- TSV import: auto-detects headers, flexibly maps columns, strips non-breaking spaces
+- Import modes: Merge vs Overwrite
+- `xlsx` loaded via dynamic `await import('xlsx')` to avoid SSR errors
 
 ---
 
@@ -277,14 +278,18 @@ const [splitDescSel, setSplitDescSel] = useState<SplitSelMap>(new Map());
 - Topic delimiter is pipe `|` not comma: `"Topic A | Topic B"`
 - Tag delimiter is comma: `"tag1, tag2"`
 - AST virtual scrolling uses `splitRowH = splitTopics ? 80 : ROW_HEIGHT`
-- AST zoom uses CSS `zoom` property (not `fontSize`) because hardcoded px in CSS overrode inline fontSize
+- AST zoom uses CSS `zoom` property (not `fontSize`)
 - MT entries state is lifted to KeywordWorkspace to survive detach/reattach cycles
 - MT resize handler has null guard: `if (!resizeRef.current) return prev`
 - Divider drag uses incremental deltas (not absolute position tracking)
 - Canvas collapse state is local (not persisted to DB yet)
 - `linkedKwIds` is stored as Json in DB but typed as `string[]` in TypeScript — always cast appropriately
 - `xlsx` must be imported dynamically (`await import('xlsx')`) inside async handlers — top-level import causes SSR build failure
-- `resolveOverlap()` must run BEFORE `updateNodes()` — running after causes bounce-back due to conflicting state updates
+- `resolveOverlap()` must run BEFORE `updateNodes()` — running after causes bounce-back
+- `volume` field may be typed as `string | number` in some contexts — always use `Number(kw.volume) || 0`
+- `useCanvas` is now called in KeywordWorkspace, NOT in CanvasPanel — CanvasPanel receives it as `canvas` prop
+- Multi-select uses `selectedIds: Set<number>` — all old `selectedId` references were converted
+- Selection box and node drag use ref-based viewport tracking (`viewXRef`, `viewYRef`, `zoomRef`) to avoid stale React closure values during mouse event handlers
 
 ---
 
@@ -342,37 +347,44 @@ The user is a complete novice with no programming knowledge. For every action:
 ## 10. FILE LISTING
 
 ```
+src/app/keyword-clustering/
+├── page.tsx                    (~226 lines)
+
 src/app/keyword-clustering/components/
-├── ASTTable.tsx              (~1123 lines)
+├── ASTTable.tsx                (~1123 lines)
 ├── ast-table.css
-├── MTTable.tsx               (~1310 lines)
+├── MTTable.tsx                 (~1310 lines)
 ├── mt-table.css
-├── TIFTable.tsx              (~849 lines)
+├── TIFTable.tsx                (~849 lines)
 ├── tif-table.css
-├── CanvasPanel.tsx           (~660 lines)
+├── CanvasPanel.tsx             (~884 lines)
 ├── canvas-panel.css
 ├── CanvasEditPanel.tsx
 ├── canvas-edit-panel.css
-├── CanvasTableMode.tsx       (~924 lines)
-├── canvas-table-mode.css     (~566 lines)
-├── KeywordWorkspace.tsx      (~260 lines)
-├── workspace.css
+├── CanvasTableMode.tsx         (~924 lines)
+├── canvas-table-mode.css       (~566 lines)
+├── TVTTable.tsx                (~479 lines)
+├── tvt-table.css               (~327 lines)
+├── KASTable.tsx                (~281 lines)
+├── kas-table.css               (~172 lines)
+├── KeywordWorkspace.tsx        (~399 lines)
+├── workspace.css               (~386 lines)
 ├── ScrollArrows.tsx
 ├── scroll-arrows.css
 ├── FloatingPanel.tsx
 ├── floating-panel.css
-├── *.bak, *.bak2, *.bak3... (backups)
+├── *.bak, *.bak2, *.bak3...   (backups)
 
 src/hooks/
 ├── useKeywords.ts
 ├── useCanvas.ts
 
 src/app/api/projects/[projectId]/
-├── keywords/route.ts         (GET, POST, DELETE)
+├── keywords/route.ts           (GET, POST, DELETE)
 ├── keywords/[keywordId]/route.ts (PATCH, DELETE)
-├── canvas/route.ts           (GET, PATCH canvas state)
-├── canvas/nodes/route.ts     (GET, POST, PATCH, DELETE)
-├── canvas/pathways/route.ts  (POST, DELETE)
+├── canvas/route.ts             (GET, PATCH canvas state)
+├── canvas/nodes/route.ts       (GET, POST, PATCH, DELETE)
+├── canvas/pathways/route.ts    (POST, DELETE)
 ├── canvas/sister-links/route.ts (POST, DELETE)
 
 prisma/
