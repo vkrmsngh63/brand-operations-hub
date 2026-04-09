@@ -339,24 +339,44 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
   useEffect(() => {
     if (dragNodeId === null) return;
     const offsets = multiDragOffsets.current;
+    const EDGE_ZONE = 40;
+    const PAN_SPEED = 8;
 
     function onMove(e: MouseEvent) {
       dragMoved.current = true;
-      const pos = screenToCanvas(e.clientX, e.clientY);
+      const rect = svgRef.current?.getBoundingClientRect();
+      if (!rect) return;
+
+      // Auto-pan when dragging near viewport edges
+      let panDx = 0, panDy = 0;
+      if (e.clientX < rect.left + EDGE_ZONE) panDx = -PAN_SPEED / zoomRef.current;
+      else if (e.clientX > rect.right - EDGE_ZONE) panDx = PAN_SPEED / zoomRef.current;
+      if (e.clientY < rect.top + EDGE_ZONE) panDy = -PAN_SPEED / zoomRef.current;
+      else if (e.clientY > rect.bottom - EDGE_ZONE) panDy = PAN_SPEED / zoomRef.current;
+
+      if (panDx !== 0 || panDy !== 0) {
+        viewXRef.current += panDx;
+        viewYRef.current += panDy;
+        setViewX(viewXRef.current);
+        setViewY(viewYRef.current);
+      }
+
+      // Compute canvas position using refs (always current)
+      const cx = (e.clientX - rect.left) / zoomRef.current + viewXRef.current;
+      const cy = (e.clientY - rect.top) / zoomRef.current + viewYRef.current;
+
       // Move all nodes in the drag set
       offsets.forEach(({ dx, dy }, id) => {
         const idx = nodes.findIndex(n => n.id === id);
         if (idx >= 0) {
-          nodes[idx] = { ...nodes[idx], x: pos.x - dx, y: pos.y - dy };
+          nodes[idx] = { ...nodes[idx], x: cx - dx, y: cy - dy };
         }
       });
       forceUpdate();
     }
     function onUp() {
       if (dragMoved.current && offsets.size > 0) {
-        // Resolve overlap for each dragged node
         offsets.forEach((_, id) => resolveOverlap(id));
-        // Save all dragged nodes
         const updates: Partial<CanvasNode>[] = [];
         offsets.forEach((_, id) => {
           const node = nodes.find(n => n.id === id);
