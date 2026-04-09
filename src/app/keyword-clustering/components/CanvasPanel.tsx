@@ -819,6 +819,28 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
                     </foreignObject>
                   )}
 
+                  {kwCount > 0 && (() => {
+                    const kwIds = (node.linkedKwIds || []) as string[];
+                    const placements = (node.kwPlacements || {}) as Record<string, string>;
+                    const primaryKws = kwIds.filter(id => (placements[id] || 'p') === 'p').map(id => allKeywords.find(k => k.id === id)).filter(Boolean);
+                    const secondaryKws = kwIds.filter(id => placements[id] === 's').map(id => allKeywords.find(k => k.id === id)).filter(Boolean);
+                    const kwY = Math.min(descY + Math.max(descH, 0), node.h - 36);
+                    const kwH = node.h - kwY - 18;
+                    if (kwH < 10) return null;
+                    return (
+                      <foreignObject x={ACCENT_W + 8} y={kwY} width={node.w - ACCENT_W - 16} height={kwH}>
+                        <div className="cvs-node-kw-preview">
+                          {primaryKws.slice(0, 3).map((k, i) => (
+                            <span key={i} className="cvs-kw-primary">{k!.keyword}</span>
+                          ))}
+                          {secondaryKws.slice(0, 2).map((k, i) => (
+                            <span key={'s' + i} className="cvs-kw-secondary">{k!.keyword}</span>
+                          ))}
+                          {kwIds.length > 5 && <span className="cvs-kw-more">+{kwIds.length - 5} more</span>}
+                        </div>
+                      </foreignObject>
+                    );
+                  })()}
                   <text x={node.w - 8} y={node.h - 8} className="cvs-node-badge" textAnchor="end">
                     {kwCount > 0 ? `${kwCount}kw` : ''}{kwCount > 0 && childCount > 0 ? ' \u00b7 ' : ''}{childCount > 0 ? `${childCount}ch` : ''}
                   </text>

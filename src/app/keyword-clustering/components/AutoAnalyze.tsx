@@ -924,6 +924,22 @@ export default function AutoAnalyze({
     }
     if (parentUpdates.length > 0) await onUpdateNodes(parentUpdates);
 
+    // 4b. Chain depth-0 nodes with linear connections for conversion funnel flow
+    const depth0Rows = parsed.filter(r => r.depth === 0 && r.title && titleToNode.has(r.title));
+    const chainUpdates: Partial<CanvasNode>[] = [];
+    for (let i = 1; i < depth0Rows.length; i++) {
+      const prevNode = titleToNode.get(depth0Rows[i - 1].title);
+      const currNode = titleToNode.get(depth0Rows[i].title);
+      if (prevNode && currNode) {
+        chainUpdates.push({
+          id: currNode.id,
+          parentId: prevNode.id,
+          relationshipType: 'linear',
+        });
+      }
+    }
+    if (chainUpdates.length > 0) await onUpdateNodes(chainUpdates);
+
     // 5. Link keywords to nodes
     const kwUpdates: Partial<CanvasNode>[] = [];
     const kwStatusUpdates: { id: string; [key: string]: unknown }[] = [];
