@@ -800,9 +800,9 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
                         autoFocus />
                     </foreignObject>
                   ) : (
-                    <text x={ACCENT_W + 10} y={20} className="cvs-node-title">
-                      {node.title || '(untitled)'}
-                    </text>
+                    <foreignObject x={ACCENT_W + 8} y={4} width={node.w - ACCENT_W - 16} height={22}>
+                      <div className="cvs-node-title-wrap">{node.title || '(untitled)'}</div>
+                    </foreignObject>
                   )}
 
                   {hasAlts && (

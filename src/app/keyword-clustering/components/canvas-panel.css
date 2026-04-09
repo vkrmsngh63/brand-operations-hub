@@ -121,6 +121,17 @@
   font-family: system-ui, -apple-system, sans-serif;
   pointer-events: none;
 }
+.cvs-node-title-wrap {
+  color: #1e293b;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: system-ui, -apple-system, sans-serif;
+  pointer-events: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 20px;
+}
 .cvs-node-alt {
   fill: #94a3b8;
   font-size: 9px;

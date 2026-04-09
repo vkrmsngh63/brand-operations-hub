@@ -878,6 +878,36 @@ export default function AutoAnalyze({
       if (newNode) titleToNode.set(row.title, newNode);
     }
 
+    // 3b. Create pathways for depth-0 nodes and assign pathwayId
+    const depth0Nodes = parsed.filter(r => r.depth === 0 && r.title && titleToNode.has(r.title));
+    const pathwayUpdates: Partial<CanvasNode>[] = [];
+    for (const row of depth0Nodes) {
+      try {
+        const res = await fetch('/api/projects/' + projectId + '/canvas/pathways', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        });
+        if (res.ok) {
+          const pw = await res.json();
+          const node = titleToNode.get(row.title);
+          if (node) {
+            pathwayUpdates.push({ id: node.id, pathwayId: pw.id });
+            // Also assign same pathwayId to all descendants
+            function assignPathway(title: string) {
+              for (const r of parsed) {
+                if (r.parentTitle === title && titleToNode.has(r.title)) {
+                  pathwayUpdates.push({ id: titleToNode.get(r.title)!.id, pathwayId: pw.id });
+                  assignPathway(r.title);
+                }
+              }
+            }
+            assignPathway(row.title);
+          }
+        }
+      } catch (e) { console.error('Pathway creation error:', e); }
+    }
+    if (pathwayUpdates.length > 0) await onUpdateNodes(pathwayUpdates);
+
     // 4. Set parent relationships
     const parentUpdates: Partial<CanvasNode>[] = [];
     for (const row of parsed) {
@@ -923,6 +953,36 @@ export default function AutoAnalyze({
       }
     }
     if (kwUpdates.length > 0) await onUpdateNodes(kwUpdates);
+
+    // 5b. Update keyword records with topic names and canvasLoc descriptions
+    const kwTopicUpdates: { id: string; [key: string]: unknown }[] = [];
+    for (const row of parsed) {
+      if (!row.kwRaw || !row.title) continue;
+      const entries = row.kwRaw.split(',').map(s => s.trim()).filter(Boolean);
+      for (const entry of entries) {
+        const m = entry.match(/^(.+?)\s*\[([ps])\]\s*$/i);
+        const kwText = m ? m[1].trim() : entry.replace(/\s*\[[ps]\]\s*$/i, '').trim();
+        const kwObj = allKeywords.find(k => k.keyword.toLowerCase() === kwText.toLowerCase());
+        if (kwObj) {
+          // Build topic list (pipe-delimited)
+          const existingTopics = (kwObj.topic || '').split('|').map(s => s.trim()).filter(Boolean);
+          if (!existingTopics.includes(row.title)) {
+            existingTopics.push(row.title);
+          }
+          // Build canvasLoc with description
+          const existingLoc = (typeof kwObj.canvasLoc === 'object' && kwObj.canvasLoc) ? { ...kwObj.canvasLoc } : {};
+          if (row.desc) {
+            (existingLoc as Record<string, string>)[row.title] = row.desc;
+          }
+          kwTopicUpdates.push({
+            id: kwObj.id,
+            topic: existingTopics.join(' | '),
+            canvasLoc: existingLoc,
+          });
+        }
+      }
+    }
+    if (kwTopicUpdates.length > 0) onBatchUpdateKeywords(kwTopicUpdates);
 
     // Refresh canvas + keywords to sync UI
     await onRefreshCanvas();
