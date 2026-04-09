@@ -38,6 +38,9 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
   const [viewX, setViewX] = useState(0);
   const [viewY, setViewY] = useState(0);
   const [zoom, setZoom] = useState(1);
+  const viewXRef = useRef(0);
+  const viewYRef = useRef(0);
+  const zoomRef = useRef(1);
   const [isPanning, setIsPanning] = useState(false);
   const panStart = useRef({ x: 0, y: 0, vx: 0, vy: 0 });
 
@@ -51,7 +54,9 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
 
   /* ── Selection box state (shift+drag on background) ──────────── */
   const [selBox, setSelBox] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
-  const selBoxStart = useRef<{ cx: number; cy: number } | null>(null);
+  const selBoxRef = useRef<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
+  const selBoxActive = useRef(false);
+  const selBoxAnimFrame = useRef<number | null>(null);
 
   /* ── Multi-drag: offsets for all selected nodes ──────────────── */
   const multiDragOffsets = useRef<Map<number, { dx: number; dy: number }>>(new Map());
@@ -93,6 +98,11 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
     }
   }, [canvasState]);
 
+  // Keep refs in sync with state for use in event handlers
+  useEffect(() => { viewXRef.current = viewX; }, [viewX]);
+  useEffect(() => { viewYRef.current = viewY; }, [viewY]);
+  useEffect(() => { zoomRef.current = zoom; }, [zoom]);
+
   const viewSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveViewport = useCallback((vx: number, vy: number, z: number) => {
     if (viewSaveTimer.current) clearTimeout(viewSaveTimer.current);
@@ -119,8 +129,10 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
     // Shift+drag on background = selection box
     if (e.shiftKey) {
       const pos = screenToCanvas(e.clientX, e.clientY);
-      setSelBox({ x1: pos.x, y1: pos.y, x2: pos.x, y2: pos.y });
-      selBoxStart.current = { cx: e.clientX, cy: e.clientY };
+      const box = { x1: pos.x, y1: pos.y, x2: pos.x, y2: pos.y };
+      setSelBox(box);
+      selBoxRef.current = box;
+      selBoxActive.current = true;
       e.preventDefault();
       return;
     }
@@ -132,44 +144,81 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
     e.preventDefault();
   }
 
-  /* ── Selection box drag ──────────────────────────────────────── */
+  /* ── Selection box drag with auto-pan at edges ────────────────── */
   useEffect(() => {
-    if (!selBox || !selBoxStart.current) return;
+    if (!selBoxActive.current) return;
+
+    const EDGE_ZONE = 40; // px from viewport edge to start panning
+    const PAN_SPEED = 8;  // canvas units per frame
+
     function onMove(e: MouseEvent) {
-      const pos = screenToCanvas(e.clientX, e.clientY);
-      setSelBox(prev => prev ? { ...prev, x2: pos.x, y2: pos.y } : null);
+      const rect = svgRef.current?.getBoundingClientRect();
+      if (!rect) return;
+
+      // Auto-pan when near edges
+      let panDx = 0, panDy = 0;
+      if (e.clientX < rect.left + EDGE_ZONE) panDx = -PAN_SPEED / zoomRef.current;
+      else if (e.clientX > rect.right - EDGE_ZONE) panDx = PAN_SPEED / zoomRef.current;
+      if (e.clientY < rect.top + EDGE_ZONE) panDy = -PAN_SPEED / zoomRef.current;
+      else if (e.clientY > rect.bottom - EDGE_ZONE) panDy = PAN_SPEED / zoomRef.current;
+
+      if (panDx !== 0 || panDy !== 0) {
+        viewXRef.current += panDx;
+        viewYRef.current += panDy;
+        setViewX(viewXRef.current);
+        setViewY(viewYRef.current);
+      }
+
+      // Compute canvas position using refs (always current)
+      const cx = (e.clientX - rect.left) / zoomRef.current + viewXRef.current;
+      const cy = (e.clientY - rect.top) / zoomRef.current + viewYRef.current;
+      const prev = selBoxRef.current;
+      if (prev) {
+        const updated = { ...prev, x2: cx, y2: cy };
+        selBoxRef.current = updated;
+        setSelBox(updated);
+      }
     }
-    function onUp(e: MouseEvent) {
-      // Find all nodes inside the selection box
-      if (selBox) {
-        const minX = Math.min(selBox.x1, selBox.x2);
-        const maxX = Math.max(selBox.x1, selBox.x2);
-        const minY = Math.min(selBox.y1, selBox.y2);
-        const maxY = Math.max(selBox.y1, selBox.y2);
-        const hits = new Set<number>();
-        nodes.forEach(n => {
-          // Node is selected if it overlaps with box
-          if (n.x + n.w > minX && n.x < maxX && n.y + n.h > minY && n.y < maxY) {
-            if (!isHiddenByCollapse(n.id)) hits.add(n.id);
-          }
-        });
-        if (hits.size > 0) {
-          setSelectedIds(prev => {
-            const next = new Set(prev);
-            hits.forEach(id => next.add(id));
-            return next;
+
+    function onUp() {
+      selBoxActive.current = false;
+      if (selBoxAnimFrame.current) { cancelAnimationFrame(selBoxAnimFrame.current); selBoxAnimFrame.current = null; }
+
+      const box = selBoxRef.current;
+      if (box) {
+        const minX = Math.min(box.x1, box.x2);
+        const maxX = Math.max(box.x1, box.x2);
+        const minY = Math.min(box.y1, box.y2);
+        const maxY = Math.max(box.y1, box.y2);
+
+        // Only select if box has some size (avoid accidental micro-drags)
+        if (maxX - minX > 5 || maxY - minY > 5) {
+          const hits = new Set<number>();
+          nodes.forEach(n => {
+            if (n.x + n.w > minX && n.x < maxX && n.y + n.h > minY && n.y < maxY) {
+              if (!isHiddenByCollapse(n.id)) hits.add(n.id);
+            }
           });
-          showToast(`Selected ${hits.size} node${hits.size > 1 ? 's' : ''}`);
+          if (hits.size > 0) {
+            setSelectedIds(prev => {
+              const next = new Set(prev);
+              hits.forEach(id => next.add(id));
+              return next;
+            });
+            showToast(`Selected ${hits.size} node${hits.size > 1 ? 's' : ''}`);
+          }
         }
       }
+
       setSelBox(null);
-      selBoxStart.current = null;
+      selBoxRef.current = null;
     }
+
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
     return () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selBox ? `${selBox.x1},${selBox.y1}` : null]);
+  }, [selBox ? 'active' : 'inactive']);
 
   useEffect(() => {
     if (!isPanning) return;
