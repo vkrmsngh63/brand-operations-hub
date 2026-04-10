@@ -404,10 +404,10 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
       for (const n of nodes) {
         if (n.id === nodeId) continue;
         const overlapX = node.x < n.x + n.w + GAP && node.x + node.w + GAP > n.x;
-        const overlapY = node.y < n.y + n.h + GAP && node.y + node.h + GAP > n.y;
+        const overlapY = node.y < n.y + Math.max(n.h, NODE_H) + GAP && node.y + Math.max(node.h, NODE_H) + GAP > n.y;
         if (overlapX && overlapY) {
           const nudgeRight = (n.x + n.w + GAP) - node.x;
-          const nudgeDown = (n.y + n.h + GAP) - node.y;
+          const nudgeDown = (n.y + Math.max(n.h, NODE_H) + GAP) - node.y;
           if (nudgeRight <= nudgeDown) {
             node.x = n.x + n.w + GAP;
           } else {
