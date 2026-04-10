@@ -1314,7 +1314,7 @@ export default function AutoAnalyze({
                 <option value="claude-opus-4-5">Claude Opus 4.5</option>
                 <option value="claude-haiku-4-5">Claude Haiku 4.5</option>
               </select>
-              <span className="aa-label">Scope<span className="aa-help">ⓘ<span className="aa-tip">Which keywords to include. "Unsorted only" skips already-sorted keywords. "All" re-analyzes everything.</span></span></span>
+              <span className="aa-label" style={{minWidth:"auto",marginLeft:"12px"}}>Scope<span className="aa-help">ⓘ<span className="aa-tip">Which keywords to include. "Unsorted only" skips already-sorted keywords. "All" re-analyzes everything.</span></span></span>
               <select className="aa-select" value={keywordScope} onChange={e => setKeywordScope(e.target.value as typeof keywordScope)} disabled={aaState !== 'IDLE'}>
                 <option value="unsorted-only">Unsorted only</option>
                 <option value="non-ai-sorted">Non-AI-Sorted</option>
@@ -1331,7 +1331,7 @@ export default function AutoAnalyze({
                 <option value="adaptive">Adaptive</option>
                 <option value="classic">Classic</option>
               </select>
-              <span className="aa-label">Batch size<span className="aa-help">ⓘ<span className="aa-tip">Number of keywords per API call. Only editable in Classic mode. Larger batches are faster but risk truncation.</span></span></span>
+              <span className="aa-label" style={{minWidth:"auto",marginLeft:"12px"}}>Batch size<span className="aa-help">ⓘ<span className="aa-tip">Number of keywords per API call. Only editable in Classic mode. Larger batches are faster but risk truncation.</span></span></span>
               <input className="aa-input aa-input-sm" type="number" value={batchSize} onChange={e => setBatchSize(parseInt(e.target.value) || 8)} disabled={aaState !== 'IDLE' || processingMode === 'adaptive'} />
               {processingMode === 'adaptive' && <span style={{ fontSize: '9px', color: '#64748b' }}>Auto: 8→12→18</span>}
             </div>
