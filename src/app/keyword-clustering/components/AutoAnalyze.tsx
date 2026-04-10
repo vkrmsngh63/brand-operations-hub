@@ -1294,7 +1294,7 @@ export default function AutoAnalyze({
           <div className="aa-section">
             <div className="aa-section-title">Configuration</div>
             <div className="aa-row">
-              <span className="aa-label">API Mode</span>
+              <span className="aa-label">API Mode<span className="aa-help">ⓘ<span className="aa-tip">Direct sends requests from your browser straight to Anthropic (no timeout). Server proxy routes through Vercel (5-min timeout limit).</span></span></span>
               <select className="aa-select" value={apiMode} onChange={e => setApiMode(e.target.value as 'direct' | 'server')} disabled={aaState !== 'IDLE'}>
                 <option value="direct">Direct (browser → Anthropic)</option>
                 <option value="server">Server proxy (browser → Vercel → Anthropic)</option>
@@ -1307,14 +1307,14 @@ export default function AutoAnalyze({
               </div>
             )}
             <div className="aa-row">
-              <span className="aa-label">Model</span>
+              <span className="aa-label">Model<span className="aa-help">ⓘ<span className="aa-tip">Which Claude model to use. Opus is most capable but slower/costlier. Sonnet is a good balance. Haiku is fastest/cheapest.</span></span></span>
               <select className="aa-select" value={model} onChange={e => setModel(e.target.value)} disabled={aaState !== 'IDLE'}>
                 <option value="claude-opus-4-6">Claude Opus 4.6</option>
                 <option value="claude-sonnet-4-6">Claude Sonnet 4.6</option>
                 <option value="claude-opus-4-5">Claude Opus 4.5</option>
                 <option value="claude-haiku-4-5">Claude Haiku 4.5</option>
               </select>
-              <span className="aa-label">Scope</span>
+              <span className="aa-label">Scope<span className="aa-help">ⓘ<span className="aa-tip">Which keywords to include. "Unsorted only" skips already-sorted keywords. "All" re-analyzes everything.</span></span></span>
               <select className="aa-select" value={keywordScope} onChange={e => setKeywordScope(e.target.value as typeof keywordScope)} disabled={aaState !== 'IDLE'}>
                 <option value="unsorted-only">Unsorted only</option>
                 <option value="non-ai-sorted">Non-AI-Sorted</option>
@@ -1322,21 +1322,21 @@ export default function AutoAnalyze({
               </select>
             </div>
             <div className="aa-row">
-              <span className="aa-label">Seed words</span>
+              <span className="aa-label">Seed words<span className="aa-help">ⓘ<span className="aa-tip">Core niche terms that help the AI understand your market context (e.g. "bursitis", "joint pain").</span></span></span>
               <input className="aa-input aa-input-wide" value={seedWords} onChange={e => setSeedWords(e.target.value)} placeholder="e.g. bursitis" disabled={aaState !== 'IDLE'} />
             </div>
             <div className="aa-row">
-              <span className="aa-label">Processing</span>
+              <span className="aa-label">Processing<span className="aa-help">ⓘ<span className="aa-tip">Adaptive auto-sizes batches (8→12→18) as the topic hierarchy grows. Classic uses a fixed batch size.</span></span></span>
               <select className="aa-select" value={processingMode} onChange={e => { setProcessingMode(e.target.value as 'adaptive' | 'classic'); if (e.target.value === 'adaptive') setBatchSize(AA_BATCH_TIERS[0].size); }} disabled={aaState !== 'IDLE'}>
                 <option value="adaptive">Adaptive</option>
                 <option value="classic">Classic</option>
               </select>
-              <span className="aa-label">Batch size</span>
+              <span className="aa-label">Batch size<span className="aa-help">ⓘ<span className="aa-tip">Number of keywords per API call. Only editable in Classic mode. Larger batches are faster but risk truncation.</span></span></span>
               <input className="aa-input aa-input-sm" type="number" value={batchSize} onChange={e => setBatchSize(parseInt(e.target.value) || 8)} disabled={aaState !== 'IDLE' || processingMode === 'adaptive'} />
               {processingMode === 'adaptive' && <span style={{ fontSize: '9px', color: '#64748b' }}>Auto: 8→12→18</span>}
             </div>
             <div className="aa-row">
-              <span className="aa-label">Thinking</span>
+              <span className="aa-label">Thinking<span className="aa-help">ⓘ<span className="aa-tip">Extended thinking lets the AI reason before responding. Adaptive enables it automatically. Budget caps thinking tokens.</span></span></span>
               <select className="aa-select" value={thinkingMode} onChange={e => setThinkingMode(e.target.value as typeof thinkingMode)} disabled={aaState !== 'IDLE'}>
                 <option value="adaptive">Adaptive</option>
                 <option value="enabled">Enabled</option>
@@ -1348,11 +1348,11 @@ export default function AutoAnalyze({
                   <input className="aa-input aa-input-sm" type="number" value={thinkingBudget} onChange={e => setThinkingBudget(parseInt(e.target.value) || 10000)} disabled={aaState !== 'IDLE'} />
                 </>
               )}
-              <span className="aa-label">Stall (sec)</span>
+              <span className="aa-label">Stall (sec)<span className="aa-help">ⓘ<span className="aa-tip">Seconds of no data before retrying the stream connection. Lower = faster recovery but more retries.</span></span></span>
               <input className="aa-input aa-input-sm" type="number" value={stallTimeout} onChange={e => setStallTimeout(parseInt(e.target.value) || 90)} disabled={aaState !== 'IDLE'} />
             </div>
             <div className="aa-row">
-              <span className="aa-label">Vol threshold</span>
+              <span className="aa-label">Vol threshold<span className="aa-help">ⓘ<span className="aa-tip">Keywords with volume above this are flagged for priority placement in the topic hierarchy.</span></span></span>
               <input className="aa-input aa-input-sm" type="number" value={volumeThreshold} onChange={e => setVolumeThreshold(parseInt(e.target.value) || 1000)} disabled={aaState !== 'IDLE'} />
               <div className="aa-toggle" onClick={() => { if (aaState === 'IDLE') setReviewMode(!reviewMode); }}>
                 <div className={`aa-toggle-track${reviewMode ? ' on' : ''}`}><div className="aa-toggle-thumb" /></div>
