@@ -1344,11 +1344,11 @@ export default function AutoAnalyze({
               </select>
               {thinkingMode === 'enabled' && (
                 <>
-                  <span className="aa-label">Budget</span>
+                  <span className="aa-label" style={{marginLeft:"12px"}}>Budget</span>
                   <input className="aa-input aa-input-sm" type="number" value={thinkingBudget} onChange={e => setThinkingBudget(parseInt(e.target.value) || 10000)} disabled={aaState !== 'IDLE'} />
                 </>
               )}
-              <span className="aa-label">Stall (sec)<span className="aa-help">ⓘ<span className="aa-tip">Seconds of no data before retrying the stream connection. Lower = faster recovery but more retries.</span></span></span>
+              <span className="aa-label" style={{marginLeft:"12px"}}>Stall (sec)<span className="aa-help">ⓘ<span className="aa-tip">Seconds of no data before retrying the stream connection. Lower = faster recovery but more retries.</span></span></span>
               <input className="aa-input aa-input-sm" type="number" value={stallTimeout} onChange={e => setStallTimeout(parseInt(e.target.value) || 90)} disabled={aaState !== 'IDLE'} />
             </div>
             <div className="aa-row">
@@ -1371,10 +1371,10 @@ export default function AutoAnalyze({
             </div>
             {promptExpanded && (
               <div style={{ marginTop: '8px' }}>
-                <div style={{ fontSize: '10px', color: '#94a3b8', marginBottom: '4px' }}>Initial Prompt (main analysis instructions):</div>
+                <div style={{ fontSize: '10px', color: '#94a3b8', marginBottom: '4px' }}>Initial Prompt (main analysis instructions): <span className="aa-help" style={{display:'inline-flex'}}>ⓘ<span className="aa-tip">The main instruction prompt sent to Claude. Defines how keywords should be analyzed, grouped into topics, and organized into a conversion funnel hierarchy.</span></span></div>
                 <textarea className="aa-prompt-textarea" value={initialPrompt} onChange={e => setInitialPrompt(e.target.value)} placeholder="Paste your AI analysis prompt here…" />
                 <div className="aa-prompt-chars">{initialPrompt.length.toLocaleString()} chars</div>
-                <div style={{ fontSize: '10px', color: '#94a3b8', marginBottom: '4px', marginTop: '8px' }}>Topics Layout Table Primer (optional):</div>
+                <div style={{ fontSize: '10px', color: '#94a3b8', marginBottom: '4px', marginTop: '8px' }}>Topics Layout Table Primer (optional): <span className="aa-help" style={{display:'inline-flex'}}>ⓘ<span className="aa-tip">Additional context about how the Topics Layout Table should be structured — funnel ordering rules, placement guidelines, and depth conventions. Appended to the system prompt.</span></span></div>
                 <textarea className="aa-prompt-textarea" value={primerPrompt} onChange={e => setPrimerPrompt(e.target.value)} placeholder="Optional primer prompt…" style={{ minHeight: '50px' }} />
                 <div className="aa-prompt-chars">{primerPrompt.length.toLocaleString()} chars</div>
               </div>
