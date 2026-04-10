@@ -122,7 +122,7 @@
 - [x] Topics View Table (TVT) — light theme, depth-first tree walk, single expand/collapse toggle, drag-reorder, depth filter, zoom, description popover, ancestry highlighting
 - [x] Shared useCanvas lifted to KeywordWorkspace for real-time sync between Canvas, TVT, and KAS
 
-### 1g. Auto-Analyze System: IN PROGRESS — CURRENT PRIORITY
+### 1g. Auto-Analyze System: CODE COMPLETE — TESTING PENDING
 - [x] Server-side API proxy route (`/api/ai/analyze`)
 - [x] Direct browser→Anthropic API mode (no timeout limit)
 - [x] Auto-Analyze overlay UI (config, prompts, batch list, progress, log, controls)
@@ -134,15 +134,36 @@
 - [x] Post-apply UI refresh (fetchCanvas + fetchKeywords)
 - [x] AI-Sorted status marking with verification
 - [x] Node title overflow fix
-- [x] Keyword popover (floating panel with all keywords)
-- [ ] **FIX: Keyword preview not rendering in node boxes** ← NEXT
-- [ ] Copy activity log button
-- [ ] Help icons (ⓘ) with tooltips on overlay config elements
-- [ ] Checkpoint persistence (save/resume interrupted runs)
-- [ ] Sister link creation during apply
-- [ ] Test: depth-0 linear chain connections (fresh run needed)
-- [ ] Test: pathway colors on nodes (fresh run needed)
-- [ ] Test: full multi-batch run end-to-end
+- [x] Keyword preview (blue primary, purple secondary pills in node boxes)
+- [x] Keyword popover (floating panel with all keywords on ▼ click)
+- [x] Copy activity log button
+- [x] Help icons (ⓘ) with tooltips on all overlay config elements and prompt fields
+- [x] Checkpoint persistence (save/resume interrupted runs via localStorage)
+- [x] Sister link creation during canvas apply
+- [x] Uniform node height (160px min, 5-line descriptions, overlap resolution uses renderH)
+
+### 1-persist. Data Persistence Fixes: NOT STARTED — HIGH PRIORITY
+Many types of user data and UI state are lost on page refresh. See HANDOFF.md Section 9 for full audit.
+
+**Must fix (user loses work) → save to Database:**
+- [ ] MT Table entries (Main Terms) — currently React state only, lost on refresh
+- [ ] Auto-Analyze config (API key, model, seed words, all settings) — lost on refresh
+- [ ] Auto-Analyze prompts (Initial Prompt, Primer Prompt) — lost on refresh
+
+**Should fix (annoying UX) → save to localStorage:**
+- [ ] Panel visibility checkboxes (AST/MT/TIF/Canvas)
+- [ ] AST column visibility toggles (Vol/Tags/Topics/TopicDesc)
+- [ ] AST status filters (Sorted/Partial/Unsorted)
+- [ ] AST zoom / font size
+- [ ] AI table view selection (Normal/Common/Analysis/Topics)
+- [ ] Canvas mode (Mindmap vs Table)
+- [ ] Canvas collapsed nodes
+- [ ] TIF entries (Terms In Focus keywords)
+- [ ] TIF active/paused toggle
+
+**Nice to have → save to localStorage:**
+- [ ] Panel flex ratios (divider positions)
+- [ ] Detached panel states
 
 ### 1h. Download/Upload Work: NOT STARTED
 - [ ] Export complete .kst JSON file (all data, selections, filters, UI state, AI state, canvas state)
