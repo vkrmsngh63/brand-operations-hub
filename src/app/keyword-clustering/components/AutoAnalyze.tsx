@@ -1432,7 +1432,7 @@ export default function AutoAnalyze({
           {/* ── Activity log ── */}
           {logEntries.length > 0 && (
             <div className="aa-section">
-              <div className="aa-section-title">Activity Log</div>
+              <div className="aa-section-title" style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>Activity Log <button className="aa-btn aa-btn-sm" onClick={()=>{const txt=logEntries.map(e=>e.ts+' '+e.msg).join('\n');navigator.clipboard.writeText(txt);aaLog('Activity log copied to clipboard','ok')}}>📋 Copy Log</button></div>
               <div className="aa-log" ref={logRef}>
                 {logEntries.map((e, i) => (
                   <div key={i} className="aa-log-entry">
