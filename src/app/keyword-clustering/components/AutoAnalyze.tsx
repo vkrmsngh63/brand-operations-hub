@@ -1344,11 +1344,11 @@ export default function AutoAnalyze({
               </select>
               {thinkingMode === 'enabled' && (
                 <>
-                  <span className="aa-label" style={{marginLeft:"12px"}}>Budget</span>
+                  <span className="aa-label" style={{marginLeft:'12px',minWidth:'auto'}}>Budget</span>
                   <input className="aa-input aa-input-sm" type="number" value={thinkingBudget} onChange={e => setThinkingBudget(parseInt(e.target.value) || 10000)} disabled={aaState !== 'IDLE'} />
                 </>
               )}
-              <span className="aa-label" style={{marginLeft:"12px"}}>Stall (sec)<span className="aa-help">ⓘ<span className="aa-tip">Seconds of no data before retrying the stream connection. Lower = faster recovery but more retries.</span></span></span>
+              <span className="aa-label" style={{marginLeft:'12px',minWidth:'auto'}}>Stall (sec)<span className="aa-help">ⓘ<span className="aa-tip">Seconds of no data before retrying the stream connection. Lower = faster recovery but more retries.</span></span></span>
               <input className="aa-input aa-input-sm" type="number" value={stallTimeout} onChange={e => setStallTimeout(parseInt(e.target.value) || 90)} disabled={aaState !== 'IDLE'} />
             </div>
             <div className="aa-row">
