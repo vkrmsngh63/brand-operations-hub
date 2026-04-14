@@ -1,6 +1,5 @@
 'use client';
 import { useState, useCallback } from 'react';
-import { authFetch } from '@/lib/authFetch';
 
 /* ── Types ─────────────────────────────────────────────────────── */
 export interface CanvasNode {
@@ -66,8 +65,8 @@ export function useCanvas(projectId: string) {
     setLoading(true);
     try {
       const [nodesRes, stateRes] = await Promise.all([
-        authFetch(`${base}/nodes`),
-        authFetch(base),
+        fetch(`${base}/nodes`),
+        fetch(base),
       ]);
       const nodesData = await nodesRes.json();
       const stateData = await stateRes.json();
@@ -85,7 +84,7 @@ export function useCanvas(projectId: string) {
   /* ── Add node ──────────────────────────────────────────────── */
   const addNode = useCallback(async (data: Partial<CanvasNode>) => {
     try {
-      const res = await authFetch(`${base}/nodes`, {
+      const res = await fetch(`${base}/nodes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -104,7 +103,7 @@ export function useCanvas(projectId: string) {
   /* ── Update nodes (bulk) ───────────────────────────────────── */
   const updateNodes = useCallback(async (updates: Partial<CanvasNode>[]) => {
     try {
-      await authFetch(`${base}/nodes`, {
+      await fetch(`${base}/nodes`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ nodes: updates }),
@@ -124,7 +123,7 @@ export function useCanvas(projectId: string) {
   const deleteNode = useCallback(async (nodeId: number) => {
     try {
       setNodes(prev => prev.filter(n => n.id !== nodeId));
-      await authFetch(`${base}/nodes`, {
+      await fetch(`${base}/nodes`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: nodeId }),
@@ -137,7 +136,7 @@ export function useCanvas(projectId: string) {
   /* ── Update canvas state (viewport, zoom) ──────────────────── */
   const updateCanvasState = useCallback(async (data: Partial<CanvasState>) => {
     try {
-      await authFetch(base, {
+      await fetch(base, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),

@@ -1,16 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { verifyAuth } from '@/lib/auth';
 
-// GET /api/projects — list all projects for a user
+// GET /api/projects — list all projects for the authenticated user
 export async function GET(req: NextRequest) {
-  try {
-    const userId = req.headers.get('x-user-id');
-    if (!userId) {
-      return NextResponse.json({ error: 'Missing user ID' }, { status: 401 });
-    }
+  const auth = await verifyAuth(req);
+  if (auth.error) return auth.error;
 
+  try {
     const projects = await prisma.project.findMany({
-      where: { userId },
+      where: { userId: auth.userId },
       orderBy: { updatedAt: 'desc' },
       include: {
         _count: { select: { keywords: true, canvasNodes: true } },
@@ -26,19 +25,17 @@ export async function GET(req: NextRequest) {
 
 // POST /api/projects — create a new project
 export async function POST(req: NextRequest) {
-  try {
-    const userId = req.headers.get('x-user-id');
-    if (!userId) {
-      return NextResponse.json({ error: 'Missing user ID' }, { status: 401 });
-    }
+  const auth = await verifyAuth(req);
+  if (auth.error) return auth.error;
 
+  try {
     const body = await req.json();
     const name = body.name || 'Untitled Project';
     const workflow = body.workflow || 'keyword-clustering';
 
     const project = await prisma.project.create({
       data: {
-        userId,
+        userId: auth.userId,
         name,
         workflow,
         canvasState: {

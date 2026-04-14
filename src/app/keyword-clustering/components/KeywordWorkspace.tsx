@@ -115,7 +115,7 @@ export default function KeywordWorkspace({ projectId, userId, aiMode }: KeywordW
   const {
     keywords, loading, fetchKeywords, addKeyword, bulkImport,
     updateKeyword, batchUpdate, deleteKeyword, bulkDelete, reorder,
-  } = useKeywords(projectId, userId);
+  } = useKeywords(projectId);
 
   const canvas = useCanvas(projectId);
 

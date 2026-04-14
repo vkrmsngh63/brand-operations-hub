@@ -1,13 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { verifyProjectAuth } from '@/lib/auth';
 
 // PATCH /api/projects/[projectId]/keywords/[keywordId] — update a keyword
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ projectId: string; keywordId: string }> }
 ) {
+  const { projectId, keywordId } = await params;
+  const auth = await verifyProjectAuth(req, projectId);
+  if (auth.error) return auth.error;
+
   try {
-    const { projectId, keywordId } = await params;
     const body = await req.json();
 
     const keyword = await prisma.keyword.update({
@@ -19,8 +23,8 @@ export async function PATCH(
         ...(body.tags !== undefined && { tags: body.tags }),
         ...(body.topic !== undefined && { topic: body.topic }),
         ...(body.sortOrder !== undefined && { sortOrder: body.sortOrder }),
-          ...(body.canvasLoc !== undefined && { canvasLoc: body.canvasLoc }),
-          ...(body.topicApproved !== undefined && { topicApproved: body.topicApproved }),
+        ...(body.canvasLoc !== undefined && { canvasLoc: body.canvasLoc }),
+        ...(body.topicApproved !== undefined && { topicApproved: body.topicApproved }),
       },
     });
 
@@ -36,9 +40,11 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ projectId: string; keywordId: string }> }
 ) {
-  try {
-    const { projectId, keywordId } = await params;
+  const { projectId, keywordId } = await params;
+  const auth = await verifyProjectAuth(req, projectId);
+  if (auth.error) return auth.error;
 
+  try {
     await prisma.keyword.delete({
       where: { id: keywordId, projectId },
     });

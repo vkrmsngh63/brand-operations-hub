@@ -1,5 +1,6 @@
 'use client';
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { authFetch } from '@/lib/authFetch';
 import type { CanvasNode } from '@/hooks/useCanvas';
 import './auto-analyze.css';
 
@@ -509,7 +510,7 @@ export default function AutoAnalyze({
         headers['anthropic-version'] = '2023-06-01';
         headers['anthropic-dangerous-direct-browser-access'] = 'true';
       }
-      const response = await fetch(fetchUrl, {
+      const response = await (isDirect ? fetch : authFetch)(fetchUrl, {
         method: 'POST',
         headers,
         body: JSON.stringify({ ...requestBody, stream: true }),
@@ -959,7 +960,7 @@ export default function AutoAnalyze({
     const pathwayUpdates: Partial<CanvasNode>[] = [];
     for (const row of depth0Nodes) {
       try {
-        const res = await fetch('/api/projects/' + projectId + '/canvas/pathways', {
+        const res = await authFetch('/api/projects/' + projectId + '/canvas/pathways', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
         });
@@ -1093,7 +1094,7 @@ export default function AutoAnalyze({
         const key = [node.id, sNode.id].sort().join('-');
         if (existingSisters.has(key)) continue;
         try {
-          await fetch('/api/projects/' + projectId + '/canvas/sister-links', {
+          await authFetch('/api/projects/' + projectId + '/canvas/sister-links', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ nodeA: node.id, nodeB: sNode.id }),

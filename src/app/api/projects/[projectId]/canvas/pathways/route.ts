@@ -1,14 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { verifyProjectAuth } from '@/lib/auth';
 
 // POST /api/projects/[projectId]/canvas/pathways — create a pathway
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ projectId: string }> }
 ) {
-  try {
-    const { projectId } = await params;
+  const { projectId } = await params;
+  const auth = await verifyProjectAuth(req, projectId);
+  if (auth.error) return auth.error;
 
+  try {
     // Get and increment nextPathwayId
     const canvasState = await prisma.canvasState.findUnique({
       where: { projectId },
@@ -40,8 +43,11 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ projectId: string }> }
 ) {
+  const { projectId } = await params;
+  const auth = await verifyProjectAuth(req, projectId);
+  if (auth.error) return auth.error;
+
   try {
-    const { projectId } = await params;
     const body = await req.json();
 
     await prisma.pathway.delete({

@@ -1,13 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { verifyProjectAuth } from '@/lib/auth';
 
 // GET /api/projects/[projectId]/canvas/nodes — list all canvas nodes
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ projectId: string }> }
 ) {
+  const { projectId } = await params;
+  const auth = await verifyProjectAuth(req, projectId);
+  if (auth.error) return auth.error;
+
   try {
-    const { projectId } = await params;
     const nodes = await prisma.canvasNode.findMany({
       where: { projectId },
       orderBy: { sortOrder: 'asc' },
@@ -24,8 +28,11 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ projectId: string }> }
 ) {
+  const { projectId } = await params;
+  const auth = await verifyProjectAuth(req, projectId);
+  if (auth.error) return auth.error;
+
   try {
-    const { projectId } = await params;
     const body = await req.json();
 
     // Get and increment nextNodeId from canvas state
@@ -75,8 +82,11 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ projectId: string }> }
 ) {
+  const { projectId } = await params;
+  const auth = await verifyProjectAuth(req, projectId);
+  if (auth.error) return auth.error;
+
   try {
-    const { projectId } = await params;
     const body = await req.json();
 
     if (!Array.isArray(body.nodes)) {
@@ -119,8 +129,11 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ projectId: string }> }
 ) {
+  const { projectId } = await params;
+  const auth = await verifyProjectAuth(req, projectId);
+  if (auth.error) return auth.error;
+
   try {
-    const { projectId } = await params;
     const body = await req.json();
 
     const ids: number[] = body.ids || (body.id !== undefined ? [body.id] : []);

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
+import { authFetch } from '@/lib/authFetch';
 import KeywordWorkspace from './components/KeywordWorkspace';
 
 const supabase = createClient(
@@ -46,9 +47,7 @@ export default function KeywordClusteringPage() {
 
   async function fetchProjects() {
     try {
-      const res = await fetch('/api/projects', {
-        headers: { 'x-user-id': userId! },
-      });
+      const res = await authFetch('/api/projects');
       if (res.ok) {
         const data = await res.json();
         setProjects(data);
@@ -63,9 +62,9 @@ export default function KeywordClusteringPage() {
   async function createProject() {
     if (!newName.trim()) return;
     try {
-      const res = await fetch('/api/projects', {
+      const res = await authFetch('/api/projects', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-user-id': userId! },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newName.trim(), workflow: 'keyword-clustering' }),
       });
       if (res.ok) {
@@ -81,7 +80,7 @@ export default function KeywordClusteringPage() {
   async function deleteProject(id: string) {
     if (!confirm('Delete this project and all its data?')) return;
     try {
-      await fetch(`/api/projects/${id}`, { method: 'DELETE' });
+      await authFetch(`/api/projects/${id}`, { method: 'DELETE' });
       if (activeProjectId === id) setActiveProjectId(null);
       fetchProjects();
     } catch (err) {

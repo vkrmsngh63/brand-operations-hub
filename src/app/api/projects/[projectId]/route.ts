@@ -1,14 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { verifyProjectAuth } from '@/lib/auth';
 
 // GET /api/projects/[projectId] — get one project with all data
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ projectId: string }> }
 ) {
-  try {
-    const { projectId } = await params;
+  const { projectId } = await params;
+  const auth = await verifyProjectAuth(req, projectId);
+  if (auth.error) return auth.error;
 
+  try {
     const project = await prisma.project.findUnique({
       where: { id: projectId },
       include: {
@@ -36,8 +39,11 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ projectId: string }> }
 ) {
+  const { projectId } = await params;
+  const auth = await verifyProjectAuth(req, projectId);
+  if (auth.error) return auth.error;
+
   try {
-    const { projectId } = await params;
     const body = await req.json();
 
     const project = await prisma.project.update({
@@ -60,11 +66,12 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ projectId: string }> }
 ) {
+  const { projectId } = await params;
+  const auth = await verifyProjectAuth(req, projectId);
+  if (auth.error) return auth.error;
+
   try {
-    const { projectId } = await params;
-
     await prisma.project.delete({ where: { id: projectId } });
-
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('DELETE /api/projects/[projectId] error:', error);

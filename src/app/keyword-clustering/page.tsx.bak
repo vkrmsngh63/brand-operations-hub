@@ -25,6 +25,7 @@ export default function KeywordClusteringPage() {
   const [loading, setLoading] = useState(true);
   const [newName, setNewName] = useState('');
   const [showNewForm, setShowNewForm] = useState(false);
+  const [aiMode, setAiMode] = useState(false);
 
   // Check auth
   useEffect(() => {
@@ -105,10 +106,18 @@ export default function KeywordClusteringPage() {
           </h1>
         </div>
         <div className="flex items-center gap-3">
-          {/* Mode toggle placeholder — Manual / AI */}
+          {/* Mode toggle — Manual / AI */}
           <div className="flex rounded-lg overflow-hidden border border-gray-700">
-            <button className="px-4 py-1.5 text-sm bg-blue-600 text-white">Manual</button>
-            <button className="px-4 py-1.5 text-sm bg-gray-800 text-gray-400 hover:text-white transition-colors">
+            <button
+              className={`px-4 py-1.5 text-sm transition-colors ${!aiMode ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
+              onClick={() => setAiMode(false)}
+            >
+              Manual
+            </button>
+            <button
+              className={`px-4 py-1.5 text-sm transition-colors ${aiMode ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
+              onClick={() => setAiMode(true)}
+            >
               AI
             </button>
           </div>
@@ -208,7 +217,7 @@ export default function KeywordClusteringPage() {
                 {projects.find((p) => p.id === activeProjectId)?.name}
               </span>
             </div>
-            <KeywordWorkspace projectId={activeProjectId} userId={userId!} />
+            <KeywordWorkspace projectId={activeProjectId} userId={userId!} aiMode={aiMode} />
           </div>
         )}
       </div>

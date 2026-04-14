@@ -1,8 +1,13 @@
 import { NextRequest } from 'next/server';
+import { verifyAuth } from '@/lib/auth';
 
 export const maxDuration = 300; // 5 min timeout for long AI responses
 
 export async function POST(req: NextRequest) {
+  // Verify the user is authenticated before proxying to Anthropic
+  const auth = await verifyAuth(req);
+  if (auth.error) return auth.error;
+
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     return new Response(JSON.stringify({ error: 'ANTHROPIC_API_KEY not configured' }), {
