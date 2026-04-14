@@ -866,21 +866,14 @@ export default function AutoAnalyze({
     return { ok: errors.length === 0, errors, warnings };
   }
 
-  /* ── Apply result to canvas (overwrite + rebuild) ──────────── */
+  /* ── Apply result to canvas (diff-based atomic rebuild) ────── */
   async function doApply(batch: BatchObj, result: BatchResult) {
     if (!result.topicsTableTsv) return;
 
-    // 1. Delete all existing nodes
-    for (const n of nodesRef.current) {
-      await onDeleteNode(n.id);
-    }
-    await new Promise(r => setTimeout(r, 100));
-
-    // 2. Parse TSV and rebuild
+    // 1. Parse TSV
     const lines = result.topicsTableTsv.split('\n').filter(l => l.trim());
     if (lines.length < 2) return;
 
-    // Parse rows
     const parsed: { depth: number; title: string; altTitles: string[]; rel: string; parentTitle: string; convPath: string; sisters: string; kwRaw: string; desc: string }[] = [];
     for (let i = 1; i < lines.length; i++) {
       const cols = lines[i].split('\t');
@@ -897,157 +890,253 @@ export default function AutoAnalyze({
       });
     }
 
-    // 3. Create nodes with auto-layout based on tree structure
+    // 2. Diff: match AI titles against existing nodes
+    const existingByTitle = new Map<string, CanvasNode>();
+    for (const n of nodesRef.current) {
+      existingByTitle.set(n.title, n);
+    }
+    const aiTitles = new Set(parsed.filter(r => r.title).map(r => r.title));
+
+    // Nodes to delete: existing nodes whose title is NOT in the AI output
+    const deleteNodeIds = nodesRef.current
+      .filter(n => !aiTitles.has(n.title))
+      .map(n => n.id);
+
+    // 3. Build node objects — reuse existing ID/position when title matches
     const NODE_W = 220;
     const NODE_H = 160;
     const H_GAP = 60;
     const V_GAP = 40;
 
-    const titleToNode = new Map<string, CanvasNode>();
-    let nextX = 0;
+    // Get next available node ID
+    const canvasStateRes = await authFetch('/api/projects/' + projectId + '/canvas');
+    const canvasStateData = await canvasStateRes.json();
+    let nextNodeId = canvasStateData.canvasState?.nextNodeId ?? 1;
 
-    // Track depth-0 column for horizontal spread
+    const titleToBuilt = new Map<string, { id: number; x: number; y: number; w: number; h: number; isNew: boolean }>();
+    const rebuildNodes: Record<string, unknown>[] = [];
     const depthXOffset = new Map<number, number>();
 
     for (const row of parsed) {
       if (!row.title) continue;
 
-      let x = 0;
-      let y = 0;
+      const existing = existingByTitle.get(row.title);
+      let id: number;
+      let x: number;
+      let y: number;
+      let w: number;
+      let h: number;
+      let isNew = false;
 
-      if (row.parentTitle && titleToNode.has(row.parentTitle)) {
-        const parent = titleToNode.get(row.parentTitle)!;
-        // Place below parent, indented by depth
-        x = parent.x + H_GAP;
-        // Find the lowest existing child of this parent
-        let maxChildY = parent.y;
-        for (const [, n] of titleToNode) {
-          if (n.x >= x && n.y > maxChildY) maxChildY = n.y;
-        }
-        y = maxChildY + NODE_H + V_GAP;
+      if (existing) {
+        // Reuse existing node — preserve user position/size customizations
+        id = existing.id;
+        x = existing.x;
+        y = existing.y;
+        w = existing.w;
+        h = existing.h;
       } else {
-        // Root node — place in next column
-        if (!depthXOffset.has(0)) depthXOffset.set(0, 0);
-        x = depthXOffset.get(0)!;
-        // Find max y used in this x column
-        let maxY = -NODE_H - V_GAP;
-        for (const [, n] of titleToNode) {
-          if (Math.abs(n.x - x) < NODE_W && n.y > maxY) maxY = n.y;
-        }
-        y = maxY + NODE_H + V_GAP;
+        // New node — auto-layout
+        id = nextNodeId++;
+        isNew = true;
+        w = NODE_W;
+        h = NODE_H;
 
-        // If we've stacked too many vertically, start a new column
-        if (y > 2000) {
-          depthXOffset.set(0, x + NODE_W + H_GAP * 3);
+        if (row.parentTitle && titleToBuilt.has(row.parentTitle)) {
+          const parent = titleToBuilt.get(row.parentTitle)!;
+          x = parent.x + H_GAP;
+          let maxChildY = parent.y;
+          for (const [, n] of titleToBuilt) {
+            if (n.x >= x && n.y > maxChildY) maxChildY = n.y;
+          }
+          y = maxChildY + NODE_H + V_GAP;
+        } else {
+          if (!depthXOffset.has(0)) depthXOffset.set(0, 0);
           x = depthXOffset.get(0)!;
-          y = 0;
-        }
-      }
-
-      const newNode = await onAddNode({
-        title: row.title,
-        description: row.desc,
-        altTitles: row.altTitles,
-        x, y, w: NODE_W, h: NODE_H,
-        relationshipType: row.rel === 'linear' || row.rel === 'nested' ? row.rel : '',
-      });
-
-      if (newNode) titleToNode.set(row.title, newNode);
-    }
-
-    // 3b. Create pathways for depth-0 nodes and assign pathwayId
-    const depth0Nodes = parsed.filter(r => r.depth === 0 && r.title && titleToNode.has(r.title));
-    const pathwayUpdates: Partial<CanvasNode>[] = [];
-    for (const row of depth0Nodes) {
-      try {
-        const res = await authFetch('/api/projects/' + projectId + '/canvas/pathways', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-        });
-        if (res.ok) {
-          const pw = await res.json();
-          const node = titleToNode.get(row.title);
-          if (node) {
-            pathwayUpdates.push({ id: node.id, pathwayId: pw.id });
-            // Also assign same pathwayId to all descendants
-            function assignPathway(title: string) {
-              for (const r of parsed) {
-                if (r.parentTitle === title && titleToNode.has(r.title)) {
-                  pathwayUpdates.push({ id: titleToNode.get(r.title)!.id, pathwayId: pw.id });
-                  assignPathway(r.title);
-                }
-              }
-            }
-            assignPathway(row.title);
+          let maxY = -NODE_H - V_GAP;
+          for (const [, n] of titleToBuilt) {
+            if (Math.abs(n.x - x) < NODE_W && n.y > maxY) maxY = n.y;
+          }
+          y = maxY + NODE_H + V_GAP;
+          if (y > 2000) {
+            depthXOffset.set(0, x + NODE_W + H_GAP * 3);
+            x = depthXOffset.get(0)!;
+            y = 0;
           }
         }
-      } catch (e) { console.error('Pathway creation error:', e); }
-    }
-    if (pathwayUpdates.length > 0) await onUpdateNodes(pathwayUpdates);
-
-    // 4. Set parent relationships
-    const parentUpdates: Partial<CanvasNode>[] = [];
-    for (const row of parsed) {
-      if (!row.parentTitle || !row.title) continue;
-      const child = titleToNode.get(row.title);
-      const parent = titleToNode.get(row.parentTitle);
-      if (child && parent) {
-        parentUpdates.push({
-          id: child.id,
-          parentId: parent.id,
-          relationshipType: row.rel === 'linear' || row.rel === 'nested' ? row.rel : 'nested',
-        });
       }
-    }
-    if (parentUpdates.length > 0) await onUpdateNodes(parentUpdates);
 
-    // 4b. Chain depth-0 nodes with linear connections for conversion funnel flow
-    const depth0Rows = parsed.filter(r => r.depth === 0 && r.title && titleToNode.has(r.title));
-    const chainUpdates: Partial<CanvasNode>[] = [];
-    for (let i = 1; i < depth0Rows.length; i++) {
-      const prevNode = titleToNode.get(depth0Rows[i - 1].title);
-      const currNode = titleToNode.get(depth0Rows[i].title);
-      if (prevNode && currNode) {
-        chainUpdates.push({
-          id: currNode.id,
-          parentId: prevNode.id,
-          relationshipType: 'linear',
-        });
-      }
-    }
-    if (chainUpdates.length > 0) await onUpdateNodes(chainUpdates);
+      titleToBuilt.set(row.title, { id, x, y, w, h, isNew });
 
-    // 5. Link keywords to nodes
-    const kwUpdates: Partial<CanvasNode>[] = [];
-    const kwStatusUpdates: { id: string; [key: string]: unknown }[] = [];
-
-    for (const row of parsed) {
-      if (!row.kwRaw || !row.title) continue;
-      const node = titleToNode.get(row.title);
-      if (!node) continue;
-
+      // Parse keywords for this node
       const linkedIds: string[] = [];
       const placements: Record<string, string> = {};
-
-      const entries = row.kwRaw.split(',').map(s => s.trim()).filter(Boolean);
-      for (const entry of entries) {
-        const m = entry.match(/^(.+?)\s*\[([ps])\]\s*$/i);
-        const kwText = m ? m[1].trim() : entry.replace(/\s*\[[ps]\]\s*$/i, '').trim();
-        const placement = m ? m[2].toLowerCase() : 'p';
-        const kwObj = allKeywords.find(k => k.keyword.toLowerCase() === kwText.toLowerCase());
-        if (kwObj) {
-          linkedIds.push(kwObj.id);
-          placements[kwObj.id] = placement;
+      if (row.kwRaw) {
+        const entries = row.kwRaw.split(',').map(s => s.trim()).filter(Boolean);
+        for (const entry of entries) {
+          const m = entry.match(/^(.+?)\s*\[([ps])\]\s*$/i);
+          const kwText = m ? m[1].trim() : entry.replace(/\s*\[[ps]\]\s*$/i, '').trim();
+          const placement = m ? m[2].toLowerCase() : 'p';
+          const kwObj = allKeywords.find(k => k.keyword.toLowerCase() === kwText.toLowerCase());
+          if (kwObj) {
+            linkedIds.push(kwObj.id);
+            placements[kwObj.id] = placement;
+          }
         }
       }
 
-      if (linkedIds.length > 0) {
-        kwUpdates.push({ id: node.id, linkedKwIds: linkedIds, kwPlacements: placements });
+      rebuildNodes.push({
+        id,
+        title: row.title,
+        description: existing ? (row.desc || existing.description) : (row.desc || ''),
+        altTitles: row.altTitles.length > 0 ? row.altTitles : (existing?.altTitles || []),
+        x, y, w, h,
+        relationshipType: row.rel === 'linear' || row.rel === 'nested' ? row.rel : (existing?.relationshipType || ''),
+        linkedKwIds: linkedIds.length > 0 ? linkedIds : (existing?.linkedKwIds || []),
+        kwPlacements: Object.keys(placements).length > 0 ? placements : (existing?.kwPlacements || {}),
+        narrativeBridge: existing?.narrativeBridge || '',
+        collapsedLinear: existing?.collapsedLinear || false,
+        collapsedNested: existing?.collapsedNested || false,
+        userMinH: existing?.userMinH || null,
+        connCP: existing?.connCP || null,
+        connOutOff: existing?.connOutOff || null,
+        connInOff: existing?.connInOff || null,
+        sortOrder: rebuildNodes.length,
+      });
+    }
+
+    // 4. Set parent relationships on the built nodes
+    for (const row of parsed) {
+      if (!row.title) continue;
+      const built = rebuildNodes.find(n => n.title === row.title);
+      if (!built) continue;
+
+      if (row.parentTitle && titleToBuilt.has(row.parentTitle)) {
+        built.parentId = titleToBuilt.get(row.parentTitle)!.id;
+        if (!built.relationshipType) built.relationshipType = 'nested';
+      } else {
+        built.parentId = null;
       }
     }
-    if (kwUpdates.length > 0) await onUpdateNodes(kwUpdates);
 
-    // 5b. Update keyword records with topic names and canvasLoc descriptions
+    // 4b. Chain depth-0 nodes linearly
+    const depth0Rows = parsed.filter(r => r.depth === 0 && r.title && titleToBuilt.has(r.title));
+    for (let i = 1; i < depth0Rows.length; i++) {
+      const prev = titleToBuilt.get(depth0Rows[i - 1].title);
+      const curr = titleToBuilt.get(depth0Rows[i].title);
+      if (prev && curr) {
+        const node = rebuildNodes.find(n => n.id === curr.id);
+        if (node) {
+          node.parentId = prev.id;
+          node.relationshipType = 'linear';
+        }
+      }
+    }
+
+    // 5. Build pathways for depth-0 nodes
+    const existingPathwayIds = new Set(pathways.map(p => p.id));
+    let nextPathwayId = canvasStateData.canvasState?.nextPathwayId ?? 1;
+    const newPathways: { id: number }[] = [];
+
+    for (const row of depth0Rows) {
+      const built = titleToBuilt.get(row.title);
+      if (!built) continue;
+      const existingNode = existingByTitle.get(row.title);
+
+      // If node already had a pathway, keep it
+      if (existingNode?.pathwayId && existingPathwayIds.has(existingNode.pathwayId)) {
+        const nodeObj = rebuildNodes.find(n => n.id === built.id);
+        if (nodeObj) nodeObj.pathwayId = existingNode.pathwayId;
+        // Assign same pathway to descendants
+        function assignExistingPw(title: string, pwId: number) {
+          for (const r of parsed) {
+            if (r.parentTitle === title && titleToBuilt.has(r.title)) {
+              const desc = rebuildNodes.find(n => n.id === titleToBuilt.get(r.title)!.id);
+              if (desc) desc.pathwayId = pwId;
+              assignExistingPw(r.title, pwId);
+            }
+          }
+        }
+        assignExistingPw(row.title, existingNode.pathwayId);
+      } else {
+        // New pathway needed
+        const pwId = nextPathwayId++;
+        newPathways.push({ id: pwId });
+        const nodeObj = rebuildNodes.find(n => n.id === built.id);
+        if (nodeObj) nodeObj.pathwayId = pwId;
+        function assignNewPw(title: string, pwId: number) {
+          for (const r of parsed) {
+            if (r.parentTitle === title && titleToBuilt.has(r.title)) {
+              const desc = rebuildNodes.find(n => n.id === titleToBuilt.get(r.title)!.id);
+              if (desc) desc.pathwayId = pwId;
+              assignNewPw(r.title, pwId);
+            }
+          }
+        }
+        assignNewPw(row.title, pwId);
+      }
+    }
+
+    // 6. Build sister links
+    const existingSisterKeys = new Set(sisterLinks.map(sl => [sl.nodeA, sl.nodeB].sort().join('-')));
+    const newSisterLinks: { nodeA: number; nodeB: number }[] = [];
+    for (const row of parsed) {
+      if (!row.sisters || !row.title) continue;
+      const built = titleToBuilt.get(row.title);
+      if (!built) continue;
+      const sisterNames = row.sisters.split(',').map(s => s.trim()).filter(Boolean);
+      for (const sName of sisterNames) {
+        const sBuilt = titleToBuilt.get(sName);
+        if (!sBuilt || sBuilt.id === built.id) continue;
+        const key = [built.id, sBuilt.id].sort().join('-');
+        if (existingSisterKeys.has(key)) continue;
+        existingSisterKeys.add(key);
+        newSisterLinks.push({ nodeA: built.id, nodeB: sBuilt.id });
+      }
+    }
+
+    // 7. Delete pathways for removed depth-0 nodes
+    const keptPathwayIds = new Set<number>();
+    for (const n of rebuildNodes) {
+      if (n.pathwayId) keptPathwayIds.add(n.pathwayId as number);
+    }
+    const deletePathwayIds = pathways
+      .filter(p => !keptPathwayIds.has(p.id))
+      .map(p => p.id);
+
+    // Delete sister links involving deleted nodes
+    const deleteNodeIdSet = new Set(deleteNodeIds);
+    const deleteSisterLinkIds = sisterLinks
+      .filter(sl => deleteNodeIdSet.has(sl.nodeA) || deleteNodeIdSet.has(sl.nodeB))
+      .map(sl => sl.id);
+
+    // 8. ATOMIC REBUILD — single transaction
+    aaLog('  Applying to canvas (atomic rebuild)...', 'info');
+    try {
+      const res = await authFetch('/api/projects/' + projectId + '/canvas/rebuild', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nodes: rebuildNodes,
+          pathways: newPathways,
+          sisterLinks: newSisterLinks,
+          canvasState: { nextNodeId, nextPathwayId },
+          deleteNodeIds,
+          deletePathwayIds,
+          deleteSisterLinkIds,
+        }),
+      });
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error('Canvas rebuild failed: ' + errText);
+      }
+      aaLog('  ✓ Canvas rebuilt atomically (' + rebuildNodes.length + ' nodes, ' + deleteNodeIds.length + ' removed)', 'ok');
+    } catch (e) {
+      aaLog('  ✗ Canvas rebuild FAILED — all changes rolled back. ' + (e instanceof Error ? e.message : ''), 'error');
+      return;
+    }
+
+    // 9. Update keyword records with topic names and canvasLoc
     const kwTopicUpdates: { id: string; [key: string]: unknown }[] = [];
     for (const row of parsed) {
       if (!row.kwRaw || !row.title) continue;
@@ -1057,59 +1146,24 @@ export default function AutoAnalyze({
         const kwText = m ? m[1].trim() : entry.replace(/\s*\[[ps]\]\s*$/i, '').trim();
         const kwObj = allKeywords.find(k => k.keyword.toLowerCase() === kwText.toLowerCase());
         if (kwObj) {
-          // Build topic list (pipe-delimited)
           const existingTopics = (kwObj.topic || '').split('|').map(s => s.trim()).filter(Boolean);
-          if (!existingTopics.includes(row.title)) {
-            existingTopics.push(row.title);
-          }
-          // Build canvasLoc with description
+          if (!existingTopics.includes(row.title)) existingTopics.push(row.title);
           const existingLoc = (typeof kwObj.canvasLoc === 'object' && kwObj.canvasLoc) ? { ...kwObj.canvasLoc } : {};
-          if (row.desc) {
-            (existingLoc as Record<string, string>)[row.title] = row.desc;
-          }
-          kwTopicUpdates.push({
-            id: kwObj.id,
-            topic: existingTopics.join(' | '),
-            canvasLoc: existingLoc,
-          });
+          if (row.desc) (existingLoc as Record<string, string>)[row.title] = row.desc;
+          kwTopicUpdates.push({ id: kwObj.id, topic: existingTopics.join(' | '), canvasLoc: existingLoc });
         }
       }
     }
     if (kwTopicUpdates.length > 0) onBatchUpdateKeywords(kwTopicUpdates);
 
-    // Refresh canvas + keywords to sync UI
+    // 10. Refresh UI
     await onRefreshCanvas();
     await onRefreshKeywords();
 
-    // 6. Create sister links
-    const existingSisters = new Set(sisterLinks.map(sl => [sl.nodeA, sl.nodeB].sort().join('-')));
-    for (const row of parsed) {
-      if (!row.sisters || !row.title) continue;
-      const node = titleToNode.get(row.title);
-      if (!node) continue;
-      const sisterNames = row.sisters.split(',').map(s => s.trim()).filter(Boolean);
-      for (const sName of sisterNames) {
-        const sNode = titleToNode.get(sName);
-        if (!sNode || sNode.id === node.id) continue;
-        const key = [node.id, sNode.id].sort().join('-');
-        if (existingSisters.has(key)) continue;
-        try {
-          await authFetch('/api/projects/' + projectId + '/canvas/sister-links', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ nodeA: node.id, nodeB: sNode.id }),
-          });
-          existingSisters.add(key);
-        } catch (e) { console.warn('Sister link failed:', e); }
-      }
-    }
-
-    // 7. Verify and mark keywords as AI-Sorted
+    // 11. Verify and mark keywords as AI-Sorted
     const allLinkedIds = new Set<string>();
-    // Re-read nodes after updates
-    for (const [, n] of titleToNode) {
-      const upd = kwUpdates.find(u => u.id === n.id);
-      if (upd?.linkedKwIds) (upd.linkedKwIds as string[]).forEach(id => allLinkedIds.add(id));
+    for (const n of rebuildNodes) {
+      if (Array.isArray(n.linkedKwIds)) (n.linkedKwIds as string[]).forEach(id => allLinkedIds.add(id));
     }
 
     const unplaced: string[] = [];
