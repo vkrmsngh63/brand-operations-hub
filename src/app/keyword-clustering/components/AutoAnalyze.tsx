@@ -899,7 +899,7 @@ export default function AutoAnalyze({
 
     // 3. Create nodes with auto-layout based on tree structure
     const NODE_W = 220;
-    const NODE_H = 120;
+    const NODE_H = 160;
     const H_GAP = 60;
     const V_GAP = 40;
 

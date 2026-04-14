@@ -83,6 +83,9 @@ export default function ASTTable({
   onDeleteKeyword, onBulkDelete, onReorder, loading, onAddToTif,
 }: ASTTableProps) {
   const [searchQ, setSearchQ] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function onSearchChange(val: string) { setSearchInput(val); if (searchTimerRef.current) clearTimeout(searchTimerRef.current); searchTimerRef.current = setTimeout(() => setSearchQ(val), 200); }
   const [showVol, setShowVol] = useState(true);
   const [showSorted, setShowSorted] = useState(true);
   const [showPartial, setShowPartial] = useState(true);
@@ -482,11 +485,11 @@ export default function ASTTable({
   }
 
   function handleShowAll() {
-    setSearchQ(''); setTagFilter(''); setTagQ(''); setTopicQ(''); setTopicFilter('');
+    setSearchQ(''); setSearchInput(''); setTagFilter(''); setTagQ(''); setTopicQ(''); setTopicFilter('');
     setShowVol(true); setShowSorted(true); setShowPartial(true); setShowUnsorted(true); setShowTags(true); setShowTopics(true);
   }
 
-  function handleSearch() { if (frameRef.current) frameRef.current.scrollTop = 0; setScrollTop(0); }
+  function handleSearch() { if (searchTimerRef.current) clearTimeout(searchTimerRef.current); setSearchQ(searchInput); if (frameRef.current) frameRef.current.scrollTop = 0; setScrollTop(0); }
 
   function handleCopyTableData() {
     if (visible.length === 0) { showToast('⚠ No visible rows to copy.'); return; }
@@ -594,7 +597,7 @@ export default function ASTTable({
       </div>
       <div className="ast-ctrl">
         <div className="ast-search-wrap">
-          <input className="ast-search-inp" type="text" placeholder="Search keywords…" value={searchQ} onChange={e => setSearchQ(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleSearch(); }} />
+          <input className="ast-search-inp" type="text" placeholder="Search keywords…" value={searchInput} onChange={e => onSearchChange(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleSearch(); }} />
           <button className="ast-search-btn" onClick={handleSearch} title="Search">⌕</button>
         </div>
         <div className="ast-ctrl-div" />
