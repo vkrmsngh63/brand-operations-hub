@@ -78,6 +78,51 @@ export async function POST(
   }
 }
 
+// PATCH /api/projects/[projectId]/keywords — bulk update keywords
+// Send { keywords: [{ id, ...fields }, ...] }
+// All updates run in a single Prisma transaction — all succeed or all fail.
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ projectId: string }> }
+) {
+  const { projectId } = await params;
+  const auth = await verifyProjectAuth(req, projectId);
+  if (auth.error) return auth.error;
+
+  try {
+    const body = await req.json();
+
+    if (!Array.isArray(body.keywords) || body.keywords.length === 0) {
+      return NextResponse.json({ error: 'Provide keywords array with id and fields' }, { status: 400 });
+    }
+
+    // Build one update operation per keyword, all inside a transaction
+    const ops = body.keywords.map((kw: Record<string, unknown>) => {
+      const id = kw.id as string;
+      return prisma.keyword.update({
+        where: { id, projectId },
+        data: {
+          ...(kw.keyword !== undefined && { keyword: kw.keyword as string }),
+          ...(kw.volume !== undefined && { volume: kw.volume as number }),
+          ...(kw.sortingStatus !== undefined && { sortingStatus: kw.sortingStatus as string }),
+          ...(kw.tags !== undefined && { tags: kw.tags as string }),
+          ...(kw.topic !== undefined && { topic: kw.topic as string }),
+          ...(kw.sortOrder !== undefined && { sortOrder: kw.sortOrder as number }),
+          ...(kw.canvasLoc !== undefined && { canvasLoc: kw.canvasLoc as object }),
+          ...(kw.topicApproved !== undefined && { topicApproved: kw.topicApproved as object }),
+        },
+      });
+    });
+
+    const results = await prisma.$transaction(ops);
+
+    return NextResponse.json({ updated: results.length });
+  } catch (error) {
+    console.error('PATCH keywords bulk error:', error);
+    return NextResponse.json({ error: 'Failed to bulk update keywords' }, { status: 500 });
+  }
+}
+
 // DELETE /api/projects/[projectId]/keywords — bulk delete
 // Send { ids: ["id1", "id2"] }
 export async function DELETE(

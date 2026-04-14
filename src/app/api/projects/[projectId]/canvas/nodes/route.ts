@@ -78,6 +78,7 @@ export async function POST(
 
 // PATCH /api/projects/[projectId]/canvas/nodes — bulk update nodes
 // Send { nodes: [{ id, ...fields }] }
+// All updates run in a single Prisma transaction — all succeed or all fail.
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ projectId: string }> }
@@ -93,30 +94,30 @@ export async function PATCH(
       return NextResponse.json({ error: 'Provide nodes array' }, { status: 400 });
     }
 
-    const updates = await Promise.all(
-      body.nodes.map((n: Record<string, unknown>) =>
-        prisma.canvasNode.update({
-          where: { id: n.id as number, projectId },
-          data: {
-            ...(n.title !== undefined && { title: n.title as string }),
-            ...(n.description !== undefined && { description: n.description as string }),
-            ...(n.x !== undefined && { x: n.x as number }),
-            ...(n.y !== undefined && { y: n.y as number }),
-            ...(n.w !== undefined && { w: n.w as number }),
-            ...(n.h !== undefined && { h: n.h as number }),
-            ...(n.parentId !== undefined && { parentId: n.parentId as number | null }),
-            ...(n.pathwayId !== undefined && { pathwayId: n.pathwayId as number | null }),
-            ...(n.relationshipType !== undefined && { relationshipType: n.relationshipType as string }),
-            ...(n.linkedKwIds !== undefined && { linkedKwIds: n.linkedKwIds as unknown as import('@prisma/client').Prisma.InputJsonValue }),
-            ...(n.kwPlacements !== undefined && { kwPlacements: n.kwPlacements as unknown as import('@prisma/client').Prisma.InputJsonValue }),
-            ...(n.altTitles !== undefined && { altTitles: n.altTitles as unknown as import('@prisma/client').Prisma.InputJsonValue }),
-            ...(n.sortOrder !== undefined && { sortOrder: n.sortOrder as number }),
-          },
-        })
-      )
+    const ops = body.nodes.map((n: Record<string, unknown>) =>
+      prisma.canvasNode.update({
+        where: { id: n.id as number, projectId },
+        data: {
+          ...(n.title !== undefined && { title: n.title as string }),
+          ...(n.description !== undefined && { description: n.description as string }),
+          ...(n.x !== undefined && { x: n.x as number }),
+          ...(n.y !== undefined && { y: n.y as number }),
+          ...(n.w !== undefined && { w: n.w as number }),
+          ...(n.h !== undefined && { h: n.h as number }),
+          ...(n.parentId !== undefined && { parentId: n.parentId as number | null }),
+          ...(n.pathwayId !== undefined && { pathwayId: n.pathwayId as number | null }),
+          ...(n.relationshipType !== undefined && { relationshipType: n.relationshipType as string }),
+          ...(n.linkedKwIds !== undefined && { linkedKwIds: n.linkedKwIds as unknown as import('@prisma/client').Prisma.InputJsonValue }),
+          ...(n.kwPlacements !== undefined && { kwPlacements: n.kwPlacements as unknown as import('@prisma/client').Prisma.InputJsonValue }),
+          ...(n.altTitles !== undefined && { altTitles: n.altTitles as unknown as import('@prisma/client').Prisma.InputJsonValue }),
+          ...(n.sortOrder !== undefined && { sortOrder: n.sortOrder as number }),
+        },
+      })
     );
 
-    return NextResponse.json(updates);
+    const results = await prisma.$transaction(ops);
+
+    return NextResponse.json(results);
   } catch (error) {
     console.error('PATCH canvas nodes error:', error);
     return NextResponse.json({ error: 'Failed to update nodes' }, { status: 500 });

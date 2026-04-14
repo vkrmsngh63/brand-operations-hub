@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase-server';
+import { getSupabaseAdmin } from '@/lib/supabase-server';
 import { prisma } from '@/lib/db';
 
 // ── Result types ───────────────────────────────────────────────
@@ -48,7 +48,7 @@ export async function verifyAuth(req: NextRequest): Promise<AuthResult> {
   const token = authHeader.replace('Bearer ', '');
 
   try {
-    const { data, error } = await supabaseAdmin.auth.getUser(token);
+    const { data, error } = await getSupabaseAdmin().auth.getUser(token);
 
     if (error || !data.user) {
       return {

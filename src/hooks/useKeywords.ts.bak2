@@ -143,27 +143,19 @@ export function useKeywords(projectId: string | null) {
     }
   }, [base]);
 
-  // ── Batch update (single bulk request with transaction) ──────
+  // ── Batch update ─────────────────────────────────────────────
   const batchUpdate = useCallback(async (ids: string[], patch: Partial<Keyword>) => {
     if (!base) return;
-    // Optimistic UI update
     setKeywords(prev =>
       prev.map(k => ids.includes(k.id) ? { ...k, ...patch } : k)
     );
-    try {
-      const res = await authFetch(base, {
+    await Promise.all(ids.map(id =>
+      authFetch(`${base}/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          keywords: ids.map(id => ({ id, ...patch })),
-        }),
-      });
-      if (!res.ok) throw new Error(`Batch update failed: ${res.status}`);
-    } catch (e: unknown) {
-      // Rollback optimistic update on failure
-      setError(e instanceof Error ? e.message : 'Batch update error');
-      await fetchKeywords();
-    }
+        body: JSON.stringify(patch),
+      })
+    ));
   }, [base]);
 
   // ── Delete single ────────────────────────────────────────────
@@ -186,7 +178,7 @@ export function useKeywords(projectId: string | null) {
     });
   }, [base]);
 
-  // ── Reorder (single bulk request with transaction) ───────────
+  // ── Reorder (update sortOrders and persist) ──────────────────
   const reorder = useCallback(async (reorderedKeywords: Keyword[]) => {
     const updated = reorderedKeywords.map((k, i) => ({ ...k, sortOrder: i }));
     setKeywords(updated);
@@ -194,20 +186,18 @@ export function useKeywords(projectId: string | null) {
 
     if (!base) return;
     try {
-      // Only send keywords whose sortOrder actually changed
       const toUpdate = updated.filter(k => {
         const orig = reorderedKeywords.find(o => o.id === k.id);
         return orig && orig.sortOrder !== k.sortOrder;
       });
       if (toUpdate.length > 0) {
-        const res = await authFetch(base, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            keywords: toUpdate.map(k => ({ id: k.id, sortOrder: k.sortOrder })),
-          }),
-        });
-        if (!res.ok) throw new Error(`Reorder failed: ${res.status}`);
+        await Promise.all(toUpdate.map(k =>
+          authFetch(`${base}/${k.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sortOrder: k.sortOrder }),
+          })
+        ));
       }
     } catch {
       // Reorder saved locally — server sync will retry on next page load
