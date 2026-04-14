@@ -29,6 +29,10 @@ export function useKeywords(projectId: string | null) {
   const [keywords, setKeywords] = useState<Keyword[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const savingCount = useRef(0);
+  function startSave() { savingCount.current++; setSaving(true); }
+  function endSave() { savingCount.current--; if (savingCount.current <= 0) { savingCount.current = 0; setSaving(false); } }
   const nextSortRef = useRef(0);
 
   const base = projectId ? `/api/projects/${projectId}/keywords` : null;
@@ -66,6 +70,7 @@ export function useKeywords(projectId: string | null) {
     if (/^\d+(\.\d+)?[Mm]$/.test(v)) v = String(parseFloat(v) * 1_000_000);
 
     try {
+      startSave();
       const res = await authFetch(base, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -75,8 +80,10 @@ export function useKeywords(projectId: string | null) {
       const created: Keyword = await res.json();
       nextSortRef.current++;
       setKeywords(prev => [...prev, created]);
+      endSave();
       return true;
     } catch {
+      endSave();
       return false;
     }
   }, [base, keywords]);
@@ -130,6 +137,7 @@ export function useKeywords(projectId: string | null) {
   const updateKeyword = useCallback(async (id: string, patch: Partial<Keyword>) => {
     if (!base) return;
     try {
+      startSave();
       const res = await authFetch(`${base}/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -138,7 +146,9 @@ export function useKeywords(projectId: string | null) {
       if (!res.ok) throw new Error(`Update failed: ${res.status}`);
       const updated: Keyword = await res.json();
       setKeywords(prev => prev.map(k => k.id === id ? updated : k));
+      endSave();
     } catch (e: unknown) {
+      endSave();
       setError(e instanceof Error ? e.message : 'Update error');
     }
   }, [base]);
@@ -151,6 +161,7 @@ export function useKeywords(projectId: string | null) {
       prev.map(k => ids.includes(k.id) ? { ...k, ...patch } : k)
     );
     try {
+      startSave();
       const res = await authFetch(base, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -159,8 +170,9 @@ export function useKeywords(projectId: string | null) {
         }),
       });
       if (!res.ok) throw new Error(`Batch update failed: ${res.status}`);
+      endSave();
     } catch (e: unknown) {
-      // Rollback optimistic update on failure
+      endSave();
       setError(e instanceof Error ? e.message : 'Batch update error');
       await fetchKeywords();
     }
@@ -200,6 +212,7 @@ export function useKeywords(projectId: string | null) {
         return orig && orig.sortOrder !== k.sortOrder;
       });
       if (toUpdate.length > 0) {
+        startSave();
         const res = await authFetch(base, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -208,8 +221,10 @@ export function useKeywords(projectId: string | null) {
           }),
         });
         if (!res.ok) throw new Error(`Reorder failed: ${res.status}`);
+        endSave();
       }
     } catch {
+      endSave();
       // Reorder saved locally — server sync will retry on next page load
     }
   }, [base]);
@@ -218,6 +233,7 @@ export function useKeywords(projectId: string | null) {
     keywords,
     setKeywords,
     loading,
+    saving,
     error,
     fetchKeywords,
     addKeyword,

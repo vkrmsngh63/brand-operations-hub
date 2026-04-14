@@ -113,7 +113,7 @@ function AIActionsPane({ view, onSetView, onOpenAA }: {
 
 export default function KeywordWorkspace({ projectId, userId, aiMode }: KeywordWorkspaceProps) {
   const {
-    keywords, loading, fetchKeywords, addKeyword, bulkImport,
+    keywords, loading, saving, fetchKeywords, addKeyword, bulkImport,
     updateKeyword, batchUpdate, deleteKeyword, bulkDelete, reorder,
   } = useKeywords(projectId);
 
@@ -288,7 +288,7 @@ export default function KeywordWorkspace({ projectId, userId, aiMode }: KeywordW
           <input type="checkbox" checked={showCanvas} onChange={e => { setShowCanvas(e.target.checked); if (!e.target.checked) setDetachedCanvas(false); }} />
           <span>Canvas</span>
         </label>
-        {loading ? <span style={{ marginLeft: "auto", fontSize: 11, color: "#f59e0b", opacity: 0.8 }}>Saving…</span> : <span style={{ marginLeft: "auto", fontSize: 11, color: "#4ade80", opacity: 0.8 }}>Saved ✓</span>}
+        {saving ? <span style={{ marginLeft: "auto", fontSize: 11, color: "#f59e0b", opacity: 0.8 }}>Saving…</span> : <span style={{ marginLeft: "auto", fontSize: 11, color: "#4ade80", opacity: 0.8 }}>Saved ✓</span>}
       </div>
 
       {/* ── Main workspace area ───────────────────────────────── */}
