@@ -1,95 +1,225 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 
-const workflows = [
+/* ── Default card data ── */
+const DEFAULT_CARDS = [
   {
-    id: "keyword-clustering",
-    icon: "🔑",
-    title: "Keyword Clustering",
-    badge: "active",
-    desc: "Take a broad list of niche-condition related keywords, analyze their intents and organize them thematically into a hierarchy of topics that form highly efficient conversion funnels.",
+    id: "plos",
+    icon: "🚀",
+    title: "Product Launch Operating System",
+    description:
+      "End-to-end product launch workflows — from keyword research and competitive analysis through content development, marketplace launch, and post-launch optimization.",
+    route: "/plos",
   },
   {
-    id: "competition-scraping",
-    icon: "🔍",
-    title: "Competition Scraping & Analysis",
-    badge: "soon",
-    desc: "Scrape and analyze competitor products, positioning, pricing, claims, and reviews to identify market gaps and differentiation opportunities.",
+    id: "pms",
+    icon: "📋",
+    title: "Project Management System",
+    description:
+      "Coordinate teams, track tasks, manage timelines, and oversee project deliverables across all product launch operations.",
+    route: "/pms",
   },
   {
-    id: "conversion-funnel",
-    icon: "🎯",
-    title: "Conversion Funnel Creation",
-    badge: "soon",
-    desc: "Design and build end-to-end conversion funnels from keyword-driven topic hierarchies, mapping the searcher journey from awareness to purchase.",
-  },
-  {
-    id: "content-development",
-    icon: "✍️",
-    title: "Content Development",
-    badge: "soon",
-    desc: "Create hyper-relevant content for each funnel stage — from blog posts and landing pages to product descriptions and ad copy — optimized for search and conversion.",
-  },
-  {
-    id: "multimedia-assets",
-    icon: "🎬",
-    title: "Multi-Media Assets Development",
-    badge: "soon",
-    desc: "Develop images, videos, infographics, and other rich media assets aligned with the content strategy and funnel stages.",
-  },
-  {
-    id: "review-generation",
-    icon: "⭐",
-    title: "Post-Launch Review Generation",
-    badge: "soon",
-    desc: "Coordinate and manage authentic product review generation across marketplaces after product launch to build social proof and trust.",
-  },
-  {
-    id: "clinical-evidence",
-    icon: "🔬",
-    title: "Clinical Evidence & Endorsement Generation",
-    badge: "soon",
-    desc: "Plan and manage clinical studies, collect evidence, and secure professional endorsements to substantiate product claims.",
-  },
-  {
-    id: "ip-development",
+    id: "think-tank",
     icon: "💡",
-    title: "IP Development",
-    badge: "soon",
-    desc: "Identify, develop, and manage intellectual property — patents, trademarks, trade secrets, and proprietary formulations — to protect competitive advantages.",
-  },
-  {
-    id: "post-launch-improvement",
-    icon: "📈",
-    title: "Post Launch Improvement",
-    badge: "soon",
-    desc: "Monitor post-launch performance metrics, customer feedback, and market trends to drive iterative product and content improvements.",
+    title: "Think Tank",
+    description:
+      "Capture ideas, organize research, and develop strategic concepts in a flexible project-based workspace.",
+    route: "/think-tank",
   },
 ];
 
-const operationsWorkflows = [
-  {
-    id: "business-operations",
-    icon: "⚙️",
-    title: "Business Operations",
-    badge: "soon",
-    desc: "Manage the day-to-day operations of a launched product — inventory, fulfillment, customer service, financials, vendor relationships, and operational workflows.",
-  },
-  {
-    id: "exit-strategy",
-    icon: "🚪",
-    title: "Exit Strategy",
-    badge: "soon",
-    desc: "Plan and execute brand exit strategies — including acquisition positioning, licensing opportunities, and portfolio wind-down procedures.",
-  },
-];
+const LS_KEY = "plos_initial_cards";
 
+function loadCards() {
+  if (typeof window === "undefined") return DEFAULT_CARDS;
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (raw) {
+      const saved = JSON.parse(raw);
+      // Merge saved data with defaults (preserves route/icon, allows new defaults to be added)
+      return DEFAULT_CARDS.map((def) => {
+        const match = saved.find((s: { id: string }) => s.id === def.id);
+        return match ? { ...def, title: match.title, description: match.description } : def;
+      });
+    }
+  } catch { /* ignore */ }
+  return DEFAULT_CARDS;
+}
+
+function saveCards(cards: typeof DEFAULT_CARDS) {
+  localStorage.setItem(
+    LS_KEY,
+    JSON.stringify(cards.map(({ id, title, description }) => ({ id, title, description })))
+  );
+}
+
+/* ── Edit Modal ── */
+function EditModal({
+  card,
+  onSave,
+  onClose,
+}: {
+  card: (typeof DEFAULT_CARDS)[0];
+  onSave: (title: string, description: string) => void;
+  onClose: () => void;
+}) {
+  const [title, setTitle] = useState(card.title);
+  const [desc, setDesc] = useState(card.description);
+  const backdropRef = useRef<HTMLDivElement>(null);
+
+  return (
+    <div
+      ref={backdropRef}
+      onClick={(e) => e.target === backdropRef.current && onClose()}
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,.6)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 1000,
+      }}
+    >
+      <div
+        style={{
+          background: "#161b22",
+          border: "1px solid #30363d",
+          borderRadius: "12px",
+          padding: "32px",
+          width: "480px",
+          maxWidth: "90vw",
+          boxShadow: "0 20px 60px rgba(0,0,0,.7)",
+        }}
+      >
+        <h3
+          style={{
+            fontSize: "16px",
+            fontWeight: 700,
+            color: "#e6edf3",
+            marginBottom: "24px",
+          }}
+        >
+          Edit Card — {card.icon}
+        </h3>
+
+        {/* Title */}
+        <label
+          style={{
+            display: "block",
+            fontSize: "10px",
+            fontWeight: 600,
+            color: "#8b949e",
+            letterSpacing: "1.5px",
+            textTransform: "uppercase",
+            marginBottom: "6px",
+          }}
+        >
+          Title
+        </label>
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          style={{
+            width: "100%",
+            padding: "10px 12px",
+            background: "#0d1117",
+            border: "1px solid #30363d",
+            borderRadius: "6px",
+            color: "#e6edf3",
+            fontFamily: "'IBM Plex Sans', sans-serif",
+            fontSize: "14px",
+            outline: "none",
+            boxSizing: "border-box",
+            marginBottom: "18px",
+          }}
+        />
+
+        {/* Description */}
+        <label
+          style={{
+            display: "block",
+            fontSize: "10px",
+            fontWeight: 600,
+            color: "#8b949e",
+            letterSpacing: "1.5px",
+            textTransform: "uppercase",
+            marginBottom: "6px",
+          }}
+        >
+          Description
+        </label>
+        <textarea
+          value={desc}
+          onChange={(e) => setDesc(e.target.value)}
+          rows={4}
+          style={{
+            width: "100%",
+            padding: "10px 12px",
+            background: "#0d1117",
+            border: "1px solid #30363d",
+            borderRadius: "6px",
+            color: "#e6edf3",
+            fontFamily: "'IBM Plex Sans', sans-serif",
+            fontSize: "13px",
+            lineHeight: 1.5,
+            outline: "none",
+            boxSizing: "border-box",
+            resize: "vertical",
+            marginBottom: "24px",
+          }}
+        />
+
+        {/* Buttons */}
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+          <button
+            onClick={onClose}
+            style={{
+              padding: "8px 18px",
+              background: "transparent",
+              border: "1px solid #30363d",
+              borderRadius: "6px",
+              color: "#8b949e",
+              fontSize: "13px",
+              fontWeight: 600,
+              cursor: "pointer",
+              fontFamily: "'IBM Plex Sans', sans-serif",
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => onSave(title.trim(), desc.trim())}
+            style={{
+              padding: "8px 18px",
+              background: "#1f6feb",
+              border: "none",
+              borderRadius: "6px",
+              color: "#fff",
+              fontSize: "13px",
+              fontWeight: 600,
+              cursor: "pointer",
+              fontFamily: "'IBM Plex Sans', sans-serif",
+            }}
+          >
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Main Page ── */
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
-  const [toast, setToast] = useState("");
+  const [cards, setCards] = useState(DEFAULT_CARDS);
+  const [editingCard, setEditingCard] = useState<(typeof DEFAULT_CARDS)[0] | null>(null);
+  const [hovered, setHovered] = useState<string | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -97,6 +227,7 @@ export default function DashboardPage() {
       if (!session) {
         router.push("/");
       } else {
+        setCards(loadCards());
         setLoading(false);
       }
     });
@@ -107,19 +238,14 @@ export default function DashboardPage() {
     router.push("/");
   }
 
-  function handleCardClick(workflow: {
-    id: string;
-    badge: string;
-    title: string;
-  }) {
-    if (workflow.badge === "active") {
-      router.push(`/${workflow.id}`);
-      setToast(`Opening ${workflow.title}…`);
-      setTimeout(() => setToast(""), 2000);
-    } else {
-      setToast(`${workflow.title} — coming soon`);
-      setTimeout(() => setToast(""), 2000);
-    }
+  function handleSaveCard(title: string, description: string) {
+    if (!editingCard) return;
+    const updated = cards.map((c) =>
+      c.id === editingCard.id ? { ...c, title: title || c.title, description: description || c.description } : c
+    );
+    setCards(updated);
+    saveCards(updated);
+    setEditingCard(null);
   }
 
   if (loading) {
@@ -131,9 +257,9 @@ export default function DashboardPage() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background:
-            "radial-gradient(ellipse at 35% 40%, #0d2a4a 0%, #0d1117 65%)",
-          color: "var(--text-light)",
+          background: "radial-gradient(ellipse at 35% 40%, #0d2a4a 0%, #0d1117 65%)",
+          color: "#8b949e",
+          fontFamily: "'IBM Plex Sans', sans-serif",
         }}
       >
         Loading…
@@ -146,14 +272,14 @@ export default function DashboardPage() {
       style={{
         position: "fixed",
         inset: 0,
-        background:
-          "radial-gradient(ellipse at 35% 40%, #0d2a4a 0%, #0d1117 65%)",
+        background: "radial-gradient(ellipse at 35% 40%, #0d2a4a 0%, #0d1117 65%)",
         overflowY: "auto",
+        fontFamily: "'IBM Plex Sans', sans-serif",
       }}
     >
       <div
         style={{
-          maxWidth: "900px",
+          maxWidth: "960px",
           margin: "0 auto",
           padding: "48px 32px 64px",
         }}
@@ -186,263 +312,143 @@ export default function DashboardPage() {
         </div>
 
         {/* Header */}
-        <div style={{ textAlign: "center", marginBottom: "40px" }}>
+        <div style={{ textAlign: "center", marginBottom: "48px" }}>
           <span
             style={{
-              fontSize: "36px",
+              fontSize: "40px",
               display: "block",
-              marginBottom: "10px",
+              marginBottom: "12px",
             }}
           >
-            🛠️
+            🚀
           </span>
           <h1
             style={{
-              fontSize: "22px",
+              fontSize: "24px",
               fontWeight: 700,
               color: "#e6edf3",
-              margin: "0 0 6px",
+              margin: "0 0 8px",
             }}
           >
-            Brand Operations Hub
+            Product Launch Operating System
           </h1>
           <p
             style={{
-              fontSize: "11px",
+              fontSize: "12px",
               color: "#8b949e",
               letterSpacing: "1.4px",
               textTransform: "uppercase",
               margin: 0,
             }}
           >
-            Select a workflow to continue
+            Select a system to continue
           </p>
         </div>
 
-        {/* Section: Product Development & Launch */}
-        <div
-          style={{
-            fontSize: "10px",
-            fontWeight: 700,
-            color: "#8b949e",
-            letterSpacing: "1.6px",
-            textTransform: "uppercase",
-            marginBottom: "12px",
-            paddingLeft: "2px",
-          }}
-        >
-          Product Development &amp; Launch
-        </div>
-
+        {/* Cards */}
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: "16px",
+            gridTemplateColumns: "repeat(3, 1fr)",
+            gap: "20px",
           }}
         >
-          {workflows.map((wf) => (
+          {cards.map((card) => (
             <div
-              key={wf.id}
-              onClick={() => handleCardClick(wf)}
+              key={card.id}
               style={{
-                background: "#161b22",
-                border: "1px solid #30363d",
-                borderRadius: "10px",
-                padding: "24px 22px",
-                cursor:
-                  wf.badge === "active" ? "pointer" : "not-allowed",
-                opacity: wf.badge === "active" ? 1 : 0.5,
+                position: "relative",
+                background: hovered === card.id ? "#1c2333" : "#161b22",
+                border: `1px solid ${hovered === card.id ? "#1f6feb" : "#30363d"}`,
+                borderRadius: "12px",
+                padding: "32px 24px 28px",
+                cursor: "pointer",
                 display: "flex",
                 flexDirection: "column",
-                gap: "10px",
-                transition:
-                  "border-color .2s, transform .15s, box-shadow .2s",
+                alignItems: "center",
+                textAlign: "center",
+                gap: "14px",
+                transition: "all .2s ease",
+                transform: hovered === card.id ? "translateY(-3px)" : "none",
+                boxShadow: hovered === card.id ? "0 12px 32px rgba(0,0,0,.4)" : "none",
+                minHeight: "220px",
               }}
-              onMouseEnter={(e) => {
-                if (wf.badge === "active") {
-                  e.currentTarget.style.borderColor = "var(--accent)";
-                  e.currentTarget.style.transform = "translateY(-2px)";
-                  e.currentTarget.style.boxShadow =
-                    "0 8px 24px rgba(0,0,0,.35)";
-                }
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = "#30363d";
-                e.currentTarget.style.transform = "none";
-                e.currentTarget.style.boxShadow = "none";
-              }}
+              onMouseEnter={() => setHovered(card.id)}
+              onMouseLeave={() => setHovered(null)}
+              onClick={() => router.push(card.route)}
             >
-              <div
+              {/* Edit button */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEditingCard(card);
+                }}
+                title="Edit card"
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "10px",
+                  position: "absolute",
+                  top: "10px",
+                  right: "10px",
+                  background: "transparent",
+                  border: "none",
+                  color: "#484f58",
+                  cursor: "pointer",
+                  fontSize: "14px",
+                  padding: "4px 6px",
+                  borderRadius: "4px",
+                  opacity: hovered === card.id ? 1 : 0,
+                  transition: "opacity .2s",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.color = "#e6edf3";
+                  e.currentTarget.style.background = "rgba(255,255,255,.08)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.color = "#484f58";
+                  e.currentTarget.style.background = "transparent";
                 }}
               >
-                <span style={{ fontSize: "22px", flexShrink: 0 }}>
-                  {wf.icon}
-                </span>
-                <span
-                  style={{
-                    fontSize: "14px",
-                    fontWeight: 700,
-                    color: "#e6edf3",
-                  }}
-                >
-                  {wf.title}
-                </span>
-                <span
-                  style={{
-                    fontSize: "8px",
-                    fontWeight: 700,
-                    textTransform: "uppercase",
-                    letterSpacing: "1px",
-                    padding: "2px 7px",
-                    borderRadius: "3px",
-                    marginLeft: "auto",
-                    flexShrink: 0,
-                    background:
-                      wf.badge === "active"
-                        ? "rgba(31,111,235,.2)"
-                        : "rgba(139,148,158,.15)",
-                    color:
-                      wf.badge === "active" ? "#58a6ff" : "#8b949e",
-                  }}
-                >
-                  {wf.badge === "active" ? "Active" : "Coming Soon"}
-                </span>
-              </div>
-              <div
+                ✏️
+              </button>
+
+              {/* Icon */}
+              <span style={{ fontSize: "36px" }}>{card.icon}</span>
+
+              {/* Title */}
+              <h2
                 style={{
-                  fontSize: "11px",
-                  color: "#8b949e",
-                  lineHeight: 1.55,
+                  fontSize: "16px",
+                  fontWeight: 700,
+                  color: "#e6edf3",
+                  margin: 0,
+                  lineHeight: 1.3,
                 }}
               >
-                {wf.desc}
-              </div>
-            </div>
-          ))}
-        </div>
+                {card.title}
+              </h2>
 
-        {/* Divider */}
-        <hr
-          style={{
-            border: "none",
-            borderTop: "1px solid #21262d",
-            margin: "28px 0 4px",
-          }}
-        />
-
-        {/* Section: Ongoing Operations */}
-        <div
-          style={{
-            fontSize: "10px",
-            fontWeight: 700,
-            color: "#8b949e",
-            letterSpacing: "1.6px",
-            textTransform: "uppercase",
-            margin: "32px 0 12px",
-            paddingLeft: "2px",
-          }}
-        >
-          Ongoing Operations
-        </div>
-
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: "16px",
-          }}
-        >
-          {operationsWorkflows.map((wf) => (
-            <div
-              key={wf.id}
-              onClick={() => handleCardClick(wf)}
-              style={{
-                background: "#1a2332",
-                border: "1px solid rgba(31,111,235,.27)",
-                borderRadius: "10px",
-                padding: "28px 26px",
-                cursor: "not-allowed",
-                opacity: 0.55,
-                display: "flex",
-                flexDirection: "column",
-                gap: "10px",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "10px",
-                }}
-              >
-                <span style={{ fontSize: "26px", flexShrink: 0 }}>
-                  {wf.icon}
-                </span>
-                <span
-                  style={{
-                    fontSize: "16px",
-                    fontWeight: 700,
-                    color: "#e6edf3",
-                  }}
-                >
-                  {wf.title}
-                </span>
-                <span
-                  style={{
-                    fontSize: "8px",
-                    fontWeight: 700,
-                    textTransform: "uppercase",
-                    letterSpacing: "1px",
-                    padding: "2px 7px",
-                    borderRadius: "3px",
-                    marginLeft: "auto",
-                    flexShrink: 0,
-                    background: "rgba(139,148,158,.15)",
-                    color: "#8b949e",
-                  }}
-                >
-                  Coming Soon
-                </span>
-              </div>
-              <div
+              {/* Description */}
+              <p
                 style={{
                   fontSize: "12px",
                   color: "#8b949e",
-                  lineHeight: 1.55,
+                  lineHeight: 1.6,
+                  margin: 0,
                 }}
               >
-                {wf.desc}
-              </div>
+                {card.description}
+              </p>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Toast notification */}
-      {toast && (
-        <div
-          style={{
-            position: "fixed",
-            bottom: "24px",
-            left: "50%",
-            transform: "translateX(-50%)",
-            background: "#161b22",
-            border: "1px solid #30363d",
-            borderRadius: "8px",
-            padding: "10px 20px",
-            color: "#e6edf3",
-            fontSize: "13px",
-            boxShadow: "0 8px 32px rgba(0,0,0,.5)",
-            zIndex: 1000,
-          }}
-        >
-          {toast}
-        </div>
+      {/* Edit Modal */}
+      {editingCard && (
+        <EditModal
+          card={editingCard}
+          onSave={handleSaveCard}
+          onClose={() => setEditingCard(null)}
+        />
       )}
     </div>
   );

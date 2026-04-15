@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Product Launch Operating System",
-  description: "Internal operations platform for product launch workflows",
+  title: "Brand Operations Hub",
+  description: "Internal operations platform for brand development workflows",
 };
 
 export default function RootLayout({

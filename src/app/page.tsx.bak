@@ -41,8 +41,8 @@ export default function LoginPage() {
     >
       <div
         style={{
-          background: "#161b22",
-          border: "1px solid #30363d",
+          background: "var(--bg-panel)",
+          border: "1px solid var(--border-dark)",
           borderRadius: "12px",
           padding: "48px 44px",
           width: "390px",
@@ -52,22 +52,22 @@ export default function LoginPage() {
         {/* Brand */}
         <div style={{ textAlign: "center", marginBottom: "36px" }}>
           <span style={{ fontSize: "34px", display: "block", marginBottom: "10px" }}>
-            🚀
+            🛠️
           </span>
           <h1
             style={{
               fontSize: "19px",
               fontWeight: 700,
-              color: "#e6edf3",
+              color: "var(--text-bright)",
               margin: 0,
             }}
           >
-            Product Launch Operating System
+            Brand Operations Hub
           </h1>
           <p
             style={{
               fontSize: "11px",
-              color: "#8b949e",
+              color: "var(--text-light)",
               letterSpacing: "1.6px",
               textTransform: "uppercase",
               marginTop: "5px",
@@ -84,7 +84,7 @@ export default function LoginPage() {
               display: "block",
               fontSize: "10px",
               fontWeight: 600,
-              color: "#8b949e",
+              color: "var(--text-light)",
               letterSpacing: "1.5px",
               textTransform: "uppercase",
               marginBottom: "7px",
@@ -101,10 +101,10 @@ export default function LoginPage() {
             style={{
               width: "100%",
               padding: "11px 14px",
-              background: "#0d1117",
-              border: "1px solid #30363d",
+              background: "var(--bg-app)",
+              border: "1px solid var(--border-dark)",
               borderRadius: "6px",
-              color: "#e6edf3",
+              color: "var(--text-bright)",
               fontFamily: "'IBM Plex Sans', sans-serif",
               fontSize: "14px",
               outline: "none",
@@ -120,7 +120,7 @@ export default function LoginPage() {
               display: "block",
               fontSize: "10px",
               fontWeight: 600,
-              color: "#8b949e",
+              color: "var(--text-light)",
               letterSpacing: "1.5px",
               textTransform: "uppercase",
               marginBottom: "7px",
@@ -137,10 +137,10 @@ export default function LoginPage() {
             style={{
               width: "100%",
               padding: "11px 14px",
-              background: "#0d1117",
-              border: "1px solid #30363d",
+              background: "var(--bg-app)",
+              border: "1px solid var(--border-dark)",
               borderRadius: "6px",
-              color: "#e6edf3",
+              color: "var(--text-bright)",
               fontFamily: "'IBM Plex Sans', sans-serif",
               fontSize: "14px",
               outline: "none",
@@ -156,7 +156,7 @@ export default function LoginPage() {
           style={{
             width: "100%",
             padding: "13px",
-            background: "#1f6feb",
+            background: "var(--accent)",
             border: "none",
             borderRadius: "6px",
             color: "#fff",

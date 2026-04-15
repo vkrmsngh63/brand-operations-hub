@@ -94,7 +94,7 @@ export default function KeywordClusteringPage() {
       <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
         <div className="flex items-center gap-4">
           <button
-            onClick={() => router.push('/dashboard')}
+            onClick={() => router.push('/plos')}
             className="text-2xl hover:opacity-80 transition-opacity"
             title="Back to Hub"
           >
