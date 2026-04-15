@@ -16,7 +16,6 @@ interface CardData {
   longDesc: string;
   badge: "active" | "soon";
   route: string | null;
-  standalone?: boolean;
 }
 
 const DEFAULT_CARDS: CardData[] = [
@@ -607,46 +606,6 @@ const DEFAULT_CARDS: CardData[] = [
     badge: "soon",
     route: null,
   },
-  {
-    id: "business-operations",
-    icon: "⚙️",
-    title: "Business Operations",
-    shortDesc:
-      "Manage day-to-day operations of launched products — inventory, fulfillment, customer service, financials, vendor relationships, and operational workflows.",
-    longDesc: `## Inventory & Supply Chain
-- Stock level monitoring across all channels
-- Reorder point alerts and automated purchase orders
-- Supplier relationship management
-- Fulfillment center coordination (FBA, 3PL, in-house)
-
-## Customer Service
-- Support ticket management and escalation workflows
-- Returns and refund processing
-- Customer communication templates
-- Satisfaction tracking and NPS monitoring
-
-## Financial Operations
-- Revenue tracking per product, channel, and brand
-- Cost of goods sold (COGS) management
-- Profit margin analysis per SKU
-- Payment processing and reconciliation
-- Tax compliance tracking
-
-## Vendor & Partner Management
-- Vendor contact database and contract tracking
-- Service level agreement (SLA) monitoring
-- Payment scheduling and history
-- Performance scorecards per vendor
-
-## Operational Workflows
-- Standard operating procedure (SOP) library
-- Task automation and recurring task scheduling
-- Quality control checklists
-- Incident tracking and resolution logging`,
-    badge: "soon",
-    route: null,
-    standalone: true,
-  },
 ];
 
 const LS_KEY = "plos_workflow_cards";
@@ -1147,11 +1106,11 @@ export default function PLOSLandingPage() {
             display: "grid",
             gridTemplateColumns: gridCols,
             gap: "16px",
-            alignItems: "stretch",
+            alignItems: "start",
             transition: "all .3s ease",
           }}
         >
-          {cards.filter((c) => !c.standalone).map((card) => {
+          {cards.map((card) => {
             const isHovered = hovered === card.id;
             const isActive = card.badge === "active";
             const isExpanded = expandedCards.has(card.id);
@@ -1309,169 +1268,6 @@ export default function PLOSLandingPage() {
             );
           })}
         </div>
-
-        {/* ── Standalone Cards (Business Operations) ── */}
-        {cards.filter((c) => c.standalone).map((card) => {
-          const isHovered = hovered === card.id;
-          const isActive = card.badge === "active";
-          const isExpanded = expandedCards.has(card.id);
-
-          return (
-            <div key={card.id}>
-              {/* Divider */}
-              <hr
-                style={{
-                  border: "none",
-                  borderTop: "1px solid #21262d",
-                  margin: "28px 0 12px",
-                }}
-              />
-              <div
-                style={{
-                  fontSize: "10px",
-                  fontWeight: 700,
-                  color: "#8b949e",
-                  letterSpacing: "1.6px",
-                  textTransform: "uppercase",
-                  marginBottom: "12px",
-                  paddingLeft: "2px",
-                }}
-              >
-                Ongoing Operations
-              </div>
-
-              {/* Card */}
-              <div
-                onMouseEnter={() => setHovered(card.id)}
-                onMouseLeave={() => setHovered(null)}
-                onClick={() => handleCardClick(card)}
-                style={{
-                  position: "relative",
-                  background: isHovered && isActive ? "#1c2333" : "#1a2332",
-                  border: `1px solid ${isHovered && isActive ? "#1f6feb" : "rgba(31,111,235,.27)"}`,
-                  borderRadius: "10px",
-                  padding: "24px 22px",
-                  cursor: isActive ? "pointer" : "not-allowed",
-                  opacity: isActive ? 1 : 0.6,
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "10px",
-                  transition: "all .2s ease",
-                }}
-              >
-                {/* Edit button */}
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setEditingCard(card);
-                  }}
-                  title="Edit card"
-                  style={{
-                    position: "absolute",
-                    top: "8px",
-                    right: "8px",
-                    background: "transparent",
-                    border: "none",
-                    color: "#484f58",
-                    cursor: "pointer",
-                    fontSize: "13px",
-                    padding: "3px 5px",
-                    borderRadius: "4px",
-                    opacity: isHovered ? 1 : 0,
-                    transition: "opacity .2s",
-                    zIndex: 2,
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.color = "#e6edf3";
-                    e.currentTarget.style.background = "rgba(255,255,255,.08)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.color = "#484f58";
-                    e.currentTarget.style.background = "transparent";
-                  }}
-                >
-                  ✏️
-                </button>
-
-                {/* Title Row */}
-                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                  <span style={{ fontSize: "22px", flexShrink: 0 }}>{card.icon}</span>
-                  <span style={{ fontSize: "14px", fontWeight: 700, color: "#e6edf3" }}>
-                    {card.title}
-                  </span>
-                  <span
-                    style={{
-                      fontSize: "8px",
-                      fontWeight: 700,
-                      textTransform: "uppercase",
-                      letterSpacing: "1px",
-                      padding: "2px 7px",
-                      borderRadius: "3px",
-                      marginLeft: "auto",
-                      flexShrink: 0,
-                      background: isActive ? "rgba(31,111,235,.2)" : "rgba(139,148,158,.15)",
-                      color: isActive ? "#58a6ff" : "#8b949e",
-                    }}
-                  >
-                    {isActive ? "Active" : "Coming Soon"}
-                  </span>
-                </div>
-
-                {/* Short Description */}
-                <div style={{ fontSize: "11.5px", color: "#8b949e", lineHeight: 1.55 }}>
-                  {card.shortDesc}
-                </div>
-
-                {/* Long Description — only in Detailed view */}
-                {!isOverview && (
-                  <>
-                    <button
-                      onClick={(e) => toggleExpand(card.id, e)}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "6px",
-                        background: "none",
-                        border: "none",
-                        color: "#58a6ff",
-                        cursor: "pointer",
-                        fontSize: "11px",
-                        fontWeight: 600,
-                        fontFamily: "'IBM Plex Sans', sans-serif",
-                        padding: "2px 0",
-                      }}
-                    >
-                      <span
-                        style={{
-                          display: "inline-block",
-                          transition: "transform .2s ease",
-                          transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)",
-                          fontSize: "10px",
-                        }}
-                      >
-                        ▶
-                      </span>
-                      {isExpanded ? "Hide details" : "Show details"}
-                    </button>
-                    <div
-                      style={{
-                        overflow: "hidden",
-                        maxHeight: isExpanded ? "2000px" : "0px",
-                        opacity: isExpanded ? 1 : 0,
-                        transition: "max-height .4s ease, opacity .3s ease",
-                        borderTop: isExpanded ? "1px solid #21262d" : "1px solid transparent",
-                        paddingTop: isExpanded ? "10px" : "0",
-                        marginTop: isExpanded ? "2px" : "0",
-                      }}
-                    >
-                      <LongDescRenderer text={card.longDesc} />
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-          );
-        })}
       </div>
 
       {/* Toast */}
