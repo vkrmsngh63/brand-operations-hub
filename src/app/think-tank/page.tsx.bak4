@@ -518,7 +518,7 @@ export default function ThinkTankLandingPage() {
           <button onClick={() => router.push("/dashboard")} style={btnSecondary}>← Back</button>
           <div style={{ display: "flex", gap: "10px" }}>
             <button
-              onClick={() => router.push("/think-tank/notes")}
+              onClick={() => showToast("Admin Notes — coming in next update")}
               style={{ ...btnSecondary, display: "flex", alignItems: "center", gap: "6px" }}
             >
               📝 Admin Notes

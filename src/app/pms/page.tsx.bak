@@ -4,18 +4,6 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 
-const btnSecondary: React.CSSProperties = {
-  padding: "6px 14px",
-  background: "transparent",
-  border: "1px solid #30363d",
-  borderRadius: "6px",
-  color: "#8b949e",
-  fontSize: "11px",
-  fontWeight: 600,
-  cursor: "pointer",
-  fontFamily: "'IBM Plex Sans', sans-serif",
-};
-
 export default function PMSLandingPage() {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
@@ -68,7 +56,7 @@ export default function PMSLandingPage() {
         style={{
           maxWidth: "900px",
           margin: "0 auto",
-          padding: "40px 32px 64px",
+          padding: "48px 32px 64px",
         }}
       >
         {/* Top bar */}
@@ -80,20 +68,38 @@ export default function PMSLandingPage() {
             marginBottom: "16px",
           }}
         >
-          <button onClick={() => router.push("/dashboard")} style={btnSecondary}>
+          <button
+            onClick={() => router.push("/dashboard")}
+            style={{
+              padding: "6px 14px",
+              background: "transparent",
+              border: "1px solid #30363d",
+              borderRadius: "6px",
+              color: "#8b949e",
+              fontSize: "11px",
+              fontWeight: 600,
+              cursor: "pointer",
+              fontFamily: "'IBM Plex Sans', sans-serif",
+            }}
+          >
             ← Back
           </button>
-          <div style={{ display: "flex", gap: "10px" }}>
-            <button
-              onClick={() => router.push("/pms/notes")}
-              style={{ ...btnSecondary, display: "flex", alignItems: "center", gap: "6px" }}
-            >
-              📝 Admin Notes
-            </button>
-            <button onClick={handleLogout} style={btnSecondary}>
-              Sign Out
-            </button>
-          </div>
+          <button
+            onClick={handleLogout}
+            style={{
+              padding: "6px 14px",
+              background: "transparent",
+              border: "1px solid #30363d",
+              borderRadius: "6px",
+              color: "#8b949e",
+              fontSize: "11px",
+              fontWeight: 600,
+              cursor: "pointer",
+              fontFamily: "'IBM Plex Sans', sans-serif",
+            }}
+          >
+            Sign Out
+          </button>
         </div>
 
         {/* Header */}
@@ -146,9 +152,7 @@ export default function PMSLandingPage() {
             Under Construction
           </h2>
           <p style={{ fontSize: "13px", color: "#8b949e", lineHeight: 1.6 }}>
-            The Project Management System is being built. Project tracking features are coming in future updates.
-            <br />
-            Admin Notes are available now — click the button above.
+            The Project Management System is being built. Admin Notes and project tracking features are coming in the next update.
           </p>
         </div>
       </div>
