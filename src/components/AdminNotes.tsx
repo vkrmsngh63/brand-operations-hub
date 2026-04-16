@@ -23,6 +23,7 @@ interface Note {
   userId: string;
   system: string;
   title: string;
+  description: string;
   content: string;
   sortOrder: number;
   createdAt: string;
@@ -34,30 +35,18 @@ type SystemKey = "think-tank" | "pms";
 
 interface AdminNotesProps {
   system: SystemKey;
-  systemLabel: string;      // e.g. "Think Tank"
-  systemIcon: string;       // e.g. "💡"
-  backRoute: string;        // e.g. "/think-tank"
+  systemLabel: string;
+  systemIcon: string;
+  backRoute: string;
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   SHARED STYLES
+   CONSTANTS & UTILITIES
    ═══════════════════════════════════════════════════════════════ */
 
-const btnPrimary: React.CSSProperties = {
-  padding: "8px 16px", background: "#1f6feb", border: "none", borderRadius: "6px",
-  color: "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer",
-  fontFamily: "'IBM Plex Sans', sans-serif",
-};
-
-const btnSecondary: React.CSSProperties = {
-  padding: "8px 16px", background: "transparent", border: "1px solid #30363d",
-  borderRadius: "6px", color: "#8b949e", fontSize: "13px", fontWeight: 600,
-  cursor: "pointer", fontFamily: "'IBM Plex Sans', sans-serif",
-};
-
-/* ═══════════════════════════════════════════════════════════════
-   UTILITIES
-   ═══════════════════════════════════════════════════════════════ */
+const DEFAULT_SIDEBAR_WIDTH = 280;
+const MIN_SIDEBAR_WIDTH = 200;
+const MAX_SIDEBAR_WIDTH = 560;
 
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -86,7 +75,7 @@ function isVideo(type: string): boolean {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   LIGHTBOX VIEWER
+   LIGHTBOX
    ═══════════════════════════════════════════════════════════════ */
 
 function LightboxViewer({ attachment, onClose }: { attachment: Attachment; onClose: () => void }) {
@@ -120,22 +109,285 @@ function LightboxViewer({ attachment, onClose }: { attachment: Attachment; onClo
       </button>
       <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: "90vw", maxHeight: "90vh" }}>
         {isImage(attachment.fileType) ? (
-          <img
-            src={attachment.publicUrl}
-            alt={attachment.fileName}
-            style={{ maxWidth: "90vw", maxHeight: "85vh", objectFit: "contain", borderRadius: "8px" }}
-          />
+          <img src={attachment.publicUrl} alt={attachment.fileName}
+            style={{ maxWidth: "90vw", maxHeight: "85vh", objectFit: "contain", borderRadius: "8px" }} />
         ) : isVideo(attachment.fileType) ? (
-          <video
-            src={attachment.publicUrl}
-            controls
-            autoPlay
-            style={{ maxWidth: "90vw", maxHeight: "85vh", borderRadius: "8px" }}
-          />
+          <video src={attachment.publicUrl} controls autoPlay
+            style={{ maxWidth: "90vw", maxHeight: "85vh", borderRadius: "8px" }} />
         ) : null}
         <p style={{ color: "#c9d1d9", fontSize: "12px", textAlign: "center", marginTop: "12px" }}>
           {attachment.fileName} · {formatFileSize(attachment.fileSize)}
         </p>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   RICH TEXT TOOLBAR
+   ═══════════════════════════════════════════════════════════════ */
+
+function RichTextToolbar({ onCommand, onSetFontSize, onSetForeColor }: {
+  onCommand: (cmd: string, value?: string) => void;
+  onSetFontSize: (size: string) => void;
+  onSetForeColor: (color: string) => void;
+}) {
+  const btnStyle: React.CSSProperties = {
+    background: "transparent",
+    border: "1px solid transparent",
+    borderRadius: "4px",
+    padding: "5px 8px",
+    fontSize: "13px",
+    cursor: "pointer",
+    color: "#374151",
+    fontFamily: "inherit",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "3px",
+    minWidth: "28px",
+    justifyContent: "center",
+  };
+
+  const sep: React.CSSProperties = {
+    width: "1px",
+    height: "20px",
+    background: "#e5e7eb",
+    margin: "0 4px",
+  };
+
+  function handleLink() {
+    const url = prompt("Enter the URL (include https://):", "https://");
+    if (url && url.trim() && url.trim() !== "https://") {
+      onCommand("createLink", url.trim());
+    }
+  }
+
+  function handleColor(e: React.ChangeEvent<HTMLInputElement>) {
+    onSetForeColor(e.target.value);
+  }
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexWrap: "wrap",
+        alignItems: "center",
+        gap: "2px",
+        padding: "8px 12px",
+        background: "#f9fafb",
+        border: "1px solid #e5e7eb",
+        borderRadius: "8px 8px 0 0",
+        borderBottom: "1px solid #e5e7eb",
+      }}
+      onMouseDown={(e) => e.preventDefault() /* keep focus in editor */}
+    >
+      {/* Font size dropdown */}
+      <select
+        onChange={(e) => { onSetFontSize(e.target.value); e.target.value = ""; }}
+        defaultValue=""
+        style={{
+          ...btnStyle,
+          padding: "4px 6px",
+          border: "1px solid #d1d5db",
+          background: "#fff",
+          cursor: "pointer",
+        }}
+        title="Font size"
+      >
+        <option value="" disabled>Size</option>
+        <option value="1">Tiny</option>
+        <option value="2">Small</option>
+        <option value="3">Normal</option>
+        <option value="4">Medium</option>
+        <option value="5">Large</option>
+        <option value="6">X-Large</option>
+        <option value="7">Huge</option>
+      </select>
+
+      <span style={sep} />
+
+      {/* Bold / Italic / Underline */}
+      <button type="button" style={btnStyle} title="Bold (Ctrl+B)" onClick={() => onCommand("bold")}>
+        <b>B</b>
+      </button>
+      <button type="button" style={btnStyle} title="Italic (Ctrl+I)" onClick={() => onCommand("italic")}>
+        <i>I</i>
+      </button>
+      <button type="button" style={btnStyle} title="Underline (Ctrl+U)" onClick={() => onCommand("underline")}>
+        <span style={{ textDecoration: "underline" }}>U</span>
+      </button>
+      <button type="button" style={btnStyle} title="Strikethrough" onClick={() => onCommand("strikeThrough")}>
+        <span style={{ textDecoration: "line-through" }}>S</span>
+      </button>
+
+      <span style={sep} />
+
+      {/* Color picker */}
+      <label style={{ ...btnStyle, padding: "2px 4px", cursor: "pointer" }} title="Text color">
+        <span style={{ fontSize: "12px", marginRight: "3px" }}>A</span>
+        <input
+          type="color"
+          onChange={handleColor}
+          style={{
+            width: "18px", height: "18px", padding: 0, border: "none",
+            background: "transparent", cursor: "pointer",
+          }}
+        />
+      </label>
+
+      <span style={sep} />
+
+      {/* Alignment */}
+      <button type="button" style={btnStyle} title="Align left" onClick={() => onCommand("justifyLeft")}>
+        <span style={{ fontSize: "14px" }}>⬅</span>
+      </button>
+      <button type="button" style={btnStyle} title="Align center" onClick={() => onCommand("justifyCenter")}>
+        <span style={{ fontSize: "14px" }}>↔</span>
+      </button>
+      <button type="button" style={btnStyle} title="Align right" onClick={() => onCommand("justifyRight")}>
+        <span style={{ fontSize: "14px" }}>➡</span>
+      </button>
+      <button type="button" style={btnStyle} title="Justify" onClick={() => onCommand("justifyFull")}>
+        <span style={{ fontSize: "14px" }}>☰</span>
+      </button>
+
+      <span style={sep} />
+
+      {/* Lists */}
+      <button type="button" style={btnStyle} title="Bulleted list" onClick={() => onCommand("insertUnorderedList")}>
+        •
+      </button>
+      <button type="button" style={btnStyle} title="Numbered list" onClick={() => onCommand("insertOrderedList")}>
+        1.
+      </button>
+
+      <span style={sep} />
+
+      {/* Hyperlink */}
+      <button type="button" style={btnStyle} title="Insert link" onClick={handleLink}>
+        🔗
+      </button>
+      <button type="button" style={btnStyle} title="Remove link" onClick={() => onCommand("unlink")}>
+        ⛓️‍💥
+      </button>
+
+      <span style={sep} />
+
+      {/* Clear formatting */}
+      <button type="button" style={btnStyle} title="Clear formatting" onClick={() => onCommand("removeFormat")}>
+        ⨯
+      </button>
+
+      <span style={sep} />
+
+      {/* Undo / Redo */}
+      <button type="button" style={btnStyle} title="Undo (Ctrl+Z)" onClick={() => onCommand("undo")}>
+        ↶
+      </button>
+      <button type="button" style={btnStyle} title="Redo (Ctrl+Y)" onClick={() => onCommand("redo")}>
+        ↷
+      </button>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   RENAME MODAL (title + description together)
+   ═══════════════════════════════════════════════════════════════ */
+
+function RenameModal({
+  initialTitle, initialDescription,
+  onSave, onClose,
+}: {
+  initialTitle: string;
+  initialDescription: string;
+  onSave: (title: string, description: string) => void;
+  onClose: () => void;
+}) {
+  const [title, setTitle] = useState(initialTitle);
+  const [description, setDescription] = useState(initialDescription);
+  const backdropRef = useRef<HTMLDivElement>(null);
+
+  return (
+    <div
+      ref={backdropRef}
+      onClick={(e) => e.target === backdropRef.current && onClose()}
+      style={{
+        position: "fixed", inset: 0, background: "rgba(0,0,0,.5)",
+        display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1500,
+      }}
+    >
+      <div
+        style={{
+          background: "#fff", borderRadius: "12px", padding: "28px",
+          width: "480px", maxWidth: "90vw",
+          boxShadow: "0 20px 60px rgba(0,0,0,.3)",
+          fontFamily: "'IBM Plex Sans', sans-serif",
+        }}
+      >
+        <h3 style={{ fontSize: "16px", fontWeight: 700, color: "#111827", marginBottom: "20px" }}>
+          Edit note details
+        </h3>
+
+        <label style={{ display: "block", fontSize: "11px", fontWeight: 600, color: "#6b7280",
+          letterSpacing: "1px", textTransform: "uppercase", marginBottom: "6px" }}>
+          Title
+        </label>
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          autoFocus
+          style={{
+            width: "100%", padding: "10px 12px", marginBottom: "16px",
+            background: "#fff", border: "1px solid #d1d5db", borderRadius: "6px",
+            color: "#111827", fontSize: "14px", fontFamily: "inherit",
+            outline: "none", boxSizing: "border-box",
+          }}
+          onFocus={(e) => (e.currentTarget.style.borderColor = "#3b82f6")}
+          onBlur={(e) => (e.currentTarget.style.borderColor = "#d1d5db")}
+        />
+
+        <label style={{ display: "block", fontSize: "11px", fontWeight: 600, color: "#6b7280",
+          letterSpacing: "1px", textTransform: "uppercase", marginBottom: "6px" }}>
+          Description <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>(optional)</span>
+        </label>
+        <textarea
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          rows={3}
+          placeholder="Short description shown in the sidebar…"
+          style={{
+            width: "100%", padding: "10px 12px", marginBottom: "24px",
+            background: "#fff", border: "1px solid #d1d5db", borderRadius: "6px",
+            color: "#111827", fontSize: "13px", lineHeight: 1.5, fontFamily: "inherit",
+            outline: "none", boxSizing: "border-box", resize: "vertical",
+          }}
+          onFocus={(e) => (e.currentTarget.style.borderColor = "#3b82f6")}
+          onBlur={(e) => (e.currentTarget.style.borderColor = "#d1d5db")}
+        />
+
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
+          <button
+            onClick={onClose}
+            style={{
+              padding: "8px 16px", background: "#fff", border: "1px solid #d1d5db",
+              borderRadius: "6px", color: "#374151", fontSize: "13px", fontWeight: 600,
+              cursor: "pointer", fontFamily: "inherit",
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => onSave(title.trim() || "Untitled Note", description.trim())}
+            style={{
+              padding: "8px 16px", background: "#3b82f6", border: "none",
+              borderRadius: "6px", color: "#fff", fontSize: "13px", fontWeight: 600,
+              cursor: "pointer", fontFamily: "inherit",
+            }}
+          >
+            Save
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -155,18 +407,30 @@ export default function AdminNotes({ system, systemLabel, systemIcon, backRoute 
   const [lightbox, setLightbox] = useState<Attachment | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [renamingId, setRenamingId] = useState<string | null>(null);
-  const [renameValue, setRenameValue] = useState("");
+  const [renameModal, setRenameModal] = useState<Note | null>(null);
+
+  // Drag-reorder
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [dropZoneIdx, setDropZoneIdx] = useState<number | null>(null);
+
+  // Sidebar width (server-persisted)
+  const [sidebarWidth, setSidebarWidth] = useState<number>(DEFAULT_SIDEBAR_WIDTH);
+  const [resizing, setResizing] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const saveTimerRef = useRef<NodeJS.Timeout | null>(null);
   const savedTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const widthSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const editorRef = useRef<HTMLDivElement>(null);
+  const activeNoteIdRef = useRef<string | null>(null);
+  const lastLoadedContentRef = useRef<{ id: string; content: string } | null>(null);
 
-  /* ── AUTH CHECK & LOAD NOTES ── */
+  /* ── AUTH + INITIAL LOAD ── */
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session) { router.push("/"); return; }
       fetchNotes();
+      fetchSidebarWidth();
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router, system]);
@@ -187,7 +451,81 @@ export default function AdminNotes({ system, systemLabel, systemIcon, backRoute 
     }
   }
 
+  async function fetchSidebarWidth() {
+    try {
+      const res = await authFetch(`/api/user-preferences/adminnotes_sidebar_width`);
+      if (res.ok) {
+        const { value } = await res.json();
+        const w = parseInt(value || "", 10);
+        if (!isNaN(w) && w >= MIN_SIDEBAR_WIDTH && w <= MAX_SIDEBAR_WIDTH) {
+          setSidebarWidth(w);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load sidebar width", err);
+    }
+  }
+
+  function persistSidebarWidth(w: number) {
+    if (widthSaveTimerRef.current) clearTimeout(widthSaveTimerRef.current);
+    widthSaveTimerRef.current = setTimeout(async () => {
+      try {
+        await authFetch(`/api/user-preferences/adminnotes_sidebar_width`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ value: String(w) }),
+        });
+      } catch (err) {
+        console.error("Failed to save sidebar width", err);
+      }
+    }, 400);
+  }
+
   const activeNote = notes.find((n) => n.id === activeNoteId) || null;
+
+  /* ── SYNC editor DOM with active note content ── */
+  useEffect(() => {
+    if (!editorRef.current || !activeNote) return;
+    // Only overwrite the DOM if we switched notes OR it's the first render
+    const last = lastLoadedContentRef.current;
+    if (!last || last.id !== activeNote.id) {
+      editorRef.current.innerHTML = activeNote.content || "";
+      lastLoadedContentRef.current = { id: activeNote.id, content: activeNote.content };
+      activeNoteIdRef.current = activeNote.id;
+    }
+  }, [activeNoteId, activeNote]);
+
+  /* ── SIDEBAR RESIZE ── */
+  useEffect(() => {
+    if (!resizing) return;
+    function onMove(e: MouseEvent) {
+      const w = Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, e.clientX));
+      setSidebarWidth(w);
+    }
+    function onUp() {
+      setResizing(false);
+      persistSidebarWidth(sidebarWidth);
+    }
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    return () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resizing]);
+
+  // Save width change when resizing stops
+  useEffect(() => {
+    if (!resizing && sidebarWidth !== DEFAULT_SIDEBAR_WIDTH) {
+      persistSidebarWidth(sidebarWidth);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sidebarWidth]);
 
   /* ── CREATE NOTE ── */
   async function createNote() {
@@ -201,8 +539,7 @@ export default function AdminNotes({ system, systemLabel, systemIcon, backRoute 
       const newNote: Note = await res.json();
       setNotes((prev) => [...prev, newNote]);
       setActiveNoteId(newNote.id);
-      setRenamingId(newNote.id);
-      setRenameValue(newNote.title);
+      setRenameModal(newNote);
     } catch (err) {
       console.error(err);
       setError("Failed to create note.");
@@ -219,6 +556,7 @@ export default function AdminNotes({ system, systemLabel, systemIcon, backRoute 
       setNotes(remaining);
       if (activeNoteId === id) {
         setActiveNoteId(remaining.length > 0 ? remaining[0].id : null);
+        lastLoadedContentRef.current = null;
       }
     } catch (err) {
       console.error(err);
@@ -226,54 +564,71 @@ export default function AdminNotes({ system, systemLabel, systemIcon, backRoute 
     }
   }
 
-  /* ── AUTO-SAVE CONTENT ── */
-  const scheduleSave = useCallback((noteId: string, updates: { title?: string; content?: string }) => {
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+  /* ── AUTO-SAVE ── */
+  const scheduleSave = useCallback(
+    (noteId: string, updates: { title?: string; description?: string; content?: string }) => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = setTimeout(async () => {
+        setSaveStatus("saving");
+        try {
+          const res = await authFetch(`/api/admin-notes/${noteId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(updates),
+          });
+          if (!res.ok) throw new Error("Save failed");
+          const updated: Note = await res.json();
+          setNotes((prev) => prev.map((n) => (n.id === noteId ? updated : n)));
+          // Keep lastLoadedContent in sync so the editor doesn't refresh on our own save
+          if (updates.content !== undefined) {
+            lastLoadedContentRef.current = { id: noteId, content: updates.content };
+          }
+          setSaveStatus("saved");
+          if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+          savedTimerRef.current = setTimeout(() => setSaveStatus("idle"), 1500);
+        } catch (err) {
+          console.error(err);
+          setSaveStatus("idle");
+          setError("Failed to save changes.");
+        }
+      }, 800);
+    },
+    []
+  );
 
-    saveTimerRef.current = setTimeout(async () => {
-      setSaveStatus("saving");
-      try {
-        const res = await authFetch(`/api/admin-notes/${noteId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(updates),
-        });
-        if (!res.ok) throw new Error("Save failed");
-        const updated: Note = await res.json();
-        setNotes((prev) => prev.map((n) => (n.id === noteId ? updated : n)));
-        setSaveStatus("saved");
-        if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
-        savedTimerRef.current = setTimeout(() => setSaveStatus("idle"), 1500);
-      } catch (err) {
-        console.error(err);
-        setSaveStatus("idle");
-        setError("Failed to save changes.");
-      }
-    }, 800);
-  }, []);
-
-  /* ── TITLE EDITING ── */
-  function startRename(note: Note) {
-    setRenamingId(note.id);
-    setRenameValue(note.title);
+  /* ── RICH TEXT COMMANDS ── */
+  function execCommand(cmd: string, value?: string) {
+    if (!editorRef.current) return;
+    editorRef.current.focus();
+    document.execCommand(cmd, false, value);
+    handleContentInput();
   }
 
-  function commitRename() {
-    if (!renamingId) return;
-    const title = renameValue.trim() || "Untitled Note";
-    setNotes((prev) => prev.map((n) => (n.id === renamingId ? { ...n, title } : n)));
-    scheduleSave(renamingId, { title });
-    setRenamingId(null);
+  function setFontSize(size: string) {
+    execCommand("fontSize", size);
   }
 
-  /* ── CONTENT EDITING ── */
-  function handleContentChange(content: string) {
-    if (!activeNote) return;
-    setNotes((prev) => prev.map((n) => (n.id === activeNote.id ? { ...n, content } : n)));
-    scheduleSave(activeNote.id, { content });
+  function setForeColor(color: string) {
+    execCommand("foreColor", color);
   }
 
-  /* ── ATTACHMENT UPLOAD ── */
+  function handleContentInput() {
+    if (!editorRef.current || !activeNoteId) return;
+    const html = editorRef.current.innerHTML;
+    setNotes((prev) => prev.map((n) => (n.id === activeNoteId ? { ...n, content: html } : n)));
+    scheduleSave(activeNoteId, { content: html });
+  }
+
+  /* ── RENAME / DESCRIPTION ── */
+  function handleSaveRename(title: string, description: string) {
+    if (!renameModal) return;
+    const id = renameModal.id;
+    setNotes((prev) => prev.map((n) => (n.id === id ? { ...n, title, description } : n)));
+    scheduleSave(id, { title, description });
+    setRenameModal(null);
+  }
+
+  /* ── ATTACHMENTS ── */
   async function uploadFiles(files: FileList | File[]) {
     if (!activeNote || files.length === 0) return;
     setUploading(true);
@@ -281,10 +636,8 @@ export default function AdminNotes({ system, systemLabel, systemIcon, backRoute 
     try {
       const formData = new FormData();
       Array.from(files).forEach((f) => formData.append("files", f));
-
       const res = await authFetch(`/api/admin-notes/${activeNote.id}/attachments`, {
-        method: "POST",
-        body: formData,
+        method: "POST", body: formData,
       });
       if (!res.ok) throw new Error("Upload failed");
       const data = await res.json();
@@ -295,7 +648,6 @@ export default function AdminNotes({ system, systemLabel, systemIcon, backRoute 
         );
       }
 
-      // Reload note to get fresh attachment list
       const noteRes = await authFetch(`/api/admin-notes/${activeNote.id}`);
       if (noteRes.ok) {
         const updated: Note = await noteRes.json();
@@ -330,8 +682,7 @@ export default function AdminNotes({ system, systemLabel, systemIcon, backRoute 
     }
   }
 
-  /* ── DRAG & DROP ── */
-  function handleDrop(e: React.DragEvent) {
+  function handleDropFilesOnEditor(e: React.DragEvent) {
     e.preventDefault();
     setDragOver(false);
     if (!activeNote) return;
@@ -339,7 +690,70 @@ export default function AdminNotes({ system, systemLabel, systemIcon, backRoute 
     if (files.length > 0) uploadFiles(files);
   }
 
-  /* ── LOADING STATE ── */
+  /* ── SIDEBAR DRAG-REORDER ── */
+  function handleNoteDragStart(id: string, e: React.DragEvent) {
+    setDraggedId(id);
+    e.dataTransfer.effectAllowed = "move";
+    // Transparent drag image
+    const el = document.createElement("div");
+    el.style.width = "1px"; el.style.height = "1px"; el.style.opacity = "0.01";
+    document.body.appendChild(el);
+    e.dataTransfer.setDragImage(el, 0, 0);
+    setTimeout(() => document.body.removeChild(el), 0);
+  }
+
+  function handleNoteDragOver(idx: number, e: React.DragEvent) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (draggedId === null) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const midY = rect.top + rect.height / 2;
+    const zone = e.clientY < midY ? idx : idx + 1;
+    setDropZoneIdx(zone);
+  }
+
+  async function handleNoteDrop(e: React.DragEvent) {
+    e.preventDefault();
+    if (draggedId === null || dropZoneIdx === null) {
+      setDraggedId(null);
+      setDropZoneIdx(null);
+      return;
+    }
+
+    const oldIdx = notes.findIndex((n) => n.id === draggedId);
+    if (oldIdx === -1 || oldIdx === dropZoneIdx || oldIdx === dropZoneIdx - 1) {
+      setDraggedId(null);
+      setDropZoneIdx(null);
+      return;
+    }
+
+    const newNotes = [...notes];
+    const [moved] = newNotes.splice(oldIdx, 1);
+    const adjustedTarget = oldIdx < dropZoneIdx ? dropZoneIdx - 1 : dropZoneIdx;
+    newNotes.splice(adjustedTarget, 0, moved);
+
+    setNotes(newNotes);
+    setDraggedId(null);
+    setDropZoneIdx(null);
+
+    try {
+      await authFetch("/api/admin-notes/reorder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ noteIds: newNotes.map((n) => n.id) }),
+      });
+    } catch (err) {
+      console.error(err);
+      setError("Failed to save new order.");
+    }
+  }
+
+  function handleNoteDragEnd() {
+    setDraggedId(null);
+    setDropZoneIdx(null);
+  }
+
+  /* ── LOADING ── */
   if (loading) {
     return (
       <div style={{
@@ -352,31 +766,40 @@ export default function AdminNotes({ system, systemLabel, systemIcon, backRoute 
     );
   }
 
-  /* ── MAIN LAYOUT ── */
+  /* ── RENDER ── */
   return (
     <div
       style={{
         position: "fixed", inset: 0,
-        background: "radial-gradient(ellipse at 35% 40%, #0d2a4a 0%, #0d1117 65%)",
+        background: "#f3f4f6",
         fontFamily: "'IBM Plex Sans', sans-serif",
         display: "flex", flexDirection: "column",
       }}
     >
-      {/* ── TOP BAR ── */}
+      {/* ── TOP BAR (keeps dark theme for app-wide consistency) ── */}
       <div
         style={{
           display: "flex", alignItems: "center", justifyContent: "space-between",
           padding: "14px 24px", borderBottom: "1px solid #21262d",
-          background: "rgba(13,17,23,.6)", backdropFilter: "blur(8px)",
-          flexShrink: 0,
+          background: "#0d1117", flexShrink: 0,
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
-          <button onClick={() => router.push(backRoute)} style={btnSecondary}>← Back</button>
+          <button
+            onClick={() => router.push(backRoute)}
+            style={{
+              padding: "6px 14px", background: "transparent",
+              border: "1px solid #30363d", borderRadius: "6px",
+              color: "#8b949e", fontSize: "12px", fontWeight: 600,
+              cursor: "pointer", fontFamily: "inherit",
+            }}
+          >
+            ← Back
+          </button>
           <div style={{ width: "1px", height: "24px", background: "#30363d" }} />
           <span style={{ fontSize: "22px" }}>{systemIcon}</span>
           <div>
-            <h1 style={{ fontSize: "16px", fontWeight: 700, color: "#e6edf3", margin: 0, lineHeight: 1.2 }}>
+            <h1 style={{ fontSize: "15px", fontWeight: 700, color: "#e6edf3", margin: 0, lineHeight: 1.2 }}>
               {systemLabel} · Admin Notes
             </h1>
             <p style={{ fontSize: "10px", color: "#8b949e", margin: "2px 0 0", letterSpacing: "1.2px", textTransform: "uppercase" }}>
@@ -384,8 +807,6 @@ export default function AdminNotes({ system, systemLabel, systemIcon, backRoute 
             </p>
           </div>
         </div>
-
-        {/* Save status */}
         <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
           {saveStatus === "saving" && (
             <span style={{ fontSize: "11px", color: "#d4a72c", display: "flex", alignItems: "center", gap: "6px" }}>
@@ -394,9 +815,7 @@ export default function AdminNotes({ system, systemLabel, systemIcon, backRoute 
             </span>
           )}
           {saveStatus === "saved" && (
-            <span style={{ fontSize: "11px", color: "#3fb950", display: "flex", alignItems: "center", gap: "6px" }}>
-              ✓ Saved
-            </span>
+            <span style={{ fontSize: "11px", color: "#3fb950" }}>✓ Saved</span>
           )}
         </div>
       </div>
@@ -406,15 +825,15 @@ export default function AdminNotes({ system, systemLabel, systemIcon, backRoute 
         <div
           style={{
             position: "fixed", top: "80px", right: "24px", zIndex: 999,
-            background: "rgba(248,81,73,.1)", border: "1px solid rgba(248,81,73,.4)",
-            padding: "10px 14px", borderRadius: "6px", color: "#ffa198", fontSize: "12px",
-            maxWidth: "320px", boxShadow: "0 8px 24px rgba(0,0,0,.4)",
+            background: "#fee2e2", border: "1px solid #fca5a5",
+            padding: "10px 14px", borderRadius: "8px", color: "#991b1b", fontSize: "12px",
+            maxWidth: "320px", boxShadow: "0 8px 24px rgba(0,0,0,.15)",
           }}
         >
           {error}
           <button
             onClick={() => setError(null)}
-            style={{ background: "none", border: "none", color: "#ffa198", marginLeft: "10px", cursor: "pointer", fontSize: "14px" }}
+            style={{ background: "none", border: "none", color: "#991b1b", marginLeft: "10px", cursor: "pointer", fontSize: "14px" }}
           >
             ×
           </button>
@@ -423,100 +842,170 @@ export default function AdminNotes({ system, systemLabel, systemIcon, backRoute 
 
       {/* ── MAIN AREA: sidebar + editor ── */}
       <div style={{ flex: 1, display: "flex", minHeight: 0, overflow: "hidden" }}>
-        {/* ─── SIDEBAR: Note list ─── */}
+        {/* ─── SIDEBAR ─── */}
         <div
           style={{
-            width: "280px", borderRight: "1px solid #21262d",
+            width: `${sidebarWidth}px`, borderRight: "1px solid #e5e7eb",
             display: "flex", flexDirection: "column",
-            background: "rgba(22,27,34,.4)", flexShrink: 0,
+            background: "#fafbfc", flexShrink: 0,
+            position: "relative",
           }}
         >
-          <div style={{ padding: "16px 16px 12px", borderBottom: "1px solid #21262d" }}>
+          <div style={{ padding: "16px 16px 12px", borderBottom: "1px solid #e5e7eb" }}>
             <button
               onClick={createNote}
-              style={{ ...btnPrimary, width: "100%", padding: "9px 14px", fontSize: "13px" }}
+              style={{
+                width: "100%", padding: "9px 14px",
+                background: "#3b82f6", border: "none", borderRadius: "6px",
+                color: "#fff", fontSize: "13px", fontWeight: 600,
+                cursor: "pointer", fontFamily: "inherit",
+              }}
             >
               + New Note
             </button>
           </div>
 
-          <div style={{ flex: 1, overflowY: "auto", padding: "8px" }}>
+          <div style={{ flex: 1, overflowY: "auto", padding: "8px", position: "relative" }}>
             {notes.length === 0 ? (
-              <div style={{ padding: "40px 16px", textAlign: "center", color: "#484f58", fontSize: "12px" }}>
+              <div style={{ padding: "40px 16px", textAlign: "center", color: "#9ca3af", fontSize: "12px" }}>
                 No notes yet.<br />Click &quot;+ New Note&quot; to create one.
               </div>
             ) : (
-              notes.map((note) => {
-                const isActive = activeNoteId === note.id;
-                const isRenaming = renamingId === note.id;
-                return (
-                  <div
-                    key={note.id}
-                    onClick={() => !isRenaming && setActiveNoteId(note.id)}
-                    style={{
-                      padding: "10px 12px", borderRadius: "6px", marginBottom: "3px",
-                      cursor: isRenaming ? "text" : "pointer",
-                      background: isActive ? "rgba(31,111,235,.18)" : "transparent",
-                      border: `1px solid ${isActive ? "rgba(31,111,235,.4)" : "transparent"}`,
-                      transition: "all .15s",
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!isActive) e.currentTarget.style.background = "rgba(255,255,255,.04)";
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!isActive) e.currentTarget.style.background = "transparent";
-                    }}
-                  >
-                    {isRenaming ? (
-                      <input
-                        value={renameValue}
-                        onChange={(e) => setRenameValue(e.target.value)}
-                        onBlur={commitRename}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") commitRename();
-                          if (e.key === "Escape") setRenamingId(null);
-                        }}
-                        autoFocus
-                        onClick={(e) => e.stopPropagation()}
-                        style={{
-                          width: "100%", padding: "4px 6px",
-                          background: "#0d1117", border: "1px solid #1f6feb", borderRadius: "4px",
-                          color: "#e6edf3", fontSize: "13px", fontWeight: 600,
-                          fontFamily: "inherit", outline: "none", boxSizing: "border-box",
-                        }}
-                      />
-                    ) : (
-                      <div style={{ fontSize: "13px", fontWeight: 600, color: isActive ? "#e6edf3" : "#c9d1d9", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {note.title}
-                      </div>
-                    )}
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "4px" }}>
-                      <span style={{ fontSize: "10px", color: "#6e7681" }}>
-                        {timeAgo(note.updatedAt)}
-                      </span>
-                      {note.attachments.length > 0 && (
-                        <span style={{ fontSize: "9px", color: "#6e7681", display: "flex", alignItems: "center", gap: "2px" }}>
-                          📎 {note.attachments.length}
-                        </span>
+              <>
+                {notes.map((note, idx) => {
+                  const isActive = activeNoteId === note.id;
+                  const isBeingDragged = draggedId === note.id;
+                  const showLineBefore = dropZoneIdx === idx && draggedId !== null;
+
+                  return (
+                    <div key={note.id} style={{ position: "relative" }}>
+                      {/* Drop indicator line */}
+                      {showLineBefore && (
+                        <div style={{
+                          position: "absolute", top: "-2px", left: "4px", right: "4px", height: "3px",
+                          background: "#3b82f6", borderRadius: "2px", zIndex: 5,
+                          boxShadow: "0 0 6px rgba(59,130,246,.4)",
+                        }} />
                       )}
+
+                      <div
+                        draggable
+                        onDragStart={(e) => handleNoteDragStart(note.id, e)}
+                        onDragOver={(e) => handleNoteDragOver(idx, e)}
+                        onDrop={handleNoteDrop}
+                        onDragEnd={handleNoteDragEnd}
+                        onClick={() => setActiveNoteId(note.id)}
+                        onDoubleClick={() => setRenameModal(note)}
+                        style={{
+                          padding: "10px 12px", borderRadius: "6px", marginBottom: "3px",
+                          cursor: isBeingDragged ? "grabbing" : "pointer",
+                          background: isActive ? "#dbeafe" : "transparent",
+                          border: `1px solid ${isActive ? "#93c5fd" : "transparent"}`,
+                          opacity: isBeingDragged ? 0.4 : 1,
+                          transition: "background .15s, border-color .15s",
+                          position: "relative",
+                        }}
+                        onMouseEnter={(e) => {
+                          if (!isActive && !isBeingDragged) e.currentTarget.style.background = "#f3f4f6";
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!isActive) e.currentTarget.style.background = "transparent";
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "flex-start", gap: "8px" }}>
+                          <span
+                            style={{
+                              color: "#9ca3af", fontSize: "13px", marginTop: "1px",
+                              cursor: "grab", userSelect: "none", flexShrink: 0,
+                            }}
+                            title="Drag to reorder"
+                          >
+                            ⋮⋮
+                          </span>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div
+                              style={{
+                                fontSize: "13px", fontWeight: 600,
+                                color: isActive ? "#1e3a8a" : "#1f2937",
+                                lineHeight: 1.3,
+                                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                              }}
+                              title={note.title}
+                            >
+                              {note.title}
+                            </div>
+                            {note.description && (
+                              <div
+                                style={{
+                                  fontSize: "11px", color: "#6b7280", lineHeight: 1.4,
+                                  marginTop: "2px",
+                                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                                }}
+                                title={note.description}
+                              >
+                                {note.description}
+                              </div>
+                            )}
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "4px" }}>
+                              <span style={{ fontSize: "10px", color: "#9ca3af" }}>
+                                {timeAgo(note.updatedAt)}
+                              </span>
+                              {note.attachments.length > 0 && (
+                                <span style={{ fontSize: "9px", color: "#9ca3af", display: "flex", alignItems: "center", gap: "2px" }}>
+                                  📎 {note.attachments.length}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                );
-              })
+                  );
+                })}
+                {/* Drop indicator at end of list */}
+                {dropZoneIdx === notes.length && draggedId !== null && (
+                  <div style={{
+                    position: "relative", height: "3px", margin: "0 4px",
+                    background: "#3b82f6", borderRadius: "2px",
+                    boxShadow: "0 0 6px rgba(59,130,246,.4)",
+                  }} />
+                )}
+                {/* Footer hint */}
+                <p style={{ fontSize: "10px", color: "#9ca3af", textAlign: "center", marginTop: "12px", padding: "0 8px" }}>
+                  Drag to reorder · Double-click to edit title &amp; description
+                </p>
+              </>
             )}
           </div>
+
+          {/* Resize handle on the right edge */}
+          <div
+            onMouseDown={(e) => { e.preventDefault(); setResizing(true); }}
+            style={{
+              position: "absolute", top: 0, right: "-3px", bottom: 0, width: "6px",
+              cursor: "col-resize", zIndex: 10,
+              background: resizing ? "#3b82f6" : "transparent",
+              transition: "background .15s",
+            }}
+            onMouseEnter={(e) => {
+              if (!resizing) e.currentTarget.style.background = "#bfdbfe";
+            }}
+            onMouseLeave={(e) => {
+              if (!resizing) e.currentTarget.style.background = "transparent";
+            }}
+          />
         </div>
 
-        {/* ─── EDITOR PANE ─── */}
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden" }}>
+        {/* ─── EDITOR PANE (LIGHT THEME) ─── */}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden", background: "#fff" }}>
           {!activeNote ? (
             <div
               style={{
                 flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
-                flexDirection: "column", gap: "12px", color: "#484f58",
+                flexDirection: "column", gap: "12px", color: "#9ca3af",
               }}
             >
-              <span style={{ fontSize: "48px", opacity: 0.4 }}>📝</span>
+              <span style={{ fontSize: "48px", opacity: 0.5 }}>📝</span>
               <p style={{ fontSize: "14px" }}>
                 {notes.length === 0 ? "Create a note to get started" : "Select a note from the sidebar"}
               </p>
@@ -526,79 +1015,102 @@ export default function AdminNotes({ system, systemLabel, systemIcon, backRoute 
               {/* Note header */}
               <div
                 style={{
-                  padding: "20px 32px 16px", borderBottom: "1px solid #21262d",
+                  padding: "18px 28px 14px", borderBottom: "1px solid #e5e7eb",
                   display: "flex", alignItems: "center", justifyContent: "space-between",
-                  flexShrink: 0,
+                  flexShrink: 0, background: "#fff",
                 }}
               >
-                <div
-                  onClick={() => startRename(activeNote)}
-                  style={{
-                    flex: 1, fontSize: "20px", fontWeight: 700, color: "#e6edf3",
-                    cursor: "text", padding: "4px 6px", borderRadius: "4px",
-                    transition: "background .15s",
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,.03)")}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                  title="Click to rename"
-                >
-                  {activeNote.title}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div
+                    onClick={() => setRenameModal(activeNote)}
+                    style={{
+                      fontSize: "20px", fontWeight: 700, color: "#111827",
+                      cursor: "text", padding: "2px 4px", borderRadius: "4px",
+                      transition: "background .15s",
+                      display: "inline-block",
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "#f3f4f6")}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                    title="Click to rename"
+                  >
+                    {activeNote.title}
+                  </div>
+                  {activeNote.description && (
+                    <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "4px", padding: "0 4px" }}>
+                      {activeNote.description}
+                    </div>
+                  )}
                 </div>
                 <button
                   onClick={() => deleteNote(activeNote.id)}
                   title="Delete note"
                   style={{
-                    background: "transparent", border: "1px solid #30363d",
-                    color: "#8b949e", padding: "6px 12px", borderRadius: "6px",
+                    background: "transparent", border: "1px solid #e5e7eb",
+                    color: "#6b7280", padding: "6px 12px", borderRadius: "6px",
                     fontSize: "12px", cursor: "pointer", fontFamily: "inherit",
+                    flexShrink: 0, marginLeft: "12px",
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor = "#f85149";
-                    e.currentTarget.style.color = "#ffa198";
+                    e.currentTarget.style.borderColor = "#fca5a5";
+                    e.currentTarget.style.color = "#dc2626";
+                    e.currentTarget.style.background = "#fef2f2";
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = "#30363d";
-                    e.currentTarget.style.color = "#8b949e";
+                    e.currentTarget.style.borderColor = "#e5e7eb";
+                    e.currentTarget.style.color = "#6b7280";
+                    e.currentTarget.style.background = "transparent";
                   }}
                 >
                   🗑️ Delete note
                 </button>
               </div>
 
-              {/* Scroll area: textarea + attachments */}
+              {/* Scroll area: toolbar + rich text editor + attachments */}
               <div
                 onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
                 onDragLeave={() => setDragOver(false)}
-                onDrop={handleDrop}
+                onDrop={handleDropFilesOnEditor}
                 style={{
-                  flex: 1, overflowY: "auto", padding: "24px 32px 32px",
-                  position: "relative",
+                  flex: 1, overflowY: "auto", padding: "20px 28px 32px",
+                  position: "relative", background: "#fff",
                 }}
               >
                 {dragOver && (
                   <div
                     style={{
                       position: "absolute", inset: "16px", borderRadius: "12px",
-                      border: "2px dashed #58a6ff", background: "rgba(31,111,235,.08)",
+                      border: "2px dashed #3b82f6", background: "rgba(59,130,246,.05)",
                       display: "flex", alignItems: "center", justifyContent: "center",
                       pointerEvents: "none", zIndex: 5,
-                      color: "#58a6ff", fontSize: "14px", fontWeight: 600,
+                      color: "#1d4ed8", fontSize: "14px", fontWeight: 600,
                     }}
                   >
                     Drop files to upload
                   </div>
                 )}
 
-                {/* Textarea */}
-                <textarea
-                  value={activeNote.content}
-                  onChange={(e) => handleContentChange(e.target.value)}
-                  placeholder="Start writing your notes here…"
+                {/* Rich Text Toolbar */}
+                <RichTextToolbar
+                  onCommand={execCommand}
+                  onSetFontSize={setFontSize}
+                  onSetForeColor={setForeColor}
+                />
+
+                {/* Rich Text Editor (contentEditable) */}
+                <div
+                  ref={editorRef}
+                  contentEditable
+                  suppressContentEditableWarning
+                  onInput={handleContentInput}
+                  onBlur={handleContentInput}
+                  data-placeholder="Start writing your notes here…"
                   style={{
-                    width: "100%", minHeight: "280px", padding: "16px 18px",
-                    background: "#0d1117", border: "1px solid #21262d", borderRadius: "10px",
-                    color: "#e6edf3", fontFamily: "inherit", fontSize: "14px",
-                    lineHeight: 1.65, outline: "none", resize: "vertical",
+                    width: "100%", minHeight: "320px", padding: "16px 18px",
+                    background: "#fff",
+                    border: "1px solid #e5e7eb", borderTop: "none",
+                    borderRadius: "0 0 8px 8px",
+                    color: "#111827", fontFamily: "inherit", fontSize: "14px",
+                    lineHeight: 1.65, outline: "none",
                     marginBottom: "28px", boxSizing: "border-box",
                   }}
                 />
@@ -610,17 +1122,18 @@ export default function AdminNotes({ system, systemLabel, systemIcon, backRoute 
                     marginBottom: "14px",
                   }}
                 >
-                  <div style={{ fontSize: "11px", fontWeight: 700, color: "#8b949e", letterSpacing: "1.4px", textTransform: "uppercase" }}>
+                  <div style={{ fontSize: "11px", fontWeight: 700, color: "#6b7280", letterSpacing: "1.4px", textTransform: "uppercase" }}>
                     Attachments ({activeNote.attachments.length})
                   </div>
                   <button
                     onClick={() => fileInputRef.current?.click()}
                     disabled={uploading}
                     style={{
-                      ...btnSecondary,
-                      padding: "6px 14px", fontSize: "12px",
+                      padding: "6px 14px", fontSize: "12px", fontWeight: 600,
+                      background: "#fff", border: "1px solid #d1d5db",
+                      borderRadius: "6px", color: "#374151",
+                      cursor: uploading ? "wait" : "pointer", fontFamily: "inherit",
                       opacity: uploading ? 0.6 : 1,
-                      cursor: uploading ? "wait" : "pointer",
                     }}
                   >
                     {uploading ? "Uploading…" : "+ Upload files"}
@@ -643,8 +1156,8 @@ export default function AdminNotes({ system, systemLabel, systemIcon, backRoute 
                   <div
                     style={{
                       padding: "40px 20px", textAlign: "center",
-                      border: "1px dashed #21262d", borderRadius: "10px",
-                      color: "#6e7681", fontSize: "12px",
+                      border: "1px dashed #d1d5db", borderRadius: "10px",
+                      color: "#9ca3af", fontSize: "12px", background: "#fafbfc",
                     }}
                   >
                     No attachments. Drag &amp; drop files here, or click &quot;+ Upload files&quot; above.
@@ -662,53 +1175,41 @@ export default function AdminNotes({ system, systemLabel, systemIcon, backRoute 
                         key={att.id}
                         style={{
                           position: "relative",
-                          background: "#161b22", border: "1px solid #30363d",
+                          background: "#fff", border: "1px solid #e5e7eb",
                           borderRadius: "8px", overflow: "hidden",
                           transition: "all .15s",
                         }}
-                        onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#484f58"; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#30363d"; }}
+                        onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#9ca3af"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#e5e7eb"; }}
                       >
-                        {/* Preview */}
                         <div
                           onClick={() => setLightbox(att)}
                           style={{
-                            height: "140px", background: "#0d1117", cursor: "pointer",
+                            height: "140px", background: "#f9fafb", cursor: "pointer",
                             display: "flex", alignItems: "center", justifyContent: "center",
                             position: "relative", overflow: "hidden",
                           }}
                         >
                           {isImage(att.fileType) ? (
-                            <img
-                              src={att.publicUrl}
-                              alt={att.fileName}
-                              style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                            />
+                            <img src={att.publicUrl} alt={att.fileName}
+                              style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                           ) : isVideo(att.fileType) ? (
                             <>
-                              <video
-                                src={att.publicUrl}
-                                style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                              />
+                              <video src={att.publicUrl} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                               <div style={{
-                                position: "absolute", inset: 0,
-                                background: "rgba(0,0,0,.3)",
+                                position: "absolute", inset: 0, background: "rgba(0,0,0,.25)",
                                 display: "flex", alignItems: "center", justifyContent: "center",
                                 color: "#fff", fontSize: "32px",
-                              }}>
-                                ▶
-                              </div>
+                              }}>▶</div>
                             </>
                           ) : (
                             <span style={{ fontSize: "36px" }}>📄</span>
                           )}
                         </div>
-
-                        {/* Info + delete */}
                         <div style={{ padding: "8px 10px" }}>
                           <div
                             style={{
-                              fontSize: "11px", fontWeight: 500, color: "#c9d1d9",
+                              fontSize: "11px", fontWeight: 500, color: "#1f2937",
                               overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                             }}
                             title={att.fileName}
@@ -716,7 +1217,7 @@ export default function AdminNotes({ system, systemLabel, systemIcon, backRoute 
                             {att.fileName}
                           </div>
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "3px" }}>
-                            <span style={{ fontSize: "10px", color: "#6e7681" }}>
+                            <span style={{ fontSize: "10px", color: "#9ca3af" }}>
                               {formatFileSize(att.fileSize)}
                             </span>
                             <button
@@ -724,11 +1225,11 @@ export default function AdminNotes({ system, systemLabel, systemIcon, backRoute 
                               title="Delete"
                               style={{
                                 background: "transparent", border: "none",
-                                color: "#484f58", fontSize: "12px", cursor: "pointer",
+                                color: "#9ca3af", fontSize: "12px", cursor: "pointer",
                                 padding: "2px 4px", borderRadius: "3px",
                               }}
-                              onMouseEnter={(e) => { e.currentTarget.style.color = "#ffa198"; }}
-                              onMouseLeave={(e) => { e.currentTarget.style.color = "#484f58"; }}
+                              onMouseEnter={(e) => { e.currentTarget.style.color = "#dc2626"; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.color = "#9ca3af"; }}
                             >
                               🗑️
                             </button>
@@ -747,11 +1248,35 @@ export default function AdminNotes({ system, systemLabel, systemIcon, backRoute 
       {/* Lightbox */}
       {lightbox && <LightboxViewer attachment={lightbox} onClose={() => setLightbox(null)} />}
 
-      {/* Animation keyframes */}
+      {/* Rename modal */}
+      {renameModal && (
+        <RenameModal
+          initialTitle={renameModal.title}
+          initialDescription={renameModal.description}
+          onSave={handleSaveRename}
+          onClose={() => setRenameModal(null)}
+        />
+      )}
+
+      {/* Global styles */}
       <style jsx global>{`
         @keyframes pulse {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.4; }
+        }
+        [contenteditable][data-placeholder]:empty:before {
+          content: attr(data-placeholder);
+          color: #9ca3af;
+          pointer-events: none;
+        }
+        [contenteditable] a {
+          color: #2563eb;
+          text-decoration: underline;
+        }
+        [contenteditable] ul,
+        [contenteditable] ol {
+          padding-left: 1.8em;
+          margin: 0.3em 0;
         }
       `}</style>
     </div>

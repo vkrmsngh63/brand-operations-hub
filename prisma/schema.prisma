@@ -112,6 +112,7 @@ model AdminNote {
   userId      String
   system      String
   title       String   @default("Untitled Note")
+  description String   @default("") @db.Text
   content     String   @default("") @db.Text
   sortOrder   Int      @default(0)
   createdAt   DateTime @default(now())
@@ -135,4 +136,14 @@ model NoteAttachment {
   note        AdminNote @relation(fields: [noteId], references: [id], onDelete: Cascade)
 
   @@index([noteId])
+}
+model UserPreference {
+  id        String   @id @default(uuid())
+  userId    String
+  key       String
+  value     String   @db.Text
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, key])
+  @@index([userId])
 }
