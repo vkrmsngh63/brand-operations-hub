@@ -415,12 +415,8 @@ export default function ThinkTankLandingPage() {
 
     if (dropTarget.zone === "child") {
       dragProject.parentId = target.id;
-      // Prepend as first child so the new item appears visually close to where it was dropped
-      const siblings = updated
-        .filter((p) => p.parentId === target.id && p.id !== dragId)
-        .sort((a, b) => a.sortOrder - b.sortOrder);
-      dragProject.sortOrder = 0;
-      siblings.forEach((p, i) => (p.sortOrder = i + 1));
+      const siblings = updated.filter((p) => p.parentId === target.id && p.id !== dragId);
+      dragProject.sortOrder = siblings.length;
       // Auto-expand parent so the nested child is visible
       setCollapsedIds((prev) => { const next = new Set(prev); next.delete(target.id); return next; });
     } else {
@@ -586,12 +582,13 @@ export default function ThinkTankLandingPage() {
           </div>
         ) : (
           <div
-            style={{ display: "flex", flexDirection: "column", gap: "0" }}
+            style={{ display: "flex", flexDirection: "column", gap: "6px" }}
             onDragOver={(e) => {
               e.preventDefault();
+              // If dragging below all items, allow drop to root at end
             }}
           >
-            {displayList.map((project, idx) => {
+            {displayList.map((project) => {
               const depth = getDepth(projects, project.id);
               const isHov = hovered === project.id && dragId === null;
               const isDragging = dragId === project.id;
@@ -599,21 +596,16 @@ export default function ThinkTankLandingPage() {
               const isCollapsed = collapsedIds.has(project.id);
               const st = STATUS_COLORS[project.status];
               const isNested = project.parentId !== null;
-              const isTopLevel = depth === 0;
 
               // Drop indicator logic
               const isDropBefore = dropTarget?.id === project.id && dropTarget.zone === "before";
               const isDropAfter = dropTarget?.id === project.id && dropTarget.zone === "after";
               const isDropChild = dropTarget?.id === project.id && dropTarget.zone === "child";
 
-              // Spacing: top-level projects get larger top margin (except first),
-              // nested projects get minimal spacing (feels connected to parent)
-              const topMargin = idx === 0 ? 0 : (isTopLevel ? 22 : 6);
-
               return (
                 <div
                   key={project.id}
-                  style={{ position: "relative", marginLeft: depth * INDENT_PX, marginTop: topMargin }}
+                  style={{ position: "relative", marginLeft: depth * INDENT_PX }}
                 >
                   {/* ── Before insertion line ── */}
                   {isDropBefore && (
@@ -643,29 +635,19 @@ export default function ThinkTankLandingPage() {
                     style={{
                       display: "flex",
                       alignItems: "center",
-                      gap: isTopLevel ? "16px" : "12px",
-                      padding: isTopLevel ? "18px 20px 18px 22px" : "10px 14px 10px 14px",
+                      gap: "14px",
+                      padding: "14px 16px",
                       background: isDropChild
                         ? "rgba(234,179,8,.06)"
-                        : isHov
-                          ? "#f0f6ff"
-                          : isTopLevel
-                            ? "#1c2333"
-                            : "#161b22",
+                        : isHov ? "#f0f6ff" : "#161b22",
                       border: isDropChild
                         ? "2.5px solid #d97706"
-                        : `1px solid ${isHov ? "#3b82f6" : isTopLevel ? "#3b4b66" : "#30363d80"}`,
-                      borderLeft: isDropChild
-                        ? "2.5px solid #d97706"
-                        : isTopLevel
-                          ? `4px solid ${isHov ? "#3b82f6" : "#58a6ff"}`
-                          : `1px solid ${isHov ? "#3b82f6" : "#30363d80"}`,
-                      borderRadius: isTopLevel ? "10px" : "6px",
+                        : `1px solid ${isHov ? "#3b82f6" : "#30363d80"}`,
+                      borderRadius: "8px",
                       opacity: isDragging ? 0.35 : 1,
                       transition: isDragging ? "none" : "all .2s ease",
                       cursor: "grab",
                       position: "relative",
-                      boxShadow: isTopLevel && !isHov ? "0 2px 6px rgba(0,0,0,.2)" : "none",
                     }}
                   >
                     {/* Nest indicator label */}
@@ -704,10 +686,8 @@ export default function ThinkTankLandingPage() {
 
                     {/* Thumbnail */}
                     <div style={{
-                      width: isTopLevel ? "56px" : "38px",
-                      height: isTopLevel ? "56px" : "38px",
-                      borderRadius: isTopLevel ? "8px" : "5px",
-                      border: `1px solid ${isHov ? "#cbd5e1" : isTopLevel ? "#3b4b66" : "#30363d"}`,
+                      width: "44px", height: "44px", borderRadius: "6px",
+                      border: `1px solid ${isHov ? "#cbd5e1" : "#30363d"}`,
                       background: isHov ? "#e2e8f0" : "#0d1117",
                       display: "flex", alignItems: "center", justifyContent: "center",
                       overflow: "hidden", flexShrink: 0,
@@ -715,24 +695,18 @@ export default function ThinkTankLandingPage() {
                       {project.thumbnail ? (
                         <img src={project.thumbnail} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                       ) : (
-                        <span style={{ fontSize: isTopLevel ? "24px" : "16px", opacity: 0.35 }}>💡</span>
+                        <span style={{ fontSize: "18px", opacity: 0.3 }}>💡</span>
                       )}
                     </div>
 
                     {/* Title + Description */}
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{
-                        fontSize: isTopLevel ? "15px" : "13px",
-                        fontWeight: isTopLevel ? 700 : 600,
-                        color: isHov ? "#0f172a" : "#e6edf3",
-                        lineHeight: 1.3,
-                      }}>
+                      <div style={{ fontSize: "14px", fontWeight: 600, color: isHov ? "#0f172a" : "#e6edf3", lineHeight: 1.3 }}>
                         {project.title}
                       </div>
                       {project.description && (
                         <div style={{
-                          fontSize: isTopLevel ? "12px" : "11px",
-                          color: isHov ? "#475569" : "#8b949e",
+                          fontSize: "11.5px", color: isHov ? "#475569" : "#8b949e",
                           lineHeight: 1.4, marginTop: "3px",
                           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                         }}>
@@ -826,9 +800,8 @@ export default function ThinkTankLandingPage() {
 
         {/* Drag hint */}
         {projects.length > 0 && (
-          <p style={{ fontSize: "11px", color: "#484f58", marginTop: "16px", textAlign: "center", lineHeight: 1.6 }}>
-            Drop on <span style={{ color: "#58a6ff" }}>top/bottom edge</span> of a project to place it before/after as a sibling<br />
-            Drop on <span style={{ color: "#d97706" }}>middle</span> of a project to nest as its first child · Use ↩️ to un-nest
+          <p style={{ fontSize: "11px", color: "#484f58", marginTop: "16px", textAlign: "center" }}>
+            Drag projects to reorder · Drop on the middle of a project to nest it · Use ↩️ to un-nest
           </p>
         )}
       </div>
