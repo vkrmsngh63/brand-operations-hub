@@ -127,11 +127,10 @@ function LightboxViewer({ attachment, onClose }: { attachment: Attachment; onClo
    RICH TEXT TOOLBAR
    ═══════════════════════════════════════════════════════════════ */
 
-function RichTextToolbar({ onCommand, onSetFontSize, onSetForeColor, onSaveSelection }: {
+function RichTextToolbar({ onCommand, onSetFontSize, onSetForeColor }: {
   onCommand: (cmd: string, value?: string) => void;
   onSetFontSize: (size: string) => void;
   onSetForeColor: (color: string) => void;
-  onSaveSelection: () => void;
 }) {
   const btnStyle: React.CSSProperties = {
     background: "transparent",
@@ -180,7 +179,7 @@ function RichTextToolbar({ onCommand, onSetFontSize, onSetForeColor, onSaveSelec
         borderRadius: "8px 8px 0 0",
         borderBottom: "1px solid #e5e7eb",
       }}
-      onMouseDown={() => onSaveSelection()}
+      onMouseDown={(e) => e.preventDefault() /* keep focus in editor */}
     >
       {/* Font size dropdown */}
       <select
@@ -425,7 +424,6 @@ export default function AdminNotes({ system, systemLabel, systemIcon, backRoute 
   const editorRef = useRef<HTMLDivElement>(null);
   const activeNoteIdRef = useRef<string | null>(null);
   const lastLoadedContentRef = useRef<{ id: string; content: string } | null>(null);
-  const savedSelectionRef = useRef<Range | null>(null);
 
   /* ── AUTH + INITIAL LOAD ── */
   useEffect(() => {
@@ -602,51 +600,8 @@ export default function AdminNotes({ system, systemLabel, systemIcon, backRoute 
   function execCommand(cmd: string, value?: string) {
     if (!editorRef.current) return;
     editorRef.current.focus();
-
-    // Restore the selection that was active when the toolbar was clicked
-    const saved = savedSelectionRef.current;
-    if (saved) {
-      try {
-        const sel = window.getSelection();
-        if (sel) {
-          sel.removeAllRanges();
-          sel.addRange(saved);
-        }
-      } catch {
-        /* ignore - stale range */
-      }
-    }
-
     document.execCommand(cmd, false, value);
-
-    // If we just created a link, ensure it opens in a new tab
-    if (cmd === "createLink" && editorRef.current) {
-      const anchors = editorRef.current.querySelectorAll("a");
-      anchors.forEach((a) => {
-        if (!a.getAttribute("target")) {
-          a.setAttribute("target", "_blank");
-          a.setAttribute("rel", "noopener noreferrer");
-        }
-      });
-    }
-
     handleContentInput();
-  }
-
-  /* ── EDITOR CLICK: open links in new tab ── */
-  function handleEditorClick(e: React.MouseEvent) {
-    let el = e.target as HTMLElement | null;
-    while (el && el !== editorRef.current) {
-      if (el.tagName === "A") {
-        const href = (el as HTMLAnchorElement).href;
-        if (href) {
-          e.preventDefault();
-          window.open(href, "_blank", "noopener,noreferrer");
-          return;
-        }
-      }
-      el = el.parentElement;
-    }
   }
 
   function setFontSize(size: string) {
@@ -1139,12 +1094,6 @@ export default function AdminNotes({ system, systemLabel, systemIcon, backRoute 
                   onCommand={execCommand}
                   onSetFontSize={setFontSize}
                   onSetForeColor={setForeColor}
-                  onSaveSelection={() => {
-                    const sel = window.getSelection();
-                    if (sel && sel.rangeCount > 0 && editorRef.current?.contains(sel.anchorNode)) {
-                      savedSelectionRef.current = sel.getRangeAt(0).cloneRange();
-                    }
-                  }}
                 />
 
                 {/* Rich Text Editor (contentEditable) */}
@@ -1152,7 +1101,6 @@ export default function AdminNotes({ system, systemLabel, systemIcon, backRoute 
                   ref={editorRef}
                   contentEditable
                   suppressContentEditableWarning
-                  onClick={handleEditorClick}
                   onInput={handleContentInput}
                   onBlur={handleContentInput}
                   data-placeholder="Start writing your notes here…"
@@ -1324,31 +1272,11 @@ export default function AdminNotes({ system, systemLabel, systemIcon, backRoute 
         [contenteditable] a {
           color: #2563eb;
           text-decoration: underline;
-          cursor: pointer;
         }
-        [contenteditable] a:hover {
-          color: #1d4ed8;
-        }
-        [contenteditable] ul {
-          padding-left: 1.8em;
-          margin: 0.3em 0;
-          list-style-type: disc !important;
-        }
+        [contenteditable] ul,
         [contenteditable] ol {
           padding-left: 1.8em;
           margin: 0.3em 0;
-          list-style-type: decimal !important;
-        }
-        [contenteditable] ul li,
-        [contenteditable] ol li {
-          display: list-item !important;
-          list-style-position: outside !important;
-        }
-        [contenteditable] ul ul {
-          list-style-type: circle !important;
-        }
-        [contenteditable] ul ul ul {
-          list-style-type: square !important;
         }
       `}</style>
     </div>
