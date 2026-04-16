@@ -418,10 +418,6 @@ export default function AdminNotes({ system, systemLabel, systemIcon, backRoute 
   const [sidebarWidth, setSidebarWidth] = useState<number>(DEFAULT_SIDEBAR_WIDTH);
   const [resizing, setResizing] = useState(false);
 
-  // View mode + combined sort order (server-persisted)
-  const [viewMode, setViewMode] = useState<"individual" | "combined">("individual");
-  const [combinedSort, setCombinedSort] = useState<"newest" | "oldest">("newest");
-
   const fileInputRef = useRef<HTMLInputElement>(null);
   const saveTimerRef = useRef<NodeJS.Timeout | null>(null);
   const savedTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -437,7 +433,6 @@ export default function AdminNotes({ system, systemLabel, systemIcon, backRoute 
       if (!session) { router.push("/"); return; }
       fetchNotes();
       fetchSidebarWidth();
-      fetchViewPrefs();
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router, system]);
@@ -486,51 +481,6 @@ export default function AdminNotes({ system, systemLabel, systemIcon, backRoute 
         console.error("Failed to save sidebar width", err);
       }
     }, 400);
-  }
-
-  async function fetchViewPrefs() {
-    try {
-      const [viewRes, sortRes] = await Promise.all([
-        authFetch(`/api/user-preferences/adminnotes_view_mode_${system}`),
-        authFetch(`/api/user-preferences/adminnotes_combined_sort_${system}`),
-      ]);
-      if (viewRes.ok) {
-        const { value } = await viewRes.json();
-        if (value === "individual" || value === "combined") setViewMode(value);
-      }
-      if (sortRes.ok) {
-        const { value } = await sortRes.json();
-        if (value === "newest" || value === "oldest") setCombinedSort(value);
-      }
-    } catch (err) {
-      console.error("Failed to load view preferences", err);
-    }
-  }
-
-  async function changeViewMode(mode: "individual" | "combined") {
-    setViewMode(mode);
-    try {
-      await authFetch(`/api/user-preferences/adminnotes_view_mode_${system}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ value: mode }),
-      });
-    } catch (err) {
-      console.error("Failed to save view mode", err);
-    }
-  }
-
-  async function changeCombinedSort(order: "newest" | "oldest") {
-    setCombinedSort(order);
-    try {
-      await authFetch(`/api/user-preferences/adminnotes_combined_sort_${system}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ value: order }),
-      });
-    } catch (err) {
-      console.error("Failed to save sort order", err);
-    }
   }
 
   const activeNote = notes.find((n) => n.id === activeNoteId) || null;
@@ -902,63 +852,7 @@ export default function AdminNotes({ system, systemLabel, systemIcon, backRoute 
             </p>
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
-          {/* View mode toggle */}
-          <div
-            style={{
-              display: "flex", borderRadius: "6px", overflow: "hidden",
-              border: "1px solid #30363d",
-            }}
-          >
-            <button
-              onClick={() => changeViewMode("individual")}
-              style={{
-                padding: "6px 12px", fontSize: "11px", fontWeight: 600,
-                border: "none", cursor: "pointer",
-                background: viewMode === "individual" ? "#1f6feb" : "transparent",
-                color: viewMode === "individual" ? "#fff" : "#8b949e",
-                fontFamily: "inherit", display: "flex", alignItems: "center", gap: "5px",
-                transition: "all .15s",
-              }}
-              title="Show one note at a time with sidebar list"
-            >
-              📄 Individual
-            </button>
-            <button
-              onClick={() => changeViewMode("combined")}
-              style={{
-                padding: "6px 12px", fontSize: "11px", fontWeight: 600,
-                borderLeft: "1px solid #30363d", border: "none", cursor: "pointer",
-                background: viewMode === "combined" ? "#1f6feb" : "transparent",
-                color: viewMode === "combined" ? "#fff" : "#8b949e",
-                fontFamily: "inherit", display: "flex", alignItems: "center", gap: "5px",
-                transition: "all .15s",
-              }}
-              title="Show all notes one after another"
-            >
-              📚 Combined
-            </button>
-          </div>
-
-          {/* Sort dropdown - only in Combined view */}
-          {viewMode === "combined" && (
-            <select
-              value={combinedSort}
-              onChange={(e) => changeCombinedSort(e.target.value as "newest" | "oldest")}
-              style={{
-                padding: "6px 10px", fontSize: "11px", fontWeight: 600,
-                background: "#0d1117", border: "1px solid #30363d",
-                borderRadius: "6px", color: "#c9d1d9",
-                cursor: "pointer", fontFamily: "inherit", outline: "none",
-              }}
-              title="Sort order"
-            >
-              <option value="newest">🕒 Newest → Oldest</option>
-              <option value="oldest">🕰️ Oldest → Newest</option>
-            </select>
-          )}
-
-          {/* Save status */}
+        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
           {saveStatus === "saving" && (
             <span style={{ fontSize: "11px", color: "#d4a72c", display: "flex", alignItems: "center", gap: "6px" }}>
               <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#d4a72c", animation: "pulse 1s infinite" }} />
@@ -991,8 +885,7 @@ export default function AdminNotes({ system, systemLabel, systemIcon, backRoute 
         </div>
       )}
 
-      {/* ── MAIN AREA ── */}
-      {viewMode === "individual" ? (
+      {/* ── MAIN AREA: sidebar + editor ── */}
       <div style={{ flex: 1, display: "flex", minHeight: 0, overflow: "hidden" }}>
         {/* ─── SIDEBAR ─── */}
         <div
@@ -1403,197 +1296,6 @@ export default function AdminNotes({ system, systemLabel, systemIcon, backRoute 
           )}
         </div>
       </div>
-      ) : (
-        /* ── COMBINED VIEW ── */
-        <div style={{ flex: 1, overflow: "auto", background: "#f3f4f6", padding: "24px 40px 64px" }}>
-          {notes.length === 0 ? (
-            <div
-              style={{
-                maxWidth: "820px", margin: "48px auto", padding: "56px 32px",
-                textAlign: "center", background: "#fff",
-                border: "1px solid #e5e7eb", borderRadius: "12px",
-                color: "#6b7280",
-              }}
-            >
-              <span style={{ fontSize: "48px", opacity: 0.5, display: "block", marginBottom: "12px" }}>📝</span>
-              <p style={{ fontSize: "14px" }}>
-                No notes yet. Switch to Individual view and click &quot;+ New Note&quot; to create one.
-              </p>
-            </div>
-          ) : (
-            <div style={{ maxWidth: "820px", margin: "0 auto" }}>
-              {/* Count header */}
-              <div
-                style={{
-                  fontSize: "11px", fontWeight: 700, color: "#6b7280",
-                  letterSpacing: "1.4px", textTransform: "uppercase",
-                  marginBottom: "16px", paddingLeft: "2px",
-                }}
-              >
-                All Notes ({notes.length}) ·{" "}
-                {combinedSort === "newest" ? "Newest first" : "Oldest first"}
-              </div>
-
-              {/* Render each note */}
-              {[...notes]
-                .sort((a, b) => {
-                  const tA = new Date(a.createdAt).getTime();
-                  const tB = new Date(b.createdAt).getTime();
-                  return combinedSort === "newest" ? tB - tA : tA - tB;
-                })
-                .map((note) => (
-                  <div
-                    key={note.id}
-                    style={{
-                      background: "#fff", border: "1px solid #e5e7eb",
-                      borderRadius: "10px", padding: "24px 28px",
-                      marginBottom: "18px",
-                      boxShadow: "0 1px 3px rgba(0,0,0,.04)",
-                    }}
-                  >
-                    {/* Note header */}
-                    <div
-                      style={{
-                        display: "flex", alignItems: "flex-start", justifyContent: "space-between",
-                        gap: "12px", marginBottom: "12px",
-                        paddingBottom: "12px", borderBottom: "1px solid #f3f4f6",
-                      }}
-                    >
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <h2
-                          style={{
-                            fontSize: "18px", fontWeight: 700, color: "#111827",
-                            margin: 0, lineHeight: 1.3,
-                          }}
-                        >
-                          {note.title}
-                        </h2>
-                        {note.description && (
-                          <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "4px" }}>
-                            {note.description}
-                          </div>
-                        )}
-                        <div style={{ fontSize: "10px", color: "#9ca3af", marginTop: "6px", display: "flex", gap: "12px" }}>
-                          <span>Created {timeAgo(note.createdAt)}</span>
-                          {note.updatedAt !== note.createdAt && (
-                            <span>· Updated {timeAgo(note.updatedAt)}</span>
-                          )}
-                          {note.attachments.length > 0 && (
-                            <span>· 📎 {note.attachments.length} attachment{note.attachments.length === 1 ? "" : "s"}</span>
-                          )}
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => {
-                          setActiveNoteId(note.id);
-                          changeViewMode("individual");
-                        }}
-                        title="Open in Individual view to edit"
-                        style={{
-                          padding: "6px 12px", fontSize: "11px", fontWeight: 600,
-                          background: "#fff", border: "1px solid #d1d5db",
-                          borderRadius: "6px", color: "#374151",
-                          cursor: "pointer", fontFamily: "inherit", flexShrink: 0,
-                        }}
-                        onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#9ca3af"; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#d1d5db"; }}
-                      >
-                        ✏️ Edit
-                      </button>
-                    </div>
-
-                    {/* Rendered content */}
-                    {note.content ? (
-                      <div
-                        className="combined-note-content"
-                        style={{
-                          fontSize: "14px", lineHeight: 1.65, color: "#111827",
-                        }}
-                        onClick={(e) => {
-                          // Make links inside rendered content clickable
-                          let el = e.target as HTMLElement | null;
-                          while (el && el !== e.currentTarget) {
-                            if (el.tagName === "A") {
-                              const href = (el as HTMLAnchorElement).href;
-                              if (href) {
-                                e.preventDefault();
-                                window.open(href, "_blank", "noopener,noreferrer");
-                                return;
-                              }
-                            }
-                            el = el.parentElement;
-                          }
-                        }}
-                        dangerouslySetInnerHTML={{ __html: note.content }}
-                      />
-                    ) : (
-                      <div style={{ fontSize: "13px", color: "#9ca3af", fontStyle: "italic" }}>
-                        (No content)
-                      </div>
-                    )}
-
-                    {/* Attachments */}
-                    {note.attachments.length > 0 && (
-                      <div style={{ marginTop: "20px", paddingTop: "16px", borderTop: "1px solid #f3f4f6" }}>
-                        <div style={{
-                          fontSize: "10px", fontWeight: 700, color: "#6b7280",
-                          letterSpacing: "1.3px", textTransform: "uppercase", marginBottom: "10px",
-                        }}>
-                          Attachments
-                        </div>
-                        <div
-                          style={{
-                            display: "grid",
-                            gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
-                            gap: "8px",
-                          }}
-                        >
-                          {note.attachments.map((att) => (
-                            <div
-                              key={att.id}
-                              onClick={() => setLightbox(att)}
-                              style={{
-                                border: "1px solid #e5e7eb", borderRadius: "6px",
-                                overflow: "hidden", cursor: "pointer",
-                                background: "#f9fafb",
-                              }}
-                              onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#9ca3af"; }}
-                              onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#e5e7eb"; }}
-                            >
-                              <div style={{
-                                height: "100px",
-                                display: "flex", alignItems: "center", justifyContent: "center",
-                                position: "relative", overflow: "hidden",
-                              }}>
-                                {isImage(att.fileType) ? (
-                                  <img src={att.publicUrl} alt={att.fileName} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                                ) : isVideo(att.fileType) ? (
-                                  <>
-                                    <video src={att.publicUrl} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                                    <div style={{
-                                      position: "absolute", inset: 0, background: "rgba(0,0,0,.25)",
-                                      display: "flex", alignItems: "center", justifyContent: "center",
-                                      color: "#fff", fontSize: "24px",
-                                    }}>▶</div>
-                                  </>
-                                ) : (
-                                  <span style={{ fontSize: "28px" }}>📄</span>
-                                )}
-                              </div>
-                              <div style={{ padding: "6px 8px", fontSize: "10px", color: "#4b5563", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                {att.fileName}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Lightbox */}
       {lightbox && <LightboxViewer attachment={lightbox} onClose={() => setLightbox(null)} />}
@@ -1646,35 +1348,6 @@ export default function AdminNotes({ system, systemLabel, systemIcon, backRoute 
           list-style-type: circle !important;
         }
         [contenteditable] ul ul ul {
-          list-style-type: square !important;
-        }
-        .combined-note-content a {
-          color: #2563eb;
-          text-decoration: underline;
-          cursor: pointer;
-        }
-        .combined-note-content a:hover {
-          color: #1d4ed8;
-        }
-        .combined-note-content ul {
-          padding-left: 1.8em;
-          margin: 0.5em 0;
-          list-style-type: disc !important;
-        }
-        .combined-note-content ol {
-          padding-left: 1.8em;
-          margin: 0.5em 0;
-          list-style-type: decimal !important;
-        }
-        .combined-note-content ul li,
-        .combined-note-content ol li {
-          display: list-item !important;
-          list-style-position: outside !important;
-        }
-        .combined-note-content ul ul {
-          list-style-type: circle !important;
-        }
-        .combined-note-content ul ul ul {
           list-style-type: square !important;
         }
       `}</style>
