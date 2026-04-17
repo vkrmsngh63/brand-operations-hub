@@ -159,6 +159,7 @@ const WORKFLOW_DEFS: { id: string; icon: string; title: string; active: boolean;
   { id: "compliance-risk", icon: "⚖️", title: "Compliance & Risk Mitigation", active: false, route: null },
   { id: "exit-strategy", icon: "🚪", title: "Exit Strategy & Portfolio Management", active: false, route: null },
   { id: "analytics-admin", icon: "📊", title: "Analytics & System Administration", active: false, route: null },
+  { id: "business-operations", icon: "⚙️", title: "Business Operations", active: false, route: null },
 ];
 
 function WorkflowCardGrid({

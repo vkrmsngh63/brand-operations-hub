@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth';
 
-// GET /api/admin-notes?system=think-tank
+// GET /api/admin-notes?system=think-tank|pms|dashboard|plos
 export async function GET(req: NextRequest) {
   const auth = await verifyAuth(req);
   if (auth.error) return auth.error;
@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const system = searchParams.get('system');
 
-    if (!system || !['think-tank', 'pms'].includes(system)) {
+    if (!system || !['think-tank', 'pms', 'dashboard', 'plos'].includes(system)) {
       return NextResponse.json({ error: 'Invalid or missing system parameter' }, { status: 400 });
     }
 
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
     const system = body.system;
     const title = (body.title || 'Untitled Note').trim() || 'Untitled Note';
 
-    if (!system || !['think-tank', 'pms'].includes(system)) {
+    if (!system || !['think-tank', 'pms', 'dashboard', 'plos'].includes(system)) {
       return NextResponse.json({ error: 'Invalid or missing system' }, { status: 400 });
     }
 
