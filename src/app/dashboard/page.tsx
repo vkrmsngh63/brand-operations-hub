@@ -294,6 +294,23 @@ export default function DashboardPage() {
           }}
         >
           <button
+            onClick={() => router.push("/dashboard/notes")}
+            title="Admin Notes"
+            style={{
+              padding: "6px 14px",
+              background: "transparent",
+              border: "1px solid #30363d",
+              borderRadius: "6px",
+              color: "#8b949e",
+              fontSize: "11px",
+              fontWeight: 600,
+              cursor: "pointer",
+              fontFamily: "'IBM Plex Sans', sans-serif",
+            }}
+          >
+            📝 Notes
+          </button>
+          <button
             onClick={handleLogout}
             style={{
               padding: "6px 14px",

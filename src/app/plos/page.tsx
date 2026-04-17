@@ -57,7 +57,7 @@ const DEFAULT_CARDS: CardData[] = [
 - Adjustment interface for non-technical workers
 - Approval gate before passing to downstream stages`,
     badge: "active",
-    route: "/keyword-clustering",
+    route: "/projects",
   },
   {
     id: "competition-scraping",
@@ -1048,9 +1048,14 @@ export default function PLOSLandingPage() {
           <button onClick={() => router.push("/dashboard")} style={btnSecondary}>
             ← Back
           </button>
-          <button onClick={handleLogout} style={btnSecondary}>
-            Sign Out
-          </button>
+          <div style={{ display: "flex", gap: "10px" }}>
+            <button onClick={() => router.push("/plos/notes")} title="Admin Notes" style={btnSecondary}>
+              📝 Notes
+            </button>
+            <button onClick={handleLogout} style={btnSecondary}>
+              Sign Out
+            </button>
+          </div>
         </div>
 
         {/* Header */}

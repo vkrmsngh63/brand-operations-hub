@@ -31,7 +31,7 @@ interface Note {
   attachments: Attachment[];
 }
 
-type SystemKey = "think-tank" | "pms";
+type SystemKey = "think-tank" | "pms" | "dashboard" | "plos";
 
 interface AdminNotesProps {
   system: SystemKey;
