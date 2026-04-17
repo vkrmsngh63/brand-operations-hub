@@ -1,43 +1,56 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { verifyProjectAuth } from '@/lib/auth';
+import { verifyProjectWorkflowAuth } from '@/lib/auth';
+import { markWorkflowActive } from '@/lib/workflow-status';
 
-// GET /api/projects/[projectId]/canvas/nodes — list all canvas nodes
+const WORKFLOW = 'keyword-clustering';
+
+// GET /api/projects/[projectId]/canvas/nodes — list all canvas nodes.
+// Pure read.
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   const { projectId } = await params;
-  const auth = await verifyProjectAuth(req, projectId);
+  const auth = await verifyProjectWorkflowAuth(req, projectId, WORKFLOW);
   if (auth.error) return auth.error;
+  const { projectWorkflowId } = auth;
 
   try {
     const nodes = await prisma.canvasNode.findMany({
-      where: { projectId },
+      where: { projectWorkflowId },
       orderBy: { sortOrder: 'asc' },
     });
     return NextResponse.json(nodes);
   } catch (error) {
     console.error('GET canvas nodes error:', error);
-    return NextResponse.json({ error: 'Failed to fetch nodes' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Failed to fetch nodes' },
+      { status: 500 }
+    );
   }
 }
 
-// POST /api/projects/[projectId]/canvas/nodes — create a node
+// POST /api/projects/[projectId]/canvas/nodes — create a node.
+// Meaningful activity — bumps workspace status.
+//
+// NOTE: The read-then-increment of nextNodeId is not atomic. Two concurrent
+// POSTs could read the same nextNodeId and collide on primary key. Flagged
+// for future infrastructure work; out of scope for the Phase M refactor.
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   const { projectId } = await params;
-  const auth = await verifyProjectAuth(req, projectId);
+  const auth = await verifyProjectWorkflowAuth(req, projectId, WORKFLOW);
   if (auth.error) return auth.error;
+  const { projectWorkflowId } = auth;
 
   try {
     const body = await req.json();
 
-    // Get and increment nextNodeId from canvas state
     const canvasState = await prisma.canvasState.findUnique({
-      where: { projectId },
+      where: { projectWorkflowId },
     });
 
     const nodeId = canvasState?.nextNodeId ?? 1;
@@ -45,7 +58,7 @@ export async function POST(
     const node = await prisma.canvasNode.create({
       data: {
         id: nodeId,
-        projectId,
+        projectWorkflowId,
         title: body.title || '',
         description: body.description || '',
         x: body.x ?? 0,
@@ -64,91 +77,133 @@ export async function POST(
 
     // Increment nextNodeId (upsert in case canvasState didn't exist yet)
     await prisma.canvasState.upsert({
-      where: { projectId },
+      where: { projectWorkflowId },
       update: { nextNodeId: nodeId + 1 },
-      create: { projectId, nextNodeId: nodeId + 1 },
+      create: { projectWorkflowId, nextNodeId: nodeId + 1 },
     });
 
+    await markWorkflowActive(projectId, WORKFLOW);
     return NextResponse.json(node, { status: 201 });
   } catch (error) {
     console.error('POST canvas node error:', error);
-    return NextResponse.json({ error: 'Failed to create node' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Failed to create node' },
+      { status: 500 }
+    );
   }
 }
 
-// PATCH /api/projects/[projectId]/canvas/nodes — bulk update nodes
-// Send { nodes: [{ id, ...fields }] }
+// PATCH /api/projects/[projectId]/canvas/nodes — bulk update nodes.
+// Body: { nodes: [{ id, ...fields }] }
 // All updates run in a single Prisma transaction — all succeed or all fail.
+// Meaningful activity — bumps workspace status.
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   const { projectId } = await params;
-  const auth = await verifyProjectAuth(req, projectId);
+  const auth = await verifyProjectWorkflowAuth(req, projectId, WORKFLOW);
   if (auth.error) return auth.error;
+  const { projectWorkflowId } = auth;
 
   try {
     const body = await req.json();
 
     if (!Array.isArray(body.nodes)) {
-      return NextResponse.json({ error: 'Provide nodes array' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Provide nodes array' },
+        { status: 400 }
+      );
     }
 
     const ops = body.nodes.map((n: Record<string, unknown>) =>
       prisma.canvasNode.update({
-        where: { id: n.id as number, projectId },
+        where: { id: n.id as number, projectWorkflowId },
         data: {
           ...(n.title !== undefined && { title: n.title as string }),
-          ...(n.description !== undefined && { description: n.description as string }),
+          ...(n.description !== undefined && {
+            description: n.description as string,
+          }),
           ...(n.x !== undefined && { x: n.x as number }),
           ...(n.y !== undefined && { y: n.y as number }),
           ...(n.w !== undefined && { w: n.w as number }),
           ...(n.h !== undefined && { h: n.h as number }),
-          ...(n.parentId !== undefined && { parentId: n.parentId as number | null }),
-          ...(n.pathwayId !== undefined && { pathwayId: n.pathwayId as number | null }),
-          ...(n.relationshipType !== undefined && { relationshipType: n.relationshipType as string }),
-          ...(n.linkedKwIds !== undefined && { linkedKwIds: n.linkedKwIds as unknown as import('@prisma/client').Prisma.InputJsonValue }),
-          ...(n.kwPlacements !== undefined && { kwPlacements: n.kwPlacements as unknown as import('@prisma/client').Prisma.InputJsonValue }),
-          ...(n.altTitles !== undefined && { altTitles: n.altTitles as unknown as import('@prisma/client').Prisma.InputJsonValue }),
-          ...(n.sortOrder !== undefined && { sortOrder: n.sortOrder as number }),
+          ...(n.parentId !== undefined && {
+            parentId: n.parentId as number | null,
+          }),
+          ...(n.pathwayId !== undefined && {
+            pathwayId: n.pathwayId as number | null,
+          }),
+          ...(n.relationshipType !== undefined && {
+            relationshipType: n.relationshipType as string,
+          }),
+          ...(n.linkedKwIds !== undefined && {
+            linkedKwIds:
+              n.linkedKwIds as unknown as import('@prisma/client').Prisma.InputJsonValue,
+          }),
+          ...(n.kwPlacements !== undefined && {
+            kwPlacements:
+              n.kwPlacements as unknown as import('@prisma/client').Prisma.InputJsonValue,
+          }),
+          ...(n.altTitles !== undefined && {
+            altTitles:
+              n.altTitles as unknown as import('@prisma/client').Prisma.InputJsonValue,
+          }),
+          ...(n.sortOrder !== undefined && {
+            sortOrder: n.sortOrder as number,
+          }),
         },
       })
     );
 
     const results = await prisma.$transaction(ops);
+    await markWorkflowActive(projectId, WORKFLOW);
 
     return NextResponse.json(results);
   } catch (error) {
     console.error('PATCH canvas nodes error:', error);
-    return NextResponse.json({ error: 'Failed to update nodes' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Failed to update nodes' },
+      { status: 500 }
+    );
   }
 }
 
-// DELETE /api/projects/[projectId]/canvas/nodes — delete node(s)
-// Send { ids: [1, 2, 3] } or { id: 1 }
+// DELETE /api/projects/[projectId]/canvas/nodes — delete node(s).
+// Body: { ids: [1, 2, 3] } or { id: 1 }
+// Meaningful activity — bumps workspace status.
 export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   const { projectId } = await params;
-  const auth = await verifyProjectAuth(req, projectId);
+  const auth = await verifyProjectWorkflowAuth(req, projectId, WORKFLOW);
   if (auth.error) return auth.error;
+  const { projectWorkflowId } = auth;
 
   try {
     const body = await req.json();
 
-    const ids: number[] = body.ids || (body.id !== undefined ? [body.id] : []);
+    const ids: number[] =
+      body.ids || (body.id !== undefined ? [body.id] : []);
     if (ids.length === 0) {
-      return NextResponse.json({ error: 'Provide id or ids' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Provide id or ids' },
+        { status: 400 }
+      );
     }
 
     await prisma.canvasNode.deleteMany({
-      where: { id: { in: ids }, projectId },
+      where: { id: { in: ids }, projectWorkflowId },
     });
 
+    await markWorkflowActive(projectId, WORKFLOW);
     return NextResponse.json({ success: true, deleted: ids });
   } catch (error) {
     console.error('DELETE canvas nodes error:', error);
-    return NextResponse.json({ error: 'Failed to delete nodes' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Failed to delete nodes' },
+      { status: 500 }
+    );
   }
 }

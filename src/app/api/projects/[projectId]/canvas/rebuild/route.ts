@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { verifyProjectAuth } from '@/lib/auth';
+import { verifyProjectWorkflowAuth } from '@/lib/auth';
+import { markWorkflowActive } from '@/lib/workflow-status';
 
-// POST /api/projects/[projectId]/canvas/rebuild — atomic canvas rebuild
+const WORKFLOW = 'keyword-clustering';
+
+// POST /api/projects/[projectId]/canvas/rebuild — atomic canvas rebuild.
 // Accepts full canvas state and applies it in a single transaction.
 // Used by Auto-Analyze to replace canvas without partial failures.
 //
@@ -15,13 +18,16 @@ import { verifyProjectAuth } from '@/lib/auth';
 //   deletePathwayIds?: number[],  // pathways to remove
 //   deleteSisterLinkIds?: string[], // sister links to remove
 // }
+//
+// Meaningful activity — bumps workspace status after the transaction succeeds.
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   const { projectId } = await params;
-  const auth = await verifyProjectAuth(req, projectId);
+  const auth = await verifyProjectWorkflowAuth(req, projectId, WORKFLOW);
   if (auth.error) return auth.error;
+  const { projectWorkflowId } = auth;
 
   try {
     const body = await req.json();
@@ -31,23 +37,29 @@ export async function POST(
     if (Array.isArray(body.deleteNodeIds) && body.deleteNodeIds.length > 0) {
       ops.push(
         prisma.canvasNode.deleteMany({
-          where: { projectId, id: { in: body.deleteNodeIds } },
+          where: { projectWorkflowId, id: { in: body.deleteNodeIds } },
         })
       );
     }
 
-    if (Array.isArray(body.deletePathwayIds) && body.deletePathwayIds.length > 0) {
+    if (
+      Array.isArray(body.deletePathwayIds) &&
+      body.deletePathwayIds.length > 0
+    ) {
       ops.push(
         prisma.pathway.deleteMany({
-          where: { projectId, id: { in: body.deletePathwayIds } },
+          where: { projectWorkflowId, id: { in: body.deletePathwayIds } },
         })
       );
     }
 
-    if (Array.isArray(body.deleteSisterLinkIds) && body.deleteSisterLinkIds.length > 0) {
+    if (
+      Array.isArray(body.deleteSisterLinkIds) &&
+      body.deleteSisterLinkIds.length > 0
+    ) {
       ops.push(
         prisma.sisterLink.deleteMany({
-          where: { projectId, id: { in: body.deleteSisterLinkIds } },
+          where: { projectWorkflowId, id: { in: body.deleteSisterLinkIds } },
         })
       );
     }
@@ -57,10 +69,12 @@ export async function POST(
       for (const n of body.nodes) {
         ops.push(
           prisma.canvasNode.upsert({
-            where: { id: n.id, projectId },
+            where: { id: n.id, projectWorkflowId },
             update: {
               ...(n.title !== undefined && { title: n.title }),
-              ...(n.description !== undefined && { description: n.description }),
+              ...(n.description !== undefined && {
+                description: n.description,
+              }),
               ...(n.x !== undefined && { x: n.x }),
               ...(n.y !== undefined && { y: n.y }),
               ...(n.w !== undefined && { w: n.w }),
@@ -68,22 +82,36 @@ export async function POST(
               ...(n.baseY !== undefined && { baseY: n.baseY }),
               ...(n.parentId !== undefined && { parentId: n.parentId }),
               ...(n.pathwayId !== undefined && { pathwayId: n.pathwayId }),
-              ...(n.relationshipType !== undefined && { relationshipType: n.relationshipType }),
-              ...(n.linkedKwIds !== undefined && { linkedKwIds: n.linkedKwIds }),
-              ...(n.kwPlacements !== undefined && { kwPlacements: n.kwPlacements }),
+              ...(n.relationshipType !== undefined && {
+                relationshipType: n.relationshipType,
+              }),
+              ...(n.linkedKwIds !== undefined && {
+                linkedKwIds: n.linkedKwIds,
+              }),
+              ...(n.kwPlacements !== undefined && {
+                kwPlacements: n.kwPlacements,
+              }),
               ...(n.altTitles !== undefined && { altTitles: n.altTitles }),
-              ...(n.collapsedLinear !== undefined && { collapsedLinear: n.collapsedLinear }),
-              ...(n.collapsedNested !== undefined && { collapsedNested: n.collapsedNested }),
-              ...(n.narrativeBridge !== undefined && { narrativeBridge: n.narrativeBridge }),
+              ...(n.collapsedLinear !== undefined && {
+                collapsedLinear: n.collapsedLinear,
+              }),
+              ...(n.collapsedNested !== undefined && {
+                collapsedNested: n.collapsedNested,
+              }),
+              ...(n.narrativeBridge !== undefined && {
+                narrativeBridge: n.narrativeBridge,
+              }),
               ...(n.userMinH !== undefined && { userMinH: n.userMinH }),
               ...(n.connCP !== undefined && { connCP: n.connCP }),
-              ...(n.connOutOff !== undefined && { connOutOff: n.connOutOff }),
+              ...(n.connOutOff !== undefined && {
+                connOutOff: n.connOutOff,
+              }),
               ...(n.connInOff !== undefined && { connInOff: n.connInOff }),
               ...(n.sortOrder !== undefined && { sortOrder: n.sortOrder }),
             },
             create: {
               id: n.id,
-              projectId,
+              projectWorkflowId,
               title: n.title || '',
               description: n.description || '',
               x: n.x ?? 0,
@@ -116,9 +144,9 @@ export async function POST(
       for (const pw of body.pathways) {
         ops.push(
           prisma.pathway.upsert({
-            where: { id: pw.id, projectId },
+            where: { id: pw.id, projectWorkflowId },
             update: {},
-            create: { id: pw.id, projectId },
+            create: { id: pw.id, projectWorkflowId },
           })
         );
       }
@@ -129,7 +157,11 @@ export async function POST(
       for (const sl of body.sisterLinks) {
         ops.push(
           prisma.sisterLink.create({
-            data: { projectId, nodeA: sl.nodeA, nodeB: sl.nodeB },
+            data: {
+              projectWorkflowId,
+              nodeA: sl.nodeA,
+              nodeB: sl.nodeB,
+            },
           })
         );
       }
@@ -140,16 +172,20 @@ export async function POST(
       const cs = body.canvasState;
       ops.push(
         prisma.canvasState.upsert({
-          where: { projectId },
+          where: { projectWorkflowId },
           update: {
-            ...(cs.nextNodeId !== undefined && { nextNodeId: cs.nextNodeId }),
-            ...(cs.nextPathwayId !== undefined && { nextPathwayId: cs.nextPathwayId }),
+            ...(cs.nextNodeId !== undefined && {
+              nextNodeId: cs.nextNodeId,
+            }),
+            ...(cs.nextPathwayId !== undefined && {
+              nextPathwayId: cs.nextPathwayId,
+            }),
             ...(cs.viewX !== undefined && { viewX: cs.viewX }),
             ...(cs.viewY !== undefined && { viewY: cs.viewY }),
             ...(cs.zoom !== undefined && { zoom: cs.zoom }),
           },
           create: {
-            projectId,
+            projectWorkflowId,
             nextNodeId: cs.nextNodeId ?? 1,
             nextPathwayId: cs.nextPathwayId ?? 1,
             viewX: cs.viewX ?? 0,
@@ -164,9 +200,14 @@ export async function POST(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await prisma.$transaction(ops as any);
 
+    await markWorkflowActive(projectId, WORKFLOW);
+
     return NextResponse.json({ success: true, operations: ops.length });
   } catch (error) {
     console.error('POST canvas rebuild error:', error);
-    return NextResponse.json({ error: 'Canvas rebuild failed — all changes rolled back' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Canvas rebuild failed — all changes rolled back' },
+      { status: 500 }
+    );
   }
 }

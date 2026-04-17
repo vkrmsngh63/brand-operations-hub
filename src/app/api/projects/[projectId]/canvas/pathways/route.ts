@@ -1,62 +1,74 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { verifyProjectAuth } from '@/lib/auth';
+import { verifyProjectWorkflowAuth } from '@/lib/auth';
+import { markWorkflowActive } from '@/lib/workflow-status';
 
-// POST /api/projects/[projectId]/canvas/pathways — create a pathway
+const WORKFLOW = 'keyword-clustering';
+
+// POST /api/projects/[projectId]/canvas/pathways — create a pathway.
+// Meaningful activity — bumps workspace status.
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   const { projectId } = await params;
-  const auth = await verifyProjectAuth(req, projectId);
+  const auth = await verifyProjectWorkflowAuth(req, projectId, WORKFLOW);
   if (auth.error) return auth.error;
+  const { projectWorkflowId } = auth;
 
   try {
-    // Get and increment nextPathwayId
     const canvasState = await prisma.canvasState.findUnique({
-      where: { projectId },
+      where: { projectWorkflowId },
     });
-
     const pathwayId = canvasState?.nextPathwayId ?? 1;
 
     const pathway = await prisma.pathway.create({
-      data: { id: pathwayId, projectId },
+      data: { id: pathwayId, projectWorkflowId },
     });
 
     if (canvasState) {
       await prisma.canvasState.update({
-        where: { projectId },
+        where: { projectWorkflowId },
         data: { nextPathwayId: pathwayId + 1 },
       });
     }
 
+    await markWorkflowActive(projectId, WORKFLOW);
     return NextResponse.json(pathway, { status: 201 });
   } catch (error) {
     console.error('POST pathway error:', error);
-    return NextResponse.json({ error: 'Failed to create pathway' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Failed to create pathway' },
+      { status: 500 }
+    );
   }
 }
 
-// DELETE /api/projects/[projectId]/canvas/pathways — delete pathway
-// Send { id: 1 }
+// DELETE /api/projects/[projectId]/canvas/pathways — delete one pathway.
+// Body: { id: 1 }
+// Meaningful activity — bumps workspace status.
 export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   const { projectId } = await params;
-  const auth = await verifyProjectAuth(req, projectId);
+  const auth = await verifyProjectWorkflowAuth(req, projectId, WORKFLOW);
   if (auth.error) return auth.error;
+  const { projectWorkflowId } = auth;
 
   try {
     const body = await req.json();
-
     await prisma.pathway.delete({
-      where: { id: body.id, projectId },
+      where: { id: body.id, projectWorkflowId },
     });
 
+    await markWorkflowActive(projectId, WORKFLOW);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('DELETE pathway error:', error);
-    return NextResponse.json({ error: 'Failed to delete pathway' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Failed to delete pathway' },
+      { status: 500 }
+    );
   }
 }

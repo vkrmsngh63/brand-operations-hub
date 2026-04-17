@@ -1,3 +1,10 @@
+// ============================================================
+// PLOS database schema — Phase M
+// User-facing concept: "Project" (one product launch effort)
+// Internal structure: Project + ProjectWorkflow (user never sees
+// the name "ProjectWorkflow" — it's pure DB implementation)
+// ============================================================
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -8,28 +15,84 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-model Keyword {
-  id             String   @id @default(uuid())
-  projectId      String
-  keyword        String
-  volume         Int      @default(0)
-  sortingStatus  String   @default("Unsorted")
-  tags           String   @default("")
-  topic          String   @default("")
-  canvasLoc      Json     @default("{}")
-  topicApproved  Json     @default("{}")
-  sortOrder      Int      @default(0)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+// ============================================================
+// Project — user-facing record.
+// One Project = one product launch effort.
+// Flows through all 14 PLOS workflows via ProjectWorkflow rows.
+// ============================================================
+model Project {
+  id          String   @id @default(uuid())
+  userId      String
+  name        String   @default("Untitled Project")
+  description String   @default("") @db.Text
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workflows ProjectWorkflow[]
 
+  @@index([userId])
+}
+
+// ============================================================
+// ProjectWorkflow — internal per-workflow state + data bucket.
+// User never sees this name in the UI.
+// Auto-created on first workflow entry; auto-transitions
+// "inactive" -> "active" on first real action; "completed"
+// is user-marked.
+// ============================================================
+model ProjectWorkflow {
+  id              String    @id @default(uuid())
+  projectId       String
+  workflow        String // "keyword-clustering", etc.
+  status          String    @default("inactive") // "inactive" | "active" | "completed"
+  firstActivityAt DateTime?
+  lastActivityAt  DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  keywords    Keyword[]
+  canvasNodes CanvasNode[]
+  pathways    Pathway[]
+  sisterLinks SisterLink[]
+  canvasState CanvasState?
+
+  @@unique([projectId, workflow])
   @@index([projectId])
 }
 
+// ============================================================
+// Keyword — attached to a workflow instance (was: Project).
+// All fields unchanged; only the foreign key target changed.
+// ============================================================
+model Keyword {
+  id                String   @id @default(uuid())
+  projectWorkflowId String
+  keyword           String
+  volume            Int      @default(0)
+  sortingStatus     String   @default("Unsorted")
+  tags              String   @default("")
+  topic             String   @default("")
+  canvasLoc         Json     @default("{}")
+  topicApproved     Json     @default("{}")
+  sortOrder         Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  projectWorkflow ProjectWorkflow @relation(fields: [projectWorkflowId], references: [id], onDelete: Cascade)
+
+  @@index([projectWorkflowId])
+}
+
+// ============================================================
+// CanvasNode — attached to a workflow instance (was: Project).
+// All fields unchanged; only the foreign key target changed.
+// ============================================================
 model CanvasNode {
   id                Int      @id
-  projectId         String
+  projectWorkflowId String
   title             String   @default("")
   description       String   @default("")
   x                 Float    @default(0)
@@ -54,59 +117,52 @@ model CanvasNode {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  project           Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectWorkflow ProjectWorkflow @relation(fields: [projectWorkflowId], references: [id], onDelete: Cascade)
 
-  @@index([projectId])
+  @@index([projectWorkflowId])
 }
 
 model Pathway {
-  id        Int      @id
-  projectId String
-  createdAt DateTime @default(now())
+  id                Int      @id
+  projectWorkflowId String
+  createdAt         DateTime @default(now())
 
-  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectWorkflow ProjectWorkflow @relation(fields: [projectWorkflowId], references: [id], onDelete: Cascade)
 
-  @@index([projectId])
+  @@index([projectWorkflowId])
 }
 
 model SisterLink {
-  id        String   @id @default(uuid())
-  projectId String
-  nodeA     Int
-  nodeB     Int
-  createdAt DateTime @default(now())
+  id                String   @id @default(uuid())
+  projectWorkflowId String
+  nodeA             Int
+  nodeB             Int
+  createdAt         DateTime @default(now())
 
-  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectWorkflow ProjectWorkflow @relation(fields: [projectWorkflowId], references: [id], onDelete: Cascade)
 
-  @@index([projectId])
+  @@index([projectWorkflowId])
 }
 
 model CanvasState {
-  id             String  @id @default(uuid())
-  projectId      String  @unique
-  nextNodeId     Int     @default(1)
-  nextPathwayId  Int     @default(1)
-  viewX          Float   @default(0)
-  viewY          Float   @default(0)
-  zoom           Float   @default(1)
+  id                String @id @default(uuid())
+  projectWorkflowId String @unique
+  nextNodeId        Int    @default(1)
+  nextPathwayId     Int    @default(1)
+  viewX             Float  @default(0)
+  viewY             Float  @default(0)
+  zoom              Float  @default(1)
 
-  project        Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectWorkflow ProjectWorkflow @relation(fields: [projectWorkflowId], references: [id], onDelete: Cascade)
 }
 
-model Project {
-  id          String        @id @default(uuid())
-  userId      String
-  name        String        @default("Untitled Project")
-  workflow    String        @default("keyword-clustering")
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-
-  keywords    Keyword[]
-  canvasNodes CanvasNode[]
-  pathways    Pathway[]
-  sisterLinks SisterLink[]
-  canvasState CanvasState?
-}
+// ============================================================
+// Admin Notes — unchanged from pre-Phase M.
+// Note: `system` values expand in Phase M to include
+// "dashboard" and "plos" (in addition to "pms" and
+// "think-tank"). The schema needs no change — enforcement
+// of valid values happens in application code.
+// ============================================================
 model AdminNote {
   id          String   @id @default(uuid())
   userId      String
@@ -133,10 +189,11 @@ model NoteAttachment {
   publicUrl   String
   createdAt   DateTime @default(now())
 
-  note        AdminNote @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  note AdminNote @relation(fields: [noteId], references: [id], onDelete: Cascade)
 
   @@index([noteId])
 }
+
 model UserPreference {
   id        String   @id @default(uuid())
   userId    String
