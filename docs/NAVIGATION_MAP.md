@@ -1,8 +1,8 @@
 # NAVIGATION MAP
 ## Every route, every click path through PLOS — the single source of truth for UI navigation
 
-**Last updated:** April 17, 2026 (Phase M Ckpt 8 complete — `/dashboard/notes` and `/plos/notes` added; `/plos` Keyword Analysis card now routes to `/projects`)
-**Last updated in chat:** https://claude.ai/chat/fc8025bf-551a-4b3c-8483-ec6d8ed9e33c
+**Last updated:** April 17, 2026 (Phase M COMPLETE — Ckpts 9 + 9.5 deployed to vklf.com; `/projects/[projectId]` detail page live for first time)
+**Last updated in chat:** https://claude.ai/chat/75cc8985-b70a-49f4-8b64-444c34ef541f
 **Chat where originally created:** https://claude.ai/chat/8320490b-3910-4b3d-b3f8-8222e25777c2
 
 **Purpose:** This document is the authoritative map of how users navigate through the platform. If any navigation flow is not documented here, Claude must ASK the user before writing instructions that involve it.
@@ -11,21 +11,20 @@
 
 ---
 
-## Status note (Phase M)
+## Status note (post-Phase-M)
 
-As of end-of-Phase-M-Checkpoint-8 (2026-04-17):
-- **Database schema + server-side API routes:** aligned with new Project + ProjectWorkflow structure (Ckpt 5).
-- **`/projects` page:** ✅ BUILT — list page with search, filter, sort, infinite scroll, new/edit/delete (Ckpt 6).
-- **`/projects/[projectId]` detail page:** ✅ BUILT — minimal Project detail page showing 14 workflow cards (Ckpt 6).
-- **`/projects/[projectId]/keyword-clustering`:** ✅ BUILT (Ckpt 7) — single-state Keyword Clustering workspace, Project pre-selected from URL. Route is live and compiles cleanly.
-- **`/keyword-clustering`:** ✅ DELETED (Ckpt 7) — folder removed entirely; route no longer exists.
-- **`/plos` Keyword Analysis card:** ✅ REWIRED (Ckpt 8) — now routes to `/projects` instead of deleted `/keyword-clustering`. Clicking the card takes the user to the Projects list; they pick a Project, then click into Keyword Analysis from inside the Project.
-- **`/dashboard/notes`:** ✅ BUILT (Ckpt 8) — Dashboard Admin Notes using shared `AdminNotes` component with `system="dashboard"`. Reached via 📝 Notes button in the Dashboard top bar.
-- **`/plos/notes`:** ✅ BUILT (Ckpt 8) — PLOS Admin Notes using shared `AdminNotes` component with `system="plos"`. Reached via 📝 Notes button in the PLOS top bar.
+**Phase M is COMPLETE as of 2026-04-17.** All routes below are live on vklf.com. The DB schema, server-side API, and UI pages are all aligned and verified working end-to-end.
 
-**All Phase M UI work is now complete.** Remaining work is Ckpt 9 — deploy + cleanup.
+- **Database schema + server-side API routes:** ✅ LIVE (Ckpt 5)
+- **`/projects` page:** ✅ LIVE — list page with search, filter, sort, infinite scroll, new/edit/delete (Ckpt 6)
+- **`/projects/[projectId]` detail page:** ✅ LIVE — Project header + 15-card workflow grid with status badges + coming-soon toast for non-active workflows (Ckpt 9.5 — note: Ckpt 6 docs claimed this was built then but the file didn't exist; built for real in Ckpt 9.5. See CORRECTIONS_LOG for the Pattern 7 recurrence.)
+- **`/projects/[projectId]/keyword-clustering`:** ✅ LIVE (Ckpt 7) — single-state Keyword Clustering workspace, Project pre-selected from URL
+- **`/keyword-clustering`:** ✅ DELETED (Ckpt 7) — folder removed entirely; route no longer exists
+- **`/plos` Keyword Analysis card:** ✅ LIVE (Ckpt 8) — routes to `/projects` list
+- **`/dashboard/notes` + `/plos/notes`:** ✅ LIVE (Ckpt 8; note-creation fixed in Ckpt 9.5 — API allowlist had to be extended)
+- **`/docs/`:** ✅ CREATED (Ckpt 9) — canonical handoff doc location at repo root
 
-⚠️ **DEPLOY HOLD:** Until Ckpt 9 completes, the UI and the DB are out of sync on vklf.com. Do NOT deploy to vklf.com during this window. The Phase M work exists only in local committed code (4 commits ahead of origin/main: `14d68e7` Ckpt 5, `3b69cf2` Ckpt 6, `5cc10c5` Ckpt 7, `ac62a3a` Ckpt 8).
+**Deploy hold lifted.** All Phase M commits pushed and serving on vklf.com. Commits in stack: `fcf2373` (Ckpt 9.5) → `3a2b928` (Ckpt 9) → `ac62a3a` (Ckpt 8) → `5cc10c5` (Ckpt 7) → `3b69cf2` (Ckpt 6) → `14d68e7` (Ckpt 5) → `f545e2a` (pre-Phase-M safety branch anchor).
 
 ---
 

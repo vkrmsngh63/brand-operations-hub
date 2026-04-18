@@ -1,8 +1,8 @@
 # ROADMAP
 ## Product Launch Operating System (PLOS) — Development Execution Plan
 
-**Last updated:** April 17, 2026 (Phase M Ckpt 8 complete; Ckpt 9 is next — deploy + `/docs/` setup + cleanup; then TOP-PRIORITY migration to Claude Code)
-**Last updated in chat:** https://claude.ai/chat/fc8025bf-551a-4b3c-8483-ec6d8ed9e33c
+**Last updated:** April 17, 2026 (Phase M COMPLETE — Ckpts 9 + 9.5 deployed; ready for Claude Code migration and Phase 1g-test)
+**Last updated in chat:** https://claude.ai/chat/75cc8985-b70a-49f4-8b64-444c34ef541f
 
 **Scale context (added 2026-04-17):** PLOS targets 500 Projects/week with 50 concurrent workers in Phase 3, with headroom for 5,000 Projects/week in Phase 4. See `PLATFORM_REQUIREMENTS.md §1` for full scale targets. All roadmap items must be evaluated against Phase 3 as the minimum target scale.
 
@@ -47,7 +47,7 @@ Phase 4 — Scale hardening
 | Phase / Milestone | Status |
 |---|---|
 | **Platform foundations** (Phases 0, 1a–1f, 1g-rebuild, 1-foundation, Phase 2 rebrand, Phase D) | ✅ COMPLETE |
-| **Phase M** (DB refactor + API rewrite + UI rework) | 🔄 IN PROGRESS — Ckpts 1–8 done; Ckpt 9 remains |
+| **Phase M** (DB refactor + API rewrite + UI rework) | ✅ COMPLETE — All 9 checkpoints + 9.5 bug-fix deployed to vklf.com |
 | **Phase 1 — Admin-solo tooling** | 🔄 IN PROGRESS — Keyword Clustering (workflow 1) is the first tool; 13 more to build |
 | **Phase 2 — Multi-user infrastructure** | ❌ NOT STARTED — architectural sketches exist; no build work |
 | **Phase 3 — Worker ramp** | ❌ NOT STARTED |
@@ -74,42 +74,40 @@ These phases/milestones are complete and remain valid after the April 17 archite
 
 ---
 
-## 🎯 PHASE M — Remaining Checkpoint (9)
+## ✅ PHASE M — ALL CHECKPOINTS COMPLETE (2026-04-17)
 
-### Current state entering Checkpoint 9
-- **Database:** ✅ New schema live in Supabase
-- **Server code (API routes):** ✅ Rewritten for new schema, builds cleanly (Ckpt 5)
-- **`/projects` page:** ✅ Built, committed locally (Ckpt 6)
-- **`/projects/[projectId]` detail page:** ✅ Built, committed locally (Ckpt 6)
-- **`/projects/[projectId]/keyword-clustering`:** ✅ Built, committed locally (Ckpt 7)
+### Final state
+- **Database:** ✅ New Project + ProjectWorkflow schema live in Supabase
+- **Server code (API routes):** ✅ Rewritten for new schema; deployed (Ckpt 5)
+- **`/projects` page:** ✅ Scale-aware list page deployed (Ckpt 6)
+- **`/projects/[projectId]` detail page:** ✅ Built (Ckpt 9.5 — discovered missing post-deploy) + deployed
+- **`/projects/[projectId]/keyword-clustering`:** ✅ Single-state KC workspace deployed (Ckpt 7)
 - **`/keyword-clustering` (old dual-state route):** ✅ Deleted (Ckpt 7)
-- **`/dashboard/notes` + Dashboard 📝 Notes button:** ✅ Built, committed locally (Ckpt 8)
-- **`/plos/notes` + PLOS 📝 Notes button:** ✅ Built, committed locally (Ckpt 8)
-- **`/plos` Keyword Analysis card:** ✅ Rewired to `/projects` (Ckpt 8)
-- **Deploy:** ❌ Still in hold window until Ckpt 9
+- **`/dashboard/notes` + Dashboard 📝 Notes button:** ✅ Deployed (Ckpt 8; note-creation fixed in Ckpt 9.5)
+- **`/plos/notes` + PLOS 📝 Notes button:** ✅ Deployed (Ckpt 8; note-creation fixed in Ckpt 9.5)
+- **`/plos` Keyword Analysis card:** ✅ Rewired to `/projects` (Ckpt 8), deployed
+- **`/docs/` handoff docs folder:** ✅ Created + populated with 15 docs (Ckpt 9)
+- **Legacy `src/app/HANDOFF.md` + `ROADMAP.md`:** ✅ Deleted (Ckpt 9)
+- **All 51 `.bak` files:** ✅ Deleted (Ckpt 9); `.gitignore` now catches future ones
+- **Live site:** ✅ vklf.com running Phase M code; full happy-path verified working
 
-### ✅ Checkpoint 8 — Admin Notes for Dashboard + PLOS + `/plos` rewiring — COMPLETE
-Done in chat `fc8025bf-551a-4b3c-8483-ec6d8ed9e33c`. See completed-work summary above.
+### Checkpoint completion summaries
+- **Ckpt 9 (2026-04-17, chat `75cc8985-...`):** Deploy + cleanup + `/docs/` setup. Committed as `3a2b928`: 58 files changed, 5131 insertions, 26869 deletions. Pushed as part of a 5-commit push (Ckpts 5-9 together). Vercel build "Ready" in ~2 min. Visual verification on vklf.com passed for: login, Dashboard + 📝 Notes nav, PLOS + 📝 Notes nav, `/plos` Keyword Analysis → `/projects` rewire, `/projects` list page, expanded accordion, `/projects/[id]/keyword-clustering` reachable via accordion card. Failed for: Admin Notes creation on Dashboard/PLOS (API allowlist missed new systems), `/projects` accordion missing Business Ops card, clicking Project title → 404 because `/projects/[projectId]/page.tsx` had never existed despite docs claiming it was built in Ckpt 6. Triggered Ckpt 9.5 in the same chat.
+- **Ckpt 9.5 (2026-04-17, same chat):** Three bug fixes. Fix 1: extended admin-notes API allowlist to include `'dashboard'` and `'plos'` (2-line change in `src/app/api/admin-notes/route.ts`). Fix 2: added `business-operations` as 15th entry in `WORKFLOW_DEFS` in `src/app/projects/page.tsx` (1-line insert). Fix 3: created `src/app/projects/[projectId]/page.tsx` from scratch (487 lines) — Project header + 15-card workflow grid + 404/403/loading states + coming-soon toast + back-nav. Committed as `fcf2373`: 3 files changed, 491 insertions, 3 deletions. Pushed; Vercel "Ready" in ~2 min. Re-verification on vklf.com: all three bugs fixed.
 
-### 🎯 Checkpoint 9 — Deploy + cleanup + /docs/ setup for Claude Code migration — NEXT
-**Goal:** Publish the Phase M work to vklf.com, clean up stray files, AND prepare the repo for the methodology shift to Claude Code.
+### Phase M — officially complete
 
-**Work items:**
-- `npm run build` + fix any remaining TypeScript errors
-- **Create `/docs/` at repo root.** This becomes the canonical location for all handoff documentation going forward — Claude Code reads it directly, no uploads needed.
-- **Move all 13 Group A handoff docs into `/docs/`** (overwriting local canonical copies with the latest versions from Ckpt 8). Plus Group B: `KEYWORD_CLUSTERING_ACTIVE.md`. Plus the two new Claude Code docs: `CLAUDE_CODE_MIGRATION.md` (Group A #13) and `CLAUDE_CODE_STARTER.md` (read-at-session-start prompt).
-- **Handle legacy-location files** (`src/app/HANDOFF.md` and `src/app/ROADMAP.md`) — delete them; the canonical copies are now in `/docs/` and the in-repo copies were never authoritative. (Ckpt 9 also verifies these files contain no unique content before deletion.)
-- Remove all committed and untracked `.bak*` files from the repo (13 untracked leftovers + ~32 committed — see "Pre-Ckpt-9 leftovers inventory" below) — add `*.bak*` to `.gitignore`
-- `git commit` the cleanup + `/docs/` setup as "Phase M Ckpt 9: deploy readiness + docs/ setup + cleanup"
-- `git push origin main` — this publishes Ckpts 5, 6, 7, 8, 9 to live site in one push (5 commits total after Ckpt 9's commit)
-- Wait for Vercel build to complete (~2 min)
-- Verify at vklf.com with Ctrl+Shift+R — test full navigation flow (login → Dashboard → 📝 Notes → back → PLOS → 📝 Notes → back → Keyword Analysis card → /projects → Project → Keyword Clustering workspace)
-- User visually confirms each page matches expectations
-- Produce the "Migration readiness" handoff message (see §Migration section below)
+**Deploy hold lifted.** vklf.com is now stable and coherent. The DB schema, API routes, UI pages, and Admin Notes all align. The full Phase 1 happy-path works end-to-end: Dashboard → PLOS → Keyword Analysis card → Projects list → click Project → detail page → Keyword Clustering workspace → Back to Project → Back to Projects.
 
-### 🎯 Post-Ckpt-9 — Claude Code Migration (TOP PRIORITY) — user executes, no Claude chat needed
+**Safety branch `phase-m-safety-net` at `f545e2a`:** Can now be deleted in a future chat if desired (it served its purpose as a pre-Phase-M anchor; no longer needed).
 
-After Ckpt 9 confirms deployed + visually verified, the user performs a ~30-minute offline migration:
+**Phase 1g-test can now begin.**
+
+---
+
+## 🎯 Post-Phase-M — Claude Code Migration (TOP PRIORITY) — user executes, no Claude chat needed
+
+After Phase M is fully deployed and verified (DONE as of 2026-04-17), the user performs a ~30-minute offline migration:
 
 1. **Install Claude Code** in Codespaces (`npm install -g @anthropic-ai/claude-code` or current equivalent — check https://docs.claude.com for current install command)
 2. **Authenticate** (uses existing Anthropic account)
@@ -119,41 +117,10 @@ After Ckpt 9 confirms deployed + visually verified, the user performs a ~30-minu
 
 This migration is logged as a roadmap item (this section) and captured in `docs/CLAUDE_CODE_MIGRATION.md`. No code changes. No Claude chat required during the migration itself.
 
-**The Ckpt 9 chat's final Personalized Handoff Message tells the user exactly when and how to execute this migration.** Look for the "🚨 Ready to switch to Claude Code" section in that handoff — it's the explicit trigger.
+**The final message of chat `75cc8985-...` (the chat that deployed Ckpt 9 + Ckpt 9.5) includes a "🚨 Ready to switch to Claude Code" section with exact steps.**
 
 ### First Claude Code session — Phase 1g-test kickoff
-**After migration:** First real Claude Code session tackles Phase 1g-test — live-testing Auto-Analyze on Keyword Clustering. Starter prompt: `docs/CLAUDE_CODE_STARTER.md`. See `KEYWORD_CLUSTERING_ACTIVE.md` §6 for Phase 1g-test scope.
-
----
-
-### Pre-Ckpt-9 leftovers inventory (CRITICAL — every chat before Ckpt 9 must handle these the same way)
-
-**Across Ckpts 5–8, thirteen files have accumulated in the user's working tree that are NOT part of any committed checkpoint.** They are:
-
-| File | Origin | Disposition in Ckpt 9 |
-|---|---|---|
-| `prisma/schema.prisma.bak` | Ckpts 1–4 (schema refactor backup) | Delete (safe — schema is stable on new shape) |
-| `src/app/HANDOFF.md` | Legacy location (modified at some point) | Relocate to `/docs/` or delete — this file shouldn't live under `src/app/` (Next.js could treat it as a route) |
-| `src/app/ROADMAP.md` | Same | Same treatment |
-| `src/app/api/projects/route.ts.bak` | Ckpt 5 | Delete |
-| `src/app/api/projects/[projectId]/route.ts.bak` | Ckpt 5 | Delete |
-| `src/app/api/projects/[projectId]/canvas/route.ts.bak` | Ckpt 5 | Delete |
-| `src/app/api/projects/[projectId]/canvas/nodes/route.ts.bak` | Ckpt 5 | Delete |
-| `src/app/api/projects/[projectId]/canvas/pathways/route.ts.bak` | Ckpt 5 | Delete |
-| `src/app/api/projects/[projectId]/canvas/rebuild/route.ts.bak` | Ckpt 5 | Delete |
-| `src/app/api/projects/[projectId]/canvas/sister-links/route.ts.bak` | Ckpt 5 | Delete |
-| `src/app/api/projects/[projectId]/keywords/route.ts.bak` | Ckpt 5 | Delete |
-| `src/app/api/projects/[projectId]/keywords/[keywordId]/route.ts.bak` | Ckpt 5 | Delete |
-| `src/lib/auth.ts.bak` | Ckpt 5 | Delete |
-
-**Plus committed `.bak` files that should also be deleted in Ckpt 9:**
-- `src/app/dashboard/page.tsx.bak` (committed in `ac62a3a`)
-- `src/app/plos/page.tsx.bak` (committed in `ac62a3a`)
-- `~30 .bak files in src/app/projects/[projectId]/keyword-clustering/components/` (committed during Ckpt 7's folder move)
-
-**Rule for every chat BEFORE Ckpt 9:** When committing, use specific paths — not `git add -A`. If leftovers accidentally get staged, unstage with `git reset HEAD <paths>` before committing. See `CORRECTIONS_LOG.md` entry "Pre-existing .bak/untracked files in git status handled via Option A clean split" for the full procedural pattern.
-
-**Rule for the Ckpt 9 chat:** Execute the complete cleanup per the inventory above. Add `*.bak` and `*.bak[0-9]*` patterns to `.gitignore`. After cleanup, `git status` should show zero `.bak` files anywhere.
+**After migration:** First real Claude Code session tackles Phase 1g-test — live-testing Auto-Analyze on Keyword Clustering. Starter prompt: `docs/CLAUDE_CODE_STARTER.md`. See `docs/KEYWORD_CLUSTERING_ACTIVE.md` §6 for Phase 1g-test scope.
 
 ---
 

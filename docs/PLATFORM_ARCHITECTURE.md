@@ -1,8 +1,8 @@
 # PLATFORM ARCHITECTURE
 ## Technical architecture of the Product Launch Operating System (PLOS)
 
-**Last updated:** April 17, 2026 (Phase M Ckpt 8 complete — Admin Notes added for Dashboard + PLOS; `/plos` Keyword Analysis card rewired to `/projects`)
-**Last updated in chat:** https://claude.ai/chat/fc8025bf-551a-4b3c-8483-ec6d8ed9e33c
+**Last updated:** April 17, 2026 (Phase M COMPLETE — Ckpts 9 + 9.5 deployed to vklf.com; `/docs/` setup done; `.bak` cleanup done; `/projects/[projectId]/page.tsx` built for the first time in Ckpt 9.5)
+**Last updated in chat:** https://claude.ai/chat/75cc8985-b70a-49f4-8b64-444c34ef541f
 
 **Purpose:** Defines the technical structure of the platform — routes, database schema, authentication, shared systems, file organization. Loaded in every chat as part of Group A.
 
@@ -117,7 +117,7 @@
 | `/think-tank` | Yes | Think Tank landing (projects in localStorage) |
 | `/think-tank/notes` | Yes | Think Tank Admin Notes |
 | `/projects` | Yes | **(Ckpt 6)** — Projects list page with search/filter/sort/infinite-scroll/create/edit/delete. Also serves as PLOS Projects View. |
-| `/projects/[projectId]` | Yes | **(Ckpt 6)** — Project detail page showing 14 workflow cards with status. Clicking KC card navigates to per-Project KC workspace (works as of Ckpt 7). |
+| `/projects/[projectId]` | Yes | **(Built for real in Ckpt 9.5)** — Project detail page showing Project name + description + 15-card workflow grid (14 launch workflows + Business Operations) with per-workflow status badges. Clicking Keyword Analysis card → `/projects/[id]/keyword-clustering`. Other cards show "coming soon" toast. Handles 404/403/loading gracefully. **Note:** Ckpt 6 docs originally claimed this was built in Ckpt 6, but the file never existed on disk until Ckpt 9.5 — see CORRECTIONS_LOG for the Pattern 7 recurrence details. |
 | `/projects/[projectId]/keyword-clustering` | Yes | **(Ckpt 7)** — Keyword Clustering workspace, single-state (Project pre-picked from URL). Reads projectId from URL, fetches Project name, renders `<KeywordWorkspace>`. |
 
 ### Deleted routes (previously existed)
@@ -457,32 +457,22 @@ From Phase M Ckpt 6 (2026-04-17):
 From Phase M Ckpt 7 (2026-04-17):
 - 🆕 **Manual/AI toggle on Keyword Clustering page resets on refresh.** Low priority; admin typically uses one mode per session. Would benefit from persisting per-user preference via `UserPreference`. ROADMAP Phase 1-polish item logged.
 
-From Phase M Ckpt 8 (2026-04-17) — **Pre-Ckpt-9 leftover inventory (CRITICAL for all chats before Ckpt 9):**
+From Phase M Ckpt 9 (2026-04-17) — **Phase M closeout cleanup completed:**
 
-**Thirteen files exist in the user's working tree that are NOT part of any committed checkpoint.** They accumulated across Ckpts 5, 6, and 7 and were not swept in by those chats (correctly — each chat committed only its own work). Ckpt 8 also did not commit them (Option A clean split). Ckpt 9 deletes them during its cleanup pass.
+All pre-Ckpt-9 leftovers handled in commit `3a2b928` (Ckpt 9):
+- ✅ 11 untracked `.bak` files (from Ckpts 1-5) deleted from disk
+- ✅ 40 committed `.bak` files (from Ckpts 2-8 folder moves and edits) deleted via `git rm` — remain in git history if needed, gone from future commits
+- ✅ 2 legacy docs (`src/app/HANDOFF.md`, `src/app/ROADMAP.md`) deleted — they were stale Phase-2-era copies, never authoritative
+- ✅ `*.bak*` pattern added to `.gitignore` — future `.bak` files won't accumulate
+- ✅ `/docs/` created at repo root with 13 Group A handoff docs + `KEYWORD_CLUSTERING_ACTIVE.md` + `CLAUDE_CODE_STARTER.md` (15 total). Canonical location going forward; Claude Code reads directly from here.
 
-```
-prisma/schema.prisma.bak                          (Ckpts 1–4 backup; schema stable — safe to delete)
-src/app/HANDOFF.md                                (legacy location; relocate to /docs/ or delete)
-src/app/ROADMAP.md                                (legacy location; relocate to /docs/ or delete)
-src/app/api/projects/route.ts.bak                 (Ckpt 5)
-src/app/api/projects/[projectId]/route.ts.bak     (Ckpt 5)
-src/app/api/projects/[projectId]/canvas/route.ts.bak                (Ckpt 5)
-src/app/api/projects/[projectId]/canvas/nodes/route.ts.bak          (Ckpt 5)
-src/app/api/projects/[projectId]/canvas/pathways/route.ts.bak       (Ckpt 5)
-src/app/api/projects/[projectId]/canvas/rebuild/route.ts.bak        (Ckpt 5)
-src/app/api/projects/[projectId]/canvas/sister-links/route.ts.bak   (Ckpt 5)
-src/app/api/projects/[projectId]/keywords/route.ts.bak              (Ckpt 5)
-src/app/api/projects/[projectId]/keywords/[keywordId]/route.ts.bak  (Ckpt 5)
-src/lib/auth.ts.bak                               (Ckpt 5)
-```
+From Phase M Ckpt 9.5 (2026-04-17) — **post-deploy bug fixes:**
 
-**Plus committed `.bak` files that also need Ckpt 9 removal:**
-- `src/app/dashboard/page.tsx.bak` (committed `ac62a3a`)
-- `src/app/plos/page.tsx.bak` (committed `ac62a3a`)
-- ~30 `.bak`/`.bak2`/`.bak3`/etc. files in `src/app/projects/[projectId]/keyword-clustering/components/` (committed during Ckpt 7's folder move at `5cc10c5`)
+- ✅ Admin Notes API (`src/app/api/admin-notes/route.ts`) allowlist extended to include `'dashboard'` and `'plos'` — Ckpt 8's `SystemKey` type extension was incomplete; server-side string validation missed the new systems
+- ✅ Business Operations added as 15th entry in `WORKFLOW_DEFS` in `src/app/projects/page.tsx` — Ckpt 6 omitted it from the expanded-accordion render list
+- ✅ `src/app/projects/[projectId]/page.tsx` — **built for the first time** (487 lines). Ckpts 6-8 docs all claimed it was built; in reality the file never existed on disk. Discovered during Ckpt 9 visual verification post-deploy. Pattern 7 recurrence documented in CORRECTIONS_LOG.
 
-**Procedural rule for any chat BEFORE Ckpt 9:** `git add -A` silently sweeps these into the next chat's commit. Use specific paths or run `git reset HEAD <paths>` after staging to unstage leftovers before committing. See `CORRECTIONS_LOG.md` 2026-04-17 entry "Pre-existing .bak/untracked files in git status handled via Option A clean split" for the canonical procedure.
+**Deploy status:** Phase M is fully deployed on vklf.com as of commits `3a2b928` + `fcf2373`. Full Phase 1 happy-path verified working end-to-end.
 
 ---
 
@@ -519,7 +509,7 @@ Codespace edit → git commit → git push origin main → Vercel auto-deploy �
 - Ask user to visually confirm
 
 ### Phase M deployment note
-**The app is currently in a broken intermediate state.** The live Supabase DB has the new schema (Phase M Ckpt 4 complete), and the server-side API routes have been rewritten (Ckpt 5 complete) plus all client-side pages (`/projects`, `/projects/[projectId]`, `/projects/[projectId]/keyword-clustering`, `/dashboard/notes`, `/plos/notes`) have been built (Ckpts 6–8 complete), but none of this is deployed yet. DO NOT deploy to vklf.com until Checkpoint 9 of Phase M is reached. The safety branch `phase-m-safety-net` at `f545e2a` can be reverted to if something goes wrong, but note that the DB schema would still need to be reverted too. Local main is now 4 commits ahead of origin/main: `14d68e7` Ckpt 5, `3b69cf2` Ckpt 6, `5cc10c5` Ckpt 7, `ac62a3a` Ckpt 8.
+**Phase M is FULLY DEPLOYED as of 2026-04-17.** The DB schema, server-side API routes, client-side pages, and cleanup are all live on vklf.com. Final commits: `3a2b928` (Ckpt 9 — deploy + docs/ setup + cleanup) and `fcf2373` (Ckpt 9.5 — post-deploy bug fixes). Full Phase 1 happy-path verified working end-to-end. Safety branch `phase-m-safety-net` at `f545e2a` preserved (deletable at user's discretion — no longer needed).
 
 ---
 

@@ -1,8 +1,8 @@
 # DOCUMENTATION ARCHITECTURE
 ## The meta-document: explains how the entire documentation system works, why each doc exists, and when to load/update each one.
 
-**Last updated:** April 17, 2026 (Ckpt 8 end — Group A expanded to 13 docs with addition of `CLAUDE_CODE_MIGRATION.md`; §15 Claude Code methodology shift section added)
-**Last updated in chat:** https://claude.ai/chat/fc8025bf-551a-4b3c-8483-ec6d8ed9e33c
+**Last updated:** April 17, 2026 (timestamp bump — Phase M Ckpts 9 + 9.5 complete; `/docs/` canonical location now active; content unchanged from Ckpt 8 version)
+**Last updated in chat:** https://claude.ai/chat/75cc8985-b70a-49f4-8b64-444c34ef541f
 
 ---
 

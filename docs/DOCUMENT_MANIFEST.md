@@ -1,8 +1,8 @@
 # DOCUMENT MANIFEST
 ## Ground-truth registry of every handoff document in the PLOS system
 
-**Last updated:** April 17, 2026 (end of Phase M Ckpt 8 chat `fc8025bf-551a-4b3c-8483-ec6d8ed9e33c`)
-**Last updated in chat:** https://claude.ai/chat/fc8025bf-551a-4b3c-8483-ec6d8ed9e33c
+**Last updated:** April 17, 2026 (Phase M COMPLETE — all 15 handoff docs now live in `/docs/` at repo root per Ckpt 9; next session in Claude Code)
+**Last updated in chat:** https://claude.ai/chat/75cc8985-b70a-49f4-8b64-444c34ef541f
 
 **Purpose:** This is the authoritative registry of what handoff documents exist, where each fits in the system, and their last-modified status. When a new chat starts, the user consults this manifest to confirm which files to upload. When doc drift is suspected, this manifest is the reference for "what should exist."
 
@@ -10,9 +10,11 @@
 
 ---
 
-## Group A — Always uploaded at start of every chat
+## Group A — Canonical location: `/docs/` in repo (post-Ckpt-9)
 
-These 12 documents form the persistent handoff context. They travel with every chat regardless of scope. All live at the user's local document-working directory; the user uploads them to each new chat.
+As of Phase M Ckpt 9 (2026-04-17), **all Group A docs live at `/docs/` in the repo**, no longer uploaded per-chat. Claude Code reads them directly from disk at session start. The user's local copies on their filesystem serve as a backup and for the rare case of a claude.ai rollback (see `CLAUDE_CODE_MIGRATION.md` §8).
+
+These 13 documents form the persistent handoff context.
 
 | # | Document | Purpose | Last modified | Modified this chat? |
 |---|---|---|---|---|
@@ -23,14 +25,14 @@ These 12 documents form the persistent handoff context. They travel with every c
 | 5 | `DATA_CATALOG.md` | Every data item — where it lives, Human Reference Language, cross-workflow sharing contracts | 2026-04-17 (chat `cc15409c-...`, scope 2) | NO |
 | 6 | `ROADMAP.md` | Development execution plan — completed work + remaining phases | 2026-04-17 (this chat) | ✅ YES |
 | 7 | `CORRECTIONS_LOG.md` | Append-only log of mistakes + extracted patterns | 2026-04-17 (this chat) | ✅ YES |
-| 8 | `CHAT_REGISTRY.md` | Chronological log of chats + URLs + work-summaries | 2026-04-17 (this chat) | ✅ YES |
-| 9 | `HANDOFF_PROTOCOL.md` | Rules for how chats operate — start/mid/end protocols, communication rules, interview rules | 2026-04-17 (this chat) | ✅ YES |
-| 10 | `DOCUMENTATION_ARCHITECTURE.md` | Design of the doc-system itself (DLMS, tool graduation, group A/B, workflow interview pattern, Claude Code migration) | 2026-04-17 (this chat) | ✅ YES |
-| 11 | `NEW_CHAT_PROMPT.md` | Briefing template pasted at start of each chat (retailored per chat) | 2026-04-17 (this chat) | ✅ YES |
+| 8 | `CHAT_REGISTRY.md` | Chronological log of chats + URLs + work-summaries (post-Ckpt-9: Claude Code sessions use session-identifier format) | 2026-04-17 (this chat) | ✅ YES |
+| 9 | `HANDOFF_PROTOCOL.md` | Rules for how chats operate — start/mid/end protocols, communication rules, interview rules | 2026-04-17 (Ckpt 8) | NO |
+| 10 | `DOCUMENTATION_ARCHITECTURE.md` | Design of the doc-system itself (DLMS, tool graduation, group A/B, workflow interview pattern, Claude Code migration) | 2026-04-17 (this chat — timestamp only) | ✅ YES (timestamp) |
+| 11 | `NEW_CHAT_PROMPT.md` | **Historical** — claude.ai era briefing template. Post-Phase-M, Claude Code sessions use `CLAUDE_CODE_STARTER.md` instead. | 2026-04-17 (this chat) | ✅ YES |
 | 12 | `DOCUMENT_MANIFEST.md` | This file — ground-truth doc registry | 2026-04-17 (this chat) | ✅ YES |
-| 13 | `CLAUDE_CODE_MIGRATION.md` | **NEW** — Migration plan and operational rules for shifting from claude.ai to Claude Code after Ckpt 9. Includes setup steps, safety rules M1–M7, session management, rollback plan. | 2026-04-17 (this chat — created) | ✅ YES (new) |
+| 13 | `CLAUDE_CODE_MIGRATION.md` | Migration plan and operational rules for shifting from claude.ai to Claude Code. Executed successfully in Ckpt 9+9.5. | 2026-04-17 (Ckpt 8) | NO |
 
-**Group A count: 13 documents.** 10 modified this chat (2 created, 8 updated).
+**Group A count: 13 documents.** 7 modified this chat.
 
 ---
 
