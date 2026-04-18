@@ -2,8 +2,9 @@
 ## Append-only record of mistakes made during chats and lessons learned
 
 **Started:** April 16, 2026
-**Last updated:** April 18, 2026 (Phase 1g-test partial — 4 new entries: AA localStorage-keys drift, Phase 1g-test bugs surfaced, Pattern 11 recurrence #5 on session-boundary instructions, new Pattern 13 on session-boundary step-by-step requirement)
-**Last updated in session:** session_2026-04-18_phase1g-test-kickoff (Claude Code)
+**Last updated:** April 18, 2026 (Phase 1g-test follow-up — 2 new entries: stale-closure bug in buildCurrentTsv (load-bearing, contaminates prior Mode A diagnosis) + production validation of Task 2/3 fixes)
+**Last updated in session:** session_2026-04-18_phase1g-test-followup (Claude Code)
+**Previously updated in session:** session_2026-04-18_phase1g-test-kickoff (Claude Code)
 **Previously updated (claude.ai era):** https://claude.ai/chat/75cc8985-b70a-49f4-8b64-444c34ef541f
 
 **Purpose:** Every mistake made in any chat — whether Claude or user catches it — gets appended. Future Claudes read this to avoid repeating. This is how institutional memory survives Claude's lack of memory.
@@ -34,6 +35,59 @@
 ---
 
 ## Entries
+
+### 2026-04-18 — Stale-closure bug in buildCurrentTsv contaminates Mode A diagnosis; exposed during live Phase 1g-test follow-up run
+**Session:** session_2026-04-18_phase1g-test-followup (Claude Code)
+**Tool/Phase affected:** Keyword Clustering / Auto-Analyze / Phase 1g-test
+**Severity:** High (load-bearing bug blocking all Auto-Analyze runs past batch 2; also reshapes the prior session's diagnosis of the Mode A "dropped topics" failure mode)
+
+**What happened:** During the Bursitis Auto-Analyze run attempted this session (2,320 keywords, Direct mode, Enabled-12k thinking, model claude-sonnet-4-6, Review each batch ON), Task 2's new Mode A → Mode B auto-switch fired correctly on batch 2 when Mode A's response dropped 1 topic ("Pes anserine bursitis") and 8 keywords. Batch 2 Mode B succeeded and applied 22 nodes to the canvas. But then batch 3 Mode B failed validation with "Deleted 11 topics; Lost 8 keywords." Investigation revealed the merge function had operated on 10 rows, not 22:
+
+- Pre-batch-3 canvas had **22 nodes**
+- Batch 3 delta response: **8 ADD + 2 UPDATE rows**
+- Expected merged total: 22 + 8 = **30 rows**
+- Actual merged total reported by the tool: **"18 total rows"**
+- Math: 18 − 8 adds = **10 rows baseline** — exactly the canvas state after batch 1's apply, not batch 2's
+
+**Root cause:** Two compounding bugs:
+
+**Bug A — Stale-closure on `nodes` in `buildCurrentTsv`** (`src/app/projects/[projectId]/keyword-clustering/components/AutoAnalyze.tsx` lines 359–408). The function reads `nodes`, `allKeywords`, and `sisterLinks` directly from the component's render-time closure. The `runLoop` async function persists across renders and invokes `buildCurrentTsv` (via `mergeDelta` at line 629 and `assemblePrompt` at line 421) using the closure from when `runLoop` was defined. The correct pattern — already in use by `validateResult` (line 823, 841) and `doApply` (line 895) — is `nodesRef.current` / `keywordsRef.current`, which are always-fresh refs updated via `useEffect` at lines 214–215. Someone added the refs but missed `buildCurrentTsv`.
+
+**Bug B — Missing `await` on `doApply` in `handleApplyBatch`** (line 1387). `doApply` is `async` and contains `await onRefreshCanvas()` + `await onRefreshKeywords()` at lines 1160–1161 that update parent state. But `handleApplyBatch` fires `doApply` without awaiting, then immediately calls `runLoop()`. The new runLoop captures its closure before the refresh completes, so even fresh-closure-aware code would see pre-apply state. Bug A is the load-bearing one; Bug B compounds it.
+
+**How caught:** Arithmetic on the batch 3 log output revealed the inconsistency (18 merged rows from a 22-row starting state). Code inspection confirmed the stale-closure pattern. Canvas state was not corrupted because validation caught the mismatch and rejected the merged TSV before `doApply` ran.
+
+**Meta-reframing — this contaminates the prior session's Mode A diagnosis.** The prior session (2026-04-18 Phase 1g-test partial) observed Mode A dropping 4-6 topics across 3 retries of batch 2 and attributed this to "LLM attention dilution over long outputs." That theory isn't wrong in general — attention dilution IS real in LLMs emitting 30k+ token structured responses — but the specific failures observed there were at least partially due to Bug A: the AI was being given a stale (smaller) view of the current table via `buildCurrentTsv`, so "dropped" topics may have been topics the AI never saw in its input. Future LLM-behavior theorizing about Auto-Analyze runs should verify the input the AI actually received before diagnosing model behavior.
+
+**Task 2's fix (commit `84062f5`, this session) still works as a safety net.** It correctly catches HC4/HC5 failures in Mode A and flips to Mode B. What it catches is a symptom of Bug A + B, not the original "LLM attention dilution" root cause I thought existed. It remains valuable — the switch to Mode B reduces output size and is structurally safer regardless of the input-freshness question — but isn't a complete fix.
+
+**Correction:** Deferred to next session — two focused code edits:
+- (A) Rewrite `buildCurrentTsv` (lines 359–408) to use `nodesRef.current`, `keywordsRef.current`, and a new `sisterLinksRef.current`. Add the sister-links ref + useEffect alongside existing refs at lines 205–215.
+- (B) Make `handleApplyBatch` (lines 1384–1398) `async` and `await doApply(batch, pendingResult)` before the subsequent `batch.status = 'complete'` / `runLoop()` calls. Also audit `handleSkipBatch` (lines 1400–1413) for the same pattern — it calls `runLoop()` but doesn't invoke `doApply`, so it may not need the same fix; verify during the next session.
+- After (A) + (B) are pushed and deployed, restart the Bursitis Auto-Analyze run to validate end-to-end completion.
+
+**Prevention:** New procedural rule for future Auto-Analyze code additions: any function called inside `runLoop` (directly or transitively through `processBatch`, `mergeDelta`, etc.) that needs to read `nodes`, `allKeywords`, `sisterLinks`, or other props must use the `*Ref.current` pattern. Treat the render-time closure as frozen for the runLoop's lifetime. Adding a code comment near the refs' `useEffect` block saying "All `runLoop`-reachable reads of these must use the refs, not the raw props" would make the invariant discoverable by future sessions.
+
+**Lesson — observations during long runs need math-verification, not just "looks right."** Batch 2 Mode B appeared to succeed (delta merged to 22 rows, validation passed). But the 22-row result was coincidental given a 10-row baseline + 12 adds + 4 updates (and a stale `nodes` that happened to match the real state's first 10 rows). If Claude had done the arithmetic check after every batch — "pre-batch row count + deltas = post-batch row count?" — Bug A would have surfaced earlier. Adding to the "how to review Auto-Analyze runs" mental checklist.
+
+**Meta-lesson — Pattern 7 adjacent.** Docs claimed something existed/worked and reality diverged; in this case, the "docs" were my Mode A diagnosis in the prior session. Cheap verifications (arithmetic on log output) catch it; expensive ones (full code read) confirm. This is a recurring class of issue — when a diagnosis feels "clean," spending 30 seconds checking the numbers can save hours of accumulated-wrong-theory.
+
+---
+
+### 2026-04-18 — Task 2 and Task 3 fixes validated in production (informational, not a mistake)
+**Session:** session_2026-04-18_phase1g-test-followup (Claude Code)
+**Tool/Phase affected:** Keyword Clustering / Auto-Analyze / Phase 1g-test
+**Severity:** Informational (success record — this is NOT a mistake; entry exists to document live-production validation of both fixes)
+
+**What happened (Task 2 validation):** The Mode A → Mode B auto-switch expansion committed in this session (`84062f5`) fired correctly during batch 2 of the live Bursitis run. When the AI's Mode A response at 1:44:46 dropped "Pes anserine bursitis" (HC4) and 8 keywords (HC5), the `isLostDataError` check at the new validation-failure branch matched, `⚡ AUTO-SWITCH: … — switching to DELTA mode (Mode B)` logged, `setDeltaMode(true)` fired, `batch.attempts--` decremented the retry counter so the Mode B retry started as "attempt 1" preserving the full 3-attempt budget. Mode B retry succeeded. Behavior exactly as designed.
+
+**What happened (Task 3 validation):** The Budget input UX fix committed in this session (`b9dc8b9`) was verified live by the user during pre-launch smoke-test on vklf.com after Vercel rolled the deploy. User confirmed: field can be cleared to blank mid-edit without snapping back to 10000, typing a new value works naturally, tabbing away from an empty field snaps to the default. Same pattern applied to Batch size / Stall / Vol threshold inputs also holds by construction (identical code pattern).
+
+**Significance:** First production validation of a Claude-Code-authored code fix for the PLOS platform. Both Tasks 2 and 3 went from "code committed" to "live-verified" within a single session. Contrast with prior claude.ai sessions where fixes often deployed without immediate live verification and surfaced as later-session bug discoveries (e.g., the missing `/projects/[projectId]/page.tsx` that slipped through Ckpts 6–8).
+
+**Prevention:** Not applicable (not a mistake). But worth noting as evidence that the Claude-Code-direct-execution methodology shortens the verification loop substantially.
+
+---
 
 ### 2026-04-18 — IMMEDIATE same-session Pattern 14 violation: Claude violated the newly-written rule in the next major decision
 **Session:** session_2026-04-18_phase1g-test-kickoff (Claude Code) — caught by user after Pattern 14 had been committed as `b782a53`

@@ -1,8 +1,9 @@
 # KEYWORD CLUSTERING — ACTIVE DOCUMENT
 ## Current state of the Keyword Clustering workflow tool (Group B, tool-specific)
 
-**Last updated:** April 18, 2026 (Phase 1g-test partial — first Claude Code session; Auto-Analyze live-tested with real signal + multiple tuning findings + several doc drifts corrected)
-**Last updated in session:** session_2026-04-18_phase1g-test-kickoff (Claude Code)
+**Last updated:** April 18, 2026 (Phase 1g-test follow-up — Tasks 1-3 deployed + live-validated; new stale-closure bug in buildCurrentTsv discovered; prior Mode A "attention dilution" diagnosis reframed)
+**Last updated in session:** session_2026-04-18_phase1g-test-followup (Claude Code)
+**Previously updated in session:** session_2026-04-18_phase1g-test-kickoff (Claude Code)
 **Previously updated (claude.ai era):** https://claude.ai/chat/fc8025bf-551a-4b3c-8483-ec6d8ed9e33c
 
 **Purpose:** This is the working document for the Keyword Clustering tool during its active development phase. Covers everything built so far, what's pending, technical details, and known issues.
@@ -13,18 +14,38 @@
 
 ---
 
-## ⚠️ POST-PHASE-1G-TEST STATE (READ FIRST — added 2026-04-18)
+## ⚠️ POST-PHASE-1G-TEST-FOLLOWUP STATE (READ FIRST — updated 2026-04-18 follow-up session)
+
+**As of 2026-04-18 (follow-up Claude Code session — Phase 1g-test still partial; new blocking bug):**
+
+- ✅ **Three code-fix priorities from the prior session all shipped and deployed:**
+  - `docs/AUTO_ANALYZE_PROMPT_V2.md` committed (canonical V2 prompts live in repo) — commit `27eb180`
+  - Mode A → Mode B auto-switch broadened to fire on HC4/HC5 validation failures — commit `84062f5`
+  - Budget UX bug + 3 sibling inputs with same root cause — commit `b9dc8b9`
+  - All three pushed to origin/main; Vercel build clean; Budget UX fix verified live by user on vklf.com
+- ✅ **Task 2 fix validated live in production:** during this session's attempted Bursitis run, batch 2's Mode A response dropped 1 topic + 8 keywords; the new auto-switch fired correctly (`⚡ AUTO-SWITCH: ... switching to DELTA mode (Mode B)`); batch 2 retry in Mode B succeeded with the full 3-attempt budget preserved (attempts counter decremented as designed). First live-production validation of a Claude-Code-authored fix on this platform.
+- 🚨 **NEW BLOCKING BUG DISCOVERED — stale closure in `buildCurrentTsv`.** During batch 3 of the follow-up run, validation caught "Deleted 11 topics; Lost 8 keywords" in Mode B (where Mode B shouldn't be able to cause drop failures). Math on the merge output proves the baseline was 10 rows, not the 22 nodes on canvas — i.e., `buildCurrentTsv` was fed a stale snapshot. Two compounding bugs identified in `AutoAnalyze.tsx`:
+  - **Bug A (load-bearing):** `buildCurrentTsv` lines 359–408 reads `nodes` / `allKeywords` / `sisterLinks` from the render-time closure. The `runLoop` async function persists across renders and keeps calling `buildCurrentTsv` with its captured (stale) values. `validateResult` (line 823, 841) and `doApply` (line 895) correctly use `nodesRef.current` / `keywordsRef.current` — the refs exist (lines 205–215) but `buildCurrentTsv` doesn't use them.
+  - **Bug B (compounding):** `handleApplyBatch` (line 1387) does not `await doApply(...)` before calling `runLoop()`. The new runLoop captures its closure before canvas refresh completes. Fix: make the function async, await doApply.
+  - Full reproduction math + code citations + fix plan in `CORRECTIONS_LOG.md` 2026-04-18 stale-closure entry.
+- ⚠️ **Prior-session Mode A "attention dilution" diagnosis reframed.** The kickoff session observed Mode A dropping 4-6 topics across 3 retries of batch 2 and attributed this to LLM attention dilution over long outputs. That theory isn't wrong in general, but the *specific* failures observed there were at least partly due to Bug A — the AI was being shown an incomplete (stale) current-state view by `buildCurrentTsv`, so "dropped" topics may be topics the AI never saw in its input. Task 2's fix still works as an effective safety net but addresses a symptom, not the original design flaw I'd originally attributed it to. See §6.5 below for the updated diagnosis.
+- ⚠️ **Adaptive Thinking + large prompts still unresolved** — workaround remains Enabled-12k. Unchanged from kickoff session.
+- ⚠️ **Vercel 5-min timeout risk still real** — switched to Direct mode for this session's run to avoid it; worked fine through 3 batches.
+- 🚫 **Bursitis clustering run still blocked.** Canvas has 22 nodes from batch 2's apply; next session's bug fix + redeploy + restart will run from scratch with the current 22 nodes on the canvas. The 2,320 unsorted keywords (8 were placed across batches 1-2) still need to be clustered.
+
+**Next session top priority:** fix Bug A + Bug B in `AutoAnalyze.tsx`, push + deploy, restart Bursitis Auto-Analyze. See `ROADMAP.md` Phase 1g-test follow-up REMAINING section.
+
+## ⚠️ POST-PHASE-1G-TEST STATE (kickoff session context — retained for history)
 
 **As of 2026-04-18 (first Claude Code session — Phase 1g-test partial):**
 
-- ✅ **Auto-Analyze has been live-tested for the first time.** The tool runs end-to-end in principle. Batch 1 completed cleanly: 8 topic nodes created, canvas rebuild atomic, validation passed.
-- ❌ **Systematic failure mode discovered in batch 2:** With a growing topics table, the model (Sonnet 4-6) produces full-table (Mode A) responses that drop pre-existing topics. 3 retries all failed the same way. The tool's Mode A→B auto-switch does NOT trigger on validation failures (only on truncation) — this is a design gap.
-- ⚠️ **Adaptive Thinking mode is broken for large prompts.** With Initial Prompt V2 (~35,921 chars) + Primer (~15,208 chars), Adaptive thinking consumed its entire budget and produced 0 output tokens. **Workaround confirmed:** switch Thinking dropdown to "Enabled" with Budget=12000 tokens. This worked for batch 1.
-- ⚠️ **Vercel 5-min timeout is a real risk.** Batch 2 attempt 2 took 4:59 wall time and returned 0 output tokens — strongly suggests Vercel killed the stream. For long runs, Direct mode (no timeout) may be required.
-- 📝 **Multiple doc drifts discovered and corrected this session** — see §4 below. Most notable: the `kst_aa_*` localStorage keys referenced in prior docs **do not exist in the code**. Only `aa_checkpoint_{Project.id}` exists, and only after a run starts.
-- 🚫 **The Bursitis Project's 2,328 keywords are NOT yet clustered.** First 8 keywords from batch 1 landed as topics; all others remain unsorted. Phase 1g-test follow-up (a second tuning pass) is required before we can complete a real clustering run.
+- ✅ Auto-Analyze live-tested for the first time; batch 1 completed cleanly.
+- ❌ Systematic failure mode observed in batch 2; diagnosis reframed in follow-up session (see §6.5 updates) — what was attributed to LLM attention dilution is now known to be partly the stale-closure bug.
+- ⚠️ Adaptive Thinking produces 0 output tokens on large prompts; workaround: Thinking=Enabled, Budget=12000.
+- ⚠️ Vercel 5-min timeout approaches at ~5 min wall time on server mode.
+- 📝 Multiple doc drifts corrected (see §4).
 
-**Next priority after Phase 1g-test follow-up:** see §6 "Phase 1g-test findings" for specific tuning items to validate in the next session.
+**Next priority after Phase 1g-test follow-up:** see §6 "Phase 1g-test findings" for specific tuning items.
 
 ---
 
@@ -463,18 +484,18 @@ Nice-to-haves:
 ## 12. Upcoming work for this tool
 
 ### Phase 1 (admin-solo)
-- **Phase 1g-test (PARTIAL — 2026-04-18):** First live run completed; Sonnet+Adaptive-Thinking bug found + workaround confirmed; Mode A omission failure identified. See §6.5 for details.
-- **Phase 1g-test follow-up (🎯 NEXT PRIORITY):** Second tuning pass. Scope:
-  1. Commit canonical V2 Initial + Primer prompts to `docs/AUTO_ANALYZE_PROMPT_V2.md` (source of truth in repo, not scattered files)
-  2. Broaden Mode A → Mode B auto-switch trigger to include validation failures (currently only triggers on truncation)
-  3. Fix Budget input UX bug (allow empty string during editing; default on blur)
-  4. Add UI hint recommending Direct mode for larger Projects (Vercel 5-min timeout risk)
-  5. Do a full clustering run on Bursitis (2,328 keywords) with Direct + Enabled-12k + expectation of Mode B operation after batch 1
-- **Phase 1-polish (NEW items added 2026-04-18):**
-  - Auto-Analyze overlay should be **resizable** (drag bottom-right corner) AND **movable** (drag top bar)
-  - Budget input field UX bug (see §6.5.4)
-  - Warn user in UI when Adaptive Thinking is selected with a large prompt (risk of 0 output tokens)
-  - Persist Auto-Analyze settings (prompts, apiKey, model, etc.) in `UserPreference` so they survive panel close / page refresh even before a run starts
+- **Phase 1g-test (STILL PARTIAL — 2026-04-18 kickoff + follow-up):** First live run partial completion; 2,320 keywords still not clustered due to stale-closure bug discovered in follow-up session. Tool itself ran end-to-end for batches 1–2 with Task 2's fix helping recover batch 2's Mode A failure, but batch 3 exposed the deeper stale-closure issue blocking further progress.
+- **Phase 1g-test follow-up Tasks 1–3 (✅ COMPLETE — deployed 2026-04-18):**
+  1. ✅ `docs/AUTO_ANALYZE_PROMPT_V2.md` committed as `27eb180`
+  2. ✅ Mode A → Mode B auto-switch broadened as `84062f5` — **live-validated in production**
+  3. ✅ Budget + 3 sibling inputs UX fix as `b9dc8b9` — **live-validated in production**
+- **Phase 1g-test follow-up REMAINING (🎯 NEXT SESSION TOP PRIORITY):**
+  1. 🚨 Fix stale-closure bug in `buildCurrentTsv` (`AutoAnalyze.tsx` lines 359–408) — use `nodesRef.current` / `keywordsRef.current` + new `sisterLinksRef.current` instead of prop-captured closures. LOAD-BEARING.
+  2. 🚨 Add `await` on `doApply` in `handleApplyBatch` (line 1387); audit `handleSkipBatch` for same.
+  3. After deploy, restart the Bursitis Auto-Analyze run (canvas will start fresh; prior session's 22-node state will be rebuilt).
+  4. (Carried from kickoff) Add UI hint recommending Direct mode for larger Projects
+  5. (Carried from kickoff) Add warning when Adaptive Thinking is selected with a large prompt
+- **Phase 1-polish (accumulated across kickoff + follow-up sessions):** See `ROADMAP.md` Phase 1-polish section for the full list with details. Summary: overlay resize/move + localStorage persistence; prompt-sync button (NEW — syncs AA-panel prompts back to the repo file); persist AA settings to `UserPreference`; proactive Mode A → Mode B after batch 1; row-count self-check in Mode A prompt; cap Mode A batch size; add Haiku 4.5 to Model dropdown; comparative Mode A robustness test across three models; include failed-attempt costs in Total Spent.
 - **Phase 1-verify:** Verify canvas rebuild edge cases.
 - **Phase 1-gap:** Port remaining KST features (reset-workflow-data, canvas-as-image export, undo/redo, keyboard shortcuts).
 - **Phase 1-persist:** Migrate must-persist localStorage items to database (MT Table, Removed Terms, etc.). Possibly also migrate `aiMode` to UserPreference.

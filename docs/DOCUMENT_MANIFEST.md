@@ -1,8 +1,9 @@
 # DOCUMENT MANIFEST
 ## Ground-truth registry of every handoff document in the PLOS system
 
-**Last updated:** April 18, 2026 (Phase 1g-test partial — first Claude Code session; protocol change: Pattern 13 + HANDOFF_PROTOCOL §4 Step 4b + CLAUDE_CODE_STARTER Rule 15 expansion)
-**Last updated in session:** session_2026-04-18_phase1g-test-kickoff (Claude Code)
+**Last updated:** April 18, 2026 (Phase 1g-test follow-up — Tasks 1-3 deployed including new `docs/AUTO_ANALYZE_PROMPT_V2.md`; stale-closure bug in buildCurrentTsv discovered during live run)
+**Last updated in session:** session_2026-04-18_phase1g-test-followup (Claude Code)
+**Previously updated in session:** session_2026-04-18_phase1g-test-kickoff (Claude Code)
 **Previously updated (claude.ai era):** https://claude.ai/chat/75cc8985-b70a-49f4-8b64-444c34ef541f
 
 **Purpose:** This is the authoritative registry of what handoff documents exist, where each fits in the system, and their last-modified status. When a new chat starts, the user consults this manifest to confirm which files to upload. When doc drift is suspected, this manifest is the reference for "what should exist."

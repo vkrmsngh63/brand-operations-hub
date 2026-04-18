@@ -1,8 +1,9 @@
 # ROADMAP
 ## Product Launch Operating System (PLOS) — Development Execution Plan
 
-**Last updated:** April 18, 2026 (Phase 1g-test partial — first Claude Code session; findings + tuning punch-list; Phase 1g-test follow-up now the top priority)
-**Last updated in session:** session_2026-04-18_phase1g-test-kickoff (Claude Code)
+**Last updated:** April 18, 2026 (Phase 1g-test follow-up session — Tasks 1–3 deployed, Task 2 validated live; new stale-closure bug in buildCurrentTsv discovered during run, blocking Bursitis completion)
+**Last updated in session:** session_2026-04-18_phase1g-test-followup (Claude Code)
+**Previously updated in session:** session_2026-04-18_phase1g-test-kickoff (Claude Code)
 **Previously updated (claude.ai era):** https://claude.ai/chat/75cc8985-b70a-49f4-8b64-444c34ef541f
 
 **Scale context (added 2026-04-17):** PLOS targets 500 Projects/week with 50 concurrent workers in Phase 3, with headroom for 5,000 Projects/week in Phase 4. See `PLATFORM_REQUIREMENTS.md §1` for full scale targets. All roadmap items must be evaluated against Phase 3 as the minimum target scale.
@@ -137,18 +138,27 @@ This migration is logged as a roadmap item (this section) and captured in `docs/
 **Status:** 🔄 IN PROGRESS (partially built — Phase 1a–1g-rebuild done; Phase 1g-test PARTIAL as of 2026-04-18; polish items remain)
 
 **Polish items remaining:**
-- ✅ **Phase 1g-test (partial — 2026-04-18):** First live Auto-Analyze run completed on Bursitis Project (2,328 keywords). Tool runs end-to-end in principle. Findings: Adaptive Thinking produces 0 output tokens on large prompts (workaround: Enabled mode w/ 12k budget). Mode A full-table drops pre-existing topics as the table grows (3-of-3 retries failed on batch 2). Vercel 5-min timeout is a real ceiling. Multiple doc drifts corrected. See `KEYWORD_CLUSTERING_ACTIVE.md` §6.5 for full findings.
-- 🎯 **Phase 1g-test follow-up (NEXT PRIORITY — next session):**
-  1. Commit canonical V2 prompts to `docs/AUTO_ANALYZE_PROMPT_V2.md` (source of truth in the repo, not scattered text files on the user's laptop)
-  2. Broaden the Mode A → Mode B auto-switch trigger to include validation failures (currently only fires on truncation)
-  3. Fix Budget input UX bug (empty string during edit should not snap to default)
-  4. Add UI hint recommending Direct mode for large-keyword Projects
-  5. Add warning when Adaptive Thinking is selected with a large prompt (0-output-tokens risk)
-  6. Complete a full Bursitis clustering run with tuned settings (Direct mode + Enabled-12k + expected Mode B after batch 1)
-- **Phase 1-polish (NEW items added 2026-04-18 from Phase 1g-test session):**
-  - Auto-Analyze overlay should be **resizable** (drag bottom-right corner) AND **movable** (drag top bar)
-  - Budget input field: allow empty string during editing, enforce default on blur only
-  - Persist Auto-Analyze settings (prompts, apiKey, model, etc.) in `UserPreference` so they survive panel close / page refresh even before a run starts
+- ✅ **Phase 1g-test (partial — 2026-04-18 kickoff session):** First live Auto-Analyze run completed on Bursitis Project (2,328 keywords). Tool runs end-to-end in principle. Findings: Adaptive Thinking produces 0 output tokens on large prompts (workaround: Enabled mode w/ 12k budget). Mode A full-table appears to drop pre-existing topics as the table grows (3-of-3 retries failed on batch 2) — **note: this diagnosis was later reframed in the follow-up session; see `KEYWORD_CLUSTERING_ACTIVE.md §6.5` update.** Vercel 5-min timeout is a real ceiling. Multiple doc drifts corrected.
+- ✅ **Phase 1g-test follow-up Tasks 1–3 (completed 2026-04-18 follow-up session — deployed):**
+  1. ✅ Canonical V2 prompts committed to `docs/AUTO_ANALYZE_PROMPT_V2.md` as `27eb180`
+  2. ✅ Mode A → Mode B auto-switch broadened to fire on HC4/HC5 validation failures as `84062f5` — **validated live in production**: fired correctly on batch 2 of the follow-up Bursitis run
+  3. ✅ Budget input UX fix (plus 3 other inputs with same bug: Batch size / Stall / Vol threshold) committed as `b9dc8b9` — **validated live in production** by user on vklf.com
+- 🎯 **Phase 1g-test follow-up REMAINING (NEXT SESSION TOP PRIORITY):**
+  1. 🚨 **Fix stale-closure bug in `buildCurrentTsv`** (`AutoAnalyze.tsx` lines 359–408) — reads `nodes` / `allKeywords` / `sisterLinks` from render-time closure, should use `nodesRef.current` / `keywordsRef.current` + a new `sisterLinksRef.current`. **Load-bearing: blocks all Auto-Analyze runs past batch 2.** Details + reproduction math in `CORRECTIONS_LOG.md` 2026-04-18 stale-closure entry.
+  2. 🚨 **Add `await` on `doApply` in `handleApplyBatch`** (`AutoAnalyze.tsx` line 1387) — compounds Bug #1 by letting `runLoop()` start before canvas refresh completes. Make `handleApplyBatch` async; audit `handleSkipBatch` for the same pattern.
+  3. After fixes 1+2 deploy, re-attempt the full Bursitis clustering run (Direct mode + Enabled-12k, same settings as follow-up session's attempt). Canvas will start fresh; checkpoint from prior run should be discarded.
+  4. Add UI hint recommending Direct mode for large-keyword Projects (deferred from kickoff session — still applicable)
+  5. Add warning when Adaptive Thinking is selected with a large prompt (0-output-tokens risk — deferred from kickoff session)
+- **Phase 1-polish items — accumulated across kickoff + follow-up sessions:**
+  - **Auto-Analyze overlay resize + move + persistence** (refined 2026-04-18 follow-up): overlay should be resizable by dragging the bottom-right corner or any edge, movable by dragging the top bar, AND the adjusted size + position should persist in localStorage (survives page refresh, per-user-per-device).
+  - **Prompt-sync button in Auto-Analyze** (NEW 2026-04-18 follow-up): one-click button in the AA panel that syncs the currently-displayed Initial + Primer prompts back to `docs/AUTO_ANALYZE_PROMPT_V2.md` in the repo via a new server-side endpoint + GitHub API (PAT stored as Vercel env var). **Design question to resolve at implementation time:** stay with "repo is source of truth" (button = one-way UI→repo sync) vs. move prompts into DB and keep repo copy as a snapshot. First is simpler; second fits the platform's general "persist in DB, not localStorage/file" pattern.
+  - **Persist Auto-Analyze settings in `UserPreference`** (carried from kickoff session) so prompts, apiKey, model, etc. survive panel close / page refresh even before a run starts.
+  - **Proactive Mode A → Mode B switch after batch 1** (NEW 2026-04-18 follow-up): once the topics table is non-empty (i.e., after batch 1 applies), automatically use Mode B for all subsequent batches without waiting for a Mode A failure. Eliminates the sunk-cost Mode A attempt at ~$0.30-0.50 per batch. Complements the reactive auto-switch already in place (doesn't replace it — keeps reactive switch as a safety net for classic-mode runs or unexpected Mode A-in-delta conditions).
+  - **Row-count self-check in Mode A prompt** (NEW 2026-04-18 follow-up): add language to the Initial Prompt V2 asking the AI to count existing rows in its input and verify its output contains the same count of pre-existing rows plus new additions. Reliability uncertain (LLMs are bad at self-policing output-length constraints) but worth trying as belt-and-suspenders. Docs edit in `docs/AUTO_ANALYZE_PROMPT_V2.md`, not a code change.
+  - **Cap Mode A batch size** (NEW 2026-04-18 follow-up): cap Mode A batches at 4 keywords (vs. adaptive's 8/12/18 tiers) until the switch to Mode B occurs. Reduces Mode A output token count and thus attention-dilution surface area. Marginal help only — attention issue comes from the *existing* table size, not new-batch size — but cheap to implement.
+  - **Add Haiku 4.5 to the Model dropdown** (NEW 2026-04-18 follow-up): AutoAnalyze currently supports model selection but Haiku 4.5 isn't listed in the dropdown options. Small code addition to the `<select>` in AutoAnalyze.tsx settings panel. Required prerequisite for the comparative-testing item below.
+  - **Comparative Mode A robustness testing across Opus 4.7 / Sonnet 4-6 / Haiku 4.5** (NEW 2026-04-18 follow-up, depends on Haiku integration): run a small test Project through Mode A with each of the three current models and see which exhibits least dropped-rows / lost-keywords behavior. Informs model default recommendation in the UI.
+  - **Include failed-attempt costs in tool's Total Spent** (NEW 2026-04-18 follow-up): when a batch's API call succeeds (tokens spent) but validation fails and triggers a retry or Mode switch, the Anthropic charges are still incurred but the tool's cost tracker only counts successful validations. Example from follow-up session: batch 2's Mode A attempt consumed ~33k output tokens (≈$0.50 cost to Anthropic) but "Total spent" reflected only the Mode B retry's $0.399. Fix: accumulate all attempts into cost tracking, differentiate applied-vs-rejected tokens in the display if useful.
 - **Phase 1-verify:** Verify canvas rebuild edge cases (large batches, node deletion overlap, pathway updates)
 - **Phase 1-gap:** Port remaining KST features (see §below for full list)
 - **Phase 1-persist:** Migrate must-persist localStorage items to database (MT Table, Removed Terms, etc.)
