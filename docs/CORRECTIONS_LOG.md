@@ -35,6 +35,43 @@
 
 ## Entries
 
+### 2026-04-18 — IMMEDIATE same-session Pattern 14 violation: Claude violated the newly-written rule in the next major decision
+**Session:** session_2026-04-18_phase1g-test-kickoff (Claude Code) — caught by user after Pattern 14 had been committed as `b782a53`
+**Tool/Phase affected:** Methodology / decision-framing / Pattern 14 enforcement
+**Severity:** High (proof that documentation alone does not prevent Pattern 14 slips — even the Claude that authored the rule failed it in the next major decision)
+
+**What happened:** During end-of-session wrap-up, Claude presented a push-to-GitHub decision with three options:
+- "push" — I run git push origin main
+- "don't push yet" — I produce the handoff noting the commit is local-only, and you can push later yourself when ready
+- "show me what changed first" — I show you a summary of the diff before you decide
+
+Each option had a one-line label but lacked:
+- Per-option consequence context (what does "local-only" mean in practice for the user? How would they push later — what exact command?)
+- Per-option reversibility framing ("pause is fully reversible" / "this is one-way" etc.)
+- The required free-text invitation ("Or ask me a question about any option first")
+
+This was committed and pushed as part of the ordinary session flow. The user accepted "push" without complaint. Only AFTER Claude committed Pattern 14 itself (`b782a53`) did the user reread the session and flag: *"you did it again. You gave me a multiple choice to pick from and provided no context for the choices. For example, what did you mean by don't ask for git - again."*
+
+**Root cause:** This is Pattern 14 itself, committed just moments before. The Claude that authored Rule 20 / Rule 14f / Pattern 14 did not have the newly-written rule in sufficient foreground attention during the NEXT major decision it made (push vs. don't push). The rule was written and committed, but the Claude's own behavior didn't yet reflect it. This is the exact visibility-under-load failure mode Pattern 11 describes, recurring for Pattern 14.
+
+**How caught:** User directly, reading back through the session after the commit.
+
+**Correction (applied this entry):**
+- Claude acknowledged the slip openly in-session (no minimizing, per Rule 7 in CLAUDE_CODE_STARTER)
+- Provided the per-option context retroactively in plain language
+- Added this entry to CORRECTIONS_LOG.md as proof that Pattern 14 requires more than documentation
+
+**Prevention (strengthens Pattern 14):**
+- Future sessions reading CLAUDE_CODE_STARTER.md at start will see Rule 20, but this entry's existence in CORRECTIONS_LOG — flagged for 2026-04-18 same-session violation — should reinforce that the mechanical test (scan each option for context; confirm free-text invitation) must be run on EVERY multi-option question, not just the important-feeling ones.
+- The scan-each-option test from Rule 20 / Rule 14f must become reflexive before sending any response that includes bulleted letter-options or "reply with one of" framing.
+- **Related: the "reply with one of: A / B / C" phrasing pattern itself is a red flag.** It implies forced choice without escape. Claude should avoid that phrasing in favor of "A does X (consequence), B does Y (consequence), C does Z (consequence). What sounds right? — or ask me anything about any of these first."
+
+**Lesson:** Pattern 11's recurrence across chats taught us that "rules in docs" aren't sufficient to prevent LLM attention drift. Pattern 14 is an immediate case study in the same failure mode — the rule was authored and immediately not followed. This confirms that mechanical tests must be internalized as habits, not just read-at-start of session.
+
+**Meta-lesson for future sessions reading this entry:** if Claude ever catches itself writing "reply with one of" or a similar forced-choice closer on an options question, STOP and rewrite. The rewrite template: context per option + explicit free-text invitation. Every time.
+
+---
+
 ### 2026-04-18 — Multi-option questions without context or free-text escape hatch trapped user into picking letters
 **Session:** session_2026-04-18_phase1g-test-kickoff (Claude Code) — feedback raised at end-of-session, post-handoff
 **Tool/Phase affected:** Methodology / decision-framing
