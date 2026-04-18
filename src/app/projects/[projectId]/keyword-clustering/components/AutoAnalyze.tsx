@@ -1212,6 +1212,18 @@ export default function AutoAnalyze({
 
         const validation = validateResult(result, batch);
         if (!validation.ok) {
+          // HC4/HC5 signal Mode A dropped pre-existing data; Mode B (delta) recovers faster than retrying Mode A.
+          const isLostDataError = validation.errors.some(e =>
+            e.startsWith('Deleted ') || e.startsWith('Lost ')
+          );
+          if (isLostDataError && !deltaModeRef.current && processingMode === 'adaptive') {
+            setDeltaMode(true);
+            deltaModeRef.current = true;
+            aaLog('⚡ AUTO-SWITCH: ' + validation.errors.join('; ') + ' — switching to DELTA mode (Mode B)', 'warn');
+            batch.attempts--;
+            batch.status = 'queued';
+            continue;
+          }
           if (batch.attempts < batch.maxAttempts) {
             aaLog('Batch ' + batch.batchNum + ' validation failed: ' + validation.errors.join('; ') + ' — retrying…', 'warn');
             batch.status = 'queued';
