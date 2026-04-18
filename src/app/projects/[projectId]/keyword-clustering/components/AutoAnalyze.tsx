@@ -1510,7 +1510,14 @@ export default function AutoAnalyze({
                 <option value="classic">Classic</option>
               </select>
               <span className="aa-label" style={{minWidth:"auto",marginLeft:"12px"}}>Batch size<span className="aa-help">ⓘ<span className="aa-tip">Number of keywords per API call. Only editable in Classic mode. Larger batches are faster but risk truncation.</span></span></span>
-              <input className="aa-input aa-input-sm" type="number" value={batchSize} onChange={e => setBatchSize(parseInt(e.target.value) || 8)} disabled={aaState !== 'IDLE' || processingMode === 'adaptive'} />
+              <input
+                className="aa-input aa-input-sm"
+                type="number"
+                value={batchSize || ''}
+                onChange={e => setBatchSize(parseInt(e.target.value) || 0)}
+                onBlur={() => { if (!batchSize) setBatchSize(8); }}
+                disabled={aaState !== 'IDLE' || processingMode === 'adaptive'}
+              />
               {processingMode === 'adaptive' && <span style={{ fontSize: '9px', color: '#64748b' }}>Auto: 8→12→18</span>}
             </div>
             <div className="aa-row">
@@ -1523,15 +1530,36 @@ export default function AutoAnalyze({
               {thinkingMode === 'enabled' && (
                 <>
                   <span className="aa-label" style={{marginLeft:'12px',minWidth:'auto'}}>Budget</span>
-                  <input className="aa-input aa-input-sm" type="number" value={thinkingBudget} onChange={e => setThinkingBudget(parseInt(e.target.value) || 10000)} disabled={aaState !== 'IDLE'} />
+                  <input
+                    className="aa-input aa-input-sm"
+                    type="number"
+                    value={thinkingBudget || ''}
+                    onChange={e => setThinkingBudget(parseInt(e.target.value) || 0)}
+                    onBlur={() => { if (!thinkingBudget) setThinkingBudget(10000); }}
+                    disabled={aaState !== 'IDLE'}
+                  />
                 </>
               )}
               <span className="aa-label" style={{marginLeft:'12px',minWidth:'auto'}}>Stall (sec)<span className="aa-help">ⓘ<span className="aa-tip">Seconds of no data before retrying the stream connection. Lower = faster recovery but more retries.</span></span></span>
-              <input className="aa-input aa-input-sm" type="number" value={stallTimeout} onChange={e => setStallTimeout(parseInt(e.target.value) || 90)} disabled={aaState !== 'IDLE'} />
+              <input
+                className="aa-input aa-input-sm"
+                type="number"
+                value={stallTimeout || ''}
+                onChange={e => setStallTimeout(parseInt(e.target.value) || 0)}
+                onBlur={() => { if (!stallTimeout) setStallTimeout(90); }}
+                disabled={aaState !== 'IDLE'}
+              />
             </div>
             <div className="aa-row">
               <span className="aa-label">Vol threshold<span className="aa-help">ⓘ<span className="aa-tip">Keywords with volume above this are flagged for priority placement in the topic hierarchy.</span></span></span>
-              <input className="aa-input aa-input-sm" type="number" value={volumeThreshold} onChange={e => setVolumeThreshold(parseInt(e.target.value) || 1000)} disabled={aaState !== 'IDLE'} />
+              <input
+                className="aa-input aa-input-sm"
+                type="number"
+                value={volumeThreshold || ''}
+                onChange={e => setVolumeThreshold(parseInt(e.target.value) || 0)}
+                onBlur={() => { if (!volumeThreshold) setVolumeThreshold(1000); }}
+                disabled={aaState !== 'IDLE'}
+              />
               <div className="aa-toggle" onClick={() => { if (aaState === 'IDLE') setReviewMode(!reviewMode); }}>
                 <div className={`aa-toggle-track${reviewMode ? ' on' : ''}`}><div className="aa-toggle-thumb" /></div>
                 <span>Review each batch</span>
