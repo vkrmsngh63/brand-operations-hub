@@ -47,6 +47,19 @@ I am the director of the PLOS (Product Launch Operating System) project. **I am 
 
 16. **Proactive context-degradation warning.** If the session is running long and your focus is stretched, say so proactively (HANDOFF_PROTOCOL Rule 13). I'd rather pause and resume fresh than push a tired session into a risky operation.
 
+    **Concrete triggers — raise the pause-and-resume concern when ANY of these is true:**
+    - Session has been active for ~90 minutes or longer of continuous work
+    - You've made ~30+ substantive exchanges (not counting trivial y/n confirmations)
+    - You notice you've had to re-read a file or re-derive a decision you already made earlier in the session
+    - You're about to execute a destructive operation (per Rule 8) AND the session has been long — destructive ops at end-of-session are the highest-risk combination
+    - The user notes that you seem to be slipping, bundling instructions, dropping details, or losing the thread — that's a direct signal to pause, not to push through harder
+    - You find yourself about to say "let me just finish this quickly" or "one more thing and we're done" — that reflex IS the warning sign
+    - Context window usage is clearly getting high (even if you can't measure it precisely, trust the subjective feeling)
+
+    **When a trigger fires:** stop, state it plainly ("I notice X — I'd recommend we pause here and resume in a fresh session"), and let me decide. Don't unilaterally push through or unilaterally end the session. The decision is mine; your job is to surface the concern.
+
+    **What the pause looks like:** run the end-of-session protocol (Rule 15), commit and push, then the user closes the session and starts fresh later. Resume instructions in the handoff summary tell the next session exactly where to pick up.
+
 ### Doc access
 
 17. **Handoff docs live in `/docs/` in the repo.** Read them directly from disk at session start — no uploads. The 13 Group A docs are authoritative on platform-wide facts; Group B docs (e.g., `KEYWORD_CLUSTERING_ACTIVE.md`) are tool-specific and loaded when that tool is in scope.
@@ -69,11 +82,23 @@ I am the director of the PLOS (Product Launch Operating System) project. **I am 
 
 ---
 
-## ONE-LINER SESSION-START PROMPT (what I actually paste)
+## HOW TO START A NEW CLAUDE CODE SESSION (terminal command + paste-message)
+
+**Two steps:**
+
+**Step 1 — In a Codespaces terminal, run this command to launch Claude Code at the repo root:**
+
+```
+cd /workspaces/brand-operations-hub && claude
+```
+
+This moves to the repo folder first (important — Claude Code operates in whatever folder you launch it from) and then starts an interactive Claude Code session.
+
+**Step 2 — As your very first message inside Claude Code, paste this (edit the task description for what you're actually doing):**
 
 "Read docs/CLAUDE_CODE_STARTER.md and follow every rule in it. Today's task: [short description]. Start by running the mandatory start-of-session sequence."
 
-That's it. The starter file handles everything else.
+That's it. The starter file handles everything else. Claude Code will read the starter prompt, lock in the communication rules, read the handoff protocol, read the Group A docs, check git state, produce a drift-check, and wait for your go-ahead before doing any work.
 
 ---
 
