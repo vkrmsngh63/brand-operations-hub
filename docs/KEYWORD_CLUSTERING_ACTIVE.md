@@ -1,15 +1,30 @@
 # KEYWORD CLUSTERING — ACTIVE DOCUMENT
 ## Current state of the Keyword Clustering workflow tool (Group B, tool-specific)
 
-**Last updated:** April 17, 2026 (Phase M Ckpt 8 complete — `/plos` Keyword Analysis card now correctly routes to `/projects`, navigation path is fully working end-to-end)
-**Last updated in chat:** https://claude.ai/chat/fc8025bf-551a-4b3c-8483-ec6d8ed9e33c
-**Previously updated:** https://claude.ai/chat/7e0b8456-b925-4460-a583-d348d1c965bf
+**Last updated:** April 18, 2026 (Phase 1g-test partial — first Claude Code session; Auto-Analyze live-tested with real signal + multiple tuning findings + several doc drifts corrected)
+**Last updated in session:** session_2026-04-18_phase1g-test-kickoff (Claude Code)
+**Previously updated (claude.ai era):** https://claude.ai/chat/fc8025bf-551a-4b3c-8483-ec6d8ed9e33c
 
 **Purpose:** This is the working document for the Keyword Clustering tool during its active development phase. Covers everything built so far, what's pending, technical details, and known issues.
 
 **When this tool graduates to stable completion:** This doc will be split into `KEYWORD_CLUSTERING_ARCHIVE.md` (full history) and `KEYWORD_CLUSTERING_DATA_CONTRACT.md` (what downstream tools need to know). See `DOCUMENTATION_ARCHITECTURE.md` §5 for the Tool Graduation Ritual.
 
 **Upload this doc when:** Working on ANY feature, test, or bugfix related to Keyword Clustering.
+
+---
+
+## ⚠️ POST-PHASE-1G-TEST STATE (READ FIRST — added 2026-04-18)
+
+**As of 2026-04-18 (first Claude Code session — Phase 1g-test partial):**
+
+- ✅ **Auto-Analyze has been live-tested for the first time.** The tool runs end-to-end in principle. Batch 1 completed cleanly: 8 topic nodes created, canvas rebuild atomic, validation passed.
+- ❌ **Systematic failure mode discovered in batch 2:** With a growing topics table, the model (Sonnet 4-6) produces full-table (Mode A) responses that drop pre-existing topics. 3 retries all failed the same way. The tool's Mode A→B auto-switch does NOT trigger on validation failures (only on truncation) — this is a design gap.
+- ⚠️ **Adaptive Thinking mode is broken for large prompts.** With Initial Prompt V2 (~35,921 chars) + Primer (~15,208 chars), Adaptive thinking consumed its entire budget and produced 0 output tokens. **Workaround confirmed:** switch Thinking dropdown to "Enabled" with Budget=12000 tokens. This worked for batch 1.
+- ⚠️ **Vercel 5-min timeout is a real risk.** Batch 2 attempt 2 took 4:59 wall time and returned 0 output tokens — strongly suggests Vercel killed the stream. For long runs, Direct mode (no timeout) may be required.
+- 📝 **Multiple doc drifts discovered and corrected this session** — see §4 below. Most notable: the `kst_aa_*` localStorage keys referenced in prior docs **do not exist in the code**. Only `aa_checkpoint_{Project.id}` exists, and only after a run starts.
+- 🚫 **The Bursitis Project's 2,328 keywords are NOT yet clustered.** First 8 keywords from batch 1 landed as topics; all others remain unsorted. Phase 1g-test follow-up (a second tuning pass) is required before we can complete a real clustering run.
+
+**Next priority after Phase 1g-test follow-up:** see §6 "Phase 1g-test findings" for specific tuning items to validate in the next session.
 
 ---
 
@@ -183,10 +198,15 @@ Manual user action:
 - Toggle "Completed" on the Projects page Completed button → PATCH to `/api/project-workflows/[projectId]/keyword-clustering` with `{ status: "completed" }`
 
 ### Data still in localStorage (planned migration in Phase 1-persist)
+
+**⚠️ CORRECTED 2026-04-18:** the prior version of this list referenced `kst_aa_apikey`, `kst_aa_model`, `kst_aa_initial_prompt`, `kst_aa_primer_prompt` as if they were standalone localStorage keys. **Those keys do NOT exist in the current code.** Verified by grep across `/src/` on 2026-04-18 — zero matches. The actual behavior:
+
+- **Auto-Analyze checkpoint — the ONLY AA-related localStorage key** — `aa_checkpoint_{Project.id}` (note: uses `Project.id` not `ProjectWorkflow.id`; prior docs were wrong on this too). Created only AFTER a run starts and `saveCheckpoint()` fires. Contains the full config (apiMode, apiKey, model, seedWords, thinking mode + budget, processingMode, prompts, etc.) + current batch state + log entries.
+- **Before a run starts, NO Auto-Analyze settings are persisted.** Open the panel, paste prompts, close the browser → everything is lost. This is a UX gap for a non-programmer user.
+- **After a run starts and the first checkpoint saves, the Resume Checkpoint button (▶ Resume) appears on next visit and restores the full config including prompts** — but only if the checkpoint wasn't discarded via ✕ Cancel (which calls `clearCheckpoint()`).
+
+**Other localStorage items (unchanged from prior docs — verify each against code before acting):**
 - MT Table entries (`kst_mt`)
-- Auto-Analyze config (`kst_aa_apikey`, `kst_aa_model`, etc.)
-- Auto-Analyze prompts (`kst_aa_initial_prompt`, `kst_aa_primer_prompt`)
-- Auto-Analyze checkpoint (`aa_checkpoint_{projectWorkflowId}`) — key already uses projectWorkflowId
 - Removed Terms (`kst_rm`) — ⚠️ currently lost on refresh
 - UI state (panel visibility, filters, zoom, canvas mode, collapsed nodes, TIF entries, etc.)
 - **NEW (Ckpt 7):** `aiMode` (Manual/AI toggle state) is currently per-session only — resets on page refresh. Considering adding to `UserPreference` per-user per-workflow. See ROADMAP Phase 1-polish items.
@@ -294,10 +314,91 @@ Manual user action:
 - Atomic canvas rebuild: ✅ Working (via Ckpt 1g-rebuild)
 - Multi-project management: ✅ Working pre-Phase-M; needs re-verification after Ckpt 9 deploy
 
+### Partially tested
+- **Auto-Analyze — first live run completed 2026-04-18 on Bursitis Project (2,328 keywords).** See §6.5 Phase 1g-test findings below. Batch 1 succeeded end-to-end, batch 2 failed systematically with Mode A full-table behavior. More tuning work needed before a completing run is possible.
+
 ### NOT yet tested in user's real usage
-- **Auto-Analyze full flow** — Phase 1g-test. Code complete but never actually run against a live dataset.
-- **Post-Phase-M data persistence** — the new schema is live in Supabase but no data has been imported since the `--force-reset`; user intends to re-import keywords from the legacy KST after Ckpt 9 deploy.
-- **Post-Ckpt-7 navigation in the browser** — build passes, route compiles, but no visual test performed due to Codespaces PORTS glitch. Will visual-test during Ckpt 9 deploy.
+- **Post-Phase-M data persistence** — the new schema is live in Supabase and user has re-imported Bursitis keywords (2,328) since Ckpt 9 deploy. Read/write confirmed via the one successful batch. Needs broader stress testing.
+- **Post-Ckpt-7 navigation in the browser** — confirmed working during Ckpt 9.5 visual verification and confirmed again during Phase 1g-test. ✅ No issues.
+
+---
+
+## 6.5 Phase 1g-test findings (2026-04-18, first Claude Code session)
+
+**Test setup:**
+- Project: "Bursitis" — 2,328 unsorted keywords (fresh Project, no prior clustering or AI-Sorted data)
+- Model: `claude-sonnet-4-6` (chosen for balance of capability and cost)
+- API Mode: **Server proxy** (via Vercel, leveraging the server-side `ANTHROPIC_API_KEY` env var)
+- Processing mode: Adaptive (Foundation 8 → Expansion 12 → Placement 18 batch tiers)
+- Initial Prompt V2 pasted: 35,921 characters
+- Topics Layout Table Primer V2 pasted: 15,208 characters
+- Seed words: `bursitis`
+
+### 6.5.1 — BUG: Adaptive Thinking mode produces 0 output tokens on large prompts
+
+**Symptom:** With Thinking=Adaptive and the 51k-char prompt loaded, the model entered thinking phase and ran for ~4:58 of wall time on each of 3 attempts, then the stream completed with "Input: 183, Output: 0 tokens." The "Input: 183" is misleading — it's cache-miss tokens reported by the streaming usage event, not total input. Total input was ~13,584 tokens per attempt.
+
+**Root cause hypothesis:** Adaptive Thinking does not cap the thinking token budget. On complex/large prompts, the model consumes its entire `max_tokens=128000` allocation during the silent thinking phase with no room left to emit output text. The stream's final usage event reports 0 output tokens because none were ever generated.
+
+**Workaround confirmed working:** Change Thinking dropdown from "Adaptive" to "Enabled", set Budget to 12000. Batch 1 with this setting: thinking phase ~1:55, output phase ~1:49, total batch time ~3:51, 14,752 output tokens generated, validation passed, 8 topics on canvas. Cost: $0.257 for batch 1 (no cache hit yet).
+
+**Fix recommendation:** In the Auto-Analyze component, when Adaptive is selected but the combined system prompt exceeds ~40k chars, the tool should warn the user that Adaptive may fail and suggest switching to Enabled with a safe budget. Alternatively, detect the "0 output tokens" failure signature and auto-fall-back to Enabled.
+
+### 6.5.2 — BUG: Mode A (full-table) produces invalid output as the topics table grows
+
+**Symptom:** Batch 2 with Thinking=Enabled 12k budget succeeded in producing 17,399 output tokens but the model's response **dropped 4 pre-existing topics from batch 1 and lost 8 keywords.** The validation check (HC5 — lost keywords — zero tolerance) correctly rejected the response and triggered a retry with correction context.
+
+Across 3 attempts on batch 2:
+- Attempt 1: 17,399 output tokens, dropped 4 topics + lost 8 keywords → validation failed
+- Attempt 2: 0 output tokens — stream ran 4:59 wall time (suspicious — Vercel's 5-min ceiling) → retry triggered
+- Attempt 3: 16,552 output tokens, dropped 6 topics + lost 2 keywords → validation failed → batch 2 marked FAILED, tool moved to batch 3
+
+The tool's 3-attempt retry cap worked as designed. But the 8 keywords from batch 2 remain unsorted.
+
+**Root cause:** Mode A requires the model to transcribe the full existing topics table AND add new rows for the current batch. As the table grows, the model's attention degrades and it omits rows — effectively "summarizing by omission." The prompt explicitly forbids deleting topics, but the model does it anyway. This is a known pattern with long-context generation.
+
+**Design gap:** The docs describe a Mode A → Mode B auto-switch that's supposed to kick in on truncation. It did not trigger on these validation failures because the responses weren't truncated — they were omission-complete. **The auto-switch condition needs to include validation failures from dropped-topics / lost-keywords, not just truncation.**
+
+**Fix recommendations:**
+1. Broaden the Mode A → Mode B trigger to include validation failures from lost data
+2. Consider making Mode B (delta) the default after batch 1 (when the topics table has any content)
+3. Consider splitting very large prompts across system + cached + user-message boundaries more deliberately to leverage Anthropic's prompt caching further
+
+### 6.5.3 — BUG: Vercel 5-minute timeout is a real ceiling, and it's close
+
+**Symptom:** Batch 2 attempt 2 took exactly 4:59 wall time from request start to stream-complete — within 1 second of Vercel's 5-minute serverless function timeout — and returned 0 output tokens. Possible that Vercel killed the stream.
+
+**Implication:** For any batch that takes longer than ~4:30 wall time on Server mode, we're at risk of this ceiling. And batches get slower as the table grows (more input tokens, more thinking needed to manage existing state).
+
+**Workaround:** Switch API Mode dropdown to "Direct (browser → Anthropic)". This routes requests from the user's browser straight to Anthropic, bypassing Vercel entirely, with no timeout. Downside: the user must paste their own Anthropic API key into the tool's UI (stored in React state only — same persistence caveats as the prompts).
+
+**Design recommendation:** For Projects with > N keywords (where N is small enough that expected per-batch times stay safely under 4 minutes), Server mode is fine. For larger Projects, Direct mode should be the default. A UI hint could surface this based on keyword count.
+
+### 6.5.4 — UX bug: Budget input field snaps back to default on empty
+
+**Symptom:** When editing the "Budget" number input, deleting all characters causes the field to auto-refill with the default value (10000) before the user can type their new number. The user is forced to triple-click to select-all, then type.
+
+**Code location:** `src/app/projects/[projectId]/keyword-clustering/components/AutoAnalyze.tsx` line ~1514: `onChange={e => setThinkingBudget(parseInt(e.target.value) || 10000)}`. The `|| 10000` fallback fires whenever `parseInt("")` returns NaN.
+
+**Fix:** Allow an empty string during editing. Only enforce the default on blur or on form submit.
+
+### 6.5.5 — UX need: Auto-Analyze overlay should be resizable and movable
+
+**User request:** The overlay should be draggable via its top bar (move to any position on screen) and resizable via a drag-handle on its bottom-right corner. Currently it's a fixed-position panel.
+
+### 6.5.6 — Documentation drift corrected (Pattern 3 / Pattern 11 adjacent)
+
+During this session, three doc drifts from prior claude.ai chats were discovered via code reading:
+
+1. **`DATA_CATALOG.md` §5.8** and **`KEYWORD_CLUSTERING_ACTIVE.md` §4** both claimed the `kst_aa_apikey`, `kst_aa_model`, `kst_aa_initial_prompt`, `kst_aa_primer_prompt` localStorage keys exist. **They don't.** Grep confirmed zero matches in `/src/`. Fixed in both docs this session.
+
+2. **`KEYWORD_CLUSTERING_ACTIVE.md` §4** claimed the checkpoint key uses `projectWorkflowId`. **Code uses `projectId`** (line 227: `const cpKey = 'aa_checkpoint_' + projectId;`). Fixed.
+
+3. **Implicit assumption** that the "Initial Prompt v2" was retrievable from somewhere. In fact it's stored only in the user's separate text files + inside `keyword_sorting_tool_v18.html` on the user's laptop. Nothing in the repo or database holds the prompt content. Recommendation: commit `docs/AUTO_ANALYZE_PROMPT_V2.md` containing the canonical V2 Initial + Primer prompts — source-of-truth in the repo, not in ephemeral browser state or scattered files. **Logged as a follow-up task for the next session.**
+
+### 6.5.7 — Session verdict
+
+Phase 1g-test was **partially completed**: we confirmed the tool works end-to-end in principle, found the major tuning path (Thinking: Enabled 12k), identified several bugs and doc drifts, and produced a concrete punch-list for a Phase 1g-test follow-up session. The Bursitis Project's 2,328 keywords are not yet fully clustered — that's a dedicated follow-up run, ideally in Direct mode, with Mode A→B auto-switch behavior revisited first.
 
 ---
 
@@ -362,7 +463,18 @@ Nice-to-haves:
 ## 12. Upcoming work for this tool
 
 ### Phase 1 (admin-solo)
-- **Phase 1g-test:** Live-test Auto-Analyze end-to-end. Top priority after Ckpt 9 deploy.
+- **Phase 1g-test (PARTIAL — 2026-04-18):** First live run completed; Sonnet+Adaptive-Thinking bug found + workaround confirmed; Mode A omission failure identified. See §6.5 for details.
+- **Phase 1g-test follow-up (🎯 NEXT PRIORITY):** Second tuning pass. Scope:
+  1. Commit canonical V2 Initial + Primer prompts to `docs/AUTO_ANALYZE_PROMPT_V2.md` (source of truth in repo, not scattered files)
+  2. Broaden Mode A → Mode B auto-switch trigger to include validation failures (currently only triggers on truncation)
+  3. Fix Budget input UX bug (allow empty string during editing; default on blur)
+  4. Add UI hint recommending Direct mode for larger Projects (Vercel 5-min timeout risk)
+  5. Do a full clustering run on Bursitis (2,328 keywords) with Direct + Enabled-12k + expectation of Mode B operation after batch 1
+- **Phase 1-polish (NEW items added 2026-04-18):**
+  - Auto-Analyze overlay should be **resizable** (drag bottom-right corner) AND **movable** (drag top bar)
+  - Budget input field UX bug (see §6.5.4)
+  - Warn user in UI when Adaptive Thinking is selected with a large prompt (risk of 0 output tokens)
+  - Persist Auto-Analyze settings (prompts, apiKey, model, etc.) in `UserPreference` so they survive panel close / page refresh even before a run starts
 - **Phase 1-verify:** Verify canvas rebuild edge cases.
 - **Phase 1-gap:** Port remaining KST features (reset-workflow-data, canvas-as-image export, undo/redo, keyboard shortcuts).
 - **Phase 1-persist:** Migrate must-persist localStorage items to database (MT Table, Removed Terms, etc.). Possibly also migrate `aiMode` to UserPreference.

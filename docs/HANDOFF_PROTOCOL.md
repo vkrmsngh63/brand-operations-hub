@@ -355,6 +355,60 @@ This is a tailored message for the user. It MUST include these sections, filled 
 
 This message is non-negotiable.
 
+### Step 4b — Claude Code variant of the handoff (use this, not the claude.ai template above, when session happens in Claude Code)
+
+The template above was authored for claude.ai's upload/download workflow. In Claude Code, there are no uploads or downloads — Claude edits files directly and commits to git. The handoff must reflect that, and must include explicit session-boundary instructions for a non-programmer user.
+
+**Mandatory Claude Code handoff template:**
+
+```
+## YOUR PERSONALIZED HANDOFF
+
+### What we did this session
+[2–4 sentences, plain language, no jargon]
+
+### Files changed this session
+[List with a one-line description of what changed in each, plus the commit hash(es)]
+
+### Push status
+[Either: "Committed locally as <hash> — NOT pushed yet, your call when ready."
+ Or:     "Committed as <hash> AND pushed to origin/main — live site will redeploy automatically. Watch vklf.com for build completion."]
+
+### Deferred items captured
+[Every flagged-and-set-aside item from this session, with the specific doc + section where it's now captured. Per Rule 14e, no item leaves a session uncaptured.]
+
+### 🚪 END-OF-SESSION INSTRUCTIONS — what you do NOW to close this session
+
+Step-by-step, concrete. Example:
+
+1. Claude Code is still running in your terminal. Type `exit` and press Enter to leave.
+2. (Optional) Close the terminal tab — or leave it open for later; either works.
+3. (Optional) If you paused vklf.com runs, nothing to do — they stopped when you cancelled.
+
+### 🚪 NEXT-SESSION INSTRUCTIONS — what you do when you come back
+
+Step-by-step, concrete. Example:
+
+1. Open a new Codespaces terminal — OR reopen the one you left running.
+2. Type this exact command and press Enter:
+   ```
+   cd /workspaces/brand-operations-hub && claude
+   ```
+3. Claude Code will start. As your very first message, paste this exactly (edit only the task description in brackets if you want a different task — but "[EXACT NEXT TASK]" is the default from this handoff):
+   ```
+   Read docs/CLAUDE_CODE_STARTER.md and follow every rule in it. Today's task: [EXACT NEXT TASK]. Start by running the mandatory start-of-session sequence.
+   ```
+4. Press Enter. Claude will read the starter, read all handoff docs, check git state, produce a drift check, and wait for your go-ahead before doing any work.
+
+### Anything you need to do offline between sessions
+[Only include if applicable — e.g., "Find the V2 prompt file on your laptop," "Check Vercel env vars." Otherwise say "Nothing — you're all set."]
+
+### Open questions / carry-overs for the next session
+[Any unresolved questions from this session that the next one needs to know about]
+```
+
+**Why this template is non-negotiable in Claude Code:** the user is a non-programmer. Session-boundary moments are high-confusion moments ("what do I type? which terminal? what message do I paste?"). The same mechanical rigor that Rule 14a demands mid-session — every imperative paired with a concrete method — applies here. The 🚪 sections must be **copy-paste-ready terminal commands** and **copy-paste-ready message text**, with no ambiguity.
+
 ### Step 5 — Present all updated files via `present_files`
 
 ---

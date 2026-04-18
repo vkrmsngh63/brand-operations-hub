@@ -1,8 +1,9 @@
 # DOCUMENT MANIFEST
 ## Ground-truth registry of every handoff document in the PLOS system
 
-**Last updated:** April 17, 2026 (Phase M COMPLETE — all 15 handoff docs now live in `/docs/` at repo root per Ckpt 9; next session in Claude Code)
-**Last updated in chat:** https://claude.ai/chat/75cc8985-b70a-49f4-8b64-444c34ef541f
+**Last updated:** April 18, 2026 (Phase 1g-test partial — first Claude Code session; protocol change: Pattern 13 + HANDOFF_PROTOCOL §4 Step 4b + CLAUDE_CODE_STARTER Rule 15 expansion)
+**Last updated in session:** session_2026-04-18_phase1g-test-kickoff (Claude Code)
+**Previously updated (claude.ai era):** https://claude.ai/chat/75cc8985-b70a-49f4-8b64-444c34ef541f
 
 **Purpose:** This is the authoritative registry of what handoff documents exist, where each fits in the system, and their last-modified status. When a new chat starts, the user consults this manifest to confirm which files to upload. When doc drift is suspected, this manifest is the reference for "what should exist."
 
@@ -16,23 +17,27 @@ As of Phase M Ckpt 9 (2026-04-17), **all Group A docs live at `/docs/` in the re
 
 These 13 documents form the persistent handoff context.
 
-| # | Document | Purpose | Last modified | Modified this chat? |
+| # | Document | Purpose | Last modified | Modified this session? |
 |---|---|---|---|---|
-| 1 | `PROJECT_CONTEXT.md` | Big-picture project context, philosophy, methodology, discover-as-you-build approach | 2026-04-17 (chat `cc15409c-...`, scope 2) | NO |
-| 2 | `PLATFORM_ARCHITECTURE.md` | Technical architecture — routes, schema, auth, file structure, tech debt | 2026-04-17 (this chat) | ✅ YES |
-| 3 | `PLATFORM_REQUIREMENTS.md` | Platform-wide requirements — scale, user-model, review cycle, audit, concurrency, phasing | 2026-04-17 (chat `cc15409c-...`, scope 2) | NO |
-| 4 | `NAVIGATION_MAP.md` | Every route + click path through PLOS — UI navigation source of truth | 2026-04-17 (this chat) | ✅ YES |
-| 5 | `DATA_CATALOG.md` | Every data item — where it lives, Human Reference Language, cross-workflow sharing contracts | 2026-04-17 (chat `cc15409c-...`, scope 2) | NO |
-| 6 | `ROADMAP.md` | Development execution plan — completed work + remaining phases | 2026-04-17 (this chat) | ✅ YES |
-| 7 | `CORRECTIONS_LOG.md` | Append-only log of mistakes + extracted patterns | 2026-04-17 (this chat) | ✅ YES |
-| 8 | `CHAT_REGISTRY.md` | Chronological log of chats + URLs + work-summaries (post-Ckpt-9: Claude Code sessions use session-identifier format) | 2026-04-17 (this chat) | ✅ YES |
-| 9 | `HANDOFF_PROTOCOL.md` | Rules for how chats operate — start/mid/end protocols, communication rules, interview rules | 2026-04-17 (Ckpt 8) | NO |
-| 10 | `DOCUMENTATION_ARCHITECTURE.md` | Design of the doc-system itself (DLMS, tool graduation, group A/B, workflow interview pattern, Claude Code migration) | 2026-04-17 (this chat — timestamp only) | ✅ YES (timestamp) |
-| 11 | `NEW_CHAT_PROMPT.md` | **Historical** — claude.ai era briefing template. Post-Phase-M, Claude Code sessions use `CLAUDE_CODE_STARTER.md` instead. | 2026-04-17 (this chat) | ✅ YES |
-| 12 | `DOCUMENT_MANIFEST.md` | This file — ground-truth doc registry | 2026-04-17 (this chat) | ✅ YES |
-| 13 | `CLAUDE_CODE_MIGRATION.md` | Migration plan and operational rules for shifting from claude.ai to Claude Code. Executed successfully in Ckpt 9+9.5. | 2026-04-17 (Ckpt 8) | NO |
+| 1 | `PROJECT_CONTEXT.md` | Big-picture project context, philosophy, methodology, discover-as-you-build approach | 2026-04-17 | NO |
+| 2 | `PLATFORM_ARCHITECTURE.md` | Technical architecture — routes, schema, auth, file structure, tech debt | 2026-04-17 | NO |
+| 3 | `PLATFORM_REQUIREMENTS.md` | Platform-wide requirements — scale, user-model, review cycle, audit, concurrency, phasing | 2026-04-17 | NO |
+| 4 | `NAVIGATION_MAP.md` | Every route + click path through PLOS — UI navigation source of truth | 2026-04-17 | NO |
+| 5 | `DATA_CATALOG.md` | Every data item — where it lives, Human Reference Language, cross-workflow sharing contracts | 2026-04-18 (this session — §5.8/5.9 drift corrected) | ✅ YES |
+| 6 | `ROADMAP.md` | Development execution plan — completed work + remaining phases | 2026-04-18 (this session — Phase 1g-test status + polish items) | ✅ YES |
+| 7 | `CORRECTIONS_LOG.md` | Append-only log of mistakes + extracted patterns | 2026-04-18 (this session — 3 new entries + Pattern 13) | ✅ YES |
+| 8 | `CHAT_REGISTRY.md` | Chronological log of chats + URLs + work-summaries (post-Ckpt-9: Claude Code sessions use session-identifier format) | 2026-04-18 (this session — first Claude Code session row) | ✅ YES |
+| 9 | `HANDOFF_PROTOCOL.md` | Rules for how chats operate — start/mid/end protocols, communication rules, interview rules | 2026-04-18 (this session — new §4 Step 4b Claude Code handoff template) | ✅ YES |
+| 10 | `DOCUMENTATION_ARCHITECTURE.md` | Design of the doc-system itself (DLMS, tool graduation, group A/B, workflow interview pattern, Claude Code migration) | 2026-04-17 | NO |
+| 11 | `NEW_CHAT_PROMPT.md` | **Historical** — claude.ai era briefing template. Post-Phase-M, Claude Code sessions use `CLAUDE_CODE_STARTER.md` instead. | 2026-04-17 | NO |
+| 12 | `DOCUMENT_MANIFEST.md` | This file — ground-truth doc registry | 2026-04-18 (this session — timestamps + modified flags) | ✅ YES |
+| 13 | `CLAUDE_CODE_MIGRATION.md` | Migration plan and operational rules for shifting from claude.ai to Claude Code. Executed successfully in Ckpt 9+9.5. | 2026-04-17 | NO |
 
-**Group A count: 13 documents.** 7 modified this chat.
+**Group A count: 13 documents.** 6 modified this session.
+
+**Also modified this session (non-Group-A):**
+- `KEYWORD_CLUSTERING_ACTIVE.md` (Group B) — Phase 1g-test findings added (§6.5), localStorage drift corrected (§4), Phase 1-polish items expanded (§12)
+- `CLAUDE_CODE_STARTER.md` (operational file) — Rule 15 extended with mandatory handoff-content checklist
 
 ---
 

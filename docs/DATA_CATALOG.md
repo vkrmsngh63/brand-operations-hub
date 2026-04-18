@@ -1,8 +1,9 @@
 # DATA CATALOG
 ## Master index of all data captured across the PLOS platform, with Human Reference Language
 
-**Last updated:** April 17, 2026 (platform architectural reveal — Phase 2 data items added as planned placeholders)
-**Last updated in chat:** https://claude.ai/chat/cc15409c-5000-4f4f-a5ce-a42784b5a94f
+**Last updated:** April 18, 2026 (Phase 1g-test partial — corrected §5.8 and §5.9 Auto-Analyze drift; keys claimed in prior versions do not exist in code)
+**Last updated in session:** session_2026-04-18_phase1g-test-kickoff (Claude Code)
+**Previously updated (claude.ai era):** https://claude.ai/chat/cc15409c-5000-4f4f-a5ce-a42784b5a94f
 
 **Purpose:** Bridge between user's natural language references and the code's technical names. Loaded every chat as Group A.
 
@@ -220,14 +221,18 @@ These data items are required for Phase 2 (multi-user infrastructure) per `PLATF
 - **TECHNICAL NAME:** `CanvasState` table (viewX, viewY, zoom, nextNodeId, nextPathwayId, projectWorkflowId unique)
 - **SHARED WITH:** N/A (UI state)
 
-### 5.8 Auto-Analyze config + prompts (localStorage — Phase 1-persist will migrate to DB)
+### 5.8 Auto-Analyze config + prompts (ephemeral React state — **NOT persisted before a run starts**)
 - **HUMAN REF (PROVISIONAL):** "the auto-analyze settings" / "the AI prompts" / "the seed words"
-- **TECHNICAL NAME:** localStorage keys `kst_aa_apikey`, `kst_aa_model`, `kst_aa_initial_prompt`, `kst_aa_primer_prompt`, `kst_aip_seed`
+- **TECHNICAL REALITY (corrected 2026-04-18):** These settings (apiMode, apiKey, model, seedWords, thinking mode + budget, processingMode, stallTimeout, reviewMode, volumeThreshold, batchSize, keywordScope, initialPrompt, primerPrompt) live ONLY in React component state inside `AutoAnalyze.tsx` before a run begins. **No standalone localStorage keys exist** for any of these — prior versions of this catalog claimed keys like `kst_aa_apikey`, `kst_aa_model`, `kst_aa_initial_prompt`, `kst_aa_primer_prompt`; those do not exist in the codebase (grep-verified 2026-04-18, zero matches).
+- **After a run starts**, the `saveCheckpoint()` function bundles all settings into the `aa_checkpoint_{Project.id}` localStorage blob (see 5.9 below).
+- **Practical UX implication:** If the user opens the Auto-Analyze panel, pastes prompts, configures settings, and then closes the browser or reloads the page WITHOUT starting a run, everything is lost. Tracked as a Phase 1-polish item (persist settings to `UserPreference`).
 - **SHARED WITH:** N/A
 
 ### 5.9 Auto-Analyze checkpoint (localStorage)
 - **HUMAN REF (PROVISIONAL):** "the auto-analyze progress" / "where I left off in auto-analyze"
-- **TECHNICAL NAME:** localStorage key `aa_checkpoint_{projectWorkflowId}` (updated in Checkpoint 5)
+- **TECHNICAL NAME (corrected 2026-04-18):** localStorage key `aa_checkpoint_{Project.id}` — **uses `Project.id`, NOT `ProjectWorkflow.id`.** The code is at line 227 of `AutoAnalyze.tsx`: `const cpKey = 'aa_checkpoint_' + projectId;` where `projectId` comes from `useParams()` which reads `Project.id` from the URL. Prior docs were wrong on this.
+- **Content when populated:** full config (§5.8 fields), batches array, currentIdx, totalSpent, deltaMode, batchTier, elapsed seconds, logEntries.
+- **Lifecycle:** Created on first `saveCheckpoint()` call during a run; updated after each batch; cleared on ✕ Cancel (via `handleCancel()` → `clearCheckpoint()`); restored on ▶ Resume via `handleResumeCheckpoint()`.
 - **SHARED WITH:** N/A
 
 ### 5.10 Removed Terms (localStorage — ⚠️ currently lost on refresh)

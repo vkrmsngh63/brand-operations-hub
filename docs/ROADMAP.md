@@ -1,8 +1,9 @@
 # ROADMAP
 ## Product Launch Operating System (PLOS) — Development Execution Plan
 
-**Last updated:** April 17, 2026 (Phase M COMPLETE — Ckpts 9 + 9.5 deployed; ready for Claude Code migration and Phase 1g-test)
-**Last updated in chat:** https://claude.ai/chat/75cc8985-b70a-49f4-8b64-444c34ef541f
+**Last updated:** April 18, 2026 (Phase 1g-test partial — first Claude Code session; findings + tuning punch-list; Phase 1g-test follow-up now the top priority)
+**Last updated in session:** session_2026-04-18_phase1g-test-kickoff (Claude Code)
+**Previously updated (claude.ai era):** https://claude.ai/chat/75cc8985-b70a-49f4-8b64-444c34ef541f
 
 **Scale context (added 2026-04-17):** PLOS targets 500 Projects/week with 50 concurrent workers in Phase 3, with headroom for 5,000 Projects/week in Phase 4. See `PLATFORM_REQUIREMENTS.md §1` for full scale targets. All roadmap items must be evaluated against Phase 3 as the minimum target scale.
 
@@ -133,10 +134,21 @@ This migration is logged as a roadmap item (this section) and captured in `docs/
 ### Workflow build plan (the 14 PLOS workflows)
 
 #### Workflow 1 — Keyword Analysis & Intent Discovery (🔑)
-**Status:** 🔄 IN PROGRESS (partially built — Phase 1a–1g-rebuild done; polish items remain)
+**Status:** 🔄 IN PROGRESS (partially built — Phase 1a–1g-rebuild done; Phase 1g-test PARTIAL as of 2026-04-18; polish items remain)
 
 **Polish items remaining:**
-- 🎯 **Phase 1g-test:** Auto-Analyze system needs live testing (code complete ~10 days). Test batch sizes, retry logic, checkpointing. May need tuning.
+- ✅ **Phase 1g-test (partial — 2026-04-18):** First live Auto-Analyze run completed on Bursitis Project (2,328 keywords). Tool runs end-to-end in principle. Findings: Adaptive Thinking produces 0 output tokens on large prompts (workaround: Enabled mode w/ 12k budget). Mode A full-table drops pre-existing topics as the table grows (3-of-3 retries failed on batch 2). Vercel 5-min timeout is a real ceiling. Multiple doc drifts corrected. See `KEYWORD_CLUSTERING_ACTIVE.md` §6.5 for full findings.
+- 🎯 **Phase 1g-test follow-up (NEXT PRIORITY — next session):**
+  1. Commit canonical V2 prompts to `docs/AUTO_ANALYZE_PROMPT_V2.md` (source of truth in the repo, not scattered text files on the user's laptop)
+  2. Broaden the Mode A → Mode B auto-switch trigger to include validation failures (currently only fires on truncation)
+  3. Fix Budget input UX bug (empty string during edit should not snap to default)
+  4. Add UI hint recommending Direct mode for large-keyword Projects
+  5. Add warning when Adaptive Thinking is selected with a large prompt (0-output-tokens risk)
+  6. Complete a full Bursitis clustering run with tuned settings (Direct mode + Enabled-12k + expected Mode B after batch 1)
+- **Phase 1-polish (NEW items added 2026-04-18 from Phase 1g-test session):**
+  - Auto-Analyze overlay should be **resizable** (drag bottom-right corner) AND **movable** (drag top bar)
+  - Budget input field: allow empty string during editing, enforce default on blur only
+  - Persist Auto-Analyze settings (prompts, apiKey, model, etc.) in `UserPreference` so they survive panel close / page refresh even before a run starts
 - **Phase 1-verify:** Verify canvas rebuild edge cases (large batches, node deletion overlap, pathway updates)
 - **Phase 1-gap:** Port remaining KST features (see §below for full list)
 - **Phase 1-persist:** Migrate must-persist localStorage items to database (MT Table, Removed Terms, etc.)

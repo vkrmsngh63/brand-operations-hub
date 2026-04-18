@@ -2,8 +2,9 @@
 ## Append-only record of mistakes made during chats and lessons learned
 
 **Started:** April 16, 2026
-**Last updated:** April 17, 2026 (Phase M Ckpts 9 + 9.5 complete — 3 new entries: Pattern 7 recurrence (missing file from Ckpt 6 surfaced post-deploy), sed/tr quoting slip, empty-subfolder drift in /docs/; Pattern 7 mitigation strengthened)
-**Last updated in chat:** https://claude.ai/chat/75cc8985-b70a-49f4-8b64-444c34ef541f
+**Last updated:** April 18, 2026 (Phase 1g-test partial — 4 new entries: AA localStorage-keys drift, Phase 1g-test bugs surfaced, Pattern 11 recurrence #5 on session-boundary instructions, new Pattern 13 on session-boundary step-by-step requirement)
+**Last updated in session:** session_2026-04-18_phase1g-test-kickoff (Claude Code)
+**Previously updated (claude.ai era):** https://claude.ai/chat/75cc8985-b70a-49f4-8b64-444c34ef541f
 
 **Purpose:** Every mistake made in any chat — whether Claude or user catches it — gets appended. Future Claudes read this to avoid repeating. This is how institutional memory survives Claude's lack of memory.
 
@@ -33,6 +34,84 @@
 ---
 
 ## Entries
+
+### 2026-04-18 — Pattern 11 recurrence #5: session-boundary step-by-step instructions needed by non-programmer user (now a standing protocol requirement)
+**Session:** session_2026-04-18_phase1g-test-kickoff (Claude Code)
+**Tool/Phase affected:** Methodology / end-of-session protocol
+**Severity:** High (5th recurrence of a class of issue that documentation alone has not solved)
+
+**What happened:** At the end-of-session doc update phase, the user stated: *"please also tell me exactly what to do to end this session, how to begin the next session, exactly what to type, etc. Please also make sure the next session and every subsequent session is provided this information as well so that I am given step by step instructions on what to do next when I am at the end of sessions and in-between sessions about to start a new session."*
+
+This is a direct reinforcement of the non-programmer rule, applied specifically to **session-boundary moments** — which the existing Pattern 11 / Rule 14a / Rule 9 framework had not sufficiently covered. The prior rules covered mid-session imperatives ("paste this file") but not end-of-session handholding (how to close, how to resume).
+
+**Root cause:** The existing end-of-chat Personalized Handoff template in `HANDOFF_PROTOCOL.md §4 Step 4` was written for the claude.ai era (upload/download workflow). When the project migrated to Claude Code, the template wasn't updated to reflect the new workflow — and the non-programmer handholding requirement wasn't made explicit for Claude Code's session-boundary moments (close + reopen with exact terminal commands).
+
+**How caught:** User directly, at end-of-session.
+
+**Correction (applied this session):**
+- Added a new **Step 4b — Claude Code variant of the handoff** to `HANDOFF_PROTOCOL.md §4`, with a mandatory template requiring 🚪 END-OF-SESSION INSTRUCTIONS and 🚪 NEXT-SESSION INSTRUCTIONS sections. The sections must contain exact terminal commands and exact copy-paste-ready first-message text.
+- Extended Rule 15 in `CLAUDE_CODE_STARTER.md` with explicit sub-bullets requiring: "what we did," "files changed," "deferred items," "🚪 END-OF-SESSION INSTRUCTIONS," "🚪 NEXT-SESSION INSTRUCTIONS," "open questions."
+- Every future Claude Code session reads `CLAUDE_CODE_STARTER.md` at start — so the requirement propagates automatically.
+
+**Prevention — new Pattern 13 below.**
+
+**Lesson:** Session bookends (end + next start) are exactly when a non-programmer user is at highest risk of being lost. The same mechanical rigor demanded mid-session applies at the boundaries, and the protocol must enforce this template-ly, not as a case-by-case courtesy.
+
+**Meta-lesson (reinforces Pattern 11):** When the user has to restate a class of rule for the Nth time, document containment has failed and **mechanical enforcement at the protocol level** is required. A textual rule that Claude "should follow" is insufficient — the rule must be embedded in a REQUIRED TEMPLATE that Claude cannot produce an end-of-session handoff without filling in.
+
+---
+
+### 2026-04-18 — Phase 1g-test bugs: Adaptive Thinking runaway, Mode A omission failure, Vercel 5-min timeout risk
+**Session:** session_2026-04-18_phase1g-test-kickoff (Claude Code)
+**Tool/Phase affected:** Keyword Clustering / Auto-Analyze / Phase 1g-test
+**Severity:** Medium (bugs in the tool, surfaced by the test exactly as designed; not mistakes by Claude or user)
+
+**What happened:** First live test of Auto-Analyze against a real dataset (Bursitis Project, 2,328 keywords, model `claude-sonnet-4-6`, Server mode). Surfaced:
+
+1. **Adaptive Thinking → 0 output tokens.** With Thinking=Adaptive and a 51k-character combined prompt, the model consumed its entire `max_tokens=128000` allocation during the silent thinking phase on all 3 attempts, emitting zero output text. Same signature each time: "Stream complete. Input: 183, Output: 0 tokens" after ~5 min wall time. Workaround: switch to Thinking=Enabled with Budget=12000; confirmed working on batch 1.
+
+2. **Mode A (full-table) drops pre-existing topics as the table grows.** Batch 2 attempts 1 and 3 produced valid-looking responses but omitted 4–6 topics from the prior state and lost 2–8 keywords. HC5 validation caught the omissions correctly. The tool's Mode A → Mode B auto-switch did NOT trigger because that condition only fires on truncation, not on omission failures. Tool's 3-attempt retry with correction context exhausted without success; batch 2 marked FAILED, tool moved on to batch 3.
+
+3. **Vercel 5-min timeout ceiling is close.** Batch 2 attempt 2 took 4:59 wall time and returned 0 output tokens — within 1 second of Vercel's serverless function timeout. May have been Vercel killing the stream, not the model misbehaving.
+
+**Root cause (per-bug):**
+- Bug 1: Adaptive Thinking is unbounded by design; large prompts make the model "want to think a lot"; combined with `max_tokens=128000` cap, thinking can fill the whole allocation.
+- Bug 2: Full-table Mode A asks the model to re-transcribe the entire current state. As state grows, model attention degrades and rows get dropped. Known long-context generation pattern.
+- Bug 3: Server-mode requests are Vercel serverless functions with a 5-min hard kill. Each batch's thinking + output needs to fit under that ceiling, and batches get slower as prompts grow.
+
+**How caught:** Live narration by user during the test. Exactly what Phase 1g-test was designed to surface.
+
+**Corrections applied (this session):**
+- Full findings captured in `KEYWORD_CLUSTERING_ACTIVE.md` §6.5 with fix recommendations per bug
+- Phase 1g-test follow-up added as top priority for next session in `ROADMAP.md`
+- Phase 1-polish list expanded with: overlay resize/move, Budget input UX fix, persist AA settings to UserPreference, UI warning for Adaptive+large-prompt combo
+
+**Prevention:** These are product bugs, not process mistakes. They're prevented in future runs by tuning defaults (Thinking=Enabled-12k as default), broadening the Mode A→B trigger, and surfacing UI hints. All logged.
+
+---
+
+### 2026-04-18 — Documentation drift: `kst_aa_*` localStorage keys claimed to exist, actually don't
+**Session:** session_2026-04-18_phase1g-test-kickoff (Claude Code)
+**Tool/Phase affected:** Documentation accuracy / Auto-Analyze
+**Severity:** Medium (mid-session time loss; user blocker on what was assumed to be a recoverable prompt)
+
+**What happened:** At start of Phase 1g-test, the user opened the Auto-Analyze panel and the Initial Prompt textarea was empty. Prior docs (`DATA_CATALOG.md` §5.8 + `KEYWORD_CLUSTERING_ACTIVE.md` §4) claimed the prompts persist in localStorage under keys `kst_aa_initial_prompt` and `kst_aa_primer_prompt`. Claude grepped the codebase and confirmed those keys **do not exist anywhere in `/src/`** (zero matches). The only AA-related localStorage key is `aa_checkpoint_{Project.id}` (and note: uses `Project.id`, not `ProjectWorkflow.id` as the docs also claimed). Settings (including prompts) live only in React component state before a run starts, and are bundled into the checkpoint only after `saveCheckpoint()` fires.
+
+**Root cause:** Likely origin — the original legacy KST HTML (pre-Phase 0) may have used those key names. When the tool was ported to the Next.js app, the localStorage logic was simplified to only checkpoint-based persistence. The handoff docs were written with the original key names in mind and never got a Pattern-3 (code is source of truth) verification pass.
+
+**How caught:** Claude's start-of-session grep when the empty prompt was encountered. User had assumed (based on docs) that the prompts would be auto-loaded. They had to paste both prompts manually from their own saved text files.
+
+**Correction (applied this session):**
+- `DATA_CATALOG.md` §5.8 rewritten to reflect actual behavior + explicit note that the old key names don't exist
+- `DATA_CATALOG.md` §5.9 corrected to `Project.id` (was `projectWorkflowId`)
+- `KEYWORD_CLUSTERING_ACTIVE.md` §4 rewritten with correction + practical UX implication
+- New follow-up task: commit canonical `docs/AUTO_ANALYZE_PROMPT_V2.md` so the prompts live in the repo (not scattered across user's laptop)
+
+**Prevention:** Pattern 3 (code is source of truth) applies. When docs assert "localStorage key X exists" or "data persists at location Y," any session that depends on that claim should verify with a grep before acting. Adding a general corollary to Pattern 7: **claims about runtime state and persistence are doc-drift risks; verify against code.**
+
+**Meta-lesson:** Prompts (and similar artifacts required for tool operation) should live in the **repo**, not in browser localStorage that "might persist." Commit-it-or-it-didn't-happen applies to required operational content just as it does to code.
+
+---
 
 ### 2026-04-17 — Pattern 7 recurrence: `/projects/[projectId]/page.tsx` claimed built in Ckpt 6 but never existed — discovered post-production-deploy
 **Chat URL:** https://claude.ai/chat/75cc8985-b70a-49f4-8b64-444c34ef541f
@@ -514,6 +593,26 @@ Described in the 2026-04-17 "Gave user a sandbox-only path" entry. Claude operat
 - **Small-to-medium files (< 200 lines):** Heredoc pattern — `cat > "path/in/user/repo" << 'MARKER' ... MARKER`. The content is embedded in the command. Reliable.
 - **Large files (> 200 lines):** Paste content in a code block, have user right-click in Codespaces file-explorer → New File → name it → paste → save.
 - **`present_files` produces a download link in the chat UI** — that's for the user to manually download if they want a copy, NOT for `mv` from a path in Claude's sandbox.
+
+### Pattern 13 — Session-boundary instructions must be step-by-step concrete (NEW 2026-04-18)
+Described in the 2026-04-18 "Pattern 11 recurrence #5" entry.
+
+**The rule:** Every Claude Code session's end-of-session handoff MUST include two explicit sections with copy-paste-ready commands — not general guidance:
+
+1. **🚪 END-OF-SESSION INSTRUCTIONS** — what the user types/clicks RIGHT NOW to close the current session (e.g., `exit`, close tab behavior, whether to leave terminal open). Concrete. No "when you're ready, end the session" — that's not a method.
+
+2. **🚪 NEXT-SESSION INSTRUCTIONS** — what the user types when they return:
+   - Exact terminal command to launch (`cd /workspaces/brand-operations-hub && claude`)
+   - Exact first-message text (copy-paste-ready)
+   - Any offline-between-sessions steps
+
+**Why this pattern exists:** The user is a non-programmer. Session bookends are high-confusion moments ("what do I type? which terminal? what message do I paste?"). Without explicit copy-paste-ready instructions, the user has to guess. Pattern 11 rules apply to mid-session imperatives; Pattern 13 extends the same discipline to session bookends.
+
+**Enforcement:** Baked into `HANDOFF_PROTOCOL.md §4 Step 4b` (the Claude Code variant of the handoff template) and `CLAUDE_CODE_STARTER.md` Rule 15's mandatory content list. Every session reads `CLAUDE_CODE_STARTER.md` at start, so the requirement propagates.
+
+**Trigger condition:** Pattern 13 is engaged every end-of-session in Claude Code. Not conditional.
+
+**Related patterns:** Pattern 11 (visibility-under-load for non-programmer users), Rule 14a / Rule 9 (Read-It-Back test for imperatives), Pattern 12 (sandbox-path leaks).
 
 ---
 

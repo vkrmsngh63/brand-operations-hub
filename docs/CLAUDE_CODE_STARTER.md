@@ -45,6 +45,20 @@ I am the director of the PLOS (Product Launch Operating System) project. **I am 
 
 15. **End-of-session doc update** is mandatory. Run the checklist in `docs/HANDOFF_PROTOCOL.md` §4 Step 1. Update whatever changed, commit to git, and produce a personalized handoff summary.
 
+    **MANDATORY content of that handoff summary — no exceptions, applies to every session:**
+
+    - **"What we did this session"** — 2–4 sentences in plain language, no jargon.
+    - **"Files changed and committed"** — list with commit hash. If pushed, say so. If not pushed, say so and explain why.
+    - **"Deferred items"** — every flagged-and-set-aside item, with the specific doc + section where it's now captured (per Rule 14e of HANDOFF_PROTOCOL).
+    - **🚪 "END-OF-SESSION INSTRUCTIONS — what the user types NOW to close this session"** — step-by-step, concrete. Example: *"Type `exit` and press Enter to leave Claude Code. You can close the terminal tab or leave it open — either works."*
+    - **🚪 "NEXT-SESSION INSTRUCTIONS — what the user types when they come back"** — step-by-step, concrete, with:
+      - Exact terminal command to launch Claude Code (`cd /workspaces/brand-operations-hub && claude`)
+      - Exact first-message text to paste (the "Read docs/CLAUDE_CODE_STARTER.md..." line with the specific next task filled in)
+      - Any offline steps to do between sessions (e.g., "check Vercel env vars," "find a file on your computer") if applicable
+    - **"Open questions / carry-overs"** — anything unresolved that the next session needs to know about.
+
+    **Why this is mandatory:** the user is a non-programmer. Session-boundary moments (end of this session, start of next) are when they're most likely to feel lost without an exact-word instruction. The same discipline that applies to mid-session imperatives (Rule 6 + Rule 9 above) applies at session bookends. "Run the start-of-session sequence" is not a concrete instruction — "type this exact command in the terminal: `cd /workspaces/brand-operations-hub && claude`" is.
+
 16. **Proactive context-degradation warning.** If the session is running long and your focus is stretched, say so proactively (HANDOFF_PROTOCOL Rule 13). I'd rather pause and resume fresh than push a tired session into a risky operation.
 
     **Concrete triggers — raise the pause-and-resume concern when ANY of these is true:**
