@@ -657,24 +657,41 @@ Described in the 2026-04-17 "Gave user a sandbox-only path" entry. Claude operat
 - **Large files (> 200 lines):** Paste content in a code block, have user right-click in Codespaces file-explorer → New File → name it → paste → save.
 - **`present_files` produces a download link in the chat UI** — that's for the user to manually download if they want a copy, NOT for `mv` from a path in Claude's sandbox.
 
-### Pattern 14 — Multi-option questions must include per-option context AND invite free-text responses (NEW 2026-04-18)
-Described in the 2026-04-18 "Multi-option questions without context or free-text escape hatch trapped user into picking letters" entry.
+### Pattern 14 — Multi-option questions must include per-option context, an escape-hatch "question first" option, AND a free-text invitation (NEW 2026-04-18; refined same-session with the escape-hatch requirement)
+Described in the 2026-04-18 "Multi-option questions without context or free-text escape hatch trapped user into picking letters" entry, and further refined in the same session after the user observed that Claude Code's forced-picker UI physically hides the input box, making a text-level free-text invitation inaccessible mid-picker. User's refinement: *"Let's add a new rule. Always give me an additional choice to all the choices you're offering that says 'I have a question first that I need clarified'. This way, I select from a forced options list and still get to type my response."*
 
-**The rule:** Every multi-option question Claude presents (A/B/C, 1/2/3) must contain:
-1. **Per-option plain-language description** — not just a label, but what the option actually does
-2. **Per-option consequence / reversibility note** — "if you pick A, X happens; it's reversible by Y" vs. "if you pick B, it's one-way"
-3. **Enough context per option** that a non-programmer can evaluate without needing to ask — OR explicit acknowledgment that there's a subtlety they might want to ask about
-4. **Explicit free-text invitation at the close** — wording like "Or if you have a question about any option before picking, just ask — a clarification-first response is always valid. You're never locked into a letter answer."
+**The rule (three-part — all three required on every multi-option question):**
 
-**Mechanical test:** before sending a multi-option question, Claude scans each option ("can a non-programmer evaluate this without asking anything?") and checks that the free-text invitation is present. If either test fails, rewrite.
+1. **Per-option content:**
+   - Plain-language description of what the option actually does — not just a label
+   - Consequence / reversibility note — "if you pick A, X happens; reversible by Y" vs. "if you pick B, it's one-way"
+   - Enough context that a non-programmer can evaluate without further questions — OR explicit acknowledgment that there's a subtlety worth asking about
 
-**Scope exception:** simple yes/no/not-sure don't need the full treatment, but should still avoid implying the user MUST pick one of the three. Add ", or ask me something" at the close.
+2. **An explicit escape-hatch option as the LAST option**, worded:
+   > *"I have a question first that I need clarified"*
+   (or near-equivalent phrasing the user will recognize). Non-negotiable regardless of how clear the other options seem. This option works INSIDE Claude Code's forced-picker UI — when the input box is hidden and the user can only arrow-key/number-select, the escape-hatch is selectable. Picking it returns the user to normal chat mode where they can type their question.
 
-**Why this pattern exists:** "Options + recommendation + reversibility" (Rule 3 in CLAUDE_CODE_STARTER) was insufficient on its own. It allowed Claude to give terse labeled options that a non-programmer couldn't evaluate without asking — but the existing framing implicitly demanded a letter answer, so the user felt blocked from asking. Pattern 14 adds the missing mechanics: per-option context AND explicit free-text permission.
+3. **A closing free-text invitation** in the prose after the option list, e.g.:
+   > *"Or if you have a question about any option before picking, just ask — a clarification-first response is always valid."*
+   Covers the case where Claude's message renders as plain text (input box already visible).
 
-**Enforcement:** Baked into `CLAUDE_CODE_STARTER.md` Rule 20 and `HANDOFF_PROTOCOL.md` Rule 14f. Every future session reads the starter at open, so the requirement propagates.
+**Mechanical test — scan every multi-option question before sending:**
+1. For each option: "can a non-programmer evaluate this without further questions?" If no, add context.
+2. Is the "I have a question first that I need clarified" escape-hatch option present as the final option?
+3. Is the free-text invitation present at the close?
 
-**Related patterns:** Pattern 11 (non-programmer visibility under load), Pattern 13 (session-boundary step-by-step), Rule 14a (Read-It-Back test for questions). Pattern 14 sits alongside 11 and 13 as a family of "mechanical discipline for non-programmer communication."
+If any check fails, rewrite.
+
+**Scope exception:** simple yes/no/not-sure don't need elaborate per-option context, but STILL must include the escape-hatch option and free-text invitation. "Yes / No / I have a question first / Not sure" is the right shape for a simple binary — never just "yes / no."
+
+**Why this pattern exists (both halves):**
+- The first version of Pattern 14 ("Options + recommendation + reversibility" as in Rule 3, plus a free-text invitation) was insufficient because the invitation lives in prose, and Claude Code's forced-picker UI hides the input box — so the user couldn't act on the invitation mid-picker.
+- Adding the "question first" option WITHIN the picker gives the user a selectable escape hatch that works regardless of whether Claude's message is rendered as plain text OR as an interactive picker.
+- Both halves are needed: the free-text invitation for plain-text rendering, the escape-hatch option for picker rendering. Rule 14f captures this defensively — always include both.
+
+**Enforcement:** Baked into `CLAUDE_CODE_STARTER.md` Rule 20 (read at start of every Claude Code session) and `HANDOFF_PROTOCOL.md` Rule 14f. Propagates automatically.
+
+**Related patterns:** Pattern 11 (non-programmer visibility under load), Pattern 13 (session-boundary step-by-step), Rule 14a (Read-It-Back test for questions). Pattern 14 sits alongside these as a family of "mechanical discipline for non-programmer communication."
 
 **Trigger condition:** Every multi-option question Claude presents. Not conditional.
 

@@ -76,19 +76,34 @@ I am the director of the PLOS (Product Launch Operating System) project. **I am 
 
 ### Decision-framing rules
 
-20. **Option questions (A/B/C, 1/2/3) must include per-option context AND always invite free-text responses.** (NEW 2026-04-18 — Pattern 14 in CORRECTIONS_LOG. User raised this at end of first Claude Code session: "at several points you posed options to me where rather than type my response, I could only pick from 1,2,3… The problem is, in many instances, I had questions about an option and couldn't type it in.")
+20. **Option questions (A/B/C, 1/2/3) must include per-option context, an "I have a question first" escape-hatch option, AND a closing free-text invitation.** (NEW 2026-04-18 — Pattern 14 in CORRECTIONS_LOG. User raised the initial concern at end of first Claude Code session: *"at several points you posed options to me where rather than type my response, I could only pick from 1,2,3… The problem is, in many instances, I had questions about an option and couldn't type it in."* Then refined with a second directive that solves the tool-UI constraint: *"Let's add a new rule. Always give me an additional choice to all the choices you're offering that says 'I have a question first that I need clarified'. This way, I select from a forced options list and still get to type my response."*)
+
+    **Background — why the escape-hatch option matters.** Claude Code sometimes renders multi-option questions as an interactive picker UI in which the input box is temporarily hidden and the user can only navigate with arrow keys or number-select. In those moments, a free-text invitation in the prose of my message is inaccessible — the user can't type anything. Adding an escape-hatch option WITHIN the forced picker lets the user select their way back into normal chat mode, where the input box reappears and they can type their question.
 
     **For every multi-option question I give the user, each option must contain:**
     - A plain-language description of what the option actually means (not just a label like "Option A — do X")
     - The user-visible consequence of picking it ("if you pick A, you'll see X; it's reversible by doing Y" vs. "if you pick B, X is locked in permanently")
     - Enough context that a non-programmer can evaluate it without needing to ask a clarifying question — OR an explicit acknowledgment that the option has a subtlety they might want to ask about
 
-    **Every multi-option question must explicitly close with a free-text invitation**, such as:
+    **AND** — every multi-option question must include an **explicit escape-hatch option as the last option in the list**, worded as:
+
+    > *"I have a question first that I need clarified"*
+
+    (or near-equivalent wording the user will recognize as the escape hatch — consistent phrasing is the goal). This option is NON-NEGOTIABLE regardless of how confident I am that the main options are self-explanatory. Selecting it means the user wants to ask something before picking one of the "real" options, and I should respond with a clarification-focused reply rather than executing any action.
+
+    **AND** — every multi-option question must also close with a free-text invitation such as:
     > *"Or if you have a question about any option before picking, just ask — a clarification-first response is always valid. You're never locked into a letter/number answer."*
 
-    **Mechanical test before sending a multi-option question:** scan each option and ask yourself — "does this option have enough context that the user can evaluate it without further questions?" If no to any option, add context. Separately, confirm the free-text invitation is present at the close. If either is missing, rewrite.
+    This covers the case where I'm rendered as plain text (not an interactive picker), where the user's input box is already visible and they don't need the escape-hatch option to type.
 
-    **Scope exception:** simple yes/no/not-sure questions don't need elaborate per-option context (the options are trivially understood). But even these should avoid framing that implies the user MUST pick one of the three — "yes / no / not sure / or ask me something" is the right shape.
+    **Mechanical test before sending a multi-option question:**
+    1. Scan each option: "does this option have enough context that a non-programmer can evaluate it without asking?" If no, add context.
+    2. Is there an "I have a question first that I need clarified" option as the final option? If no, add it.
+    3. Is there a free-text invitation at the close? If no, add it.
+
+    If any of the three fails, rewrite before sending.
+
+    **Scope exception:** simple yes/no/not-sure questions don't need elaborate per-option context (the options are trivially understood). But they STILL must include the escape-hatch option and the free-text invitation. "Yes / No / I have a question first / Not sure" is the shape for a simple binary with escape-hatch — never just "yes / no."
 
 ### Doc access
 

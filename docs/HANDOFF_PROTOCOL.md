@@ -172,9 +172,11 @@ If the decision is purely about how the code is organized internally (which func
 
 **If in doubt:** the test is "would the user experience anything different depending on which option is picked?" If yes, it's a user decision. If no, it's Claude's call.
 
-### Rule 14f — Multi-option questions must include per-option context AND invite free-text responses (NEW 2026-04-18)
+### Rule 14f — Multi-option questions must include per-option context, an "I have a question first" escape-hatch option, AND a free-text invitation (NEW 2026-04-18; refined same-session with the escape-hatch requirement after user observed that forced-picker UI renders hide the input box)
 
 Added after the user flagged that forced multiple-choice questions without context or without a free-text escape hatch made them feel locked into picking a letter when they actually had clarifying questions. This is Pattern 14 in `CORRECTIONS_LOG.md`.
+
+**Background — why the escape-hatch option matters.** Claude Code sometimes renders multi-option questions as an interactive picker UI in which the input box is temporarily hidden and the user can only navigate with arrow keys or number-select. In that rendering, a free-text invitation in the prose of the message is inaccessible — the user physically cannot type. Adding an escape-hatch option WITHIN the picker lets the user select their way back into normal chat mode where the input box reappears.
 
 When Claude presents a multi-option question (A/B/C, 1/2/3, etc.), each option MUST contain:
 
@@ -182,18 +184,28 @@ When Claude presents a multi-option question (A/B/C, 1/2/3, etc.), each option M
 2. **The user-visible consequence** of picking that option, including reversibility ("this is reversible — you can undo it by doing X" vs. "this is one-way").
 3. **Enough context** that a non-programmer can evaluate the option without needing to ask a clarifying question — OR an explicit acknowledgment that there's a subtlety they might want to ask about first.
 
-AND every multi-option question MUST close with an explicit invitation to ask questions instead of picking, such as:
+AND every multi-option question MUST include an explicit escape-hatch option as the LAST option in the list, worded as:
+
+> *"I have a question first that I need clarified"*
+
+(or near-equivalent phrasing the user will recognize as the escape hatch — consistent wording is the goal). This option is **non-negotiable** regardless of how confident Claude is that the main options are self-explanatory. Selecting it means the user wants to ask a clarifying question before picking one of the "real" options; Claude should respond with a clarification-focused reply rather than executing any action.
+
+AND every multi-option question MUST also close with an explicit invitation to ask questions instead of picking, such as:
 
 > *"Or if you have a question about any option before picking, just ask — a clarification-first response is always valid. You're never locked into a letter answer."*
 
+This covers the case where Claude's message renders as plain text (not an interactive picker), where the input box is already visible and the user can type freely.
+
 **Mechanical test before sending a multi-option question:**
-- For each option, ask: "can a non-programmer evaluate this without further questions?" If no, add context.
-- Confirm the free-text invitation is present at the close.
-- If either is missing, rewrite.
+1. For each option, ask: "can a non-programmer evaluate this without further questions?" If no, add context.
+2. Is the "I have a question first that I need clarified" escape-hatch option present as the final option? If no, add it.
+3. Is the free-text invitation present at the close? If no, add it.
 
-**Scope exception:** simple yes/no/not-sure questions don't need elaborate per-option framing, but even these should avoid implying the user MUST pick one — phrasing like "yes / no / not sure / or ask me something" is the right shape.
+If any of the three fails, rewrite before sending.
 
-**Why this rule exists:** Without it, a well-intentioned A/B/C question degrades into a forced choice for a non-programmer user who may have a question about an option they can't express. The user then either picks in the dark or writes a meta-message saying "wait I have a question" — both add friction. The rule eliminates the ambiguity: context + explicit free-text door.
+**Scope exception:** simple yes/no/not-sure questions don't need elaborate per-option framing, but they STILL must include both the escape-hatch option and the free-text invitation. "Yes / No / I have a question first / Not sure" is the right shape for a simple binary — never just "yes / no."
+
+**Why this rule exists:** Without the escape-hatch-option, a forced-picker UI in Claude Code physically blocks the user from typing questions mid-decision. Without per-option context, the user can't evaluate what they're picking. Without the free-text invitation, a user viewing the message as plain text may still feel locked into a letter answer. Rule 14f addresses all three failure modes.
 
 ### Rule 14e — Capture what you defer (end-of-chat sweep)
 Whenever Claude flags an issue during a chat and sets it aside ("not now," "out of scope," "future work," "we'll deal with that later"), the same sentence must state where it will be documented. Valid destinations:
