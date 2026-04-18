@@ -74,6 +74,22 @@ I am the director of the PLOS (Product Launch Operating System) project. **I am 
 
     **What the pause looks like:** run the end-of-session protocol (Rule 15), commit and push, then the user closes the session and starts fresh later. Resume instructions in the handoff summary tell the next session exactly where to pick up.
 
+### Decision-framing rules
+
+20. **Option questions (A/B/C, 1/2/3) must include per-option context AND always invite free-text responses.** (NEW 2026-04-18 — Pattern 14 in CORRECTIONS_LOG. User raised this at end of first Claude Code session: "at several points you posed options to me where rather than type my response, I could only pick from 1,2,3… The problem is, in many instances, I had questions about an option and couldn't type it in.")
+
+    **For every multi-option question I give the user, each option must contain:**
+    - A plain-language description of what the option actually means (not just a label like "Option A — do X")
+    - The user-visible consequence of picking it ("if you pick A, you'll see X; it's reversible by doing Y" vs. "if you pick B, X is locked in permanently")
+    - Enough context that a non-programmer can evaluate it without needing to ask a clarifying question — OR an explicit acknowledgment that the option has a subtlety they might want to ask about
+
+    **Every multi-option question must explicitly close with a free-text invitation**, such as:
+    > *"Or if you have a question about any option before picking, just ask — a clarification-first response is always valid. You're never locked into a letter/number answer."*
+
+    **Mechanical test before sending a multi-option question:** scan each option and ask yourself — "does this option have enough context that the user can evaluate it without further questions?" If no to any option, add context. Separately, confirm the free-text invitation is present at the close. If either is missing, rewrite.
+
+    **Scope exception:** simple yes/no/not-sure questions don't need elaborate per-option context (the options are trivially understood). But even these should avoid framing that implies the user MUST pick one of the three — "yes / no / not sure / or ask me something" is the right shape.
+
 ### Doc access
 
 17. **Handoff docs live in `/docs/` in the repo.** Read them directly from disk at session start — no uploads. The 13 Group A docs are authoritative on platform-wide facts; Group B docs (e.g., `KEYWORD_CLUSTERING_ACTIVE.md`) are tool-specific and loaded when that tool is in scope.

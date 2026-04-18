@@ -172,6 +172,29 @@ If the decision is purely about how the code is organized internally (which func
 
 **If in doubt:** the test is "would the user experience anything different depending on which option is picked?" If yes, it's a user decision. If no, it's Claude's call.
 
+### Rule 14f — Multi-option questions must include per-option context AND invite free-text responses (NEW 2026-04-18)
+
+Added after the user flagged that forced multiple-choice questions without context or without a free-text escape hatch made them feel locked into picking a letter when they actually had clarifying questions. This is Pattern 14 in `CORRECTIONS_LOG.md`.
+
+When Claude presents a multi-option question (A/B/C, 1/2/3, etc.), each option MUST contain:
+
+1. **A plain-language description** of what the option actually does — not just a label ("Option A — just delete it" is a label; "Option A — delete the file from your repo; nothing else is touched; you'll lose that file and can't recover it through git because it was never committed" is an adequate description).
+2. **The user-visible consequence** of picking that option, including reversibility ("this is reversible — you can undo it by doing X" vs. "this is one-way").
+3. **Enough context** that a non-programmer can evaluate the option without needing to ask a clarifying question — OR an explicit acknowledgment that there's a subtlety they might want to ask about first.
+
+AND every multi-option question MUST close with an explicit invitation to ask questions instead of picking, such as:
+
+> *"Or if you have a question about any option before picking, just ask — a clarification-first response is always valid. You're never locked into a letter answer."*
+
+**Mechanical test before sending a multi-option question:**
+- For each option, ask: "can a non-programmer evaluate this without further questions?" If no, add context.
+- Confirm the free-text invitation is present at the close.
+- If either is missing, rewrite.
+
+**Scope exception:** simple yes/no/not-sure questions don't need elaborate per-option framing, but even these should avoid implying the user MUST pick one — phrasing like "yes / no / not sure / or ask me something" is the right shape.
+
+**Why this rule exists:** Without it, a well-intentioned A/B/C question degrades into a forced choice for a non-programmer user who may have a question about an option they can't express. The user then either picks in the dark or writes a meta-message saying "wait I have a question" — both add friction. The rule eliminates the ambiguity: context + explicit free-text door.
+
 ### Rule 14e — Capture what you defer (end-of-chat sweep)
 Whenever Claude flags an issue during a chat and sets it aside ("not now," "out of scope," "future work," "we'll deal with that later"), the same sentence must state where it will be documented. Valid destinations:
 - `ROADMAP.md` Infrastructure TODOs — for tech debt and improvements

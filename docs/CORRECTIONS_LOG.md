@@ -35,6 +35,32 @@
 
 ## Entries
 
+### 2026-04-18 — Multi-option questions without context or free-text escape hatch trapped user into picking letters
+**Session:** session_2026-04-18_phase1g-test-kickoff (Claude Code) — feedback raised at end-of-session, post-handoff
+**Tool/Phase affected:** Methodology / decision-framing
+**Severity:** High (usability pattern that impacts every future session's interaction model)
+
+**What happened:** Throughout the session, Claude presented several multi-option decisions (Option A/B/C for things like: how to handle the leftover script, keyword data starting point, test-plan tuning picks, etc.). In several cases the options had enough context for an informed pick; in others Claude gave terse labels and expected the user to pick by letter. The user raised this directly at end-of-session:
+
+> *"At several points during our session, you posed options to me where rather than type my response, I could only pick from 1,2,3 etc. The problem is, in many instances, I had questions about an option and couldn't type it in. So I want you to do the following next time. Either provide context for my choices so that I know what I'm choosing or let me type my responses so that I can include questions, clarifications about my choices."*
+
+The user is explicitly saying they felt the format was forced: "pick a letter" rather than "pick a letter OR ask me anything first." This is a structural interaction pattern, not a one-off slip.
+
+**Root cause:** Claude's option-framing habit leans toward "make a clean multiple choice" which is good for clarity but bad for a non-programmer who may need to poke at an option before committing. The existing rules (14a–14e in HANDOFF_PROTOCOL) covered "plain language" and "required structure of decision questions" but did NOT explicitly require (a) per-option consequence context OR (b) an explicit free-text invitation. So Claude followed the letter of the rules while missing the spirit of the user's non-programmer needs.
+
+**How caught:** User directly, at end-of-session, with a clear prescriptive ask: "integrate the solutions into our documents so that this issue doesn't happen again."
+
+**Correction (applied this session, second commit):**
+- Added Rule 20 to `CLAUDE_CODE_STARTER.md` — "Option questions must include per-option context AND always invite free-text responses" — with mandatory free-text invitation wording and a mechanical test.
+- Added Rule 14f to `HANDOFF_PROTOCOL.md` — same requirement, integrated with the existing Rules 14a–14e family.
+- This new entry + new Pattern 14 (below) in `CORRECTIONS_LOG.md`.
+
+**Prevention:** Pattern 14 below formalizes the mechanical rule for future Claude sessions.
+
+**Meta-lesson:** "Options + recommendation + reversibility" (Rule 3 in CLAUDE_CODE_STARTER) is insufficient on its own because it doesn't explicitly require per-option consequence context or an escape hatch. The user needs BOTH the information to decide AND the freedom to ask questions. A well-framed multiple-choice should feel like a menu with descriptions, not a fill-in-the-circle form.
+
+---
+
 ### 2026-04-18 — Pattern 11 recurrence #5: session-boundary step-by-step instructions needed by non-programmer user (now a standing protocol requirement)
 **Session:** session_2026-04-18_phase1g-test-kickoff (Claude Code)
 **Tool/Phase affected:** Methodology / end-of-session protocol
@@ -593,6 +619,29 @@ Described in the 2026-04-17 "Gave user a sandbox-only path" entry. Claude operat
 - **Small-to-medium files (< 200 lines):** Heredoc pattern — `cat > "path/in/user/repo" << 'MARKER' ... MARKER`. The content is embedded in the command. Reliable.
 - **Large files (> 200 lines):** Paste content in a code block, have user right-click in Codespaces file-explorer → New File → name it → paste → save.
 - **`present_files` produces a download link in the chat UI** — that's for the user to manually download if they want a copy, NOT for `mv` from a path in Claude's sandbox.
+
+### Pattern 14 — Multi-option questions must include per-option context AND invite free-text responses (NEW 2026-04-18)
+Described in the 2026-04-18 "Multi-option questions without context or free-text escape hatch trapped user into picking letters" entry.
+
+**The rule:** Every multi-option question Claude presents (A/B/C, 1/2/3) must contain:
+1. **Per-option plain-language description** — not just a label, but what the option actually does
+2. **Per-option consequence / reversibility note** — "if you pick A, X happens; it's reversible by Y" vs. "if you pick B, it's one-way"
+3. **Enough context per option** that a non-programmer can evaluate without needing to ask — OR explicit acknowledgment that there's a subtlety they might want to ask about
+4. **Explicit free-text invitation at the close** — wording like "Or if you have a question about any option before picking, just ask — a clarification-first response is always valid. You're never locked into a letter answer."
+
+**Mechanical test:** before sending a multi-option question, Claude scans each option ("can a non-programmer evaluate this without asking anything?") and checks that the free-text invitation is present. If either test fails, rewrite.
+
+**Scope exception:** simple yes/no/not-sure don't need the full treatment, but should still avoid implying the user MUST pick one of the three. Add ", or ask me something" at the close.
+
+**Why this pattern exists:** "Options + recommendation + reversibility" (Rule 3 in CLAUDE_CODE_STARTER) was insufficient on its own. It allowed Claude to give terse labeled options that a non-programmer couldn't evaluate without asking — but the existing framing implicitly demanded a letter answer, so the user felt blocked from asking. Pattern 14 adds the missing mechanics: per-option context AND explicit free-text permission.
+
+**Enforcement:** Baked into `CLAUDE_CODE_STARTER.md` Rule 20 and `HANDOFF_PROTOCOL.md` Rule 14f. Every future session reads the starter at open, so the requirement propagates.
+
+**Related patterns:** Pattern 11 (non-programmer visibility under load), Pattern 13 (session-boundary step-by-step), Rule 14a (Read-It-Back test for questions). Pattern 14 sits alongside 11 and 13 as a family of "mechanical discipline for non-programmer communication."
+
+**Trigger condition:** Every multi-option question Claude presents. Not conditional.
+
+---
 
 ### Pattern 13 — Session-boundary instructions must be step-by-step concrete (NEW 2026-04-18)
 Described in the 2026-04-18 "Pattern 11 recurrence #5" entry.
