@@ -204,8 +204,10 @@ export default function AutoAnalyze({
   const totalSpentRef = useRef(totalSpent);
   const nodesRef = useRef(nodes);
   const keywordsRef = useRef(allKeywords);
+  const sisterLinksRef = useRef(sisterLinks);
 
-  // Keep refs in sync
+  // Keep refs in sync.
+  // runLoop-reachable code must read nodes/allKeywords/sisterLinks via *Ref.current, not raw props — the async runLoop closure freezes props. See CORRECTIONS_LOG 2026-04-18.
   useEffect(() => { batchesRef.current = batches; }, [batches]);
   useEffect(() => { currentIdxRef.current = currentIdx; }, [currentIdx]);
   useEffect(() => { deltaModeRef.current = deltaMode; }, [deltaMode]);
@@ -213,6 +215,7 @@ export default function AutoAnalyze({
   useEffect(() => { totalSpentRef.current = totalSpent; }, [totalSpent]);
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
   useEffect(() => { keywordsRef.current = allKeywords; }, [allKeywords]);
+  useEffect(() => { sisterLinksRef.current = sisterLinks; }, [sisterLinks]);
 
   const logRef = useRef<HTMLDivElement>(null);
 
@@ -357,9 +360,14 @@ export default function AutoAnalyze({
 
   /* ── Build the current Topics Layout Table TSV from nodes ──── */
   function buildCurrentTsv(): string {
+    // Read via refs — runLoop's async closure would otherwise freeze these to pre-run state.
+    const nodesNow = nodesRef.current;
+    const keywordsNow = keywordsRef.current;
+    const sisterLinksNow = sisterLinksRef.current;
+
     // Depth-first tree walk
     const childMap = new Map<number | null, CanvasNode[]>();
-    for (const n of nodes) {
+    for (const n of nodesNow) {
       const pid = n.parentId ?? null;
       if (!childMap.has(pid)) childMap.set(pid, []);
       childMap.get(pid)!.push(n);
@@ -374,14 +382,14 @@ export default function AutoAnalyze({
     function walk(parentId: number | null, depth: number) {
       const children = childMap.get(parentId) || [];
       for (const node of children) {
-        const parentNode = parentId !== null ? nodes.find(n => n.id === parentId) : null;
+        const parentNode = parentId !== null ? nodesNow.find(n => n.id === parentId) : null;
         const parentTitle = parentNode?.title || '';
         const altTitles = (node.altTitles || []).join(', ');
         const rel = node.relationshipType || '';
         // Build keywords with [p]/[s] annotations
         const kwParts: string[] = [];
         for (const kwId of (node.linkedKwIds || [])) {
-          const kw = allKeywords.find(k => k.id === kwId);
+          const kw = keywordsNow.find(k => k.id === kwId);
           if (kw) {
             const placement = (node.kwPlacements || {})[kwId] || 'p';
             kwParts.push(kw.keyword + ' [' + placement + ']');
@@ -389,12 +397,12 @@ export default function AutoAnalyze({
         }
         // Sister nodes
         const sisters: string[] = [];
-        for (const sl of sisterLinks) {
+        for (const sl of sisterLinksNow) {
           if (sl.nodeA === node.id) {
-            const sn = nodes.find(n => n.id === sl.nodeB);
+            const sn = nodesNow.find(n => n.id === sl.nodeB);
             if (sn) sisters.push(sn.title);
           } else if (sl.nodeB === node.id) {
-            const sn = nodes.find(n => n.id === sl.nodeA);
+            const sn = nodesNow.find(n => n.id === sl.nodeA);
             if (sn) sisters.push(sn.title);
           }
         }
@@ -1381,10 +1389,10 @@ export default function AutoAnalyze({
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
   }
 
-  function handleApplyBatch() {
+  async function handleApplyBatch() {
     if (aaState !== 'BATCH_REVIEW' || !pendingResult) return;
     const batch = batchesRef.current[currentIdxRef.current];
-    doApply(batch, pendingResult);
+    await doApply(batch, pendingResult);
     batch.status = 'complete';
     batch.completedAt = Date.now();
     setPendingResult(null);
