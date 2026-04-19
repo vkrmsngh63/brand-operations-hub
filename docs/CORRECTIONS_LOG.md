@@ -2,9 +2,9 @@
 ## Append-only record of mistakes made during chats and lessons learned
 
 **Started:** April 16, 2026
-**Last updated:** April 18, 2026 (Phase 1g-test follow-up — 2 new entries: stale-closure bug in buildCurrentTsv (load-bearing, contaminates prior Mode A diagnosis) + production validation of Task 2/3 fixes)
-**Last updated in session:** session_2026-04-18_phase1g-test-followup (Claude Code)
-**Previously updated in session:** session_2026-04-18_phase1g-test-kickoff (Claude Code)
+**Last updated:** April 19, 2026 (Phase 1g-test follow-up Part 2 — 2 new informational entries: stale-closure fix validated live across 7 batches + Mode-A-alone cannot complete a 2,304-keyword run)
+**Last updated in session:** session_2026-04-19_phase1g-test-followup-part2 (Claude Code)
+**Previously updated in session:** session_2026-04-18_phase1g-test-followup (Claude Code)
 **Previously updated (claude.ai era):** https://claude.ai/chat/75cc8985-b70a-49f4-8b64-444c34ef541f
 
 **Purpose:** Every mistake made in any chat — whether Claude or user catches it — gets appended. Future Claudes read this to avoid repeating. This is how institutional memory survives Claude's lack of memory.
@@ -35,6 +35,51 @@
 ---
 
 ## Entries
+
+### 2026-04-19 — Stale-closure fix validated live across 7 clean batches on Bursitis run (informational, not a mistake)
+**Session:** session_2026-04-19_phase1g-test-followup-part2 (Claude Code)
+**Tool/Phase affected:** Keyword Clustering / Auto-Analyze / Phase 1g-test
+**Severity:** Informational (success record)
+
+**What happened:** Commit `a6b3b19` shipped the two fixes from yesterday's stale-closure entry: (A) `buildCurrentTsv` now reads from `nodesRef.current` / `keywordsRef.current` / a new `sisterLinksRef.current` instead of the render-time closure; (B) `handleApplyBatch` is now async and `await`s `doApply(...)` before running the next `runLoop()` iteration. `handleSkipBatch` was audited — no change needed (it doesn't call `doApply`). Build clean in 36s; pushed to origin/main; Vercel deployed in ~2 min.
+
+User then launched a fresh Bursitis Auto-Analyze run (288 batches, 2,304 keywords, API Mode=Direct, Thinking=Enabled, Budget=12000, Review-each-batch=ON) leaving the 22 pre-existing canvas nodes from the prior aborted run in place. Over the first 7 completed batches:
+
+- **"0 removed" on every single batch** (HC4 validation: no topics ever deleted)
+- **"All N keywords verified on canvas" on every batch** (HC5 validation: no keywords ever lost)
+- Canvas grew monotonically: 22 → 27 → 33 → 36 → 39 → 41 → 49 → 53 nodes
+- Input token count grew batch-over-batch in proportion to canvas size (21,347 → 23,246 → 26,331 → 28,020 → 29,870 → 31,586 → 36,839 → 39,781) — this is the live fingerprint that `buildCurrentTsv` is reading post-apply state via the refs, not the frozen closure. If the stale-closure bug were still present, this number would be flat.
+
+One stream stall on batch 2 (Anthropic API went quiet mid-generation for ~90s) triggered the tool's built-in stall-retry correctly — stall retry counter used separately from the 3-attempt API retry budget, as designed. Not related to the fix.
+
+Batch 6 and 7 emitted "⚠ Unusually high: N new topics" soft warnings (27 and 31 respectively, threshold 25) — the AI is producing more new-topic *signals* than net canvas growth, consistent with Mode A doing speculative topic restructuring. Not a correctness failure (validation always passed), but a signal Mode A is starting to think-out-loud as the table grows.
+
+**Prevention:** Not applicable (not a mistake). But worth noting as evidence that the stale-closure fix is robust: 7 consecutive clean batches, validated across two different processing patterns (normal 2–6-new-topic batches AND batch-6's 8-new-topic spike with the warning). Also worth noting: the comment added near the refs block (`"runLoop-reachable code must read nodes/allKeywords/sisterLinks via *Ref.current, not raw props"`) now documents the invariant so future developers don't re-introduce the bug.
+
+---
+
+### 2026-04-19 — Mode-A-alone cannot complete a 2,304-keyword Bursitis run before the 200k context wall
+**Session:** session_2026-04-19_phase1g-test-followup-part2 (Claude Code)
+**Tool/Phase affected:** Keyword Clustering / Auto-Analyze / Phase 1-polish
+**Severity:** Informational (new quantitative finding that reframes the roadmap)
+
+**What happened:** After 7 clean Bursitis batches validated the stale-closure fix, I produced a trajectory projection based on the observed data (input ~750 tokens per canvas node; output ~600–700 tokens per node in Mode A, spiking to ~950 in reshuffle batches). Projection: at the current ~3–4 net-new-topics-per-batch pace, Mode A in pure form hits the **200k context-window wall at roughly 120–140 canvas nodes**, which equals only **240–600 of the 2,304 keywords placed (10–26% of the dataset)**, depending on whether adaptive batch tiering kicks in to grow batch size from 8 → 12 → 18. Either way: Mode A alone cannot finish this dataset.
+
+**The implication:** completing a full Bursitis (or similarly-sized) clustering run **requires** the Mode A → Mode B switch to fire at some point. Two paths exist:
+- **Reactive switch (shipped)** — fires on HC4/HC5 validation failure or output truncation. Relies on Mode A starting to drop topics *before* the context wall hits. Race condition.
+- **Proactive switch (roadmap item, NOT shipped)** — would fire after batch 1 (or at a node-count threshold) regardless of Mode A quality. Removes the race.
+
+The reactive switch by itself is insufficient for full-dataset runs because Mode A may stay "clean" past the point where switching is still safe (once input + output tokens exceed ~180k, Mode B's smaller delta output can't rescue it either — the input alone is the problem).
+
+**Why this wasn't obvious before this session:** prior Bursitis attempts never got past ~batch 3, so the trajectory data didn't exist. The stale-closure fix was the prerequisite to generating this data.
+
+**Correction:** Not a fix — a re-prioritization of existing roadmap item. The "Proactive Mode A → Mode B switch after batch 1" Phase 1-polish item is promoted from "nice-to-have" to **functional prerequisite for any full-dataset clustering run**. Captured in `ROADMAP.md` Phase 1-polish section and `KEYWORD_CLUSTERING_ACTIVE.md` §6.5.
+
+**Prevention — for future LLM projections:** when making trajectory estimates from limited batch data, explicitly project the context-window math out to dataset completion, not just the next few batches. The gap between "this batch works" and "the full run can complete" needs to be stated, not assumed. Adding this as a checklist item for future Auto-Analyze run narration.
+
+**Lesson — useful pattern for run-narration more generally:** once 5–7 batches of data exist, do the full-dataset projection arithmetic explicitly. The arithmetic is cheap; the insights it surfaces (context wall, cost ceiling, time-to-completion) change the decision space (continue vs. pause to implement a missing feature). Per `HANDOFF_PROTOCOL.md` Rule 16 zoom-out requirement.
+
+---
 
 ### 2026-04-18 — Stale-closure bug in buildCurrentTsv contaminates Mode A diagnosis; exposed during live Phase 1g-test follow-up run
 **Session:** session_2026-04-18_phase1g-test-followup (Claude Code)

@@ -1,9 +1,9 @@
 # KEYWORD CLUSTERING — ACTIVE DOCUMENT
 ## Current state of the Keyword Clustering workflow tool (Group B, tool-specific)
 
-**Last updated:** April 18, 2026 (Phase 1g-test follow-up — Tasks 1-3 deployed + live-validated; new stale-closure bug in buildCurrentTsv discovered; prior Mode A "attention dilution" diagnosis reframed)
-**Last updated in session:** session_2026-04-18_phase1g-test-followup (Claude Code)
-**Previously updated in session:** session_2026-04-18_phase1g-test-kickoff (Claude Code)
+**Last updated:** April 19, 2026 (Phase 1g-test follow-up Part 2 — stale-closure + missing-await bugs both fixed, deployed, and validated live across 7 clean Bursitis batches; trajectory analysis proves Mode A alone cannot finish a 2,304-keyword run — proactive Mode A→B switch elevated to functional prerequisite)
+**Last updated in session:** session_2026-04-19_phase1g-test-followup-part2 (Claude Code)
+**Previously updated in session:** session_2026-04-18_phase1g-test-followup (Claude Code)
 **Previously updated (claude.ai era):** https://claude.ai/chat/fc8025bf-551a-4b3c-8483-ec6d8ed9e33c
 
 **Purpose:** This is the working document for the Keyword Clustering tool during its active development phase. Covers everything built so far, what's pending, technical details, and known issues.
@@ -14,26 +14,33 @@
 
 ---
 
-## ⚠️ POST-PHASE-1G-TEST-FOLLOWUP STATE (READ FIRST — updated 2026-04-18 follow-up session)
+## ⚠️ POST-PHASE-1G-TEST-FOLLOWUP-PART-2 STATE (READ FIRST — updated 2026-04-19 session)
 
-**As of 2026-04-18 (follow-up Claude Code session — Phase 1g-test still partial; new blocking bug):**
+**As of 2026-04-19 (Phase 1g-test follow-up Part 2 Claude Code session — both stale-closure + missing-await bugs fixed and validated live; full-run still blocked pending proactive Mode A→B switch):**
+
+- ✅ **Stale-closure bug in `buildCurrentTsv` FIXED and deployed** — commit `a6b3b19`. Function now reads from `nodesRef.current` / `keywordsRef.current` / a new `sisterLinksRef.current` (the latter added alongside the existing refs at lines ~205-215). Comment added near refs block documenting the invariant for future developers.
+- ✅ **Missing-`await` bug in `handleApplyBatch` FIXED and deployed** — same commit. Function made `async`; now `await`s `doApply(...)` before subsequent state flips and the next `runLoop()` call. `handleSkipBatch` audited: no change needed (doesn't call `doApply`).
+- ✅ **Fixes validated live on Bursitis across 7 consecutive clean batches** (session_2026-04-19 run): canvas grew 22 → 27 → 33 → 36 → 39 → 41 → 49 → 53 nodes; "0 removed" every batch; "All 8 keywords verified on canvas" every batch; input token count grew batch-over-batch in proportion to canvas size (21.3k → 23.2k → 26.3k → 28.0k → 29.9k → 31.6k → 36.8k → 39.8k). The monotonic input growth is the live fingerprint that `buildCurrentTsv` is reading post-apply state from the refs — under the broken version, this number would be flat.
+- ✅ **All three prior-session priorities remain deployed** (commits `27eb180`, `84062f5`, `b9dc8b9` from 2026-04-18 follow-up session — V2 prompts in repo, Mode A→B reactive auto-switch broadened, Budget UX).
+- ⚠️ **Prior-session Mode A "attention dilution" diagnosis remains reframed:** the 2026-04-18 kickoff's observations of Mode A dropping topics were at least partially due to the stale-closure bug, not pure LLM attention dilution. See §6.5 below.
+- ⚠️ **Adaptive Thinking + large prompts still unresolved** — workaround remains Enabled-12k. Unchanged.
+- 🚨 **NEW QUANTITATIVE FINDING — Mode A alone cannot complete a full Bursitis run.** Trajectory analysis after 7 batches: Mode A costs ~750 input tokens/node and ~600-950 output tokens/node. Projected context wall at ~120-140 canvas nodes, which equals only **240-600 of 2,304 keywords placed (10-26%)** before hitting the 200k window. See `CORRECTIONS_LOG.md` 2026-04-19 "Mode-A-alone cannot complete" entry for full arithmetic. **Implication:** the planned proactive Mode A → Mode B switch (Phase 1-polish item) is no longer optional — it is a **functional prerequisite** for any full-dataset clustering run.
+- 🚨 **Batch 6 and 7 "Unusually high: N new topics" warnings** emerged (27 and 31 new-topic-signals respectively, threshold 25). The AI is emitting more new-topic titles in its Mode A response than actually grow the canvas — consistent with Mode A doing speculative topic reshuffling as the table grows. Not a correctness failure (validation always passed, "0 removed"), but a signal that Mode A is starting to spend tokens on speculative structure changes rather than pure additions.
+- 🏃 **Bursitis run left continuing in browser tab during session wrap-up.** User's choice (per session_2026-04-19): leave the tab running so the browser keeps processing batches unattended, see how far the reactive Mode A→B switch catches it before the context wall, and pick up with fresh evidence next session. Expected outcomes: (a) reactive switch fires around 60-100 nodes → Mode B carries the rest to completion ✅ ideal; (b) Mode A holds clean past ~130 nodes → context-wall failure 🛑 informative; (c) Anthropic stream stall exhausts 5-retry budget mid-batch → run aborts. User will paste activity log at start of next session.
+
+**Next session top priority:** read activity log from the still-running (or completed/failed) Bursitis run; decide whether to implement the proactive Mode A → Mode B switch, or address whatever surfaces from the run's outcome. See `ROADMAP.md` Phase 1-polish section.
+
+## ⚠️ POST-PHASE-1G-TEST-FOLLOWUP STATE (prior-session context — retained for history)
+
+**As of 2026-04-18 (follow-up Claude Code session — Phase 1g-test still partial at that time):**
 
 - ✅ **Three code-fix priorities from the prior session all shipped and deployed:**
   - `docs/AUTO_ANALYZE_PROMPT_V2.md` committed (canonical V2 prompts live in repo) — commit `27eb180`
   - Mode A → Mode B auto-switch broadened to fire on HC4/HC5 validation failures — commit `84062f5`
   - Budget UX bug + 3 sibling inputs with same root cause — commit `b9dc8b9`
   - All three pushed to origin/main; Vercel build clean; Budget UX fix verified live by user on vklf.com
-- ✅ **Task 2 fix validated live in production:** during this session's attempted Bursitis run, batch 2's Mode A response dropped 1 topic + 8 keywords; the new auto-switch fired correctly (`⚡ AUTO-SWITCH: ... switching to DELTA mode (Mode B)`); batch 2 retry in Mode B succeeded with the full 3-attempt budget preserved (attempts counter decremented as designed). First live-production validation of a Claude-Code-authored fix on this platform.
-- 🚨 **NEW BLOCKING BUG DISCOVERED — stale closure in `buildCurrentTsv`.** During batch 3 of the follow-up run, validation caught "Deleted 11 topics; Lost 8 keywords" in Mode B (where Mode B shouldn't be able to cause drop failures). Math on the merge output proves the baseline was 10 rows, not the 22 nodes on canvas — i.e., `buildCurrentTsv` was fed a stale snapshot. Two compounding bugs identified in `AutoAnalyze.tsx`:
-  - **Bug A (load-bearing):** `buildCurrentTsv` lines 359–408 reads `nodes` / `allKeywords` / `sisterLinks` from the render-time closure. The `runLoop` async function persists across renders and keeps calling `buildCurrentTsv` with its captured (stale) values. `validateResult` (line 823, 841) and `doApply` (line 895) correctly use `nodesRef.current` / `keywordsRef.current` — the refs exist (lines 205–215) but `buildCurrentTsv` doesn't use them.
-  - **Bug B (compounding):** `handleApplyBatch` (line 1387) does not `await doApply(...)` before calling `runLoop()`. The new runLoop captures its closure before canvas refresh completes. Fix: make the function async, await doApply.
-  - Full reproduction math + code citations + fix plan in `CORRECTIONS_LOG.md` 2026-04-18 stale-closure entry.
-- ⚠️ **Prior-session Mode A "attention dilution" diagnosis reframed.** The kickoff session observed Mode A dropping 4-6 topics across 3 retries of batch 2 and attributed this to LLM attention dilution over long outputs. That theory isn't wrong in general, but the *specific* failures observed there were at least partly due to Bug A — the AI was being shown an incomplete (stale) current-state view by `buildCurrentTsv`, so "dropped" topics may be topics the AI never saw in its input. Task 2's fix still works as an effective safety net but addresses a symptom, not the original design flaw I'd originally attributed it to. See §6.5 below for the updated diagnosis.
-- ⚠️ **Adaptive Thinking + large prompts still unresolved** — workaround remains Enabled-12k. Unchanged from kickoff session.
-- ⚠️ **Vercel 5-min timeout risk still real** — switched to Direct mode for this session's run to avoid it; worked fine through 3 batches.
-- 🚫 **Bursitis clustering run still blocked.** Canvas has 22 nodes from batch 2's apply; next session's bug fix + redeploy + restart will run from scratch with the current 22 nodes on the canvas. The 2,320 unsorted keywords (8 were placed across batches 1-2) still need to be clustered.
-
-**Next session top priority:** fix Bug A + Bug B in `AutoAnalyze.tsx`, push + deploy, restart Bursitis Auto-Analyze. See `ROADMAP.md` Phase 1g-test follow-up REMAINING section.
+- ✅ **Task 2 fix validated live in production:** during that session's attempted Bursitis run, batch 2's Mode A response dropped 1 topic + 8 keywords; the new auto-switch fired correctly (`⚡ AUTO-SWITCH: ... switching to DELTA mode (Mode B)`); batch 2 retry in Mode B succeeded with the full 3-attempt budget preserved. First live-production validation of a Claude-Code-authored fix.
+- 🚨 **Stale-closure + missing-await bugs discovered** in that session (both now FIXED in 2026-04-19 — see above).
 
 ## ⚠️ POST-PHASE-1G-TEST STATE (kickoff session context — retained for history)
 
