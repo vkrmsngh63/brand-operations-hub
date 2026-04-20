@@ -1,9 +1,9 @@
 # KEYWORD CLUSTERING — ACTIVE DOCUMENT
 ## Current state of the Keyword Clustering workflow tool (Group B, tool-specific)
 
-**Last updated:** April 19, 2026 (Phase 1g-test follow-up Part 2 — stale-closure + missing-await bugs both fixed, deployed, and validated live across 7 clean Bursitis batches; trajectory analysis proves Mode A alone cannot finish a 2,304-keyword run — proactive Mode A→B switch elevated to functional prerequisite)
-**Last updated in session:** session_2026-04-19_phase1g-test-followup-part2 (Claude Code)
-**Previously updated in session:** session_2026-04-18_phase1g-test-followup (Claude Code)
+**Last updated:** April 20, 2026 (Phase 1g-test follow-up Part 3 — full 51-batch Bursitis run analyzed end-to-end; Mode A qualitatively superior per director's direct assessment; Mode B can silently overwrite Mode A's better work identified as first-order problem; batch 52 Mode B "Lost 6" foundational keywords including "bursa"; massive design session covering Changes Ledger, Human-in-Loop first-class mode, cross-platform Feedback Repository, stability scoring algorithm, stable topic IDs, homograph/Irrelevant-Keywords handling, Pending Deletion region, comprehensiveness verification, cross-canvas consolidation, cost ledger with manual entry, model registry, multi-trigger safety nets, and a 15+ session execution plan)
+**Last updated in session:** session_2026-04-20_phase1g-test-followup-part3 (Claude Code)
+**Previously updated in session:** session_2026-04-19_phase1g-test-followup-part2 (Claude Code)
 **Previously updated (claude.ai era):** https://claude.ai/chat/fc8025bf-551a-4b3c-8483-ec6d8ed9e33c
 
 **Purpose:** This is the working document for the Keyword Clustering tool during its active development phase. Covers everything built so far, what's pending, technical details, and known issues.
@@ -14,7 +14,59 @@
 
 ---
 
-## ⚠️ POST-PHASE-1G-TEST-FOLLOWUP-PART-2 STATE (READ FIRST — updated 2026-04-19 session)
+## ⚠️ POST-PHASE-1G-TEST-FOLLOWUP-PART-3 STATE (READ FIRST — updated 2026-04-20 session)
+
+**As of 2026-04-20 (Phase 1g-test follow-up Part 3 Claude Code session — design work only, NO code commits; director confirmed Mode A qualitative superiority; Mode B can silently overwrite Mode A's work identified as first-order problem):**
+
+### Run-outcome facts
+- ✅ **Full 51-batch Bursitis Auto-Analyze run narrated from activity log.** Run duration: ~10h 37min (started 1:03:40 PM 2026-04-19, cancelled by director 11:40:22 PM after batch 52 failed validation). 51 full batch applies + 1 partial (batch 52 attempt 2 cancelled mid-generation). Outcome was variant (a) of the prior session's prediction set.
+- ✅ **Reactive Mode A→B switch fired at batch 40** (10:27:02 PM, canvas = 95 nodes) on a narrow trigger: "⚡ AUTO-SWITCH: Deleted 1 topics: Wrist bursitis; Lost 1 keywords: wrist bursitis."
+- ✅ **Context wall NEVER hit.** Mode A peaked at ~53k billed input + ~66k output ≈ 119k total at batch 17 — well below the 200k ceiling. The prior session's "Mode A alone cannot complete" projection was partially rebutted (Mode A kept running clean past the projection's worry point).
+- ✅ **Mode B carried batches 40-51 cleanly**, then failed batch 52 attempt 1 with "Missing 2 batch keywords: bursa city, bursa iş ilanları; Lost 6 keywords: bursa, bursa sac, what is a bursa, what is bursa, omental bursa." Director cancelled during retry 2.
+- 📊 **Progress:** 408 of 2,304 keywords placed = 17.7%. Estimated total runtime to completion at Mode B pace: ~33 hours. Estimated final API cost if completed: ~$90-100.
+- 📉 **Batch-time and cost reduction under Mode B:** batch time dropped from ~14 min/batch (Mode A) to ~5-6 min/batch (Mode B); cost from $0.80 avg/batch (Mode A) to $0.36-$0.47 (Mode B).
+
+### Qualitative findings (director-surfaced + Claude-verified)
+- 🎯 **Mode A output is QUALITATIVELY SUPERIOR to Mode B per director's direct assessment.** This reframes the cost analysis entirely — Mode A's extra time and money is paying for structural quality Mode B cannot produce. Locked-in decision for Phase 1: **Mode A is the default; accept higher cost as quality tax**; add multi-trigger safety nets (not proactive switch) to prevent context-wall failures.
+- 🚨 **Mode B can silently overwrite Mode A's better work.** No per-action provenance tracking exists currently; admin cannot distinguish which mode produced which part of the final tree. Identified this session as a first-order design problem. Fix: Changes Ledger with full provenance; Mode A protected status via stability scoring; final review mode-difference view. See `CORRECTIONS_LOG.md` 2026-04-20 entry "Mode B can silently overwrite Mode A's higher-quality work" for full detail.
+- 🚨 **Mode A is quietly reshuffling topics under the hood** (canvas oscillation 80→81→80→82→81→80... with "0 removed" every batch). Validation only catches by-name-disappearance; renames/merges/splits are invisible. Fix: stable topic IDs + Changes Ledger + stability scoring friction gradient.
+- 🚨 **"Unusually high: N new topics" warning is misleading** — counts renames as new. Grew from 27 (batch 6) to 82 (batches 34-39) in Mode A. Fix: stable topic IDs eliminate the ambiguity; Activity Log v2 with explicit Renamed/Restructured/Truly-new/Unchanged breakdown.
+- 🚨 **Director's bursa/Turkey-city homograph insight.** "bursa" = fluid sac (medical) AND Turkish city. Batch 52 "Missing 2" keywords were "bursa city" + "bursa iş ilanları" ("Bursa job listings" in Turkish). Forcing the model to place every batch keyword creates pressure for bad behavior. Fix: "Irrelevant Keywords" floating topic as runtime safety valve + Pending Deletion canvas region for obsolete topics + prompt instruction to use these surfaces.
+- 🚨 **Model is not comprehensive in topic-chain creation.** Director's example: "bursitis pain in older women" should generate 1 primary ("bursitis pain") + 2 secondary ("bursitis in women" w/ chain "Who does bursitis affect → How bursitis affects different sexes differently" + "bursitis in older people" w/ chain "How does bursitis affect a person by age → Who does bursitis affect"). Current model under-places under output-length pressure. Fix: Step 4b Comprehensiveness Verification in prompt (see `AUTO_ANALYZE_PROMPT_V2_PROPOSED_CHANGES.md` Change 3).
+- 🚨 **Keywords being left out of batches (director's AST Table observation).** Some keywords show "Unsorted" status despite batches being completed; missing from Topics/Analysis tables. Investigation deferred to Session 2. Fix includes: independent post-batch AST verification + re-queuing orphaned keywords.
+- 🚨 **Canvas layout regressions from HTML tool.** Overlapping nodes, description overflow, wrong placement/order. `resolveOverlap` exists in React code but insufficient. Diagnostic deferred to Session 2 after director uploads `keyword_sorting_tool_v18.html` to repo root.
+- 📝 **Cost tracker missing failed-attempt costs + too-small UI + no estimated-vs-actual variance.** Known from 2026-04-18; promoted to roadmap Cost Ledger item with manual entry capability.
+
+### Director's Q4 correction (Claude's framing error — see CORRECTIONS_LOG)
+- Claude initially framed Mode A's 9 hours + $31 as "wasted" vs. Mode B, assuming quality parity. Director correctly pushed back: quality matters more than cost for a product-launch hierarchy. Claude acknowledged the error; proactive Mode A→B switch was downgraded from "functional prerequisite" to "cost-optimization option, pending qualitative comparison." See `CORRECTIONS_LOG.md` 2026-04-20 entry for full detail.
+
+### New design artifacts created this session
+- `docs/AI_TOOL_FEEDBACK_PROTOCOL.md` — platform-wide standard for AI-tool feedback integration (every new AI-using tool must comply)
+- `docs/MODEL_QUALITY_SCORING.md` — stability-score algorithm spec, admin scoring guidelines, meta-note on algorithm derivation + review triggers
+- `docs/AUTO_ANALYZE_PROMPT_V2_PROPOSED_CHANGES.md` — 7 specific proposed prompt modifications with exact wording + exact line-level placement in `AUTO_ANALYZE_PROMPT_V2.md`; pending director review in Session 6
+
+### Multi-session execution plan (locked in 2026-04-20)
+See `ROADMAP.md` "Phase 1g-test Part 3 session plan" for the full 15+ session roadmap. Sessions 1-6 are detailed; Sessions 7-15+ are scoped. Key points:
+- **Session 1 = THIS SESSION (2026-04-20):** Design capture + doc updates. DONE.
+- **Session 2 = NEXT SESSION:** Investigations — DB access verification, direct Bursitis canvas query + qualitative analysis, P3-F7 keyword-left-out bug investigation, Removed Terms display bug investigation, P3-F8 canvas layout regression diagnostic using `keyword_sorting_tool_v18.html` (director to upload to repo root before Session 2 starts).
+- **Session 3:** Tier-1 code fixes (keyword re-queuing, Removed Terms fix, layout fix, salvage-ignored-keywords, settings persistence, cost tracker fix, Opus 4.7 dropdown).
+- **Sessions 4-5:** Changes Ledger foundation + stability scoring + stable topic IDs.
+- **Session 6:** Merge approved prompt changes from `AUTO_ANALYZE_PROMPT_V2_PROPOSED_CHANGES.md`.
+- **Sessions 7-9:** Human-in-Loop mode (multi-session build).
+- **Sessions 10-12:** Feedback Repository (3 phases).
+- **Session 13:** Cost Ledger + Model Registry.
+- **Session 14:** Feedback-summarization-to-prompt-improvements button (meta-tool).
+- **Session 15+:** Integration of director's parallel-chat workflow-fundamentals work (reminder: director is running a parallel chat; conclusions to be shared later; session MUST ask for them before Session 6's prompt merge).
+
+### Director's explicit instructions for future sessions
+- **Auto-Remove Irrelevant Terms button:** DO NOT program without explicit prompt. Director will provide details when this item is reached.
+- **Changes Ledger naming:** director agreed to "Changes Ledger" for now; discuss finalizing in Session 4.
+- **HTML tool:** director will upload `keyword_sorting_tool_v18.html` to repo root after 2026-04-20 session. Session 2 can assume it's available.
+- **Session pacing:** stop design-only sessions at design-completion; don't push into code while tired. Rule 13 honored.
+
+---
+
+## ⚠️ POST-PHASE-1G-TEST-FOLLOWUP-PART-2 STATE (READ SECOND — updated 2026-04-19 session, retained for history)
 
 **As of 2026-04-19 (Phase 1g-test follow-up Part 2 Claude Code session — both stale-closure + missing-await bugs fixed and validated live; full-run still blocked pending proactive Mode A→B switch):**
 

@@ -1,9 +1,9 @@
 # DOCUMENT MANIFEST
 ## Ground-truth registry of every handoff document in the PLOS system
 
-**Last updated:** April 19, 2026 (Phase 1g-test follow-up Part 2 — stale-closure + missing-await bugs fixed + validated live across 7 clean Bursitis batches; Mode A alone cannot finish a 2,304-keyword run — proactive Mode A→B switch elevated to functional prerequisite)
-**Last updated in session:** session_2026-04-19_phase1g-test-followup-part2 (Claude Code)
-**Previously updated in session:** session_2026-04-18_phase1g-test-followup (Claude Code)
+**Last updated:** April 20, 2026 (Phase 1g-test follow-up Part 3 — massive design session; 3 new Group A docs created; 5 existing docs updated; NO code commits)
+**Last updated in session:** session_2026-04-20_phase1g-test-followup-part3 (Claude Code)
+**Previously updated in session:** session_2026-04-19_phase1g-test-followup-part2 (Claude Code)
 **Previously updated (claude.ai era):** https://claude.ai/chat/75cc8985-b70a-49f4-8b64-444c34ef541f
 
 **Purpose:** This is the authoritative registry of what handoff documents exist, where each fits in the system, and their last-modified status. When a new chat starts, the user consults this manifest to confirm which files to upload. When doc drift is suspected, this manifest is the reference for "what should exist."
@@ -33,14 +33,19 @@ These 13 documents form the persistent handoff context.
 | 11 | `NEW_CHAT_PROMPT.md` | **Historical** — claude.ai era briefing template. Post-Phase-M, Claude Code sessions use `CLAUDE_CODE_STARTER.md` instead. | 2026-04-17 | NO |
 | 12 | `DOCUMENT_MANIFEST.md` | This file — ground-truth doc registry | 2026-04-19 (this session — timestamps + modified flags) | ✅ YES |
 | 13 | `CLAUDE_CODE_MIGRATION.md` | Migration plan and operational rules for shifting from claude.ai to Claude Code. Executed successfully in Ckpt 9+9.5. | 2026-04-17 | NO |
+| 14 | `AI_TOOL_FEEDBACK_PROTOCOL.md` | **NEW 2026-04-20** — Platform-wide standard for every AI-using tool in PLOS. Defines required integration points (structured decision output with reasoning, admin review surface with 3 actions + 2 feedback channels, feedback-repo write/read-back, quality scoring, model/provider registry), 3-phase implementation roll-out, and the primer text to include in every new workflow's design doc. | 2026-04-20 (this session — NEW) | ✅ NEW |
+| 15 | `MODEL_QUALITY_SCORING.md` | **NEW 2026-04-20** — Stability-score algorithm spec. Defines 0-10 stability_score per AI output item, factors that add/subtract to score, model's interpretation instructions, JUSTIFY_RESTRUCTURE payload requirement for high-score modifications, admin scoring guidelines (1-5 scale with 4 evaluation dimensions), meta-note on how algorithm was derived + review triggers + how to propose weight changes. | 2026-04-20 (this session — NEW) | ✅ NEW |
 
-**Group A count: 13 documents.** 4 modified this session.
+**Group A count: 15 documents.** 9 modified this session (ROADMAP, CORRECTIONS_LOG, CHAT_REGISTRY, DOCUMENT_MANIFEST + 5 no-change), PLUS 2 NEW docs created (AI_TOOL_FEEDBACK_PROTOCOL, MODEL_QUALITY_SCORING).
+
+**Also created this session (non-Group-A — interim planning doc):**
+- `AUTO_ANALYZE_PROMPT_V2_PROPOSED_CHANGES.md` — 7 specific proposed prompt modifications with exact wording + exact line-level placement in `AUTO_ANALYZE_PROMPT_V2.md`. Pending director review in Session 6. To be archived/deleted once all proposed changes are merged or explicitly rejected.
 
 **Also modified this session (non-Group-A):**
-- `KEYWORD_CLUSTERING_ACTIVE.md` (Group B) — Post-Phase-1g-test-followup-Part-2 state block added (both bugs fixed, live-validated, Mode-A-cannot-complete finding); prior followup state block preserved for history.
+- `KEYWORD_CLUSTERING_ACTIVE.md` (Group B) — Post-Phase-1g-test-followup-Part-3 state block added (run outcome facts, qualitative findings, new design artifacts, multi-session execution plan, director's explicit instructions); prior state blocks preserved for history.
 
 **Code changes this session (non-doc):**
-- `src/app/projects/[projectId]/keyword-clustering/components/AutoAnalyze.tsx` — added `sisterLinksRef` + useEffect sync; rewrote `buildCurrentTsv` to read from refs via local aliases; made `handleApplyBatch` async + await `doApply`; added invariant comment. Commit `a6b3b19` (17 insertions, 9 deletions), pushed to origin/main, auto-deployed.
+- **NONE.** Session was design-only. No code commits. Next session (Session 2) will begin investigation work that may produce code-commits-proposed-for-review; Session 3 will ship them.
 
 ---
 

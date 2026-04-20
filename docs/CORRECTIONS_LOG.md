@@ -2,9 +2,9 @@
 ## Append-only record of mistakes made during chats and lessons learned
 
 **Started:** April 16, 2026
-**Last updated:** April 19, 2026 (Phase 1g-test follow-up Part 2 — 2 new informational entries: stale-closure fix validated live across 7 batches + Mode-A-alone cannot complete a 2,304-keyword run)
-**Last updated in session:** session_2026-04-19_phase1g-test-followup-part2 (Claude Code)
-**Previously updated in session:** session_2026-04-18_phase1g-test-followup (Claude Code)
+**Last updated:** April 20, 2026 (Phase 1g-test follow-up Part 3 — 5 new entries covering the 51-batch Bursitis run analysis, Claude's Q4 quantitative-framing error + director correction, double-classification terminology clarification, Lost vs Missing code-verification finding, and Mode-B-can-silently-overwrite-Mode-A identified as first-order quality problem)
+**Last updated in session:** session_2026-04-20_phase1g-test-followup-part3 (Claude Code)
+**Previously updated in session:** session_2026-04-19_phase1g-test-followup-part2 (Claude Code)
 **Previously updated (claude.ai era):** https://claude.ai/chat/75cc8985-b70a-49f4-8b64-444c34ef541f
 
 **Purpose:** Every mistake made in any chat — whether Claude or user catches it — gets appended. Future Claudes read this to avoid repeating. This is how institutional memory survives Claude's lack of memory.
@@ -35,6 +35,127 @@
 ---
 
 ## Entries
+
+### 2026-04-20 — 51-batch Bursitis run narration + analysis: reactive switch fired at batch 40, Mode B carried batches 40-51 cleanly, batch 52 Mode B "Lost 6" core keywords including "bursa" (informational)
+**Session:** session_2026-04-20_phase1g-test-followup-part3 (Claude Code)
+**Tool/Phase affected:** Keyword Clustering / Auto-Analyze / Phase 1g-test
+**Severity:** Informational (run analysis + qualitative findings)
+
+**What happened:** The Bursitis Auto-Analyze run left processing in browser tab at end of 2026-04-19 session was cancelled by director at 11:40:22 PM after batch 52 failed validation. Run duration ~10h 37min. Outcome was variant (a) from prior session's prediction set: reactive Mode A→B switch fired at **batch 40 (10:27:02 PM, canvas of 95 nodes)** on a narrow trigger ("Deleted 1 topics: Wrist bursitis; Lost 1 keywords: wrist bursitis"). Mode A never hit the projected 200k context wall — input peaked at ~53k billed + ~66k output ≈ 119k at batch 17. 39 Mode A batches: canvas 22→95 nodes, "0 removed" every batch, all keywords verified every batch; "Unusually high: N new topics" warnings grew from 27 (batch 6) to 82 (batches 34-39). 12 Mode B batches (40-51): canvas 95→105, delta rows 7-12, cost dropped ~2× ($0.36-$0.47 vs. $0.80 avg), batch time dropped ~2.5× (5-6 min vs. 14 min). Batch 52 attempt 1 failed validation: "Missing 2 batch keywords: bursa city, bursa iş ilanları; Lost 6 keywords: bursa, bursa sac, what is a bursa, what is bursa, omental bursa." Director cancelled during retry 2. Total keywords placed: 408 of 2,304 = 17.7%. Estimated final cost if completed at Mode B pace: ~$90-100 over ~33 hours.
+
+**Key qualitative findings (from director + log + code review):**
+- **Mode A was qualitatively SUPERIOR to Mode B structurally** (director's direct assessment) — but there's no current way to quantify the difference. See also: Mode-B-can-silently-overwrite-Mode-A entry below.
+- **Silent topic reshuffling in Mode A:** canvas oscillated 80→81→80→82→81→80... while "0 removed" fired every batch. Validation only catches by-name-disappearance; renames/merges/splits look like "no topics removed" even when structure changes substantially.
+- **"N new topics" count is misleading:** the code compares response-row names to pre-existing names; renames count as "new." With 80+ row responses, this produces alarming noise (e.g. 82 "new topics" when net canvas growth is +3).
+- **Director's bursa/Turkey-city homograph insight:** "bursa" = fluid sac AND Turkish city. "bursa iş ilanları" = "Bursa job listings." Forcing the model to place every batch keyword creates pressure to invent awkward topics, drop keywords, or silently mis-place. This is probably contributing to topic-structure corruption across runs.
+- **Model not comprehensive in topic-chain creation:** for keyword like "bursitis pain in older women" (3 facets: pain, gender, age), model should produce 1 primary + 2 secondary with full upstream chains. Currently producing partial coverage under output-length pressure.
+- **Keywords being left out of batches (director's AST Table observation):** some keywords show "Unsorted" status interspersed with "AI Sorted" after runs, and are absent from Topics/Analysis tables. Investigation deferred to Session 2.
+- **Canvas layout regressions** from the HTML tool (node overlap, description overflow, wrong ordering) observed by director. `resolveOverlap` exists in React code (per `PLATFORM_ARCHITECTURE.md §388`) but appears insufficient. Diagnostic deferred to Session 2 after director uploads `keyword_sorting_tool_v18.html` to repo root.
+
+**Correction (to prior session's roadmap):** The 2026-04-19 roadmap entry framing the proactive Mode A→B switch as a "functional prerequisite" was based on a projection that this run did not fully validate (context wall never hit). Downgraded to "cost-optimization option, pending qualitative comparison." See separate entry below on Claude's Q4 framing error.
+
+**Prevention:** Future run-narration sessions must explicitly incorporate the director's qualitative observations, not just the log-based quantitative data. Log analysis alone is insufficient — the model's output quality (topic hierarchy structural integrity, searcher-centric language quality, conversion-funnel stage placement, comprehensive facet extraction) can only be assessed by eye on the canvas. Added to Session 2's scope: direct DB query on the Bursitis canvas for joint qualitative analysis.
+
+**Lesson:** Safety checks that look clean are not evidence of quality. Batch-level "all keywords verified" + "0 removed" + "no errors" can co-exist with silent structural degradation. Qualitative review is not optional.
+
+---
+
+### 2026-04-20 — Claude's Q4 quantitative-framing error: treated Mode A time/money as "wasted" relative to Mode B without justifying quality parity
+**Session:** session_2026-04-20_phase1g-test-followup-part3 (Claude Code)
+**Tool/Phase affected:** Methodology / analysis-framing / roadmap-prioritization
+**Severity:** High (would have driven wrong-direction roadmap decisions; caught by director)
+
+**What happened:** During the Q4 portion of analyzing the 51-batch Bursitis run, Claude stated Mode A's 9 hours and ~$31 was "wasted" relative to Mode B, and recommended a proactive Mode A→B switch to eliminate the "waste." This framing assumed quality parity between Mode A and Mode B — an assumption Claude never justified. Director correctly pushed back: "But why do you consider Mode A time and money wasted relative to Mode B if the quality of Mode A could have been far superior to Mode B — something we have yet to discuss? ... The goal is to create an accurate topics hierarchy that serves our overall purposes of successfully launching a product... simply looking at the output in a quantitative manner devoid of a qualitative analysis will lead us down the wrong path with poor overall outcomes."
+
+**Root cause:** Claude defaulted to a quantitative analysis lens (tokens, dollars, batch time) because those are the log-extractable metrics. The qualitative lens (tree structure, narrative flow, searcher-centric language quality, conversion-funnel integrity) requires canvas inspection and product-domain judgment — both of which Claude didn't have access to in that turn. Instead of flagging the gap ("I don't know Mode A quality vs. Mode B quality from the log alone"), Claude assumed parity and built a "wasted cost" argument on top. This is a Pattern-7-adjacent failure mode: defaulting to available evidence without flagging missing evidence.
+
+**How caught:** Director directly, immediately, with a clear prescriptive explanation of why qualitative matters more than quantitative for this platform's purposes.
+
+**Correction (applied this session):**
+- Claude openly acknowledged the error mid-session, no minimizing (per Rule 7 in CLAUDE_CODE_STARTER).
+- Revised recommendation: DON'T implement proactive Mode A→B switch as a default; instead, do qualitative A/B comparison FIRST. If Mode A wins on quality (as director later confirmed), keep Mode A as default with multi-trigger safety nets, accept higher cost as quality tax.
+- Downgraded ROADMAP entry for "Proactive Mode A→B switch" from "functional prerequisite" to "cost-optimization option, pending qualitative comparison."
+- Added Mode-B-can-silently-overwrite-Mode-A problem (next entry) as a first-order concern that the purely-quantitative framing completely missed.
+
+**Prevention:**
+- **New meta-rule for future run-narration sessions:** when log-extractable metrics point in one direction, explicitly flag the metrics Claude does NOT have access to and what conclusion they might support differently. "Based on the log alone, Mode A costs more; from the canvas alone, the quality comparison might be opposite. To decide, we need the canvas."
+- **Apply Rule 16 (zoom in AND zoom out) more rigorously when analysis involves tradeoffs:** cost/time is the zoom-in; product-launch effectiveness is the zoom-out. Both must be named before any recommendation.
+- **Default assumption to flip:** when two modes produce different cost/time profiles, ASSUME the lower-cost one may have lower quality and require the director to confirm quality parity before recommending it as the default.
+
+**Lesson:** For a non-programmer director building a product-launch platform, "faster + cheaper" is NEVER automatically better than "slower + more expensive" — the qualitative product outcome dominates. Quantitative analysis without qualitative grounding is worse than no analysis, because it produces confident-sounding wrong answers.
+
+---
+
+### 2026-04-20 — "Double-classification" terminology clarification (informational)
+**Session:** session_2026-04-20_phase1g-test-followup-part3 (Claude Code)
+**Tool/Phase affected:** Methodology / communication / Keyword Clustering semantics
+**Severity:** Low (terminology clarification, no user-facing impact)
+
+**What happened:** Claude used the phrase "double-classification" in a negative context during Q1 analysis (listing it as one of the "messy workarounds" the model engages in when it can't delete topics). Director correctly flagged that many keywords SHOULD appear in multiple topics because their intent genuinely spans multiple facets — example: "bursitis pain in older women" legitimately belongs under "bursitis pain", "bursitis in women", and "bursitis in older people" simultaneously.
+
+**Root cause:** Claude conflated two distinct concepts:
+- **Intentional multi-placement** (GOOD, platform feature) — keyword genuinely spans topics; primary [p] + one or more secondary [s] placements represent the full intent.
+- **Workaround duplication** (BAD, failure mode) — model can't decide between two topics and places in both out of indecision, not intent.
+
+Using "double-classification" without qualifier made it sound like all multi-placement is problematic, which contradicts the prompt's explicit secondary-placement design.
+
+**How caught:** Director directly.
+
+**Correction:**
+- Claude clarified the distinction in-session.
+- Added the distinction to `AUTO_ANALYZE_PROMPT_V2_PROPOSED_CHANGES.md` Change 5 (multi-placement reinforcement) with explicit "MULTI-PLACEMENT IS A FEATURE, NOT A COMPROMISE" framing + "IS / IS NOT" contrast.
+- Recorded here for future sessions.
+
+**Prevention:** Future sessions should use precise terminology: "intentional multi-placement" for the feature, "workaround duplication" only for the specific failure where the model hedges without justification. Flag any appearance of ambiguous terms like "double-classification" or "redundant placement" and ask for clarification before recommending fixes.
+
+**Director's guidance to preserve:** "many keywords should be put into multiple topic nodes because the focus of those individual topics could be equally applicable to that keyword." This is the intended behavior.
+
+---
+
+### 2026-04-20 — "Lost" vs "Missing" keyword-validation error messages: code-verified distinct semantics (informational)
+**Session:** session_2026-04-20_phase1g-test-followup-part3 (Claude Code)
+**Tool/Phase affected:** Keyword Clustering / Auto-Analyze / batch validation
+**Severity:** Informational (factual clarification, directly referenced by prompt/code-design decisions this session)
+
+**What happened:** Director asked whether the "Lost N keywords" vs "Missing N batch keywords" error messages represent different failure modes. Claude verified in `AutoAnalyze.tsx`:
+- **Line 822:** `const missing = batch.keywords.filter(kw => !allKwsInTable.has(kw.toLowerCase()));` — "Missing N batch keywords" = this batch's keywords that didn't make it into the AI's output.
+- **Line 865:** `errors.push('Lost ' + lost.length + ' keywords: ' + lost.slice(0, 5).join(', '));` — "Lost N keywords" = previously-placed keywords that disappeared from the AI's response.
+
+Confirmed semantics: **"Missing" = same-batch non-placements (this batch's work wasn't finished). "Lost" = previously-applied work erased (prior work destroyed).** "Lost" is the more serious failure mode because it represents data destruction, not just incomplete work.
+
+**Relevance to batch 52 failure in the 51-batch run:** Batch 52 error was BOTH: "Missing 2 batch keywords: bursa city, bursa iş ilanları" (consistent with the Turkey-city homograph insight — model couldn't place these unrelated keywords) AND "Lost 6 keywords: bursa, bursa sac, what is a bursa, what is bursa, omental bursa" (six previously-placed foundational keywords erased — structural failure). The "Lost 6" is the larger concern.
+
+**Design implication (captured in `AUTO_ANALYZE_PROMPT_V2_PROPOSED_CHANGES.md` Change 6):** The salvage-ignored-keywords mechanism applies to "Missing" (can do a targeted follow-up placement). For "Lost", targeted follow-up is insufficient — structurally broken response; use full-batch retry instead.
+
+**Prevention:** Terminology in future discussions should clearly distinguish "Missing" vs "Lost" per the code's actual semantics. Documentation and prompt copy should use the same terms consistently.
+
+---
+
+### 2026-04-20 — Mode B can silently overwrite Mode A's higher-quality work — identified as a first-order problem not addressed in prior design
+**Session:** session_2026-04-20_phase1g-test-followup-part3 (Claude Code)
+**Tool/Phase affected:** Keyword Clustering / Auto-Analyze / Mode A vs Mode B architecture
+**Severity:** High (identified this session; design fix proposed; not yet implemented)
+
+**What happened:** Director raised this critical issue during Q3 discussion: "Since Mode B can overwrite the work done by Mode A, when admin finally reviews the Auto-Analysis's final output, the results could be drastically skewed by Mode B with Mode B masking the better results of Mode A." In the 51-batch Bursitis run, Mode A produced qualitatively superior structural work over 39 batches (director's direct assessment). Then Mode B took over at batch 40 and modified topics Mode A had created, producing 12 more batches of work in its own style. Admin's final-review canvas is a blend of Mode A work and Mode B modifications, with no way to distinguish which mode produced which part — so Mode A's quality can be diluted or lost without admin knowing.
+
+**Root cause:** The current architecture treats Mode A and Mode B as interchangeable fallback modes. The reactive switch assumes Mode B can continue Mode A's work. No per-action provenance tracking. No mechanism to protect Mode A's admin-approved work from Mode B modifications. No quality scoring per mode. No side-by-side comparison view. All of these are first-order design gaps the previous sessions missed because they were optimizing for "does the run finish?" rather than "does the run produce quality output?"
+
+**How caught:** Director directly during Q3 discussion.
+
+**Correction (design captured this session, implementation pending across multi-session plan):**
+- **Changes Ledger with per-action provenance** (mode/model/batch/settings/stability-score-at-time-of-action) — admin can filter to "show only Mode A actions" to see Mode A's contribution isolated. Session 4 scope.
+- **Admin quality scoring per action (1-5 scale)** rolled up per-mode — after a run admin sees "Mode A avg 4.3 / Mode B avg 2.8" and the quality difference becomes measurable. Session 7-9 (Human-in-Loop) scope.
+- **Mode A "protected" status on admin-approved actions** — Mode B cannot modify a Mode A topic that admin has marked as good. Uses the stability-scoring friction gradient (score ≥ 7.0 requires JUSTIFY_RESTRUCTURE). Session 5 scope.
+- **Final review "mode difference" view** — diff of what each mode changed, with ability to revert Mode B changes that damaged Mode A quality. Session 7-9 scope.
+
+**Prevention:**
+- **New architectural principle:** when two (or more) AI processing modes operate on shared state, there MUST be per-action provenance tracking from the start. Admin must always be able to answer "which mode produced this result?" without guesswork.
+- **Applies platform-wide:** any future tool with multi-mode AI processing must build this in from day one. Added as a requirement to `AI_TOOL_FEEDBACK_PROTOCOL.md` §2.
+- **This entry also exposes a gap in Claude's Q4 framing error (entry above):** not only was quality comparison missing, but the interaction between modes (Mode B's ability to silently erode Mode A's quality) was invisible in the quantitative framing. Qualitative analysis must consider cross-mode interactions, not just per-mode outputs.
+
+**Lesson:** When architecting multi-mode AI systems, the single most important question is not "how does each mode perform?" but "how do the modes interact, and does their interaction preserve or degrade quality?"
+
+---
 
 ### 2026-04-19 — Stale-closure fix validated live across 7 clean batches on Bursitis run (informational, not a mistake)
 **Session:** session_2026-04-19_phase1g-test-followup-part2 (Claude Code)
