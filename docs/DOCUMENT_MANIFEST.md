@@ -1,9 +1,10 @@
 # DOCUMENT MANIFEST
 ## Ground-truth registry of every handoff document in the PLOS system
 
-**Last updated:** April 20, 2026 (Phase 1g-test follow-up Part 3 — massive design session; 3 new Group A docs created; 5 existing docs updated; NO code commits)
-**Last updated in session:** session_2026-04-20_phase1g-test-followup-part3 (Claude Code)
-**Previously updated in session:** session_2026-04-19_phase1g-test-followup-part2 (Claude Code)
+**Last updated:** April 24, 2026 (Phase 1g-test follow-up Part 3 — Session 2 — investigations-only; P3-F7 + Removed Terms root causes diagnosed from direct DB queries + code read; fix directions agreed with director; 5 docs updated, no new docs; NO code commits)
+**Last updated in session:** session_2026-04-24_phase1g-test-followup-part3-session2 (Claude Code)
+**Previously updated in session:** session_2026-04-20_phase1g-test-followup-part3 (Claude Code)
+**Previously updated in session (earlier):** session_2026-04-19_phase1g-test-followup-part2 (Claude Code)
 **Previously updated (claude.ai era):** https://claude.ai/chat/75cc8985-b70a-49f4-8b64-444c34ef541f
 
 **Purpose:** This is the authoritative registry of what handoff documents exist, where each fits in the system, and their last-modified status. When a new chat starts, the user consults this manifest to confirm which files to upload. When doc drift is suspected, this manifest is the reference for "what should exist."
@@ -25,27 +26,26 @@ These 13 documents form the persistent handoff context.
 | 3 | `PLATFORM_REQUIREMENTS.md` | Platform-wide requirements — scale, user-model, review cycle, audit, concurrency, phasing | 2026-04-17 | NO |
 | 4 | `NAVIGATION_MAP.md` | Every route + click path through PLOS — UI navigation source of truth | 2026-04-17 | NO |
 | 5 | `DATA_CATALOG.md` | Every data item — where it lives, Human Reference Language, cross-workflow sharing contracts | 2026-04-18 | NO |
-| 6 | `ROADMAP.md` | Development execution plan — completed work + remaining phases | 2026-04-19 (this session — Phase 1g-test follow-up items 1+2 marked ✅ complete; proactive Mode A→B switch priority elevated to functional prerequisite) | ✅ YES |
-| 7 | `CORRECTIONS_LOG.md` | Append-only log of mistakes + extracted patterns | 2026-04-19 (this session — 2 new informational entries: stale-closure fix validated live + Mode-A-alone cannot complete) | ✅ YES |
-| 8 | `CHAT_REGISTRY.md` | Chronological log of chats + URLs + work-summaries (post-Ckpt-9: Claude Code sessions use session-identifier format) | 2026-04-19 (this session — new row for session_2026-04-19_phase1g-test-followup-part2) | ✅ YES |
+| 6 | `ROADMAP.md` | Development execution plan — completed work + remaining phases | 2026-04-24 (this session — Session 2 partial-done marker added; Session 2b new block; Session 3 scope expanded with post-batch reconciliation pass + `RemovedKeyword` table + `nextNodeId` stale-counter; P3-F7 finding updated with diagnosis outcome) | ✅ YES |
+| 7 | `CORRECTIONS_LOG.md` | Append-only log of mistakes + extracted patterns | 2026-04-24 (this session — 1 new informational entry on P3-F7 + Removed Terms root causes; architectural pattern "multi-mode write paths always drift without reconciliation" captured as standing design guidance) | ✅ YES |
+| 8 | `CHAT_REGISTRY.md` | Chronological log of chats + URLs + work-summaries (post-Ckpt-9: Claude Code sessions use session-identifier format) | 2026-04-24 (this session — new row for session_2026-04-24_phase1g-test-followup-part3-session2) | ✅ YES |
 | 9 | `HANDOFF_PROTOCOL.md` | Rules for how chats operate — start/mid/end protocols, communication rules, interview rules | 2026-04-18 | NO |
 | 10 | `DOCUMENTATION_ARCHITECTURE.md` | Design of the doc-system itself (DLMS, tool graduation, group A/B, workflow interview pattern, Claude Code migration) | 2026-04-17 | NO |
 | 11 | `NEW_CHAT_PROMPT.md` | **Historical** — claude.ai era briefing template. Post-Phase-M, Claude Code sessions use `CLAUDE_CODE_STARTER.md` instead. | 2026-04-17 | NO |
-| 12 | `DOCUMENT_MANIFEST.md` | This file — ground-truth doc registry | 2026-04-19 (this session — timestamps + modified flags) | ✅ YES |
+| 12 | `DOCUMENT_MANIFEST.md` | This file — ground-truth doc registry | 2026-04-24 (this session — timestamps + modified flags) | ✅ YES |
 | 13 | `CLAUDE_CODE_MIGRATION.md` | Migration plan and operational rules for shifting from claude.ai to Claude Code. Executed successfully in Ckpt 9+9.5. | 2026-04-17 | NO |
 | 14 | `AI_TOOL_FEEDBACK_PROTOCOL.md` | **NEW 2026-04-20** — Platform-wide standard for every AI-using tool in PLOS. Defines required integration points (structured decision output with reasoning, admin review surface with 3 actions + 2 feedback channels, feedback-repo write/read-back, quality scoring, model/provider registry), 3-phase implementation roll-out, and the primer text to include in every new workflow's design doc. | 2026-04-20 (this session — NEW) | ✅ NEW |
 | 15 | `MODEL_QUALITY_SCORING.md` | **NEW 2026-04-20** — Stability-score algorithm spec. Defines 0-10 stability_score per AI output item, factors that add/subtract to score, model's interpretation instructions, JUSTIFY_RESTRUCTURE payload requirement for high-score modifications, admin scoring guidelines (1-5 scale with 4 evaluation dimensions), meta-note on how algorithm was derived + review triggers + how to propose weight changes. | 2026-04-20 (this session — NEW) | ✅ NEW |
 
-**Group A count: 15 documents.** 9 modified this session (ROADMAP, CORRECTIONS_LOG, CHAT_REGISTRY, DOCUMENT_MANIFEST + 5 no-change), PLUS 2 NEW docs created (AI_TOOL_FEEDBACK_PROTOCOL, MODEL_QUALITY_SCORING).
+**Group A count: 15 documents.** 4 modified this session (ROADMAP, CORRECTIONS_LOG, CHAT_REGISTRY, DOCUMENT_MANIFEST). No new Group A docs created this session. The 11 not-modified Group A docs retain their timestamps from prior sessions.
 
-**Also created this session (non-Group-A — interim planning doc):**
-- `AUTO_ANALYZE_PROMPT_V2_PROPOSED_CHANGES.md` — 7 specific proposed prompt modifications with exact wording + exact line-level placement in `AUTO_ANALYZE_PROMPT_V2.md`. Pending director review in Session 6. To be archived/deleted once all proposed changes are merged or explicitly rejected.
+**Not created this session:** no new docs. The interim `AUTO_ANALYZE_PROMPT_V2_PROPOSED_CHANGES.md` created 2026-04-20 remains pending director review (Task 5 rolled from Session 2 into Session 2b or Session 3).
 
 **Also modified this session (non-Group-A):**
-- `KEYWORD_CLUSTERING_ACTIVE.md` (Group B) — Post-Phase-1g-test-followup-Part-3 state block added (run outcome facts, qualitative findings, new design artifacts, multi-session execution plan, director's explicit instructions); prior state blocks preserved for history.
+- `KEYWORD_CLUSTERING_ACTIVE.md` (Group B) — New POST-SESSION-2 STATE block added above the POST-PHASE-1G-TEST-FOLLOWUP-PART-3 block. Contains: DB access verification + query log, Bursitis DB snapshot (2,328 kw / 104 nodes / 1,360 SisterLinks / stale `nextNodeId=5`), qualitative structural observations, full P3-F7 root-cause diagnosis (both bugs + two sub-groups of Bug 2), Removed Terms root-cause diagnosis, director-agreed fix directions for both (P3-F7 two-part primary+backup; Removed Terms Option B RemovedKeyword table), and director's new standing instructions (root-cause-first + reconciliation-as-backup philosophy; Removed Terms UI must distinguish manual vs auto-removed). Prior state blocks preserved for history.
 
 **Code changes this session (non-doc):**
-- **NONE.** Session was design-only. No code commits. Next session (Session 2) will begin investigation work that may produce code-commits-proposed-for-review; Session 3 will ship them.
+- **NONE.** Session 2 was investigations-only per session plan. `keyword_sorting_tool_v18.html` at repo root remains untracked — director's upload for P3-F8, not touched this session; per Option A clean-split hygiene, will be committed in the session that actually investigates it (Session 2b or Session 3).
 
 ---
 
@@ -57,7 +57,7 @@ These are tool-specific working documents. They travel with chats that touch the
 
 | Document | Tool/System | Status | Last modified | Modified this chat? |
 |---|---|---|---|---|
-| `KEYWORD_CLUSTERING_ACTIVE.md` | Keyword Clustering (workflow 1) | Active development | 2026-04-17 (this chat) | ✅ YES |
+| `KEYWORD_CLUSTERING_ACTIVE.md` | Keyword Clustering (workflow 1) | Active development | 2026-04-24 (this session — new POST-SESSION-2 STATE block with P3-F7 + Removed Terms diagnoses + fix directions + DB snapshot + architectural-pattern note) | ✅ YES |
 
 ### Graduated Group B documents (split into Archive + Data Contract)
 

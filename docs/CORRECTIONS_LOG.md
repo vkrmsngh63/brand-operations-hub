@@ -2,9 +2,10 @@
 ## Append-only record of mistakes made during chats and lessons learned
 
 **Started:** April 16, 2026
-**Last updated:** April 20, 2026 (Phase 1g-test follow-up Part 3 — 5 new entries covering the 51-batch Bursitis run analysis, Claude's Q4 quantitative-framing error + director correction, double-classification terminology clarification, Lost vs Missing code-verification finding, and Mode-B-can-silently-overwrite-Mode-A identified as first-order quality problem)
-**Last updated in session:** session_2026-04-20_phase1g-test-followup-part3 (Claude Code)
-**Previously updated in session:** session_2026-04-19_phase1g-test-followup-part2 (Claude Code)
+**Last updated:** April 24, 2026 (Phase 1g-test follow-up Part 3 — Session 2 — 1 new informational entry on P3-F7 + Removed Terms root causes diagnosed via hybrid DB-query + code-read analysis; two-way sync drift architectural pattern named for Phase 2+ reference)
+**Last updated in session:** session_2026-04-24_phase1g-test-followup-part3-session2 (Claude Code)
+**Previously updated in session:** session_2026-04-20_phase1g-test-followup-part3 (Claude Code)
+**Previously updated in session (earlier):** session_2026-04-19_phase1g-test-followup-part2 (Claude Code)
 **Previously updated (claude.ai era):** https://claude.ai/chat/75cc8985-b70a-49f4-8b64-444c34ef541f
 
 **Purpose:** Every mistake made in any chat — whether Claude or user catches it — gets appended. Future Claudes read this to avoid repeating. This is how institutional memory survives Claude's lack of memory.
@@ -35,6 +36,40 @@
 ---
 
 ## Entries
+
+### 2026-04-24 — P3-F7 + Removed Terms root causes diagnosed via hybrid DB-query + code-read analysis (informational, Session 2 findings)
+**Session:** session_2026-04-24_phase1g-test-followup-part3-session2 (Claude Code)
+**Tool/Phase affected:** Keyword Clustering / Auto-Analyze / ASTTable / Phase 1g-test follow-up Part 3 — Session 2
+**Severity:** Informational (diagnostic findings, not a mistake)
+
+**What happened:** First Claude Code session to engage direct DB queries as standard practice. Ran 4 read-only Prisma-client queries against live Bursitis data in Supabase: project list → baseline counts → full canvas tree walk → P3-F7 diagnostic (sum linked keywords vs AI-Sorted DB count + cross-reference). Then read `AutoAnalyze.tsx` (batching + `doApply` steps 3/9/11 + `buildQueue`), `ASTTable.tsx` (state init + `handleRemove`/`handleRestore`), `api/.../keywords/route.ts` (DELETE endpoint behavior), `api/.../canvas/rebuild/route.ts` (atomic rebuild transaction) in detail.
+
+**P3-F7 findings:** Two distinct bugs share a shared architectural root — two independent sources of truth for "keyword is placed" (`Keyword.sortingStatus` updated by `doApply` step 11; `CanvasNode.linkedKwIds`/`kwPlacements` updated by step 3) with unidirectional updates (status only gets ADDED as AI-Sorted, never REMOVED). No reconciliation pass. Drift accumulates batch-by-batch.
+- **Bug 1 — 58 "silent placements":** all on canvas as [p] primary but `sortingStatus='Unsorted'`. Root cause: `doApply` step 11 at line 1179 iterates only `batch.keywordIds` when marking AI-Sorted. Step 9 at lines 1147–1165 updates `Keyword.topic` for every keyword matching any text in the AI's response regardless of batch. Mode A's full-table view regularly places prior-batch keywords as [p] primary in later batches' responses → step 9 fires → step 11 doesn't (cross-batch keyword not in `batch.keywordIds`) → silent placement.
+- **Bug 2 — 74 "ghost AI-Sorted":** `sortingStatus='AI-Sorted'` but not on canvas. Two sub-groups:
+  - **Sub-group 1 (49 kw, non-empty topic + canvasLoc):** reshuffle casualties. Correctly placed in earlier batch (step 11 marked AI-Sorted). Later batch's canvas rebuild removed keyword from canvas. Step 11 only ADDS to AI-Sorted, never REMOVES. Stale status persists. Topic/canvasLoc strings survive because step 9 only appends.
+  - **Sub-group 2 (25 kw, empty topic + empty canvasLoc):** linkedKwIds carryover via the `existing?.linkedKwIds || []` fallback at `doApply` line 1003. When AI response has empty `kwRaw` for a node, the node inherits linkedKwIds from pre-existing state. Inherited kws flow into `allLinkedIds` at step 11 → marked AI-Sorted if in `batch.keywordIds` → step 9 never touched them (not in parsed response text).
+
+**Removed Terms findings:** `ASTTable.tsx` line 116 initializes `removedTerms` as `useState<RemovedKeyword[]>([])` — no localStorage load, no DB fetch. `handleRemove` (line 252) calls `onBulkDelete` / `onDeleteKeyword` which HARD-DELETE Keyword rows via `prisma.keyword.deleteMany` at `/api/projects/[projectId]/keywords` DELETE endpoint. Archive entry written only to in-memory state → lost on page refresh; hard-deleted Keyword row gone forever. Director's prior-session remove action did NOT actually delete anything (DB shows 2,328 kw = original import count; zero orphan canvas refs) — action evidently didn't fire. But the wiring IS capable of permanent deletion, so future remove clicks would silently lose data.
+
+**Sub-finding (additional):** `CanvasState.nextNodeId = 5` despite max `CanvasNode.id = 104`. Stale counter. New-node creation via this counter would collide. Flagged for Session 3 investigation.
+
+**Director's fix directions (2026-04-24):**
+- **P3-F7 — two-part fix.** Primary = root-cause stack via Sessions 3-6 plan already in place (salvage-ignored-keywords mechanism + prompt changes [tie-breaker, comprehensiveness verification, multi-placement reinforcement] + stable topic IDs + stability scoring friction gradient + Changes Ledger admin visibility). Backup = post-batch reconciliation pass (new Session 3 item) that walks canvas after every batch and reconciles `Keyword.sortingStatus` against canvas reality. Per director: *"Whatever fix we apply here should be a backup to that primary fix."*
+- **Removed Terms — Option B.** New `RemovedKeyword` table scoped to `ProjectWorkflow`. Remove = transaction copying Keyword row to `RemovedKeyword` + deleting Keyword. Restore = reverse. `removedSource` field distinguishes manual vs future auto-AI removal; `aiReasoning` holds model rationale when auto.
+
+**How caught:** Planned investigation + code reading. No mistake involved.
+
+**Prevention:** Not applicable (not a mistake).
+
+**Lessons captured for future sessions:**
+1. **Direct DB queries surface drift that code-reading alone can't.** The P3-F7 two-sub-group split of ghosts was only visible from the DB cross-reference (49 with topic + 25 without) — pointed directly to two distinct mechanisms. Hybrid analysis (DB + code) is more powerful than either alone. Validates the 2026-04-20 decision to make direct-DB-querying standard practice.
+2. **Architectural pattern named: "multi-mode write paths to a single logical concept always drift without reconciliation."** `Keyword.sortingStatus` vs `CanvasNode.linkedKwIds` is one instance. This pattern will recur in: (a) Phase 2 worker-concurrency work on shared canvas state; (b) any future multi-mode AI tool (e.g., Mode A + Mode B + Human-in-Loop mode all writing to the same canvas — the Session 1 2026-04-20 "Mode B can silently overwrite Mode A" finding is exactly this pattern). Design guidance: either single source of truth, or explicit reconciliation pass, or per-action provenance that makes drift visible + recoverable. Recorded in `KEYWORD_CLUSTERING_ACTIVE.md` POST-SESSION-2 STATE block for future reference.
+3. **Director's root-cause-first + reconciliation-as-backup philosophy** is now standing guidance for multi-source-of-truth bugs. Don't patch the symptom alone — fix the root cause (the WHY) AND add reconciliation as a safety net for anything that slips through.
+
+**Meta-procedural note:** Claude's first framing of the follow-up questions (asking director to "react to" diagnoses without concrete pickable options) was too vague — director asked "What are you asking me?" Claude reframed with proper Rule 20 per-option context + escape hatch + free-text invitation. Correction was inline + conversational, not escalated — noting here for future sessions to apply Rule 20 to reaction-solicitation moments, not just decision points.
+
+---
 
 ### 2026-04-20 — 51-batch Bursitis run narration + analysis: reactive switch fired at batch 40, Mode B carried batches 40-51 cleanly, batch 52 Mode B "Lost 6" core keywords including "bursa" (informational)
 **Session:** session_2026-04-20_phase1g-test-followup-part3 (Claude Code)

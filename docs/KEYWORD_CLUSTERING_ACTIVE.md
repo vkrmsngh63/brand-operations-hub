@@ -1,9 +1,10 @@
 # KEYWORD CLUSTERING — ACTIVE DOCUMENT
 ## Current state of the Keyword Clustering workflow tool (Group B, tool-specific)
 
-**Last updated:** April 20, 2026 (Phase 1g-test follow-up Part 3 — full 51-batch Bursitis run analyzed end-to-end; Mode A qualitatively superior per director's direct assessment; Mode B can silently overwrite Mode A's better work identified as first-order problem; batch 52 Mode B "Lost 6" foundational keywords including "bursa"; massive design session covering Changes Ledger, Human-in-Loop first-class mode, cross-platform Feedback Repository, stability scoring algorithm, stable topic IDs, homograph/Irrelevant-Keywords handling, Pending Deletion region, comprehensiveness verification, cross-canvas consolidation, cost ledger with manual entry, model registry, multi-trigger safety nets, and a 15+ session execution plan)
-**Last updated in session:** session_2026-04-20_phase1g-test-followup-part3 (Claude Code)
-**Previously updated in session:** session_2026-04-19_phase1g-test-followup-part2 (Claude Code)
+**Last updated:** April 24, 2026 (Phase 1g-test follow-up Part 3 — Session 2 — investigations-only; first direct DB queries against live Bursitis canvas; P3-F7 root cause identified as two-way status/canvas sync drift; Removed Terms display bug root cause identified; fix directions agreed with director for both; P3-F8 layout regression + Task 5 prompt changes review rolled to Session 2b or Session 3; docs-only commit, no code)
+**Last updated in session:** session_2026-04-24_phase1g-test-followup-part3-session2 (Claude Code)
+**Previously updated in session:** session_2026-04-20_phase1g-test-followup-part3 (Claude Code)
+**Previously updated in session (earlier):** session_2026-04-19_phase1g-test-followup-part2 (Claude Code)
 **Previously updated (claude.ai era):** https://claude.ai/chat/fc8025bf-551a-4b3c-8483-ec6d8ed9e33c
 
 **Purpose:** This is the working document for the Keyword Clustering tool during its active development phase. Covers everything built so far, what's pending, technical details, and known issues.
@@ -14,7 +15,108 @@
 
 ---
 
-## ⚠️ POST-PHASE-1G-TEST-FOLLOWUP-PART-3 STATE (READ FIRST — updated 2026-04-20 session)
+## ⚠️ POST-SESSION-2 STATE (READ FIRST — updated 2026-04-24 session)
+
+**As of 2026-04-24 (Phase 1g-test follow-up Part 3 — Session 2 — INVESTIGATIONS ONLY, no code commits; first direct DB queries against live Bursitis canvas; P3-F7 and Removed Terms root causes diagnosed; P3-F8 layout + Task 5 prompt review rolled forward to Session 2b or Session 3):**
+
+### DB access verified + first queries run
+- `DATABASE_URL` + `DIRECT_URL` confirmed in `.env.local` (Supabase pooler + direct connection). Prisma client queries succeed against live Bursitis data. Direct DB querying now engaged as standard practice per director's 2026-04-20 instruction.
+- Four read-only queries run jointly with director: project list → baseline counts → full canvas tree walk → P3-F7 diagnostic (sum linked keywords vs AI-Sorted DB count, cross-reference to find drift).
+
+### Bursitis canvas DB snapshot — 2026-04-24
+- `Project` "Bursitis" id `6a6bd586-e873-4bae-a4a3-2612236dc270`, userId `3261bf98-3d77-413e-9de2-01e612fc753a`. `ProjectWorkflow` id `816f5de1-0356-4fe3-80de-de69a64f49dc`, status `active`, lastActivityAt `2026-04-20T03:30:41Z`.
+- **Keywords: 2,328 total** (matches original import count per CORRECTIONS_LOG 2026-04-18 entry — confirms prior "remove from AST" action did NOT hard-delete any Keyword rows, even though the code path IS capable of hard-delete). Split: 238 AI-Sorted + 2,090 Unsorted. No other sortingStatus values exist.
+- **CanvasNodes: 104.** Max `CanvasNode.id = 104`. Tree: 1 depth-0 root + 8 depth-1 + 22 depth-2 + 41 depth-3 + 27 depth-4 + 5 depth-5. Tree well-formed (all nodes chain to root; zero orphans).
+- **Pathway: 1. SisterLink: 1,360.**
+- 🚩 **`CanvasState.nextNodeId = 5` despite max CanvasNode.id = 104** — stale counter. New-node creation via this counter would collide with existing IDs. Flagged for Session 3 triage.
+
+### Qualitative structural observations from tree walk
+- Root `[1] "What is bursitis?"` with 8 depth-1 narrative-bridge children.
+- 🚨 **HIP bursitis topics misplaced under KNEE parent:** `[4] "What causes bursitis in the knee?"` (itself under `[9] Knee bursitis`) contains `[5] Trochanteric bursitis`, `[28] Iliopsoas bursitis`, `[29] How is hip bursitis diagnosed?`, `[34] What is the hip bursa?`, `[57] What causes bursitis in the hip?` as children. All HIP topics. Direct fingerprint of P3-F2 silent-reshuffling at work.
+- `[3] "Where does bursitis occur?"` — depth-1 bridge node with 0 keywords + 0 placements, but parent of every body-part subtree. Possibly intentional narrative bridging; possibly post-merge orphan. TBD by director.
+- `[21] "Who does bursitis affect?"` has only one child: `[22] "How bursitis affects women differently"` (3 secondaries, 0 primaries). Director's bursitis-pain-in-older-women example expects an age-demographic sibling (e.g., "How bursitis affects older people"). The sibling does NOT exist — direct P3-F5 evidence of under-placement.
+- Aggregate duplication: separate "Treating [body part] bursitis" chains for 7 body parts + separate "Exercises for [body part] bursitis" chains for 4 — consistent with lack of tie-breaker rule (P3-F1). ~45 of 104 nodes are singleton `kw=1` — suggests over-specificity for many topics.
+- Secondary-placement coverage: only 56 placement slots across 51 distinct keywords vs 222 primaries = ~25% secondary-coverage rate. Confirms P3-F5 under-placement pressure.
+
+### P3-F7 diagnosis — TWO-WAY sync drift (root cause identified)
+
+**Architectural root:** two separate sources of truth for "keyword is placed" — `Keyword.sortingStatus` (updated by `doApply` step 11) and `CanvasNode.linkedKwIds` / `kwPlacements` (updated by `doApply` step 3's canvas rebuild). Updates are one-directional (status only gets ADDED as AI-Sorted, never REMOVED). No reconciliation pass. Drift accumulates batch-by-batch.
+
+**Bug 1 — Silent Placements (58 kw, all on canvas as [p] primary but `sortingStatus='Unsorted'`):**
+`doApply` step 11 at `AutoAnalyze.tsx` line 1179 iterates ONLY `batch.keywordIds` when marking AI-Sorted:
+```
+for (const id of batch.keywordIds) { if (allLinkedIds.has(id)) placed.push(id); }
+if (placed.length > 0) onBatchUpdateKeywords(placed.map(id => ({ id, sortingStatus: 'AI-Sorted' })));
+```
+Step 9 (lines 1147–1165) updates `Keyword.topic` for EVERY keyword matching any text in the AI's response, regardless of batch. When Mode A's full-table view places prior-batch keywords as [p] primary in later batches' responses, step 9 fires (topic updated + canvasLoc set) but step 11 does NOT fire (keyword not in this batch's input IDs) → silent placement.
+
+**Bug 2 — Ghost AI-Sorted (74 kw, two sub-groups):**
+- **Sub-group 1 (49 kw with non-empty topic + canvasLoc — "reshuffle casualties"):** Keyword was correctly placed in an earlier batch (step 9 set topic; step 11 set status). A later batch's canvas rebuild removed the keyword from canvas. Step 11 only ADDS to AI-Sorted — never REMOVES. Stale AI-Sorted status persists. Topic/canvasLoc strings survive intact because step 9's `existingTopics.push` only appends.
+- **Sub-group 2 (25 kw with empty topic + empty canvasLoc — "linkedKwIds carryover"):** `doApply` line 1003 fallback: `linkedKwIds: linkedIds.length > 0 ? linkedIds : (existing?.linkedKwIds || [])`. When the AI's response has empty `kwRaw` for a node, the node inherits linkedKwIds from its pre-existing state. Inherited keywords flow into `allLinkedIds` at step 11 → marked AI-Sorted if in batch.keywordIds → step 9 never touched them (not in parsed response text) → resulting state is AI-Sorted with blank topic, no canvasLoc, no canvas presence after next rebuild.
+
+### P3-F7 fix direction (agreed with director 2026-04-24 — Session 3 scope)
+
+Per director's framing — *"Whatever fix we apply here should be a backup to that primary fix"* — two-part fix:
+
+**Primary stack (root-cause fixes, Sessions 3–6, mostly already in the plan):**
+- Salvage-ignored-keywords mechanism (`AUTO_ANALYZE_PROMPT_V2_PROPOSED_CHANGES.md` Change 6). Targeted second prompt for "Missing" (same-batch) keywords; full-batch retry for "Lost" (prior-work-erased) keywords.
+- Prompt changes: tie-breaker "default to existing topic" (Change 1), comprehensiveness verification Step 4b (Change 3), multi-placement reinforcement (Change 5).
+- Stable topic IDs (Session 5). Renames stop masquerading as "new topics"; prompt output contract uses explicit `RENAME` / `MERGE` / `SPLIT` / `DELETE` row types.
+- Stability scoring friction gradient (Session 5). `JUSTIFY_RESTRUCTURE` payload required for modifications to high-confidence topics.
+- Changes Ledger (Session 4). Admin-visible per-batch change log with provenance; enables admin to see exactly what reshuffled and reject.
+
+**Backup safety net (Session 3, NEW this session):**
+Post-batch reconciliation pass in `doApply` after step 11. Compute `trueCanvasKeywordIds` from rebuilt canvas. For each Keyword:
+- (a) On canvas AND `sortingStatus === 'Unsorted'` → flip to `'AI-Sorted'` (fixes Bug 1; heals drift from Sub-group 1 reappearances).
+- (b) Off canvas AND `sortingStatus === 'AI-Sorted'` → flip to `'Unsorted'` (aggressive) OR to new status `'Reshuffled'` (conservative — preserves history + alerts admin). Final decision deferred to Session 3 implementation review.
+- Every flip logged to activity log + future Changes Ledger.
+
+### Removed Terms display bug — root cause diagnosed
+
+`ASTTable.tsx` line 116: `const [removedTerms, setRemovedTerms] = useState<RemovedKeyword[]>([])` — no localStorage load, no DB fetch. `handleRemove` (line 252) calls `onBulkDelete` / `onDeleteKeyword` which HARD-DELETE the Keyword row via `prisma.keyword.deleteMany` at `/api/projects/[projectId]/keywords` DELETE endpoint. Archive entry written only to in-memory state. Page refresh resets state to `[]`; hard-deleted Keyword row is gone forever, no restore path.
+
+Director's prior-session remove action didn't actually delete anything (DB still shows 2,328 kw = original import count; zero orphan canvas refs). The click evidently never fired the API call (modal aborted / network error / UI-state mismatch / confirmation not reached). But the wiring IS capable of permanent deletion — future remove clicks would silently lose data if they succeeded.
+
+### Removed Terms fix direction (agreed with director 2026-04-24 — Option B, Session 3 scope)
+
+New `RemovedKeyword` table scoped to `ProjectWorkflow`. Schema:
+- `id` uuid, `projectWorkflowId` FK → ProjectWorkflow
+- `keyword`, `volume`, `tags` — archived from original Keyword row
+- `topic`, `canvasLoc` (Json) — last-known placement state at time of removal (useful for context + restore-with-history)
+- `removedAt` DateTime, `removedBy` userId, `createdAt` DateTime
+- `removedSource` string enum: `'manual'` or `'auto-ai-detected-irrelevant'`
+- `aiReasoning` text (nullable) — populated only when `removedSource = 'auto-ai-detected-irrelevant'`; stores the model's rationale for flagging as irrelevant
+
+Remove action = transaction: (1) copy Keyword row data to `RemovedKeyword`, (2) delete Keyword row. Restore = reverse. `ASTTable.tsx` `removedTerms` state replaced with DB-backed fetch. Modal UI filters / badges by `removedSource` so admin can distinguish manual vs AI-auto removal.
+
+**Forward-looking:** `removedSource` + `aiReasoning` fields support the future Auto-Remove Irrelevant Terms button feature (which remains DEFERRED per director's explicit instruction — not to be programmed without director-provided specifics on the AI flow).
+
+### Session 2 scope — partial completion
+
+**✅ DONE this session:**
+- DB access verification + first direct Bursitis canvas queries (4 queries total).
+- P3-F7 code investigation (read `AutoAnalyze.tsx` batching + `doApply` steps 3/9/11, `api/.../keywords/route.ts`, `api/.../canvas/rebuild/route.ts`). Root cause + fix direction agreed.
+- Removed Terms display bug investigation (read `ASTTable.tsx` state init + `handleRemove`/`handleRestore`). Root cause + fix direction agreed.
+
+**🎯 ROLLED to Session 2b or Session 3:**
+- P3-F8 canvas layout regression diagnostic — compare `keyword_sorting_tool_v18.html` (present at repo root, uncommitted — director's upload; remains untracked until the session that actually investigates it per Option A clean-split) to React `resolveOverlap` at `CanvasPanel.tsx`.
+- Task 5 — draft proposed prompt changes from `AUTO_ANALYZE_PROMPT_V2_PROPOSED_CHANGES.md` with exact final wording for director review.
+
+### Additional findings flagged for Session 3 triage
+- `CanvasState.nextNodeId = 5` stale counter (see above). Investigate how new CanvasNode IDs are actually assigned; either repair the counter or confirm it's unused + remove.
+- SisterLink count 1,360 across 104 nodes (~25% of all possible node-pairs). Possibly legitimate multi-placement density, possibly duplicates. Not investigated this session; spot-check worth scheduling.
+
+### Director's explicit instructions preserved for Session 3+
+- **NEW 2026-04-24:** For ALL multi-source-of-truth bugs, apply reconciliation as safety net ON TOP OF the primary fix that addresses the root cause — not as the only fix. Root-cause-first, reconciliation-as-backup.
+- **NEW 2026-04-24:** The Removed Terms table must distinguish manual-removed vs AI-auto-removed entries in the UI once Auto-Remove ships.
+- **Preserved from 2026-04-20:** Auto-Remove Irrelevant Terms button — DO NOT program without explicit director prompt + specifics.
+- **Preserved from 2026-04-20:** Direct DB querying is standard practice — engage whenever analyzing runs.
+- **Preserved from 2026-04-20:** Ask for parallel-chat workflow-fundamentals conclusions at or before Session 5.
+- **Preserved from 2026-04-20:** Stay lucid — pause for fresh session rather than pushing through fatigue.
+
+---
+
+## ⚠️ POST-PHASE-1G-TEST-FOLLOWUP-PART-3 STATE (READ SECOND — updated 2026-04-20 session)
 
 **As of 2026-04-20 (Phase 1g-test follow-up Part 3 Claude Code session — design work only, NO code commits; director confirmed Mode A qualitative superiority; Mode B can silently overwrite Mode A's work identified as first-order problem):**
 
