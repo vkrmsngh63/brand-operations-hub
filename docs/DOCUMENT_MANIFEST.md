@@ -1,9 +1,10 @@
 # DOCUMENT MANIFEST
 ## Ground-truth registry of every handoff document in the PLOS system
 
-**Last updated:** April 24, 2026 (Phase 1g-test follow-up Part 3 — Session 2b — investigations-only continuation of Session 2; P3-F8 canvas-layout regression diagnosed + Task 5 prompt review complete; 6 docs updated + `keyword_sorting_tool_v18.html` transitions from untracked to tracked per Option A clean-split timing; no new docs; NO code commits)
-**Last updated in session:** session_2026-04-24_phase1g-test-followup-part3-session2b (Claude Code)
-**Previously updated in session:** session_2026-04-24_phase1g-test-followup-part3-session2 (Claude Code)
+**Last updated:** April 24, 2026 (Phase 1g-test follow-up Part 3 — Session 3a — first code-write session of Part 3; 5 of 9 Session 3 items shipped + deployed (commit `25811c3` pushed); Prisma schema gains `RemovedKeyword` model (live migration applied with director approval); 2 new API routes for soft-archive + restore; 6 docs updated; no new docs)
+**Last updated in session:** session_2026-04-24_phase1g-test-followup-part3-session3a (Claude Code)
+**Previously updated in session:** session_2026-04-24_phase1g-test-followup-part3-session2b (Claude Code)
+**Previously updated in session (earlier):** session_2026-04-24_phase1g-test-followup-part3-session2 (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-20_phase1g-test-followup-part3 (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-19_phase1g-test-followup-part2 (Claude Code)
 **Previously updated (claude.ai era):** https://claude.ai/chat/75cc8985-b70a-49f4-8b64-444c34ef541f
@@ -23,34 +24,38 @@ These 13 documents form the persistent handoff context.
 | # | Document | Purpose | Last modified | Modified this session? |
 |---|---|---|---|---|
 | 1 | `PROJECT_CONTEXT.md` | Big-picture project context, philosophy, methodology, discover-as-you-build approach | 2026-04-17 | NO |
-| 2 | `PLATFORM_ARCHITECTURE.md` | Technical architecture — routes, schema, auth, file structure, tech debt | 2026-04-17 | NO |
+| 2 | `PLATFORM_ARCHITECTURE.md` | Technical architecture — routes, schema, auth, file structure, tech debt | 2026-04-24 (Session 3a — schema gains `RemovedKeyword` model; routes table gains 2 new soft-archive endpoints; canvas GET endpoint behavior note for self-heal-on-read) | ✅ YES |
 | 3 | `PLATFORM_REQUIREMENTS.md` | Platform-wide requirements — scale, user-model, review cycle, audit, concurrency, phasing | 2026-04-17 | NO |
 | 4 | `NAVIGATION_MAP.md` | Every route + click path through PLOS — UI navigation source of truth | 2026-04-17 | NO |
-| 5 | `DATA_CATALOG.md` | Every data item — where it lives, Human Reference Language, cross-workflow sharing contracts | 2026-04-18 | NO |
-| 6 | `ROADMAP.md` | Development execution plan — completed work + remaining phases | 2026-04-24 (Session 2b — P3-F8 finding updated with diagnosis outcome + Q1/Q2/Q3-driven fix direction; Session 2b block marked ✅ DONE; Session 3 scope expanded with 4-function canvas-layout port (`calcNodeHeight` + `runLayoutPass` + `autoLayoutChild` + pathway separation); Session 6 block updated with Q4/Q5/Q6-driven prompt-merge prerequisites + Stability Score Primer updates list) | ✅ YES |
-| 7 | `CORRECTIONS_LOG.md` | Append-only log of mistakes + extracted patterns | 2026-04-24 (Session 2b — 1 new informational entry on P3-F8 diagnosis + Task 5 prompt-review outcomes; architectural pattern "React migrations can port rendering without porting the layout/interaction engine" captured for future React-port work; "line-reference drift is real + cheap to verify" + "math bugs in model-prompts are high-leverage to catch pre-merge" lessons captured) | ✅ YES |
-| 8 | `CHAT_REGISTRY.md` | Chronological log of chats + URLs + work-summaries (post-Ckpt-9: Claude Code sessions use session-identifier format) | 2026-04-24 (Session 2b — new row for session_2026-04-24_phase1g-test-followup-part3-session2b) | ✅ YES |
+| 5 | `DATA_CATALOG.md` | Every data item — where it lives, Human Reference Language, cross-workflow sharing contracts | 2026-04-24 (Session 3a — §5.8 Auto-Analyze settings now DB-backed via UserPreference + apiKey-localStorage split; §5.10 Removed Terms migrated to new `RemovedKeyword` DB table) | ✅ YES |
+| 6 | `ROADMAP.md` | Development execution plan — completed work + remaining phases | 2026-04-24 (Session 3a — Session 3a block marked ✅ DONE with 5 items shipped; Session 3b block defines remaining 3 items (#1 reconciliation, #2 salvage, #4 P3-F8 layout port); cleanup TODO captured for the now-dead /keywords DELETE endpoint) | ✅ YES |
+| 7 | `CORRECTIONS_LOG.md` | Append-only log of mistakes + extracted patterns | 2026-04-24 (Session 3a — 1 new informational entry on Session 3a code shipping; zero mistakes; two new architectural patterns captured: "self-heal on read for stale persistent counters" + "split-secret-from-shared-prefs for sensitive UserPreference fields"; two autonomous design calls flagged for director review) | ✅ YES |
+| 8 | `CHAT_REGISTRY.md` | Chronological log of chats + URLs + work-summaries (post-Ckpt-9: Claude Code sessions use session-identifier format) | 2026-04-24 (Session 3a — new row for session_2026-04-24_phase1g-test-followup-part3-session3a) | ✅ YES |
 | 9 | `HANDOFF_PROTOCOL.md` | Rules for how chats operate — start/mid/end protocols, communication rules, interview rules | 2026-04-18 | NO |
 | 10 | `DOCUMENTATION_ARCHITECTURE.md` | Design of the doc-system itself (DLMS, tool graduation, group A/B, workflow interview pattern, Claude Code migration) | 2026-04-17 | NO |
 | 11 | `NEW_CHAT_PROMPT.md` | **Historical** — claude.ai era briefing template. Post-Phase-M, Claude Code sessions use `CLAUDE_CODE_STARTER.md` instead. | 2026-04-17 | NO |
-| 12 | `DOCUMENT_MANIFEST.md` | This file — ground-truth doc registry | 2026-04-24 (Session 2b — timestamps + modified flags + HTML tool transitions from untracked to tracked) | ✅ YES |
+| 12 | `DOCUMENT_MANIFEST.md` | This file — ground-truth doc registry | 2026-04-24 (Session 3a — timestamps + modified flags) | ✅ YES |
 | 13 | `CLAUDE_CODE_MIGRATION.md` | Migration plan and operational rules for shifting from claude.ai to Claude Code. Executed successfully in Ckpt 9+9.5. | 2026-04-17 | NO |
 | 14 | `AI_TOOL_FEEDBACK_PROTOCOL.md` | **NEW 2026-04-20** — Platform-wide standard for every AI-using tool in PLOS. Defines required integration points (structured decision output with reasoning, admin review surface with 3 actions + 2 feedback channels, feedback-repo write/read-back, quality scoring, model/provider registry), 3-phase implementation roll-out, and the primer text to include in every new workflow's design doc. | 2026-04-20 (this session — NEW) | ✅ NEW |
 | 15 | `MODEL_QUALITY_SCORING.md` | **NEW 2026-04-20** — Stability-score algorithm spec. Defines 0-10 stability_score per AI output item, factors that add/subtract to score, model's interpretation instructions, JUSTIFY_RESTRUCTURE payload requirement for high-score modifications, admin scoring guidelines (1-5 scale with 4 evaluation dimensions), meta-note on how algorithm was derived + review triggers + how to propose weight changes. | 2026-04-20 (this session — NEW) | ✅ NEW |
 
-**Group A count: 15 documents.** 4 modified this session (ROADMAP, CORRECTIONS_LOG, CHAT_REGISTRY, DOCUMENT_MANIFEST). No new Group A docs created this session. The 11 not-modified Group A docs retain their timestamps from prior sessions.
+**Group A count: 15 documents.** 6 modified this session (PLATFORM_ARCHITECTURE, DATA_CATALOG, ROADMAP, CORRECTIONS_LOG, CHAT_REGISTRY, DOCUMENT_MANIFEST). No new Group A docs created this session. The 9 not-modified Group A docs retain their timestamps from prior sessions.
 
-**Not created this session:** no new docs. `AUTO_ANALYZE_PROMPT_V2_PROPOSED_CHANGES.md` (interim doc created 2026-04-20) was UPDATED this session with the Session 2b refinements + Q4/Q5/Q6 resolutions baked in — now locked for mechanical Session 6 merge.
+**Not created this session:** no new docs. `AUTO_ANALYZE_PROMPT_V2_PROPOSED_CHANGES.md` remains locked for Session 6 mechanical merge (no further changes needed).
 
 **Also modified this session (non-Group-A):**
-- `KEYWORD_CLUSTERING_ACTIVE.md` (Group B) — New POST-SESSION-2b STATE block added above the POST-SESSION-2 block (which is preserved for history). Contains: P3-F8 four-job gap diagnosis vs React layout surface, Q1/Q2/Q3 lockdowns for Session 3 scope, Task 5 prompt-review refinements (Change 3 math redraft, Change 2/4/5 polish), Q4/Q5/Q6 design-question resolutions, Session 3 cumulative scope (9 items from Sessions 2 + 2b), Session 6 mechanical-merge prerequisites, director's new standing instructions preserved for Session 3+.
-- `AUTO_ANALYZE_PROMPT_V2_PROPOSED_CHANGES.md` (interim working doc) — Added new "SESSION 2b REVIEW OUTCOMES" section at top containing: verified-zero-drift base commit hash (`27eb180`); Change 3 redrafted body + worked example; Change 2 Loc 1 and Loc 2 final wording with Q4 additions; Change 4 6-field payload + Q4-cross-reference sentence + Q6 TSV-column opener; Change 5 polished example labels; Change 6 Q5-aware salvage template + DELTA ROWS 10th-column update + Lost-vs-Missing note; Topics Layout Table Primer updates (column definition + parsing rule 12 + constraint rule 16 + 10-column OUTPUT FORMAT + one-decimal float output rule + Step 3 bullet + intro paragraph tweak + HOW TO READ parenthetical).
+- `KEYWORD_CLUSTERING_ACTIVE.md` (Group B) — New POST-SESSION-3a STATE block added above the POST-SESSION-2b block (which is preserved for history). Contains: director-approved 3a/3b split rationale; what shipped (5 items with implementation detail); what did NOT change (3 deferred items + standing deferrals); two autonomous design calls flagged for director review; updated standing instructions for Session 3b+. Header timestamp updated.
 
-**Newly tracked file this session (non-doc):**
-- `keyword_sorting_tool_v18.html` at repo root — transitions from untracked to tracked per Option A clean-split timing. This is the session that actually used it (P3-F8 diagnostic read layout code from this file). 17,725 lines; director's original HTML tool that preceded the React migration.
+**Code changes this session (src/ + prisma/):**
+- `prisma/schema.prisma` — added `RemovedKeyword` model + back-reference on `ProjectWorkflow`. Live migration applied via `npx prisma db push` with director's Rule-8 approval.
+- `src/app/api/projects/[projectId]/canvas/route.ts` — GET endpoint self-heals stale `nextNodeId`/`nextPathwayId` on read.
+- `src/app/api/projects/[projectId]/removed-keywords/route.ts` — NEW. GET (list) + POST (transactional soft-archive).
+- `src/app/api/projects/[projectId]/removed-keywords/[removedId]/restore/route.ts` — NEW. POST (transactional reverse).
+- `src/app/projects/[projectId]/keyword-clustering/components/AutoAnalyze.tsx` — model dropdown gets Opus 4.7; cost tracker counts failed-attempt costs; settings persistence (load + debounced save) with apiKey-localStorage / others-DB split.
+- `src/app/projects/[projectId]/keyword-clustering/components/ASTTable.tsx` — local removedTerms state removed; props change (drop `onBulkDelete`/`onDeleteKeyword`, add `removedKeywords`/`onSoftArchive`/`onRestoreRemoved`); modal gains Source column.
+- `src/app/projects/[projectId]/keyword-clustering/components/KeywordWorkspace.tsx` — owns `removedKeywords` state + soft-archive/restore HTTP plumbing; passes new props to ASTTable.
 
-**Code changes this session (src/):**
-- **NONE.** Session 2b was investigations-only per session plan.
+**Single commit:** `25811c3`. Pushed to origin/main; Vercel redeploy underway. Three commits unpushed at session start (`fe9cc07`, `cbda73b`, `25811c3`) all went out together.
 
 ---
 

@@ -1,8 +1,9 @@
 # PLATFORM ARCHITECTURE
 ## Technical architecture of the Product Launch Operating System (PLOS)
 
-**Last updated:** April 17, 2026 (Phase M COMPLETE — Ckpts 9 + 9.5 deployed to vklf.com; `/docs/` setup done; `.bak` cleanup done; `/projects/[projectId]/page.tsx` built for the first time in Ckpt 9.5)
-**Last updated in chat:** https://claude.ai/chat/75cc8985-b70a-49f4-8b64-444c34ef541f
+**Last updated:** April 24, 2026 (Phase 1g-test follow-up Part 3 — Session 3a — schema gains new `RemovedKeyword` model (FK to ProjectWorkflow) for soft-archive flow; two new API routes `GET/POST /api/projects/[projectId]/removed-keywords` and `POST .../[removedId]/restore`; canvas GET endpoint now self-heals stale `nextNodeId`/`nextPathwayId` on read)
+**Last updated in chat:** session_2026-04-24_phase1g-test-followup-part3-session3a (Claude Code)
+**Previously updated:** April 17, 2026 (Phase M COMPLETE — Ckpts 9 + 9.5 deployed)
 
 **Purpose:** Defines the technical structure of the platform — routes, database schema, authentication, shared systems, file organization. Loaded in every chat as part of Group A.
 
@@ -144,6 +145,8 @@
 | `/api/project-workflows/[projectId]/[workflow]` | GET / PATCH | Read / update single workspace status (auto-creates row on first peek, manual active/completed toggle) | `verifyProjectAuth` + ensureProjectWorkflow |
 | `/api/projects/[projectId]/keywords` | GET / POST / PATCH / DELETE | Keywords CRUD — uses projectWorkflowId internally | `verifyProjectWorkflowAuth("keyword-clustering")` |
 | `/api/projects/[projectId]/keywords/[keywordId]` | PATCH / DELETE | Single keyword update/delete | `verifyProjectWorkflowAuth("keyword-clustering")` |
+| `/api/projects/[projectId]/removed-keywords` | GET / POST | List soft-archived keywords / soft-archive (transactional copy-then-delete; body accepts `removedSource` + `aiReasoning`) | `verifyProjectWorkflowAuth("keyword-clustering")` |
+| `/api/projects/[projectId]/removed-keywords/[removedId]/restore` | POST | Reverse soft-archive (transactional re-create as Keyword + delete RemovedKeyword); 409 on text-collision | `verifyProjectWorkflowAuth("keyword-clustering")` |
 | `/api/projects/[projectId]/canvas` | GET / PATCH | Full canvas read / canvas state (viewport/counters) update | `verifyProjectWorkflowAuth("keyword-clustering")` |
 | `/api/projects/[projectId]/canvas/nodes` | GET / POST / PATCH / DELETE | Node CRUD (bulk PATCH transactional) | `verifyProjectWorkflowAuth("keyword-clustering")` |
 | `/api/projects/[projectId]/canvas/pathways` | POST / DELETE | Pathway create/delete | `verifyProjectWorkflowAuth("keyword-clustering")` |
@@ -271,9 +274,18 @@ model Keyword {
 // CanvasNode, Pathway, SisterLink, CanvasState — same pattern: projectWorkflowId FK
 // AdminNote, NoteAttachment, UserPreference — unchanged from pre-Phase M
 // (AdminNote.system enum expands to include "dashboard" and "plos" at the app level)
+
+// RemovedKeyword — NEW 2026-04-24 Session 3a. Soft-archive of keywords
+// removed from an AST table. Same projectWorkflowId FK pattern.
+// Fields: id, projectWorkflowId, originalKeywordId (nullable; audit only),
+// keyword, volume, sortingStatus, tags, topic, canvasLoc,
+// removedAt (DateTime @default(now())), removedBy (userId),
+// removedSource ("manual" | "auto-ai-detected-irrelevant"),
+// aiReasoning (nullable Text — model rationale for auto removals).
+// @@index([projectWorkflowId]). FK has onDelete: Cascade.
 ```
 
-For the complete file, see `prisma/schema.prisma` (206 lines).
+For the complete file, see `prisma/schema.prisma` (~240 lines as of Session 3a).
 
 ### 5.3 Schema evolution philosophy
 

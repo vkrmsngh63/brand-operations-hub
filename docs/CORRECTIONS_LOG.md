@@ -2,9 +2,10 @@
 ## Append-only record of mistakes made during chats and lessons learned
 
 **Started:** April 16, 2026
-**Last updated:** April 24, 2026 (Phase 1g-test follow-up Part 3 — Session 2b — 1 new informational entry on P3-F8 canvas-layout diagnosis + Task 5 prompt-review outcomes; zero mistakes this session; "ported rendering but not the layout engine" architectural pattern captured for future React-port work)
-**Last updated in session:** session_2026-04-24_phase1g-test-followup-part3-session2b (Claude Code)
-**Previously updated in session:** session_2026-04-24_phase1g-test-followup-part3-session2 (Claude Code)
+**Last updated:** April 24, 2026 (Phase 1g-test follow-up Part 3 — Session 3a — 1 new informational entry on Session 3a code shipping — 5 of 9 Session 3 items implemented + deployed; zero mistakes this session; "self-heal-on-read for stale persistent counters" pattern + "split-secret-from-shared-prefs for sensitive UserPreference fields" pattern captured for future tools)
+**Last updated in session:** session_2026-04-24_phase1g-test-followup-part3-session3a (Claude Code)
+**Previously updated in session:** session_2026-04-24_phase1g-test-followup-part3-session2b (Claude Code)
+**Previously updated in session (earlier):** session_2026-04-24_phase1g-test-followup-part3-session2 (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-20_phase1g-test-followup-part3 (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-19_phase1g-test-followup-part2 (Claude Code)
 **Previously updated (claude.ai era):** https://claude.ai/chat/75cc8985-b70a-49f4-8b64-444c34ef541f
@@ -37,6 +38,40 @@
 ---
 
 ## Entries
+
+### 2026-04-24c — Session 3a code shipped (5 of 9 Session 3 items, informational, autonomous design calls noted for director review)
+**Session:** session_2026-04-24_phase1g-test-followup-part3-session3a (Claude Code)
+**Tool/Phase affected:** Keyword Clustering / Auto-Analyze / ASTTable / Canvas / Phase 1g-test follow-up Part 3 — Session 3a
+**Severity:** Informational (clean code session, zero mistakes; logging design calls + patterns for future reference)
+
+**What happened:** Director approved a Session 3a / Session 3b split at session start. Session 3a shipped 5 smaller items — model dropdown (#6), nextNodeId stale-counter fix (#5), cost-tracker failed-attempt fix (#7), B1 settings persistence (#8), RemovedKeyword soft-archive flow (#3). Session 3b deferred for fresh-mind focus on the bigger items: P3-F7 reconciliation pass (#1), salvage mechanism (#2), and the four-function P3-F8 canvas-layout port (#4). Single commit `25811c3`; pushed and deployed to vklf.com.
+
+**DB migration applied to production Supabase:** added one new table `RemovedKeyword` (FK to `ProjectWorkflow`, indexed on `projectWorkflowId`). Pure additive — no existing data touched. Director gave explicit approval before `npx prisma db push` per Rule 8.
+
+**Two autonomous design calls (per Rule 15) flagged here for director review:**
+
+1. **Self-heal-on-read for `CanvasState.nextNodeId`.** Rather than diagnosing the exact write path that left Bursitis at `nextNodeId=5` vs `max(CanvasNode.id)=104`, the canvas GET endpoint now returns `max(stored_nextNodeId, max(CanvasNode.id) + 1)` and the same for pathways. Single source of truth at read time, immune to future stale writes, no migration required. **Why this design over hunt-the-bug:** the bug surfaces at most as ID collisions during new-node create, which only fires manually or during Auto-Analyze rebuild — both consume the GET output. Healing on read covers all callers in one place. Director can override by asking for a write-side fix later if a collision still surfaces.
+
+2. **`apiKey` stays in browser localStorage; all other Auto-Analyze settings sync via UserPreference DB.** Director asked for "settings persist across refresh." Two ways to do that: store everything in DB (simpler, syncs cross-device, exposes Anthropic API key in plain-text Postgres) OR split (apiKey local-only, others DB-synced). Picked the split because the cross-device benefit is small for a Phase-1 admin-solo project and the security exposure of a long-lived API key in plain-text DB is real. Director can override by asking for the merge-everything version — adding apiKey to the DB blob is one extra line. Documented at Director's review surface in handoff so override stays cheap.
+
+**One architectural pattern named (third in this Part-3 series):**
+
+3. **"Self-heal on read" for stale persistent counters.** When a counter value is written from many code paths and any one of them might leave it stale, fixing all the writers is fragile and incomplete. Computing the effective value at read time from the underlying data (`max(stored, observed_max + 1)`) is one place to fix and immune to future regressions. Generalizable to any monotonic counter the system has independent ground truth for. Recorded for future tools that build similar "next-id" counters.
+
+4. **"Split-secret-from-shared-prefs" for sensitive UserPreference fields.** When a user-preference key holds a long-lived secret (API key, OAuth refresh token), keeping it browser-local-only while other prefs sync to DB gives refresh-survival without DB-plaintext exposure. The pattern: one DB key for the structural prefs JSON; one localStorage key for the secret; same load-on-mount and debounced-save flow for both. Recorded for future AI-using tools that need user-supplied API keys.
+
+**How caught:** Planned Session-3a scope. No mistake.
+
+**Prevention:** Not applicable.
+
+**Lessons captured for future sessions:**
+1. The self-heal-on-read pattern (above) generalizes — should be the default approach when adding any counter that multiple code paths write to.
+2. The split-secret-from-shared-prefs pattern (above) becomes more important as more AI-using tools land — every new tool that takes a user API key should follow this.
+3. Session 3a / Session 3b split worked well. Both halves stayed within Rule 16 fatigue budgets. Recommend continuing the "split when in doubt" heuristic for any session with both DB schema work AND substantial code rewrites.
+
+**Meta-procedural note (positive):** Director approved the proposed split + the autonomous design calls without escalation, suggesting the pre-work framing (option-with-recommendation per Rule 14b, then "make recommendations comprehensive" override) worked as intended.
+
+---
 
 ### 2026-04-24b — P3-F8 canvas-layout diagnosed + Task 5 prompt-review refinements locked in (informational, Session 2b findings)
 **Session:** session_2026-04-24_phase1g-test-followup-part3-session2b (Claude Code)

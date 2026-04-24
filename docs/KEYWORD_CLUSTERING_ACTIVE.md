@@ -1,7 +1,7 @@
 # KEYWORD CLUSTERING — ACTIVE DOCUMENT
 ## Current state of the Keyword Clustering workflow tool (Group B, tool-specific)
 
-**Last updated:** April 24, 2026 (Phase 1g-test follow-up Part 3 — Session 2b — investigations-only continuation of Session 2; P3-F8 canvas-layout regression diagnosed — React migration ported rendering but dropped the HTML tool's four-job layout engine (content-driven height, holistic push-down pass, auto-layout-on-link, pathway separation); Session 3 P3-F8 scope locked in per director's Q1/Q2/Q3 answers (all four jobs ported together in one commit, layout pass runs after every Auto-Analyze batch, pathway separation included not deferred); Task 5 prompt review complete — all 7 proposed changes' line refs verified; Change 3 math bug fixed; Change 2/4/5 wording polish applied; Q4/Q5/Q6 design questions resolved — keyword-reassignment out of ≥7.0 topic requires JUSTIFY_RESTRUCTURE, salvage IRRELEVANT_KEYWORDS auto-archive to RemovedKeyword table, Stability Score added as 10th TSV column; `keyword_sorting_tool_v18.html` committed this session per Option A clean-split timing; docs-only commit, no code)
+**Last updated:** April 24, 2026 (Phase 1g-test follow-up Part 3 — Session 3a — first code-write session of Part 3; 5 of 9 Session 3 items shipped + deployed: model dropdown gets Opus 4.7 (#6), CanvasState.nextNodeId self-heals on read (#5), cost tracker counts failed-attempt costs (#7), Auto-Analyze settings persist via UserPreference + apiKey-in-localStorage split (#8), RemovedKeyword table + soft-archive flow + ASTTable rewrite (#3); Session 3b carries the 3 bigger items: P3-F7 reconciliation (#1), salvage mechanism (#2), four-function P3-F8 layout port (#4); commit `25811c3` pushed)
 **Last updated in session:** session_2026-04-24_phase1g-test-followup-part3-session2b (Claude Code)
 **Previously updated in session:** session_2026-04-24_phase1g-test-followup-part3-session2 (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-20_phase1g-test-followup-part3 (Claude Code)
@@ -16,7 +16,51 @@
 
 ---
 
-## ⚠️ POST-SESSION-2b STATE (READ FIRST — updated 2026-04-24 Session 2b)
+## ⚠️ POST-SESSION-3a STATE (READ FIRST — updated 2026-04-24 Session 3a)
+
+**As of 2026-04-24 Session 3a (Phase 1g-test follow-up Part 3 — Session 3a — first code-write session of Part 3; 5 of 9 Session 3 items shipped + deployed to vklf.com; Session 3b carries the 3 bigger items):**
+
+### Director-approved Session 3a / Session 3b split
+At session start, Claude proposed splitting the 9-item Session 3 scope across two sessions to avoid Rule-16 fatigue triggers (the canvas-layout port + reconciliation pass at end of a long session was the highest-risk combination). Director approved.
+
+- **Session 3a (today):** items #3 (RemovedKeyword soft-archive), #5 (nextNodeId), #6 (model dropdown), #7 (cost tracker), #8 (B1 settings persistence). All DB + UI + smaller code; no doApply rewrite, no canvas-layout port.
+- **Session 3b (next session):** items #1 (P3-F7 reconciliation pass), #2 (salvage mechanism — uses RemovedKeyword table built in 3a), #4 (P3-F8 four-function canvas-layout port).
+
+### What shipped this session
+1. **(#6) Opus 4.7 dropdown.** Added to `AA_PRICING` table + `<select>` in `AutoAnalyze.tsx`. Listed first; default unchanged (Sonnet 4.6); pricing $5/$25 placeholder until Model Registry. Haiku 4.5 was already in the dropdown (no change).
+2. **(#5) `CanvasState.nextNodeId` self-heal-on-read.** Modified `GET /api/projects/[projectId]/canvas` to return `max(stored_nextNodeId, max(CanvasNode.id) + 1)` and same for pathways. Two extra Prisma `aggregate` queries per canvas mount (cheap, not a hot path). Heals existing stale values (Bursitis 5 → 105) automatically on next read; immune to whatever future writes might re-stale the counter; no migration required.
+3. **(#7) Cost tracker — failed-attempt costs counted.** Cost-recording moved from after-validation-passes to immediately after `processBatch` returns. `batch.cost` accumulates across attempts (was overwritten before); per-attempt log line added; success log shows total-across-attempts. HC4/HC5 lost-data triggers, validation retries, and Mode A→B auto-switches all now reflect in `totalSpent`.
+4. **(#8) B1 settings persistence — split-secret design.** Auto-save 800ms debounced after any setting change; load on `AutoAnalyze` panel mount. **`apiKey`** stored in browser `localStorage` per-project (avoids storing the user's Anthropic secret in plain-text Postgres). All other settings (`model`, `apiMode`, `seedWords`, `volumeThreshold`, `batchSize`, `processingMode`, `thinkingMode`, `thinkingBudget`, `keywordScope`, `stallTimeout`, `reviewMode`, `initialPrompt`, `primerPrompt`) sync via existing `UserPreference` table per-user-per-project (cross-device). Director may override scoping at any time.
+5. **(#3) RemovedKeyword soft-archive flow.** Big one. New Prisma model `RemovedKeyword` (FK to `ProjectWorkflow`, `@@index([projectWorkflowId])`). Director approved `npx prisma db push` per Rule 8; pure additive migration applied to live Supabase. Two new API routes:
+   - `GET /api/projects/[projectId]/removed-keywords` — list, newest first.
+   - `POST /api/projects/[projectId]/removed-keywords` — body `{ keywordIds, removedSource?, aiReasoning? }`; transactionally copies each Keyword to RemovedKeyword + deletes original Keyword row. `removedSource` accepts `'manual'` (default; AST-table user click) or `'auto-ai-detected-irrelevant'` (forward-ready for Session-3b salvage writes per Q5).
+   - `POST /api/projects/[projectId]/removed-keywords/[removedId]/restore` — reverses the soft-archive. New Keyword gets a fresh id (the original id is gone); rejects with 409 if a keyword with the same text already exists in the workspace.
+   `ASTTable.tsx` rewired: removed local `useState<RemovedKeyword[]>([])` (the prior bug — local state, no DB persistence); `handleRemove` now calls `onSoftArchive` parent callback instead of the hard-delete `onBulkDelete`/`onDeleteKeyword`. Modal gains a **Source column** with badge: "Manual" (gray) or "AI auto" (accent color, with `aiReasoning` shown on title hover when present). `KeywordWorkspace.tsx` owns the `removedKeywords` state, fetches on mount, exposes `softArchiveKeywords` + `restoreRemovedKeyword` as the parent callbacks, drops the obsolete `bulkDelete`/`deleteKeyword` props from the ASTTable interface.
+
+### What did NOT change this session
+- `AutoAnalyze.tsx` `doApply` step 11 reconciliation logic — deferred to Session 3b (item #1).
+- The salvage follow-up prompt + tool-side IRRELEVANT_KEYWORDS handling — deferred to Session 3b (item #2).
+- The four-function canvas-layout port (`calcNodeHeight`, `runLayoutPass`, `autoLayoutChild`, pathway separation) — deferred to Session 3b (item #4). `NODE_H = 160` constant + the absent layout-pass after Auto-Analyze batches still in effect; layout regressions persist until Session 3b ships.
+- Stable topic IDs / stability scoring / Changes Ledger — Sessions 4-5+ as before.
+- Auto-Remove Irrelevant Terms BUTTON — still deferred per director's standing instruction; the salvage per-batch auto-archive is a different feature (per Q5) and ships in 3b.
+- Any prompt-text changes to `AUTO_ANALYZE_PROMPT_V2.md` — Session 6 mechanical merge.
+
+### Two autonomous design calls flagged for director review (per Rule 15 + the Session 2b/3a "be comprehensive, recommend rather than ask" override)
+
+These are documented in CORRECTIONS_LOG 2026-04-24c entry. Brief here for Session 3+ context:
+
+1. **Self-heal-on-read for stale persistent counters.** The nextNodeId fix returns the healed value at read time rather than diagnosing which write left it stale. Single source of truth, immune to future regressions, no migration. Pattern recorded for any similar counter the system grows.
+2. **Split-secret-from-shared-prefs scoping for B1.** apiKey stays in localStorage; everything else syncs via DB. Avoids long-lived plain-text secret exposure. Director may override at any time (one extra line to merge them into the DB blob).
+
+### Director's explicit instructions preserved for Session 3b+
+- **Carried from 2026-04-24 Session 2b:** Layout pass after every Auto-Analyze batch apply (Q1). Pathway separation in scope (Q2). Canvas layout ships as one-shot commit (Q3). Keyword reassignment out of ≥7.0 topic requires JUSTIFY_RESTRUCTURE (Q4). Salvage IRRELEVANT_KEYWORDS auto-archive ≠ Auto-Remove BUTTON (Q5). Stability Score is the 10th TSV column (Q6).
+- **Carried from 2026-04-24 Session 2:** Root-cause-first + reconciliation-as-backup philosophy. Removed Terms UI distinguishes manual vs AI-auto (✅ Source column shipped this session — currently shows only "Manual" until Session 3b's salvage starts populating "AI auto"). Direct DB queries are standard practice.
+- **Carried from 2026-04-20:** Do NOT program Auto-Remove Irrelevant Terms BUTTON without explicit director-provided specifics. Ask for parallel-chat workflow-fundamentals conclusions at or before Session 5. Stay lucid.
+- **NEW from 2026-04-24 Session 3a:** Two autonomous design choices await director review: self-heal-on-read for nextNodeId; apiKey in localStorage (others in DB). Director may override either in a follow-up session.
+
+---
+
+## ⚠️ POST-SESSION-2b STATE (READ SECOND — updated 2026-04-24 Session 2b)
 
 **As of 2026-04-24 Session 2b (Phase 1g-test follow-up Part 3 — Session 2b — finishes the two items Session 2 rolled forward: P3-F8 canvas-layout regression diagnostic + Task 5 prompt changes review; docs-only commit, no code):**
 

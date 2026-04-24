@@ -1,8 +1,9 @@
 # DATA CATALOG
 ## Master index of all data captured across the PLOS platform, with Human Reference Language
 
-**Last updated:** April 18, 2026 (Phase 1g-test partial — corrected §5.8 and §5.9 Auto-Analyze drift; keys claimed in prior versions do not exist in code)
-**Last updated in session:** session_2026-04-18_phase1g-test-kickoff (Claude Code)
+**Last updated:** April 24, 2026 (Phase 1g-test follow-up Part 3 — Session 3a — §5.8 Auto-Analyze settings now DB-backed (apiKey local; others UserPreference); §5.10 Removed Terms migrated from localStorage to new `RemovedKeyword` DB table)
+**Last updated in session:** session_2026-04-24_phase1g-test-followup-part3-session3a (Claude Code)
+**Previously updated:** April 18, 2026 (Phase 1g-test partial — corrected §5.8 and §5.9 Auto-Analyze drift)
 **Previously updated (claude.ai era):** https://claude.ai/chat/cc15409c-5000-4f4f-a5ce-a42784b5a94f
 
 **Purpose:** Bridge between user's natural language references and the code's technical names. Loaded every chat as Group A.
@@ -221,11 +222,13 @@ These data items are required for Phase 2 (multi-user infrastructure) per `PLATF
 - **TECHNICAL NAME:** `CanvasState` table (viewX, viewY, zoom, nextNodeId, nextPathwayId, projectWorkflowId unique)
 - **SHARED WITH:** N/A (UI state)
 
-### 5.8 Auto-Analyze config + prompts (ephemeral React state — **NOT persisted before a run starts**)
-- **HUMAN REF (PROVISIONAL):** "the auto-analyze settings" / "the AI prompts" / "the seed words"
-- **TECHNICAL REALITY (corrected 2026-04-18):** These settings (apiMode, apiKey, model, seedWords, thinking mode + budget, processingMode, stallTimeout, reviewMode, volumeThreshold, batchSize, keywordScope, initialPrompt, primerPrompt) live ONLY in React component state inside `AutoAnalyze.tsx` before a run begins. **No standalone localStorage keys exist** for any of these — prior versions of this catalog claimed keys like `kst_aa_apikey`, `kst_aa_model`, `kst_aa_initial_prompt`, `kst_aa_primer_prompt`; those do not exist in the codebase (grep-verified 2026-04-18, zero matches).
-- **After a run starts**, the `saveCheckpoint()` function bundles all settings into the `aa_checkpoint_{Project.id}` localStorage blob (see 5.9 below).
-- **Practical UX implication:** If the user opens the Auto-Analyze panel, pastes prompts, configures settings, and then closes the browser or reloads the page WITHOUT starting a run, everything is lost. Tracked as a Phase 1-polish item (persist settings to `UserPreference`).
+### 5.8 Auto-Analyze config + prompts (DB-backed via UserPreference + apiKey-in-localStorage split — fixed 2026-04-24 Session 3a)
+- **HUMAN REF:** "the auto-analyze settings" / "the AI prompts" / "the seed words" / "my Anthropic key"
+- **TECHNICAL REALITY (Session 3a):** Settings auto-save 800ms after any change in `AutoAnalyze.tsx` and load on panel mount. Two storage paths split for security:
+  - **`apiKey`** — browser `localStorage` key `aa_apikey_{projectId}`. Per-browser, per-project. Never sent to our DB to avoid storing the user's Anthropic secret in plain-text Postgres.
+  - **All other settings** (apiMode, model, seedWords, volumeThreshold, batchSize, processingMode, thinkingMode, thinkingBudget, keywordScope, stallTimeout, reviewMode, initialPrompt, primerPrompt) — single JSON blob stored in existing `UserPreference` table at key `aa_settings_{projectId}` via `PUT /api/user-preferences/aa_settings_{projectId}`. Per-user-per-project. Syncs across devices.
+- **Hydration on mount:** GET reads both paths in parallel; missing values fall back to hardcoded defaults; `settingsLoaded` flag prevents the auto-save useEffect from overwriting fresh-loaded values with stale React-default values during the initial render.
+- **HISTORY:** Pre-2026-04-24 was ephemeral React state — settings reset on every page refresh. Director's "Phase 1-polish: persist Auto-Analyze settings in UserPreference" item shipped this session.
 - **SHARED WITH:** N/A
 
 ### 5.9 Auto-Analyze checkpoint (localStorage)
@@ -235,10 +238,12 @@ These data items are required for Phase 2 (multi-user infrastructure) per `PLATF
 - **Lifecycle:** Created on first `saveCheckpoint()` call during a run; updated after each batch; cleared on ✕ Cancel (via `handleCancel()` → `clearCheckpoint()`); restored on ▶ Resume via `handleResumeCheckpoint()`.
 - **SHARED WITH:** N/A
 
-### 5.10 Removed Terms (localStorage — ⚠️ currently lost on refresh)
-- **HUMAN REF (PROVISIONAL):** "the removed terms" / "the archived keywords"
-- **TECHNICAL NAME:** localStorage key `kst_rm` (migration to DB pending Phase 1-persist)
-- **SHARED WITH:** TBD
+### 5.10 Removed Terms (DB-backed soft archive — fixed 2026-04-24 Session 3a)
+- **HUMAN REF:** "the removed terms" / "the archived keywords" / "the trash" (Modal labels them "🗑 Removed Terms")
+- **TECHNICAL NAME:** Prisma model `RemovedKeyword`. FK to `ProjectWorkflow`. Fields: `id, projectWorkflowId, originalKeywordId (nullable), keyword, volume, sortingStatus, tags, topic, canvasLoc, removedAt, removedBy (userId), removedSource ('manual' | 'auto-ai-detected-irrelevant'), aiReasoning (nullable Text)`. Read via `GET /api/projects/[projectId]/removed-keywords`; written via `POST .../removed-keywords` (transactional copy-then-delete) and `POST .../removed-keywords/[removedId]/restore` (transactional reverse).
+- **PERSISTENCE:** Database. Survives page refresh, syncs across devices (per-ProjectWorkflow scope).
+- **SHARED WITH:** Future Auto-Analyze salvage mechanism (Session 3b) writes here with `removedSource='auto-ai-detected-irrelevant'`. Future Auto-Remove BUTTON (deferred per director) would also write here.
+- **HISTORY:** Pre-2026-04-24 was localStorage-only (key `kst_rm`); UI showed an empty list on every page refresh and the underlying delete actually hard-deleted the Keyword row. Director caught the bug in Session 2; fix shipped Session 3a as Option B (per-ProjectWorkflow DB table).
 
 ### 5.11 Main Terms entries (localStorage — Phase 1-persist pending)
 - **HUMAN REF (PROVISIONAL):** "the main terms" / "the MT entries"
