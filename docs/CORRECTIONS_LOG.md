@@ -2,9 +2,10 @@
 ## Append-only record of mistakes made during chats and lessons learned
 
 **Started:** April 16, 2026
-**Last updated:** April 24, 2026 (Phase 1g-test follow-up Part 3 — Session 2 — 1 new informational entry on P3-F7 + Removed Terms root causes diagnosed via hybrid DB-query + code-read analysis; two-way sync drift architectural pattern named for Phase 2+ reference)
-**Last updated in session:** session_2026-04-24_phase1g-test-followup-part3-session2 (Claude Code)
-**Previously updated in session:** session_2026-04-20_phase1g-test-followup-part3 (Claude Code)
+**Last updated:** April 24, 2026 (Phase 1g-test follow-up Part 3 — Session 2b — 1 new informational entry on P3-F8 canvas-layout diagnosis + Task 5 prompt-review outcomes; zero mistakes this session; "ported rendering but not the layout engine" architectural pattern captured for future React-port work)
+**Last updated in session:** session_2026-04-24_phase1g-test-followup-part3-session2b (Claude Code)
+**Previously updated in session:** session_2026-04-24_phase1g-test-followup-part3-session2 (Claude Code)
+**Previously updated in session (earlier):** session_2026-04-20_phase1g-test-followup-part3 (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-19_phase1g-test-followup-part2 (Claude Code)
 **Previously updated (claude.ai era):** https://claude.ai/chat/75cc8985-b70a-49f4-8b64-444c34ef541f
 
@@ -36,6 +37,61 @@
 ---
 
 ## Entries
+
+### 2026-04-24b — P3-F8 canvas-layout diagnosed + Task 5 prompt-review refinements locked in (informational, Session 2b findings)
+**Session:** session_2026-04-24_phase1g-test-followup-part3-session2b (Claude Code)
+**Tool/Phase affected:** Keyword Clustering / CanvasPanel / Auto-Analyze prompts / Phase 1g-test follow-up Part 3 — Session 2b
+**Severity:** Informational (diagnostic findings + prompt-engineering review outcomes, not a mistake)
+
+**What happened:** Session 2b finished the two items Session 2 rolled forward — P3-F8 canvas-layout regression diagnostic and Task 5 proposed-prompt-changes review. Docs-only commit, no code.
+
+**P3-F8 findings — single architectural root, three user-visible regressions.** Compared `keyword_sorting_tool_v18.html` (17,725 lines — director's upload to repo root, previously untracked, committed this session per Option A clean-split timing) to React `CanvasPanel.tsx` layout surface. Grepped for layout-related function names in both. **Root cause:** the React port migrated canvas *rendering* (SVG node cards, connectors, drag, zoom, single-node overlap nudge via `resolveOverlap` at line 397) but did NOT port the HTML tool's four-job *layout engine*. The four missing jobs:
+
+1. **`cvsNodeH(node)` (HTML line 11965)** — content-driven node height using canvas `CanvasRenderingContext2D.measureText` for accurate text wrapping of title + altTitles + description at the node's current width, plus kw-row accounting and detail-view state. Called from 20+ callsites on content edit, resize, detail toggle, load. **React equivalent: NONE.** `NODE_H = 160` hardcoded constant; `h` loaded from DB and never recomputed. Direct cause of regression 2 (descriptions overflowing node boxes).
+
+2. **`cvsPushDownOverlaps()` (HTML line 14152)** — holistic 4-step pass: reset disconnected roots to baseY → tree-walk from roots via `layoutChildren` (type-aware nested vs linear placement) → 60-pass overlap resolution across all nodes sorted by y → pathway separation. Called after every structural change (node add/delete, parent-child link, content edit, resize, detail-view toggle). **React equivalent: NONE** — only the single-node `resolveOverlap(nodeId)` exists, fires on drag/resize only, does NOT fire after Auto-Analyze canvas rebuild. Direct cause of regression 1 (overlapping nodes after Auto-Analyze adds 80+ nodes per batch).
+
+3. **`cvsAutoLayoutChild(childNode, parentNode, relType)` (HTML line 14321)** — type-aware auto-positioning when a parent-child relationship is formed: linear = align child-left with parent-left, place below all peer descendants; nested = align child-left with parent-center-plus-indent, place below nested siblings only. **React equivalent: NONE.** Direct cause of regression 3 (wrong linear-vs-nested placement, wrong order).
+
+4. **`cvsSeparatePathways()` (HTML line 14251)** — horizontal push-apart for overlapping pathway borders. **React equivalent: NONE.**
+
+Bonus gap #5: **`baseY`/`y` separation** — HTML tracks user-set baseY distinct from current pushed y, so collapse/expand restores user-arranged positions cleanly. React has only `y`.
+
+**Director's Q1/Q2/Q3 resolutions for Session 3 P3-F8 port:**
+- Q1 (layout-pass frequency after Auto-Analyze) → **after every batch** (not just run-end). Keeps canvas clean during live human-in-loop review.
+- Q2 (include pathway separation in Session 3 scope, or defer) → **don't defer** (include). Bursitis is single-pathway but multi-pathway Projects will need it.
+- Q3 (one-shot port of all four functions together vs incremental) → **one-shot**. The four functions are interdependent (height feeds layout-pass; auto-layout-child feeds layout-pass); testing isolated would require shim code.
+
+Item #5 (`baseY`/`y`) defers to a follow-up session — Q2 was narrowly about pathway separation.
+
+**Task 5 findings — all 7 proposed changes' line references verified zero-drift against current `AUTO_ANALYZE_PROMPT_V2.md`** (last committed 2026-04-18 at `27eb180`). Every insertion point still accurate. Refinements applied to the proposed-changes doc:
+
+- **Change 3 — meaningful fix.** Original Step 4b Comprehensiveness Verification text had a math/definition bug: question (i) asked "how many facets" without disambiguating whether the core intent counts as a facet; the worked example then self-caught the confusion mid-logic with literal "Wait — 3 < 4, one facet skipped. Adjust:". Redrafted with (i) "qualifying facets = demographic/situational/temporal/severity/contextual modifiers ONLY, NOT the core intent"; (iii) correct total = 1 + N(facets) stated explicitly; COMPREHENSIVENESS CHECK BLOCK adds a dedicated "Core intent (primary placement topic title)" row separate from "Qualifying facets identified"; worked example rewritten to arithmetic-match.
+- **Change 2 Location 2 — grammar fix.** "within the same facet that their combined volume meets or exceeds" → "within the same facet, where their combined volume meets or exceeds".
+- **Change 4 — JUSTIFY_RESTRUCTURE payload expanded.** Original proposed 4 fields (prior state, new state, reason, expected improvement) → full 6 fields per `MODEL_QUALITY_SCORING.md §4` (Topic affected, Prior state, New state, Score, Reason, Expected quality improvement).
+- **Change 5 — example labels polished.** "(symptom focus)"/"(demographic focus)"/"(age-demographic focus)" had two overlapping demographic labels → "(symptom focus)"/"(gender facet)"/"(age-group facet)".
+- **Changes 1, 6, 7 — no changes needed.**
+
+**Three design questions resolved:**
+- **Q4 — Change 2 × Change 4 interaction.** When Step 6(b) cross-canvas cluster promotion or Trigger (7) reassigns a keyword out of a prior-canvas topic whose `stability_score >= 7.0`, the reassignment requires a JUSTIFY_RESTRUCTURE payload in the Reevaluation Report. Prevents high-confidence topics being silently gutted of keywords. Captured as sentence additions to both Change 2 Location 1 and Location 2.
+- **Q5 — What does the tool do with IRRELEVANT_KEYWORDS flags from Change 6's salvage template?** Tool code writes flagged keywords to the Session-3 `RemovedKeyword` table with `removedSource='auto-ai-detected-irrelevant'` and `aiReasoning` populated from the model's reason. Admin can review or restore any time. **This is distinct from the deferred "Auto-Remove Irrelevant Terms button"** (proactive full-canvas scan UI — director's "don't program without specifics" instruction still applies to THAT button). Salvage's per-batch model-initiated auto-archive is NOT blocked. Change 6 template text updated: "Admin will review and decide whether to move it to the Removed Terms table" → "The tool will auto-archive these keywords to the Removed Terms table with source tag 'auto-ai-detected-irrelevant' and your reasoning preserved; admin can review or restore at any time."
+- **Q6 — How does `stability_score` metadata reach the model?** Add `Stability Score` as 10th column to the Topics Layout Table TSV schema. Primer Section 2 updated with: column definition, parsing rule 12 (float default 0.0 clamped [0.0, 10.0]), constraint rule 16 (preserve existing verbatim, emit 0.0 for new, structural changes to ≥7.0 require JUSTIFY_RESTRUCTURE), OUTPUT FORMAT header updated to 10 columns, output rule for one-decimal-place float. Ships in Session 5 (scoring implementation) + Session 6 (prompt merge) together.
+
+**How caught:** Planned investigation + review. No mistake involved.
+
+**Prevention:** Not applicable (not a mistake).
+
+**Lessons captured for future sessions:**
+
+1. **Architectural pattern named: "React migrations can port rendering without porting the layout/interaction engine."** The HTML tool's layout engine (20+ call-sites of `cvsNodeH` + `cvsPushDownOverlaps` triggered from every structural change) is not drawing code — it's geometry code triggered from many places. Mechanical component-by-component React ports preserve drawing faithfully (node card, connector) but silently omit this kind of cross-cutting behavioral logic because it doesn't live in any single component. Design guidance for future port work: before starting, grep the source for all callsites of each layout/interaction function; enumerate the triggering events; confirm each has a React equivalent. Don't assume "rendering parity" = "behavioral parity." Recorded in ROADMAP P3-F8 UPDATE block for reference.
+
+2. **Line-reference drift in prompt-change docs is a real risk + cheap to verify.** The proposed-changes doc was drafted 2026-04-20 against commit `27eb180`; Session 2b verified all 7 references still match the current canonical doc in seconds via `Read` + grep. Cheap insurance. Future prompt-change docs should include the base commit hash in their header so verification is deterministic.
+
+3. **Math bugs in model-prompts are high-leverage to catch pre-merge.** The original Change 3 text had a self-contradictory worked example ("3 < 4, one facet skipped. Wait — adjust:") that the model would replicate live in every batch. Catching it pre-merge is cheap; catching it post-merge requires debugging why the model self-corrects mid-response. Reviewer's job in prompt-change merges is arithmetic-level proofreading, not just wording polish.
+
+**Meta-procedural note (positive):** Session 2b's Q1/Q2/Q3 framing for P3-F8 + Q4/Q5/Q6 framing for Task 5 — every multi-option question included per-option context + "I have a question first that I need clarified" escape hatch + free-text invitation close, per Rule 20. No Pattern 14 recurrence. Director's responses were crisp letter/answer picks ("a" / "A. However..." / "Accept the diagnosis. However, here are my answers") suggesting the forced-pick UX with escape-hatch worked as intended.
+
+---
 
 ### 2026-04-24 — P3-F7 + Removed Terms root causes diagnosed via hybrid DB-query + code-read analysis (informational, Session 2 findings)
 **Session:** session_2026-04-24_phase1g-test-followup-part3-session2 (Claude Code)

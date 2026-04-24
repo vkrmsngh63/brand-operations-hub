@@ -1,9 +1,181 @@
 # AUTO-ANALYZE PROMPT V2 — PROPOSED CHANGES
-## Specific additions/modifications to the V2 prompts drafted during session_2026-04-20_phase1g-test-followup-part3
+## Specific additions/modifications to the V2 prompts drafted during session_2026-04-20_phase1g-test-followup-part3 + refined during session_2026-04-24_phase1g-test-followup-part3-session2b
 
-**Created:** April 20, 2026
-**Status:** PROPOSED — not yet merged into `AUTO_ANALYZE_PROMPT_V2.md`
-**Purpose:** Capture the prompt-engineering changes discussed during the 2026-04-20 session so the next session can review, refine, and merge them into the canonical V2 prompts. Each change below includes the problem it addresses, the exact text to add or modify, and the precise location in `AUTO_ANALYZE_PROMPT_V2.md` where it belongs.
+**Created:** April 20, 2026 (Session 1)
+**Refined:** April 24, 2026 (Session 2b — Change 3 math bug fixed, Change 2 Loc 2 grammar fix, Change 4 payload expanded to 6 fields, Change 5 example labels de-overlapped, Q4/Q5/Q6 design questions resolved)
+**Base commit for line references:** `27eb180` (2026-04-18 commit of `AUTO_ANALYZE_PROMPT_V2.md`) — verified zero-drift during Session 2b
+**Status:** LOCKED FOR SESSION 6 MERGE — all wording refinements + Q4/Q5/Q6 resolutions baked into this doc below; Session 6 is mechanical merge (no further design decisions needed)
+**Purpose:** Capture the prompt-engineering changes discussed during the 2026-04-20 session, refine wording in Session 2b, and deliver a merge-ready specification for Session 6. Each change below includes the problem it addresses, the exact text to add or modify, and the precise location in `AUTO_ANALYZE_PROMPT_V2.md` where it belongs. See the "SESSION 2b REVIEW OUTCOMES" section near the top for the locked-in refinements vs. the original 2026-04-20 text below.
+
+---
+
+## SESSION 2b REVIEW OUTCOMES (2026-04-24) — locked-in refinements + design-question resolutions
+
+**Line-reference verification:** all 7 changes' line refs verified against the current `AUTO_ANALYZE_PROMPT_V2.md` at commit `27eb180`. **Zero drift.** All insertion points still accurate (line 88 / 104 / 116 / 131 / 137 / 163 / 194 as originally specified).
+
+**Wording refinements locked in:**
+
+### Change 3 — MEANINGFUL FIX: math/definition bug in original proposed text
+
+Original Step 4b text had an ambiguity in question (i) ("How many distinct facets") about whether the core intent counts as a facet. The worked example then self-caught the confusion mid-logic with the literal text "Wait — 3 < 4, one facet skipped. Adjust:". The model would replicate this in every batch.
+
+**Use this redrafted Change 3 body when merging** (replaces the original Change 3 text further down in this doc):
+
+```
+Step 4b — Comprehensiveness Verification (MANDATORY per-keyword self-check):
+
+Before moving to Step 5, perform an explicit verification for each keyword just analyzed. Answer these questions internally AND record your answers in the Comprehensiveness Check block of your Reevaluation Report:
+
+(i) How many distinct QUALIFYING FACETS did you identify in this keyword? Qualifying facets are demographic, situational, temporal, severity, and contextual modifiers — NOT the core intent. The core intent is the primary topic's focus and is counted separately as the primary placement.
+
+(ii) How many total topic placements does this keyword have in your output? Count 1 primary + N secondary placements.
+
+(iii) The correct total is: (1 primary for the core intent) + (1 secondary per qualifying facet) = 1 + N(facets). If your total in (ii) is less than 1 + (i), you have SKIPPED FACETS. For each skipped facet, EITHER:
+- Add the missing secondary placement with full upstream chain, OR
+- Explicitly justify why this facet does NOT warrant a secondary placement (e.g., the facet is a stopword, is redundant with the primary topic's focus, or is too niche for cross-cutting topic creation).
+
+(iv) For each secondary placement, verify the full upstream chain exists from the facet-specific sub-topic up to a root-level (Depth 0) topic. Missing intermediate topics must be created as empty narrative-bridging topics.
+
+COMPREHENSIVENESS PRINCIPLE — A keyword that carries N qualifying facets should generate 1 primary placement (for the core intent) and up to N secondary placements (one per facet), each with its own complete upstream chain. Under-placement (omitting secondary placements to save output length) degrades the funnel's structural integrity and is a worse failure mode than over-placement.
+
+COMPREHENSIVENESS CHECK BLOCK — Include this in your Reevaluation Report:
+
+  For each keyword in this batch, list:
+  - Keyword text
+  - Core intent (primary placement topic title): [topic title]
+  - Qualifying facets identified: [list, or "None"]
+  - Secondary placements made: [list with topic titles, or "None"]
+  - Facets not placed as secondary (with justification): [list, or "None"]
+```
+
+**Rewritten worked example for Change 3's "Example application" section:**
+
+```
+For keyword "bursitis pain in older women":
+- Core intent (primary placement): "Bursitis pain"
+- Qualifying facets identified: [older-age, gender-women] → (i) = 2
+- Secondary placements: "How bursitis affects older people" + "How bursitis affects women differently" → 2 secondary
+- Total placements: 1 primary + 2 secondary = 3 → (ii) = 3
+- Check: 1 + (i) = 1 + 2 = 3. (ii) = 3. Match. No facets skipped. ✓
+- Upstream chain verified for each secondary placement.
+```
+
+### Change 2 Location 2 — grammar fix + Q4 addition
+
+Replace the awkward "within the same facet that their combined volume meets or exceeds" with "within the same facet, where their combined volume meets or exceeds". Append a sentence for Q4 (stability-score friction on keyword reassignment). **Use this final wording:**
+
+```
+(7) Volume-Based Cluster Promotion — After placing all keywords in the batch, scan BOTH (i) the branches touched by this batch AND (ii) the entire prior-canvas for keywords with the same facet as any keyword in this batch. Identify clusters of keywords that share a facet and whose combined search volume meets or exceeds [VOLUME_THRESHOLD], but which are currently scattered across broader parent topics rather than having their own dedicated sub-topic. Signal: while reviewing the completed placements for the batch, you identify two or more keywords (drawn from current batch and/or prior canvas) within the same facet, where their combined volume meets or exceeds [VOLUME_THRESHOLD]. Action: create a dedicated sub-topic for that facet cluster, reassign the relevant keywords' primary placements (both current-batch and prior-canvas) to the new sub-topic, create secondary placements if not already present, and update parent topic descriptions. Note all reassignments of prior-canvas keywords explicitly in the Reevaluation Report so admin can review whether previously-approved placements should be moved. Respect stability-score friction (Step 6b): if any reassigned prior-canvas keyword's current primary topic has stability_score >= 7.0, emit a JUSTIFY_RESTRUCTURE payload for that keyword's reassignment.
+```
+
+### Change 2 Location 1 — Q4 addition
+
+**Use this final wording (replaces the original Change 2 Location 1 text further down):**
+
+```
+(b) A cluster of keywords that share a facet and whose COMBINED search volume meets or exceeds [VOLUME_THRESHOLD] warrants a dedicated sub-topic for that facet, even if each individual keyword's volume is below the threshold. After placing all keywords in the batch, scan for such clusters across BOTH (i) the keywords just placed in the current batch AND (ii) keywords already placed in the Topics Layout Table from prior batches. If a qualifying cluster spans current-batch and prior-canvas keywords, create a new dedicated sub-topic for that facet, reassign the prior-canvas keywords' primary placements to the new sub-topic (per reassignment rules in the Reevaluation Pass Trigger 2), and reflect the reassignment in the Reevaluation Report. Respect stability-score friction (Step 6b): if a prior-canvas keyword's current primary topic has stability_score >= 7.0, reassigning that keyword into the newly-promoted sub-topic requires a JUSTIFY_RESTRUCTURE payload in the Reevaluation Report explaining why the new sub-topic is a clearly superior home for that keyword.
+```
+
+### Change 4 — JUSTIFY_RESTRUCTURE payload expanded to full 6 fields + reference to Q4 interaction
+
+**Use this final wording for the score-≥7.0 bullet's sub-items (replaces the original 4-field list):**
+
+```
+- Score >= 7.0 — Topic is well-validated. DO NOT modify its name, parent relationship, or conversion-funnel-stage assignment unless you have a compelling structural reason. If you must modify, you MUST emit a JUSTIFY_RESTRUCTURE payload in your Reevaluation Report with the following six fields:
+    - Topic affected: <topic title + stable_id if available>
+    - Prior state: <name, parent, depth>
+    - New state: <name, parent, depth>
+    - Score: <current stability score>
+    - Reason: <explicit, non-generic justification>
+    - Expected quality improvement: <what admin should see as better>
+```
+
+Also append this sentence to Change 4's closing paragraph about additive updates:
+
+```
+See also Trigger (7) and Step 6(b) for keyword-reassignment interactions with stability score.
+```
+
+Also update Change 4's opening paragraph to reference the TSV column (Q6 resolution) not generic "metadata":
+
+```
+Each topic in the Topics Layout Table carries a stability_score from 0.0 to 10.0, passed as a column in the TSV (see Topics Layout Table Primer). This score reflects how well-validated the topic is — through admin approvals, cross-batch consistency, and related signals.
+```
+
+### Change 5 — example labels polished for internal consistency
+
+Replace "(symptom focus) AND \"bursitis in women\" (demographic focus) AND \"bursitis in older people\" (age-demographic focus)" with "(symptom focus) AND \"bursitis in women\" (gender facet) AND \"bursitis in older people\" (age-group facet)".
+
+### Changes 1, 6, 7 — no refinements
+
+Change 1 (tie-breaker), Change 7 (Section 5 continuation point (e)) — use original 2026-04-20 text verbatim.
+
+Change 6 (salvage follow-up template) — one wording update for Q5 resolution:
+
+Replace "flag it for removal by listing it in a dedicated IRRELEVANT_KEYWORDS block. Admin will review and decide whether to move it to the Removed Terms table." with "flag it for removal by listing it in a dedicated IRRELEVANT_KEYWORDS block along with your reasoning. The tool will auto-archive these keywords to the Removed Terms table with source tag 'auto-ai-detected-irrelevant' and your reasoning preserved; admin can review or restore at any time."
+
+Also update the DELTA ROWS tab structure to include the 10th column:
+```
+=== DELTA ROWS FOR PLACEMENTS ===
+<Depth>\t<Topic>\t<Alternate Titles>\t<Relationship>\t<Parent Topic>\t<Conversion Path>\t<Sister Nodes>\t<Keywords>\t<Topic Description>\t<Stability Score>
+```
+
+Append a note at the end of Change 6:
+```
+IMPORTANT: This template is NOT used for "Lost" keyword errors (previously-applied keywords erased from the response). Lost-keyword errors indicate a structurally broken response that requires a full batch retry, not a targeted follow-up.
+```
+
+### Topics Layout Table Primer (Section 2 of AUTO_ANALYZE_PROMPT_V2.md) — Q6 updates
+
+The Primer must also be updated in Session 6 to support the `Stability Score` column:
+
+1. Add a new column definition paragraph in COLUMN DEFINITIONS, after the Topic Description entry:
+```
+Stability Score — A numeric score from 0.0 to 10.0 reflecting how well-validated this topic is, based on admin approvals, cross-batch consistency, keyword-placement stability, and related signals (see Initial Prompt Step 6b for full interpretation and score-gated modification rules). Populated by the tool for each existing topic. Newly-created topics default to 0.0 (fully open to modification). Topics with score >= 7.0 must not be structurally modified (renames, parent changes, merges, splits, conversion-funnel-stage reassignment) without a JUSTIFY_RESTRUCTURE payload in the Reevaluation Report. Output verbatim for existing topics; emit 0.0 for topics you create in this batch.
+```
+
+2. Add parsing rule 12 to CRITICAL TSV PARSING RULES:
+```
+12. Stability Score is optional and parsed as a float. Missing, empty, or non-numeric values default to 0.0. Values are clamped to the range [0.0, 10.0] after parsing.
+```
+
+3. Add rule 16 to RULES AND CONSTRAINTS:
+```
+16. Preserve stability scores exactly for existing topics — do not recalculate, round, or modify them. The tool computes scores and passes them to you as read-only metadata. For newly-created topics, emit 0.0. Structural modifications (renames, parent changes, merges, splits, conversion-funnel-stage reassignment) to topics with stability_score >= 7.0 require a JUSTIFY_RESTRUCTURE payload in the Reevaluation Report.
+```
+
+4. Update OUTPUT FORMAT header row to 10 columns:
+```
+Depth    Topic    Alternate Titles    Relationship    Parent Topic    Conversion Path    Sister Nodes    Keywords    Topic Description    Stability Score
+```
+
+5. Add an output format bullet:
+```
+- Stability Score is a float rounded to one decimal place (e.g., 0.0, 4.2, 7.8). Preserve existing values verbatim; emit 0.0 for newly-created topics.
+```
+
+6. Add a "HOW TO UPDATE THE TABLE..." step bullet (in Step 3: Create New Topics):
+```
+- Stability Score: 0.0 for newly-created topics (fully open to modification)
+```
+
+7. Update WHAT THE TOPICS LAYOUT TABLE IS opening paragraph to acknowledge stability score:
+```
+The Topics Layout Table is a structured representation of our conversion funnel. It is exported as a TSV (tab-separated values) file from our tool and captures the complete hierarchy of topics, their relationships, descriptions, linked keywords, which conversion path they belong to, and a stability score per topic.
+```
+
+8. Add a parenthetical to the HOW TO READ THE TABLE example to acknowledge the column is omitted from display:
+```
+(Stability Score is present on every row in the actual TSV but omitted from this display example for readability.)
+```
+
+### Q4/Q5/Q6 DESIGN RESOLUTIONS — DIRECTOR-LOCKED 2026-04-24
+
+- **Q4:** Keyword reassignment out of a prior-canvas topic with `stability_score >= 7.0` requires JUSTIFY_RESTRUCTURE payload. Captured as additions to Change 2 Location 1 + Location 2 above.
+- **Q5:** Salvage IRRELEVANT_KEYWORDS flags → tool auto-archives to `RemovedKeyword` table with `removedSource='auto-ai-detected-irrelevant'` + `aiReasoning` populated. Admin can review or restore any time. **Distinct from the deferred "Auto-Remove Irrelevant Terms button"** (proactive full-canvas scan UI — director's "don't program without specifics" instruction still applies to THAT button). Captured as Change 6 template text update above.
+- **Q6:** `Stability Score` is the 10th TSV column. Primer updates captured above. Session 5 ships scoring infrastructure; Session 6 merges prompt text that references it.
+
+---
 
 ---
 

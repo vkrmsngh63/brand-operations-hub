@@ -1,9 +1,10 @@
 # DOCUMENT MANIFEST
 ## Ground-truth registry of every handoff document in the PLOS system
 
-**Last updated:** April 24, 2026 (Phase 1g-test follow-up Part 3 — Session 2 — investigations-only; P3-F7 + Removed Terms root causes diagnosed from direct DB queries + code read; fix directions agreed with director; 5 docs updated, no new docs; NO code commits)
-**Last updated in session:** session_2026-04-24_phase1g-test-followup-part3-session2 (Claude Code)
-**Previously updated in session:** session_2026-04-20_phase1g-test-followup-part3 (Claude Code)
+**Last updated:** April 24, 2026 (Phase 1g-test follow-up Part 3 — Session 2b — investigations-only continuation of Session 2; P3-F8 canvas-layout regression diagnosed + Task 5 prompt review complete; 6 docs updated + `keyword_sorting_tool_v18.html` transitions from untracked to tracked per Option A clean-split timing; no new docs; NO code commits)
+**Last updated in session:** session_2026-04-24_phase1g-test-followup-part3-session2b (Claude Code)
+**Previously updated in session:** session_2026-04-24_phase1g-test-followup-part3-session2 (Claude Code)
+**Previously updated in session (earlier):** session_2026-04-20_phase1g-test-followup-part3 (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-19_phase1g-test-followup-part2 (Claude Code)
 **Previously updated (claude.ai era):** https://claude.ai/chat/75cc8985-b70a-49f4-8b64-444c34ef541f
 
@@ -26,26 +27,30 @@ These 13 documents form the persistent handoff context.
 | 3 | `PLATFORM_REQUIREMENTS.md` | Platform-wide requirements — scale, user-model, review cycle, audit, concurrency, phasing | 2026-04-17 | NO |
 | 4 | `NAVIGATION_MAP.md` | Every route + click path through PLOS — UI navigation source of truth | 2026-04-17 | NO |
 | 5 | `DATA_CATALOG.md` | Every data item — where it lives, Human Reference Language, cross-workflow sharing contracts | 2026-04-18 | NO |
-| 6 | `ROADMAP.md` | Development execution plan — completed work + remaining phases | 2026-04-24 (this session — Session 2 partial-done marker added; Session 2b new block; Session 3 scope expanded with post-batch reconciliation pass + `RemovedKeyword` table + `nextNodeId` stale-counter; P3-F7 finding updated with diagnosis outcome) | ✅ YES |
-| 7 | `CORRECTIONS_LOG.md` | Append-only log of mistakes + extracted patterns | 2026-04-24 (this session — 1 new informational entry on P3-F7 + Removed Terms root causes; architectural pattern "multi-mode write paths always drift without reconciliation" captured as standing design guidance) | ✅ YES |
-| 8 | `CHAT_REGISTRY.md` | Chronological log of chats + URLs + work-summaries (post-Ckpt-9: Claude Code sessions use session-identifier format) | 2026-04-24 (this session — new row for session_2026-04-24_phase1g-test-followup-part3-session2) | ✅ YES |
+| 6 | `ROADMAP.md` | Development execution plan — completed work + remaining phases | 2026-04-24 (Session 2b — P3-F8 finding updated with diagnosis outcome + Q1/Q2/Q3-driven fix direction; Session 2b block marked ✅ DONE; Session 3 scope expanded with 4-function canvas-layout port (`calcNodeHeight` + `runLayoutPass` + `autoLayoutChild` + pathway separation); Session 6 block updated with Q4/Q5/Q6-driven prompt-merge prerequisites + Stability Score Primer updates list) | ✅ YES |
+| 7 | `CORRECTIONS_LOG.md` | Append-only log of mistakes + extracted patterns | 2026-04-24 (Session 2b — 1 new informational entry on P3-F8 diagnosis + Task 5 prompt-review outcomes; architectural pattern "React migrations can port rendering without porting the layout/interaction engine" captured for future React-port work; "line-reference drift is real + cheap to verify" + "math bugs in model-prompts are high-leverage to catch pre-merge" lessons captured) | ✅ YES |
+| 8 | `CHAT_REGISTRY.md` | Chronological log of chats + URLs + work-summaries (post-Ckpt-9: Claude Code sessions use session-identifier format) | 2026-04-24 (Session 2b — new row for session_2026-04-24_phase1g-test-followup-part3-session2b) | ✅ YES |
 | 9 | `HANDOFF_PROTOCOL.md` | Rules for how chats operate — start/mid/end protocols, communication rules, interview rules | 2026-04-18 | NO |
 | 10 | `DOCUMENTATION_ARCHITECTURE.md` | Design of the doc-system itself (DLMS, tool graduation, group A/B, workflow interview pattern, Claude Code migration) | 2026-04-17 | NO |
 | 11 | `NEW_CHAT_PROMPT.md` | **Historical** — claude.ai era briefing template. Post-Phase-M, Claude Code sessions use `CLAUDE_CODE_STARTER.md` instead. | 2026-04-17 | NO |
-| 12 | `DOCUMENT_MANIFEST.md` | This file — ground-truth doc registry | 2026-04-24 (this session — timestamps + modified flags) | ✅ YES |
+| 12 | `DOCUMENT_MANIFEST.md` | This file — ground-truth doc registry | 2026-04-24 (Session 2b — timestamps + modified flags + HTML tool transitions from untracked to tracked) | ✅ YES |
 | 13 | `CLAUDE_CODE_MIGRATION.md` | Migration plan and operational rules for shifting from claude.ai to Claude Code. Executed successfully in Ckpt 9+9.5. | 2026-04-17 | NO |
 | 14 | `AI_TOOL_FEEDBACK_PROTOCOL.md` | **NEW 2026-04-20** — Platform-wide standard for every AI-using tool in PLOS. Defines required integration points (structured decision output with reasoning, admin review surface with 3 actions + 2 feedback channels, feedback-repo write/read-back, quality scoring, model/provider registry), 3-phase implementation roll-out, and the primer text to include in every new workflow's design doc. | 2026-04-20 (this session — NEW) | ✅ NEW |
 | 15 | `MODEL_QUALITY_SCORING.md` | **NEW 2026-04-20** — Stability-score algorithm spec. Defines 0-10 stability_score per AI output item, factors that add/subtract to score, model's interpretation instructions, JUSTIFY_RESTRUCTURE payload requirement for high-score modifications, admin scoring guidelines (1-5 scale with 4 evaluation dimensions), meta-note on how algorithm was derived + review triggers + how to propose weight changes. | 2026-04-20 (this session — NEW) | ✅ NEW |
 
 **Group A count: 15 documents.** 4 modified this session (ROADMAP, CORRECTIONS_LOG, CHAT_REGISTRY, DOCUMENT_MANIFEST). No new Group A docs created this session. The 11 not-modified Group A docs retain their timestamps from prior sessions.
 
-**Not created this session:** no new docs. The interim `AUTO_ANALYZE_PROMPT_V2_PROPOSED_CHANGES.md` created 2026-04-20 remains pending director review (Task 5 rolled from Session 2 into Session 2b or Session 3).
+**Not created this session:** no new docs. `AUTO_ANALYZE_PROMPT_V2_PROPOSED_CHANGES.md` (interim doc created 2026-04-20) was UPDATED this session with the Session 2b refinements + Q4/Q5/Q6 resolutions baked in — now locked for mechanical Session 6 merge.
 
 **Also modified this session (non-Group-A):**
-- `KEYWORD_CLUSTERING_ACTIVE.md` (Group B) — New POST-SESSION-2 STATE block added above the POST-PHASE-1G-TEST-FOLLOWUP-PART-3 block. Contains: DB access verification + query log, Bursitis DB snapshot (2,328 kw / 104 nodes / 1,360 SisterLinks / stale `nextNodeId=5`), qualitative structural observations, full P3-F7 root-cause diagnosis (both bugs + two sub-groups of Bug 2), Removed Terms root-cause diagnosis, director-agreed fix directions for both (P3-F7 two-part primary+backup; Removed Terms Option B RemovedKeyword table), and director's new standing instructions (root-cause-first + reconciliation-as-backup philosophy; Removed Terms UI must distinguish manual vs auto-removed). Prior state blocks preserved for history.
+- `KEYWORD_CLUSTERING_ACTIVE.md` (Group B) — New POST-SESSION-2b STATE block added above the POST-SESSION-2 block (which is preserved for history). Contains: P3-F8 four-job gap diagnosis vs React layout surface, Q1/Q2/Q3 lockdowns for Session 3 scope, Task 5 prompt-review refinements (Change 3 math redraft, Change 2/4/5 polish), Q4/Q5/Q6 design-question resolutions, Session 3 cumulative scope (9 items from Sessions 2 + 2b), Session 6 mechanical-merge prerequisites, director's new standing instructions preserved for Session 3+.
+- `AUTO_ANALYZE_PROMPT_V2_PROPOSED_CHANGES.md` (interim working doc) — Added new "SESSION 2b REVIEW OUTCOMES" section at top containing: verified-zero-drift base commit hash (`27eb180`); Change 3 redrafted body + worked example; Change 2 Loc 1 and Loc 2 final wording with Q4 additions; Change 4 6-field payload + Q4-cross-reference sentence + Q6 TSV-column opener; Change 5 polished example labels; Change 6 Q5-aware salvage template + DELTA ROWS 10th-column update + Lost-vs-Missing note; Topics Layout Table Primer updates (column definition + parsing rule 12 + constraint rule 16 + 10-column OUTPUT FORMAT + one-decimal float output rule + Step 3 bullet + intro paragraph tweak + HOW TO READ parenthetical).
 
-**Code changes this session (non-doc):**
-- **NONE.** Session 2 was investigations-only per session plan. `keyword_sorting_tool_v18.html` at repo root remains untracked — director's upload for P3-F8, not touched this session; per Option A clean-split hygiene, will be committed in the session that actually investigates it (Session 2b or Session 3).
+**Newly tracked file this session (non-doc):**
+- `keyword_sorting_tool_v18.html` at repo root — transitions from untracked to tracked per Option A clean-split timing. This is the session that actually used it (P3-F8 diagnostic read layout code from this file). 17,725 lines; director's original HTML tool that preceded the React migration.
+
+**Code changes this session (src/):**
+- **NONE.** Session 2b was investigations-only per session plan.
 
 ---
 

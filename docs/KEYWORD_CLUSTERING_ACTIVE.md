@@ -1,9 +1,10 @@
 # KEYWORD CLUSTERING — ACTIVE DOCUMENT
 ## Current state of the Keyword Clustering workflow tool (Group B, tool-specific)
 
-**Last updated:** April 24, 2026 (Phase 1g-test follow-up Part 3 — Session 2 — investigations-only; first direct DB queries against live Bursitis canvas; P3-F7 root cause identified as two-way status/canvas sync drift; Removed Terms display bug root cause identified; fix directions agreed with director for both; P3-F8 layout regression + Task 5 prompt changes review rolled to Session 2b or Session 3; docs-only commit, no code)
-**Last updated in session:** session_2026-04-24_phase1g-test-followup-part3-session2 (Claude Code)
-**Previously updated in session:** session_2026-04-20_phase1g-test-followup-part3 (Claude Code)
+**Last updated:** April 24, 2026 (Phase 1g-test follow-up Part 3 — Session 2b — investigations-only continuation of Session 2; P3-F8 canvas-layout regression diagnosed — React migration ported rendering but dropped the HTML tool's four-job layout engine (content-driven height, holistic push-down pass, auto-layout-on-link, pathway separation); Session 3 P3-F8 scope locked in per director's Q1/Q2/Q3 answers (all four jobs ported together in one commit, layout pass runs after every Auto-Analyze batch, pathway separation included not deferred); Task 5 prompt review complete — all 7 proposed changes' line refs verified; Change 3 math bug fixed; Change 2/4/5 wording polish applied; Q4/Q5/Q6 design questions resolved — keyword-reassignment out of ≥7.0 topic requires JUSTIFY_RESTRUCTURE, salvage IRRELEVANT_KEYWORDS auto-archive to RemovedKeyword table, Stability Score added as 10th TSV column; `keyword_sorting_tool_v18.html` committed this session per Option A clean-split timing; docs-only commit, no code)
+**Last updated in session:** session_2026-04-24_phase1g-test-followup-part3-session2b (Claude Code)
+**Previously updated in session:** session_2026-04-24_phase1g-test-followup-part3-session2 (Claude Code)
+**Previously updated in session (earlier):** session_2026-04-20_phase1g-test-followup-part3 (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-19_phase1g-test-followup-part2 (Claude Code)
 **Previously updated (claude.ai era):** https://claude.ai/chat/fc8025bf-551a-4b3c-8483-ec6d8ed9e33c
 
@@ -15,7 +16,110 @@
 
 ---
 
-## ⚠️ POST-SESSION-2 STATE (READ FIRST — updated 2026-04-24 session)
+## ⚠️ POST-SESSION-2b STATE (READ FIRST — updated 2026-04-24 Session 2b)
+
+**As of 2026-04-24 Session 2b (Phase 1g-test follow-up Part 3 — Session 2b — finishes the two items Session 2 rolled forward: P3-F8 canvas-layout regression diagnostic + Task 5 prompt changes review; docs-only commit, no code):**
+
+### P3-F8 diagnosis — React migration dropped the layout engine
+
+Investigation approach: read `keyword_sorting_tool_v18.html` (17,725 lines) layout code (centred on `cvsPushDownOverlaps`, `cvsAutoLayoutChild`, `cvsNodeH`, `cvsSeparatePathways` — lines 11965–14315) and compared to React `CanvasPanel.tsx` layout surface (`resolveOverlap` at line 397 + callsites at 380, 591). Grepped for all layout-related function names in both sources.
+
+**Root cause (single systemic gap):** The React port migrated canvas rendering (SVG node cards, connectors, drag, zoom, single-node overlap nudge) but did NOT port the HTML tool's four-job layout engine. The gap manifests as three user-visible regressions sharing one architectural cause.
+
+**Four jobs the HTML tool did automatically — status in React:**
+
+| # | HTML tool job | HTML function(s) | React equivalent |
+|---|---|---|---|
+| 1 | Measure node height from content (title wrap + altTitles + description wrap + kw rows + detail-view state) | `cvsNodeH(node)` at line 11965 (canvas `measureText`-based) | ❌ NONE — `NODE_H = 160` hardcoded constant (line 12); `h` loaded from DB, never recomputed |
+| 2 | Holistic layout pass on every structural change (4 steps: reset → tree-walk via `layoutChildren` → 60-pass overlap resolution → pathway separation) | `cvsPushDownOverlaps()` at line 14152 | ❌ NONE — only `resolveOverlap(nodeId)` exists; single-node nudge; only fires on drag/resize end; does NOT fire after Auto-Analyze canvas rebuild |
+| 3 | Auto-position child relative to parent when a parent-child link is formed (type-aware: linear aligned to parent-left-below-peers; nested aligned parent-center-plus-indent-below-nested-siblings) | `cvsAutoLayoutChild()` at line 14321 | ❌ NONE |
+| 4 | Separate overlapping pathway borders horizontally | `cvsSeparatePathways()` at line 14251 | ❌ NONE |
+| 5 (bonus) | `baseY`/`y` separation so collapse/expand restores user-set positions cleanly | All HTML functions use `baseY` | ❌ NONE — React has only `y` |
+
+**Regression 1 (overlapping nodes, wrong placement/order) traces to gap #2, #3, #4.** Auto-Analyze rebuilds 80+ nodes per batch; no layout pass ever runs; nodes land wherever the rebuild set their coords with zero structural arrangement.
+
+**Regression 2 (descriptions overflowing node boxes) traces to gap #1.** Node height = 160px constant regardless of content; long descriptions spill past the bottom.
+
+**Regression 3 (nested vs linear placement wrong) traces to gap #3.** Any new parent-child relationship (drag-link OR Auto-Analyze-created) gets arbitrary child position; HTML's type-aware placement is absent.
+
+### P3-F8 fix direction — Session 3 scope locked in
+
+Director's answers to the three diagnostic questions (Q1/Q2/Q3 in Session 2b discussion):
+
+- **Q1 — Layout pass trigger frequency after Auto-Analyze:** run **after every batch** (not just run-end). Keeps canvas clean live-during-run for human-in-loop review; ~50–200ms per batch cost is acceptable.
+- **Q2 — Pathway separation (Tier 2 item #6):** **don't defer** — include in Session 3 scope. Bursitis has 1 pathway so not biting today, but any multi-pathway Project will hit it; ~30 extra lines of port is worth it now.
+- **Q3 — One-shot port vs incremental:** **one-shot** — port all four functions + wire them in one Session 3 commit, verify in one pass. The four functions are interdependent (height feeds layout-pass; auto-layout-child feeds layout-pass); testing in isolation would require shim code.
+
+**Locked-in Session 3 P3-F8 scope:**
+1. Port `cvsNodeH` → React `calcNodeHeight(node)` using browser canvas `CanvasRenderingContext2D.measureText` for accurate text wrapping at current node width. Replaces hardcoded `NODE_H = 160`. Recalc on: content edit, resize end, canvas rebuild apply, detail-view toggle, initial load.
+2. Port `cvsPushDownOverlaps` → React `runLayoutPass()` — four-step holistic pass matching HTML behavior. Call after every structural change including every Auto-Analyze batch apply (per Q1).
+3. Port `cvsAutoLayoutChild` → React `autoLayoutChild(child, parent, relType)` — type-aware linear vs nested auto-positioning on parent-child form.
+4. Port `cvsSeparatePathways` → React equivalent (per Q2 "don't defer"). Multi-pathway push-apart.
+5. Keep existing React `resolveOverlap(nodeId)` for drag/resize single-node nudges — no change.
+
+**One item still deferred (not in Session 3):** `baseY`/`y` separation for clean collapse/expand restoration. Q2 was narrowly about pathway separation; `baseY`/`y` was not asked about. Can land in a follow-up session.
+
+### Task 5 prompt review — all 7 changes' line references verified + refinements locked in
+
+All 7 proposed changes in `AUTO_ANALYZE_PROMPT_V2_PROPOSED_CHANGES.md` had their line references verified against current `AUTO_ANALYZE_PROMPT_V2.md` (last committed `27eb180` on 2026-04-18). **Zero drift.** All insertion points still accurate.
+
+**Wording refinements (locked in, written into proposed-changes doc):**
+
+- **Change 3 (Step 4b Comprehensiveness) — meaningful fix applied.** Original proposed text had a math/definition bug: (i) counted "facets" ambiguously (was the core intent a facet or not?); the worked example self-caught the confusion mid-logic. Redraft clarifies: qualifying facets = demographic/situational/temporal/severity/contextual modifiers only, NOT the core intent; correct total = 1 + N(facets); COMPREHENSIVENESS CHECK BLOCK now includes "Core intent" as a distinct row from "Qualifying facets identified"; worked example rewritten unambiguously.
+- **Change 2 Location 2 — grammar fix.** Original proposed clause "within the same facet that their combined volume meets or exceeds" replaced with "within the same facet, where their combined volume meets or exceeds".
+- **Change 4 — JUSTIFY_RESTRUCTURE payload expanded from 4 fields to full 6 fields** matching `MODEL_QUALITY_SCORING.md §4` (Topic affected, Prior state, New state, Score, Reason, Expected quality improvement).
+- **Change 5 — example labels polished** for internal consistency: "(symptom focus)", "(gender facet)", "(age-group facet)" replaces the originally-overlapping "(symptom focus)", "(demographic focus)", "(age-demographic focus)".
+- **Changes 1, 6, 7 — no changes needed.**
+
+**Three substantive design questions resolved:**
+
+- **Q4 — Cross-canvas keyword reassignment × stability-score friction.** When Step 6(b) cross-canvas cluster promotion or Trigger (7) reassigns a keyword out of a prior-canvas topic, IF that source topic has `stability_score >= 7.0` → the reassignment requires a JUSTIFY_RESTRUCTURE payload in the Reevaluation Report. Prevents high-confidence topics being silently gutted of keywords without admin-visible justification. Captured as additions to Change 2 Location 1 + Location 2.
+- **Q5 — What does the tool do with IRRELEVANT_KEYWORDS flags from salvage?** Tool auto-archives flagged keywords to the Session-3 `RemovedKeyword` table with `removedSource='auto-ai-detected-irrelevant'` and `aiReasoning` populated from the model's returned reason. Admin can review or restore at any time. NOT the same as the "Auto-Remove Irrelevant Terms button" feature director has deferred (that's a proactive full-canvas scan + batch removal UI; this is per-batch model-initiated during salvage). Director's "DO NOT program Auto-Remove without specifics" instruction applies to the proactive-scan button, not to salvage's per-batch behavior. Captured in Change 6 template: language updated from "Admin will review and decide whether to move it to the Removed Terms table" → "The tool will auto-archive these keywords to the Removed Terms table with source tag 'auto-ai-detected-irrelevant' and your reasoning preserved; admin can review or restore at any time."
+- **Q6 — How does `stability_score` metadata reach the model?** Add `Stability Score` as a 10th column in the Topics Layout Table TSV schema (column definition added to Primer Section 2). Parsing rule 12 added: missing/empty/non-numeric defaults to 0.0, clamped to [0.0, 10.0]. Output rule added: float rounded to one decimal place. New topics emit 0.0; existing topics preserve the tool-provided value verbatim. Ships in Session 5 (stability scoring) + Session 6 (prompt merge) together.
+
+### Session 2b scope — complete
+
+**✅ DONE this session:**
+- P3-F8 canvas layout regression diagnostic (HTML tool layout engine vs React layout surface; 4-job gap analysis; Session 3 scope locked in per Q1/Q2/Q3 answers).
+- Task 5 prompt changes review (all 7 line refs verified; Change 3 math redraft; Change 2/4/5 polish; Q4/Q5/Q6 design resolutions).
+- `keyword_sorting_tool_v18.html` committed to repo per Option A clean-split timing (this is the session that actually used it).
+
+**No code changes this session.** End-of-session commit is docs-only (+ the HTML tool file that was previously untracked).
+
+### Session 3 scope (full — cumulative from Sessions 2 + 2b lockdowns)
+
+1. **P3-F7 backup safety net:** post-batch reconciliation pass in `doApply` after step 11. Flip Unsorted-but-on-canvas → AI-Sorted (fixes 58 silent placements + 49 reshuffle ghosts on reappearance); flip AI-Sorted-but-off-canvas → Unsorted OR new status `'Reshuffled'` (conservative decision at implementation time; fixes 49 reshuffle casualties + 25 linkedKwIds-carryover ghosts as side effect). Every flip logged to activity log + future Changes Ledger.
+2. **Salvage-ignored-keywords mechanism** per refined Change 6 template (Q5-aware auto-archive language). Paired with the reconciliation pass as the primary+backup pair for P3-F7.
+3. **Removed Terms fix — Option B `RemovedKeyword` table** scoped to `ProjectWorkflow` with `removedSource` ('manual' | 'auto-ai-detected-irrelevant') + `aiReasoning` fields. Soft-archive flow: Remove = transaction (copy row → `RemovedKeyword`, delete from `Keyword`); Restore = reverse. `ASTTable.tsx` `removedTerms` state → DB-backed fetch. Modal UI filters/badges by source.
+4. **P3-F8 canvas-layout port (one commit, four functions together):** `calcNodeHeight`, `runLayoutPass` (called after every Auto-Analyze batch apply + structural changes), `autoLayoutChild`, pathway separation. Keep `resolveOverlap` for drag/resize. Defer `baseY`/`y` to follow-up.
+5. **`CanvasState.nextNodeId` stale-counter investigation + fix** — max CanvasNode.id=104 vs nextNodeId=5. Either repair to `max(id)+1` or confirm counter is unused + remove.
+6. **Opus 4.7 + Haiku 4.5** added to model dropdown (interim hardcoded; full Model Registry deferred to Session 13).
+7. **Cost tracker failed-attempt-cost fix** (per Q8 design Session 1).
+8. **B1 settings persistence** (`UserPreference` DB table).
+9. **Commit + push + deploy + director verification.**
+
+### Session 6 scope — locked-in prompt merge
+
+When Session 6 starts, the prompt merge is mechanical:
+- Open `AUTO_ANALYZE_PROMPT_V2_PROPOSED_CHANGES.md` — all 7 changes carry the Session-2b-refined wording + Q4/Q5/Q6 resolutions baked in.
+- Open `AUTO_ANALYZE_PROMPT_V2.md` at the line references verified during Session 2b (still accurate unless intervening sessions edit that file).
+- Insert/replace per each change's specified location.
+- Add Stability Score column to Primer Section 2 (COLUMN DEFINITIONS + CRITICAL TSV PARSING RULES rule 12 + RULES AND CONSTRAINTS rule 16 + OUTPUT FORMAT header + output-rules).
+- Director re-pastes updated prompt into Auto-Analyze UI; test run validates.
+
+**Note:** Session 5 should ship stability scoring (infrastructure) BEFORE Session 6 merges the prompt text that references it — or the model will see `Stability Score` column references in the prompt without actual score data flowing.
+
+### Director's explicit instructions preserved for Session 3+
+- **NEW 2026-04-24 Session 2b:** Layout pass runs after every Auto-Analyze batch apply (Q1). Pathway separation is Session 3 scope, not deferred (Q2). Canvas layout port ships as one-shot commit (Q3).
+- **NEW 2026-04-24 Session 2b (Q4):** Keyword reassignment out of a high-score (≥7.0) topic requires JUSTIFY_RESTRUCTURE payload.
+- **NEW 2026-04-24 Session 2b (Q5):** Salvage IRRELEVANT_KEYWORDS auto-archive to `RemovedKeyword` table is NOT the same as the "Auto-Remove Irrelevant Terms button" feature and is NOT blocked by the standing "don't program Auto-Remove without specifics" instruction. The button (proactive full-canvas scan) stays deferred.
+- **NEW 2026-04-24 Session 2b (Q6):** `Stability Score` is the 10th TSV column. Tool populates for existing topics; model emits 0.0 for new topics.
+- **Preserved from 2026-04-24 Session 2:** Root-cause-first + reconciliation-as-backup philosophy for all multi-source-of-truth bugs. Removed Terms UI must distinguish manual vs AI-auto once Auto-Remove ships. Direct DB queries standard practice.
+- **Preserved from 2026-04-20:** Do NOT program Auto-Remove Irrelevant Terms button without explicit director-provided specifics. Ask for parallel-chat workflow-fundamentals conclusions at or before Session 5. Stay lucid.
+
+---
+
+## ⚠️ POST-SESSION-2 STATE (READ SECOND — updated 2026-04-24 session)
 
 **As of 2026-04-24 (Phase 1g-test follow-up Part 3 — Session 2 — INVESTIGATIONS ONLY, no code commits; first direct DB queries against live Bursitis canvas; P3-F7 and Removed Terms root causes diagnosed; P3-F8 layout + Task 5 prompt review rolled forward to Session 2b or Session 3):**
 
