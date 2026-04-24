@@ -52,12 +52,13 @@ model ProjectWorkflow {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  keywords    Keyword[]
-  canvasNodes CanvasNode[]
-  pathways    Pathway[]
-  sisterLinks SisterLink[]
-  canvasState CanvasState?
+  project         Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  keywords        Keyword[]
+  removedKeywords RemovedKeyword[]
+  canvasNodes     CanvasNode[]
+  pathways        Pathway[]
+  sisterLinks     SisterLink[]
+  canvasState     CanvasState?
 
   @@unique([projectId, workflow])
   @@index([projectId])
@@ -116,6 +117,35 @@ model CanvasNode {
   sortOrder         Int      @default(0)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
+
+  projectWorkflow ProjectWorkflow @relation(fields: [projectWorkflowId], references: [id], onDelete: Cascade)
+
+  @@index([projectWorkflowId])
+}
+
+// ============================================================
+// RemovedKeyword — soft-archive of keywords removed from an
+// AST table. Preserves the keyword's prior state so admin can
+// review or restore. Two removal sources today:
+//   "manual" — admin clicked Remove in the AST table
+//   "auto-ai-detected-irrelevant" — Auto-Analyze salvage
+//   mechanism flagged as irrelevant (Session 3b)
+// `aiReasoning` is the model's text rationale for auto removals.
+// ============================================================
+model RemovedKeyword {
+  id                String   @id @default(uuid())
+  projectWorkflowId String
+  originalKeywordId String?
+  keyword           String
+  volume            Int      @default(0)
+  sortingStatus     String   @default("Unsorted")
+  tags              String   @default("")
+  topic             String   @default("")
+  canvasLoc         Json     @default("{}")
+  removedAt         DateTime @default(now())
+  removedBy         String
+  removedSource     String   @default("manual")
+  aiReasoning       String?  @db.Text
 
   projectWorkflow ProjectWorkflow @relation(fields: [projectWorkflowId], references: [id], onDelete: Cascade)
 

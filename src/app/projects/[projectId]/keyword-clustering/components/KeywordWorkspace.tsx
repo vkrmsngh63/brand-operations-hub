@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import ASTTable from './ASTTable';
+import type { RemovedKeyword } from './ASTTable';
 import MTTable from './MTTable';
 import type { MTEntry } from './MTTable';
 import TIFTable from './TIFTable';
@@ -11,7 +12,9 @@ import AutoAnalyze from './AutoAnalyze';
 import ScrollArrows from './ScrollArrows';
 import FloatingPanel from './FloatingPanel';
 import { useKeywords } from '@/hooks/useKeywords';
+import type { Keyword } from '@/hooks/useKeywords';
 import { useCanvas } from '@/hooks/useCanvas';
+import { authFetch } from '@/lib/authFetch';
 import './workspace.css';
 
 interface KeywordWorkspaceProps {
@@ -114,10 +117,54 @@ function AIActionsPane({ view, onSetView, onOpenAA }: {
 export default function KeywordWorkspace({ projectId, userId, aiMode }: KeywordWorkspaceProps) {
   const {
     keywords, loading, saving, fetchKeywords, addKeyword, bulkImport,
-    updateKeyword, batchUpdate, deleteKeyword, bulkDelete, reorder,
+    updateKeyword, batchUpdate, reorder, setKeywords,
   } = useKeywords(projectId);
 
   const canvas = useCanvas(projectId);
+
+  // ── Removed-keywords (soft archive) state ────────────────────
+  const [removedKeywords, setRemovedKeywords] = useState<RemovedKeyword[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await authFetch('/api/projects/' + projectId + '/removed-keywords');
+        if (!res.ok || cancelled) return;
+        const data: RemovedKeyword[] = await res.json();
+        if (!cancelled) setRemovedKeywords(data);
+      } catch (e) {
+        console.warn('Failed to load removed keywords', e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [projectId]);
+
+  const softArchiveKeywords = useCallback(async (ids: string[]) => {
+    const res = await authFetch('/api/projects/' + projectId + '/removed-keywords', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ keywordIds: ids, removedSource: 'manual' }),
+    });
+    if (!res.ok) throw new Error('Soft-archive failed: ' + res.status);
+    const data: { removed: RemovedKeyword[] } = await res.json();
+    setKeywords(prev => prev.filter(k => !ids.includes(k.id)));
+    setRemovedKeywords(prev => [...data.removed, ...prev]);
+  }, [projectId, setKeywords]);
+
+  const restoreRemovedKeyword = useCallback(async (removedId: string) => {
+    const res = await authFetch(
+      '/api/projects/' + projectId + '/removed-keywords/' + removedId + '/restore',
+      { method: 'POST' }
+    );
+    if (!res.ok) {
+      if (res.status === 409) throw new Error('A keyword with this text already exists.');
+      throw new Error('Restore failed: ' + res.status);
+    }
+    const data: { restored: Keyword } = await res.json();
+    setKeywords(prev => [...prev, data.restored]);
+    setRemovedKeywords(prev => prev.filter(r => r.id !== removedId));
+  }, [projectId, setKeywords]);
 
   const [tifKeywords, setTifKeywords] = useState<string[]>([]);
   const [mtEntries, setMtEntries] = useState<MTEntry[]>([]);
@@ -193,12 +240,13 @@ export default function KeywordWorkspace({ projectId, userId, aiMode }: KeywordW
       <ScrollArrows>
         <ASTTable
           keywords={keywords}
+          removedKeywords={removedKeywords}
           onAddKeyword={addKeyword}
           onBulkImport={bulkImport}
           onUpdateKeyword={updateKeyword}
           onBatchUpdate={batchUpdate}
-          onDeleteKeyword={deleteKeyword}
-          onBulkDelete={bulkDelete}
+          onSoftArchive={softArchiveKeywords}
+          onRestoreRemoved={restoreRemovedKeyword}
           onReorder={reorder}
           loading={loading}
           onAddToTif={addToTif}

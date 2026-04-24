@@ -68,6 +68,7 @@ const AA_BATCH_TIERS = [
 ];
 
 const AA_PRICING: Record<string, { inputPer1M: number; outputPer1M: number }> = {
+  'claude-opus-4-7':   { inputPer1M: 5.00, outputPer1M: 25.00 },
   'claude-opus-4-6':   { inputPer1M: 5.00, outputPer1M: 25.00 },
   'claude-sonnet-4-6': { inputPer1M: 3.00, outputPer1M: 15.00 },
   'claude-opus-4-5':   { inputPer1M: 5.00, outputPer1M: 25.00 },
@@ -216,6 +217,75 @@ export default function AutoAnalyze({
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
   useEffect(() => { keywordsRef.current = allKeywords; }, [allKeywords]);
   useEffect(() => { sisterLinksRef.current = sisterLinks; }, [sisterLinks]);
+
+  /* ── Settings persistence ──────────────────────────────────────
+     Load on mount, debounced auto-save on change. apiKey stays in
+     browser localStorage so the user's secret never sits in our DB;
+     all other settings sync per-user-per-project via UserPreference. */
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const settingsDbKey = 'aa_settings_' + projectId;
+  const apiKeyLsKey = 'aa_apikey_' + projectId;
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const storedApiKey = localStorage.getItem(apiKeyLsKey);
+        if (storedApiKey && !cancelled) setApiKey(storedApiKey);
+      } catch { /* localStorage unavailable */ }
+      try {
+        const res = await authFetch('/api/user-preferences/' + encodeURIComponent(settingsDbKey));
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        if (!data.value) return;
+        const s = JSON.parse(data.value);
+        if (cancelled) return;
+        if (s.apiMode !== undefined) setApiMode(s.apiMode);
+        if (s.model !== undefined) setModel(s.model);
+        if (s.seedWords !== undefined) setSeedWords(s.seedWords);
+        if (s.volumeThreshold !== undefined) setVolumeThreshold(s.volumeThreshold);
+        if (s.batchSize !== undefined) setBatchSize(s.batchSize);
+        if (s.processingMode !== undefined) setProcessingMode(s.processingMode);
+        if (s.thinkingMode !== undefined) setThinkingMode(s.thinkingMode);
+        if (s.thinkingBudget !== undefined) setThinkingBudget(s.thinkingBudget);
+        if (s.keywordScope !== undefined) setKeywordScope(s.keywordScope);
+        if (s.stallTimeout !== undefined) setStallTimeout(s.stallTimeout);
+        if (s.reviewMode !== undefined) setReviewMode(s.reviewMode);
+        if (s.initialPrompt !== undefined) setInitialPrompt(s.initialPrompt);
+        if (s.primerPrompt !== undefined) setPrimerPrompt(s.primerPrompt);
+      } catch (e) {
+        console.warn('Failed to load AA settings', e);
+      } finally {
+        if (!cancelled) setSettingsLoaded(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
+
+  useEffect(() => {
+    if (!settingsLoaded) return;
+    try { localStorage.setItem(apiKeyLsKey, apiKey); } catch { /* ignore */ }
+  }, [apiKey, apiKeyLsKey, settingsLoaded]);
+
+  useEffect(() => {
+    if (!settingsLoaded) return;
+    const timer = setTimeout(() => {
+      const payload = {
+        apiMode, model, seedWords, volumeThreshold, batchSize,
+        processingMode, thinkingMode, thinkingBudget, keywordScope,
+        stallTimeout, reviewMode, initialPrompt, primerPrompt,
+      };
+      authFetch('/api/user-preferences/' + encodeURIComponent(settingsDbKey), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value: JSON.stringify(payload) }),
+      }).catch(e => console.warn('Failed to save AA settings', e));
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [settingsLoaded, settingsDbKey, apiMode, model, seedWords, volumeThreshold, batchSize,
+      processingMode, thinkingMode, thinkingBudget, keywordScope,
+      stallTimeout, reviewMode, initialPrompt, primerPrompt]);
 
   const logRef = useRef<HTMLDivElement>(null);
 
@@ -1218,6 +1288,18 @@ export default function AutoAnalyze({
         const result = await processBatch(batch);
         if (abortRef.current) break;
 
+        // Record cost for this attempt as soon as the API call returns. Anthropic
+        // bills for tokens regardless of whether our validation passes downstream,
+        // so failed-validation retries and Mode A→B auto-switches must still
+        // accumulate cost. batch.cost accumulates across attempts; batch.tokensUsed
+        // reflects the most recent attempt.
+        const attemptCost = calcCost(result.tokensUsed);
+        batch.tokensUsed = result.tokensUsed;
+        batch.cost += attemptCost;
+        setTotalSpent(prev => prev + attemptCost);
+        totalSpentRef.current += attemptCost;
+        aaLog('  Batch ' + batch.batchNum + ' attempt ' + batch.attempts + ' — API call complete. Cost: $' + attemptCost.toFixed(3), 'info');
+
         const validation = validateResult(result, batch);
         if (!validation.ok) {
           // HC4/HC5 signal Mode A dropped pre-existing data; Mode B (delta) recovers faster than retrying Mode A.
@@ -1249,14 +1331,10 @@ export default function AutoAnalyze({
         }
 
         batch.result = result;
-        batch.tokensUsed = result.tokensUsed;
-        batch.cost = calcCost(result.tokensUsed);
-        setTotalSpent(prev => prev + batch.cost);
-        totalSpentRef.current += batch.cost;
         batch.reevalReport = result.reevalReport;
         batch.newTopicCount = result.newTopics.length;
 
-        aaLog('Batch ' + batch.batchNum + ' — API OK. Cost: $' + batch.cost.toFixed(3), 'ok');
+        aaLog('Batch ' + batch.batchNum + ' — passed validation. Total cost (all attempts): $' + batch.cost.toFixed(3), 'ok');
 
         if (reviewMode) {
           setPendingResult(result);
@@ -1495,6 +1573,7 @@ export default function AutoAnalyze({
             <div className="aa-row">
               <span className="aa-label">Model<span className="aa-help">ⓘ<span className="aa-tip">Which Claude model to use. Opus is most capable but slower/costlier. Sonnet is a good balance. Haiku is fastest/cheapest.</span></span></span>
               <select className="aa-select" value={model} onChange={e => setModel(e.target.value)} disabled={aaState !== 'IDLE'}>
+                <option value="claude-opus-4-7">Claude Opus 4.7</option>
                 <option value="claude-opus-4-6">Claude Opus 4.6</option>
                 <option value="claude-sonnet-4-6">Claude Sonnet 4.6</option>
                 <option value="claude-opus-4-5">Claude Opus 4.5</option>

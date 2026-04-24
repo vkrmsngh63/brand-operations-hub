@@ -17,12 +17,28 @@ export async function GET(
   const { projectWorkflowId } = auth;
 
   try {
-    const [canvasState, pathways, sisterLinks] = await Promise.all([
+    const [canvasState, pathways, sisterLinks, maxNode, maxPathway] = await Promise.all([
       prisma.canvasState.findUnique({ where: { projectWorkflowId } }),
       prisma.pathway.findMany({ where: { projectWorkflowId } }),
       prisma.sisterLink.findMany({ where: { projectWorkflowId } }),
+      prisma.canvasNode.aggregate({ where: { projectWorkflowId }, _max: { id: true } }),
+      prisma.pathway.aggregate({ where: { projectWorkflowId }, _max: { id: true } }),
     ]);
-    return NextResponse.json({ canvasState, pathways, sisterLinks });
+
+    // Self-heal nextNodeId / nextPathwayId on read. The stored counter can
+    // drift below the actual max id (observed: Bursitis canvas had nextNodeId=5
+    // vs max(CanvasNode.id)=104). Returning max(stored, observed_max+1) means
+    // every consumer (AutoAnalyze, manual node create, useCanvas) gets a
+    // collision-free next id without needing a one-off migration.
+    const healedCanvasState = canvasState
+      ? {
+          ...canvasState,
+          nextNodeId: Math.max(canvasState.nextNodeId, (maxNode._max.id ?? 0) + 1),
+          nextPathwayId: Math.max(canvasState.nextPathwayId, (maxPathway._max.id ?? 0) + 1),
+        }
+      : null;
+
+    return NextResponse.json({ canvasState: healedCanvasState, pathways, sisterLinks });
   } catch (error) {
     console.error('GET canvas error:', error);
     return NextResponse.json(

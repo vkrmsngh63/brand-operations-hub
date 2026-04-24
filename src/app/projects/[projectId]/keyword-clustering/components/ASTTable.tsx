@@ -33,13 +33,18 @@ function parseTopics(str: string): string[] {
   return (str || '').split('|').map(t => t.trim()).filter(Boolean);
 }
 
-interface RemovedKeyword {
+export interface RemovedKeyword {
   id: string;
+  originalKeywordId: string | null;
   keyword: string;
-  volume: string;
+  volume: number;
   sortingStatus: SortingStatus;
   tags: string;
-  removedAt: number;
+  topic: string;
+  removedAt: string;
+  removedBy: string;
+  removedSource: 'manual' | 'auto-ai-detected-irrelevant';
+  aiReasoning: string | null;
 }
 
 // ── Split selection helpers (kwId → Set of topic strings) ──────
@@ -67,20 +72,21 @@ function splitAllChecked(map: SplitSelMap): { kwId: string; topic: string }[] {
 
 interface ASTTableProps {
   keywords: Keyword[];
+  removedKeywords: RemovedKeyword[];
   onAddKeyword: (kw: string, vol: string) => Promise<boolean>;
   onBulkImport: (rows: { keyword: string; volume?: string }[]) => Promise<{ added: number; dupes: number }>;
   onUpdateKeyword: (id: string, patch: Partial<Keyword>) => Promise<void>;
   onBatchUpdate: (ids: string[], patch: Partial<Keyword>) => Promise<void>;
-  onDeleteKeyword: (id: string) => Promise<void>;
-  onBulkDelete: (ids: string[]) => Promise<void>;
+  onSoftArchive: (ids: string[]) => Promise<void>;
+  onRestoreRemoved: (removedId: string) => Promise<void>;
   onReorder: (reordered: Keyword[]) => void;
   loading?: boolean;
   onAddToTif?: (kws: string[]) => void;
 }
 
 export default function ASTTable({
-  keywords, onAddKeyword, onBulkImport, onUpdateKeyword, onBatchUpdate,
-  onDeleteKeyword, onBulkDelete, onReorder, loading, onAddToTif,
+  keywords, removedKeywords, onAddKeyword, onBulkImport, onUpdateKeyword, onBatchUpdate,
+  onSoftArchive, onRestoreRemoved, onReorder, loading, onAddToTif,
 }: ASTTableProps) {
   const [searchQ, setSearchQ] = useState('');
   const [searchInput, setSearchInput] = useState('');
@@ -113,7 +119,6 @@ export default function ASTTable({
   const volInputRef = useRef<HTMLInputElement>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<{ id: string; pos: 'above' | 'below' } | null>(null);
-  const [removedTerms, setRemovedTerms] = useState<RemovedKeyword[]>([]);
   const [showRemovedOverlay, setShowRemovedOverlay] = useState(false);
   const [colWidths, setColWidths] = useState([22, 160, 80, 110, 90, 100, 110]);
   const resizeRef = useRef<{ col: number; startX: number; startW: number } | null>(null);
@@ -250,24 +255,29 @@ export default function ASTTable({
   }
 
   async function handleRemove(k: Keyword) {
-    if (selected.has(k.id) && selected.size > 0) {
-      const ids = [...selected];
-      const toArchive = keywords.filter(kw => ids.includes(kw.id));
-      setRemovedTerms(prev => [...toArchive.map(kw => ({ id: kw.id, keyword: kw.keyword, volume: kw.volume, sortingStatus: 'Unsorted' as SortingStatus, tags: '', removedAt: Date.now() })), ...prev]);
-      await onBulkDelete(ids); setSelected(new Set());
-      showToast(`✓ Removed ${ids.length} keyword${ids.length !== 1 ? 's' : ''} → Removed Terms.`);
-    } else {
-      setRemovedTerms(prev => [{ id: k.id, keyword: k.keyword, volume: k.volume, sortingStatus: 'Unsorted', tags: '', removedAt: Date.now() }, ...prev]);
-      await onDeleteKeyword(k.id);
-      setSelected(prev => { const n = new Set(prev); n.delete(k.id); return n; });
-      showToast(`Keyword removed → Removed Terms.`);
+    const ids = (selected.has(k.id) && selected.size > 0) ? [...selected] : [k.id];
+    try {
+      await onSoftArchive(ids);
+      if (ids.length > 1) {
+        setSelected(new Set());
+        showToast(`✓ Removed ${ids.length} keywords → Removed Terms.`);
+      } else {
+        setSelected(prev => { const n = new Set(prev); n.delete(k.id); return n; });
+        showToast(`Keyword removed → Removed Terms.`);
+      }
+    } catch (e) {
+      showToast(`⚠ Remove failed: ${e instanceof Error ? e.message : 'unknown'}`);
     }
   }
 
   async function handleRestore(rm: RemovedKeyword) {
     if (keywords.some(k => k.keyword === rm.keyword)) { showToast(`⚠ "${rm.keyword}" already exists.`); return; }
-    const ok = await onAddKeyword(rm.keyword, String(rm.volume || ''));
-    if (ok) { setRemovedTerms(prev => prev.filter(r => r !== rm)); showToast(`✓ "${rm.keyword}" restored.`); }
+    try {
+      await onRestoreRemoved(rm.id);
+      showToast(`✓ "${rm.keyword}" restored.`);
+    } catch (e) {
+      showToast(`⚠ Restore failed: ${e instanceof Error ? e.message : 'unknown'}`);
+    }
   }
 
   async function handleTagEdit(kwId: string, oldTagsStr: string, newTagsStr: string) {
@@ -592,7 +602,7 @@ export default function ASTTable({
       <div className="ast-ph">
         <span>All Search Terms</span>
         <button className="ast-btn-rm" onClick={() => setShowRemovedOverlay(true)} title="Show removed keywords">
-          🗑 Removed Terms{removedTerms.length > 0 && <span className="ast-rm-badge">{removedTerms.length}</span>}
+          🗑 Removed Terms{removedKeywords.length > 0 && <span className="ast-rm-badge">{removedKeywords.length}</span>}
         </button>
       </div>
       <div className="ast-ctrl">
@@ -688,21 +698,35 @@ export default function ASTTable({
         <div className="ast-rm-overlay" onClick={() => setShowRemovedOverlay(false)}>
           <div className="ast-rm-card" onClick={e => e.stopPropagation()}>
             <div className="ast-rm-hdr">
-              <span className="ast-rm-title">🗑 All Removed Search Terms&nbsp;<span style={{ fontSize: 10, fontWeight: 400, color: 'var(--text-l)', textTransform: 'none', letterSpacing: 0 }}>({removedTerms.length} term{removedTerms.length !== 1 ? 's' : ''})</span></span>
+              <span className="ast-rm-title">🗑 All Removed Search Terms&nbsp;<span style={{ fontSize: 10, fontWeight: 400, color: 'var(--text-l)', textTransform: 'none', letterSpacing: 0 }}>({removedKeywords.length} term{removedKeywords.length !== 1 ? 's' : ''})</span></span>
               <button className="ast-rm-close" onClick={() => setShowRemovedOverlay(false)} title="Close">✕</button>
             </div>
             <div className="ast-rm-frame">
               <table className="ast-tbl" style={{ width: '100%' }}>
-                <colgroup><col style={{ minWidth: 180 }} /><col style={{ width: 96 }} /><col style={{ width: 110 }} /><col style={{ width: 90 }} /><col style={{ width: 70 }} /></colgroup>
-                <thead><tr><th><div className="th-inner">Keyword</div></th><th><div className="th-inner">Volume</div></th><th><div className="th-inner">Sorting Status</div></th><th><div className="th-inner">Tags</div></th><th style={{ textAlign: 'center' }}><div className="th-inner">Actions</div></th></tr></thead>
+                <colgroup><col style={{ minWidth: 180 }} /><col style={{ width: 96 }} /><col style={{ width: 110 }} /><col style={{ width: 90 }} /><col style={{ width: 80 }} /><col style={{ width: 70 }} /></colgroup>
+                <thead><tr><th><div className="th-inner">Keyword</div></th><th><div className="th-inner">Volume</div></th><th><div className="th-inner">Sorting Status</div></th><th><div className="th-inner">Tags</div></th><th><div className="th-inner">Source</div></th><th style={{ textAlign: 'center' }}><div className="th-inner">Actions</div></th></tr></thead>
                 <tbody>
-                  {removedTerms.length === 0 ? (<tr><td colSpan={5} style={{ textAlign: 'center', padding: 24, color: 'var(--text-l)', fontSize: 11 }}>No removed search terms yet.</td></tr>) : removedTerms.map((rm, idx) => {
+                  {removedKeywords.length === 0 ? (<tr><td colSpan={6} style={{ textAlign: 'center', padding: 24, color: 'var(--text-l)', fontSize: 11 }}>No removed search terms yet.</td></tr>) : removedKeywords.map((rm) => {
                     const pillCls = rm.sortingStatus === 'Completely Sorted' ? 'ast-pill ast-pill-c' : rm.sortingStatus === 'AI-Sorted' ? 'ast-pill ast-pill-ai' : rm.sortingStatus === 'Partially Sorted' ? 'ast-pill ast-pill-p' : 'ast-pill ast-pill-u';
-                    return (<tr key={`${rm.keyword}-${idx}`}>
+                    const isAuto = rm.removedSource === 'auto-ai-detected-irrelevant';
+                    const sourceLabel = isAuto ? 'AI auto' : 'Manual';
+                    const sourceTitle = isAuto
+                      ? 'Auto-archived by Auto-Analyze salvage' + (rm.aiReasoning ? ` — reason: ${rm.aiReasoning}` : '')
+                      : 'Manually removed by admin';
+                    return (<tr key={rm.id}>
                       <td><div className="ast-kw-cell"><span className="ast-kw-txt" title={rm.keyword}>{rm.keyword}</span><button className="ast-gs-btn" style={{ opacity: 1 }} onClick={() => googleSearch(rm.keyword)}>?</button></div></td>
-                      <td style={{ textAlign: 'right', paddingRight: 6 }}>{rm.volume ? fmtV(rm.volume) : ''}</td>
+                      <td style={{ textAlign: 'right', paddingRight: 6 }}>{rm.volume ? fmtV(String(rm.volume)) : ''}</td>
                       <td><span className={pillCls}>{rm.sortingStatus}</span></td>
                       <td style={{ fontSize: 9, color: 'var(--text-m)' }}>{rm.tags || ''}</td>
+                      <td style={{ fontSize: 9 }}>
+                        <span
+                          className="ast-pill"
+                          title={sourceTitle}
+                          style={{ background: isAuto ? 'var(--accent)' : 'var(--text-l)', color: '#fff' }}
+                        >
+                          {sourceLabel}
+                        </span>
+                      </td>
                       <td style={{ textAlign: 'center' }}><button className="ast-restore-btn" title="Restore keyword" onClick={() => handleRestore(rm)}>↩</button></td>
                     </tr>);
                   })}
