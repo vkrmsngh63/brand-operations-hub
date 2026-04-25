@@ -2,8 +2,9 @@
 ## Append-only record of mistakes made during chats and lessons learned
 
 **Started:** April 16, 2026
-**Last updated:** April 25, 2026 (Phase 1g-test follow-up Part 3 — Pivot Session B — 1 new entry: medium-severity Rule-16 zoom-out miss — Claude shipped the Step-3 `stableId` NOT NULL constraint to live production before noticing two pre-existing production routes would fail at runtime on the next node-create / Auto-Analyze run; director approved the in-session patch (Option A) which restored production safety; lesson captured for future migration-with-existing-callers sequencing)
-**Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-B (Claude Code)
+**Last updated:** April 25, 2026 (Phase 1g-test follow-up Part 3 — Pivot Session D — 1 new entry: medium-severity consolidated entry covering 5 mid-session bugs surfaced by live testing of the new V3 wiring layer (root-topic relationship validation drift; Prisma-6 P2025 on loose upsert where shape; global-PK collision band-aided via global autoheal; missing-CanvasState synthesis; BATCH_REVIEW newTopics not populated). All 5 caught + fixed in-session via flag-then-fix-then-test cycles; live-site never showed user-visible symptoms beyond the test runs; structural keyword-preservation property of the V3 design held throughout. Two architectural lessons named (interface-drift between applier and prompt; global-PK design needs schema migration for proper fix))
+**Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-D (Claude Code)
+**Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-B (Claude Code)
 **Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-A (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-session3b-verify (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-session3b (Claude Code)
@@ -42,6 +43,53 @@
 ---
 
 ## Entries
+
+### 2026-04-25 — Five mid-session V3 wiring bugs surfaced by live testing (medium severity consolidated; all caught + fixed in-session via flag-then-fix-then-test cycles)
+**Session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-D (Claude Code)
+**Tool/Phase affected:** Keyword Clustering / Auto-Analyze / Pivot Session D / V3 wiring layer + production routes
+**Severity:** Medium (live testing surfaced real production bugs in code we had just shipped; all 5 corrected in-session before any user-facing failure beyond the test runs themselves; ~$1.20 in API spend lost to test runs that hit each bug; structural keyword-preservation property of the V3 design held throughout)
+
+**What happened:** Pivot Session D's main wiring commit (`ac4de31`) shipped a new `src/lib/auto-analyze-v3.ts` module + integrated it into `AutoAnalyze.tsx` with a V3/V2 toggle. Build passed; 71 unit tests passed. Director then ran live tests on Bursitis. Five distinct bugs surfaced in succession; each was caught from the Activity Log, diagnosed, fixed, re-tested, and the fix shipped. All 5 fit a single pattern: the new code was correct in isolation but exposed pre-existing latent issues OR drifted from contract assumptions made elsewhere.
+
+The five bugs in order (with the fix commit hash):
+
+1. **Applier rejected ADD_TOPIC root topics with `relationship: null`** (`c3d2a80`). Test 1 first batch failed atomically with `op #0 ADD_TOPIC: relationship must be "linear" or "nested"`. PIVOT_DESIGN.md §1.1 + AUTO_ANALYZE_PROMPT_V3.md said relationship is "ignored for root" but `applyAddTopic` validated unconditionally before checking parent. The applier already nulled the field for root topics at apply time; the upfront validation was just wrong. Fix: skip validation when `parent === null`; widened `AddTopicOp.relationship` type to `Relationship | null`; parser passes through whatever the model emitted. Three regression tests added.
+
+2. **Prisma 6 P2025 "Record not found" on every `prisma.canvasNode.upsert`** (`6b70913`). Test 2 hit this on every batch's atomic rebuild. The route used `where: { id, projectWorkflowId }` — a loose shape Prisma 6 no longer accepts as a `WhereUniqueInput` because `(id, projectWorkflowId)` is not a registered unique key. CanvasNode's only registered uniques are `id @id` (global) and `@@unique([projectWorkflowId, stableId])` (per-project, added by Pivot Session B). Switched the upsert's where to `projectWorkflowId_stableId`. Backward-compatible — V2 callers don't send stableId; route falls back to `t-${n.id}` convention.
+
+3. **Global-PK collision: `CanvasNode.id` is `Int @id` (one integer space across all projects) but app treats it as project-scoped via per-project `nextNodeId` counter** (`43f773f`). The previous fix surfaced the deeper issue: "Unique constraint failed on the fields: (`id`)". Test project's stored `nextNodeId=1` → V3 issued ids 1–8 → collision with Bursitis's id 1–104. The `/canvas` GET autoheal previously consulted only the per-project max id, unaware that other projects had taken those ids. Switched the autoheal aggregates from per-project to global so the returned counter is past every existing id in the DB. Latent bug remains in `/canvas/nodes` POST (reads `nextNodeId` from DB directly, bypassing GET autoheal); deferred to ROADMAP — proper fix is schema migration to composite PK or autoincrement.
+
+4. **Synthesized-CanvasState defaults missing for projects with no `CanvasState` row** (`d485cf9`). The previous fix only kicked in when the row existed. Test project never had Auto-Analyze run on it before → no row → autoheal returned `canvasState: null` → client fell back to `nextNodeId=1` → re-collision. Synthesize a minimal CanvasState with global-max-aware counters when the row doesn't exist (in-memory only; no DB write added).
+
+5. **BATCH_REVIEW screen always showed "Topics: None" for V3** (`d624556`). Cosmetic but real — when reviewMode is on, the user can't make an informed apply/skip decision without seeing what's about to land. `processBatchV3` returned `newTopics: []` regardless. Populate from parsed ADD_TOPIC operations after validation succeeds.
+
+**Root cause (general):** New code shipping into a complex system surfaces pre-existing latent issues. The unit tests for `auto-analyze-v3.ts` covered the wiring layer in isolation (TSV serialization, JSONL parsing, applier-state translation, materializer integer-id assignment) and 71 tests passed before the first commit. But three classes of real-world failure were invisible to the unit suite:
+
+- **Contract drift between layers** (bug #1) — the applier and the V3 prompt both came from PIVOT_DESIGN.md but were written in different sessions; the relationship-validation discrepancy was not caught because the applier's tests always supplied a non-null relationship and the prompt says one thing while the applier expected another.
+- **Prisma 6 behavior change** (bug #2) — pre-existing route code worked under earlier Prisma versions but P2025s under 6's stricter WhereUniqueInput handling. This was invisible until the rebuild route was actually called by V3 against a real project (the V2 path on Bursitis happened to not trigger this code path frequently because most V2 batches updated existing-by-title nodes whose ids already existed, so the upsert behaved like a pure update).
+- **Pre-existing schema design issue** (bugs #3 + #4) — `CanvasNode.id` being `Int @id` (global) was a long-standing bug that didn't bite until a project with no canvas history tried to issue new ids that collided with another project's range. V2 worked on Bursitis because Bursitis itself owns the highest existing id range, so its `nextNodeId` is always past every other project's ids by accident.
+
+**How caught:** All 5 caught from the Activity Log during live director testing on Bursitis. The diagnostic enrichment commit (`1c44238`) — adding the underlying Prisma error message to the rebuild route's 500 response as a `detail` field — was critical for catching #2/#3/#4 since the director can't read Vercel server logs.
+
+**Correction:** Five sequential commits over the session, each fixing one bug + adding regression tests where applicable; combined with the diagnostic enrichment commit, total 6 fix commits + the main wiring commit = 7 commits pushed in-session. Build clean throughout. Tests grew from 71 to 74 (3 regression tests added for bug #1).
+
+**Prevention:**
+
+1. **Audit cross-layer contracts before shipping new wiring**, not just within a single layer's unit tests. When two layers share a contract (the applier's vocabulary + the V3 prompt's vocabulary, both from PIVOT_DESIGN.md), build at least one E2E test that goes prompt → parse → apply, exercising every operation type with realistic AI-emitted shapes (including the edge case where the model emits a field as null because the prompt says it's "ignored").
+
+2. **For new code that calls into pre-existing routes that haven't been exercised by the new code path before**, add a diagnostic enrichment to those routes BEFORE shipping, not after the first failure. The diagnostic enrichment commit (`1c44238`) saved hours of guessing on bugs #3 + #4. Generalizing: any new caller of an existing route that does work in production should bring an "if 500, return the underlying error in `detail`" patch with it as a one-line safety net.
+
+3. **For pre-existing latent design issues like global-PK collisions**, surfacing them via a band-aid (the global autoheal) is appropriate to unblock the immediate session, but the proper fix (schema migration) must be captured as a TODO with an explicit destination. Captured in ROADMAP Infrastructure TODOs as part of this session's Rule-14e sweep.
+
+**Architectural pattern named (procedural, generalizable):** "new code surfaces old bugs — diagnostic enrichment is cheap insurance." Whenever new code wires into pre-existing routes that the new code path will exercise differently, ship the diagnostic enrichment alongside the new code, not after the first failure. The cost of a 500-response detail field is one extra commit and zero runtime impact; the benefit is converting hours of remote-debugging guessing into minutes of "here's the actual error."
+
+**Rule compliance during the surfacing:**
+- Rule 7 (acknowledge slips openly, don't minimize) — all 5 framed as "real bugs we shipped, here's what's wrong, here's the fix" rather than minimized as edge cases.
+- Rule 8 (destructive op gate) — N/A; no DB schema changes were involved in the fixes (the global autoheal is a read-only behaviour change).
+- Rule 9 (deploy gate) — observed for every push (7 explicit Rule-9 approvals in-session).
+- Rule 14a/14b (plain language + per-option context + recommendation) on every option presented.
+- Rule 14e (deferred items captured) — 3 cosmetic/architectural follow-up items captured in ROADMAP Infrastructure TODOs (label drift, global-PK design, cancel-state cleanup).
+- Rule 16 (context degradation) — Claude proactively flagged at ~2.5 hours into session and recommended end-of-session over more batches; director picked end-of-session.
 
 ### 2026-04-25 — Shipped a NOT NULL DB constraint to production before checking existing callers (medium severity, Rule-16 zoom-out miss; corrected mid-session via in-session patch)
 **Session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-B (Claude Code)

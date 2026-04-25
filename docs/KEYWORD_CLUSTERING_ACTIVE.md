@@ -1,9 +1,10 @@
 # KEYWORD CLUSTERING — ACTIVE DOCUMENT
 ## Current state of the Keyword Clustering workflow tool (Group B, tool-specific)
 
-**Last updated:** April 25, 2026 (Phase 1g-test follow-up Part 3 — Pivot Session C — Initial Prompt + Primer rewrite landed as new file `docs/AUTO_ANALYZE_PROMPT_V3.md`; output contract changed from "complete updated TSV table" to "list of operations from the canonical vocabulary in `src/lib/operation-applier.ts`"; legacy V2 file untouched as historical reference; doc-only session, no code, no DB; new POST-PIVOT-SESSION-C STATE block added above)
-**Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-C (Claude Code)
-**Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-B (Claude Code)
+**Last updated:** April 25, 2026 (Phase 1g-test follow-up Part 3 — Pivot Session D — V3 wiring layer shipped + validated end-to-end on Bursitis; ~5× output reduction, ~4–7× cost reduction, ~4× wall-clock reduction vs. V2 baseline; **zero keyword loss confirmed structurally across 5+ Bursitis batches**; 7 commits pushed in-session; new POST-PIVOT-SESSION-D STATE block added above)
+**Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-D (Claude Code)
+**Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-C (Claude Code)
+**Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-pivot-session-B (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-pivot-session-A (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-session3b-verify (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-session3b (Claude Code)
@@ -19,6 +20,69 @@
 **When this tool graduates to stable completion:** This doc will be split into `KEYWORD_CLUSTERING_ARCHIVE.md` (full history) and `KEYWORD_CLUSTERING_DATA_CONTRACT.md` (what downstream tools need to know). See `DOCUMENTATION_ARCHITECTURE.md` §5 for the Tool Graduation Ritual.
 
 **Upload this doc when:** Working on ANY feature, test, or bugfix related to Keyword Clustering.
+
+---
+
+## ⚠️ POST-PIVOT-SESSION-D STATE (READ FIRST — updated 2026-04-25 Pivot Session D)
+
+**As of 2026-04-25 Pivot Session D (V3 wiring layer shipped + live-validated on Bursitis; 7 commits pushed in-session including 5 mid-session bug fixes):**
+
+### What this session did
+
+Pivot Session D's full scope per `docs/PIVOT_DESIGN.md` §4 landed in one session, with five mid-session bugs caught + fixed in flight via live testing on Bursitis.
+
+1. **New wiring layer `src/lib/auto-analyze-v3.ts`** (~470 LOC, pure-data, no I/O, no Prisma). Four exported helpers — `buildOperationsInputTsv` (9-column TSV per AUTO_ANALYZE_PROMPT_V3.md), `parseOperationsJsonl` (extracts `=== OPERATIONS ===` block, parses JSON Lines, translates snake_case → camelCase Operation discriminated union from `src/lib/operation-applier.ts`), `buildCanvasStateForApplier` (live Prisma rows → applier's pure-data shape), `materializeRebuildPayload` (applier output → `/canvas/rebuild` POST body, including integer-id assignment for new topics, parent + sister-link remapping, pathway propagation).
+
+2. **New unit-test file `src/lib/auto-analyze-v3.test.ts`** (28 tests, all passing). Combined with the 43 applier tests = **74 tests pass**. Run with `node --test --experimental-strip-types src/lib/auto-analyze-v3.test.ts`.
+
+3. **`AutoAnalyze.tsx` integration.** New `outputContract` setting (`'v3-operations'` default | `'v2-tsv'` legacy), persisted via `UserPreference` + checkpoint. New UI picker in the config section. New `assemblePromptV3` / `processBatchV3` / `validateResultV3` / `doApplyV3` functions implementing the V3 path. `runLoop` and `handleApplyBatch` dispatch on `outputContractRef`. V2 code paths preserved as defense-in-depth and selectable. ~444 lines added; build clean.
+
+4. **`CanvasNode` interface extended** in `src/hooks/useCanvas.ts` with `stableId: string` and `stabilityScore: number` (additive — `/canvas/nodes` GET already returned them via Prisma findMany).
+
+5. **End-to-end live validation on Bursitis** — 5+ batches across multiple runs, all succeeded after the bug-fix series:
+
+| Metric | V2 baseline | V3 actual (median Bursitis batch) | Improvement |
+|---|---|---|---|
+| Output tokens | 110,245 | 15K–27K | ~5× |
+| Cost per batch | $1.89 | $0.27–$0.46 | ~4–7× |
+| Wall-clock per batch | ~26 min | ~5–7 min | ~4× |
+| Keyword loss per batch | variable | **0 (structural)** | ✅ |
+
+The reconciliation pass after every successful apply reported `0 off-canvas → Reshuffled` — meaning no previously-AI-Sorted keyword was bumped off the canvas by the new batch. The "silence is preservation" architectural property held in production. Real cost is meaningfully above the design's optimistic $0.03–0.10 estimate (output dominates because each operation is ~100–300 tokens and the AI emits 15–25 ops per batch on a still-growing canvas) but the structural keyword-preservation win is the bigger architectural claim and it's solid.
+
+6. **Five mid-session bugs caught + fixed in flight** (full root-cause + fix detail in `CORRECTIONS_LOG.md` 2026-04-25 Pivot-Session-D entry):
+
+| # | Commit | Bug summary |
+|---|---|---|
+| 1 | `c3d2a80` | Applier rejected ADD_TOPIC root topics with null relationship — fixed by skipping linear|nested check when parent is null + widening type to `Relationship | null` |
+| (diag) | `1c44238` | `/canvas/rebuild` 500 hid Prisma error — added `detail` field to surface the underlying message |
+| 2 | `6b70913` | Prisma 6 P2025 on `prisma.canvasNode.upsert` — switched where to `projectWorkflowId_stableId` composite |
+| 3 | `43f773f` | Global-PK collision on `CanvasNode.id` — `/canvas` GET autoheal switched from per-project to global max |
+| 4 | `d485cf9` | Synthesized CanvasState missing for projects with no row — return defaults with global-max-aware counters |
+| 5 | `d624556` | BATCH_REVIEW screen always showed "Topics: None" for V3 — populate from parsed ADD_TOPIC operations |
+
+7. **Three cosmetic items deferred to ROADMAP Infrastructure TODOs** (per Rule 14e):
+   - `keywordScope` activity-log label drift (cosmetic ~3-line fix)
+   - `CanvasNode.id` global-PK schema design issue (proper fix needs migration)
+   - `handleCancel` / `handleResumeCheckpoint` in-progress batch status cleanup (cosmetic ~10-line fix)
+
+### What did NOT change this session
+
+- No DB schema or data changes (Pivot Session B already shipped them).
+- The legacy V2 code paths in `AutoAnalyze.tsx` (Mode A/B + delta merge + salvage + reconciliation) all still operate as before — selectable via the new picker. They keep running through Pivot Session E as defense-in-depth.
+
+### Live-site state after this session
+
+- Auto-Analyze panel now has an "Output contract" picker. Default is V3 for new sessions; V2 stays selectable.
+- Director must re-paste the V3 prompts (from `docs/AUTO_ANALYZE_PROMPT_V3.md` §1 and §2) into the Auto-Analyze panel for each project once before the V3 path runs cleanly. The textareas auto-save to `UserPreference` so it's a one-time-per-project paste.
+- Bursitis canvas grew during testing to 31 nodes (V3 created 24 new topics across the test batches with full upstream chains + sister links + correct keyword placements).
+- BATCH_REVIEW screen now displays new topic titles for V3 (was always showing "Topics: None" before commit `d624556`).
+
+### Standing instructions for next session — Pivot Session E
+
+- Read `docs/PIVOT_DESIGN.md` §4 Pivot Session E + this STATE block + `docs/ROADMAP.md` Infrastructure TODOs section.
+- Pivot Session E scope: make V3 the only path (deprecate V2 picker after a transition window); remove V2 Mode A/B + delta merge + salvage band-aid code paths from `AutoAnalyze.tsx`; address the 3 cosmetic Infrastructure TODOs from this session (label drift, global-PK schema migration, cancel-state cleanup).
+- The `CanvasNode.id` schema migration is the largest part of Session E and requires Rule-8 destructive-op approval.
 
 ---
 

@@ -1,9 +1,10 @@
 # DOCUMENT MANIFEST
 ## Ground-truth registry of every handoff document in the PLOS system
 
-**Last updated:** April 25, 2026 (Phase 1g-test follow-up Part 3 — Pivot Session C — Initial Prompt + Primer rewrite landed as new Group B file `docs/AUTO_ANALYZE_PROMPT_V3.md`; output contract changed from "complete updated TSV table" to "list of operations using the canonical vocabulary in `src/lib/operation-applier.ts`"; legacy V2 untouched; doc-only session, no code, no DB)
-**Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-C (Claude Code)
-**Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-B (Claude Code)
+**Last updated:** April 25, 2026 (Phase 1g-test follow-up Part 3 — Pivot Session D — V3 wiring layer shipped + validated end-to-end on Bursitis; `src/lib/auto-analyze-v3.ts` + `src/lib/auto-analyze-v3.test.ts` are new; `AutoAnalyze.tsx` integrated; `CanvasNode` interface extended; 7 commits pushed in-session including 5 mid-session bug fixes; doc-only updates this end-of-session: PIVOT_DESIGN, KEYWORD_CLUSTERING_ACTIVE, ROADMAP, CORRECTIONS_LOG, CHAT_REGISTRY, DOCUMENT_MANIFEST)
+**Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-D (Claude Code)
+**Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-C (Claude Code)
+**Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-pivot-session-B (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-pivot-session-A (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-session3b-verify (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-session3b (Claude Code)
@@ -33,28 +34,33 @@ These 13 documents form the persistent handoff context.
 | 3 | `PLATFORM_REQUIREMENTS.md` | Platform-wide requirements — scale, user-model, review cycle, audit, concurrency, phasing | 2026-04-17 | NO |
 | 4 | `NAVIGATION_MAP.md` | Every route + click path through PLOS — UI navigation source of truth | 2026-04-17 | NO |
 | 5 | `DATA_CATALOG.md` | Every data item — where it lives, Human Reference Language, cross-workflow sharing contracts | 2026-04-25 (Pivot Session B — §5 CanvasNode entries gain `stableId` (`t-N` format, persistent identifier the AI uses across batches) + `stabilityScore` (0.0–10.0; gates JUSTIFY_RESTRUCTURE at ≥7.0; populated later by stability-scoring algorithm)) | NO |
-| 6 | `ROADMAP.md` | Development execution plan — completed work + remaining phases | 2026-04-25 (Pivot Session C — Pivot Session C section added with full delivery summary; Pivot Session C item ✅ DONE; Pivot Session D promoted to NEXT priority; Phase 1g-test follow-up REMAINING list re-numbered) | ✅ YES |
-| 7 | `CORRECTIONS_LOG.md` | Append-only log of mistakes + extracted patterns | 2026-04-25 (Pivot Session B — 1 new medium-severity entry: shipped a NOT NULL DB constraint to production before checking pre-existing callers; corrected in-session via the patch path; new procedural pattern named "schema constraints have callers, not just data — audit both before tightening") | NO |
-| 8 | `CHAT_REGISTRY.md` | Chronological log of chats + URLs + work-summaries (post-Ckpt-9: Claude Code sessions use session-identifier format) | 2026-04-25 (Pivot Session C — new row for session_2026-04-25_phase1g-test-followup-part3-pivot-session-C; twelfth Claude Code session) | ✅ YES |
+| 6 | `ROADMAP.md` | Development execution plan — completed work + remaining phases | 2026-04-25 (Pivot Session D — Pivot Session D section added with full delivery summary; Pivot Session D item ✅ DONE; Pivot Session E promoted to NEXT; new Infrastructure TODOs section captures 3 deferred cosmetic items) | ✅ YES |
+| 7 | `CORRECTIONS_LOG.md` | Append-only log of mistakes + extracted patterns | 2026-04-25 (Pivot Session D — 1 new medium-severity consolidated entry: 5 mid-session V3 wiring bugs surfaced by live testing — root-topic relationship validation drift, Prisma 6 P2025 on loose upsert key, global-PK collision, missing-CanvasState synthesis, BATCH_REVIEW newTopics not populated; all 5 caught + fixed in-session; new procedural pattern named "new code surfaces old bugs — diagnostic enrichment is cheap insurance") | ✅ YES |
+| 8 | `CHAT_REGISTRY.md` | Chronological log of chats + URLs + work-summaries (post-Ckpt-9: Claude Code sessions use session-identifier format) | 2026-04-25 (Pivot Session D — new row for session_2026-04-25_phase1g-test-followup-part3-pivot-session-D; thirteenth Claude Code session) | ✅ YES |
 | 9 | `HANDOFF_PROTOCOL.md` | Rules for how chats operate — start/mid/end protocols, communication rules, interview rules | 2026-04-18 | NO |
 | 10 | `DOCUMENTATION_ARCHITECTURE.md` | Design of the doc-system itself (DLMS, tool graduation, group A/B, workflow interview pattern, Claude Code migration) | 2026-04-17 | NO |
 | 11 | `NEW_CHAT_PROMPT.md` | **Historical** — claude.ai era briefing template. Post-Phase-M, Claude Code sessions use `CLAUDE_CODE_STARTER.md` instead. | 2026-04-17 | NO |
-| 12 | `DOCUMENT_MANIFEST.md` | This file — ground-truth doc registry | 2026-04-25 (Pivot Session C — timestamps + modified flags + Pivot Session C summary; new Group B entry for `AUTO_ANALYZE_PROMPT_V3.md`) | ✅ YES |
+| 12 | `DOCUMENT_MANIFEST.md` | This file — ground-truth doc registry | 2026-04-25 (Pivot Session D — timestamps + modified flags + Pivot Session D summary) | ✅ YES |
 | 13 | `CLAUDE_CODE_MIGRATION.md` | Migration plan and operational rules for shifting from claude.ai to Claude Code. Executed successfully in Ckpt 9+9.5. | 2026-04-17 | NO |
 | 14 | `AI_TOOL_FEEDBACK_PROTOCOL.md` | Platform-wide standard for every AI-using tool in PLOS. Defines required integration points (structured decision output with reasoning, admin review surface with 3 actions + 2 feedback channels, feedback-repo write/read-back, quality scoring, model/provider registry), 3-phase implementation roll-out, and the primer text to include in every new workflow's design doc. | 2026-04-20 | NO |
 | 15 | `MODEL_QUALITY_SCORING.md` | Stability-score algorithm spec. Defines 0-10 stability_score per AI output item, factors that add/subtract to score, model's interpretation instructions, JUSTIFY_RESTRUCTURE payload requirement for high-score modifications, admin scoring guidelines (1-5 scale with 4 evaluation dimensions), meta-note on how algorithm was derived + review triggers + how to propose weight changes. | 2026-04-20 | NO |
 
-**Group A count: 15 documents.** 3 modified this session (ROADMAP, CHAT_REGISTRY, DOCUMENT_MANIFEST). No new Group A docs created this session. The 12 not-modified Group A docs retain their timestamps from prior sessions.
+**Group A count: 15 documents.** 4 modified this session (ROADMAP, CORRECTIONS_LOG, CHAT_REGISTRY, DOCUMENT_MANIFEST). No new Group A docs created this session. The 11 not-modified Group A docs retain their timestamps from prior sessions.
 
 **Not created this session (Group A):** no new Group A docs.
 
-**Created this session (Group B):** 1 new doc — `docs/AUTO_ANALYZE_PROMPT_V3.md` (~640 lines; the operation-based rewrite of the Auto-Analyze Initial Prompt + Primer Prompt). See Group B section below for entry.
+**Modified this session (Group B):**
+- `docs/PIVOT_DESIGN.md` — Pivot Session D marked ✅ DONE in §4 with full delivery summary; §6 metrics rewritten with real numbers from end-to-end Bursitis testing; header timestamp updated.
+- `docs/KEYWORD_CLUSTERING_ACTIVE.md` — new POST-PIVOT-SESSION-D STATE block added above POST-PIVOT-SESSION-C (which is preserved as historical context); header timestamp updated.
 
-**Also modified this session (Group B):**
-- `docs/PIVOT_DESIGN.md` — Pivot Session C marked ✅ DONE in §4 with full delivery summary; header timestamp updated.
-- `docs/KEYWORD_CLUSTERING_ACTIVE.md` — new POST-PIVOT-SESSION-C STATE block added above POST-PIVOT-SESSION-B (which is preserved as historical context); header timestamp updated.
-
-**Code changes this session (src/):** **NONE.** Pivot Session C is doc-only by design; no code paths touched, no DB changes, no `npm run build` rerun needed. Session D is the wiring session.
+**Code changes this session (src/):**
+- NEW `src/lib/auto-analyze-v3.ts` (~470 LOC; pure-data wiring layer — TSV serializer + JSONL parser + applier-state translation + rebuild-payload materializer).
+- NEW `src/lib/auto-analyze-v3.test.ts` (28 unit tests).
+- MODIFIED `src/lib/operation-applier.ts` (1 bug fix — ADD_TOPIC root-topic relationship validation; AddTopicOp type widened to `Relationship | null`).
+- MODIFIED `src/hooks/useCanvas.ts` (additive: `stableId: string` + `stabilityScore: number` on CanvasNode interface).
+- MODIFIED `src/app/projects/[projectId]/keyword-clustering/components/AutoAnalyze.tsx` (~444 lines added — V3 integration: outputContract setting + UI picker + assemblePromptV3 + processBatchV3 + validateResultV3 + doApplyV3 + dispatch in runLoop and handleApplyBatch).
+- MODIFIED `src/app/api/projects/[projectId]/canvas/rebuild/route.ts` (composite-key upsert via `projectWorkflowId_stableId` + diagnostic detail field on 500 response).
+- MODIFIED `src/app/api/projects/[projectId]/canvas/route.ts` (autoheal switched from per-project to global max + synthesized CanvasState defaults when row missing).
 
 **Files in commit (this session):**
 - `docs/AUTO_ANALYZE_PROMPT_V3.md` (NEW, ~640 lines).

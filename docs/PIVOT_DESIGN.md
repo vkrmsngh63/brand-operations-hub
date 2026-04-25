@@ -1,9 +1,10 @@
 # PIVOT DESIGN
 ## Operation-based output contract for Auto-Analyze (Keyword Clustering)
 
-**Last updated:** April 25, 2026 (Pivot Session C complete — Initial Prompt + Primer rewritten as `docs/AUTO_ANALYZE_PROMPT_V3.md`; output contract changed from "complete updated TSV table" to "list of operations" matching `src/lib/operation-applier.ts` vocabulary; doc-only session, V2 untouched as historical reference)
-**Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-C (Claude Code)
-**Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-B (Claude Code)
+**Last updated:** April 25, 2026 (Pivot Session D complete — V3 wiring layer shipped + validated end-to-end on Bursitis; ~5× output reduction, ~4–7× cost reduction, ~4× wall-clock reduction vs. V2 baseline; zero keyword loss confirmed structurally across 5+ batches; §4 Pivot Session D status updated; §6 metrics rewritten with real data)
+**Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-D (Claude Code)
+**Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-C (Claude Code)
+**Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-pivot-session-B (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-pivot-session-A (Claude Code)
 **Group:** B (tool-specific to Keyword Clustering's Auto-Analyze; loaded when pivot work is in scope)
 
@@ -184,12 +185,24 @@ Design + locked decisions. This doc is the deliverable. No code changes; no data
 - ✅ Three drift-check design questions locked with director's go-ahead: operation output syntax = JSON Lines; input-state format = TSV with Stable ID first column; standalone Reevaluation Report block = scrapped (operations carry reasons inline).
 - Director re-pastes new prompts into Auto-Analyze UI at end of session (concrete click path in the session handoff).
 
-### Pivot Session D — Wire it together + validate end-to-end
-- Update `AutoAnalyze.tsx` to send operations-output prompts and parse operation-list responses.
-- Replace existing canvas-rebuild flow (TSV-based) with the operation-applier (operations-based).
-- Run small test Project on a fresh canvas with new prompts; iterate until clean.
-- Run small test on a populated test Project; verify keyword-loss rate drops to zero.
-- Run a single batch on Bursitis as the cost-comparison data point. Expected ~$0.03–0.10 cost vs. $1.89; expected <1 minute wall-clock vs. 26 minutes.
+### Pivot Session D — ✅ DONE (2026-04-25)
+- ✅ New wiring layer `src/lib/auto-analyze-v3.ts` (~470 LOC, pure-data, no I/O): `buildOperationsInputTsv` (9-column TSV per Primer); `parseOperationsJsonl` (extracts the `=== OPERATIONS ===` block, parses JSON Lines, translates snake_case → camelCase Operation discriminated union from `src/lib/operation-applier.ts`); `buildCanvasStateForApplier` + `materializeRebuildPayload` (translate live Prisma rows ↔ applier's pure-data shape, handle integer-id assignment for newly created topics, parent + sister-link remapping, pathway propagation).
+- ✅ 28 new unit tests in `src/lib/auto-analyze-v3.test.ts` against the wiring layer (TSV shape + sort order + sister-links + multi-placement + parser snake_case translation + parser error reporting + materializer integer-id assignment + E2E ADD_TOPIC/ADD_KEYWORD/DELETE_TOPIC/sister-link round-trips). All passing. Combined with the 43 applier tests = **74 tests pass**.
+- ✅ `AutoAnalyze.tsx` integration: new `outputContract` setting (`'v3-operations'` default | `'v2-tsv'` legacy), persisted via `UserPreference` + checkpoint; UI picker added; `assemblePromptV3` / `processBatchV3` / `validateResultV3` / `doApplyV3` implemented; `runLoop` and `handleApplyBatch` dispatch on `outputContractRef`. V2 code paths preserved as defense-in-depth and selectable.
+- ✅ `CanvasNode` interface in `src/hooks/useCanvas.ts` extended with `stableId: string` and `stabilityScore: number` (additive; `/canvas/nodes` GET already returns them via Prisma findMany).
+- ✅ End-to-end validation on Bursitis (5+ batches across multiple runs):
+  - **Output tokens per batch:** 15K–27K (V2 baseline 110,245). ~5× reduction.
+  - **Cost per batch:** $0.27–$0.46 (V2 baseline $1.89). ~4–7× reduction.
+  - **Wall-clock per batch:** ~5–7 min (V2 baseline ~26 min). ~4× reduction.
+  - **Zero keyword loss confirmed** structurally across every batch — `Reconciliation: 0 off-canvas → Reshuffled` on every successful apply. The "silence is preservation" property holds in production.
+- **Five mid-session bugs caught + fixed in flight** (full detail in `CORRECTIONS_LOG.md` 2026-04-25 Pivot-Session-D entry):
+  1. Applier rejected ADD_TOPIC for root topics with null relationship (drift between applier and prompt; fixed in `c3d2a80` + AddTopicOp type widened to allow null).
+  2. Prisma 6 P2025 on `prisma.canvasNode.upsert` due to loose `where: { id, projectWorkflowId }` shape (not a registered unique key); switched to `projectWorkflowId_stableId` composite from Pivot Session B in `6b70913`.
+  3. Global-PK collision: `CanvasNode.id` is `Int @id` (one integer space across all projects) but app treats it as project-scoped via per-project `nextNodeId` counter. Fresh test project's counter at 1 → V3 issued ids 1–8 → collision with Bursitis's id 1–104. Fixed in `43f773f` by switching `/canvas` GET autoheal aggregates to global max.
+  4. Synthesized-CanvasState defaults missing for projects whose `CanvasState` row didn't exist yet (autoheal returned `null` → client fell back to `nextNodeId=1` → re-collision). Fixed in `d485cf9`.
+  5. BATCH_REVIEW screen always showed "Topics: None" for V3 (newTopics not populated). Fixed in `d624556`.
+- **Real-world cost expectations vs. design's optimistic estimate** (the design predicted $0.03–0.10; reality is $0.27–$0.46): the difference is dominated by **output tokens** the AI emits when creating new topic chains. The system prompt is cached (~14K tokens consistently hit), but the canvas TSV input grows per batch and isn't cached, and the AI emits ~15–25 operations per batch (each a JSON line of ~100–300 tokens). On a fully-built canvas with stable topics, output should drop further (model only emits placement/structural ops, not creation). Even at $0.27–$0.46 the savings are real (~4×) and the structural keyword-preservation win is the more important architectural claim — that's solid.
+- Existing band-aid code paths (V2 Mode A/B + delta merge + salvage + reconciliation) remain in `AutoAnalyze.tsx` as defense-in-depth; selectable via the UI picker. Pivot Session E plans deprecation.
 
 ### Pivot Session E — Migration to operations-default + deprecation plan for band-aids
 - Make operations-output the default mode.
@@ -219,14 +232,14 @@ These were flagged during Pivot Session A and deferred (per `HANDOFF_PROTOCOL.md
 
 ## 6. How the four root-cause failures are addressed by this design
 
-For end-of-pivot verification — does the locked design actually fix what it set out to fix?
+Updated with real data after Pivot Session D's end-to-end Bursitis validation (5+ batches; reconciliation never produced a single off-canvas → Reshuffled flip).
 
-| Failure | Mechanism in this design that addresses it |
-|---|---|
-| **Keywords drop during batch application** | Operation vocabulary is the only legal way to change anything; "anything not mentioned stays exactly where it was" is a structural property of the applier, not a model behaviour we hope for. |
-| **Keywords correctly placed in earlier batches get silently removed in later batches** | (a) Atomic batch apply prevents half-applied state that decays into ghosts. (b) JUSTIFY_RESTRUCTURE on stability ≥ 7.0 means well-placed work cannot be silently overwritten — the model must justify in writing before disturbing it. (c) Stable IDs make rename-vs-drop unambiguous (rename is `UPDATE_TOPIC_TITLE id=t-12 to=...`, never confusable with delete-and-readd). |
-| **Cost per batch has skyrocketed** | Operations-only output drops per-batch tokens from 100k+ to under 1k for most batches. Cost stops scaling with canvas size. Bursitis verification's $1.89 → expected $0.03–0.10 in Pivot Session D. |
-| **Time per batch has gone up significantly** | Wall-clock is bottlenecked by output-token generation rate (~50–80 tokens/sec on Sonnet 4.6). Operations-only output → ~1k tokens → under 1 minute. Bursitis verification's 26 minutes → expected <1 minute. |
+| Failure | Mechanism in this design that addresses it | Validated? |
+|---|---|---|
+| **Keywords drop during batch application** | Operation vocabulary is the only legal way to change anything; "anything not mentioned stays exactly where it was" is a structural property of the applier, not a model behaviour we hope for. | ✅ Confirmed across 5+ Bursitis batches: every batch keyword either ended at a topic or was archived; the post-apply invariant in `runInvariants` would have aborted the batch atomically if any original keyword was silently lost. |
+| **Keywords correctly placed in earlier batches get silently removed in later batches** | (a) Atomic batch apply prevents half-applied state that decays into ghosts. (b) JUSTIFY_RESTRUCTURE on stability ≥ 7.0 means well-placed work cannot be silently overwritten — the model must justify in writing before disturbing it. (c) Stable IDs make rename-vs-drop unambiguous (rename is `UPDATE_TOPIC_TITLE id=t-12 to=...`, never confusable with delete-and-readd). | ✅ Reconciliation pass after every applied batch reported `0 off-canvas → Reshuffled` — meaning no previously-AI-Sorted keyword was bumped off the canvas by the new batch. The structural property held even as the canvas grew from 7 to 31 nodes across batches. JUSTIFY_RESTRUCTURE gate exists in code but doesn't fire yet (no topic has stabilityScore ≥ 7.0 — the scoring algorithm ships in a follow-up session). |
+| **Cost per batch has skyrocketed** | Operations-only output reduces per-batch tokens substantially. Cost stops scaling with canvas size. | ⚠️ Partial. Real numbers: V2 baseline $1.89 / 110,245 output tokens → V3 actual $0.27–$0.46 / 15K–27K output tokens. **~5× output reduction, ~4–7× cost reduction** — meaningful but well below the design's optimistic $0.03–0.10 estimate. Why: each operation is ~100–300 tokens of JSON; on a still-growing canvas the AI emits 15–25 ops per batch (creates new topics + chains + placements). On a fully-built stable canvas where most batches only place keywords into existing topics, output should drop further. The cost-stops-scaling-with-canvas claim is partly true — the input TSV grows linearly with canvas size and isn't cached, but the system prompt cache absorbs the static parts. |
+| **Time per batch has gone up significantly** | Wall-clock is bottlenecked by output-token generation rate. Operations-only output reduces wall-clock. | ⚠️ Partial. V2 baseline ~26 min → V3 actual ~5–7 min thinking + 15–30 sec generation. **~4× wall-clock reduction.** Below the design's optimistic <1 min estimate, but a meaningful improvement. The thinking-phase latency is a Sonnet 4.6 characteristic (the model takes 5–7 min to reason about the input regardless of output size); generation itself is fast. |
 
 ---
 

@@ -1,9 +1,10 @@
 # ROADMAP
 ## Product Launch Operating System (PLOS) — Development Execution Plan
 
-**Last updated:** April 25, 2026 (Phase 1g-test follow-up Part 3 — Pivot Session C — Initial Prompt + Primer Prompt rewrite landed as new file `docs/AUTO_ANALYZE_PROMPT_V3.md`; output contract changed from "complete updated Topics Layout Table" (V2) to "list of operations using the canonical vocabulary in `src/lib/operation-applier.ts`" (V3); JSON-Lines syntax inside a single delimited block; stable-IDs and aliases first-class; reevaluation triggers map to specific operations; legacy V2 file untouched as historical reference; doc-only session, no code, no DB)
-**Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-C (Claude Code)
-**Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-B (Claude Code)
+**Last updated:** April 25, 2026 (Phase 1g-test follow-up Part 3 — Pivot Session D — V3 wiring layer shipped + validated end-to-end on Bursitis; ~5× output reduction, ~4–7× cost reduction, ~4× wall-clock reduction vs. V2 baseline; **zero keyword loss confirmed structurally across 5+ Bursitis batches**; 7 commits pushed in-session; 74 unit tests pass; 3 cosmetic bugs deferred to Infrastructure TODOs; Pivot Session E promoted to NEXT)
+**Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-D (Claude Code)
+**Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-C (Claude Code)
+**Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-pivot-session-B (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-pivot-session-A (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-session3b-verify (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-session3b (Claude Code)
@@ -167,10 +168,21 @@ This migration is logged as a roadmap item (this section) and captured in `docs/
   3. ✅ **Pivot decision committed + Pivot Session A complete 2026-04-25** (this session — three deliverables locked; full spec in `docs/PIVOT_DESIGN.md`).
   4. ✅ **Pivot Session B DONE 2026-04-25** — see Pivot Session B section below for what shipped.
   5. ✅ **Pivot Session C DONE 2026-04-25** — see Pivot Session C section below. Initial Prompt + Primer rewrite landed as `docs/AUTO_ANALYZE_PROMPT_V3.md`; legacy V2 untouched as historical reference; director re-pastes V3 into the Auto-Analyze UI before the next test run.
-  6. 🎯 **NEXT: Pivot Session D** — Wire it together + validate end-to-end. Update `AutoAnalyze.tsx` to send V3 prompts and parse the operation-list response (JSONL inside `=== OPERATIONS ===` block); replace TSV-based canvas rebuild with `applyOperations` from `src/lib/operation-applier.ts`; build the input-TSV serializer (Stable ID first column, plus Stability Score and the new keyword `<uuid>|<text> [p|s]` shape); run small fresh-Project test with V3 prompts; run small populated-Project test verifying keyword-loss rate drops to zero; run a single batch on Bursitis as the cost-comparison data point (expected ~$0.03–0.10 vs. $1.89 and <1 minute vs. 26 minutes). Existing legacy code paths stay running as defense-in-depth.
-  7. **Blank-canvas visual verification of canvas-layout engine** — Phase-1 polish item; can run as standalone quick task or be folded into Pivot Session D's small-test-Project work (which already creates a fresh canvas).
-  8. Add UI hint recommending Direct mode for large-keyword Projects (deferred from kickoff session — possibly obsolete after pivot since cost no longer scales with canvas size; revisit at Pivot Session E).
-  9. Add warning when Adaptive Thinking is selected with a large prompt (0-output-tokens risk — possibly obsolete after pivot since output tokens drop dramatically; revisit at Pivot Session E).
+  6. ✅ **Pivot Session D DONE 2026-04-25** — V3 wiring layer shipped + live-validated on Bursitis. New `src/lib/auto-analyze-v3.ts` (TSV serializer + JSONL parser + applier-state translation + rebuild-payload materializer); `AutoAnalyze.tsx` integration with `outputContract` picker (V3 default, V2 selectable as defense-in-depth); 28 new unit tests (74 total pass). 5+ Bursitis batches all succeeded with **zero keyword loss** (validated structurally — `Reconciliation: 0 off-canvas → Reshuffled` on every successful apply). Real metrics vs V2 baseline: **~5× output reduction, ~4–7× cost reduction, ~4× wall-clock reduction** (less dramatic than the design's $0.03–0.10 estimate; output dominated by per-batch topic creation; the structural keyword-preservation win is the bigger architectural claim). 5 mid-session bugs caught + fixed in flight (root-topic relationship validation drift; Prisma 6 P2025 on loose upsert key; global-PK collision band-aided via global autoheal in `/canvas` GET; missing-CanvasState synthesis; BATCH_REVIEW newTopics not populated) — full detail in `CORRECTIONS_LOG.md` 2026-04-25 Pivot-Session-D entry. 3 cosmetic items deferred to Infrastructure TODOs below.
+  7. 🎯 **NEXT: Pivot Session E** — Migration to operations-default + deprecation plan for band-aids. Make V3 the only path (remove the V2 picker after a transition window); deprecate the V2 Mode A/B + delta merge + salvage code paths in `AutoAnalyze.tsx`; resolve the 3 cosmetic bugs from Infrastructure TODOs (label drift, global-PK schema migration, cancel-state cleanup); run reconciliation + Reshuffled / salvage logic in audit-only mode for a few sessions before removal. Estimated ~1–2 sessions.
+  8. **Blank-canvas visual verification of canvas-layout engine** — Phase-1 polish item; partly addressed during Pivot Session D testing (the V3 path successfully created small new canvases on each test batch); a dedicated isolated visual-verification can fold into Session E or a follow-up.
+  9. Add UI hint recommending Direct mode for large-keyword Projects (deferred from kickoff session — possibly obsolete after pivot since cost no longer scales as steeply with canvas size; revisit at Pivot Session E).
+  10. Add warning when Adaptive Thinking is selected with a large prompt (0-output-tokens risk — possibly obsolete after pivot since output tokens drop substantially; revisit at Pivot Session E).
+
+### Infrastructure TODOs (deferred from Pivot Session D — captured per Rule 14e)
+
+These three items were flagged during Pivot Session D's live testing but deferred (cosmetic, doesn't block V3 functionality, or requires a schema migration out of session scope). Pivot Session E or a follow-up session addresses them.
+
+1. **`keywordScope` activity-log label drift** (cosmetic, ~3-line fix). Activity Log shows raw enum value `unsorted-only` instead of dropdown label "Unsorted + Reshuffled". The internal value name is legacy from before the Reshuffled status existed (Session 3a P3-F7); selection is correct, only the log display is misleading. Fix: log the dropdown label rather than the raw enum value at run start.
+
+2. **`CanvasNode.id` global-PK design issue** (architectural; needs schema migration). `CanvasNode.id` and `Pathway.id` are both `Int @id` (one integer space across all projects) but the application treats them as project-scoped via per-project `nextNodeId`/`nextPathwayId` counters in `CanvasState`. Pivot Session D band-aided this via the `/canvas` GET autoheal now consulting global max (commit `43f773f`), but latent bugs remain in `/canvas/nodes` POST and `/canvas/pathways` POST (read counters from DB directly without going through GET autoheal). Proper fix: schema migration to either composite PK `(projectWorkflowId, id)` or autoincrement `Int @id @default(autoincrement())` — both require Rule-8 destructive operation approval and code changes across all routes that pre-allocate ids.
+
+3. **`handleCancel` and `handleResumeCheckpoint` don't clean up in-progress batch statuses** (cosmetic; ~10-line fix). After clicking ✕ Cancel, the in-progress batch's status stays as `in_progress` visually. Saved checkpoints can hold `in_progress` statuses; resuming restores them as `in_progress` even when no run is running. Fix: `handleCancel` marks any `in_progress` batch as `failed` (or resets to `queued`); `handleResumeCheckpoint` downgrades any restored `in_progress` to `queued`.
 
 ### Phase 1g-test follow-up Part 3 Findings (2026-04-20 session) — critical issues surfaced
 
@@ -443,6 +455,55 @@ Doc-only session. No code, no DB, no live-site impact. Single deliverable: rewri
 **Build / safety status:** This session changed only docs. No `npm run build` rerun needed. No DB. No code paths touched. The AutoAnalyze panel still pastes V2 from localStorage / the panel's React state until the director manually re-pastes V3 into the panel before the next test run.
 
 **Next session — Pivot Session D** — Wire `applyOperations` into the Auto-Analyze rebuild path; build the V3-shaped input-TSV serializer; verify end-to-end on a fresh test Project; verify keyword-loss rate drops to zero on a populated test Project; run a single Bursitis batch as the cost-comparison data point.
+
+---
+
+### Pivot Session D — ✅ COMPLETE (2026-04-25, this session)
+
+Wiring + validation session. Code shipped + live-tested on Bursitis. 7 commits pushed in-session (1 main wiring + 5 mid-session bug fixes + 1 diagnostic enrichment). **Real-world cost-comparison data point in hand.**
+
+**1. New wiring layer `src/lib/auto-analyze-v3.ts`** (~470 LOC, pure-data, no I/O). Four exported helpers:
+- `buildOperationsInputTsv(nodes, sisterLinks, keywords)` — emits the 9-column TSV per AUTO_ANALYZE_PROMPT_V3.md ("INPUT TABLE COLUMNS"): Stable ID, Title, Description, Parent Stable ID, Relationship, Conversion Path, Stability Score, Sister Nodes, Keywords (each formatted `<uuid>|<text> [p|s]`). Header row first, then rows sorted by stableId integer suffix (deterministic). Empty canvas → header row only. Tab/newline-safe sanitization on title/description.
+- `parseOperationsJsonl(rawResponse)` — extracts the `=== OPERATIONS === ... === END OPERATIONS ===` block, parses each non-blank line as JSON, translates snake_case keys (`op`, `new_parent`, `justify_restructure` with snake_case sub-fields, etc.) to the camelCase Operation discriminated union from `src/lib/operation-applier.ts`. Returns `{operations, errors}`. Empty operations list with no errors is valid (rare but legal — see V3 prompt). Malformed lines reported per-line; valid lines still parsed.
+- `buildCanvasStateForApplier(nodes, sisterLinks, nextNodeId)` — translates live Prisma rows to the applier's pure-data shape. Resolves integer parentId → parent stableId. Expands `kwPlacements` `'p'`/`'s'` to `'primary'`/`'secondary'`. Canonicalizes sister links. Seeds `nextStableIdCounter = nextNodeId` so applier-issued stableIds are `t-N` with N matching the integer id we'll persist.
+- `materializeRebuildPayload({originalNodes, originalSisterLinks, originalPathwayIds, applierNewState, nextPathwayId})` — translates applier output back to a `/canvas/rebuild` POST body. New nodes get integer ids = the integer suffix of their applier-issued `t-N` stableId (which can't collide because we seeded the counter past the global max). Pathways: existing nodes keep their pathway; new root-level topics get a fresh pathway; nested topics inherit their root's pathway (via parent-chain walk). Sister-link + node + pathway diffing handles deletions.
+
+**2. New unit-test file `src/lib/auto-analyze-v3.test.ts`** (28 tests, all passing). Covers serializer (TSV shape + sort order + sister-links + multi-placement + sanitization), parser (snake_case translation + null/missing relationship handling + error reporting + unknown ops), CanvasState builder (parentId resolution + p/s translation + counter pass-through + sister-link canonicalization), end-to-end (ADD_TOPIC + ADD_KEYWORD on empty canvas; existing canvas + new child preserves parent's id and pathway; DELETE_TOPIC ARCHIVE returns archived keyword id; ADD_SISTER_LINK appears in payload.sisterLinks; REMOVE_SISTER_LINK queues original link id for deletion). Combined with the 43 applier tests = **74 tests pass**. Run with `node --test --experimental-strip-types src/lib/auto-analyze-v3.test.ts`.
+
+**3. `AutoAnalyze.tsx` integration.** New `outputContract` setting (`'v3-operations'` default | `'v2-tsv'` legacy), persisted via `UserPreference` + checkpoint. New UI picker in the config section labeled "Output contract". New `assemblePromptV3` (V3 prompts only — `AA_OUTPUT_INSTRUCTIONS` NOT appended since V3 prompts contain their own operations-block instructions; user content includes the input TSV plus the batch keywords with UUID + text + volume). New `processBatchV3` (calls API, returns BatchResult with raw response in `topicsTableTsv` slot for compatibility). New `validateResultV3` (parses operations, dry-run applies via `applyOperations` for validation, surfaces errors as correction context, checks every batch keyword ended placed-or-archived). New `doApplyV3` (fetches canonical canvasState; runs applier; materializes rebuild payload; runs canvas-layout pass; POSTs to `/canvas/rebuild`; POSTs each `ARCHIVE_KEYWORD` intent to `/removed-keywords` with `removedSource='auto-ai-detected-irrelevant'`; updates keyword.topic + canvasLoc; runs same P3-F7 status reconciliation as V2; verifies all batch keywords landed). `runLoop` and `handleApplyBatch` dispatch on `outputContractRef`. V2 code paths preserved as defense-in-depth and selectable. `BatchObj` interface gains optional `_v3Ops` to stash parsed operations across BATCH_REVIEW pauses. ~444 lines added to AutoAnalyze.tsx; build clean.
+
+**4. `CanvasNode` type extended in `src/hooks/useCanvas.ts`** with `stableId: string` + `stabilityScore: number` (additive; `/canvas/nodes` GET already returned them via Prisma findMany).
+
+**5. End-to-end live validation on Bursitis** (5+ batches across multiple runs):
+
+| Metric | V2 baseline | V3 actual (median Bursitis batch) | Improvement |
+|---|---|---|---|
+| Output tokens | 110,245 | 15K–27K | ~5× |
+| Cost per batch | $1.89 | $0.27–$0.46 | ~4–7× |
+| Wall-clock per batch | ~26 min | ~5–7 min | ~4× |
+| Keyword loss per batch | variable | **0** | ✅ structural |
+
+Reconciliation pass after every successful apply reported `0 off-canvas → Reshuffled` — meaning no previously-AI-Sorted keyword was bumped off the canvas by the new batch. The "silence is preservation" architectural property held in production. Real cost is meaningfully above the design's optimistic $0.03–0.10 estimate (output dominates because each operation is ~100–300 tokens and the AI emits 15–25 ops per batch on a still-growing canvas) but the structural keyword-preservation win is the bigger architectural claim and it's solid.
+
+**6. Five mid-session bugs caught + fixed in flight** (full root-cause + fix detail in `CORRECTIONS_LOG.md` 2026-04-25 Pivot-Session-D entry; commits in chronological order):
+
+| # | Commit | Bug | One-line fix |
+|---|---|---|---|
+| 1 | `c3d2a80` | Applier rejected ADD_TOPIC root topics with null relationship | Skip linear|nested check when `parent === null`; widened type to `Relationship | null` |
+| (diag) | `1c44238` | `/canvas/rebuild` 500 hid Prisma error | Add `detail` field with underlying error message (truncated 1KB) |
+| 2 | `6b70913` | Prisma 6 P2025 on `prisma.canvasNode.upsert` | Switch where to `projectWorkflowId_stableId` composite from Pivot Session B |
+| 3 | `43f773f` | Global-PK collision on `CanvasNode.id` | `/canvas` GET autoheal uses global max instead of per-project max |
+| 4 | `d485cf9` | Synthesized CanvasState missing for projects with no row | Return defaults with global-max-aware counters when row absent |
+| 5 | `d624556` | BATCH_REVIEW screen always showed "Topics: None" for V3 | Populate `newTopics` from parsed ADD_TOPIC operations |
+
+**7. Three cosmetic items deferred** (per Rule 14e — captured in Infrastructure TODOs above):
+- `keywordScope` activity-log label drift (cosmetic ~3-line fix)
+- `CanvasNode.id` global-PK schema design issue (proper fix needs migration)
+- `handleCancel` / `handleResumeCheckpoint` in-progress batch status cleanup (cosmetic ~10-line fix)
+
+**Build / safety status:** `npm run build` clean across every commit (17/17 pages, zero TypeScript errors); `node --test` 74/74 pass. No DB schema changes (Pivot Session B already shipped them). Live data state after this session: Bursitis canvas grew to 31 nodes (V3 created 24 new topics across the test batches with full upstream chains + sister links + correct keyword placements); some keywords flipped from Unsorted → AI-Sorted via the V3 reconciliation pass; no keyword loss; no node loss.
+
+**Next session — Pivot Session E** — Migration to operations-default + deprecation plan for V2 band-aid code paths. Address the 3 cosmetic Infrastructure TODOs as part of the same session.
 
 ---
 
