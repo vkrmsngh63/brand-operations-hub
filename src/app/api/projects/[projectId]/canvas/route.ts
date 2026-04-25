@@ -17,24 +17,26 @@ export async function GET(
   const { projectWorkflowId } = auth;
 
   try {
-    const [canvasState, pathways, sisterLinks, maxNode, maxPathway] = await Promise.all([
+    const [canvasState, pathways, sisterLinks, maxNodeGlobal, maxPathwayGlobal] = await Promise.all([
       prisma.canvasState.findUnique({ where: { projectWorkflowId } }),
       prisma.pathway.findMany({ where: { projectWorkflowId } }),
       prisma.sisterLink.findMany({ where: { projectWorkflowId } }),
-      prisma.canvasNode.aggregate({ where: { projectWorkflowId }, _max: { id: true } }),
-      prisma.pathway.aggregate({ where: { projectWorkflowId }, _max: { id: true } }),
+      // Pivot Session D Test 2 fix: autoheal must consider the GLOBAL max id,
+      // not the per-project max. CanvasNode.id and Pathway.id are both global
+      // primary keys (Int @id with no @default), but the application treats
+      // them as project-scoped. A project that started with nextNodeId=1
+      // would collide with another project (e.g., Bursitis owns id 1-104).
+      // Returning max(stored, globalMax+1) means newly-issued ids cannot
+      // collide with any existing row in any project.
+      prisma.canvasNode.aggregate({ _max: { id: true } }),
+      prisma.pathway.aggregate({ _max: { id: true } }),
     ]);
 
-    // Self-heal nextNodeId / nextPathwayId on read. The stored counter can
-    // drift below the actual max id (observed: Bursitis canvas had nextNodeId=5
-    // vs max(CanvasNode.id)=104). Returning max(stored, observed_max+1) means
-    // every consumer (AutoAnalyze, manual node create, useCanvas) gets a
-    // collision-free next id without needing a one-off migration.
     const healedCanvasState = canvasState
       ? {
           ...canvasState,
-          nextNodeId: Math.max(canvasState.nextNodeId, (maxNode._max.id ?? 0) + 1),
-          nextPathwayId: Math.max(canvasState.nextPathwayId, (maxPathway._max.id ?? 0) + 1),
+          nextNodeId: Math.max(canvasState.nextNodeId, (maxNodeGlobal._max.id ?? 0) + 1),
+          nextPathwayId: Math.max(canvasState.nextPathwayId, (maxPathwayGlobal._max.id ?? 0) + 1),
         }
       : null;
 
