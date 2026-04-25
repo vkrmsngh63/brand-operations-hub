@@ -1,9 +1,10 @@
 # KEYWORD CLUSTERING — ACTIVE DOCUMENT
 ## Current state of the Keyword Clustering workflow tool (Group B, tool-specific)
 
-**Last updated:** April 25, 2026 (Phase 1g-test follow-up Part 3 — Pivot Session D — V3 wiring layer shipped + validated end-to-end on Bursitis; ~5× output reduction, ~4–7× cost reduction, ~4× wall-clock reduction vs. V2 baseline; **zero keyword loss confirmed structurally across 5+ Bursitis batches**; 7 commits pushed in-session; new POST-PIVOT-SESSION-D STATE block added above)
-**Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-D (Claude Code)
-**Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-C (Claude Code)
+**Last updated:** April 25, 2026 (Phase 1g-test follow-up Part 3 — Pivot Session E — V2 code paths deleted from `AutoAnalyze.tsx` (Mode A/B + delta merge + salvage + V2 picker); UUID-PK schema migration shipped (CanvasNode + Pathway ids now String UUIDs; SisterLink FKs follow; CanvasState drops nextNodeId/nextPathwayId, gains nextStableIdN); 3 cosmetic Infrastructure TODOs from Pivot D resolved; 74 unit tests pass; build clean; new POST-PIVOT-SESSION-E STATE block added above)
+**Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-E (Claude Code)
+**Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-D (Claude Code)
+**Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-pivot-session-C (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-pivot-session-B (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-pivot-session-A (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-session3b-verify (Claude Code)
@@ -23,7 +24,67 @@
 
 ---
 
-## ⚠️ POST-PIVOT-SESSION-D STATE (READ FIRST — updated 2026-04-25 Pivot Session D)
+## ⚠️ POST-PIVOT-SESSION-E STATE (READ FIRST — updated 2026-04-25 Pivot Session E)
+
+**As of 2026-04-25 Pivot Session E (V3 made the only path; V2 band-aid code paths deleted; UUID-PK schema migration shipped; 3 cosmetic Pivot-D Infrastructure TODOs resolved; data loss accepted by director because Bursitis was test-only):**
+
+### What this session did
+
+Pivot Session E's full scope landed in one session. Two Rule-gated approvals: Rule 8 for the destructive `prisma db push --accept-data-loss` (director gave explicit "yes proceed" after seeing exactly what the command does); Rule 9 at end before push.
+
+1. **V2 code paths deleted from `AutoAnalyze.tsx`** — `assemblePrompt`, `processBatch`, `validateResult`, `doApply`, `runSalvage`, `mergeDelta`, `parseKatMapping`, `extractBlock`, `buildCurrentTsv` all gone. `AA_DELIMITERS` and `AA_OUTPUT_INSTRUCTIONS` constants gone. The output-contract picker UI is gone. `runLoop` and `handleApplyBatch` are V3-only. The Mode A→B auto-switch, the `_deltaSwitch` error path, and `deltaMode` state all removed. **Reconciliation pass and Reshuffled status stay** — they're called by `doApplyV3` and serve as a general-purpose status-sync layer, not V2 band-aid. AutoAnalyze.tsx went from 2486 → 1331 lines (1155-line reduction).
+
+2. **UUID-PK schema migration shipped (Option D — director's pick after he disclosed "data loss is OK").** The original ROADMAP described Options A (composite PK) and B (autoincrement Int). Director's disclosure that no production data exists past Keyword Sorting Tool opened up Option D — UUIDs everywhere — which is the architecturally cleanest answer (matches how every other table in the schema already does PKs).
+
+   - `CanvasNode.id`: `Int @id` → `String @id @default(uuid())`
+   - `CanvasNode.parentId`: `Int?` → `String?`
+   - `CanvasNode.pathwayId`: `Int?` → `String?`
+   - `Pathway.id`: `Int @id` → `String @id @default(uuid())`
+   - `SisterLink.nodeA`, `nodeB`: `Int` → `String`
+   - `CanvasState`: drop `nextNodeId` + `nextPathwayId`; add `nextStableIdN Int @default(1)` (per-project counter for issuing `t-N` stableIds — the user-facing handle stays project-local).
+
+   Schema pushed via `npx prisma db push --accept-data-loss` after Rule-8 approval. Bursitis's 31 test topics + sister links + pathways were wiped (zero production data lost — director confirmed).
+
+3. **Code surface threaded for UUIDs across 14 files** — every `CanvasNode.id`/`parentId`/`pathwayId`, every `Pathway.id`, every `SisterLink.nodeA`/`nodeB` typed `string` instead of `number`. Every `Set<number>` / `Map<number, …>` keyed by node id became `Set<string>` / `Map<string, …>`. The materializer (`materializeRebuildPayload`) generates UUIDs locally for new nodes/pathways via `crypto.randomUUID()` so the rebuild route gets a fully-resolved payload in one POST. Per-project stableId issuance moved server-side via `$transaction` in `/canvas/nodes` POST (atomic increment-then-read, no race window).
+
+4. **`/canvas` GET autoheal logic removed.** Pivot Session D added a band-aid that read global max id; Option D removes the underlying problem so the band-aid is unnecessary. The route now just returns the stored `CanvasState` row (or synthesized defaults if missing).
+
+5. **Pathway-color rendering switched to a string-hash.** Previously `PATHWAY_COLORS[(pathwayId - 1) % len]` (Int math). Now hash-then-modulo on the UUID string, so each pathway still gets a stable color but UUIDs work as keys.
+
+6. **3 cosmetic Pivot-D Infrastructure TODOs resolved:**
+   - **`keywordScope` activity-log label drift** — `aaLog` now emits the dropdown label ("Unsorted + Reshuffled") rather than the raw enum (`unsorted-only`). 4-line fix.
+   - **`handleCancel` / `handleResumeCheckpoint` in-progress batch cleanup** — `handleCancel` flips any `in_progress` batch to `failed`; `handleResumeCheckpoint` downgrades restored `in_progress` to `queued`. ~10-line fix.
+   - **`CanvasNode.id` global-PK design issue** — fully resolved by the UUID migration (this was the largest TODO). The latent bugs in `/canvas/nodes` POST and `/canvas/pathways` POST are gone by construction (no shared counter to race on).
+
+7. **Tests + build:** 74 unit tests pass (`operation-applier.test.ts` 43 + `auto-analyze-v3.test.ts` 31 — adjusted for UUIDs with a deterministic `makeUuid()` test injector). `npm run build` clean (17/17 pages, zero TypeScript errors). `npx tsc --noEmit` clean apart from the pre-existing `.next/dev/types/validator.ts` Phase M cruft (unrelated, documented).
+
+### What did NOT change this session
+
+- **The operation-applier (`src/lib/operation-applier.ts`) has zero diff.** It already used `stableId` strings as the canonical reference; integer ids were never part of its data model. This was a small architectural payoff: Pivot B's stable-id design naturally extends to UUIDs.
+- **The keyword data, project list, removed-terms history, dashboard notes, settings — none touched.** The `prisma db push --accept-data-loss` only affected `CanvasNode`, `Pathway`, `SisterLink`. Director confirmed all production data outside the canvas was untouched.
+- **AUTO_ANALYZE_PROMPT_V3.md is unchanged.** The AI's contract is identical (stableId is still `t-N`, operations vocabulary unchanged). Director does NOT need to re-paste the prompts — V3 prompts continue to work.
+
+### Live-site state after this session
+
+- Bursitis's canvas is empty (wiped by the schema migration). Director needs to re-run Auto-Analyze on Bursitis to populate it again, or any other test project.
+- Auto-Analyze panel UI is simpler — no "Output contract" picker; V3 is the only path.
+- The `/canvas` GET no longer returns `nextNodeId` / `nextPathwayId` (returns `nextStableIdN` instead). Any external script that depended on the old shape would break — but no such scripts exist outside this repo.
+
+### Known follow-ups (not in this session)
+
+- **Blank-canvas visual verification of canvas-layout engine** — Phase-1 polish item; rolled forward from Pivot D. Director can do this after re-running Auto-Analyze on a fresh test project.
+- **UI hint for Direct mode on large-keyword Projects** — possibly obsolete now that V3's cost stops scaling as steeply with canvas size; revisit when next test run produces real numbers.
+- **Adaptive-Thinking + large-prompt 0-output-tokens warning** — possibly obsolete for the same reason; revisit at next test.
+- **Stability-scoring algorithm** — JUSTIFY_RESTRUCTURE gate exists but no topic ever crosses 7.0 until the algorithm ships. Captured in `docs/MODEL_QUALITY_SCORING.md`.
+
+### Standing instructions for next session
+
+- The pivot is complete. Next session can choose between: (a) Phase 1 polish items above, (b) starting Sessions 7-9 Human-in-Loop mode (per `AI_TOOL_FEEDBACK_PROTOCOL.md`), or (c) building Workflow #2 (Competition Scraping) which requires a new Workflow Requirements Interview per HANDOFF_PROTOCOL Rule 18.
+- If running another Auto-Analyze test on Bursitis: just paste the V3 prompts (`docs/AUTO_ANALYZE_PROMPT_V3.md`) into the Auto-Analyze panel and run — the V3 path is now default and only.
+
+---
+
+## ⚠️ POST-PIVOT-SESSION-D STATE (updated 2026-04-25 Pivot Session D — preserved as historical context)
 
 **As of 2026-04-25 Pivot Session D (V3 wiring layer shipped + live-validated on Bursitis; 7 commits pushed in-session including 5 mid-session bug fixes):**
 

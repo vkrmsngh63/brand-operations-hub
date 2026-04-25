@@ -1,9 +1,10 @@
 # PIVOT DESIGN
 ## Operation-based output contract for Auto-Analyze (Keyword Clustering)
 
-**Last updated:** April 25, 2026 (Pivot Session D complete — V3 wiring layer shipped + validated end-to-end on Bursitis; ~5× output reduction, ~4–7× cost reduction, ~4× wall-clock reduction vs. V2 baseline; zero keyword loss confirmed structurally across 5+ batches; §4 Pivot Session D status updated; §6 metrics rewritten with real data)
-**Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-D (Claude Code)
-**Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-C (Claude Code)
+**Last updated:** April 25, 2026 (Pivot Session E complete — V2 paths deleted from `AutoAnalyze.tsx`; UUID-PK schema migration shipped (CanvasNode + Pathway ids now String UUIDs); 3 cosmetic Pivot-D Infrastructure TODOs resolved; §4 Pivot Session E status updated)
+**Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-E (Claude Code)
+**Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-D (Claude Code)
+**Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-pivot-session-C (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-pivot-session-B (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-pivot-session-A (Claude Code)
 **Group:** B (tool-specific to Keyword Clustering's Auto-Analyze; loaded when pivot work is in scope)
@@ -204,11 +205,15 @@ Design + locked decisions. This doc is the deliverable. No code changes; no data
 - **Real-world cost expectations vs. design's optimistic estimate** (the design predicted $0.03–0.10; reality is $0.27–$0.46): the difference is dominated by **output tokens** the AI emits when creating new topic chains. The system prompt is cached (~14K tokens consistently hit), but the canvas TSV input grows per batch and isn't cached, and the AI emits ~15–25 operations per batch (each a JSON line of ~100–300 tokens). On a fully-built canvas with stable topics, output should drop further (model only emits placement/structural ops, not creation). Even at $0.27–$0.46 the savings are real (~4×) and the structural keyword-preservation win is the more important architectural claim — that's solid.
 - Existing band-aid code paths (V2 Mode A/B + delta merge + salvage + reconciliation) remain in `AutoAnalyze.tsx` as defense-in-depth; selectable via the UI picker. Pivot Session E plans deprecation.
 
-### Pivot Session E — Migration to operations-default + deprecation plan for band-aids
-- Make operations-output the default mode.
-- Mark legacy table-rewrite output as deprecated; keep code path for rollback during a transition window.
-- Run reconciliation pass + Reshuffled / salvage logic in "audit-only" mode for a few sessions to validate the pivot is producing zero new ghosts.
-- Once validated, deprecate (remove) the band-aid code paths in a future cleanup session.
+### Pivot Session E — ✅ DONE (2026-04-25)
+- ✅ V2 code paths deleted from `AutoAnalyze.tsx`: `assemblePrompt`, `processBatch`, `validateResult`, `doApply`, `runSalvage`, `mergeDelta`, `parseKatMapping`, `extractBlock`, `buildCurrentTsv`, `AA_DELIMITERS`, `AA_OUTPUT_INSTRUCTIONS`, output-contract picker UI, Mode A→B auto-switch, `_deltaSwitch` error path, `deltaMode` state. Reconciliation pass + Reshuffled status retained (called by `doApplyV3`; not V2-specific).
+- ✅ UUID-PK schema migration shipped after director picked Option D (cleanest long-term answer; was unlocked by director's "data loss is OK because no production data exists past Keyword Sorting Tool" disclosure). `CanvasNode.id` and `Pathway.id` are now `String @id @default(uuid())`; `CanvasNode.parentId`/`pathwayId` and `SisterLink.nodeA`/`nodeB` are `String`. `CanvasState` drops `nextNodeId`/`nextPathwayId`; gains `nextStableIdN` (per-project counter for issuing `t-N` stableIds — the AI-facing handle stays project-local).
+- ✅ The original ROADMAP item described Options A (composite PK) and B (autoincrement Int). Option D went beyond that scope but was strictly better given the data-loss-OK constraint: it removes the entire class of "manually-assigned integer counters" from the codebase and aligns CanvasNode/Pathway with the rest of the schema (every other table already uses UUID PKs).
+- ✅ Code surface threaded for UUIDs across 14 files (lib + routes + UI). Per-project stableId issuance moved server-side via `$transaction` in `/canvas/nodes` POST. The materializer (`materializeRebuildPayload`) generates UUIDs locally for new nodes/pathways via `crypto.randomUUID()` so the rebuild route gets a fully-resolved payload in one POST. The `/canvas` GET autoheal logic from Pivot D is removed — no longer needed.
+- ✅ 3 cosmetic Pivot-D Infrastructure TODOs resolved: `keywordScope` activity-log label drift (4-line fix); `handleCancel`/`handleResumeCheckpoint` in-progress batch cleanup (~10 lines); `CanvasNode.id` global-PK design issue (fully fixed by the UUID migration).
+- ✅ 74 unit tests pass; `npm run build` clean; `npx tsc --noEmit` clean. AutoAnalyze.tsx 2486 → 1331 lines (1155-line reduction).
+- ✅ One Rule-8 destructive op approved by director with full understanding of what would be wiped (Bursitis test canvas, ~31 nodes; no production data outside).
+- The "audit-only mode for a few sessions" framing in the original Session E plan was foreshortened by mutual agreement — Pivot D's clean validation (5+ batches with zero off-canvas → Reshuffled flips) plus the director's explicit data-loss-OK call meant the safer-but-slower transition window wasn't needed. Director accepted the tighter call after Claude flagged it explicitly during drift-check.
 
 ### Pivot Session F — Re-scope Sessions 4-6 (~½ session of doc work, no code)
 - Session 4 (Changes Ledger UI): now narrowly about UI on top of operations data — filter / sort / admin-action surface. Probably collapses into ~1 session given operations infrastructure already exists.

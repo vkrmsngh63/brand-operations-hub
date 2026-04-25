@@ -1,9 +1,9 @@
 # PLATFORM ARCHITECTURE
 ## Technical architecture of the Product Launch Operating System (PLOS)
 
-**Last updated:** April 25, 2026 (Phase 1g-test follow-up Part 3 — Pivot Session B — `CanvasNode` schema gains two columns: `stableId String` (NOT NULL, `t-N` format, persistent identifier the AI uses across batches) + `stabilityScore Float @default(0.0)` (0.0–10.0; gates JUSTIFY_RESTRUCTURE at ≥7.0; populated later by stability-scoring algorithm). New unique index `@@unique([projectWorkflowId, stableId])`. Two pre-existing canvas-node-create call sites updated to supply `stableId` at insert time: `src/app/api/projects/[projectId]/canvas/nodes/route.ts` (POST) + `src/app/api/projects/[projectId]/canvas/rebuild/route.ts` (upsert.create). New pure-function module `src/lib/operation-applier.ts` (no DB / no I/O) — operation-vocabulary applier for the Auto-Analyze pivot; not yet wired into any caller. Backfill scripts at `scripts/backfill-stable-ids.ts` + `scripts/verify-no-stable-id-duplicates.ts`. tsconfig.json gains `allowImportingTsExtensions: true` for unit-test type-strip compatibility.)
-**Last updated in chat:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-B (Claude Code)
-**Previously updated in chat:** session_2026-04-24_phase1g-test-followup-part3-session3a (Claude Code)
+**Last updated:** April 25, 2026 (Phase 1g-test follow-up Part 3 — Pivot Session E — UUID-PK migration: `CanvasNode.id` and `Pathway.id` switched from `Int @id` to `String @id @default(uuid())`; `CanvasNode.parentId`/`pathwayId` and `SisterLink.nodeA`/`nodeB` are now `String`. `CanvasState` drops `nextNodeId` + `nextPathwayId`; gains `nextStableIdN Int @default(1)` (per-project counter for issuing `t-N` stableIds the AI uses). Race condition on the old shared counters is gone by construction. Migration via `prisma db push --accept-data-loss` after Rule-8 approval — Bursitis test canvas wiped (no production data outside the canvas tables touched).)
+**Last updated in chat:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-E (Claude Code)
+**Previously updated in chat:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-B (Claude Code)
 **Previously updated:** April 17, 2026 (Phase M COMPLETE — Ckpts 9 + 9.5 deployed)
 
 **Purpose:** Defines the technical structure of the platform — routes, database schema, authentication, shared systems, file organization. Loaded in every chat as part of Group A.
@@ -448,7 +448,7 @@ From Phase M:
 - **NEW from Ckpt 7 (2026-04-17):** ~30 `.bak`/`.bak2`/`.bak3` etc. files live in `src/app/projects/[projectId]/keyword-clustering/components/` (moved alongside the real components from their old location). Dead weight. Remove in Ckpt 9 cleanup.
 
 From Phase M Ckpt 5 (2026-04-17):
-- **Race condition on `nextNodeId` / `nextPathwayId`** in canvas/nodes POST and canvas/pathways POST. Two concurrent requests could read same id and collide on primary key. Fix options: wrap in `$transaction` with SERIALIZABLE isolation, OR switch to UUID primary keys. Priority: low-to-medium. Must be fixed before multi-user (Phase 1-collab).
+- ✅ **Race condition on `nextNodeId` / `nextPathwayId`** — RESOLVED in Pivot Session E (2026-04-25). Switched to UUID PKs for `CanvasNode.id` and `Pathway.id`; the surviving per-project `nextStableIdN` counter is incremented atomically inside a `$transaction` in `/canvas/nodes` POST.
 - Asymmetric `canvasState` upsert logic between `canvas/nodes/route.ts` POST and `canvas/pathways/route.ts` POST — worth normalizing.
 - `ops as any` TypeScript workaround in `canvas/rebuild/route.ts` — pre-existing, low priority.
 
