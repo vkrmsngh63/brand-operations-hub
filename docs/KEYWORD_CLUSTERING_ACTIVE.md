@@ -1,9 +1,10 @@
 # KEYWORD CLUSTERING — ACTIVE DOCUMENT
 ## Current state of the Keyword Clustering workflow tool (Group B, tool-specific)
 
-**Last updated:** April 25, 2026 (Phase 1g-test follow-up Part 3 — Session 3b — second code-write session of Part 3; 3 of 3 deferred Session 3 items shipped: P3-F7 post-batch reconciliation pass (#1) including new 'Reshuffled' status with yellow badge per director's Option B framing, salvage-ignored-keywords mechanism (#2) with HC3-only trigger and IRRELEVANT_KEYWORDS auto-archive to Session-3a /removed-keywords endpoint, P3-F8 four-function canvas-layout port (#4) as new src/lib/canvas-layout.ts; build clean 22.5s; commit `6c09e50` — NOT YET PUSHED, awaiting director approval; two NEW Phase-1-polish ROADMAP items captured: P3-F7 root-cause audit + keyword accounting / ghost detection panel)
-**Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-session3b (Claude Code)
-**Previously updated in session:** session_2026-04-24_phase1g-test-followup-part3-session3a (Claude Code)
+**Last updated:** April 25, 2026 (Phase 1g-test follow-up Part 3 — Session 3b verification — pushed commits `8afcb9f` + `6c09e50` + `aa7eb4b` to origin/main; Vercel redeploy verified live on vklf.com; ran live verification batch on Bursitis confirming reconciliation pass + canvas-layout engine + atomic rebuild ALL fire correctly; **MAJOR FINDING:** batch 1 reconciliation produced `58 on-canvas → AI-Sorted, 74 off-canvas → Reshuffled` — exact match to Session 2's direct-DB diagnosis of Bursitis P3-F7 (58 silent placements + 74 ghost AI-Sorted), validating both the new code AND the architectural correctness of the diagnosis; visual verification of canvas-layout engine output deferred — populated 95-node canvas couldn't show clean baseline; new polish item added: "Blank-canvas visual verification of canvas-layout engine")
+**Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-session3b-verify (Claude Code)
+**Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-session3b (Claude Code)
+**Previously updated in session (earlier):** session_2026-04-24_phase1g-test-followup-part3-session3a (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-24_phase1g-test-followup-part3-session2b (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-24_phase1g-test-followup-part3-session2 (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-20_phase1g-test-followup-part3 (Claude Code)
@@ -18,7 +19,96 @@
 
 ---
 
-## ⚠️ POST-SESSION-3b STATE (READ FIRST — updated 2026-04-25 Session 3b)
+## ⚠️ POST-VERIFICATION STATE (READ FIRST — updated 2026-04-25 Session 3b verify)
+
+**As of 2026-04-25 Session 3b verification (the 3 unpushed Session 3b commits + the Session 3a doc-update commit have been pushed to origin/main and visually verified live on vklf.com; Bursitis batch-1 verification batch run + cancelled; canvas state changed in a small, recoverable way per the reconciliation pass design):**
+
+### Push status
+
+`git push origin main` ran with explicit director approval per Rule 9 deploy gate. Three commits went live:
+- `8afcb9f` — Session 3a end-of-session doc updates
+- `6c09e50` — Session 3b code (reconciliation pass + salvage mechanism + 321-line canvas-layout engine)
+- `aa7eb4b` — Session 3b end-of-session doc updates
+
+Branch is now in sync with origin/main. Vercel redeploy completed; vklf.com confirmed loading the new code.
+
+### Verification on vklf.com — what was checked, what passed, what's deferred
+
+**Quick UI checks (Tier 1) — ALL PASS:**
+
+- ✅ **Check A — Opus 4.7 in model dropdown.** Director confirmed Opus 4.7 listed in the Auto-Analyze settings panel's Model dropdown.
+- ✅ **Check B — "Unsorted + Reshuffled" scope label.** Director confirmed the scope toggle label was renamed from "Unsorted only" to "Unsorted + Reshuffled" as expected per Session 3b.
+- ✅ **Check C — Settings persistence across panel close/reopen + hard refresh.** Director noted two values, closed + reopened panel → values persisted; hard refreshed page → values still persisted. Confirms Session 3a's split-secret design (apiKey in browser localStorage, other settings in `UserPreference` DB) is working live.
+- ✅ **Check D — Removed Terms modal "Source" column visible.** Director confirmed the new column shows up.
+- ✅ **Check E — Manual remove flows to soft-archive with "Manual" badge.** Director performed the test: removed a real keyword from the AST table; it appeared in the Removed Terms modal with the "Manual" Source badge. (Director should restore the test keyword via the Restore action in the modal at convenience — that also verifies the Restore flow works.)
+
+**Engine check (Tier 2) — verified at runtime via activity log:**
+
+- ✅ **Canvas-layout engine fires.** Activity log shows `Layout pass complete (104 nodes positioned)` after batch 1 apply. Confirms the new 321-line `src/lib/canvas-layout.ts` module is wired into `AutoAnalyze.doApply` step 7.5 and runs as designed.
+- ✅ **Atomic canvas rebuild works.** Activity log shows `✓ Canvas rebuilt atomically (104 nodes, 0 removed)` immediately after the layout pass. The rebuild + layout pass together took ~6 seconds (10:25:23 → 10:25:27 in the log).
+- ✅ **Reconciliation pass works correctly and emits structured per-keyword aaLog lines.** Activity log shows 74 individual `↻ Reconcile: "<keyword text>" (id <UUID>) was AI-Sorted, no longer on canvas → Reshuffled` lines, followed by the summary line `↻ Reconciliation: 58 on-canvas → AI-Sorted, 74 off-canvas → Reshuffled`. Forward-compatible with future `ai_feedback_records` schema as designed.
+- ⏳ **Salvage-ignored-keywords mechanism — NOT verified live this session.** Batch 1 passed validation cleanly on attempt 1 (`Batch 1 — passed validation. Total cost (all attempts): $1.890`); salvage only fires on HC3-only validation failures, which didn't happen. Verification deferred to natural occurrence in future Auto-Analyze runs.
+
+**Visual verification (Tier 2) — DEFERRED (the gap director caught):**
+
+- ❌ **Visual verification that the layout engine produces orderly, non-overlapping nodes with content-fitted heights.** The verification batch ran on Bursitis's heavily-populated 95-node canvas; couldn't tell whether the visible result reflects the new layout engine working correctly vs. just "the same chaos as before." Director's call: *"The canvas already had a lot of information before and I can't tell if anything is broken. Maybe we should have or should do a test on a blank canvas next time."* Captured as a NEW Phase-1-polish ROADMAP item: **"Blank-canvas visual verification of canvas-layout engine"** — create a small test Project, paste 8-12 keywords in, run one Direct-mode batch, look at the result with eyes. Confirms node heights fit content, nodes don't overlap, parent-child placement is type-aware (linear vs nested), pathway separation works. Schedules with Session 4 or as a quick standalone task. Not blocking.
+
+### MAJOR FINDING — reconciliation pass reproduced Session 2's P3-F7 diagnosis exactly
+
+The reconciliation summary on batch 1 was:
+
+> `↻ Reconciliation: 58 on-canvas → AI-Sorted, 74 off-canvas → Reshuffled`
+
+**The 58/74 split is identical to the Session 2 direct-DB-query diagnosis** of Bursitis P3-F7 (Session 2 found 58 silent placements + 74 ghost AI-Sorted keywords; the latter split into 49 reshuffle casualties + 25 linkedKwIds-carryover ghosts). On the very first batch of the very first verification run, Session 3b's reconciliation pass surfaced the entire pre-existing ghost set.
+
+**This validates two things at once:**
+1. The Session 3b reconciliation code is working correctly — exact-match numbers are not a coincidence.
+2. The Session 2 architectural diagnosis was correct — these ghost keywords genuinely existed in the database before Session 3b shipped.
+
+**Forensic note on the 74 Reshuffled keywords:** the activity log on the director's screen contains all 74 keyword texts + UUIDs. These are valuable forensic data for the upcoming P3-F7 root-cause audit (the new ROADMAP item from Session 3b). When the audit runs, this list answers two questions: (a) which of the 74 are legacy from old-code-era ghosts vs. (b) actively-broken in current code, and (c) whether the keyword text contains any HC5-evading pattern (whitespace, unicode, smart quotes, etc.). Recommendation: director copy the activity log to a text file for reference before closing the browser — or accept that re-running batch 1 next session will reproduce the same 74 deterministically.
+
+**Many of the 74 Reshuffled keywords are foundational terms** — `hip bursitis`, `bursitis hip`, `what is hip bursitis`, `bursitis pain`, `how to get rid of bursitis`, `is bursitis curable`, `trochanteric bursitis`, `subacromial bursitis`, `ischial tuberosity bursitis`, `hip pain bursitis`, `inflamed bursa hip`, `tendonitis vs bursitis`, etc. This is exactly the P3-F1/P3-F2 fingerprint: classic mode is silently reshuffling significant prior work each batch. The reconciliation pass made it visible; it does NOT prevent it. Prevention is the P3-F7 root-cause audit + (longer term) stable topic IDs + Changes Ledger + stability scoring.
+
+### Cost data point — Sonnet 4.6 classic mode on a 95-node canvas
+
+Single-batch cost from this verification run:
+
+> `Stream complete. Input: 67,002, Output: 110,245 tokens`
+> `Batch 1 attempt 1 — API call complete. Cost: $1.890`
+
+That's $1.89 per batch on Bursitis-sized projects in classic mode, with one-attempt success. At the original 523-batch run scope, the projected total was **~$985** if every batch passed on attempt 1. With the typical ~10-15% retry rate observed in earlier sessions, real-world cost would be ~$1,100-1,250. **Implication:** classic mode at this canvas scale is a real budget consideration that needs explicit framing in any future full-run kickoff. Also reinforces the design rationale for stable topic IDs + Changes Ledger + future Mode A→B safety nets — the cost-per-batch is high enough that wasted batches matter.
+
+### State changes to the Bursitis canvas this session
+
+The verification batch was real, not dry-run. State changes:
+
+1. **Canvas: 95 nodes → 104 nodes.** Batch 1 added 9 new topic nodes for the 4 new keywords + their upstream chains. Atomic rebuild persisted them.
+2. **AST table: 58 keywords flipped from `'Unsorted'` (or other) to `'AI-Sorted'`** by the reconciliation pass — these are keywords that were placed on the canvas but had stale status flags (Bug 1 silent placements). The status flag is now corrected.
+3. **AST table: 74 keywords flipped from `'AI-Sorted'` to `'Reshuffled'`** — these had stale AI-Sorted flags from prior runs but were no longer on the canvas (Bug 2 ghost AI-Sorted). They now show with the new yellow `.ast-pill-r` badge.
+4. **No data was lost.** All 74 keywords are still in the AST table (same Keyword rows, just different sortingStatus value). They're auto-eligible for re-placement on the next Auto-Analyze run because the default scope is now "Unsorted + Reshuffled." Director can restore them to AI-Sorted manually OR let the next run re-place them OR choose to investigate them as forensic data first.
+5. **Run cancelled after batch 1.** Batch 2 had started thinking phase; the cancel stopped the API call before any DB writes for batch 2 happened.
+
+Net effect on data state: data accuracy *improved* (stale status flags corrected; ghost set surfaced for review). No regression.
+
+### Deferred items (per Rule 14e — captured before session ends)
+
+1. **Blank-canvas visual verification of canvas-layout engine** — captured as new Phase-1 polish ROADMAP item. Schedules with Session 4 or as standalone.
+2. **Salvage-ignored-keywords mechanism live verification** — not directly forceable; will fire naturally during a future run. No new ROADMAP entry needed; the code is verified by build + test path coverage.
+3. **Forensic audit of the 74 Reshuffled keywords** — feeds the existing "P3-F7 root-cause audit" ROADMAP item from Session 3b. Director's activity-log copy is the input data for that audit.
+4. **Restore the test keyword from Check E** — director's housekeeping; not a blocker. The keyword was a non-load-bearing test pick; the Restore action verifies the soft-archive reverse flow when used.
+5. **Improvement to the handoff system itself** — flagged earlier in session: write end-of-session handoff into a committed doc (e.g., `docs/LAST_SESSION_HANDOFF.md`) instead of only as a chat message, so future sessions can retrieve it from the repo without needing to mine `.jsonl` transcripts. Captured here for future-session consideration; not blocking.
+
+### Standing instructions for next sessions (post-verification)
+
+Same as Session 3b's standing instructions, with one update:
+
+- ✅ **Branch is now in sync with origin/main.** No pending pushes from prior sessions. Future code commits go through the normal Rule 9 deploy gate.
+- 🆕 **Add the blank-canvas verification check to any session that touches canvas-layout code.** Quick way to confirm a layout-engine change works visually: create or open a small test Project with a fresh canvas, run one batch, eyeball the result.
+- Sessions 4-6 (Changes Ledger, stability scoring, prompt merge) remain queued in this order per Session 3b's ROADMAP block. Director may insert P3-F7 root-cause audit OR keyword accounting / ghost detection panel ahead of Session 4 if desired.
+
+---
+
+## ⚠️ POST-SESSION-3b STATE (updated 2026-04-25 Session 3b)
 
 **As of 2026-04-25 Session 3b (Phase 1g-test follow-up Part 3 — Session 3b — second code-write session of Part 3; the 3 deferred items from Session 3a all shipped; commit `6c09e50` NOT YET PUSHED awaiting director approval):**
 

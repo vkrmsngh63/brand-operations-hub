@@ -2,9 +2,10 @@
 ## Append-only record of mistakes made during chats and lessons learned
 
 **Started:** April 16, 2026
-**Last updated:** April 25, 2026 (Phase 1g-test follow-up Part 3 — Session 3b — 1 new informational entry on Session 3b code shipping — 3 of 3 deferred Session 3 items implemented; zero mistakes this session; new architectural-pattern entry "reconciliation-as-visible-alarm vs reconciliation-as-silent-heal" captured; two new Phase-1 polish items added to ROADMAP at director's prompting)
-**Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-session3b (Claude Code)
-**Previously updated in session:** session_2026-04-24_phase1g-test-followup-part3-session3a (Claude Code)
+**Last updated:** April 25, 2026 (Phase 1g-test follow-up Part 3 — Session 3b verification — 1 new informational entry on Session 3b code being deployed + verified live; reconciliation pass produced exact 58/74 match to Session 2 P3-F7 diagnosis on first verification batch; 1 new low-severity planning miss entry — recommended classic-mode batch on populated 95-node canvas without preemptively recognizing that visual verification of canvas-layout engine output would be ambiguous; director caught it post-cancel — captured as new Phase-1 polish ROADMAP item)
+**Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-session3b-verify (Claude Code)
+**Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-session3b (Claude Code)
+**Previously updated in session (earlier):** session_2026-04-24_phase1g-test-followup-part3-session3a (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-24_phase1g-test-followup-part3-session2b (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-24_phase1g-test-followup-part3-session2 (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-20_phase1g-test-followup-part3 (Claude Code)
@@ -39,6 +40,39 @@
 ---
 
 ## Entries
+
+### 2026-04-25 — Session 3b verification: code deployed + reconciliation pass reproduced exact P3-F7 ghost set on first live batch (informational, MAJOR finding) + planning miss on visual-verification-on-populated-canvas (low severity)
+**Session:** session_2026-04-25_phase1g-test-followup-part3-session3b-verify (Claude Code)
+**Tool/Phase affected:** Keyword Clustering / Auto-Analyze / Phase 1g-test follow-up Part 3 verification
+**Severity:** Informational (verification finding) + Low (planning miss)
+
+**What happened — verification finding:** Director approved Rule-9 deploy gate; pushed three commits (`8afcb9f` Session-3a doc updates + `6c09e50` Session-3b code + `aa7eb4b` Session-3b doc updates) to origin/main; Vercel redeployed; vklf.com confirmed live. Tier-1 verification (5 quick UI checks) all passed: Opus 4.7 in dropdown, "Unsorted + Reshuffled" scope label, settings persistence across panel close/reopen and hard refresh, Removed Terms "Source" column, manual remove → soft-archive with "Manual" badge. Tier-2 engine verification: ran one Sonnet 4.6 classic-mode batch on Bursitis (95 existing nodes, batch size 4, ~67k input tokens, ~110k output tokens, 26 minutes wall-clock, $1.890 cost). On apply, the activity log confirmed: `Layout pass complete (104 nodes positioned)`, `Canvas rebuilt atomically (104 nodes, 0 removed)`, then 74 individual `↻ Reconcile: "<keyword>" was AI-Sorted, no longer on canvas → Reshuffled` lines, then `↻ Reconciliation: 58 on-canvas → AI-Sorted, 74 off-canvas → Reshuffled`. **The 58/74 split is identical to Session 2's direct-DB-query diagnosis** of Bursitis P3-F7 (58 silent placements + 74 ghost AI-Sorted). The reconciliation pass surfaced the entire pre-existing ghost set on its very first run.
+
+**Why this finding matters:**
+- Validates Session 3b code is working correctly (not a coincidence — exact-match numbers).
+- Validates the Session 2 architectural diagnosis was correct (those ghosts genuinely existed in the DB before Session 3b shipped).
+- Provides forensic data for the Session 3b–captured "P3-F7 root-cause audit" ROADMAP item: the 74 keyword texts + UUIDs in the activity log are the exact set the audit will work through. Many are foundational ("hip bursitis", "bursitis pain", "what is hip bursitis", "trochanteric bursitis", "is bursitis curable", "hip pain bursitis", "tendonitis vs bursitis", etc.) — confirming P3-F1/P3-F2 fingerprint that classic mode silently reshuffles significant prior work.
+
+**What happened — planning miss (low severity):** Recommended classic-mode batch on Bursitis's 95-node canvas as the primary engine-verification path WITHOUT preemptively flagging that visual verification of canvas-layout output would be ambiguous on a heavily-populated canvas. Director caught it post-cancel: *"The canvas already had a lot of information before and I can't tell if anything is broken. Maybe we should have or should do a test on a blank canvas next time."*
+
+**Root cause of planning miss:** Optimized for "test the engine on real data" without zooming out to ask "what would the test result look like, and how would I tell pass-from-fail visually?" Pass-fail criteria for the canvas-layout engine include "nodes don't overlap," "descriptions fit inside boxes," "child nodes type-aware-positioned" — all of which require a clean baseline to measure against. A populated 95-node canvas already has visual artifacts from prior runs that would mask any new engine output, good or bad.
+
+**Correction:** Captured the missed verification as a new Phase-1 polish ROADMAP item: **"Blank-canvas visual verification of canvas-layout engine"** — create a small test Project, paste 8-12 keywords in, run one Direct-mode batch, look at the result with eyes. Schedules with Session 4 or as standalone. Not blocking.
+
+**How caught:** Director, post-cancel, after seeing the canvas wasn't visually distinguishable from the pre-batch state.
+
+**Prevention:** Going forward, before recommending any visual verification of a layout/rendering change, mentally pre-execute the test and ask: "Could I distinguish a working engine from a broken engine in the result I'd see?" If no, choose a setup (blank canvas, known small case) where pass-fail would be visible. Zoom-out check (Rule 16) extended: not only "does this work for the immediate task" but also "would the verification result actually demonstrate the property I'm checking?"
+
+**Architectural pattern named (informational, generalizable):** "verification-baseline matters as much as verification-target." A deployed feature can be verified two ways: (a) by observing it produces the expected diff from a known baseline (clean canvas → run batch → see what new state engine produces), OR (b) by observing structured logs/metrics that prove the feature *fired* (activity log shows `Layout pass complete` + `Canvas rebuilt atomically`). Path (a) is stronger for visual/UX features; path (b) is stronger for invariant-checking features (like the reconciliation pass, where the structured aaLog output IS the verification — it's machine-checkable and the 58/74 numbers can be cross-referenced against DB ground truth). When recommending a verification path, pick consciously based on what evidence would be diagnostic for the specific feature.
+
+**Cost data point (informational):** Sonnet 4.6 classic mode on Bursitis-sized projects (95 nodes, batch size 4) is **$1.89 per batch** with attempt-1 success. At the original 523-batch run scope, projected total was ~$985 (or ~$1,100-1,250 with typical retry rates). Reinforces Mode A→B safety net design rationale + stable topic IDs / Changes Ledger / stability scoring as cost-amortization mechanisms.
+
+**Rule compliance:**
+- Rule 9 deploy gate honored — described what would go live in plain English with reversibility notes; got explicit "Yes - Push" before running `git push`.
+- Rule 10 visual verification handed to director — Claude described what to check; director reported pass/fail at each step.
+- Rule 13 pause-and-resume warning surfaced when wrap-up approached; director confirmed wrap-up.
+- Rule 14e deferred items captured — blank-canvas visual verification, salvage live verification, 74-Reshuffled forensic audit, test-keyword restore housekeeping, handoff-write-to-doc improvement.
+- Rule 14f question framing — push approval used the standard yes/no/clarify/free-text pattern.
 
 ### 2026-04-25 — Session 3b code shipped (3 of 3 deferred Session 3 items; informational; reconciliation-as-visible-alarm framing locked in by director; two new Phase-1 polish items added to ROADMAP)
 **Session:** session_2026-04-25_phase1g-test-followup-part3-session3b (Claude Code)
