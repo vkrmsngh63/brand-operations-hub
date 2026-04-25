@@ -404,7 +404,7 @@ export default function MTTable({ astKeywords, onUpdateKeyword, onAddToTif, entr
           const status = rec ? rec.sortingStatus : 'Unsorted';
           if ((status === 'Completely Sorted' || status === 'AI-Sorted') && !showSorted) return false;
           if (status === 'Partially Sorted' && !showPartial) return false;
-          if (status === 'Unsorted' && !showUnsorted) return false;
+          if ((status === 'Unsorted' || status === 'Reshuffled') && !showUnsorted) return false;
           return true;
         });
         if (m.keywords.length > 0 && !hasMatch) return false;

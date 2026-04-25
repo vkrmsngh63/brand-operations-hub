@@ -4,6 +4,11 @@ import { type CanvasNode, type useCanvas } from '@/hooks/useCanvas';
 import CanvasEditPanel from './CanvasEditPanel';
 import CanvasTableMode from './CanvasTableMode';
 import type { Keyword } from '@/hooks/useKeywords';
+import {
+  calcNodeHeight as layoutCalcNodeHeight,
+  autoLayoutChild as layoutAutoLayoutChild,
+  type LayoutNode,
+} from '@/lib/canvas-layout';
 import './canvas-panel.css';
 
 const MIN_ZOOM = 0.15;
@@ -276,13 +281,66 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
     if (isDescendant(linkSource, nodeId)) {
       showToast('Cannot create circular link'); setLinkMode(null); setLinkSource(null); return;
     }
-    if (linkMode === 'nested') {
-      updateNodes([{ id: nodeId, parentId: linkSource, relationshipType: 'nested' } as Partial<CanvasNode>]);
-      showToast('\u2713 Parent\u2192Child link created');
+    const relType: 'linear' | 'nested' = linkMode === 'nested' ? 'nested' : 'linear';
+    const parentNode = nodes.find(n => n.id === linkSource);
+    const childNode = nodes.find(n => n.id === nodeId);
+
+    // Apply parent/child link + run autoLayoutChild so the freshly-linked
+    // child's subtree slides into the right slot relative to its new
+    // parent. Type-aware (linear = align parent-left below all peers;
+    // nested = align parent-center+indent below nested siblings only).
+    if (parentNode && childNode) {
+      const childIdx = nodes.findIndex(n => n.id === nodeId);
+      if (childIdx >= 0) {
+        nodes[childIdx] = { ...nodes[childIdx], parentId: linkSource, relationshipType: relType };
+      }
+      const layoutNodes: LayoutNode[] = nodes.map(n => ({
+        id: n.id,
+        title: n.title,
+        description: n.description,
+        altTitles: n.altTitles || [],
+        x: n.x,
+        y: n.y,
+        w: n.w,
+        h: n.h,
+        baseY: n.baseY ?? n.y,
+        parentId: n.parentId,
+        pathwayId: n.pathwayId,
+        relationshipType: n.relationshipType || '',
+        linkedKwIds: (n.linkedKwIds as string[]) || [],
+        userMinH: n.userMinH,
+      }));
+      const layoutChild = layoutNodes.find(n => n.id === nodeId);
+      const layoutParent = layoutNodes.find(n => n.id === linkSource);
+      if (layoutChild && layoutParent) {
+        layoutAutoLayoutChild(layoutChild, layoutParent, relType, layoutNodes, collapsed);
+      }
+      // Coalesce position changes + the parent-link change into a single
+      // updateNodes call (server-side PATCH applies all in one round-trip).
+      const updateMap = new Map<number, Partial<CanvasNode>>();
+      updateMap.set(nodeId, { id: nodeId, parentId: linkSource, relationshipType: relType });
+      for (const ln of layoutNodes) {
+        const orig = nodes.find(n => n.id === ln.id);
+        if (!orig) continue;
+        if (orig.x !== ln.x || orig.y !== ln.y || orig.baseY !== ln.baseY) {
+          const existing = updateMap.get(ln.id) || { id: ln.id };
+          existing.x = ln.x;
+          existing.y = ln.y;
+          existing.baseY = ln.baseY ?? ln.y;
+          updateMap.set(ln.id, existing);
+          const ix = nodes.findIndex(n => n.id === ln.id);
+          if (ix >= 0) {
+            nodes[ix] = { ...nodes[ix], x: ln.x, y: ln.y, baseY: ln.baseY ?? ln.y };
+          }
+        }
+      }
+      updateNodes(Array.from(updateMap.values()));
+      forceUpdate();
     } else {
-      updateNodes([{ id: nodeId, parentId: linkSource, relationshipType: 'linear' } as Partial<CanvasNode>]);
-      showToast('\u2713 Parent\u2192Parent link created');
+      // Fallback: parent or child node not found \u2014 apply the link without layout.
+      updateNodes([{ id: nodeId, parentId: linkSource, relationshipType: relType } as Partial<CanvasNode>]);
     }
+    showToast(linkMode === 'nested' ? '\u2713 Parent\u2192Child link created' : '\u2713 Parent\u2192Parent link created');
     setLinkMode(null); setLinkSource(null);
   }
 

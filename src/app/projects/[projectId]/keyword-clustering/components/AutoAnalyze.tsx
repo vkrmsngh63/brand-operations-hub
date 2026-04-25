@@ -2,6 +2,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { authFetch } from '@/lib/authFetch';
 import type { CanvasNode } from '@/hooks/useCanvas';
+import { calcNodeHeight, runLayoutPass, type LayoutNode } from '@/lib/canvas-layout';
 import './auto-analyze.css';
 
 /* ── Types ─────────────────────────────────────────────────── */
@@ -84,6 +85,14 @@ const AA_DELIMITERS = {
   katEnd:      '===END_KEYWORDS_ANALYSIS_TABLE===',
   reevalStart: '===BEGIN_REEVALUATION_REPORT===',
   reevalEnd:   '===END_REEVALUATION_REPORT===',
+  // Salvage follow-up blocks (Change 6 in AUTO_ANALYZE_PROMPT_V2_PROPOSED_CHANGES).
+  // Tool-generated prompt; not stored in canonical V2.
+  salvageDeltaStart:    '=== DELTA ROWS FOR PLACEMENTS ===',
+  salvageDeltaEnd:      '=== END DELTA ROWS ===',
+  salvageIrrStart:      '=== IRRELEVANT_KEYWORDS ===',
+  salvageIrrEnd:        '=== END IRRELEVANT_KEYWORDS ===',
+  salvageReevalStart:   '=== REEVALUATION REPORT ===',
+  salvageReevalEnd:     '=== END REEVALUATION REPORT ===',
 };
 
 const AA_OUTPUT_INSTRUCTIONS = `
@@ -377,7 +386,12 @@ export default function AutoAnalyze({
     return allKeywords.filter(k => {
       if (keywordScope === 'all') return true;
       if (keywordScope === 'non-ai-sorted') return k.sortingStatus !== 'AI-Sorted';
-      return k.sortingStatus === 'Unsorted';
+      // Default scope: keywords needing AI placement.
+      // 'Reshuffled' = keywords the AI previously placed that got bumped out
+      // during a later batch's reshuffling (surfaced by the post-batch
+      // reconciliation pass in doApply). They're re-eligible for placement
+      // alongside fresh 'Unsorted' keywords.
+      return k.sortingStatus === 'Unsorted' || k.sortingStatus === 'Reshuffled';
     });
   }
 
@@ -703,8 +717,12 @@ export default function AutoAnalyze({
   }
 
   /* ── Merge delta TSV into current full table ───────────────── */
-  function mergeDelta(deltaTsv: string): string {
-    const currentTsv = buildCurrentTsv();
+  // baseTsv is optional. Default = current canvas state via buildCurrentTsv()
+  // (the normal Mode B flow). Pass an explicit baseTsv to merge into a
+  // different snapshot — used by runSalvage to merge salvage delta rows
+  // into the original Mode A response without touching the live canvas.
+  function mergeDelta(deltaTsv: string, baseTsv?: string): string {
+    const currentTsv = baseTsv ?? buildCurrentTsv();
     const currentLines = currentTsv.split('\n');
     const header = currentLines[0];
     const resultRows = currentLines.slice(1).filter(l => l.trim());
@@ -862,6 +880,157 @@ export default function AutoAnalyze({
       tokensUsed,
       rawResponse: textContent,
     };
+  }
+
+  /* ── Salvage round ─────────────────────────────────────────── */
+  // When validateResult fires HC3 ("Missing N batch keywords") and HC3 is
+  // the ONLY error, runSalvage spawns a targeted follow-up prompt instead
+  // of a full-batch retry. Per Change 6 in AUTO_ANALYZE_PROMPT_V2_PROPOSED_CHANGES
+  // (Session-2b refined wording, Q5 resolution): for each missing keyword
+  // the model returns either a placement (delta row) OR an irrelevance flag
+  // (auto-archived to RemovedKeyword with removedSource='auto-ai-detected-irrelevant'
+  // and aiReasoning populated from the model's reason).
+  //
+  // Returns { mergedTsv, archivedKeywordIds, error }.
+  // - mergedTsv: original Mode-A response with salvage delta rows merged in;
+  //   null if salvage produced no placements OR errored.
+  // - archivedKeywordIds: Keyword.id values that were soft-archived this round.
+  // - error: non-null on API failure (caller falls through to full retry).
+  async function runSalvage(
+    batch: BatchObj,
+    missingKeywords: string[],
+    originalResult: BatchResult
+  ): Promise<{ mergedTsv: string | null; archivedKeywordIds: string[]; error: string | null }> {
+    aaLog('  Running salvage round for ' + missingKeywords.length + ' missing keyword(s)…', 'info');
+
+    // Build follow-up user prompt per Change 6 template.
+    const seed = seedWords;
+    const userContent =
+      'FOLLOW-UP REQUEST — MISSING KEYWORDS IN PRIOR BATCH RESPONSE\n\n' +
+      'In your previous response for batch ' + batch.batchNum + ', the following ' +
+      missingKeywords.length + ' keywords from the input batch were not placed in the Topics Layout Table:\n\n' +
+      missingKeywords.map(kw => '- ' + kw).join('\n') + '\n\n' +
+      'The rest of the batch was placed successfully. Do NOT re-analyze or reorganize anything else — ' +
+      'all other keywords in the batch have been processed correctly and applied to the canvas.\n\n' +
+      'For each missing keyword, respond with EXACTLY ONE of:\n\n' +
+      '(A) Placement — If the keyword is topically relevant to ' + seed + ', apply Steps 1-5 of the ' +
+      'Initial Prompt to place it, including all required secondary placements and upstream chains. ' +
+      'Output the placements in delta format (only new rows or modified rows).\n\n' +
+      '(B) Irrelevance flag — If the keyword is NOT topically relevant to ' + seed + ' (e.g., it is a ' +
+      'homograph, geographic reference unrelated to the niche, or noise), flag it for removal by ' +
+      'listing it in a dedicated IRRELEVANT_KEYWORDS block along with your reasoning. The tool will ' +
+      "auto-archive these keywords to the Removed Terms table with source tag " +
+      "'auto-ai-detected-irrelevant' and your reasoning preserved; admin can review or restore at any time.\n\n" +
+      'Output format:\n\n' +
+      AA_DELIMITERS.salvageDeltaStart + '\n' +
+      '<Depth>\\t<Topic>\\t<Alternate Titles>\\t<Relationship>\\t<Parent Topic>\\t<Conversion Path>\\t<Sister Nodes>\\t<Keywords>\\t<Topic Description>\n' +
+      '...\n' +
+      AA_DELIMITERS.salvageDeltaEnd + '\n\n' +
+      AA_DELIMITERS.salvageIrrStart + '\n' +
+      '<keyword_1>\\t<reason-why-not-relevant>\n' +
+      '<keyword_2>\\t<reason-why-not-relevant>\n' +
+      AA_DELIMITERS.salvageIrrEnd + '\n\n' +
+      AA_DELIMITERS.salvageReevalStart + '\n' +
+      '(Report only on the missing-keyword placements; do not re-report on the rest of the batch.)\n' +
+      AA_DELIMITERS.salvageReevalEnd + '\n\n' +
+      'IMPORTANT: Do NOT output the full Topics Layout Table. Only the three delimited blocks above.';
+
+    // Reuse the same system prompt (initial + primer) so prompt cache stays warm.
+    let systemText = initialPrompt;
+    systemText = systemText.replace(/\[bursitis\]/gi, '[' + seed + ']');
+    systemText = systemText.replace(/\[PRIMARY_SEED_WORDS\]/g, seed);
+    systemText = systemText.replace(/\[VOLUME_THRESHOLD\]/g, String(volumeThreshold));
+    if (primerPrompt) {
+      systemText += '\n\n--- TOPICS LAYOUT TABLE PRIMER ---\n\n' + primerPrompt;
+    }
+    systemText += AA_OUTPUT_INSTRUCTIONS;
+
+    const requestBody = buildRequestBody(systemText, userContent);
+
+    let apiResponse: { content: { type: string; text?: string }[]; usage: { input_tokens: number; output_tokens: number; cache_creation_input_tokens: number; cache_read_input_tokens: number }; stop_reason: string | null };
+    try {
+      apiResponse = await callApi(requestBody, batch.batchNum);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      aaLog('  ⚠ Salvage API call failed: ' + msg + ' — falling back to full retry', 'warn');
+      return { mergedTsv: null, archivedKeywordIds: [], error: msg };
+    }
+
+    const text = apiResponse.content.filter(b => b.type === 'text').map(b => b.text || '').join('\n');
+
+    // Cost: salvage attempts always charge tokens. batch.cost accumulates.
+    const tokensUsed = {
+      input: (apiResponse.usage.input_tokens || 0) + (apiResponse.usage.cache_creation_input_tokens || 0) + (apiResponse.usage.cache_read_input_tokens || 0),
+      output: apiResponse.usage.output_tokens || 0,
+    };
+    const salvageCost = calcCost(tokensUsed);
+    batch.cost += salvageCost;
+    setTotalSpent(prev => prev + salvageCost);
+    totalSpentRef.current += salvageCost;
+    aaLog('  Salvage API call complete. Cost: $' + salvageCost.toFixed(3), 'info');
+
+    // Parse the three salvage blocks.
+    const deltaTsv = extractBlock(text, AA_DELIMITERS.salvageDeltaStart, AA_DELIMITERS.salvageDeltaEnd);
+    const irrTsv = extractBlock(text, AA_DELIMITERS.salvageIrrStart, AA_DELIMITERS.salvageIrrEnd);
+
+    // Auto-archive irrelevants. POST per-keyword to preserve individual reasoning.
+    const archivedKeywordIds: string[] = [];
+    if (irrTsv) {
+      const irrItems: { keyword: string; reason: string }[] = irrTsv.split('\n')
+        .map(l => l.trim())
+        .filter(Boolean)
+        .map(l => {
+          const parts = l.split('\t');
+          return { keyword: (parts[0] || '').trim(), reason: (parts[1] || '').trim() };
+        })
+        .filter(x => x.keyword);
+
+      for (const item of irrItems) {
+        const kwObj = allKeywords.find(k => k.keyword.toLowerCase() === item.keyword.toLowerCase());
+        if (!kwObj) {
+          aaLog('  ⚠ Salvage flagged "' + item.keyword + '" as irrelevant but no matching AST keyword found — skipping', 'warn');
+          continue;
+        }
+        try {
+          const res = await authFetch('/api/projects/' + projectId + '/removed-keywords', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              keywordIds: [kwObj.id],
+              removedSource: 'auto-ai-detected-irrelevant',
+              aiReasoning: item.reason || null,
+            }),
+          });
+          if (res.ok) {
+            archivedKeywordIds.push(kwObj.id);
+            aaLog('  ↻ Salvage auto-archived "' + item.keyword + '"' + (item.reason ? ' — ' + item.reason : ''), 'info');
+          } else {
+            aaLog('  ⚠ Salvage auto-archive failed for "' + item.keyword + '" (status ' + res.status + ')', 'warn');
+          }
+        } catch (e) {
+          aaLog('  ⚠ Salvage auto-archive error for "' + item.keyword + '": ' + (e instanceof Error ? e.message : ''), 'warn');
+        }
+      }
+      if (archivedKeywordIds.length > 0) {
+        // Refresh parent state so HC3 re-validation sees the archived keywords as gone.
+        await onRefreshKeywords();
+      }
+    }
+
+    // Merge delta rows into the original Mode-A response (NOT the live canvas —
+    // the canvas hasn't been touched yet because validation failed).
+    let mergedTsv: string | null = null;
+    if (deltaTsv) {
+      // The salvage prompt asks for headerless data rows. Synthesize a
+      // header so mergeDelta can parse them; aIdx will be -1 (no 'action'
+      // column) so mergeDelta defaults each row to 'ADD'/upgrade-to-UPDATE
+      // when a title match is found.
+      const fakeHeader = 'Depth\tTopic\tAlternate Titles\tRelationship\tParent Topic\tConversion Path\tSister Nodes\tKeywords\tTopic Description';
+      const augmented = fakeHeader + '\n' + deltaTsv;
+      mergedTsv = mergeDelta(augmented, originalResult.topicsTableTsv);
+    }
+
+    return { mergedTsv, archivedKeywordIds, error: null };
   }
 
   /* ── Validate result ───────────────────────────────────────── */
@@ -1188,6 +1357,47 @@ export default function AutoAnalyze({
       .filter(sl => deleteNodeIdSet.has(sl.nodeA) || deleteNodeIdSet.has(sl.nodeB))
       .map(sl => sl.id);
 
+    // 7.5. P3-F8 layout pass. Recompute each node's content-driven height
+    //     via calcNodeHeight, then run the holistic 4-step push-down pass
+    //     (reset roots → tree-walk type-aware placement → 60-pass overlap
+    //     resolution → pathway separation). Mutates rebuildNodes' x/y/h
+    //     in place so the rebuild call below persists the laid-out
+    //     positions in a single transaction. Q1 answer: runs after every
+    //     batch apply (not just run-end).
+    const layoutNodes: LayoutNode[] = rebuildNodes.map(n => ({
+      id: n.id as number,
+      title: (n.title as string) || '',
+      description: (n.description as string) || '',
+      altTitles: (n.altTitles as string[]) || [],
+      x: n.x as number,
+      y: n.y as number,
+      w: n.w as number,
+      h: n.h as number,
+      baseY: (n.baseY as number | undefined) ?? (n.y as number),
+      parentId: (n.parentId as number | null) ?? null,
+      pathwayId: (n.pathwayId as number | null) ?? null,
+      relationshipType: (n.relationshipType as string) || '',
+      linkedKwIds: (n.linkedKwIds as string[]) || [],
+      userMinH: (n.userMinH as number | null) ?? null,
+    }));
+    for (const ln of layoutNodes) {
+      ln.h = calcNodeHeight(ln);
+    }
+    runLayoutPass(layoutNodes, [...pathways, ...newPathways]);
+    // Mirror computed positions/heights back onto rebuildNodes for the
+    // rebuild API call.
+    const byId = new Map<number, LayoutNode>();
+    for (const ln of layoutNodes) byId.set(ln.id, ln);
+    for (const rn of rebuildNodes) {
+      const ln = byId.get(rn.id as number);
+      if (!ln) continue;
+      rn.x = ln.x;
+      rn.y = ln.y;
+      rn.h = ln.h;
+      rn.baseY = ln.baseY ?? ln.y;
+    }
+    aaLog('  Layout pass complete (' + rebuildNodes.length + ' nodes positioned)', 'info');
+
     // 8. ATOMIC REBUILD — single transaction
     aaLog('  Applying to canvas (atomic rebuild)...', 'info');
     try {
@@ -1238,24 +1448,19 @@ export default function AutoAnalyze({
     await onRefreshCanvas();
     await onRefreshKeywords();
 
-    // 11. Verify and mark keywords as AI-Sorted
+    // 11. Identify which batch keywords landed on the canvas (input to
+    //     salvage detection in step 12 below).
     const allLinkedIds = new Set<string>();
     for (const n of rebuildNodes) {
       if (Array.isArray(n.linkedKwIds)) (n.linkedKwIds as string[]).forEach(id => allLinkedIds.add(id));
     }
 
     const unplaced: string[] = [];
-    const placed: string[] = [];
     for (const id of batch.keywordIds) {
-      if (allLinkedIds.has(id)) placed.push(id);
-      else {
+      if (!allLinkedIds.has(id)) {
         const kw = allKeywords.find(k => k.id === id);
         if (kw) unplaced.push(kw.keyword);
       }
-    }
-
-    if (placed.length > 0) {
-      onBatchUpdateKeywords(placed.map(id => ({ id, sortingStatus: 'AI-Sorted' })));
     }
 
     if (unplaced.length > 0) {
@@ -1263,6 +1468,48 @@ export default function AutoAnalyze({
       batch._unplacedKws = unplaced;
     } else {
       aaLog('  ✓ All ' + batch.keywordIds.length + ' keywords verified on canvas.', 'ok');
+    }
+
+    // 12. P3-F7 backup reconciliation pass. Heals status-vs-canvas drift
+    //     across the ENTIRE AST table (not just this batch's keywords).
+    //     Two flips, both logged with structured info that's
+    //     forward-compatible with the future ai_feedback_records schema
+    //     per AI_TOOL_FEEDBACK_PROTOCOL §2.3.
+    //
+    //     (a) keyword IS on canvas but status is 'Unsorted' or 'Reshuffled'
+    //         → flip to 'AI-Sorted'. Catches Bug 1 silent placements
+    //         (Mode A re-mentions of prior-batch keywords) AND any
+    //         Reshuffled keyword the AI just re-placed.
+    //
+    //     (b) keyword is NOT on canvas but status is 'AI-Sorted'
+    //         → flip to 'Reshuffled'. Catches Bug 2 sub-group 1 reshuffle
+    //         casualties. Reshuffled keywords appear with a yellow badge
+    //         in the AST (visible alarm) and are re-eligible for placement
+    //         under the default Auto-Analyze scope.
+    const reconcileUpdates: { id: string; sortingStatus: string }[] = [];
+    let flippedToAiSorted = 0;
+    let flippedToReshuffled = 0;
+    for (const kw of allKeywords) {
+      const onCanvas = allLinkedIds.has(kw.id);
+      if (onCanvas && (kw.sortingStatus === 'Unsorted' || kw.sortingStatus === 'Reshuffled')) {
+        reconcileUpdates.push({ id: kw.id, sortingStatus: 'AI-Sorted' });
+        flippedToAiSorted++;
+      } else if (!onCanvas && kw.sortingStatus === 'AI-Sorted') {
+        reconcileUpdates.push({ id: kw.id, sortingStatus: 'Reshuffled' });
+        aaLog(
+          '  ↻ Reconcile: "' + kw.keyword + '" (id ' + kw.id + ') was AI-Sorted, no longer on canvas → Reshuffled',
+          'warn'
+        );
+        flippedToReshuffled++;
+      }
+    }
+    if (reconcileUpdates.length > 0) {
+      onBatchUpdateKeywords(reconcileUpdates);
+      aaLog(
+        '  ↻ Reconciliation: ' + flippedToAiSorted + ' on-canvas → AI-Sorted, ' +
+        flippedToReshuffled + ' off-canvas → Reshuffled',
+        flippedToReshuffled > 0 ? 'warn' : 'ok'
+      );
     }
   }
 
@@ -1300,7 +1547,7 @@ export default function AutoAnalyze({
         totalSpentRef.current += attemptCost;
         aaLog('  Batch ' + batch.batchNum + ' attempt ' + batch.attempts + ' — API call complete. Cost: $' + attemptCost.toFixed(3), 'info');
 
-        const validation = validateResult(result, batch);
+        let validation = validateResult(result, batch);
         if (!validation.ok) {
           // HC4/HC5 signal Mode A dropped pre-existing data; Mode B (delta) recovers faster than retrying Mode A.
           const isLostDataError = validation.errors.some(e =>
@@ -1314,19 +1561,63 @@ export default function AutoAnalyze({
             batch.status = 'queued';
             continue;
           }
-          if (batch.attempts < batch.maxAttempts) {
-            aaLog('Batch ' + batch.batchNum + ' validation failed: ' + validation.errors.join('; ') + ' — retrying…', 'warn');
-            batch.status = 'queued';
-            continue;
-          } else {
-            batch.status = 'failed';
-            batch.error = 'Validation failed: ' + validation.errors.join('; ');
-            batch.completedAt = Date.now();
-            aaLog('Batch ' + batch.batchNum + ' FAILED: ' + batch.error, 'error');
-            setCurrentIdx(prev => prev + 1);
-            currentIdxRef.current++;
-            setBatches([...batchesRef.current]);
-            continue;
+
+          // Salvage path. Fires when HC3 ("Missing N batch keywords") is the
+          // only failure mode and no HC4/HC5 lost-data errors are present.
+          // Targeted follow-up prompt re-asks the model for just the missing
+          // keywords (place them OR flag irrelevant); cheaper than a full
+          // batch retry. See Change 6 in AUTO_ANALYZE_PROMPT_V2_PROPOSED_CHANGES.
+          const isMissingOnlyFailure = !isLostDataError &&
+            validation.errors.length > 0 &&
+            validation.errors.every(e => e.startsWith('Missing '));
+          if (isMissingOnlyFailure && batch._correctionContext) {
+            const m = batch._correctionContext.match(/^Missing keywords:\s*(.+?)\.\s*Please/);
+            const missingKws = m ? m[1].split(',').map(s => s.trim()).filter(Boolean) : [];
+            if (missingKws.length > 0) {
+              const salvage = await runSalvage(batch, missingKws, result);
+              if (salvage.error) {
+                // Salvage failed at API level — fall through to standard retry.
+              } else {
+                // Replace result.topicsTableTsv with the merged version (if any
+                // placements came back) and drop archived keywords from the
+                // batch's responsibility set so HC3 re-validation passes.
+                if (salvage.mergedTsv) result.topicsTableTsv = salvage.mergedTsv;
+                if (salvage.archivedKeywordIds.length > 0) {
+                  const archivedSet = new Set(salvage.archivedKeywordIds);
+                  batch.keywordIds = batch.keywordIds.filter(id => !archivedSet.has(id));
+                  // batch.keywords mirrors keywordIds; drop the same texts.
+                  batch.keywords = batch.keywords.filter(_kwText => {
+                    const kwObj = allKeywords.find(k => k.keyword === _kwText);
+                    return !(kwObj && archivedSet.has(kwObj.id));
+                  });
+                }
+                batch._correctionContext = '';
+                validation = validateResult(result, batch);
+                if (validation.ok) {
+                  aaLog('  ✓ Salvage round resolved all missing keywords.', 'ok');
+                } else {
+                  aaLog('  ⚠ Salvage round did not fully resolve: ' + validation.errors.join('; '), 'warn');
+                  // Fall through to standard retry below.
+                }
+              }
+            }
+          }
+
+          if (!validation.ok) {
+            if (batch.attempts < batch.maxAttempts) {
+              aaLog('Batch ' + batch.batchNum + ' validation failed: ' + validation.errors.join('; ') + ' — retrying…', 'warn');
+              batch.status = 'queued';
+              continue;
+            } else {
+              batch.status = 'failed';
+              batch.error = 'Validation failed: ' + validation.errors.join('; ');
+              batch.completedAt = Date.now();
+              aaLog('Batch ' + batch.batchNum + ' FAILED: ' + batch.error, 'error');
+              setCurrentIdx(prev => prev + 1);
+              currentIdxRef.current++;
+              setBatches([...batchesRef.current]);
+              continue;
+            }
           }
         }
 
@@ -1579,9 +1870,9 @@ export default function AutoAnalyze({
                 <option value="claude-opus-4-5">Claude Opus 4.5</option>
                 <option value="claude-haiku-4-5">Claude Haiku 4.5</option>
               </select>
-              <span className="aa-label" style={{minWidth:"auto",marginLeft:"12px"}}>Scope<span className="aa-help">ⓘ<span className="aa-tip">Which keywords to include. "Unsorted only" skips already-sorted keywords. "All" re-analyzes everything.</span></span></span>
+              <span className="aa-label" style={{minWidth:"auto",marginLeft:"12px"}}>Scope<span className="aa-help">ⓘ<span className="aa-tip">Which keywords to include. "Unsorted + Reshuffled" picks up never-sorted keywords plus ones the AI bumped off the canvas during reshuffling. "All" re-analyzes everything.</span></span></span>
               <select className="aa-select" value={keywordScope} onChange={e => setKeywordScope(e.target.value as typeof keywordScope)} disabled={aaState !== 'IDLE'}>
-                <option value="unsorted-only">Unsorted only</option>
+                <option value="unsorted-only">Unsorted + Reshuffled</option>
                 <option value="non-ai-sorted">Non-AI-Sorted</option>
                 <option value="all">All keywords</option>
               </select>

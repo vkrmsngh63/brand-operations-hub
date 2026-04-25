@@ -8,7 +8,7 @@ export interface Keyword {
   id: string;
   keyword: string;
   volume: string;
-  sortingStatus: 'Unsorted' | 'Partially Sorted' | 'Completely Sorted' | 'AI-Sorted';
+  sortingStatus: 'Unsorted' | 'Partially Sorted' | 'Completely Sorted' | 'AI-Sorted' | 'Reshuffled';
   tags: string;
   topic: string;
   sortOrder: number;

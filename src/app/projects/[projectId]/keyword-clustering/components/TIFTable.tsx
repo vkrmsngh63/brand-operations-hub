@@ -345,7 +345,7 @@ export default function TIFTable({ astKeywords, tifKeywords, onSetTifKeywords, o
       const st = rec ? rec.sortingStatus : 'Unsorted';
       if ((st === 'Completely Sorted' || st === 'AI-Sorted') && !showSorted) return false;
       if (st === 'Partially Sorted' && !showPartial) return false;
-      if (st === 'Unsorted' && !showUnsorted) return false;
+      if ((st === 'Unsorted' || st === 'Reshuffled') && !showUnsorted) return false;
       if (q) {
         const words = q.split(/\s+/).filter(Boolean);
         const kwLc = kw.toLowerCase();
@@ -671,6 +671,7 @@ export default function TIFTable({ astKeywords, tifKeywords, onSetTifKeywords, o
     if (st === 'Completely Sorted') return 'tif-st-c';
     if (st === 'AI-Sorted') return 'tif-st-ai';
     if (st === 'Partially Sorted') return 'tif-st-p';
+    if (st === 'Reshuffled') return 'tif-st-r';
     return 'tif-st-u';
   }
 

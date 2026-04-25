@@ -325,6 +325,7 @@
 .ast-pill-p  { background: var(--s-p-bg, #ffedd5); color: var(--s-p-fg, #c2410c); }
 .ast-pill-c  { background: var(--s-c-bg, #d1fae5); color: var(--s-c-fg, #065f46); }
 .ast-pill-ai { background: var(--s-ai-bg, #dbeafe); color: var(--s-ai-fg, #1e40af); }
+.ast-pill-r  { background: var(--s-r-bg, #fef3c7); color: var(--s-r-fg, #92400e); }
 
 /* ── Tag pills ───────────────────────────────────────────────── */
 .ast-tag-cell-inner {

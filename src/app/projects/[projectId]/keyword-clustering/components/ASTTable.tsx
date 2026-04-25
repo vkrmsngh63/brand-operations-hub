@@ -133,7 +133,7 @@ export default function ASTTable({
     return keywords.filter(k => {
       if ((k.sortingStatus === 'Completely Sorted' || k.sortingStatus === 'AI-Sorted') && !showSorted) return false;
       if (k.sortingStatus === 'Partially Sorted' && !showPartial) return false;
-      if (k.sortingStatus === 'Unsorted' && !showUnsorted) return false;
+      if ((k.sortingStatus === 'Unsorted' || k.sortingStatus === 'Reshuffled') && !showUnsorted) return false;
       if (searchQ) {
         const words = searchQ.trim().split(/\s+/).filter(Boolean);
         const kl = k.keyword.toLowerCase();
@@ -707,7 +707,7 @@ export default function ASTTable({
                 <thead><tr><th><div className="th-inner">Keyword</div></th><th><div className="th-inner">Volume</div></th><th><div className="th-inner">Sorting Status</div></th><th><div className="th-inner">Tags</div></th><th><div className="th-inner">Source</div></th><th style={{ textAlign: 'center' }}><div className="th-inner">Actions</div></th></tr></thead>
                 <tbody>
                   {removedKeywords.length === 0 ? (<tr><td colSpan={6} style={{ textAlign: 'center', padding: 24, color: 'var(--text-l)', fontSize: 11 }}>No removed search terms yet.</td></tr>) : removedKeywords.map((rm) => {
-                    const pillCls = rm.sortingStatus === 'Completely Sorted' ? 'ast-pill ast-pill-c' : rm.sortingStatus === 'AI-Sorted' ? 'ast-pill ast-pill-ai' : rm.sortingStatus === 'Partially Sorted' ? 'ast-pill ast-pill-p' : 'ast-pill ast-pill-u';
+                    const pillCls = rm.sortingStatus === 'Completely Sorted' ? 'ast-pill ast-pill-c' : rm.sortingStatus === 'AI-Sorted' ? 'ast-pill ast-pill-ai' : rm.sortingStatus === 'Partially Sorted' ? 'ast-pill ast-pill-p' : rm.sortingStatus === 'Reshuffled' ? 'ast-pill ast-pill-r' : 'ast-pill ast-pill-u';
                     const isAuto = rm.removedSource === 'auto-ai-detected-irrelevant';
                     const sourceLabel = isAuto ? 'AI auto' : 'Manual';
                     const sourceTitle = isAuto
@@ -1111,7 +1111,7 @@ const ASTRow = React.memo(function ASTRow({
   splitTopics, splitTopicSel, setSplitTopicSel, splitDescSel, setSplitDescSel,
   onSplitTopicEdit, onSplitTopicAdd, onSplitApprovalToggle, onSplitDescEdit,
 }: ASTRowProps) {
-  const pillClass = kw.sortingStatus === 'Completely Sorted' ? 'ast-pill ast-pill-c' : kw.sortingStatus === 'AI-Sorted' ? 'ast-pill ast-pill-ai' : kw.sortingStatus === 'Partially Sorted' ? 'ast-pill ast-pill-p' : 'ast-pill ast-pill-u';
+  const pillClass = kw.sortingStatus === 'Completely Sorted' ? 'ast-pill ast-pill-c' : kw.sortingStatus === 'AI-Sorted' ? 'ast-pill ast-pill-ai' : kw.sortingStatus === 'Partially Sorted' ? 'ast-pill ast-pill-p' : kw.sortingStatus === 'Reshuffled' ? 'ast-pill ast-pill-r' : 'ast-pill ast-pill-u';
   const trRef = useRef<HTMLTableRowElement>(null);
 
   return (
