@@ -1,9 +1,10 @@
 # PIVOT DESIGN
 ## Operation-based output contract for Auto-Analyze (Keyword Clustering)
 
-**Last updated:** April 25, 2026 (Pivot Session B complete — DB migration shipped (live), backfill ran on 104 Bursitis rows, operation-applier + 43 unit tests landed; production routes patched to supply `stableId` at create time)
-**Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-B (Claude Code)
-**Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-A (Claude Code)
+**Last updated:** April 25, 2026 (Pivot Session C complete — Initial Prompt + Primer rewritten as `docs/AUTO_ANALYZE_PROMPT_V3.md`; output contract changed from "complete updated TSV table" to "list of operations" matching `src/lib/operation-applier.ts` vocabulary; doc-only session, V2 untouched as historical reference)
+**Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-C (Claude Code)
+**Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-B (Claude Code)
+**Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-pivot-session-A (Claude Code)
 **Group:** B (tool-specific to Keyword Clustering's Auto-Analyze; loaded when pivot work is in scope)
 
 **Purpose:** This is the canonical reference doc for the Auto-Analyze architectural pivot from "AI as state-rebuilder" to "AI as state-mutator." It captures the locked design from Pivot Session A and is the build spec Pivot Sessions B/C/D/E reference.
@@ -176,11 +177,12 @@ Design + locked decisions. This doc is the deliverable. No code changes; no data
 - ✅ Backfill script (`scripts/backfill-stable-ids.ts`) + duplicate-check script (`scripts/verify-no-stable-id-duplicates.ts`) committed for historical/diagnostic value. Idempotent; re-running finds nothing to do.
 - One Rule-13 zoom-out miss flagged + corrected mid-session: Claude shipped Step 3's NOT NULL push before noticing two pre-existing production routes would now fail at runtime. Director approved the patch (Option A) inside the same session. Captured in `CORRECTIONS_LOG.md` 2026-04-25 pivot-session-B entry.
 
-### Pivot Session C — Prompt rewrite
-- Rewrite Initial Prompt: keep philosophy/context/conversion-funnel framing; replace "complete updated Integrated Topics Layout Table" instruction with "emit a list of operations using the following vocabulary"; rewrite reevaluation-pass section so triggers issue `MERGE` / `SPLIT` / `RENAME` / `MOVE_TOPIC` operations.
-- Rewrite Primer: column-definitions section becomes operation-definitions; output-format section becomes operation-syntax; rules-and-constraints gets the deletion-via-`DELETE_TOPIC reassign_keywords_to=...` rule (replaces the never-delete rule).
-- Update `docs/AUTO_ANALYZE_PROMPT_V2.md` (or create `_V3.md`) with the new prompts.
-- Director re-pastes new prompts into Auto-Analyze UI at end of session.
+### Pivot Session C — ✅ DONE (2026-04-25)
+- ✅ Initial Prompt rewritten — philosophy / context / conversion-funnel framing kept verbatim; "complete updated Integrated Topics Layout Table" instruction replaced with "emit a list of operations using the vocabulary in the Primer"; reevaluation-pass section rewritten so each of the seven triggers maps to a specific operation (`ADD_TOPIC` + `MOVE_KEYWORD`, `MOVE_KEYWORD`, `SPLIT_TOPIC`, `MERGE_TOPICS`, `MOVE_TOPIC`, `MOVE_TOPIC` with relationship change, `ADD_TOPIC` + `MOVE_KEYWORD`); the standalone Reevaluation Report block is gone (operations carry `reason` fields inline). New rule "anything not mentioned stays exactly where it was — silence is preservation" included as a structural promise. Surviving wording from the V2 proposed-changes notes folded in: tie-breaker rule (Change 1), Step 4b Comprehensiveness Verification with the math-bug fix (Change 3 redrafted), JUSTIFY_RESTRUCTURE 6-field payload (Change 4), multi-placement-is-a-feature paragraph (Change 5), cross-canvas low-volume scan (Change 2 Loc 1).
+- ✅ Primer rewritten — column-definitions section replaced with INPUT TABLE COLUMNS (9-column TSV with Stable ID as first column, plus the new `<uuid>|<text> [p|s]` Keywords format and Stability Score). Output-format section replaced with OPERATION SYNTAX (JSON Lines inside a `=== OPERATIONS ===` / `=== END OPERATIONS ===` block; snake_case keys throughout). Rules-and-constraints rewritten with: deletion via `DELETE_TOPIC` (with `reassign_keywords_to` accepting another topic OR the literal `"ARCHIVE"`) replacing the V2 never-delete rule; no-orphan-keywords rule for `REMOVE_KEYWORD` vs `ARCHIVE_KEYWORD`; SPLIT/DELETE pre-requirement that source has no children; MERGE auto-reparent + auto-rewrite-sister-links semantics so the AI doesn't double-emit; SPLIT/DELETE drop sister links on the source (AI re-emits ADD_SISTER_LINK if needed); parent-cycle forbidden rule; Conversion Path and Stability Score both read-only.
+- ✅ Output: new file `docs/AUTO_ANALYZE_PROMPT_V3.md` (~640 lines). Legacy `docs/AUTO_ANALYZE_PROMPT_V2.md` kept untouched as historical reference (it's the record of what was actually pasted into the production UI through every Bursitis run, including the Session 3b verification).
+- ✅ Three drift-check design questions locked with director's go-ahead: operation output syntax = JSON Lines; input-state format = TSV with Stable ID first column; standalone Reevaluation Report block = scrapped (operations carry reasons inline).
+- Director re-pastes new prompts into Auto-Analyze UI at end of session (concrete click path in the session handoff).
 
 ### Pivot Session D — Wire it together + validate end-to-end
 - Update `AutoAnalyze.tsx` to send operations-output prompts and parse operation-list responses.

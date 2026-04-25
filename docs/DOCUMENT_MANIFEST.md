@@ -1,9 +1,10 @@
 # DOCUMENT MANIFEST
 ## Ground-truth registry of every handoff document in the PLOS system
 
-**Last updated:** April 25, 2026 (Phase 1g-test follow-up Part 3 — Pivot Session B — DB migration shipped (3 steps, live); operation-applier (~600 LOC) + 43 unit tests + 2 production routes patched + 2 backfill scripts; one medium-severity CORRECTIONS_LOG entry — Rule-16 zoom-out miss on pre-existing caller audit before NOT NULL push; corrected in-session via Option A patch)
-**Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-B (Claude Code)
-**Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-A (Claude Code)
+**Last updated:** April 25, 2026 (Phase 1g-test follow-up Part 3 — Pivot Session C — Initial Prompt + Primer rewrite landed as new Group B file `docs/AUTO_ANALYZE_PROMPT_V3.md`; output contract changed from "complete updated TSV table" to "list of operations using the canonical vocabulary in `src/lib/operation-applier.ts`"; legacy V2 untouched; doc-only session, no code, no DB)
+**Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-C (Claude Code)
+**Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-B (Claude Code)
+**Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-pivot-session-A (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-session3b-verify (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-session3b (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-24_phase1g-test-followup-part3-session3a (Claude Code)
@@ -28,63 +29,44 @@ These 13 documents form the persistent handoff context.
 | # | Document | Purpose | Last modified | Modified this session? |
 |---|---|---|---|---|
 | 1 | `PROJECT_CONTEXT.md` | Big-picture project context, philosophy, methodology, discover-as-you-build approach | 2026-04-17 | NO |
-| 2 | `PLATFORM_ARCHITECTURE.md` | Technical architecture — routes, schema, auth, file structure, tech debt | 2026-04-25 (Pivot Session B — `CanvasNode` schema gains `stableId String` (NOT NULL) + `stabilityScore Float @default(0.0)` columns + `@@unique([projectWorkflowId, stableId])` index; two route patches for stableId at create) | ✅ YES |
+| 2 | `PLATFORM_ARCHITECTURE.md` | Technical architecture — routes, schema, auth, file structure, tech debt | 2026-04-25 (Pivot Session B — `CanvasNode` schema gains `stableId String` (NOT NULL) + `stabilityScore Float @default(0.0)` columns + `@@unique([projectWorkflowId, stableId])` index; two route patches for stableId at create) | NO |
 | 3 | `PLATFORM_REQUIREMENTS.md` | Platform-wide requirements — scale, user-model, review cycle, audit, concurrency, phasing | 2026-04-17 | NO |
 | 4 | `NAVIGATION_MAP.md` | Every route + click path through PLOS — UI navigation source of truth | 2026-04-17 | NO |
-| 5 | `DATA_CATALOG.md` | Every data item — where it lives, Human Reference Language, cross-workflow sharing contracts | 2026-04-25 (Pivot Session B — §5 CanvasNode entries gain `stableId` (`t-N` format, persistent identifier the AI uses across batches) + `stabilityScore` (0.0–10.0; gates JUSTIFY_RESTRUCTURE at ≥7.0; populated later by stability-scoring algorithm)) | ✅ YES |
-| 6 | `ROADMAP.md` | Development execution plan — completed work + remaining phases | 2026-04-25 (Pivot Session B — Pivot Session B section added with full delivery summary; Pivot Session B item ✅ DONE; Pivot Session C promoted to NEXT priority) | ✅ YES |
-| 7 | `CORRECTIONS_LOG.md` | Append-only log of mistakes + extracted patterns | 2026-04-25 (Pivot Session B — 1 new medium-severity entry: shipped a NOT NULL DB constraint to production before checking pre-existing callers; corrected in-session via the patch path; new procedural pattern named "schema constraints have callers, not just data — audit both before tightening") | ✅ YES |
-| 8 | `CHAT_REGISTRY.md` | Chronological log of chats + URLs + work-summaries (post-Ckpt-9: Claude Code sessions use session-identifier format) | 2026-04-25 (Pivot Session B — new row for session_2026-04-25_phase1g-test-followup-part3-pivot-session-B; eleventh Claude Code session) | ✅ YES |
+| 5 | `DATA_CATALOG.md` | Every data item — where it lives, Human Reference Language, cross-workflow sharing contracts | 2026-04-25 (Pivot Session B — §5 CanvasNode entries gain `stableId` (`t-N` format, persistent identifier the AI uses across batches) + `stabilityScore` (0.0–10.0; gates JUSTIFY_RESTRUCTURE at ≥7.0; populated later by stability-scoring algorithm)) | NO |
+| 6 | `ROADMAP.md` | Development execution plan — completed work + remaining phases | 2026-04-25 (Pivot Session C — Pivot Session C section added with full delivery summary; Pivot Session C item ✅ DONE; Pivot Session D promoted to NEXT priority; Phase 1g-test follow-up REMAINING list re-numbered) | ✅ YES |
+| 7 | `CORRECTIONS_LOG.md` | Append-only log of mistakes + extracted patterns | 2026-04-25 (Pivot Session B — 1 new medium-severity entry: shipped a NOT NULL DB constraint to production before checking pre-existing callers; corrected in-session via the patch path; new procedural pattern named "schema constraints have callers, not just data — audit both before tightening") | NO |
+| 8 | `CHAT_REGISTRY.md` | Chronological log of chats + URLs + work-summaries (post-Ckpt-9: Claude Code sessions use session-identifier format) | 2026-04-25 (Pivot Session C — new row for session_2026-04-25_phase1g-test-followup-part3-pivot-session-C; twelfth Claude Code session) | ✅ YES |
 | 9 | `HANDOFF_PROTOCOL.md` | Rules for how chats operate — start/mid/end protocols, communication rules, interview rules | 2026-04-18 | NO |
 | 10 | `DOCUMENTATION_ARCHITECTURE.md` | Design of the doc-system itself (DLMS, tool graduation, group A/B, workflow interview pattern, Claude Code migration) | 2026-04-17 | NO |
 | 11 | `NEW_CHAT_PROMPT.md` | **Historical** — claude.ai era briefing template. Post-Phase-M, Claude Code sessions use `CLAUDE_CODE_STARTER.md` instead. | 2026-04-17 | NO |
-| 12 | `DOCUMENT_MANIFEST.md` | This file — ground-truth doc registry | 2026-04-25 (Pivot Session B — timestamps + modified flags + Pivot Session B summary) | ✅ YES |
+| 12 | `DOCUMENT_MANIFEST.md` | This file — ground-truth doc registry | 2026-04-25 (Pivot Session C — timestamps + modified flags + Pivot Session C summary; new Group B entry for `AUTO_ANALYZE_PROMPT_V3.md`) | ✅ YES |
 | 13 | `CLAUDE_CODE_MIGRATION.md` | Migration plan and operational rules for shifting from claude.ai to Claude Code. Executed successfully in Ckpt 9+9.5. | 2026-04-17 | NO |
 | 14 | `AI_TOOL_FEEDBACK_PROTOCOL.md` | Platform-wide standard for every AI-using tool in PLOS. Defines required integration points (structured decision output with reasoning, admin review surface with 3 actions + 2 feedback channels, feedback-repo write/read-back, quality scoring, model/provider registry), 3-phase implementation roll-out, and the primer text to include in every new workflow's design doc. | 2026-04-20 | NO |
 | 15 | `MODEL_QUALITY_SCORING.md` | Stability-score algorithm spec. Defines 0-10 stability_score per AI output item, factors that add/subtract to score, model's interpretation instructions, JUSTIFY_RESTRUCTURE payload requirement for high-score modifications, admin scoring guidelines (1-5 scale with 4 evaluation dimensions), meta-note on how algorithm was derived + review triggers + how to propose weight changes. | 2026-04-20 | NO |
 
-**Group A count: 15 documents.** 4 modified this session (ROADMAP, CORRECTIONS_LOG, CHAT_REGISTRY, DOCUMENT_MANIFEST). No new Group A docs created this session. The 11 not-modified Group A docs retain their timestamps from prior sessions.
+**Group A count: 15 documents.** 3 modified this session (ROADMAP, CHAT_REGISTRY, DOCUMENT_MANIFEST). No new Group A docs created this session. The 12 not-modified Group A docs retain their timestamps from prior sessions.
 
 **Not created this session (Group A):** no new Group A docs.
 
-**Created this session (Group B):** 1 new doc — `docs/PIVOT_DESIGN.md` (build spec for Pivot Sessions B/C/D/E). See Group B section below for entry.
+**Created this session (Group B):** 1 new doc — `docs/AUTO_ANALYZE_PROMPT_V3.md` (~640 lines; the operation-based rewrite of the Auto-Analyze Initial Prompt + Primer Prompt). See Group B section below for entry.
 
-**Also modified this session (operational file, not Group A):** `docs/CLAUDE_CODE_STARTER.md` — one-line drift fix changing "13 Group A docs" → "15 Group A docs" in two places (§17 and START-OF-SESSION-ROUTINE step 3). No semantic change to the rules or the start-of-session sequence; just an accuracy fix.
+**Also modified this session (Group B):**
+- `docs/PIVOT_DESIGN.md` — Pivot Session C marked ✅ DONE in §4 with full delivery summary; header timestamp updated.
+- `docs/KEYWORD_CLUSTERING_ACTIVE.md` — new POST-PIVOT-SESSION-C STATE block added above POST-PIVOT-SESSION-B (which is preserved as historical context); header timestamp updated.
 
-**Also modified this session (Group B):** `docs/KEYWORD_CLUSTERING_ACTIVE.md` — new POST-PIVOT-SESSION-A STATE block above POST-VERIFICATION; "Decision pending" line in POST-VERIFICATION block updated to "Decision committed 2026-04-25 in Pivot Session A."
+**Code changes this session (src/):** **NONE.** Pivot Session C is doc-only by design; no code paths touched, no DB changes, no `npm run build` rerun needed. Session D is the wiring session.
 
-**Also modified this session (non-Group-A):**
-- `KEYWORD_CLUSTERING_ACTIVE.md` (Group B) — New POST-VERIFICATION STATE block added above the POST-SESSION-3b STATE block (which is preserved as historical "previous-session" context). Contains: push status (`8afcb9f` + `6c09e50` + `aa7eb4b` deployed), Tier-1 verification results (5/5 PASS), Tier-2 engine verification (canvas-layout fires + atomic rebuild + reconciliation pass all confirmed via activity log), MAJOR FINDING (58/74 exact match to Session 2 P3-F7 diagnosis), cost data point ($1.89 per Sonnet 4.6 classic batch on 95-node canvas), state changes to Bursitis canvas (95→104 nodes, 58 keywords status-corrected, 74 keywords Reshuffled-flagged), 5 deferred items captured per Rule 14e, updated standing instructions. Header timestamp updated.
+**Files in commit (this session):**
+- `docs/AUTO_ANALYZE_PROMPT_V3.md` (NEW, ~640 lines).
+- `docs/PIVOT_DESIGN.md` (Session C marked DONE in §4).
+- `docs/KEYWORD_CLUSTERING_ACTIVE.md` (POST-PIVOT-SESSION-C STATE block added).
+- `docs/ROADMAP.md` (header + REMAINING list re-numbered; new Pivot Session C section added; Pivot Session D promoted to NEXT).
+- `docs/CHAT_REGISTRY.md` (new top row for session_2026-04-25_phase1g-test-followup-part3-pivot-session-C).
+- `docs/DOCUMENT_MANIFEST.md` (this file — timestamps + flags + Pivot Session C summary).
 
-**Code changes this session (src/):** **NONE.** Session 3b verification was deploy + verify only; no source-code changes. The verification pushed `6c09e50` (Session 3b code, committed in the previous session) — those code changes are documented under the Session 3b row in this manifest, not duplicated here.
+**Single commit:** pending Rule-9 approval at end of session before `git push origin main`. Branch is currently in sync with origin/main (Pivot Session B already pushed at `1c281da`).
 
-**Temporary files created and cleaned up this session:**
-- `docs/_paste-initial-prompt.txt` (35,921 chars, 169 lines) — extracted Initial Prompt from `docs/AUTO_ANALYZE_PROMPT_V2.md` for click-and-Ctrl-A copy-paste workaround when chat formatting stripped meaningful whitespace from the prompts. Cleaned up before end-of-session commit.
-- `docs/_paste-primer-prompt.txt` (15,232 chars, 178 lines) — same workaround for the Primer prompt. Cleaned up before end-of-session commit.
-
-**Lesson worth retaining (cross-session):** when the user needs to copy a long, whitespace-sensitive document (like a prompt) into a UI input, dumping it into chat is unreliable because chat formatting strips whitespace. Right pattern is to write the content to a plain-text file inside the workspace and tell the user the click path. Use the leading-underscore filename convention (`_paste-*.txt`) to make the file's temporary nature obvious AND sort it near the top of the file tree.
-
-**Earlier-session code changes (Session 3b — already in this manifest under previous header sections):**
-- `src/lib/canvas-layout.ts` — **NEW FILE** (321 lines). Pure-function port of HTML tool's four-job layout engine: `calcNodeHeight` + `runLayoutPass` + `autoLayoutChild` + `separatePathways`. Used by both `AutoAnalyze.doApply` (after every batch — Q1) and `CanvasPanel.handleLinkClick` (autoLayoutChild on parent-child link form).
-- `src/app/projects/[projectId]/keyword-clustering/components/AutoAnalyze.tsx` — Added new step 12 reconciliation pass in `doApply`; added `runSalvage()` function; refactored `mergeDelta(deltaTsv, baseTsv?)` to optionally accept a base TSV; wired salvage trigger into `runLoop` validation flow on HC3-only failure; wired `calcNodeHeight` + `runLayoutPass` into `doApply` step 7.5; renamed default-scope label.
-- `src/app/projects/[projectId]/keyword-clustering/components/CanvasPanel.tsx` — Wired `autoLayoutChild` into `handleLinkClick` with single-server-PATCH coalescing.
-- `src/app/projects/[projectId]/keyword-clustering/components/ASTTable.tsx` — Filter logic + pill-class lookups (live + RemovedKeyword display) now handle `'Reshuffled'`.
-- `src/app/projects/[projectId]/keyword-clustering/components/MTTable.tsx` — Filter logic now treats `'Reshuffled'` as Unsorted-equivalent.
-- `src/app/projects/[projectId]/keyword-clustering/components/TIFTable.tsx` — Filter logic + pill-class lookup now handle `'Reshuffled'`.
-- `src/app/projects/[projectId]/keyword-clustering/components/ast-table.css` — Added `.ast-pill-r` (yellow #fef3c7 / #92400e).
-- `src/app/projects/[projectId]/keyword-clustering/components/tif-table.css` — Added `.tif-st-r` (yellow).
-- `src/hooks/useKeywords.ts` — Type union for `Keyword.sortingStatus` extended with `'Reshuffled'`.
-- (No prisma/schema.prisma changes — `sortingStatus` is a String column, accommodates new value without migration.)
-
-**Single commit:** `6c09e50`. **NOT YET PUSHED** — awaiting director approval per Rule 9 deploy gate. Prior unpushed commit `8afcb9f` (Session 3a doc updates) remains queued — both will go out together on next push.
-- `src/app/api/projects/[projectId]/canvas/route.ts` — GET endpoint self-heals stale `nextNodeId`/`nextPathwayId` on read.
-- `src/app/api/projects/[projectId]/removed-keywords/route.ts` — NEW. GET (list) + POST (transactional soft-archive).
-- `src/app/api/projects/[projectId]/removed-keywords/[removedId]/restore/route.ts` — NEW. POST (transactional reverse).
-- `src/app/projects/[projectId]/keyword-clustering/components/AutoAnalyze.tsx` — model dropdown gets Opus 4.7; cost tracker counts failed-attempt costs; settings persistence (load + debounced save) with apiKey-localStorage / others-DB split.
-- `src/app/projects/[projectId]/keyword-clustering/components/ASTTable.tsx` — local removedTerms state removed; props change (drop `onBulkDelete`/`onDeleteKeyword`, add `removedKeywords`/`onSoftArchive`/`onRestoreRemoved`); modal gains Source column.
-- `src/app/projects/[projectId]/keyword-clustering/components/KeywordWorkspace.tsx` — owns `removedKeywords` state + soft-archive/restore HTTP plumbing; passes new props to ASTTable.
-
-**Single commit:** `25811c3`. Pushed to origin/main; Vercel redeploy underway. Three commits unpushed at session start (`fe9cc07`, `cbda73b`, `25811c3`) all went out together.
+**Earlier-session code changes (Pivot Session B and prior — already documented in this manifest under previous-header sections; not duplicated here):** see the Pivot Session B header summary at the top of this file for the full list shipped at `1c281da`.
 
 ---
 
@@ -96,8 +78,11 @@ These are tool-specific working documents. They travel with chats that touch the
 
 | Document | Tool/System | Status | Last modified | Modified this chat? |
 |---|---|---|---|---|
-| `KEYWORD_CLUSTERING_ACTIVE.md` | Keyword Clustering (workflow 1) | Active development | 2026-04-25 (Pivot Session B — new POST-PIVOT-SESSION-B STATE block above POST-PIVOT-SESSION-A) | ✅ YES |
-| `PIVOT_DESIGN.md` | Keyword Clustering / Auto-Analyze architectural pivot | Active build — spec for Pivot Sessions C/D/E (Session B done) | 2026-04-25 (Pivot Session B — Session B section marked DONE in §4 with delivery summary) | ✅ YES |
+| `KEYWORD_CLUSTERING_ACTIVE.md` | Keyword Clustering (workflow 1) | Active development | 2026-04-25 (Pivot Session C — new POST-PIVOT-SESSION-C STATE block above POST-PIVOT-SESSION-B; header timestamp updated) | ✅ YES |
+| `PIVOT_DESIGN.md` | Keyword Clustering / Auto-Analyze architectural pivot | Active build — spec for Pivot Sessions D/E (Sessions B + C done) | 2026-04-25 (Pivot Session C — Session C section marked DONE in §4 with delivery summary) | ✅ YES |
+| `AUTO_ANALYZE_PROMPT_V3.md` | Keyword Clustering / Auto-Analyze prompts | NEW — operation-based output contract; canonical for what the director re-pastes into the Auto-Analyze panel after Session C | 2026-04-25 (Pivot Session C — created; ~640 lines; Initial Prompt + Primer rewrite mirroring the operation vocabulary in `src/lib/operation-applier.ts`) | ✅ YES (created) |
+| `AUTO_ANALYZE_PROMPT_V2.md` | Keyword Clustering / Auto-Analyze prompts (HISTORICAL) | Historical reference only — the V2 full-table-rewrite contract that ran every Bursitis batch through Session 3b verification; preserved untouched until V3 is field-validated through Pivot Sessions D + E, then archivable | 2026-04-18 (last canonical edit predating the pivot) | NO |
+| `AUTO_ANALYZE_PROMPT_V2_PROPOSED_CHANGES.md` | Keyword Clustering / Auto-Analyze prompts (HISTORICAL) | Mostly superseded by V3 — surviving wording (Change 1 tie-breaker, Change 3 Comprehensiveness Verification redrafted, Change 4 JUSTIFY_RESTRUCTURE 6-field payload, Change 5 multi-placement, Change 2 Loc 1 cross-canvas scan) folded into V3 with locked wording; obsolete pieces (Reevaluation Report block, never-delete rule, full-table-rewrite output format, salvage IRRELEVANT_KEYWORDS template, session-boundary continuation) obsolete by construction; archivable in future cleanup | 2026-04-24 (Session 2b — last design refinement; locked then for "mechanical Session 6 merge" which is now subsumed by V3) | NO |
 
 ### Graduated Group B documents (split into Archive + Data Contract)
 

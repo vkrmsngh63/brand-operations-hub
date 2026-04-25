@@ -1,9 +1,10 @@
 # KEYWORD CLUSTERING — ACTIVE DOCUMENT
 ## Current state of the Keyword Clustering workflow tool (Group B, tool-specific)
 
-**Last updated:** April 25, 2026 (Phase 1g-test follow-up Part 3 — Pivot Session B — DB migration shipped live (3 steps), 104 Bursitis rows backfilled with `t-1`…`t-104` stableIds, `src/lib/operation-applier.ts` + 43 unit tests added, two pre-existing production routes patched to supply stableId at create time; new POST-PIVOT-SESSION-B STATE block added above)
-**Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-B (Claude Code)
-**Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-A (Claude Code)
+**Last updated:** April 25, 2026 (Phase 1g-test follow-up Part 3 — Pivot Session C — Initial Prompt + Primer rewrite landed as new file `docs/AUTO_ANALYZE_PROMPT_V3.md`; output contract changed from "complete updated TSV table" to "list of operations from the canonical vocabulary in `src/lib/operation-applier.ts`"; legacy V2 file untouched as historical reference; doc-only session, no code, no DB; new POST-PIVOT-SESSION-C STATE block added above)
+**Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-C (Claude Code)
+**Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-B (Claude Code)
+**Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-pivot-session-A (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-session3b-verify (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-session3b (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-24_phase1g-test-followup-part3-session3a (Claude Code)
@@ -21,7 +22,51 @@
 
 ---
 
-## ⚠️ POST-PIVOT-SESSION-B STATE (READ FIRST — updated 2026-04-25 Pivot Session B)
+## ⚠️ POST-PIVOT-SESSION-C STATE (READ FIRST — updated 2026-04-25 Pivot Session C)
+
+**As of 2026-04-25 Pivot Session C (Initial Prompt + Primer rewritten for the operation-based output contract; doc-only session; no code, no DB, no live-site impact):**
+
+### What this session did
+
+Pivot Session C's full scope per `docs/PIVOT_DESIGN.md` §4 landed in one session as a single doc deliverable:
+
+1. **New file `docs/AUTO_ANALYZE_PROMPT_V3.md`** (~640 lines). Mirrors V2's structure (frontmatter + how-to-use + how-to-update + Initial Prompt code block + Primer code block), but the two prompt blocks are rewritten end-to-end for the operation-based contract. The vocabulary in `src/lib/operation-applier.ts`'s `Operation` discriminated union is the canonical reference; V3 mirrors it exactly (13 operations, snake_case keys, JSON Lines syntax, alias rules, JUSTIFY_RESTRUCTURE 6-field payload at stability ≥ 7.0).
+
+2. **Initial Prompt V3.** Philosophy / context / conversion-funnel framing kept verbatim from V2 (the director's voice is preserved on every paragraph about searcher intent, conversion stages, Topic Naming, seed-word substitution). The action-numbered task list rewritten: AI now decides what changes the canvas needs, then expresses those changes as operations. New explicit rule: "Anything you do not mention in your operation list stays exactly where it was. Silence is preservation." Multi-placement-is-a-feature paragraph (V2 proposed-changes Change 5 — locked wording) inserted at the start of the Placement Decision Framework. Tie-breaker rule (V2 Change 1 — locked wording) inserted into Step 2. Step 4b Comprehensiveness Verification (V2 Change 3 redrafted version with the math-bug fix) inserted after Step 4. Step 6's volume-aware rule (b) updated with the cross-canvas scan (V2 Change 2 Loc 1 — locked wording) and stability-score friction tie-in. New Step 6b Respecting Stability Scores (synthesized from `MODEL_QUALITY_SCORING.md §3` and V2 Change 4 6-field payload) inserted before Step 7. Step 7 Conversion Funnel Stage Ordering kept verbatim. Post-Batch Funnel Reevaluation Pass rewritten so each of the seven triggers maps to one or more specific operations. Reevaluation Report block deleted from output — operations carry `reason` fields inline. Output instruction tightened: emit exactly one delimited block (`=== OPERATIONS === ... === END OPERATIONS ===`); no markdown fences, no commentary outside the block; empty operation list is valid output.
+
+3. **Topics Layout Table Primer V3.** CONTEXT and HOW TO READ THE TABLE blocks kept (with stable-IDs in the example). WHAT THE TOPICS LAYOUT TABLE IS rewritten to clarify the AI receives the table as TSV input but does NOT re-emit it. New INPUT TABLE COLUMNS section: 9-column TSV with Stable ID as the first column (the AI's reference handle), plus Title, Description, Parent Stable ID, Relationship, Conversion Path, Stability Score, Sister Nodes, Keywords (each formatted `<uuid>|<text> [p|s]`). New THE OPERATION VOCABULARY section: full spec of all 13 operations matching `operation-applier.ts` exactly — required fields, plain-English semantics, applier-handled side effects (e.g., MERGE auto-reparents children + rewrites sister links; SPLIT/DELETE drop sister links; aliases resolve at apply time; ARCHIVE_KEYWORD removes ALL placements). New CROSS-CUTTING RULES section: atomic batch apply, sequential ordering, alias rules, keywords-by-UUID, reasons on structural ops, JUSTIFY_RESTRUCTURE 6-field payload at stability ≥ 7.0. New GENERAL CONSTRAINTS section: 13 numbered rules covering deletion-via-DELETE_TOPIC (replaces V2 "never delete"), no-orphan-keywords (REMOVE_KEYWORD legal only with another placement), parent-cycles forbidden, Conversion Path read-only, stability scores read-only, complete upstream chains, etc. New OPERATION SYNTAX block: JSON Lines inside `=== OPERATIONS ===` / `=== END OPERATIONS ===`; snake_case keys throughout. Worked example with three operations (ADD_TOPIC + ADD_KEYWORD + MOVE_KEYWORD) shown verbatim.
+
+4. **V2 file untouched.** `docs/AUTO_ANALYZE_PROMPT_V2.md` remains as-is at its 2026-04-18 canonical state. It is the historical record of what was actually pasted into the production UI through every Bursitis run including the Session 3b verification — preserving it lets us cite "behaviour X happened on V2 prompts" in any future post-mortem. V3 is the new canonical the director re-pastes after this session; future cleanup session will archive V2 once V3 is field-validated through Pivot Sessions D and E.
+
+5. **V2 proposed-changes file (`docs/AUTO_ANALYZE_PROMPT_V2_PROPOSED_CHANGES.md`) is now mostly superseded.** The pieces that survived (Change 1 tie-breaker, Change 3 Comprehensiveness Verification redrafted, Change 4 JUSTIFY_RESTRUCTURE 6-field payload, Change 5 multi-placement principle, Change 2 Loc 1 cross-canvas scan) were folded directly into V3 with their locked wording. The pieces that did not survive (the standalone Reevaluation Report block, the "never delete topics" rule, the per-batch full-table-rewrite output format, Change 6's salvage IRRELEVANT_KEYWORDS template, Change 7 session-boundary continuation) are obsolete by construction. The file remains untouched this session and can be archived in a future cleanup.
+
+6. **Three design questions resolved during the session's drift check** (locked with director's go-ahead before drafting):
+   - **Operation output syntax = JSON Lines.** One self-contained JSON object per line, no top-level array, inside a `=== OPERATIONS ===` / `=== END OPERATIONS ===` block. Reversible if Pivot Session D's parser favors a different shape.
+   - **Input-state format = TSV with Stable ID as first column.** Matches V2's TSV familiarity for the model; debuggable by humans who paste into a sheet; first column gives the AI a clean handle for operations. Reversible.
+   - **Reevaluation Report block = scrapped.** Operations carry `reason` fields inline; the reasons collectively are the audit log. Comprehensiveness Check is an internal per-keyword self-check (Step 4b); the operations themselves are the verifiable artifact admin reviews.
+
+### What did NOT change this session
+
+- No code touched. AutoAnalyze.tsx, the canvas-rebuild route, `operation-applier.ts`, the unit tests — all untouched.
+- No DB schema or data changes.
+- No `npm run build` rerun needed (docs-only).
+- The Auto-Analyze panel still pastes V2 from localStorage / the panel's React state until the director manually re-pastes V3 into the panel.
+- Existing band-aid code paths (reconciliation pass + Reshuffled status + salvage mechanism + Mode A→B switches) all still operate as before. They keep running through Pivot Sessions D as defense-in-depth and get deprecated in Pivot Session E.
+
+### Live-site state after this session
+
+Identical to end of Pivot Session B. No deploy needed.
+
+### Standing instructions for next session — Pivot Session D
+
+- Read `docs/PIVOT_DESIGN.md` §4 Pivot Session D + this STATE block + `docs/AUTO_ANALYZE_PROMPT_V3.md` end-to-end before starting code work.
+- Pivot Session D scope: wire `applyOperations` into the Auto-Analyze rebuild path; build the V3-shaped input-TSV serializer (9 columns including Stable ID + Stability Score + the new keyword `<uuid>|<text> [p|s]` format); update `AutoAnalyze.tsx` to send V3 prompts and parse the operation-list response (JSONL inside `=== OPERATIONS ===` block — one JSON.parse per line); replace the legacy TSV-based canvas rebuild with `applyOperations` + a Prisma persistence layer that writes the new state.
+- Validation tier: small fresh-Project test with V3 prompts; small populated-Project test verifying keyword-loss rate drops to zero; one Bursitis batch as the cost-comparison data point (expected ~$0.03–0.10 vs. $1.89; expected <1 minute wall-clock vs. 26 minutes).
+- Existing band-aid code paths stay running as defense-in-depth.
+
+---
+
+## ⚠️ POST-PIVOT-SESSION-B STATE (updated 2026-04-25 Pivot Session B — preserved as historical context)
 
 **As of 2026-04-25 Pivot Session B (DB migration shipped live; operation-applier + unit tests landed; two production routes patched):**
 
