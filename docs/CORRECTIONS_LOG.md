@@ -2,7 +2,7 @@
 ## Append-only record of mistakes made during chats and lessons learned
 
 **Started:** April 16, 2026
-**Last updated:** April 25, 2026 (Phase 1g-test follow-up Part 3 — Session 3b verification — 1 new informational entry on Session 3b code being deployed + verified live; reconciliation pass produced exact 58/74 match to Session 2 P3-F7 diagnosis on first verification batch; 1 new low-severity planning miss entry — recommended classic-mode batch on populated 95-node canvas without preemptively recognizing that visual verification of canvas-layout engine output would be ambiguous; director caught it post-cancel — captured as new Phase-1 polish ROADMAP item)
+**Last updated:** April 25, 2026 (Phase 1g-test follow-up Part 3 — Session 3b verification — 3 new entries: (1) informational verification finding (58/74 reconciliation match to Session 2 P3-F7 diagnosis); (2) low-severity planning miss on visual-verification-on-populated-canvas; (3) **HIGH SEVERITY architectural-insight entry** — director surfaced root-cause framing during wrap-up: AI is being used as state-rebuilder when it should be state-mutator; all three symptoms (keyword loss + cost scaling + slow batches) trace to one architectural mismatch; recent fixes have been band-aiding symptoms not root cause; recommended architectural pivot to operation-based output contract supersedes Sessions 4-6 as currently planned; ROADMAP restructured accordingly)
 **Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-session3b-verify (Claude Code)
 **Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-session3b (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-24_phase1g-test-followup-part3-session3a (Claude Code)
@@ -40,6 +40,87 @@
 ---
 
 ## Entries
+
+### 2026-04-25 — Architectural insight (high severity): AI being used as state-rebuilder when it should be state-mutator; recent fixes are band-aids not root-cause work; recommended pivot supersedes Sessions 4-6
+**Session:** session_2026-04-25_phase1g-test-followup-part3-session3b-verify (Claude Code) — surfaced post-verification during wrap-up
+**Tool/Phase affected:** Keyword Clustering / Auto-Analyze — full Phase 1g-test follow-up trajectory
+**Severity:** High (architectural; affects roadmap planning across multiple sessions)
+
+**What happened:** During end-of-session wrap-up, after completing the Session 3b verification with its $1.890-per-batch cost data point and 26-minute wall-clock for a 4-keyword batch, the director pushed back on the trajectory: *"Something doesn't make sense. Why did the cost and time sky rocket like this compared to how the system was setup previously. We have been progressively fixing things and they are getting worse. I want you to think about what is fundamentally wrong here. Why are keywords being removed from topics that they belong in? Why are responses using so many tokens and increasing cost? Why is it taking so long to process a small batch?"* This forced an honest re-examination of the architecture that prior sessions had been progressively patching without naming the root cause.
+
+**Root cause (single architectural mismatch — surfaced this session, not introduced this session):** The Auto-Analyze prompts ask the AI to **rebuild and re-emit the entire topics layout table** on every batch, not to issue change operations against an existing table. Specifically: the Initial Prompt instructs the AI to *"provide the complete updated Integrated Topics Layout Table as your final output for this batch"* with all existing rows preserved plus any new rows. The Primer Prompt's RULES AND CONSTRAINTS rule 3 reinforces this: *"Never delete existing topics or keywords — only add new ones or add keywords to existing topics."* The AI is being used as a **state-rebuilder** (input: full state; output: complete new state) rather than a **state-mutator** (input: full state; output: list of operations to apply to the state).
+
+**The mismatch is the root cause of all three observed symptoms:**
+
+1. **Keywords get removed from topics they belong in.** The AI isn't actively "removing" keywords. It's failing to *re-emit* them as it rewrites the table from scratch. When asked to type out a 100+-row TSV with rich descriptions while also analyzing 4 new keywords AND running the reevaluation pass, attention dilutes. Pre-existing rows get omitted; keyword strings get slightly altered (whitespace, case, smart quotes) and fail post-hoc text matching; topics get renamed in ways the diff detector reads as "new topic + missing old topic." The 74 Reshuffled keywords on the Session 3b verification batch are exactly this failure mode. Bursitis P3-F7's 58/74 split is the observable shadow of this single root cause.
+
+2. **Output tokens (and therefore cost) scale with the canvas size, not with the batch size.** Verification batch numbers: 110,245 output tokens for 4 new keywords = ~27,500 output tokens per new keyword. The bulk of those tokens is redundant re-emission of the existing 95-node table (rich descriptions + alternate titles + keyword lists + topic descriptions). The 4 actually-new keywords contribute only ~3-5k tokens of genuinely new content; the other ~105k tokens are restated context that the AI has been re-typing every batch since the canvas was small. **Cost-per-batch grows linearly with canvas size, not with batch size.** A 4-keyword batch on a fresh canvas would cost cents. A 4-keyword batch on a 95-node canvas costs $1.89. A 4-keyword batch on a 200-node canvas would cost ~$4. A batch on a 500-node canvas eventually hits the model's max output token limit and the run breaks entirely.
+
+3. **Wall-clock time is bottlenecked by output token generation rate.** Sonnet 4.6 generates output at ~50-80 tokens/sec. 110,245 tokens / 60 tokens/sec ≈ 30 minutes (verified: 26 min for the verification batch). The API isn't slow; we're asking for a huge output. If the output were 1,000 tokens (operations only), the same batch would finish in 20-30 seconds. Same model, same input.
+
+**Why this wasn't visible earlier in the project's life:** Smaller canvases (early Bursitis batches, the original HTML-tool runs) had small re-emitted tables, so the per-batch cost/time was tolerable and the keyword-loss rate was low enough that ghosts weren't conspicuous. The architecture has had this scaling property since the beginning — it's now visible because (a) the canvas has grown over 51+ batches across multiple sessions to 95+ nodes; (b) Session 3a's cost-tracker fix made cost numbers honest by including failed-attempt costs; (c) Session 3b's reconciliation pass made keyword loss visible by surfacing ghosts as "Reshuffled" status instead of leaving them silently broken. **The fixes weren't regressions — they were x-rays. The scaling problem was there all along.**
+
+**Why recent fixes are band-aids on this root cause, not solutions:**
+
+- **Reconciliation pass + Reshuffled status (Session 3b)** — exists because the AI's full-table-rewrite output contract permits keyword loss. The pass surfaces losses for review; it does not prevent them.
+- **Salvage-ignored-keywords mechanism (Session 3b)** — exists because validation can detect missing batch keywords post-response and we want to retry without redoing the whole batch. It's a recovery path; the underlying loss is the architecture's fault.
+- **Mode A → Mode B reactive switch (Phase 1g-test follow-up)** — exists because Mode A's full-table re-emission becomes unstable at scale. It's a fallback to a less-comprehensive mode that introduces its own quality regressions.
+- **HC4 / HC5 / proposed HC6 validation checks** — exist to detect output corruption. They detect; they don't prevent.
+- **Stable topic IDs (Session 5 as currently planned)** — exists because rename detection in a full-table-rewrite is a string-matching mess. Operation-based output makes RENAME explicit; the string-matching layer becomes unnecessary.
+- **Changes Ledger (Session 4 as currently planned)** — exists because it's hard to audit what the AI changed when the output is a full table rewrite. Operation-based output IS a Changes Ledger; the AI's response is the audit log.
+
+Each band-aid adds maintenance burden and code complexity without addressing the root cause. The complexity stack is itself a signal of architectural mismatch.
+
+**Recommended architectural pivot — the actual fix:** Change the AI's output contract from "complete updated TSV table" to "list of operations against the existing table." Operation vocabulary (initial draft, expandable):
+
+- `ADD_TOPIC id=<new-stable-id> title=... parent=<id> relationship=linear|nested depth=<N> description=...`
+- `RENAME_TOPIC id=<id> from=<old-title> to=<new-title>`
+- `MOVE_TOPIC id=<id> new_parent=<id> new_relationship=...`
+- `MERGE_TOPICS source_id=<id> target_id=<id> reconciled_description=...`
+- `SPLIT_TOPIC source_id=<id> into=[<new-id-1>, <new-id-2>] keyword_assignments={...}`
+- `DELETE_TOPIC id=<id> reason=... reassign_keywords_to=<id>`
+- `ADD_KEYWORD topic=<id> keyword=<exact-text> placement=primary|secondary`
+- `MOVE_KEYWORD keyword=<exact-text> from=<id> to=<id> placement=primary|secondary`
+- `REMOVE_KEYWORD keyword=<exact-text> from=<id>` *(only valid if keyword has another placement; otherwise must use DELETE_TOPIC reassign_keywords_to)*
+- `ADD_SISTER_LINK topic_a=<id> topic_b=<id>` / `REMOVE_SISTER_LINK ...`
+
+The tool — deterministic code, not the AI — applies these operations to the existing canvas. Validation runs on the **applied result**, not on the AI's output (since the output is just a list of intentions).
+
+**Direct consequences of the pivot:**
+
+- Output drops from 100,000+ tokens to under 1,000 for a small batch. Cost drops 99%+. Wall-clock drops to well under a minute. (The big input — the existing canvas as context — stays similar; prompt caching can amortize that further.)
+- Keywords cannot silently disappear. The AI literally cannot drop a keyword without explicit `MOVE_KEYWORD`, `DELETE_TOPIC`, or `REMOVE_KEYWORD` operations. Anything not mentioned in the operation list stays exactly where it was.
+- Reconciliation pass / Reshuffled status / salvage mechanism become vestigial. They keep working but their failure-mode-coverage drops near zero in normal operation. Long-term they can be deprecated.
+- Stable topic IDs become a hard prerequisite (operations need to refer to topics by stable identifier, not title-string match). Session 5's stable-ID work is promoted into the pivot, not deferred behind it.
+- Changes Ledger (Session 4) becomes ~80% subsumed — the operation list IS a Changes Ledger entry. Session 4 narrows to "Changes Ledger UI: filter, sort, admin actions on operations the AI already structured for us."
+- Validation rewrites: instead of "diff the AI's emitted table against the existing one," it becomes "validate the operation set is internally consistent (no orphan moves, no duplicate adds, all referenced IDs exist) and the post-application state passes invariants (no unlinked keywords, all topics have valid parents, etc.)."
+- Reevaluation pass becomes the AI's prerogative to issue MERGE / SPLIT / RENAME / MOVE_TOPIC operations — same architectural primitives as additions, just for restructuring.
+- Mode A / Mode B distinction simplifies — the input still differs but the output contract is now uniformly "operations only." Mode B's delta-format becomes Mode A's format.
+- The Initial Prompt and Primer Prompt both need substantial rewrites. The reevaluation triggers and topic-naming guidance survive; the table-emission instructions and the never-delete rule get replaced with operation-emission instructions and explicit deletion-via-DELETE_TOPIC rules.
+
+**Estimated cost of the pivot:** Multi-session work — design (~1 session) + stable-ID migration (~1 session) + applier code + prompt rewrite + validation rewrite + Changes Ledger UI rescope. Net duration probably 4-6 sessions across 2-3 weeks of effort, vs. Sessions 4-6 + Phase-1 polish items as currently scoped which would be ~6-9 sessions of patching.
+
+**Decision direction:** Director chose Option 2 — capture the insight AND restructure the ROADMAP — at end of Session 3b verification. ROADMAP gets a new top-priority "Architectural pivot" section; Sessions 4-6 get re-scoped with notes that they're contingent on the pivot. Decision on whether to actually start the pivot vs. continue with the existing roadmap is reserved for next session — the director may want to think on it overnight.
+
+**How caught:** Director, at end of session, comparing Session 3b verification's cost/time numbers against memory of how the system performed earlier and observing that progressive "fixes" hadn't yielded better results. Direct quote: *"We have been progressively fixing things and they are getting worse."* This is exactly the kind of zoom-out check that Rule 16 demands.
+
+**What was previously surfaced but not connected to this root cause:**
+
+- Session 1 (Phase 1g-test follow-up Part 3, 2026-04-20) noted "Mode B can modify topics Mode A created, masking Mode A's quality" (P3-F1) and "Mode A quietly reshuffling topics under the hood" (P3-F2). Both are downstream symptoms of the AI re-emitting the full table.
+- Session 2 (2026-04-24) diagnosed P3-F7 as TWO-WAY sync drift between `Keyword.sortingStatus` and `CanvasNode.linkedKwIds`. The drift is real, but the deeper question — "why is the AI dropping prior placements at all?" — wasn't traced back to the architecture.
+- Session 3b end-of-session captured a new ROADMAP item "P3-F7 root-cause audit" listing four sub-items (HC5 audit, canvas-rebuild text-match audit, HC6 no-keyword-unlinks check, Bursitis 49-ghost spot-audit). Each of those sub-items would be partial mitigation; none of them address the architectural mismatch. With the pivot, three of the four become unnecessary (the spot-audit retains historical value as forensic data on what the legacy ghost set contained).
+
+**Architectural pattern named:** "AI as state-mutator (operations) vs. AI as state-rebuilder (full re-emission)." Generalizable. Any LLM-driven workflow where the LLM is asked to maintain state across iterations should default to operation-based output. Re-emission scales O(state) not O(change); operations scale O(change). The latter is correct for long-lived state. This pattern applies to any future PLOS workflow where AI maintains a structured artifact across batches (Workflow 2 Competition Scraping likely; Workflow 3 Therapeutic Strategy probably; many others).
+
+**Correction:** ROADMAP restructured with new top-priority "Architectural pivot" section ahead of Sessions 4-6. Sessions 4-6 re-scoped with contingency notes. KEYWORD_CLUSTERING_ACTIVE.md POST-VERIFICATION block extended with the architectural-insight subsection. Decision to actually execute the pivot is reserved for next session.
+
+**Prevention:** Going forward, when adding any new mitigation/safety-net/recovery code to a tool, run a Rule-16 zoom-out check explicitly: *"Is this code making symptoms visible OR preventing the failure mode? If only making visible, what is the architectural change that would prevent the failure mode? Have we considered the architectural change?"* If the answer to the third question is "no" or "we keep deferring it," that's a flag to surface it to the director rather than ship the next band-aid. The reflex *"let me just add one more safety net"* is a warning sign about accumulated architectural debt.
+
+**Rule compliance during the surfacing:**
+- Rule 7 (acknowledge slips openly) — Claude acknowledged that recent docs hadn't named this root cause despite the symptoms being clear.
+- Rule 14 (expert-consultant persona, plain-language recommendations with reasoning + reversibility) — analysis was framed in plain language, with concrete operation vocabulary, with the trade-offs (multi-session pivot vs. continued patching).
+- Rule 16 (zoom in / zoom out on every significant decision) — director's pushback was the zoom-out signal that triggered the entire re-examination. Going forward: treat the director's "this doesn't make sense, what's fundamentally wrong" as the highest-priority zoom-out trigger to honor immediately, not after the band-aid ships.
+- Rule 13 (proactive context-degradation warning) — wrap-up was already in progress when the question landed; Claude proposed two options (just capture vs. capture + restructure) rather than unilaterally pushing into restructure work at end-of-session. Director chose restructure; Claude is honoring lucidity by writing carefully but not over-engineering.
 
 ### 2026-04-25 — Session 3b verification: code deployed + reconciliation pass reproduced exact P3-F7 ghost set on first live batch (informational, MAJOR finding) + planning miss on visual-verification-on-populated-canvas (low severity)
 **Session:** session_2026-04-25_phase1g-test-followup-part3-session3b-verify (Claude Code)

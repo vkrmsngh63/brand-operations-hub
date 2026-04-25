@@ -1,7 +1,7 @@
 # ROADMAP
 ## Product Launch Operating System (PLOS) — Development Execution Plan
 
-**Last updated:** April 25, 2026 (Phase 1g-test follow-up Part 3 — Session 3b verification — pushed commits `8afcb9f` + `6c09e50` + `aa7eb4b` to origin/main with director's Rule-9 approval; Vercel redeployed; vklf.com confirmed live; 5 of 5 quick UI checks PASS; Tier-2 engine verification PARTIAL — canvas-layout engine + atomic rebuild + reconciliation pass all confirmed firing via activity log on a real Bursitis batch; reconciliation produced exact 58/74 match to Session 2's direct-DB P3-F7 diagnosis (validating both new code AND prior diagnosis); visual verification of canvas-layout engine output deferred to next session because populated 95-node canvas couldn't show clean baseline; new Phase-1 polish item added: "Blank-canvas visual verification of canvas-layout engine"; one batch ran $1.89 cost data point captured)
+**Last updated:** April 25, 2026 (Phase 1g-test follow-up Part 3 — Session 3b verification — pushed Session 3a + Session 3b commits to origin/main; vklf.com verified; reconciliation pass produced exact 58/74 match to Session 2 P3-F7 diagnosis on first batch; visual verification deferred to blank-canvas test next session; **HIGH-SEVERITY ARCHITECTURAL INSIGHT** at end of session — AI is being used as state-rebuilder when it should be state-mutator; all three pain points (keyword loss + cost scaling at $1.89/batch + 26-min wall-clock for 4 keywords) trace to one architectural mismatch; new top-priority "🚨 ARCHITECTURAL PIVOT" section added below as a multi-session plan that supersedes Sessions 4-6; existing Sessions 4-6 plans kept for reference with re-scope notes)
 **Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-session3b-verify (Claude Code)
 **Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-session3b (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-24_phase1g-test-followup-part3-session3a (Claude Code)
@@ -270,21 +270,109 @@ Schedules with Session 4 or as its own session right after. Not blocking.
 **Session 3 cleanup item (deferred — capture for later):**
 - The hard-delete `DELETE /api/projects/[projectId]/keywords` endpoint is no longer called by ASTTable (replaced by soft-archive). Likely dead code — verify no other caller, then remove. Low priority; not blocking. Logged here as an Infrastructure TODO.
 
-**Session 4 — Changes Ledger foundation:**
+### 🚨 ARCHITECTURAL PIVOT — TOP PRIORITY (NEW 2026-04-25 Session 3b verify, supersedes Sessions 4-6 below)
+
+**Captured in `CORRECTIONS_LOG.md` 2026-04-25 high-severity architectural-insight entry. Read that entry first; this section is the action plan that flows from it.**
+
+**The single architectural problem:** the Auto-Analyze prompts ask the AI to **rebuild and re-emit the entire topics layout table** on every batch (Initial Prompt: *"provide the complete updated Integrated Topics Layout Table as your final output for this batch"*; Primer rule 3: *"Never delete existing topics or keywords — only add new ones or add keywords to existing topics"*). The AI is being used as a **state-rebuilder**. This single architectural choice is the root cause of all three observed pain points:
+
+1. **Keywords get removed from topics they belong in.** The AI fails to *re-emit* prior placements when the table grows (attention dilution, output-length pressure, string-matching drift). Verification batch reproduced the entire 58/74 Bursitis ghost set on its first run — exact match to Session 2's direct-DB diagnosis. The reconciliation pass surfaces these losses; it does not prevent them.
+2. **Cost and output token count scale with canvas size, not batch size.** Verification batch: 110,245 output tokens for 4 new keywords = ~27,500 output tokens per new keyword, of which only ~3-5k is genuinely new content; the other ~105k is redundant re-emission of the existing 95-node table. **Cost-per-batch grows linearly with canvas size.** $1.89 per Sonnet 4.6 classic-mode batch on a 95-node canvas; ~$4 on a 200-node canvas; eventually we hit max output token limits and the run breaks entirely.
+3. **Wall-clock time is bottlenecked by output-token generation rate** (~50-80 tokens/sec on Sonnet 4.6). 110,245 tokens / 60 tokens/sec ≈ 30 minutes per batch (verified: 26 min for the verification batch). API isn't slow; we're asking for a huge output. Operation-only output would finish in under a minute.
+
+**Why this wasn't visible earlier:** smaller canvases had small re-emitted tables; ghost rates were tolerable; cost-tracker was undercounting (failed-attempt costs missing — fixed in Session 3a) so per-batch numbers looked smaller; reconciliation pass didn't exist (Session 3b shipped it) so ghosts were silently broken instead of surfaced as Reshuffled. The architecture has had this scaling property since the beginning. Recent fixes weren't regressions — they were x-rays. Now we see the underlying problem clearly.
+
+**The pivot — change the AI's output contract.** Instead of returning the complete updated TSV table, the AI returns a **list of operations** against the existing table. Operation vocabulary (initial draft):
+
+```
+ADD_TOPIC id=<new-stable-id> title=... parent=<id> relationship=linear|nested depth=<N> description=...
+RENAME_TOPIC id=<id> from=<old-title> to=<new-title>
+MOVE_TOPIC id=<id> new_parent=<id> new_relationship=...
+MERGE_TOPICS source_id=<id> target_id=<id> reconciled_description=...
+SPLIT_TOPIC source_id=<id> into=[<new-id-1>, <new-id-2>] keyword_assignments={...}
+DELETE_TOPIC id=<id> reason=... reassign_keywords_to=<id>
+ADD_KEYWORD topic=<id> keyword=<exact-text> placement=primary|secondary
+MOVE_KEYWORD keyword=<exact-text> from=<id> to=<id> placement=primary|secondary
+REMOVE_KEYWORD keyword=<exact-text> from=<id>
+ADD_SISTER_LINK topic_a=<id> topic_b=<id>
+REMOVE_SISTER_LINK topic_a=<id> topic_b=<id>
+```
+
+The tool — deterministic code, not the AI — applies these operations to the existing canvas. Validation runs on the **applied result**, not on the AI's emitted output.
+
+**Direct consequences of the pivot:**
+
+- **Output drops from 100,000+ tokens to under 1,000** for a small batch. Cost drops 99%+. Wall-clock drops to well under a minute. (Input — the existing canvas as context — stays similar; prompt caching can amortize input cost further.)
+- **Keywords cannot silently disappear.** The AI literally cannot drop a keyword without explicit `MOVE_KEYWORD`, `REMOVE_KEYWORD`, or `DELETE_TOPIC reassign_keywords_to=...` operations. Anything not mentioned in the operation list stays exactly where it was.
+- **Reconciliation pass / Reshuffled status / salvage mechanism become vestigial.** They keep working but their failure-mode coverage drops near zero. Long-term they can be deprecated; near-term they keep running as defense-in-depth while the pivot is being validated.
+- **Stable topic IDs become a hard prerequisite, not a polish item.** Operations need stable identifiers to refer to topics across batches. Session 5's stable-ID work is promoted into the pivot; it does not stand alone.
+- **Changes Ledger (currently planned Session 4) becomes ~80% subsumed by the pivot.** The operation list IS a Changes Ledger entry. Session 4 narrows from "build the ledger from scratch" to "Changes Ledger UI: filter / sort / admin actions on the operations the AI already structured for us."
+- **Validation rewrites:** instead of "diff the AI's emitted table against the existing one," it becomes "validate the operation set is internally consistent (no orphan moves, no duplicate adds, all referenced IDs exist) and the post-application state passes invariants (no unlinked keywords, all topics have valid parents, etc.)."
+- **Mode A / Mode B distinction simplifies.** Input still differs by mode; output contract is now uniformly "operations only" regardless of mode.
+- **The Initial Prompt and Primer Prompt both need substantial rewrites.** Reevaluation triggers and topic-naming guidance survive; the table-emission instructions and the "never delete" rule get replaced with operation-emission instructions and explicit deletion-via-`DELETE_TOPIC` rules.
+
+**Pivot session plan (multi-session, supersedes Sessions 4-6 below):**
+
+**Pivot Session A — Design + stable topic IDs (~1 session):**
+- Finalize operation vocabulary (the list above is a draft; decide on edge cases like simultaneous MOVE + RENAME, batch-internal ordering rules, error handling on apply failures).
+- Decide on stable-ID format (UUID vs. short hash vs. monotonic counter; collision-safe vs. human-readable).
+- DB schema migration: add `stable_id` column to `CanvasNode` table; backfill existing rows with generated IDs; index it.
+- Update `RemovedKeyword` / canvas-rebuild / API endpoints to read/write stable IDs alongside the existing title-based identifiers (transitional period — both work).
+- Director's explicit Rule-8 approval before `npx prisma db push`.
+
+**Pivot Session B — Deterministic operation applier + validation rewrite (~1 session):**
+- Code the operation-applier function: takes (existing canvas, operation list) → (new canvas, validation result).
+- Write per-operation validators: each operation is checked for internal consistency before any are applied.
+- Write the post-application invariant checks: no unlinked keywords, no orphan topics, all parent references valid, etc.
+- Unit-test the applier against synthetic operation sets (no AI involved at this stage).
+
+**Pivot Session C — Prompt rewrite (~1 session):**
+- Rewrite Initial Prompt: keep the philosophy/context/conversion-funnel framing; replace the "provide the complete updated Integrated Topics Layout Table" instruction with "emit a list of operations using the following vocabulary"; rewrite the reevaluation-pass section so triggers issue MERGE / SPLIT / RENAME / MOVE_TOPIC operations.
+- Rewrite Primer: column-definitions section becomes operation-definitions; output-format section becomes operation-syntax; rules-and-constraints section gets the deletion-via-`DELETE_TOPIC reassign_keywords_to=...` rule (replacing the never-delete rule).
+- Update `docs/AUTO_ANALYZE_PROMPT_V2.md` (or create `_V3.md`) with the new prompts.
+- Director re-pastes new prompts into Auto-Analyze UI.
+
+**Pivot Session D — Wire it together + validate end-to-end (~1 session):**
+- Update `AutoAnalyze.tsx` to send operations-output prompts and parse operation-list responses.
+- Replace the existing canvas-rebuild flow (which expects a TSV table) with the operation-applier (which expects a list of operations).
+- Run small test project on a fresh canvas with the new prompts; iterate until clean.
+- Run a small test on a populated test project; verify keyword-loss rate drops to zero.
+- Run a single batch on Bursitis as the cost-comparison data point. Expect ~$0.05-0.20 cost vs. the $1.89 we just saw. Expect <1 minute wall-clock vs. 26 minutes.
+
+**Pivot Session E — Migration to operations-default + deprecation plan for band-aids (~1 session):**
+- Make operations-output the default mode.
+- Mark the legacy table-rewrite output as deprecated; keep code path for rollback during a transition window.
+- Run reconciliation pass + Reshuffled / salvage logic in "audit-only" mode for a few sessions to validate the pivot is producing zero new ghosts.
+- Once validated, deprecate (remove) the band-aid code paths in a future cleanup session.
+
+**Pivot Session F — Re-scope Sessions 4-6 (~½ session of doc work, no code):**
+- Session 4 (Changes Ledger UI): now narrowly about UI on top of operations data — filter/sort/admin-action surface. Probably can collapse into 1 session given the operations infrastructure already exists.
+- Session 5 (Stability scoring): unchanged in spirit; stable topic IDs already done in Pivot Session A. Stability scoring is now a smaller standalone task.
+- Session 6 (Prompt modifications): mostly subsumed by Pivot Session C's rewrite. The Q4/Q5/Q6 design questions and the Session-2b refinements still apply — fold the parts that survive into Pivot Session C; archive the parts that are now obsolete.
+
+**Estimated pivot total:** 4-6 sessions across 2-3 weeks vs. Sessions 4-6 + ongoing Phase-1 polish patching which would be ~6-9 sessions of patching that doesn't fix the root cause.
+
+**Decision still open:** the director may want to think on this overnight before deciding whether to start Pivot Session A or continue with the existing Sessions 4-6 plan. Both options are viable; the pivot is the architecturally correct move; the existing plan is the incrementally-safer move that keeps shipping smaller wins.
+
+---
+
+### Sessions 4-6 (PRE-PIVOT PLAN — kept for reference; supersedes if pivot proceeds)
+
+**Session 4 — Changes Ledger foundation** *(MAY BE SUPERSEDED by pivot — see above. If pivot proceeds, this re-scopes to "Changes Ledger UI" only since the operation list itself becomes the ledger):*
 - Design and implement `ai_action_ledger` DB table (schema TBD; provenance fields per P3-F1).
 - Implement Changes Ledger UI panel in Auto-Analyze (filterable by action type / mode / admin status).
 - Implement dependency-DAG for batch actions so cascading redos work correctly.
 - Wire up Changes Ledger writes from each batch completion.
 - Commit + push.
 
-**Session 5 — Stability scoring foundation + stable topic IDs:**
-- Add stable_id field to topics in DB; migrate existing topics.
-- Update prompt output contract to use stable IDs for RENAME/MERGE/SPLIT/DELETE operations (per `AUTO_ANALYZE_PROMPT_V2_PROPOSED_CHANGES.md` Change 3's framing).
+**Session 5 — Stability scoring foundation + stable topic IDs** *(STABLE-IDs PORTION PROMOTED into pivot Session A as a hard prerequisite; stability scoring portion remains as standalone polish):*
+- ~~Add stable_id field to topics in DB; migrate existing topics.~~ **→ moved to Pivot Session A.**
+- ~~Update prompt output contract to use stable IDs for RENAME/MERGE/SPLIT/DELETE operations~~ **→ moved to Pivot Session C.**
 - Implement stability_score computation per `MODEL_QUALITY_SCORING.md`.
 - Inject stability metadata into prompts.
 - Commit + push.
 
-**Session 6 — Prompt modifications (merge `AUTO_ANALYZE_PROMPT_V2_PROPOSED_CHANGES.md` into V2):**
+**Session 6 — Prompt modifications (merge `AUTO_ANALYZE_PROMPT_V2_PROPOSED_CHANGES.md` into V2)** *(MOSTLY SUPERSEDED by pivot Session C's full prompt rewrite. The 7 proposed changes from Session 2b would mostly live inside the new operation-based prompt — Change 3 DELETE row type becomes the `DELETE_TOPIC` operation; Change 4 JUSTIFY_RESTRUCTURE payload attaches to RENAME/MERGE/SPLIT/MOVE_TOPIC operations on stability-score ≥7 topics; Change 6 salvage template stays as runtime tool code; Changes 1/2/5/7 wording refinements survive into the new prompt):*
 - Wording refinements + Q4/Q5/Q6 resolutions already locked in during Session 2b — Session 6 is mechanical merge.
 - Initial Prompt V2 insertions at the 2026-04-18-committed line references (verified zero-drift in Session 2b): Change 5 after line 88, Change 1 after line 104, Change 3 (redrafted per Session 2b) after line 116, Change 4 (6-field JUSTIFY_RESTRUCTURE payload) before line 137 (Step 7), Change 2 Loc 1 replaces line 131, Change 2 Loc 2 replaces line 163, Change 7 appends point (e) to Section 5.
 - Primer V2 updates (Q6 resolution): add `Stability Score` to COLUMN DEFINITIONS; add parsing rule 12 (float default 0.0 clamped [0.0, 10.0]); add rule 16 to RULES AND CONSTRAINTS (preserve existing, emit 0.0 for new, structural changes to ≥7.0 require JUSTIFY_RESTRUCTURE); update OUTPUT FORMAT header to 10 columns; add output rule for one-decimal float.
