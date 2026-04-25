@@ -1930,9 +1930,16 @@ export default function AutoAnalyze({
             }
           }
 
+          // Populate the BatchResult's newTopics with the titles from each
+          // ADD_TOPIC op so the BATCH_REVIEW screen can display them. Without
+          // this the review screen shows "Topics: None" even when V3 is about
+          // to create new topics.
+          v3Result.newTopics = v3Validation.ops
+            .filter((o): o is Extract<typeof v3Validation.ops[number], { type: 'ADD_TOPIC' }> => o.type === 'ADD_TOPIC')
+            .map(o => o.title);
           batch.result = v3Result;
           batch.reevalReport = '';
-          batch.newTopicCount = v3Validation.ops.filter(o => o.type === 'ADD_TOPIC').length;
+          batch.newTopicCount = v3Result.newTopics.length;
           aaLog('Batch ' + batch.batchNum + ' — passed validation. Total cost (all attempts): $' + batch.cost.toFixed(3), 'ok');
 
           if (reviewMode) {
