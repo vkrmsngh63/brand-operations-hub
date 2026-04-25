@@ -208,8 +208,16 @@ export async function POST(
     return NextResponse.json({ success: true, operations: ops.length });
   } catch (error) {
     console.error('POST canvas rebuild error:', error);
+    // Surface the underlying Prisma/SQL error to the caller. The Auto-Analyze
+    // panel parses this string and shows it in the Activity Log; without it
+    // we can't diagnose rebuild failures without Vercel server logs (which
+    // the director cannot read). Pivot Session D Test 2 diagnostic.
+    const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json(
-      { error: 'Canvas rebuild failed — all changes rolled back' },
+      {
+        error: 'Canvas rebuild failed — all changes rolled back',
+        detail: message.substring(0, 1000),
+      },
       { status: 500 }
     );
   }
