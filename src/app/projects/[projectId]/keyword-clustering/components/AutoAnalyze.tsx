@@ -3,6 +3,13 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { authFetch } from '@/lib/authFetch';
 import type { CanvasNode } from '@/hooks/useCanvas';
 import { calcNodeHeight, runLayoutPass, type LayoutNode } from '@/lib/canvas-layout';
+import {
+  applyOperations,
+  buildCanvasStateForApplier,
+  buildOperationsInputTsv,
+  materializeRebuildPayload,
+  parseOperationsJsonl,
+} from '@/lib/auto-analyze-v3';
 import './auto-analyze.css';
 
 /* ── Types ─────────────────────────────────────────────────── */
@@ -38,6 +45,9 @@ interface BatchObj {
   newTopicCount: number;
   _unplacedKws?: string[];
   _correctionContext?: string;
+  // Pivot Session D: stash parsed operations on the batch when reviewMode
+  // pauses for human approval, so handleApplyBatch can call doApplyV3.
+  _v3Ops?: import('@/lib/auto-analyze-v3').Operation[];
 }
 
 interface BatchResult {
@@ -188,6 +198,11 @@ export default function AutoAnalyze({
   const [initialPrompt, setInitialPrompt] = useState('');
   const [primerPrompt, setPrimerPrompt] = useState('');
   const [promptExpanded, setPromptExpanded] = useState(false);
+  // Pivot Session D: output contract switch. V3 (default) uses the operation-based
+  // prompts in docs/AUTO_ANALYZE_PROMPT_V3.md and persists via the operation-applier.
+  // V2 (legacy) uses the full-table TSV / Mode A/B contract; kept selectable as
+  // defense-in-depth while V3 ramps up.
+  const [outputContract, setOutputContract] = useState<'v3-operations' | 'v2-tsv'>('v3-operations');
 
   /* ── Runtime state ─────────────────────────────────────────── */
   const [aaState, setAaState] = useState<AAState>('IDLE');
@@ -215,6 +230,7 @@ export default function AutoAnalyze({
   const nodesRef = useRef(nodes);
   const keywordsRef = useRef(allKeywords);
   const sisterLinksRef = useRef(sisterLinks);
+  const outputContractRef = useRef(outputContract);
 
   // Keep refs in sync.
   // runLoop-reachable code must read nodes/allKeywords/sisterLinks via *Ref.current, not raw props — the async runLoop closure freezes props. See CORRECTIONS_LOG 2026-04-18.
@@ -226,6 +242,7 @@ export default function AutoAnalyze({
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
   useEffect(() => { keywordsRef.current = allKeywords; }, [allKeywords]);
   useEffect(() => { sisterLinksRef.current = sisterLinks; }, [sisterLinks]);
+  useEffect(() => { outputContractRef.current = outputContract; }, [outputContract]);
 
   /* ── Settings persistence ──────────────────────────────────────
      Load on mount, debounced auto-save on change. apiKey stays in
@@ -262,6 +279,9 @@ export default function AutoAnalyze({
         if (s.reviewMode !== undefined) setReviewMode(s.reviewMode);
         if (s.initialPrompt !== undefined) setInitialPrompt(s.initialPrompt);
         if (s.primerPrompt !== undefined) setPrimerPrompt(s.primerPrompt);
+        if (s.outputContract === 'v3-operations' || s.outputContract === 'v2-tsv') {
+          setOutputContract(s.outputContract);
+        }
       } catch (e) {
         console.warn('Failed to load AA settings', e);
       } finally {
@@ -283,7 +303,7 @@ export default function AutoAnalyze({
       const payload = {
         apiMode, model, seedWords, volumeThreshold, batchSize,
         processingMode, thinkingMode, thinkingBudget, keywordScope,
-        stallTimeout, reviewMode, initialPrompt, primerPrompt,
+        stallTimeout, reviewMode, initialPrompt, primerPrompt, outputContract,
       };
       authFetch('/api/user-preferences/' + encodeURIComponent(settingsDbKey), {
         method: 'PUT',
@@ -294,7 +314,7 @@ export default function AutoAnalyze({
     return () => clearTimeout(timer);
   }, [settingsLoaded, settingsDbKey, apiMode, model, seedWords, volumeThreshold, batchSize,
       processingMode, thinkingMode, thinkingBudget, keywordScope,
-      stallTimeout, reviewMode, initialPrompt, primerPrompt]);
+      stallTimeout, reviewMode, initialPrompt, primerPrompt, outputContract]);
 
   const logRef = useRef<HTMLDivElement>(null);
 
@@ -311,7 +331,7 @@ export default function AutoAnalyze({
     try {
       const cp = {
         ts: Date.now(),
-        config: { apiMode, apiKey, model, seedWords, volumeThreshold, batchSize, processingMode, thinkingMode, thinkingBudget, keywordScope, stallTimeout, reviewMode, initialPrompt, primerPrompt },
+        config: { apiMode, apiKey, model, seedWords, volumeThreshold, batchSize, processingMode, thinkingMode, thinkingBudget, keywordScope, stallTimeout, reviewMode, initialPrompt, primerPrompt, outputContract },
         batches: batchesRef.current,
         currentIdx: currentIdxRef.current,
         totalSpent: totalSpentRef.current,
@@ -357,6 +377,10 @@ export default function AutoAnalyze({
     setKeywordScope(c.keywordScope); setStallTimeout(c.stallTimeout);
     setReviewMode(c.reviewMode); setInitialPrompt(c.initialPrompt);
     setPrimerPrompt(c.primerPrompt || '');
+    if (c.outputContract === 'v3-operations' || c.outputContract === 'v2-tsv') {
+      setOutputContract(c.outputContract);
+      outputContractRef.current = c.outputContract;
+    }
     setBatches(cp.batches); batchesRef.current = cp.batches;
     setCurrentIdx(cp.currentIdx); currentIdxRef.current = cp.currentIdx;
     setTotalSpent(cp.totalSpent); totalSpentRef.current = cp.totalSpent;
@@ -1513,6 +1537,349 @@ export default function AutoAnalyze({
     }
   }
 
+  /* ════════════════════════════════════════════════════════════
+     Pivot Session D — V3 operation-based path (default)
+     The functions below run when outputContract === 'v3-operations'.
+     They replace processBatch + doApply for V3 mode. The V2 code
+     above is preserved as defense-in-depth and runs when the user
+     selects the v2-tsv contract in the config picker.
+     ════════════════════════════════════════════════════════════ */
+
+  /* ── V3: assemble prompt ───────────────────────────────────── */
+  function assemblePromptV3(batch: BatchObj): { systemText: string; userContent: string } {
+    let systemText = initialPrompt;
+    systemText = systemText.replace(/\[PRIMARY_SEED_WORDS\]/g, seedWords);
+    systemText = systemText.replace(/\[VOLUME_THRESHOLD\]/g, String(volumeThreshold));
+    if (primerPrompt) {
+      systemText += '\n\n--- TOPICS LAYOUT TABLE PRIMER ---\n\n' + primerPrompt;
+    }
+    // V3 prompts already contain the operations-block instructions; do NOT
+    // append AA_OUTPUT_INSTRUCTIONS (which is the V2 Mode A/B contract).
+
+    const inputTsv = buildOperationsInputTsv(
+      nodesRef.current,
+      sisterLinksRef.current,
+      keywordsRef.current,
+    );
+
+    let userContent = '';
+    userContent += 'Here is the current Topics Layout Table (TSV input — read it; do not re-emit it):\n\n';
+    userContent += inputTsv + '\n\n';
+    userContent += 'Here are the ' + batch.keywords.length + ' keywords to analyze for this batch (UUID and text):\n\n';
+    userContent += 'keyword_uuid\tkeyword\tvolume\n';
+    for (const id of batch.keywordIds) {
+      const kw = keywordsRef.current.find(k => k.id === id);
+      if (kw) userContent += id + '\t' + kw.keyword + '\t' + (Number(kw.volume) || '') + '\n';
+    }
+    userContent += '\nPrimary seed word(s): ' + seedWords + '\n';
+    userContent += 'Volume threshold for dedicated topic creation: ' + volumeThreshold + '\n\n';
+    userContent += 'Emit your output as the operations block defined in the Primer. Operations only — no Topics Layout Table re-emission, no Reevaluation Report block.';
+    if (batch._correctionContext) {
+      userContent += '\n\nCORRECTION REQUIRED — PREVIOUS RESPONSE FAILED VALIDATION:\n' + batch._correctionContext + '\n\nPlease regenerate the operations correcting the above issues.';
+    }
+    return { systemText, userContent };
+  }
+
+  /* ── V3: process a batch ───────────────────────────────────── */
+  async function processBatchV3(batch: BatchObj): Promise<BatchResult> {
+    const { systemText, userContent } = assemblePromptV3(batch);
+    const estTokens = Math.ceil((systemText.length + userContent.length) / 4);
+    aaLog('Batch ' + batch.batchNum + ' (V3) — sending ~' + estTokens.toLocaleString() + ' input tokens…', 'info');
+
+    const requestBody = buildRequestBody(systemText, userContent);
+    const apiResponse = await callApi(requestBody, batch.batchNum);
+
+    const textContent = apiResponse.content.filter(b => b.type === 'text').map(b => b.text || '').join('\n');
+    if (!textContent.trim()) throw new Error('API returned empty text content');
+
+    const tokensUsed = {
+      input: (apiResponse.usage.input_tokens || 0) + (apiResponse.usage.cache_creation_input_tokens || 0) + (apiResponse.usage.cache_read_input_tokens || 0),
+      output: apiResponse.usage.output_tokens || 0,
+    };
+    if (apiResponse.usage.cache_read_input_tokens > 0) aaLog('  Cache hit: ' + apiResponse.usage.cache_read_input_tokens + ' tokens', 'info');
+    if (apiResponse.stop_reason === 'max_tokens') aaLog('  ⚠ Response truncated (max_tokens)', 'warn');
+
+    return {
+      // V3 carries the raw operations text in the topicsTableTsv slot purely
+      // so the BatchResult shape stays compatible with the existing UI/state.
+      // It is parsed and applied via doApplyV3 — never displayed as TSV.
+      topicsTableTsv: textContent,
+      kwAnalysisTable: '',
+      reevalReport: '',
+      newTopics: [],
+      kwTopicMap: {},
+      tokensUsed,
+      rawResponse: textContent,
+    };
+  }
+
+  /* ── V3: validate result ───────────────────────────────────── */
+  function validateResultV3(
+    result: BatchResult,
+    batch: BatchObj,
+  ): { ok: boolean; errors: string[]; ops: ReturnType<typeof parseOperationsJsonl>['operations']; archivedKeywordIds: Set<string> } {
+    const errors: string[] = [];
+    const archivedKeywordIds = new Set<string>();
+
+    const parsed = parseOperationsJsonl(result.rawResponse);
+    if (parsed.errors.length > 0) {
+      errors.push(...parsed.errors);
+      batch._correctionContext =
+        'Operation-list parse errors:\n' + parsed.errors.map(e => '- ' + e).join('\n');
+      return { ok: false, errors, ops: [], archivedKeywordIds };
+    }
+
+    // Dry-run apply against current canvas state to surface applier errors as
+    // correction context. We re-run the same call in doApplyV3 against the
+    // (possibly refreshed) canvas; the applier is a pure function so this is
+    // safe and side-effect-free.
+    const canvasStateRes = nodesRef.current;
+    const sisterLinksNow = sisterLinksRef.current;
+    // We pass the largest plausible nextNodeId — the actual one is fetched in
+    // doApplyV3. For dry-run validation we just need a counter that is at
+    // least one greater than the highest existing stableId integer.
+    let counter = 1;
+    for (const n of canvasStateRes) {
+      const m = /^t-(\d+)$/.exec(n.stableId);
+      if (m) {
+        const v = parseInt(m[1], 10);
+        if (v >= counter) counter = v + 1;
+      }
+    }
+    const state = buildCanvasStateForApplier(canvasStateRes, sisterLinksNow, counter);
+    const applyResult = applyOperations(state, parsed.operations);
+    if (!applyResult.ok) {
+      const msgs = applyResult.errors.map(e => `op #${e.opIndex} ${e.opType}: ${e.message}`);
+      errors.push(...msgs);
+      batch._correctionContext =
+        'Applier rejected the batch:\n' + msgs.map(m => '- ' + m).join('\n');
+      return { ok: false, errors, ops: parsed.operations, archivedKeywordIds };
+    }
+
+    for (const a of applyResult.archivedKeywords) archivedKeywordIds.add(a.keywordId);
+
+    // HC1 (V3): every batch keyword must be either placed somewhere on the
+    // canvas after apply OR archived in this batch.
+    const placedAfter = new Set<string>();
+    for (const node of applyResult.newState.nodes) {
+      for (const kwId of Object.keys(node.keywordPlacements)) placedAfter.add(kwId);
+    }
+    const missing: string[] = [];
+    for (const kwId of batch.keywordIds) {
+      if (!placedAfter.has(kwId) && !archivedKeywordIds.has(kwId)) missing.push(kwId);
+    }
+    if (missing.length > 0) {
+      const missingTexts = missing.map(id => {
+        const k = keywordsRef.current.find(x => x.id === id);
+        return k ? `${id} (${k.keyword})` : id;
+      });
+      errors.push('Missing ' + missing.length + ' batch keywords: ' + missingTexts.slice(0, 5).join(', '));
+      batch._correctionContext =
+        'After applying your operations, these batch keywords were not placed and not archived. ' +
+        'Each must end up either at a topic (via ADD_KEYWORD) or archived (via ARCHIVE_KEYWORD):\n' +
+        missingTexts.map(t => '- ' + t).join('\n');
+      return { ok: false, errors, ops: parsed.operations, archivedKeywordIds };
+    }
+
+    return { ok: true, errors, ops: parsed.operations, archivedKeywordIds };
+  }
+
+  /* ── V3: apply operations to canvas ────────────────────────── */
+  async function doApplyV3(
+    batch: BatchObj,
+    ops: ReturnType<typeof parseOperationsJsonl>['operations'],
+  ) {
+    // Fetch canonical nextNodeId / nextPathwayId so issued stableIds and new
+    // pathway ids cannot collide with anything that may have changed since
+    // page load (e.g., admin manually added a node in another tab).
+    const canvasStateRes = await authFetch('/api/projects/' + projectId + '/canvas');
+    const canvasStateData = await canvasStateRes.json();
+    const nextNodeId = canvasStateData.canvasState?.nextNodeId ?? 1;
+    const nextPathwayId = canvasStateData.canvasState?.nextPathwayId ?? 1;
+
+    const originalNodes = nodesRef.current;
+    const originalSisterLinks = sisterLinksRef.current;
+
+    const state = buildCanvasStateForApplier(originalNodes, originalSisterLinks, nextNodeId);
+    const applyResult = applyOperations(state, ops);
+    if (!applyResult.ok) {
+      // Should not happen because validateResultV3 ran the same call and
+      // passed; safety net only.
+      const msg = applyResult.errors.map(e => e.message).join('; ');
+      aaLog('  ✗ Applier rejected operations: ' + msg, 'error');
+      throw new Error('Apply failed: ' + msg);
+    }
+
+    aaLog(
+      '  Applied ' + ops.length + ' operations → ' +
+      applyResult.newState.nodes.length + ' topics, ' +
+      applyResult.newState.sisterLinks.length + ' sister links, ' +
+      applyResult.archivedKeywords.length + ' archived keywords',
+      'info',
+    );
+
+    // Materialize the rebuild payload.
+    const payload = materializeRebuildPayload({
+      originalNodes,
+      originalSisterLinks,
+      originalPathwayIds: pathways.map(p => p.id),
+      applierNewState: applyResult.newState,
+      nextPathwayId,
+    });
+
+    // Layout pass over the materialized nodes (P3-F8 same as V2 doApply).
+    const layoutNodes: LayoutNode[] = payload.nodes.map(n => ({
+      id: n.id as number,
+      title: (n.title as string) || '',
+      description: (n.description as string) || '',
+      altTitles: (n.altTitles as string[]) || [],
+      x: n.x as number,
+      y: n.y as number,
+      w: n.w as number,
+      h: n.h as number,
+      baseY: ((n.baseY as number | undefined) ?? (n.y as number)) || 0,
+      parentId: (n.parentId as number | null) ?? null,
+      pathwayId: (n.pathwayId as number | null) ?? null,
+      relationshipType: (n.relationshipType as string) || '',
+      linkedKwIds: (n.linkedKwIds as string[]) || [],
+      userMinH: (n.userMinH as number | null) ?? null,
+    }));
+    for (const ln of layoutNodes) ln.h = calcNodeHeight(ln);
+    runLayoutPass(layoutNodes, [...pathways, ...payload.pathways]);
+    const byId = new Map<number, LayoutNode>();
+    for (const ln of layoutNodes) byId.set(ln.id, ln);
+    for (const rn of payload.nodes) {
+      const ln = byId.get(rn.id as number);
+      if (!ln) continue;
+      rn.x = ln.x;
+      rn.y = ln.y;
+      rn.h = ln.h;
+      rn.baseY = ln.baseY ?? ln.y;
+    }
+    aaLog('  Layout pass complete (' + payload.nodes.length + ' nodes positioned)', 'info');
+
+    // Atomic rebuild.
+    aaLog('  Applying to canvas (atomic rebuild)…', 'info');
+    try {
+      const res = await authFetch('/api/projects/' + projectId + '/canvas/rebuild', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error('Canvas rebuild failed: ' + errText);
+      }
+      aaLog(
+        '  ✓ Canvas rebuilt (' + payload.nodes.length + ' nodes, ' +
+        payload.deleteNodeIds.length + ' removed, ' +
+        payload.sisterLinks.length + ' new sister links)',
+        'ok',
+      );
+    } catch (e) {
+      aaLog('  ✗ Canvas rebuild FAILED — all changes rolled back. ' + (e instanceof Error ? e.message : ''), 'error');
+      throw e;
+    }
+
+    // Archive keyword POSTs (one per intent — preserves individual reasoning).
+    for (const a of applyResult.archivedKeywords) {
+      try {
+        const res = await authFetch('/api/projects/' + projectId + '/removed-keywords', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            keywordIds: [a.keywordId],
+            removedSource: 'auto-ai-detected-irrelevant',
+            aiReasoning: a.reason || null,
+          }),
+        });
+        if (res.ok) {
+          aaLog('  ↻ Archived keyword ' + a.keywordId + (a.reason ? ' — ' + a.reason : ''), 'info');
+        } else {
+          aaLog('  ⚠ Archive failed for ' + a.keywordId + ' (status ' + res.status + ')', 'warn');
+        }
+      } catch (e) {
+        aaLog('  ⚠ Archive error for ' + a.keywordId + ': ' + (e instanceof Error ? e.message : ''), 'warn');
+      }
+    }
+
+    // Update keyword.topic + keyword.canvasLoc to mirror the new placements.
+    const titleByStableId = new Map<string, string>();
+    const descByStableId = new Map<string, string>();
+    for (const n of applyResult.newState.nodes) {
+      titleByStableId.set(n.stableId, n.title);
+      descByStableId.set(n.stableId, n.description);
+    }
+    const placementsByKeyword = new Map<string, Array<{ stableId: string; placement: string }>>();
+    for (const n of applyResult.newState.nodes) {
+      for (const [kwId, placement] of Object.entries(n.keywordPlacements)) {
+        if (!placementsByKeyword.has(kwId)) placementsByKeyword.set(kwId, []);
+        placementsByKeyword.get(kwId)!.push({ stableId: n.stableId, placement });
+      }
+    }
+    const kwTopicUpdates: { id: string; [key: string]: unknown }[] = [];
+    for (const [kwId, placements] of placementsByKeyword) {
+      const topics = placements.map(p => titleByStableId.get(p.stableId) ?? '').filter(Boolean);
+      const canvasLoc: Record<string, string> = {};
+      for (const p of placements) {
+        const t = titleByStableId.get(p.stableId);
+        const d = descByStableId.get(p.stableId) ?? '';
+        if (t) canvasLoc[t] = d;
+      }
+      kwTopicUpdates.push({
+        id: kwId,
+        topic: topics.join(' | '),
+        canvasLoc,
+      });
+    }
+    if (kwTopicUpdates.length > 0) onBatchUpdateKeywords(kwTopicUpdates);
+
+    // Refresh UI.
+    await onRefreshCanvas();
+    await onRefreshKeywords();
+
+    // Status reconciliation across the full keyword table — same as V2's
+    // step 12 (P3-F7). Catches any keyword whose status drifted from its
+    // canvas presence.
+    const placedSet = new Set(placementsByKeyword.keys());
+    const archivedSet = new Set(applyResult.archivedKeywords.map(a => a.keywordId));
+    const reconcileUpdates: { id: string; sortingStatus: string }[] = [];
+    let flippedToAiSorted = 0;
+    let flippedToReshuffled = 0;
+    for (const kw of allKeywords) {
+      if (archivedSet.has(kw.id)) continue; // archived keywords are handled by /removed-keywords
+      const onCanvas = placedSet.has(kw.id);
+      if (onCanvas && (kw.sortingStatus === 'Unsorted' || kw.sortingStatus === 'Reshuffled')) {
+        reconcileUpdates.push({ id: kw.id, sortingStatus: 'AI-Sorted' });
+        flippedToAiSorted++;
+      } else if (!onCanvas && kw.sortingStatus === 'AI-Sorted') {
+        reconcileUpdates.push({ id: kw.id, sortingStatus: 'Reshuffled' });
+        flippedToReshuffled++;
+      }
+    }
+    if (reconcileUpdates.length > 0) {
+      onBatchUpdateKeywords(reconcileUpdates);
+      aaLog(
+        '  ↻ Reconciliation: ' + flippedToAiSorted + ' on-canvas → AI-Sorted, ' +
+        flippedToReshuffled + ' off-canvas → Reshuffled',
+        flippedToReshuffled > 0 ? 'warn' : 'ok',
+      );
+    }
+
+    // Mark batch keywords as ✓.
+    const verified = batch.keywordIds.filter(id => placedSet.has(id) || archivedSet.has(id));
+    if (verified.length === batch.keywordIds.length) {
+      aaLog('  ✓ All ' + batch.keywordIds.length + ' keywords verified (placed or archived).', 'ok');
+    } else {
+      const unplacedIds = batch.keywordIds.filter(id => !placedSet.has(id) && !archivedSet.has(id));
+      aaLog('  ⚠ ' + unplacedIds.length + ' batch keyword(s) unplaced after apply: ' + unplacedIds.join(', '), 'warn');
+      batch._unplacedKws = unplacedIds.map(id => {
+        const k = allKeywords.find(x => x.id === id);
+        return k ? k.keyword : id;
+      });
+    }
+  }
+
   /* ── Main run loop ─────────────────────────────────────────── */
   async function runLoop() {
     while (runningRef.current && !abortRef.current && currentIdxRef.current < batchesRef.current.length) {
@@ -1532,6 +1899,63 @@ export default function AutoAnalyze({
       aaLog('Batch ' + batch.batchNum + ' — processing ' + batch.keywords.length + ' keywords (attempt ' + batch.attempts + ')…', 'info');
 
       try {
+        // ── V3 dispatch (Pivot Session D) ──────────────────────
+        if (outputContractRef.current === 'v3-operations') {
+          const v3Result = await processBatchV3(batch);
+          if (abortRef.current) break;
+
+          const v3AttemptCost = calcCost(v3Result.tokensUsed);
+          batch.tokensUsed = v3Result.tokensUsed;
+          batch.cost += v3AttemptCost;
+          setTotalSpent(prev => prev + v3AttemptCost);
+          totalSpentRef.current += v3AttemptCost;
+          aaLog('  Batch ' + batch.batchNum + ' attempt ' + batch.attempts + ' — API call complete. Cost: $' + v3AttemptCost.toFixed(3), 'info');
+
+          const v3Validation = validateResultV3(v3Result, batch);
+          if (!v3Validation.ok) {
+            if (batch.attempts < batch.maxAttempts) {
+              const headline = v3Validation.errors.slice(0, 3).join('; ');
+              aaLog('Batch ' + batch.batchNum + ' validation failed: ' + headline + ' — retrying…', 'warn');
+              batch.status = 'queued';
+              continue;
+            } else {
+              batch.status = 'failed';
+              batch.error = 'Validation failed: ' + v3Validation.errors.join('; ');
+              batch.completedAt = Date.now();
+              aaLog('Batch ' + batch.batchNum + ' FAILED: ' + batch.error, 'error');
+              setCurrentIdx(prev => prev + 1);
+              currentIdxRef.current++;
+              setBatches([...batchesRef.current]);
+              continue;
+            }
+          }
+
+          batch.result = v3Result;
+          batch.reevalReport = '';
+          batch.newTopicCount = v3Validation.ops.filter(o => o.type === 'ADD_TOPIC').length;
+          aaLog('Batch ' + batch.batchNum + ' — passed validation. Total cost (all attempts): $' + batch.cost.toFixed(3), 'ok');
+
+          if (reviewMode) {
+            setPendingResult(v3Result);
+            batch._v3Ops = v3Validation.ops;
+            batch.status = 'reviewing';
+            setAaState('BATCH_REVIEW');
+            setBatches([...batchesRef.current]);
+            return;
+          } else {
+            await doApplyV3(batch, v3Validation.ops);
+            batch.status = 'complete';
+            batch.completedAt = Date.now();
+            aaLog('Batch ' + batch.batchNum + ' — applied.', 'ok');
+            saveCheckpoint();
+            setCurrentIdx(prev => prev + 1);
+            currentIdxRef.current++;
+            setBatches([...batchesRef.current]);
+            continue;
+          }
+        }
+
+        // ── V2 (legacy full-table) path ────────────────────────
         const result = await processBatch(batch);
         if (abortRef.current) break;
 
@@ -1761,7 +2185,12 @@ export default function AutoAnalyze({
   async function handleApplyBatch() {
     if (aaState !== 'BATCH_REVIEW' || !pendingResult) return;
     const batch = batchesRef.current[currentIdxRef.current];
-    await doApply(batch, pendingResult);
+    if (outputContractRef.current === 'v3-operations' && batch._v3Ops) {
+      await doApplyV3(batch, batch._v3Ops);
+      batch._v3Ops = undefined;
+    } else {
+      await doApply(batch, pendingResult);
+    }
     batch.status = 'complete';
     batch.completedAt = Date.now();
     setPendingResult(null);
@@ -1942,6 +2371,13 @@ export default function AutoAnalyze({
                 <div className={`aa-toggle-track${reviewMode ? ' on' : ''}`}><div className="aa-toggle-thumb" /></div>
                 <span>Review each batch</span>
               </div>
+            </div>
+            <div className="aa-row">
+              <span className="aa-label">Output contract<span className="aa-help">ⓘ<span className="aa-tip">V3 (operations) is the new default — the AI emits a list of change operations, the tool applies them deterministically, keywords cannot silently disappear, cost stops scaling with canvas size. V2 (full table) is the legacy contract kept selectable as a fallback.</span></span></span>
+              <select className="aa-select" value={outputContract} onChange={e => setOutputContract(e.target.value as typeof outputContract)} disabled={aaState !== 'IDLE'}>
+                <option value="v3-operations">V3 — operations (default)</option>
+                <option value="v2-tsv">V2 — full table (legacy)</option>
+              </select>
             </div>
           </div>
 

@@ -27,6 +27,11 @@ export interface CanvasNode {
   connOutOff: unknown;
   connInOff: unknown;
   sortOrder: number;
+  // Pivot Session B columns. The /canvas/nodes GET route returns these from
+  // Prisma findMany (all fields by default). Used by the V3 operation-based
+  // Auto-Analyze flow (Pivot Session D) to address topics across batches.
+  stableId: string;
+  stabilityScore: number;
 }
 
 export interface CanvasState {
