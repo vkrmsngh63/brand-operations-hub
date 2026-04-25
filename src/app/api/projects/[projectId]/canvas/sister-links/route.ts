@@ -55,7 +55,7 @@ export async function DELETE(
 
   try {
     const body = await req.json();
-    await prisma.sisterLink.delete({
+    await prisma.sisterLink.deleteMany({
       where: { id: body.id, projectWorkflowId },
     });
 

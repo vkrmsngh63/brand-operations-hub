@@ -10,10 +10,10 @@ interface CanvasTableModeProps {
   pathways: Pathway[];
   sisterLinks: SisterLink[];
   allKeywords: Keyword[];
-  onSelectNode?: (nodeId: number) => void;
+  onSelectNode?: (nodeId: string) => void;
   onUpdateNodes?: (updates: Partial<CanvasNode>[]) => void;
   onAddNode?: (data: Partial<CanvasNode>) => Promise<CanvasNode | null>;
-  onDeleteNode?: (nodeId: number) => void;
+  onDeleteNode?: (nodeId: string) => void;
 }
 
 interface TableRow {
@@ -26,13 +26,13 @@ interface TableRow {
   sisterNodes: string[];
   keywords: { keyword: string; placement: string }[];
   description: string;
-  nodeId: number;
+  nodeId: string;
   x: number;
   y: number;
 }
 
 /* ── Editable cell types ─────────────────────────────────────── */
-type EditCell = { nodeId: number; col: 'title' | 'altTitles' | 'relationship' | 'description' } | null;
+type EditCell = { nodeId: string; col: 'title' | 'altTitles' | 'relationship' | 'description' } | null;
 
 /* ── Parsed TSV row ──────────────────────────────────────────── */
 interface ParsedTsvRow {
@@ -50,7 +50,7 @@ export default function CanvasTableMode({
   nodes, pathways, sisterLinks, allKeywords,
   onSelectNode, onUpdateNodes, onAddNode, onDeleteNode,
 }: CanvasTableModeProps) {
-  const [selectedRow, setSelectedRow] = useState<number | null>(null);
+  const [selectedRow, setSelectedRow] = useState<string | null>(null);
   const [toast, setToast] = useState('');
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -79,7 +79,7 @@ export default function CanvasTableMode({
   const rows: TableRow[] = useMemo(() => {
     const result: TableRow[] = [];
 
-    function getChildren(parentId: number) {
+    function getChildren(parentId: string) {
       return nodes
         .filter(n => n.parentId === parentId)
         .sort((a, b) => a.y - b.y);
@@ -137,7 +137,7 @@ export default function CanvasTableMode({
 
     const roots = nodes
       .filter(n => !n.parentId)
-      .sort((a, b) => (a.pathwayId || 0) - (b.pathwayId || 0) || a.y - b.y);
+      .sort((a, b) => (a.pathwayId ?? '').localeCompare(b.pathwayId ?? '') || a.y - b.y);
     roots.forEach(r => walk(r, 0, null));
 
     return result;
@@ -173,13 +173,13 @@ export default function CanvasTableMode({
   }
 
   /* ── Row click ──────────────────────────────────────────────── */
-  function handleRowClick(nodeId: number) {
+  function handleRowClick(nodeId: string) {
     setSelectedRow(nodeId);
     if (onSelectNode) onSelectNode(nodeId);
   }
 
   /* ── Start editing a cell ──────────────────────────────────── */
-  function startEdit(nodeId: number, col: NonNullable<EditCell>['col'], currentVal: string) {
+  function startEdit(nodeId: string, col: NonNullable<EditCell>['col'], currentVal: string) {
     if (!editMode) return;
     setEditCell({ nodeId, col });
     setEditVal(currentVal);
@@ -244,7 +244,7 @@ export default function CanvasTableMode({
   }
 
   /* ── Delete row ────────────────────────────────────────────── */
-  function handleDeleteRow(nodeId: number, e: React.MouseEvent) {
+  function handleDeleteRow(nodeId: string, e: React.MouseEvent) {
     e.stopPropagation();
     if (!onDeleteNode) return;
     const children = nodes.filter(n => n.parentId === nodeId);
@@ -602,7 +602,7 @@ export default function CanvasTableMode({
   }, [tsvText]);
 
   /* ── Render editable cell or static ────────────────────────── */
-  function renderCell(nodeId: number, col: NonNullable<EditCell>['col'], display: React.ReactNode, rawVal: string, className?: string) {
+  function renderCell(nodeId: string, col: NonNullable<EditCell>['col'], display: React.ReactNode, rawVal: string, className?: string) {
     const isEditing = editCell?.nodeId === nodeId && editCell?.col === col;
 
     if (isEditing) {

@@ -4,9 +4,7 @@ import { verifyProjectWorkflowAuth } from '@/lib/auth';
 
 const WORKFLOW = 'keyword-clustering';
 
-// GET /api/projects/[projectId]/canvas — fetch the canvas as a whole:
-// canvas state (viewport + counters), pathways, and sister links.
-// Pure read.
+// GET /api/projects/[projectId]/canvas — fetch canvas state, pathways, sister links.
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ projectId: string }> }
@@ -17,43 +15,20 @@ export async function GET(
   const { projectWorkflowId } = auth;
 
   try {
-    const [canvasState, pathways, sisterLinks, maxNodeGlobal, maxPathwayGlobal] = await Promise.all([
+    const [canvasState, pathways, sisterLinks] = await Promise.all([
       prisma.canvasState.findUnique({ where: { projectWorkflowId } }),
       prisma.pathway.findMany({ where: { projectWorkflowId } }),
       prisma.sisterLink.findMany({ where: { projectWorkflowId } }),
-      // Pivot Session D Test 2 fix: autoheal must consider the GLOBAL max id,
-      // not the per-project max. CanvasNode.id and Pathway.id are both global
-      // primary keys (Int @id with no @default), but the application treats
-      // them as project-scoped. A project that started with nextNodeId=1
-      // would collide with another project (e.g., Bursitis owns id 1-104).
-      // Returning max(stored, globalMax+1) means newly-issued ids cannot
-      // collide with any existing row in any project.
-      prisma.canvasNode.aggregate({ _max: { id: true } }),
-      prisma.pathway.aggregate({ _max: { id: true } }),
     ]);
 
-    // When CanvasState row doesn't exist (project never had Auto-Analyze or
-    // canvas activity), synthesize defaults that include the global-max-aware
-    // counters. Otherwise V3's doApplyV3 falls back to nextNodeId=1 and the
-    // applier issues colliding ids — exactly what the autoheal exists to
-    // prevent. Pivot Session D Test 2 fix part 2.
-    const safeNextNodeId = (maxNodeGlobal._max.id ?? 0) + 1;
-    const safeNextPathwayId = (maxPathwayGlobal._max.id ?? 0) + 1;
-    const healedCanvasState = canvasState
-      ? {
-          ...canvasState,
-          nextNodeId: Math.max(canvasState.nextNodeId, safeNextNodeId),
-          nextPathwayId: Math.max(canvasState.nextPathwayId, safeNextPathwayId),
-        }
-      : {
-          id: '',
-          projectWorkflowId,
-          nextNodeId: safeNextNodeId,
-          nextPathwayId: safeNextPathwayId,
-          viewX: 0,
-          viewY: 0,
-          zoom: 1,
-        };
+    const healedCanvasState = canvasState ?? {
+      id: '',
+      projectWorkflowId,
+      nextStableIdN: 1,
+      viewX: 0,
+      viewY: 0,
+      zoom: 1,
+    };
 
     return NextResponse.json({ canvasState: healedCanvasState, pathways, sisterLinks });
   } catch (error) {
@@ -65,19 +40,11 @@ export async function GET(
   }
 }
 
-// PATCH /api/projects/[projectId]/canvas — update canvas state.
-// Handles both viewport (viewX/viewY/zoom) and id counters
-// (nextNodeId/nextPathwayId).
+// PATCH /api/projects/[projectId]/canvas — update canvas state (viewport,
+// zoom, or the per-project stableId counter).
 //
-// Deliberately does NOT call markWorkflowActive. Rationale:
-//   - Pan/zoom is pure "looking around" — not a meaningful user action.
-//   - Counter updates happen because a node or pathway was created, which
-//     is handled by the dedicated /nodes and /pathways routes — those
-//     routes call markWorkflowActive themselves. Calling it here again
-//     would be redundant.
-//
-// Net effect: canvas pan/zoom never flips a workspace from Inactive to
-// Active, which matches the user's definition of meaningful activity.
+// Deliberately does NOT call markWorkflowActive. Pan/zoom is pure
+// "looking around" — not a meaningful user action.
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ projectId: string }> }
@@ -95,18 +62,14 @@ export async function PATCH(
         ...(body.viewX !== undefined && { viewX: body.viewX }),
         ...(body.viewY !== undefined && { viewY: body.viewY }),
         ...(body.zoom !== undefined && { zoom: body.zoom }),
-        ...(body.nextNodeId !== undefined && { nextNodeId: body.nextNodeId }),
-        ...(body.nextPathwayId !== undefined && {
-          nextPathwayId: body.nextPathwayId,
-        }),
+        ...(body.nextStableIdN !== undefined && { nextStableIdN: body.nextStableIdN }),
       },
       create: {
         projectWorkflowId,
         viewX: body.viewX ?? 0,
         viewY: body.viewY ?? 0,
         zoom: body.zoom ?? 1,
-        nextNodeId: body.nextNodeId ?? 1,
-        nextPathwayId: body.nextPathwayId ?? 1,
+        nextStableIdN: body.nextStableIdN ?? 1,
       },
     });
     return NextResponse.json(canvasState);

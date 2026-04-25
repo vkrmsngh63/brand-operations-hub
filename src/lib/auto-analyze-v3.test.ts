@@ -1,13 +1,8 @@
 /**
- * Unit tests for the V3 wiring layer (Pivot Session D).
+ * Unit tests for the V3 wiring layer.
  *
  * Run with:
  *   node --test --experimental-strip-types src/lib/auto-analyze-v3.test.ts
- *
- * Covers serializer (TSV shape, sort order, multi-placement, sister links),
- * JSONL parser (snake_case → camelCase translation, error reporting), and
- * the materializer (integer-id assignment, pathway propagation, sister-link
- * + node + pathway diffing).
  */
 
 import { test } from 'node:test';
@@ -27,6 +22,12 @@ import {
 // ============================================================
 // Builders
 // ============================================================
+
+/** Deterministic uuid generator for tests: returns "uuid-1", "uuid-2", … */
+function makeUuid() {
+  let n = 0;
+  return () => `uuid-${++n}`;
+}
 
 function rowDefaults(): Omit<
   CanvasNodeRow,
@@ -55,7 +56,7 @@ function rowDefaults(): Omit<
 }
 
 function row(
-  id: number,
+  id: string,
   title: string,
   opts: Partial<CanvasNodeRow> = {},
 ): CanvasNodeRow {
@@ -63,7 +64,7 @@ function row(
     ...rowDefaults(),
     id,
     title,
-    stableId: opts.stableId ?? `t-${id}`,
+    stableId: opts.stableId ?? `t-${id.replace(/^node-/, '')}`,
     parentId: opts.parentId ?? null,
     pathwayId: opts.pathwayId ?? null,
     relationshipType: opts.relationshipType ?? '',
@@ -87,7 +88,7 @@ test('TSV serializer: empty canvas returns header only', () => {
 });
 
 test('TSV serializer: 9 columns in exact order', () => {
-  const n = row(1, 'Root');
+  const n = row('node-1', 'Root');
   const tsv = buildOperationsInputTsv([n], [], []);
   const cols = tsv.split('\n')[0].split('\t');
   assert.deepEqual(cols, [
@@ -104,9 +105,9 @@ test('TSV serializer: 9 columns in exact order', () => {
 });
 
 test('TSV serializer: rows sorted by stableId integer suffix', () => {
-  const a = row(1, 'A', { stableId: 't-3' });
-  const b = row(2, 'B', { stableId: 't-1' });
-  const c = row(3, 'C', { stableId: 't-2' });
+  const a = row('node-a', 'A', { stableId: 't-3' });
+  const b = row('node-b', 'B', { stableId: 't-1' });
+  const c = row('node-c', 'C', { stableId: 't-2' });
   const tsv = buildOperationsInputTsv([a, b, c], [], []);
   const titles = tsv
     .split('\n')
@@ -115,10 +116,11 @@ test('TSV serializer: rows sorted by stableId integer suffix', () => {
   assert.deepEqual(titles, ['B', 'C', 'A']);
 });
 
-test('TSV serializer: parent stableId resolved from integer parentId', () => {
-  const root = row(1, 'Root');
-  const child = row(2, 'Child', {
-    parentId: 1,
+test('TSV serializer: parent stableId resolved from string parentId', () => {
+  const root = row('node-root', 'Root', { stableId: 't-1' });
+  const child = row('node-child', 'Child', {
+    stableId: 't-2',
+    parentId: 'node-root',
     relationshipType: 'nested',
   });
   const tsv = buildOperationsInputTsv([root, child], [], []);
@@ -128,14 +130,14 @@ test('TSV serializer: parent stableId resolved from integer parentId', () => {
 });
 
 test('TSV serializer: stability score formatted to 1 decimal', () => {
-  const n = row(1, 'Stable', { stabilityScore: 7.5 });
+  const n = row('node-1', 'Stable', { stabilityScore: 7.5 });
   const tsv = buildOperationsInputTsv([n], [], []);
   const dataRow = tsv.split('\n')[1].split('\t');
   assert.equal(dataRow[6], '7.5');
 });
 
 test('TSV serializer: Keywords column uses <uuid>|<text> [p|s] format', () => {
-  const n = row(1, 'Topic', {
+  const n = row('node-1', 'Topic', {
     linkedKwIds: ['uuid-1', 'uuid-2'],
     kwPlacements: { 'uuid-1': 'p', 'uuid-2': 's' },
   });
@@ -152,12 +154,12 @@ test('TSV serializer: Keywords column uses <uuid>|<text> [p|s] format', () => {
 });
 
 test('TSV serializer: sister nodes listed by stableId, sorted, comma-separated', () => {
-  const a = row(1, 'A', { stableId: 't-1' });
-  const b = row(2, 'B', { stableId: 't-2' });
-  const c = row(3, 'C', { stableId: 't-3' });
+  const a = row('node-a', 'A', { stableId: 't-1' });
+  const b = row('node-b', 'B', { stableId: 't-2' });
+  const c = row('node-c', 'C', { stableId: 't-3' });
   const sl: SisterLinkRow[] = [
-    { id: 's1', nodeA: 1, nodeB: 3 },
-    { id: 's2', nodeA: 1, nodeB: 2 },
+    { id: 's1', nodeA: 'node-a', nodeB: 'node-c' },
+    { id: 's2', nodeA: 'node-a', nodeB: 'node-b' },
   ];
   const tsv = buildOperationsInputTsv([a, b, c], sl, []);
   const aRow = tsv.split('\n')[1].split('\t');
@@ -165,7 +167,7 @@ test('TSV serializer: sister nodes listed by stableId, sorted, comma-separated',
 });
 
 test('TSV serializer: tabs and newlines in title/description are sanitized', () => {
-  const n = row(1, 'Title\twith\ttabs', {
+  const n = row('node-1', 'Title\twith\ttabs', {
     description: 'desc\nwith\nnewlines',
   });
   const tsv = buildOperationsInputTsv([n], [], []);
@@ -243,11 +245,10 @@ test('Parser: ADD_TOPIC root with relationship omitted parses to null', () => {
 });
 
 test('E2E regression: empty canvas + ADD_TOPIC root with null relationship applies cleanly', () => {
-  // This is the bug Test 1 hit on 2026-04-25: model emitted ADD_TOPIC for a
-  // root topic with relationship=null/missing, and the applier rejected the
-  // entire batch atomically. Per PIVOT_DESIGN §1.1 and the V3 prompt,
-  // relationship is "ignored for root" — root topics get their relationship
-  // nulled out at apply time regardless of what was emitted.
+  // Test 1 regression (2026-04-25): root topic ADD_TOPIC with null/missing
+  // relationship was rejected atomically. Per PIVOT_DESIGN §1.1 + V3 prompt,
+  // relationship is "ignored for root" — root topics get relationship nulled
+  // at apply time regardless of what was emitted.
   const state = buildCanvasStateForApplier([], [], 1);
   const ops = parseOperationsJsonl(`=== OPERATIONS ===
 {"op":"ADD_TOPIC","id":"$root","title":"What is bursitis?","description":"d","parent":null,"relationship":null}
@@ -336,11 +337,11 @@ test('Parser: unknown op reported', () => {
 // 3. CanvasState builder
 // ============================================================
 
-test('Builder: integer parentId resolved to parent stableId', () => {
-  const root = row(1, 'Root', { stableId: 't-1' });
-  const child = row(2, 'Child', {
+test('Builder: string parentId resolved to parent stableId', () => {
+  const root = row('node-root', 'Root', { stableId: 't-1' });
+  const child = row('node-child', 'Child', {
     stableId: 't-2',
-    parentId: 1,
+    parentId: 'node-root',
     relationshipType: 'nested',
   });
   const state = buildCanvasStateForApplier([root, child], [], 3);
@@ -350,7 +351,7 @@ test('Builder: integer parentId resolved to parent stableId', () => {
 });
 
 test('Builder: kwPlacements p/s expanded to primary/secondary', () => {
-  const n = row(1, 'T', {
+  const n = row('node-1', 'T', {
     stableId: 't-1',
     linkedKwIds: ['k1', 'k2'],
     kwPlacements: { k1: 'p', k2: 's' },
@@ -366,9 +367,9 @@ test('Builder: nextStableIdCounter passes through', () => {
 });
 
 test('Builder: sister links canonicalized (a < b)', () => {
-  const a = row(1, 'A', { stableId: 't-1' });
-  const b = row(2, 'B', { stableId: 't-2' });
-  const sl: SisterLinkRow[] = [{ id: 's', nodeA: 2, nodeB: 1 }];
+  const a = row('node-a', 'A', { stableId: 't-1' });
+  const b = row('node-b', 'B', { stableId: 't-2' });
+  const sl: SisterLinkRow[] = [{ id: 's', nodeA: 'node-b', nodeB: 'node-a' }];
   const state = buildCanvasStateForApplier([a, b], sl, 3);
   assert.equal(state.sisterLinks[0].topicAStableId, 't-1');
   assert.equal(state.sisterLinks[0].topicBStableId, 't-2');
@@ -393,29 +394,33 @@ test('E2E: ADD_TOPIC + ADD_KEYWORD on empty canvas produces correct rebuild payl
     originalSisterLinks: [],
     originalPathwayIds: [],
     applierNewState: result.newState,
-    nextPathwayId: 1,
+    uuid: makeUuid(),
   });
   assert.equal(payload.nodes.length, 1);
   const n = payload.nodes[0];
-  // Issued stableId was t-1; integer id should be 1.
-  assert.equal(n.id, 1);
+  assert.equal(typeof n.id, 'string');
+  assert.equal(n.id, 'uuid-1');
   assert.equal(n.parentId, null);
   assert.equal(n.title, 'What is bursitis?');
+  assert.equal(n.stableId, 't-1');
   assert.deepEqual(n.linkedKwIds, ['kw-uuid-1']);
   assert.deepEqual(n.kwPlacements, { 'kw-uuid-1': 'p' });
-  // Pathway should be assigned (it's a root).
-  assert.equal(n.pathwayId, 1);
+  // Pathway should be assigned (it's a root) — fresh UUID.
+  assert.equal(n.pathwayId, 'uuid-2');
   assert.equal(payload.pathways.length, 1);
-  assert.equal(payload.pathways[0].id, 1);
-  assert.equal(payload.canvasState.nextNodeId, 2);
+  assert.equal(payload.pathways[0].id, 'uuid-2');
+  // After issuing t-1 the counter advances to 2.
+  assert.equal(payload.canvasState.nextStableIdN, 2);
 });
 
-test('E2E: existing canvas — adding a child preserves parent\'s integer id and pathway', () => {
-  const root = row(7, 'Root', { stableId: 't-7', pathwayId: 99 });
+test('E2E: existing canvas — adding a child preserves parent\'s id and pathway', () => {
+  const root = row('parent-uuid', 'Root', {
+    stableId: 't-7',
+    pathwayId: 'pw-existing',
+  });
   const state = buildCanvasStateForApplier([root], [], 8);
   const ops = parseOperationsJsonl(`=== OPERATIONS ===
 {"op":"ADD_TOPIC","id":"$child","title":"Child","description":"","parent":"t-7","relationship":"nested"}
-=== OPERATIONS END
 === END OPERATIONS ===`).operations;
   const result = applyOperations(state, ops);
   assert.ok(result.ok);
@@ -424,26 +429,25 @@ test('E2E: existing canvas — adding a child preserves parent\'s integer id and
   const payload = materializeRebuildPayload({
     originalNodes: [root],
     originalSisterLinks: [],
-    originalPathwayIds: [99],
+    originalPathwayIds: ['pw-existing'],
     applierNewState: result.newState,
-    nextPathwayId: 100,
+    uuid: makeUuid(),
   });
-  // 2 nodes total in result.
   assert.equal(payload.nodes.length, 2);
   const child = payload.nodes.find(n => n.title === 'Child')!;
-  assert.equal(child.id, 8);
-  assert.equal(child.parentId, 7);
-  assert.equal(child.pathwayId, 99); // inherited from root
+  assert.equal(child.id, 'uuid-1');
+  assert.equal(child.parentId, 'parent-uuid');
+  assert.equal(child.pathwayId, 'pw-existing'); // inherited from root
   assert.equal(payload.pathways.length, 0); // no new pathways
-  assert.equal(payload.canvasState.nextNodeId, 9);
+  assert.equal(payload.canvasState.nextStableIdN, 9);
   assert.equal(payload.deleteNodeIds.length, 0);
 });
 
 test('E2E: DELETE_TOPIC ARCHIVE returns archived keyword id', () => {
-  const root = row(1, 'Root', { stableId: 't-1' });
-  const dead = row(2, 'Dead', {
+  const root = row('root-uuid', 'Root', { stableId: 't-1' });
+  const dead = row('dead-uuid', 'Dead', {
     stableId: 't-2',
-    parentId: 1,
+    parentId: 'root-uuid',
     relationshipType: 'linear',
     linkedKwIds: ['lonely-kw'],
     kwPlacements: { 'lonely-kw': 'p' },
@@ -463,18 +467,20 @@ test('E2E: DELETE_TOPIC ARCHIVE returns archived keyword id', () => {
     originalSisterLinks: [],
     originalPathwayIds: [],
     applierNewState: result.newState,
-    nextPathwayId: 1,
+    uuid: makeUuid(),
   });
-  assert.deepEqual(payload.deleteNodeIds, [2]);
+  assert.deepEqual(payload.deleteNodeIds, ['dead-uuid']);
   assert.equal(payload.nodes.length, 1);
-  assert.equal(payload.nodes[0].id, 1);
+  assert.equal(payload.nodes[0].id, 'root-uuid');
 });
 
 test('E2E: ADD_SISTER_LINK appears in payload.sisterLinks (new only)', () => {
-  const a = row(1, 'A', { stableId: 't-1' });
-  const b = row(2, 'B', { stableId: 't-2' });
-  const c = row(3, 'C', { stableId: 't-3' });
-  const existingSl: SisterLinkRow[] = [{ id: 's-old', nodeA: 1, nodeB: 2 }];
+  const a = row('a-uuid', 'A', { stableId: 't-1' });
+  const b = row('b-uuid', 'B', { stableId: 't-2' });
+  const c = row('c-uuid', 'C', { stableId: 't-3' });
+  const existingSl: SisterLinkRow[] = [
+    { id: 's-old', nodeA: 'a-uuid', nodeB: 'b-uuid' },
+  ];
   const state = buildCanvasStateForApplier([a, b, c], existingSl, 4);
   const ops = parseOperationsJsonl(`=== OPERATIONS ===
 {"op":"ADD_SISTER_LINK","topic_a":"t-1","topic_b":"t-3"}
@@ -488,19 +494,19 @@ test('E2E: ADD_SISTER_LINK appears in payload.sisterLinks (new only)', () => {
     originalSisterLinks: existingSl,
     originalPathwayIds: [],
     applierNewState: result.newState,
-    nextPathwayId: 1,
+    uuid: makeUuid(),
   });
   assert.equal(payload.sisterLinks.length, 1);
-  assert.equal(payload.sisterLinks[0].nodeA, 1);
-  assert.equal(payload.sisterLinks[0].nodeB, 3);
-  assert.equal(payload.deleteSisterLinkIds.length, 0); // old one preserved
+  assert.equal(payload.sisterLinks[0].nodeA, 'a-uuid');
+  assert.equal(payload.sisterLinks[0].nodeB, 'c-uuid');
+  assert.equal(payload.deleteSisterLinkIds.length, 0);
 });
 
 test('E2E: REMOVE_SISTER_LINK queues the original link id for deletion', () => {
-  const a = row(1, 'A', { stableId: 't-1' });
-  const b = row(2, 'B', { stableId: 't-2' });
+  const a = row('a-uuid', 'A', { stableId: 't-1' });
+  const b = row('b-uuid', 'B', { stableId: 't-2' });
   const existingSl: SisterLinkRow[] = [
-    { id: 's-doomed', nodeA: 1, nodeB: 2 },
+    { id: 's-doomed', nodeA: 'a-uuid', nodeB: 'b-uuid' },
   ];
   const state = buildCanvasStateForApplier([a, b], existingSl, 3);
   const ops = parseOperationsJsonl(`=== OPERATIONS ===
@@ -515,7 +521,7 @@ test('E2E: REMOVE_SISTER_LINK queues the original link id for deletion', () => {
     originalSisterLinks: existingSl,
     originalPathwayIds: [],
     applierNewState: result.newState,
-    nextPathwayId: 1,
+    uuid: makeUuid(),
   });
   assert.deepEqual(payload.deleteSisterLinkIds, ['s-doomed']);
   assert.equal(payload.sisterLinks.length, 0);

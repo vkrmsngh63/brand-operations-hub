@@ -6,7 +6,7 @@ import { markWorkflowActive } from '@/lib/workflow-status';
 const WORKFLOW = 'keyword-clustering';
 
 // POST /api/projects/[projectId]/canvas/pathways — create a pathway.
-// Meaningful activity — bumps workspace status.
+// Database assigns the UUID id.
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ projectId: string }> }
@@ -17,21 +17,9 @@ export async function POST(
   const { projectWorkflowId } = auth;
 
   try {
-    const canvasState = await prisma.canvasState.findUnique({
-      where: { projectWorkflowId },
-    });
-    const pathwayId = canvasState?.nextPathwayId ?? 1;
-
     const pathway = await prisma.pathway.create({
-      data: { id: pathwayId, projectWorkflowId },
+      data: { projectWorkflowId },
     });
-
-    if (canvasState) {
-      await prisma.canvasState.update({
-        where: { projectWorkflowId },
-        data: { nextPathwayId: pathwayId + 1 },
-      });
-    }
 
     await markWorkflowActive(projectId, WORKFLOW);
     return NextResponse.json(pathway, { status: 201 });
@@ -45,8 +33,7 @@ export async function POST(
 }
 
 // DELETE /api/projects/[projectId]/canvas/pathways — delete one pathway.
-// Body: { id: 1 }
-// Meaningful activity — bumps workspace status.
+// Body: { id: "uuid" }
 export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ projectId: string }> }
@@ -58,7 +45,7 @@ export async function DELETE(
 
   try {
     const body = await req.json();
-    await prisma.pathway.delete({
+    await prisma.pathway.deleteMany({
       where: { id: body.id, projectWorkflowId },
     });
 

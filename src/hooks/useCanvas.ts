@@ -4,7 +4,7 @@ import { authFetch } from '@/lib/authFetch';
 
 /* ── Types ─────────────────────────────────────────────────────── */
 export interface CanvasNode {
-  id: number;
+  id: string;
   projectId: string;
   title: string;
   description: string;
@@ -13,8 +13,8 @@ export interface CanvasNode {
   w: number;
   h: number;
   baseY: number;
-  pathwayId: number | null;
-  parentId: number | null;
+  pathwayId: string | null;
+  parentId: string | null;
   relationshipType: string;
   linkedKwIds: string[];
   kwPlacements: Record<string, string>;
@@ -27,9 +27,6 @@ export interface CanvasNode {
   connOutOff: unknown;
   connInOff: unknown;
   sortOrder: number;
-  // Pivot Session B columns. The /canvas/nodes GET route returns these from
-  // Prisma findMany (all fields by default). Used by the V3 operation-based
-  // Auto-Analyze flow (Pivot Session D) to address topics across batches.
   stableId: string;
   stabilityScore: number;
 }
@@ -37,23 +34,22 @@ export interface CanvasNode {
 export interface CanvasState {
   id: string;
   projectId: string;
-  nextNodeId: number;
-  nextPathwayId: number;
+  nextStableIdN: number;
   viewX: number;
   viewY: number;
   zoom: number;
 }
 
 export interface Pathway {
-  id: number;
+  id: string;
   projectId: string;
 }
 
 export interface SisterLink {
   id: string;
   projectId: string;
-  nodeA: number;
-  nodeB: number;
+  nodeA: string;
+  nodeB: string;
 }
 
 /* ── Hook ──────────────────────────────────────────────────────── */
@@ -97,8 +93,6 @@ export function useCanvas(projectId: string) {
       });
       const node = await res.json();
       setNodes(prev => [...prev, node]);
-      // Update local nextNodeId
-      setCanvasState(prev => prev ? { ...prev, nextNodeId: node.id + 1 } : prev);
       return node as CanvasNode;
     } catch (err) {
       console.error('addNode error:', err);
@@ -126,7 +120,7 @@ export function useCanvas(projectId: string) {
   }, [base]);
 
   /* ── Delete node ───────────────────────────────────────────── */
-  const deleteNode = useCallback(async (nodeId: number) => {
+  const deleteNode = useCallback(async (nodeId: string) => {
     try {
       setNodes(prev => prev.filter(n => n.id !== nodeId));
       await authFetch(`${base}/nodes`, {

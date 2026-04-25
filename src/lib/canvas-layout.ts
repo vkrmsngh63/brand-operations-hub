@@ -20,7 +20,7 @@
 //   regressing existing node widths.
 
 export interface LayoutNode {
-  id: number;
+  id: string;
   title: string;
   description: string;
   altTitles: string[];
@@ -29,8 +29,8 @@ export interface LayoutNode {
   w: number;
   h: number;
   baseY?: number;
-  parentId: number | null;
-  pathwayId: number | null;
+  parentId: string | null;
+  pathwayId: string | null;
   relationshipType: string;
   linkedKwIds: string[];
   userMinH: number | null;
@@ -126,7 +126,7 @@ export function calcNodeHeight(node: LayoutNode): number {
 }
 
 // ── Helpers for layout pass ──────────────────────────────────────
-function ancestorCollapsed(nodes: LayoutNode[], nodeId: number, collapsed: Set<number>): boolean {
+function ancestorCollapsed(nodes: LayoutNode[], nodeId: string, collapsed: Set<string>): boolean {
   if (collapsed.size === 0) return false;
   let cur = nodes.find(n => n.id === nodeId);
   while (cur && cur.parentId !== null) {
@@ -138,9 +138,9 @@ function ancestorCollapsed(nodes: LayoutNode[], nodeId: number, collapsed: Set<n
 
 function subtreeBottom(
   nodes: LayoutNode[],
-  childMap: Map<number, LayoutNode[]>,
-  nodeId: number,
-  collapsed: Set<number>
+  childMap: Map<string, LayoutNode[]>,
+  nodeId: string,
+  collapsed: Set<string>
 ): number {
   const node = nodes.find(n => n.id === nodeId);
   if (!node) return -Infinity;
@@ -155,13 +155,13 @@ function subtreeBottom(
 }
 
 function moveSubtree(
-  childMap: Map<number, LayoutNode[]>,
-  nodeId: number,
+  childMap: Map<string, LayoutNode[]>,
+  nodeId: string,
   dx: number,
   dy: number
 ): void {
   // Iterative to avoid stack overflow on deep trees.
-  const stack = [nodeId];
+  const stack: string[] = [nodeId];
   while (stack.length) {
     const id = stack.pop()!;
     const children = childMap.get(id);
@@ -175,8 +175,8 @@ function moveSubtree(
   }
 }
 
-function buildChildMap(nodes: LayoutNode[]): Map<number, LayoutNode[]> {
-  const map = new Map<number, LayoutNode[]>();
+function buildChildMap(nodes: LayoutNode[]): Map<string, LayoutNode[]> {
+  const map = new Map<string, LayoutNode[]>();
   for (const n of nodes) {
     if (n.parentId === null) continue;
     if (!map.has(n.parentId)) map.set(n.parentId, []);
@@ -191,8 +191,8 @@ function buildChildMap(nodes: LayoutNode[]): Map<number, LayoutNode[]> {
 // CanvasPanel (parent-child link form, etc.). Mutates nodes in place.
 export function runLayoutPass(
   nodes: LayoutNode[],
-  pathways: { id: number }[],
-  collapsed: Set<number> = new Set()
+  pathways: { id: string }[],
+  collapsed: Set<string> = new Set()
 ): void {
   const childMap = buildChildMap(nodes);
 
@@ -204,7 +204,7 @@ export function runLayoutPass(
 
   // Step 2: Tree-walk from roots; position each connected child
   // type-aware (linear vs nested).
-  const positioned = new Set<number>();
+  const positioned = new Set<string>();
 
   function layoutChildren(parent: LayoutNode): void {
     const children = childMap.get(parent.id);
@@ -306,7 +306,7 @@ export function autoLayoutChild(
   parentNode: LayoutNode,
   relType: 'linear' | 'nested',
   allNodes: LayoutNode[],
-  collapsed: Set<number> = new Set()
+  collapsed: Set<string> = new Set()
 ): void {
   const childMap = buildChildMap(allNodes);
   let targetX: number;
@@ -348,13 +348,13 @@ export function autoLayoutChild(
 // Each pathway's bounds are min-rect of its visible nodes + padding.
 export function separatePathways(
   nodes: LayoutNode[],
-  pathways: { id: number }[],
-  collapsed: Set<number> = new Set()
+  pathways: { id: string }[],
+  collapsed: Set<string> = new Set()
 ): void {
   if (!pathways || pathways.length < 2) return;
 
   // Compute bounds for each pathway with at least one visible node.
-  const bounds: { id: number; x: number; y: number; w: number; h: number }[] = [];
+  const bounds: { id: string; x: number; y: number; w: number; h: number }[] = [];
   for (const p of pathways) {
     const pnodes = nodes.filter(n => n.pathwayId === p.id && !ancestorCollapsed(nodes, n.id, collapsed));
     if (!pnodes.length) continue;

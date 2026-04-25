@@ -34,20 +34,20 @@ function depthColor(d: number) {
 
 /* ── Component ───────────────────────────────────────────────── */
 export default function TVTTable({ nodes, updateNodes, allKeywords }: TVTTableProps) {
-  const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
-  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [showDesc, setShowDesc] = useState(true);
   const [fontSize, setFontSize] = useState(10);
   const [depthFilter, setDepthFilter] = useState<Set<number>>(new Set([0, 1, 2, 3, 4, 5, 6]));
   const [showDepthDropdown, setShowDepthDropdown] = useState(false);
-  const [hoveredRowId, setHoveredRowId] = useState<number | null>(null);
-  const [popover, setPopover] = useState<{ nodeId: number; x: number; y: number } | null>(null);
+  const [hoveredRowId, setHoveredRowId] = useState<string | null>(null);
+  const [popover, setPopover] = useState<{ nodeId: string; x: number; y: number } | null>(null);
   const popoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tableRef = useRef<HTMLDivElement>(null);
 
   // ── Drag state ─────────────────────────────────────────────
-  const [dragNodeId, setDragNodeId] = useState<number | null>(null);
-  const [dropTarget, setDropTarget] = useState<{ nodeId: number; mode: 'before' | 'after' | 'child' } | null>(null);
+  const [dragNodeId, setDragNodeId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<{ nodeId: string; mode: 'before' | 'after' | 'child' } | null>(null);
 
   // ── Build keyword lookup ───────────────────────────────────
   const kwMap = useMemo(() => {
@@ -58,7 +58,7 @@ export default function TVTTable({ nodes, updateNodes, allKeywords }: TVTTablePr
 
   // ── Depth-first tree walk ──────────────────────────────────
   const rows: TVTRow[] = useMemo(() => {
-    const childMap = new Map<number | null, CanvasNode[]>();
+    const childMap = new Map<string | null, CanvasNode[]>();
     nodes.forEach(n => {
       const pid = n.parentId;
       if (!childMap.has(pid)) childMap.set(pid, []);
@@ -68,7 +68,7 @@ export default function TVTTable({ nodes, updateNodes, allKeywords }: TVTTablePr
     childMap.forEach(children => children.sort((a, b) => a.y - b.y));
 
     const result: TVTRow[] = [];
-    function walk(parentId: number | null, depth: number) {
+    function walk(parentId: string | null, depth: number) {
       const children = childMap.get(parentId) || [];
       for (const node of children) {
         const hasKids = (childMap.get(node.id) || []).length > 0;
@@ -89,10 +89,10 @@ export default function TVTTable({ nodes, updateNodes, allKeywords }: TVTTablePr
 
   // ── Ancestry lookup (for highlight chain) ──────────────────
   const ancestorIds = useMemo(() => {
-    if (hoveredRowId === null) return new Set<number>();
-    const nodeMap = new Map<number, CanvasNode>();
+    if (hoveredRowId === null) return new Set<string>();
+    const nodeMap = new Map<string, CanvasNode>();
     nodes.forEach(n => nodeMap.set(n.id, n));
-    const ids = new Set<number>();
+    const ids = new Set<string>();
     let cur = nodeMap.get(hoveredRowId);
     while (cur && cur.parentId !== null) {
       ids.add(cur.parentId);
@@ -124,7 +124,7 @@ export default function TVTTable({ nodes, updateNodes, allKeywords }: TVTTablePr
   }, [nodes]);
 
   // ── Toggle expand/collapse ─────────────────────────────────
-  function toggleCollapse(nodeId: number) {
+  function toggleCollapse(nodeId: string) {
     setCollapsed(prev => {
       const next = new Set(prev);
       if (next.has(nodeId)) next.delete(nodeId);
@@ -134,7 +134,7 @@ export default function TVTTable({ nodes, updateNodes, allKeywords }: TVTTablePr
   }
 
   // ── Select/deselect ────────────────────────────────────────
-  function toggleSelect(nodeId: number) {
+  function toggleSelect(nodeId: string) {
     setSelected(prev => {
       const next = new Set(prev);
       if (next.has(nodeId)) next.delete(nodeId);
@@ -154,7 +154,7 @@ export default function TVTTable({ nodes, updateNodes, allKeywords }: TVTTablePr
     setCollapsed(new Set());
   }
   function collapseAll() {
-    const parents = new Set<number>();
+    const parents = new Set<string>();
     nodes.forEach(n => {
       if (n.parentId !== null) parents.add(n.parentId);
     });
@@ -179,7 +179,7 @@ export default function TVTTable({ nodes, updateNodes, allKeywords }: TVTTablePr
   }
 
   // ── Popover (description on hover) ─────────────────────────
-  function handleTopicMouseEnter(e: React.MouseEvent, nodeId: number) {
+  function handleTopicMouseEnter(e: React.MouseEvent, nodeId: string) {
     const node = nodes.find(n => n.id === nodeId);
     if (!node?.description) return;
     if (popoverTimer.current) clearTimeout(popoverTimer.current);
@@ -194,18 +194,18 @@ export default function TVTTable({ nodes, updateNodes, allKeywords }: TVTTablePr
   }
 
   // ── Drag and drop ─────────────────────────────────────────
-  function handleDragStart(nodeId: number) {
+  function handleDragStart(nodeId: string) {
     setDragNodeId(nodeId);
   }
 
-  function handleDragOver(e: React.DragEvent, nodeId: number) {
+  function handleDragOver(e: React.DragEvent, nodeId: string) {
     e.preventDefault();
     if (dragNodeId === null || dragNodeId === nodeId) return;
 
     // Check: don't drop onto own descendants
-    const nodeMap = new Map<number, CanvasNode>();
+    const nodeMap = new Map<string, CanvasNode>();
     nodes.forEach(n => nodeMap.set(n.id, n));
-    function isDescendant(checkId: number, ancestorId: number): boolean {
+    function isDescendant(checkId: string, ancestorId: string): boolean {
       let cur = nodeMap.get(checkId);
       while (cur) {
         if (cur.parentId === ancestorId) return true;
@@ -284,7 +284,7 @@ export default function TVTTable({ nodes, updateNodes, allKeywords }: TVTTablePr
   }
 
   // ── Row class computation ──────────────────────────────────
-  function rowClasses(nodeId: number) {
+  function rowClasses(nodeId: string) {
     const cls = ['tvt-row'];
     if (hoveredRowId === nodeId) cls.push('tvt-row-hovered');
     if (ancestorIds.has(nodeId)) cls.push('tvt-row-ancestor');
@@ -293,7 +293,7 @@ export default function TVTTable({ nodes, updateNodes, allKeywords }: TVTTablePr
   }
 
   // ── Drop indicator class ───────────────────────────────────
-  function dropIndicatorClass(nodeId: number) {
+  function dropIndicatorClass(nodeId: string) {
     if (!dropTarget || dropTarget.nodeId !== nodeId) return '';
     return `tvt-drop-${dropTarget.mode}`;
   }

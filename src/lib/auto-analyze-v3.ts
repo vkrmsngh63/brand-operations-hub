@@ -39,7 +39,7 @@ export type { ApplyResult, Operation };
  * interchangeable with the full CanvasNode type at the call site.
  */
 export interface CanvasNodeRow {
-  id: number;
+  id: string;
   title: string;
   description: string;
   x: number;
@@ -47,8 +47,8 @@ export interface CanvasNodeRow {
   w: number;
   h: number;
   baseY: number;
-  pathwayId: number | null;
-  parentId: number | null;
+  pathwayId: string | null;
+  parentId: string | null;
   relationshipType: string;
   linkedKwIds: string[];
   kwPlacements: Record<string, string>;
@@ -72,8 +72,8 @@ export interface KeywordLite {
 
 export interface SisterLinkRow {
   id: string;
-  nodeA: number;
-  nodeB: number;
+  nodeA: string;
+  nodeB: string;
 }
 
 // ============================================================
@@ -114,13 +114,13 @@ export function buildOperationsInputTsv(
 
   if (nodes.length === 0) return header;
 
-  const idToStable = new Map<number, string>();
+  const idToStable = new Map<string, string>();
   for (const n of nodes) idToStable.set(n.id, n.stableId);
 
   const keywordById = new Map<string, KeywordLite>();
   for (const k of keywords) keywordById.set(k.id, k);
 
-  const sisterByNodeId = new Map<number, string[]>();
+  const sisterByNodeId = new Map<string, string[]>();
   for (const sl of sisterLinks) {
     const a = idToStable.get(sl.nodeA);
     const b = idToStable.get(sl.nodeB);
@@ -388,15 +388,15 @@ function translateJustify(obj: Record<string, unknown>): JustifyRestructure {
 
 /**
  * Pre-batch: build the applier's CanvasState from live canvas rows.
- * nextStableIdCounter = canvasState.nextNodeId so the applier issues
- * "t-N" with N matching the integer id we will persist.
+ * nextStableIdCounter is the per-project counter that the applier uses to
+ * issue "t-N" stable ids for newly-created topics.
  */
 export function buildCanvasStateForApplier(
   nodes: CanvasNodeRow[],
   sisterLinks: SisterLinkRow[],
-  nextNodeId: number,
+  nextStableIdN: number,
 ): ApplierCanvasState {
-  const idToStable = new Map<number, string>();
+  const idToStable = new Map<string, string>();
   for (const n of nodes) idToStable.set(n.id, n.stableId);
 
   const applierNodes: ApplierCanvasNode[] = nodes.map(n => {
@@ -435,7 +435,7 @@ export function buildCanvasStateForApplier(
   return {
     nodes: applierNodes,
     sisterLinks: applierLinks,
-    nextStableIdCounter: nextNodeId,
+    nextStableIdCounter: nextStableIdN,
   };
 }
 
@@ -445,65 +445,53 @@ export function buildCanvasStateForApplier(
 
 export interface RebuildPayload {
   nodes: Array<Record<string, unknown>>;
-  pathways: Array<{ id: number }>;
-  sisterLinks: Array<{ nodeA: number; nodeB: number }>;
-  canvasState: { nextNodeId: number; nextPathwayId: number };
-  deleteNodeIds: number[];
-  deletePathwayIds: number[];
+  pathways: Array<{ id: string }>;
+  sisterLinks: Array<{ nodeA: string; nodeB: string }>;
+  canvasState: { nextStableIdN: number };
+  deleteNodeIds: string[];
+  deletePathwayIds: string[];
   deleteSisterLinkIds: string[];
 }
 
 /**
  * Translate applier output back to a /canvas/rebuild POST body.
  *
- * Integer ids: existing nodes keep their id; new nodes get id = the integer
- * suffix of their applier-issued "t-N" stableId. Because we seeded
- * nextStableIdCounter from canvasState.nextNodeId, those new integer ids
- * cannot collide with any existing CanvasNode.id.
+ * Existing nodes keep their UUID; new nodes get a fresh UUID generated here
+ * so we can wire parent/sister/pathway references in a single payload.
  *
- * Pathways: existing nodes keep their pathway. New root-level topics get
- * a fresh pathway. Nested topics inherit their root's pathway.
+ * Pathways: existing nodes keep their pathway UUID; new root-level topics get
+ * a fresh pathway UUID; nested topics inherit their root's pathway.
  *
  * Note on x/y/h: new nodes get default-positioned (0,0); the caller is
- * expected to runLayoutPass over the result before posting, so the rebuild
- * route receives final positions.
+ * expected to runLayoutPass over the result before posting.
  */
 export function materializeRebuildPayload(args: {
   originalNodes: CanvasNodeRow[];
   originalSisterLinks: SisterLinkRow[];
-  originalPathwayIds: number[];
+  originalPathwayIds: string[];
   applierNewState: ApplierCanvasState;
-  nextPathwayId: number;
+  /** Optional UUID generator override (tests inject a deterministic one). */
+  uuid?: () => string;
 }): RebuildPayload {
   const {
     originalNodes,
     originalSisterLinks,
     originalPathwayIds,
     applierNewState,
-    nextPathwayId,
   } = args;
+  const uuid = args.uuid ?? defaultUuid;
 
-  const stableToOldId = new Map<string, number>();
+  const stableToOldId = new Map<string, string>();
   const oldNodeByStable = new Map<string, CanvasNodeRow>();
   for (const n of originalNodes) {
     stableToOldId.set(n.stableId, n.id);
     oldNodeByStable.set(n.stableId, n);
   }
 
-  let highestId = 0;
-  for (const n of originalNodes) if (n.id > highestId) highestId = n.id;
-
-  const stableToNewId = new Map<string, number>();
+  const stableToNewId = new Map<string, string>();
   for (const n of applierNewState.nodes) {
     const existingId = stableToOldId.get(n.stableId);
-    if (existingId !== undefined) {
-      stableToNewId.set(n.stableId, existingId);
-      continue;
-    }
-    const m = /^t-(\d+)$/.exec(n.stableId);
-    const id = m ? parseInt(m[1], 10) : ++highestId;
-    stableToNewId.set(n.stableId, id);
-    if (id > highestId) highestId = id;
+    stableToNewId.set(n.stableId, existingId ?? uuid());
   }
 
   const stableById = new Map<string, ApplierCanvasNode>();
@@ -520,18 +508,17 @@ export function materializeRebuildPayload(args: {
     return start;
   }
 
-  const newPathwaysByRootStable = new Map<string, number>();
-  const newPathwayIds: number[] = [];
-  let nextPw = nextPathwayId;
+  const newPathwaysByRootStable = new Map<string, string>();
+  const newPathwayIds: string[] = [];
 
-  function pathwayForNode(stable: string): number | null {
+  function pathwayForNode(stable: string): string | null {
     const root = findRootStable(stable);
     const oldRoot = oldNodeByStable.get(root);
     if (oldRoot && oldRoot.pathwayId) return oldRoot.pathwayId;
     if (newPathwaysByRootStable.has(root)) {
       return newPathwaysByRootStable.get(root)!;
     }
-    const pwId = nextPw++;
+    const pwId = uuid();
     newPathwaysByRootStable.set(root, pwId);
     newPathwayIds.push(pwId);
     return pwId;
@@ -566,6 +553,8 @@ export function materializeRebuildPayload(args: {
       relationshipType: n.relationship ?? '',
       linkedKwIds,
       kwPlacements,
+      stableId: n.stableId,
+      stabilityScore: n.stabilityScore,
       altTitles: old?.altTitles ?? [],
       collapsedLinear: old?.collapsedLinear ?? false,
       collapsedNested: old?.collapsedNested ?? false,
@@ -581,15 +570,15 @@ export function materializeRebuildPayload(args: {
   const survivingStableSet = new Set(
     applierNewState.nodes.map(n => n.stableId),
   );
-  const survivingIds = new Set(rebuildNodes.map(n => n.id as number));
+  const survivingIds = new Set(rebuildNodes.map(n => n.id as string));
 
-  const pairKey = (a: number, b: number) =>
-    [a, b].sort((x, y) => x - y).join('-');
+  const pairKey = (a: string, b: string) =>
+    [a, b].sort().join('|');
   const oldSisterPairKeys = new Set(
     originalSisterLinks.map(sl => pairKey(sl.nodeA, sl.nodeB)),
   );
 
-  const newSisterLinks: Array<{ nodeA: number; nodeB: number }> = [];
+  const newSisterLinks: Array<{ nodeA: string; nodeB: string }> = [];
   const newSisterPairKeys = new Set<string>();
   for (const link of applierNewState.sisterLinks) {
     if (
@@ -618,17 +607,17 @@ export function materializeRebuildPayload(args: {
     }
   }
 
-  const deleteNodeIds: number[] = [];
+  const deleteNodeIds: string[] = [];
   for (const n of originalNodes) {
     if (!survivingIds.has(n.id)) deleteNodeIds.push(n.id);
   }
 
-  const keptPathwayIds = new Set<number>();
+  const keptPathwayIds = new Set<string>();
   for (const n of rebuildNodes) {
-    const pw = n.pathwayId as number | null | undefined;
+    const pw = n.pathwayId as string | null | undefined;
     if (pw !== null && pw !== undefined) keptPathwayIds.add(pw);
   }
-  const deletePathwayIds: number[] = [];
+  const deletePathwayIds: string[] = [];
   for (const pwId of originalPathwayIds) {
     if (!keptPathwayIds.has(pwId)) deletePathwayIds.push(pwId);
   }
@@ -637,9 +626,20 @@ export function materializeRebuildPayload(args: {
     nodes: rebuildNodes,
     pathways: newPathwayIds.map(id => ({ id })),
     sisterLinks: newSisterLinks,
-    canvasState: { nextNodeId: highestId + 1, nextPathwayId: nextPw },
+    canvasState: { nextStableIdN: applierNewState.nextStableIdCounter },
     deleteNodeIds,
     deletePathwayIds,
     deleteSisterLinkIds,
   };
+}
+
+function defaultUuid(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  // Last-resort fallback for very old runtimes; uuid v4-shaped.
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = (Math.random() * 16) | 0;
+    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+  });
 }

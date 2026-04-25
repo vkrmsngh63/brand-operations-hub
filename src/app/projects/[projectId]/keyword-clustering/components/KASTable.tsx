@@ -44,7 +44,7 @@ export default function KASTable({ nodes, allKeywords }: KASTableProps) {
   // ── Build KAS data (derived from canvas nodes + keywords) ──
   const data: KASGroup[] = useMemo(() => {
     // Step 1: Build tree walk + topic index
-    const childMap = new Map<number | null, CanvasNode[]>();
+    const childMap = new Map<string | null, CanvasNode[]>();
     nodes.forEach(n => {
       const pid = n.parentId;
       if (!childMap.has(pid)) childMap.set(pid, []);
@@ -59,7 +59,7 @@ export default function KASTable({ nodes, allKeywords }: KASTableProps) {
     }
 
     const topicIndex = new Map<string, TopicInfo>();
-    function walk(parentId: number | null, depth: number, parentNode: CanvasNode | null) {
+    function walk(parentId: string | null, depth: number, parentNode: CanvasNode | null) {
       const children = childMap.get(parentId) || [];
       for (const node of children) {
         const title = (node.title || '').trim();

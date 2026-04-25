@@ -6,7 +6,6 @@ import { markWorkflowActive } from '@/lib/workflow-status';
 const WORKFLOW = 'keyword-clustering';
 
 // GET /api/projects/[projectId]/canvas/nodes — list all canvas nodes.
-// Pure read.
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ projectId: string }> }
@@ -34,9 +33,8 @@ export async function GET(
 // POST /api/projects/[projectId]/canvas/nodes — create a node.
 // Meaningful activity — bumps workspace status.
 //
-// NOTE: The read-then-increment of nextNodeId is not atomic. Two concurrent
-// POSTs could read the same nextNodeId and collide on primary key. Flagged
-// for future infrastructure work; out of scope for the Phase M refactor.
+// Increments the per-project stableId counter atomically so concurrent POSTs
+// can't collide on stableId. Database assigns the row's UUID id.
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ projectId: string }> }
@@ -49,40 +47,34 @@ export async function POST(
   try {
     const body = await req.json();
 
-    const canvasState = await prisma.canvasState.findUnique({
-      where: { projectWorkflowId },
-    });
-
-    const nodeId = canvasState?.nextNodeId ?? 1;
-
-    const node = await prisma.canvasNode.create({
-      data: {
-        id: nodeId,
-        // Pivot Session B: stableId mirrors the integer id at create time
-        // (backfill convention from scripts/backfill-stable-ids.ts).
-        stableId: `t-${nodeId}`,
-        projectWorkflowId,
-        title: body.title || '',
-        description: body.description || '',
-        x: body.x ?? 0,
-        y: body.y ?? 0,
-        w: body.w ?? 220,
-        h: body.h ?? 120,
-        pathwayId: body.pathwayId ?? null,
-        parentId: body.parentId ?? null,
-        relationshipType: body.relationshipType || '',
-        linkedKwIds: body.linkedKwIds ?? [],
-        kwPlacements: body.kwPlacements ?? {},
-        altTitles: body.altTitles ?? [],
-        sortOrder: body.sortOrder ?? 0,
-      },
-    });
-
-    // Increment nextNodeId (upsert in case canvasState didn't exist yet)
-    await prisma.canvasState.upsert({
-      where: { projectWorkflowId },
-      update: { nextNodeId: nodeId + 1 },
-      create: { projectWorkflowId, nextNodeId: nodeId + 1 },
+    const node = await prisma.$transaction(async tx => {
+      const state = await tx.canvasState.upsert({
+        where: { projectWorkflowId },
+        update: { nextStableIdN: { increment: 1 } },
+        create: { projectWorkflowId, nextStableIdN: 2 },
+      });
+      // After increment, nextStableIdN is the value to use for the NEXT node;
+      // this node takes nextStableIdN - 1.
+      const stableN = state.nextStableIdN - 1;
+      return tx.canvasNode.create({
+        data: {
+          stableId: `t-${stableN}`,
+          projectWorkflowId,
+          title: body.title || '',
+          description: body.description || '',
+          x: body.x ?? 0,
+          y: body.y ?? 0,
+          w: body.w ?? 220,
+          h: body.h ?? 120,
+          pathwayId: body.pathwayId ?? null,
+          parentId: body.parentId ?? null,
+          relationshipType: body.relationshipType || '',
+          linkedKwIds: body.linkedKwIds ?? [],
+          kwPlacements: body.kwPlacements ?? {},
+          altTitles: body.altTitles ?? [],
+          sortOrder: body.sortOrder ?? 0,
+        },
+      });
     });
 
     await markWorkflowActive(projectId, WORKFLOW);
@@ -98,8 +90,7 @@ export async function POST(
 
 // PATCH /api/projects/[projectId]/canvas/nodes — bulk update nodes.
 // Body: { nodes: [{ id, ...fields }] }
-// All updates run in a single Prisma transaction — all succeed or all fail.
-// Meaningful activity — bumps workspace status.
+// All updates run in a single Prisma transaction.
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ projectId: string }> }
@@ -107,7 +98,7 @@ export async function PATCH(
   const { projectId } = await params;
   const auth = await verifyProjectWorkflowAuth(req, projectId, WORKFLOW);
   if (auth.error) return auth.error;
-  const { projectWorkflowId } = auth;
+  const { projectWorkflowId: _projectWorkflowId } = auth;
 
   try {
     const body = await req.json();
@@ -121,7 +112,7 @@ export async function PATCH(
 
     const ops = body.nodes.map((n: Record<string, unknown>) =>
       prisma.canvasNode.update({
-        where: { id: n.id as number, projectWorkflowId },
+        where: { id: n.id as string },
         data: {
           ...(n.title !== undefined && { title: n.title as string }),
           ...(n.description !== undefined && {
@@ -132,10 +123,10 @@ export async function PATCH(
           ...(n.w !== undefined && { w: n.w as number }),
           ...(n.h !== undefined && { h: n.h as number }),
           ...(n.parentId !== undefined && {
-            parentId: n.parentId as number | null,
+            parentId: n.parentId as string | null,
           }),
           ...(n.pathwayId !== undefined && {
-            pathwayId: n.pathwayId as number | null,
+            pathwayId: n.pathwayId as string | null,
           }),
           ...(n.relationshipType !== undefined && {
             relationshipType: n.relationshipType as string,
@@ -173,8 +164,7 @@ export async function PATCH(
 }
 
 // DELETE /api/projects/[projectId]/canvas/nodes — delete node(s).
-// Body: { ids: [1, 2, 3] } or { id: 1 }
-// Meaningful activity — bumps workspace status.
+// Body: { ids: ["uuid", ...] } or { id: "uuid" }
 export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ projectId: string }> }
@@ -187,7 +177,7 @@ export async function DELETE(
   try {
     const body = await req.json();
 
-    const ids: number[] =
+    const ids: string[] =
       body.ids || (body.id !== undefined ? [body.id] : []);
     if (ids.length === 0) {
       return NextResponse.json(

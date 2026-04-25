@@ -7,19 +7,16 @@ const WORKFLOW = 'keyword-clustering';
 
 // POST /api/projects/[projectId]/canvas/rebuild — atomic canvas rebuild.
 // Accepts full canvas state and applies it in a single transaction.
-// Used by Auto-Analyze to replace canvas without partial failures.
 //
 // Body: {
-//   nodes: [{ id, title, description, x, y, w, h, ... }],
+//   nodes: [{ id, stableId, title, description, x, y, w, h, parentId, pathwayId, ... }],
 //   pathways: [{ id }],
 //   sisterLinks: [{ nodeA, nodeB }],
-//   canvasState: { nextNodeId, nextPathwayId, viewX, viewY, zoom },
-//   deleteNodeIds?: number[],     // nodes to remove
-//   deletePathwayIds?: number[],  // pathways to remove
-//   deleteSisterLinkIds?: string[], // sister links to remove
+//   canvasState: { nextStableIdN, viewX, viewY, zoom },
+//   deleteNodeIds?: string[],
+//   deletePathwayIds?: string[],
+//   deleteSisterLinkIds?: string[],
 // }
-//
-// Meaningful activity — bumps workspace status after the transaction succeeds.
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ projectId: string }> }
@@ -64,18 +61,29 @@ export async function POST(
       );
     }
 
-    // ── Node upserts (create or update) ──────────────────────
+    // ── Pathway creates (must run before nodes — pathway FK targets) ─
+    if (Array.isArray(body.pathways)) {
+      for (const pw of body.pathways) {
+        ops.push(
+          prisma.pathway.upsert({
+            where: { id: pw.id },
+            update: {},
+            create: { id: pw.id, projectWorkflowId },
+          })
+        );
+      }
+    }
+
+    // ── Node upserts ─────────────────────────────────────────
+    // Keyed by per-project (projectWorkflowId, stableId) composite unique.
+    // Caller supplies UUID `id` for both create and update; existing nodes
+    // keep their UUID, new nodes get one from the materializer.
     if (Array.isArray(body.nodes)) {
       for (const n of body.nodes) {
-        // Pivot Session D Test 2 fix: switched the upsert key from the loose
-        // { id, projectWorkflowId } shape (Prisma 6 returns P2025 because that
-        // pair is not a registered unique key — id alone is the global @id)
-        // to the per-project composite unique @@unique([projectWorkflowId,
-        // stableId]) introduced in Pivot Session B. Stable IDs follow the
-        // convention "t-{id}" everywhere (backfill + node-create routes), so
-        // the lookup is unambiguous for both pre-existing and freshly-issued
-        // nodes.
-        const stableId = n.stableId || `t-${n.id}`;
+        const stableId = n.stableId;
+        if (!stableId) {
+          throw new Error(`rebuild: node missing stableId`);
+        }
         ops.push(
           prisma.canvasNode.upsert({
             where: {
@@ -119,14 +127,12 @@ export async function POST(
               }),
               ...(n.connInOff !== undefined && { connInOff: n.connInOff }),
               ...(n.sortOrder !== undefined && { sortOrder: n.sortOrder }),
+              ...(n.stabilityScore !== undefined && {
+                stabilityScore: n.stabilityScore,
+              }),
             },
             create: {
-              id: n.id,
-              // Pivot Session B: stableId mirrors the integer id at create
-              // time (backfill convention from scripts/backfill-stable-ids.ts).
-              // Pivot Session D: V3 callers may also send an explicit stableId
-              // matching what the operation-applier issued; either way the
-              // value resolves to the same "t-{id}" string.
+              ...(n.id !== undefined && { id: n.id }),
               stableId,
               projectWorkflowId,
               title: n.title || '',
@@ -150,20 +156,8 @@ export async function POST(
               connOutOff: n.connOutOff ?? null,
               connInOff: n.connInOff ?? null,
               sortOrder: n.sortOrder ?? 0,
+              stabilityScore: n.stabilityScore ?? 0,
             },
-          })
-        );
-      }
-    }
-
-    // ── Pathway creates ──────────────────────────────────────
-    if (Array.isArray(body.pathways)) {
-      for (const pw of body.pathways) {
-        ops.push(
-          prisma.pathway.upsert({
-            where: { id: pw.id, projectWorkflowId },
-            update: {},
-            create: { id: pw.id, projectWorkflowId },
           })
         );
       }
@@ -191,11 +185,8 @@ export async function POST(
         prisma.canvasState.upsert({
           where: { projectWorkflowId },
           update: {
-            ...(cs.nextNodeId !== undefined && {
-              nextNodeId: cs.nextNodeId,
-            }),
-            ...(cs.nextPathwayId !== undefined && {
-              nextPathwayId: cs.nextPathwayId,
+            ...(cs.nextStableIdN !== undefined && {
+              nextStableIdN: cs.nextStableIdN,
             }),
             ...(cs.viewX !== undefined && { viewX: cs.viewX }),
             ...(cs.viewY !== undefined && { viewY: cs.viewY }),
@@ -203,8 +194,7 @@ export async function POST(
           },
           create: {
             projectWorkflowId,
-            nextNodeId: cs.nextNodeId ?? 1,
-            nextPathwayId: cs.nextPathwayId ?? 1,
+            nextStableIdN: cs.nextStableIdN ?? 1,
             viewX: cs.viewX ?? 0,
             viewY: cs.viewY ?? 0,
             zoom: cs.zoom ?? 1,
@@ -213,7 +203,6 @@ export async function POST(
       );
     }
 
-    // ── Execute all operations atomically ────────────────────
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await prisma.$transaction(ops as any);
 
@@ -222,10 +211,6 @@ export async function POST(
     return NextResponse.json({ success: true, operations: ops.length });
   } catch (error) {
     console.error('POST canvas rebuild error:', error);
-    // Surface the underlying Prisma/SQL error to the caller. The Auto-Analyze
-    // panel parses this string and shows it in the Activity Log; without it
-    // we can't diagnose rebuild failures without Vercel server logs (which
-    // the director cannot read). Pivot Session D Test 2 diagnostic.
     const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json(
       {

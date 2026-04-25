@@ -92,7 +92,7 @@ model Keyword {
 // All fields unchanged; only the foreign key target changed.
 // ============================================================
 model CanvasNode {
-  id                Int      @id
+  id                String   @id @default(uuid())
   projectWorkflowId String
   title             String   @default("")
   description       String   @default("")
@@ -101,8 +101,8 @@ model CanvasNode {
   w                 Float    @default(220)
   h                 Float    @default(120)
   baseY             Float    @default(0)
-  pathwayId         Int?
-  parentId          Int?
+  pathwayId         String?
+  parentId          String?
   relationshipType  String   @default("")
   linkedKwIds       Json     @default("[]")
   kwPlacements      Json     @default("{}")
@@ -115,9 +115,6 @@ model CanvasNode {
   connOutOff        Json?
   connInOff         Json?
   sortOrder         Int      @default(0)
-  // Pivot Session B Step 3: tightened to NOT NULL after the Step 2 backfill
-  // populated every existing row. Per-project uniqueness enforced by the
-  // index below.
   stableId          String
   stabilityScore    Float    @default(0.0)
   createdAt         DateTime @default(now())
@@ -159,7 +156,7 @@ model RemovedKeyword {
 }
 
 model Pathway {
-  id                Int      @id
+  id                String   @id @default(uuid())
   projectWorkflowId String
   createdAt         DateTime @default(now())
 
@@ -171,8 +168,8 @@ model Pathway {
 model SisterLink {
   id                String   @id @default(uuid())
   projectWorkflowId String
-  nodeA             Int
-  nodeB             Int
+  nodeA             String
+  nodeB             String
   createdAt         DateTime @default(now())
 
   projectWorkflow ProjectWorkflow @relation(fields: [projectWorkflowId], references: [id], onDelete: Cascade)
@@ -183,8 +180,7 @@ model SisterLink {
 model CanvasState {
   id                String @id @default(uuid())
   projectWorkflowId String @unique
-  nextNodeId        Int    @default(1)
-  nextPathwayId     Int    @default(1)
+  nextStableIdN     Int    @default(1)
   viewX             Float  @default(0)
   viewY             Float  @default(0)
   zoom              Float  @default(1)

@@ -45,8 +45,7 @@ interface BatchObj {
   newTopicCount: number;
   _unplacedKws?: string[];
   _correctionContext?: string;
-  // Pivot Session D: stash parsed operations on the batch when reviewMode
-  // pauses for human approval, so handleApplyBatch can call doApplyV3.
+  // Stashed during reviewMode so handleApplyBatch can apply after user approval.
   _v3Ops?: import('@/lib/auto-analyze-v3').Operation[];
 }
 
@@ -86,90 +85,17 @@ const AA_PRICING: Record<string, { inputPer1M: number; outputPer1M: number }> = 
   'claude-haiku-4-5':  { inputPer1M: 1.00, outputPer1M: 5.00 },
 };
 
-const AA_DELIMITERS = {
-  topicsStart: '===BEGIN_INTEGRATED_TOPICS_LAYOUT_TABLE===',
-  topicsEnd:   '===END_INTEGRATED_TOPICS_LAYOUT_TABLE===',
-  deltaStart:  '===BEGIN_TOPICS_LAYOUT_TABLE_DELTA===',
-  deltaEnd:    '===END_TOPICS_LAYOUT_TABLE_DELTA===',
-  katStart:    '===BEGIN_KEYWORDS_ANALYSIS_TABLE===',
-  katEnd:      '===END_KEYWORDS_ANALYSIS_TABLE===',
-  reevalStart: '===BEGIN_REEVALUATION_REPORT===',
-  reevalEnd:   '===END_REEVALUATION_REPORT===',
-  // Salvage follow-up blocks (Change 6 in AUTO_ANALYZE_PROMPT_V2_PROPOSED_CHANGES).
-  // Tool-generated prompt; not stored in canonical V2.
-  salvageDeltaStart:    '=== DELTA ROWS FOR PLACEMENTS ===',
-  salvageDeltaEnd:      '=== END DELTA ROWS ===',
-  salvageIrrStart:      '=== IRRELEVANT_KEYWORDS ===',
-  salvageIrrEnd:        '=== END IRRELEVANT_KEYWORDS ===',
-  salvageReevalStart:   '=== REEVALUATION REPORT ===',
-  salvageReevalEnd:     '=== END REEVALUATION REPORT ===',
-};
-
-const AA_OUTPUT_INSTRUCTIONS = `
-
-OUTPUT FORMAT FOR AUTOMATED PROCESSING:
-You must wrap each deliverable in exact delimiter markers as shown below.
-These markers must appear EXACTLY as shown — they are parsed programmatically.
-Do not place any extra text between the opening marker and the header row,
-or between the last data row and the closing marker.
-Do not use code fences or markdown formatting within the delimited blocks.
-
-For the Keywords Analysis Table:
-===BEGIN_KEYWORDS_ANALYSIS_TABLE===
-Keyword\tMain Topic\tMain Topic Title\tMain Topic Description\tMain Topic Location\tUpstream Topic\tUT Title\tUT Description\tUT Location
-[data rows, tab-separated]
-===END_KEYWORDS_ANALYSIS_TABLE===
-
-TWO OUTPUT MODES FOR THE TOPICS LAYOUT TABLE:
-The user message will specify which mode to use for this batch.
-
-MODE A — FULL TABLE (complete, cumulative, depth-first tree-walk order):
-===BEGIN_INTEGRATED_TOPICS_LAYOUT_TABLE===
-Depth\tTopic\tAlternate Titles\tRelationship\tParent Topic\tConversion Path\tSister Nodes\tKeywords\tTopic Description
-[ALL data rows, tab-separated — every existing and new topic]
-===END_INTEGRATED_TOPICS_LAYOUT_TABLE===
-
-MODE B — DELTA (ONLY new and modified rows — NOT the full table):
-===BEGIN_TOPICS_LAYOUT_TABLE_DELTA===
-Action\tDepth\tTopic\tAlternate Titles\tRelationship\tParent Topic\tConversion Path\tSister Nodes\tKeywords\tTopic Description
-[ONLY changed data rows, tab-separated]
-===END_TOPICS_LAYOUT_TABLE_DELTA===
-
-The Action column MUST be the first column in DELTA mode. Allowed values:
-- ADD — a brand-new topic row that does not exist in the current table.
-- UPDATE — an existing topic row where any field has changed.
-
-CRITICAL DELTA RULES (apply only when using Mode B):
-- Do NOT include unchanged rows.
-- For UPDATE rows, the Topic title must EXACTLY match the existing topic title.
-- For UPDATE rows, include the COMPLETE current state of ALL fields — especially the FULL keywords list.
-- ADD rows must appear in depth-first tree-walk order relative to each other.
-- If a new topic needs parent topics that don't exist yet, those parents must also appear as ADD rows BEFORE their children.
-- When reevaluation moves a keyword, BOTH topics must appear as UPDATE rows.
-
-For the Reevaluation Report:
-===BEGIN_REEVALUATION_REPORT===
-[your reevaluation report text — state "No structural changes warranted" if none]
-===END_REEVALUATION_REPORT===
-
-CRITICAL RULES:
-- ALL THREE delimited blocks must appear in every response.
-- Never delete existing topics or remove existing keywords — only add or reassign.
-- Do not produce files or artifacts — only the delimited text blocks above.
-- Do not ask for the next batch — the system handles sequencing automatically.
-`;
-
 /* ── Props ──────────────────────────────────────────────────── */
 interface AutoAnalyzeProps {
   open: boolean;
   onClose: () => void;
   allKeywords: Keyword[];
   nodes: CanvasNode[];
-  pathways: { id: number; projectId: string }[];
-  sisterLinks: { id: string; nodeA: number; nodeB: number }[];
+  pathways: { id: string; projectId: string }[];
+  sisterLinks: { id: string; nodeA: string; nodeB: string }[];
   onUpdateNodes: (updates: Partial<CanvasNode>[]) => Promise<void>;
   onAddNode: (data: Partial<CanvasNode>) => Promise<CanvasNode | null>;
-  onDeleteNode: (id: number) => Promise<void> | void;
+  onDeleteNode: (id: string) => Promise<void> | void;
   onBatchUpdateKeywords: (updates: { id: string; [key: string]: unknown }[]) => void;
   projectId: string;
   onRefreshCanvas: () => Promise<void>;
@@ -198,11 +124,6 @@ export default function AutoAnalyze({
   const [initialPrompt, setInitialPrompt] = useState('');
   const [primerPrompt, setPrimerPrompt] = useState('');
   const [promptExpanded, setPromptExpanded] = useState(false);
-  // Pivot Session D: output contract switch. V3 (default) uses the operation-based
-  // prompts in docs/AUTO_ANALYZE_PROMPT_V3.md and persists via the operation-applier.
-  // V2 (legacy) uses the full-table TSV / Mode A/B contract; kept selectable as
-  // defense-in-depth while V3 ramps up.
-  const [outputContract, setOutputContract] = useState<'v3-operations' | 'v2-tsv'>('v3-operations');
 
   /* ── Runtime state ─────────────────────────────────────────── */
   const [aaState, setAaState] = useState<AAState>('IDLE');
@@ -210,7 +131,6 @@ export default function AutoAnalyze({
   const [currentIdx, setCurrentIdx] = useState(-1);
   const [totalSpent, setTotalSpent] = useState(0);
   const [logEntries, setLogEntries] = useState<LogEntry[]>([]);
-  const [deltaMode, setDeltaMode] = useState(false);
   const [batchTier, setBatchTier] = useState(0);
   const [minimized, setMinimized] = useState(false);
   const [elapsed, setElapsed] = useState(0);
@@ -224,25 +144,20 @@ export default function AutoAnalyze({
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const batchesRef = useRef(batches);
   const currentIdxRef = useRef(currentIdx);
-  const deltaModeRef = useRef(deltaMode);
   const batchTierRef = useRef(batchTier);
   const totalSpentRef = useRef(totalSpent);
   const nodesRef = useRef(nodes);
   const keywordsRef = useRef(allKeywords);
   const sisterLinksRef = useRef(sisterLinks);
-  const outputContractRef = useRef(outputContract);
 
-  // Keep refs in sync.
   // runLoop-reachable code must read nodes/allKeywords/sisterLinks via *Ref.current, not raw props — the async runLoop closure freezes props. See CORRECTIONS_LOG 2026-04-18.
   useEffect(() => { batchesRef.current = batches; }, [batches]);
   useEffect(() => { currentIdxRef.current = currentIdx; }, [currentIdx]);
-  useEffect(() => { deltaModeRef.current = deltaMode; }, [deltaMode]);
   useEffect(() => { batchTierRef.current = batchTier; }, [batchTier]);
   useEffect(() => { totalSpentRef.current = totalSpent; }, [totalSpent]);
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
   useEffect(() => { keywordsRef.current = allKeywords; }, [allKeywords]);
   useEffect(() => { sisterLinksRef.current = sisterLinks; }, [sisterLinks]);
-  useEffect(() => { outputContractRef.current = outputContract; }, [outputContract]);
 
   /* ── Settings persistence ──────────────────────────────────────
      Load on mount, debounced auto-save on change. apiKey stays in
@@ -279,9 +194,6 @@ export default function AutoAnalyze({
         if (s.reviewMode !== undefined) setReviewMode(s.reviewMode);
         if (s.initialPrompt !== undefined) setInitialPrompt(s.initialPrompt);
         if (s.primerPrompt !== undefined) setPrimerPrompt(s.primerPrompt);
-        if (s.outputContract === 'v3-operations' || s.outputContract === 'v2-tsv') {
-          setOutputContract(s.outputContract);
-        }
       } catch (e) {
         console.warn('Failed to load AA settings', e);
       } finally {
@@ -303,7 +215,7 @@ export default function AutoAnalyze({
       const payload = {
         apiMode, model, seedWords, volumeThreshold, batchSize,
         processingMode, thinkingMode, thinkingBudget, keywordScope,
-        stallTimeout, reviewMode, initialPrompt, primerPrompt, outputContract,
+        stallTimeout, reviewMode, initialPrompt, primerPrompt,
       };
       authFetch('/api/user-preferences/' + encodeURIComponent(settingsDbKey), {
         method: 'PUT',
@@ -314,7 +226,7 @@ export default function AutoAnalyze({
     return () => clearTimeout(timer);
   }, [settingsLoaded, settingsDbKey, apiMode, model, seedWords, volumeThreshold, batchSize,
       processingMode, thinkingMode, thinkingBudget, keywordScope,
-      stallTimeout, reviewMode, initialPrompt, primerPrompt, outputContract]);
+      stallTimeout, reviewMode, initialPrompt, primerPrompt]);
 
   const logRef = useRef<HTMLDivElement>(null);
 
@@ -331,11 +243,10 @@ export default function AutoAnalyze({
     try {
       const cp = {
         ts: Date.now(),
-        config: { apiMode, apiKey, model, seedWords, volumeThreshold, batchSize, processingMode, thinkingMode, thinkingBudget, keywordScope, stallTimeout, reviewMode, initialPrompt, primerPrompt, outputContract },
+        config: { apiMode, apiKey, model, seedWords, volumeThreshold, batchSize, processingMode, thinkingMode, thinkingBudget, keywordScope, stallTimeout, reviewMode, initialPrompt, primerPrompt },
         batches: batchesRef.current,
         currentIdx: currentIdxRef.current,
         totalSpent: totalSpentRef.current,
-        deltaMode: deltaModeRef.current,
         batchTier: batchTierRef.current,
         elapsed,
         logEntries,
@@ -377,14 +288,12 @@ export default function AutoAnalyze({
     setKeywordScope(c.keywordScope); setStallTimeout(c.stallTimeout);
     setReviewMode(c.reviewMode); setInitialPrompt(c.initialPrompt);
     setPrimerPrompt(c.primerPrompt || '');
-    if (c.outputContract === 'v3-operations' || c.outputContract === 'v2-tsv') {
-      setOutputContract(c.outputContract);
-      outputContractRef.current = c.outputContract;
-    }
-    setBatches(cp.batches); batchesRef.current = cp.batches;
+    const restoredBatches = cp.batches.map((b: BatchObj) =>
+      b.status === 'in_progress' ? { ...b, status: 'queued' as const } : b
+    );
+    setBatches(restoredBatches); batchesRef.current = restoredBatches;
     setCurrentIdx(cp.currentIdx); currentIdxRef.current = cp.currentIdx;
     setTotalSpent(cp.totalSpent); totalSpentRef.current = cp.totalSpent;
-    setDeltaMode(cp.deltaMode); deltaModeRef.current = cp.deltaMode;
     setBatchTier(cp.batchTier); batchTierRef.current = cp.batchTier;
     setLogEntries(cp.logEntries || []);
     setElapsed(cp.elapsed || 0);
@@ -464,115 +373,6 @@ export default function AutoAnalyze({
     const estOutputPerBatch = 4000;
     const costPerBatch = (estInputPerBatch / 1e6) * p.inputPer1M + (estOutputPerBatch / 1e6) * p.outputPer1M;
     return { nBatches, nKeywords: unsorted.length, estCost: costPerBatch * nBatches };
-  }
-
-  /* ── Build the current Topics Layout Table TSV from nodes ──── */
-  function buildCurrentTsv(): string {
-    // Read via refs — runLoop's async closure would otherwise freeze these to pre-run state.
-    const nodesNow = nodesRef.current;
-    const keywordsNow = keywordsRef.current;
-    const sisterLinksNow = sisterLinksRef.current;
-
-    // Depth-first tree walk
-    const childMap = new Map<number | null, CanvasNode[]>();
-    for (const n of nodesNow) {
-      const pid = n.parentId ?? null;
-      if (!childMap.has(pid)) childMap.set(pid, []);
-      childMap.get(pid)!.push(n);
-    }
-    // Sort children by y position
-    for (const children of childMap.values()) {
-      children.sort((a, b) => a.y - b.y);
-    }
-    const rows: string[] = [];
-    rows.push('Depth\tTopic\tAlternate Titles\tRelationship\tParent Topic\tConversion Path\tSister Nodes\tKeywords\tTopic Description');
-
-    function walk(parentId: number | null, depth: number) {
-      const children = childMap.get(parentId) || [];
-      for (const node of children) {
-        const parentNode = parentId !== null ? nodesNow.find(n => n.id === parentId) : null;
-        const parentTitle = parentNode?.title || '';
-        const altTitles = (node.altTitles || []).join(', ');
-        const rel = node.relationshipType || '';
-        // Build keywords with [p]/[s] annotations
-        const kwParts: string[] = [];
-        for (const kwId of (node.linkedKwIds || [])) {
-          const kw = keywordsNow.find(k => k.id === kwId);
-          if (kw) {
-            const placement = (node.kwPlacements || {})[kwId] || 'p';
-            kwParts.push(kw.keyword + ' [' + placement + ']');
-          }
-        }
-        // Sister nodes
-        const sisters: string[] = [];
-        for (const sl of sisterLinksNow) {
-          if (sl.nodeA === node.id) {
-            const sn = nodesNow.find(n => n.id === sl.nodeB);
-            if (sn) sisters.push(sn.title);
-          } else if (sl.nodeB === node.id) {
-            const sn = nodesNow.find(n => n.id === sl.nodeA);
-            if (sn) sisters.push(sn.title);
-          }
-        }
-        const convPath = ''; // Not stored separately
-        rows.push([depth, node.title, altTitles, rel, parentTitle, convPath, sisters.join(', '), kwParts.join(', '), node.description || ''].join('\t'));
-        walk(node.id, depth + 1);
-      }
-    }
-    walk(null, 0);
-    return rows.join('\n');
-  }
-
-  /* ── Assemble prompt for a batch ───────────────────────────── */
-  function assemblePrompt(batch: BatchObj): { systemText: string; userContent: string } {
-    let systemText = initialPrompt;
-    systemText = systemText.replace(/\[bursitis\]/gi, '[' + seedWords + ']');
-    systemText = systemText.replace(/\[PRIMARY_SEED_WORDS\]/g, seedWords);
-    systemText = systemText.replace(/\[VOLUME_THRESHOLD\]/g, String(volumeThreshold));
-    if (primerPrompt) {
-      systemText += '\n\n--- TOPICS LAYOUT TABLE PRIMER ---\n\n' + primerPrompt;
-    }
-    systemText += AA_OUTPUT_INSTRUCTIONS;
-
-    const currentTsv = buildCurrentTsv();
-    const hasTopics = currentTsv.split('\n').length > 1;
-
-    let kwTable = 'Keyword\tVolume\n';
-    for (const id of batch.keywordIds) {
-      const kw = allKeywords.find(k => k.id === id);
-      if (kw) kwTable += kw.keyword + '\t' + (Number(kw.volume) || '') + '\n';
-    }
-
-    let userContent = '';
-    if (hasTopics) {
-      if (deltaModeRef.current) {
-        userContent += 'Here is the current Topics Layout Table (TSV format). This is the cumulative funnel for reference — do NOT repeat unchanged rows in your output:\n\n';
-        userContent += currentTsv + '\n\n';
-        userContent += 'OUTPUT MODE: Use MODE B (DELTA format). Only include ADD rows (new topics) and UPDATE rows (existing topics whose fields changed). Do NOT include unchanged rows.\n\n';
-        userContent += 'REEVALUATION IS STILL MANDATORY: After placing the batch keywords, run the full reevaluation pass across the ENTIRE existing table. The delta format reduces output size, NOT analysis depth.\n\n';
-      } else {
-        userContent += 'Here is the current Topics Layout Table (TSV format). This is the cumulative funnel — preserve all existing data:\n\n';
-        userContent += currentTsv + '\n\n';
-        userContent += 'OUTPUT MODE: Use MODE A (FULL TABLE format). The output must include ALL existing topics plus any new ones, in depth-first tree-walk order.\n\n';
-      }
-    } else {
-      userContent += 'The Topics Layout Table is currently empty. You will create the initial structure.\n\n';
-      userContent += deltaModeRef.current ? 'OUTPUT MODE: Use MODE B (DELTA format). All rows will be ADD rows.\n\n' : 'OUTPUT MODE: Use MODE A (FULL TABLE format).\n\n';
-    }
-
-    userContent += 'Here are the ' + batch.keywords.length + ' keywords to analyze for this batch:\n\n';
-    userContent += kwTable;
-    userContent += '\nPrimary seed word(s): ' + seedWords;
-    userContent += '\nVolume threshold for dedicated topic creation: ' + volumeThreshold + '\n';
-    userContent += '\nPlease analyze each keyword, place them into appropriate topics (marking primary [p] and secondary [s] placements), perform the reevaluation pass, and provide all three delimited output blocks.';
-    if (deltaModeRef.current) {
-      userContent += ' Remember: use MODE B DELTA format — only ADD and UPDATE rows.';
-    }
-    if (batch._correctionContext) {
-      userContent += '\n\nCORRECTION REQUIRED — PREVIOUS RESPONSE FAILED VALIDATION:\n' + batch._correctionContext + '\nPlease regenerate the outputs correcting the above issues.';
-    }
-
-    return { systemText, userContent };
   }
 
   /* ── Build API request body ────────────────────────────────── */
@@ -730,822 +530,7 @@ export default function AutoAnalyze({
     }
   }
 
-  /* ── Extract delimited block ───────────────────────────────── */
-  function extractBlock(text: string, startMarker: string, endMarker: string): string | null {
-    const startIdx = text.indexOf(startMarker);
-    if (startIdx === -1) return null;
-    const contentStart = startIdx + startMarker.length;
-    const endIdx = text.indexOf(endMarker, contentStart);
-    if (endIdx === -1) return null;
-    return text.substring(contentStart, endIdx).trim();
-  }
-
-  /* ── Merge delta TSV into current full table ───────────────── */
-  // baseTsv is optional. Default = current canvas state via buildCurrentTsv()
-  // (the normal Mode B flow). Pass an explicit baseTsv to merge into a
-  // different snapshot — used by runSalvage to merge salvage delta rows
-  // into the original Mode A response without touching the live canvas.
-  function mergeDelta(deltaTsv: string, baseTsv?: string): string {
-    const currentTsv = baseTsv ?? buildCurrentTsv();
-    const currentLines = currentTsv.split('\n');
-    const header = currentLines[0];
-    const resultRows = currentLines.slice(1).filter(l => l.trim());
-
-    const deltaLines = deltaTsv.split('\n');
-    if (deltaLines.length < 2) return currentTsv;
-    const deltaHdr = deltaLines[0].split('\t').map(h => h.trim().toLowerCase());
-    const aIdx = deltaHdr.indexOf('action');
-
-    let addCount = 0, updateCount = 0;
-
-    // Parse delta rows
-    const deltaRows: { action: string; title: string; parentTitle: string; depth: number; tsvLine: string }[] = [];
-    for (let i = 1; i < deltaLines.length; i++) {
-      const line = deltaLines[i].trim();
-      if (!line) continue;
-      const cols = line.split('\t');
-      const action = aIdx >= 0 ? (cols[aIdx] || '').trim().toUpperCase() : 'ADD';
-      const stdCols = cols.filter((_, ci) => ci !== aIdx);
-      const title = stdCols[1] ? stdCols[1].trim() : '';
-      const parentTitle = stdCols[4] ? stdCols[4].trim() : '';
-      const depth = parseInt(stdCols[0]) || 0;
-      if (!title) continue;
-      deltaRows.push({ action, title, parentTitle, depth, tsvLine: stdCols.join('\t') });
-    }
-
-    function findByTitle(t: string) {
-      for (let i = 0; i < resultRows.length; i++) {
-        const c = resultRows[i].split('\t');
-        if ((c[1] || '').trim() === t) return i;
-      }
-      return -1;
-    }
-
-    // Pass 1: UPDATE
-    for (const dr of deltaRows) {
-      if (dr.action !== 'UPDATE') continue;
-      const idx = findByTitle(dr.title);
-      if (idx >= 0) { resultRows[idx] = dr.tsvLine; updateCount++; }
-      else dr.action = 'ADD'; // reclassify
-    }
-
-    // Pass 2: ADD
-    for (const dr of deltaRows) {
-      if (dr.action !== 'ADD') continue;
-      const existIdx = findByTitle(dr.title);
-      if (existIdx >= 0) { resultRows[existIdx] = dr.tsvLine; updateCount++; continue; }
-      let insertIdx = resultRows.length;
-      if (dr.parentTitle) {
-        const parentIdx = findByTitle(dr.parentTitle);
-        if (parentIdx >= 0) {
-          const parentDepth = parseInt(resultRows[parentIdx].split('\t')[0]) || 0;
-          let lastDescIdx = parentIdx;
-          for (let j = parentIdx + 1; j < resultRows.length; j++) {
-            if ((parseInt(resultRows[j].split('\t')[0]) || 0) > parentDepth) lastDescIdx = j;
-            else break;
-          }
-          insertIdx = lastDescIdx + 1;
-        }
-      }
-      resultRows.splice(insertIdx, 0, dr.tsvLine);
-      addCount++;
-    }
-
-    aaLog('  Delta merge: ' + addCount + ' added, ' + updateCount + ' updated, ' + resultRows.length + ' total rows', 'info');
-    return header + '\n' + resultRows.join('\n');
-  }
-
-  /* ── Parse KAT mapping ────────────────────────────────────── */
-  function parseKatMapping(katTsv: string | null): Record<string, string[]> {
-    const map: Record<string, string[]> = {};
-    if (!katTsv) return map;
-    const lines = katTsv.split('\n');
-    for (let i = 1; i < lines.length; i++) {
-      const cols = lines[i].split('\t');
-      if (cols.length < 2) continue;
-      const kw = cols[0].trim();
-      const topic = cols[1].trim();
-      if (kw && topic) {
-        if (!map[kw]) map[kw] = [];
-        if (!map[kw].includes(topic)) map[kw].push(topic);
-      }
-    }
-    return map;
-  }
-
-  /* ── Process a single batch ────────────────────────────────── */
-  async function processBatch(batch: BatchObj): Promise<BatchResult> {
-    const { systemText, userContent } = assemblePrompt(batch);
-    const estTokens = Math.ceil((systemText.length + userContent.length) / 4);
-    aaLog('Batch ' + batch.batchNum + ' — sending ~' + estTokens.toLocaleString() + ' input tokens…', 'info');
-
-    const requestBody = buildRequestBody(systemText, userContent);
-    const apiResponse = await callApi(requestBody, batch.batchNum);
-
-    const textContent = apiResponse.content.filter(b => b.type === 'text').map(b => b.text || '').join('\n');
-    if (!textContent.trim()) throw new Error('API returned empty text content');
-
-    const tokensUsed = {
-      input: (apiResponse.usage.input_tokens || 0) + (apiResponse.usage.cache_creation_input_tokens || 0) + (apiResponse.usage.cache_read_input_tokens || 0),
-      output: apiResponse.usage.output_tokens || 0,
-    };
-
-    if (apiResponse.usage.cache_read_input_tokens > 0) aaLog('  Cache hit: ' + apiResponse.usage.cache_read_input_tokens + ' tokens', 'info');
-
-    // Check for truncation
-    if (apiResponse.stop_reason === 'max_tokens') aaLog('  ⚠ Response truncated (max_tokens)', 'warn');
-
-    // Parse delimited blocks
-    let topicsTableTsv: string | null = null;
-    const deltaTsv = extractBlock(textContent, AA_DELIMITERS.deltaStart, AA_DELIMITERS.deltaEnd);
-    if (deltaTsv) {
-      const dataLines = deltaTsv.split('\n').filter(l => l.trim()).length - 1;
-      aaLog('  Delta response: ' + dataLines + ' rows — merging…', 'info');
-      topicsTableTsv = mergeDelta(deltaTsv);
-    } else {
-      topicsTableTsv = extractBlock(textContent, AA_DELIMITERS.topicsStart, AA_DELIMITERS.topicsEnd);
-      if (topicsTableTsv) aaLog('  Full-table response received.', 'info');
-    }
-
-    const kwAnalysisTable = extractBlock(textContent, AA_DELIMITERS.katStart, AA_DELIMITERS.katEnd);
-    const reevalReport = extractBlock(textContent, AA_DELIMITERS.reevalStart, AA_DELIMITERS.reevalEnd);
-
-    // Handle truncation with no topics table
-    if (apiResponse.stop_reason === 'max_tokens' && !topicsTableTsv) {
-      if (!deltaModeRef.current && processingMode === 'adaptive') {
-        setDeltaMode(true);
-        deltaModeRef.current = true;
-        const err = new Error('Response truncated — switching to DELTA mode');
-        (err as Error & { _deltaSwitch?: boolean })._deltaSwitch = true;
-        throw err;
-      } else {
-        const err = new Error('Response truncated even in DELTA mode');
-        (err as Error & { _noRetry?: boolean })._noRetry = true;
-        throw err;
-      }
-    }
-
-    const kwTopicMap = parseKatMapping(kwAnalysisTable);
-    const currentTitles = new Set(nodes.map(n => n.title));
-    const newTopics: string[] = [];
-    if (topicsTableTsv) {
-      topicsTableTsv.split('\n').slice(1).forEach(line => {
-        const cols = line.split('\t');
-        if (cols.length >= 2 && cols[1].trim() && !currentTitles.has(cols[1].trim())) newTopics.push(cols[1].trim());
-      });
-    }
-
-    return {
-      topicsTableTsv: topicsTableTsv || '',
-      kwAnalysisTable: kwAnalysisTable || '',
-      reevalReport: reevalReport || '',
-      newTopics,
-      kwTopicMap,
-      tokensUsed,
-      rawResponse: textContent,
-    };
-  }
-
-  /* ── Salvage round ─────────────────────────────────────────── */
-  // When validateResult fires HC3 ("Missing N batch keywords") and HC3 is
-  // the ONLY error, runSalvage spawns a targeted follow-up prompt instead
-  // of a full-batch retry. Per Change 6 in AUTO_ANALYZE_PROMPT_V2_PROPOSED_CHANGES
-  // (Session-2b refined wording, Q5 resolution): for each missing keyword
-  // the model returns either a placement (delta row) OR an irrelevance flag
-  // (auto-archived to RemovedKeyword with removedSource='auto-ai-detected-irrelevant'
-  // and aiReasoning populated from the model's reason).
-  //
-  // Returns { mergedTsv, archivedKeywordIds, error }.
-  // - mergedTsv: original Mode-A response with salvage delta rows merged in;
-  //   null if salvage produced no placements OR errored.
-  // - archivedKeywordIds: Keyword.id values that were soft-archived this round.
-  // - error: non-null on API failure (caller falls through to full retry).
-  async function runSalvage(
-    batch: BatchObj,
-    missingKeywords: string[],
-    originalResult: BatchResult
-  ): Promise<{ mergedTsv: string | null; archivedKeywordIds: string[]; error: string | null }> {
-    aaLog('  Running salvage round for ' + missingKeywords.length + ' missing keyword(s)…', 'info');
-
-    // Build follow-up user prompt per Change 6 template.
-    const seed = seedWords;
-    const userContent =
-      'FOLLOW-UP REQUEST — MISSING KEYWORDS IN PRIOR BATCH RESPONSE\n\n' +
-      'In your previous response for batch ' + batch.batchNum + ', the following ' +
-      missingKeywords.length + ' keywords from the input batch were not placed in the Topics Layout Table:\n\n' +
-      missingKeywords.map(kw => '- ' + kw).join('\n') + '\n\n' +
-      'The rest of the batch was placed successfully. Do NOT re-analyze or reorganize anything else — ' +
-      'all other keywords in the batch have been processed correctly and applied to the canvas.\n\n' +
-      'For each missing keyword, respond with EXACTLY ONE of:\n\n' +
-      '(A) Placement — If the keyword is topically relevant to ' + seed + ', apply Steps 1-5 of the ' +
-      'Initial Prompt to place it, including all required secondary placements and upstream chains. ' +
-      'Output the placements in delta format (only new rows or modified rows).\n\n' +
-      '(B) Irrelevance flag — If the keyword is NOT topically relevant to ' + seed + ' (e.g., it is a ' +
-      'homograph, geographic reference unrelated to the niche, or noise), flag it for removal by ' +
-      'listing it in a dedicated IRRELEVANT_KEYWORDS block along with your reasoning. The tool will ' +
-      "auto-archive these keywords to the Removed Terms table with source tag " +
-      "'auto-ai-detected-irrelevant' and your reasoning preserved; admin can review or restore at any time.\n\n" +
-      'Output format:\n\n' +
-      AA_DELIMITERS.salvageDeltaStart + '\n' +
-      '<Depth>\\t<Topic>\\t<Alternate Titles>\\t<Relationship>\\t<Parent Topic>\\t<Conversion Path>\\t<Sister Nodes>\\t<Keywords>\\t<Topic Description>\n' +
-      '...\n' +
-      AA_DELIMITERS.salvageDeltaEnd + '\n\n' +
-      AA_DELIMITERS.salvageIrrStart + '\n' +
-      '<keyword_1>\\t<reason-why-not-relevant>\n' +
-      '<keyword_2>\\t<reason-why-not-relevant>\n' +
-      AA_DELIMITERS.salvageIrrEnd + '\n\n' +
-      AA_DELIMITERS.salvageReevalStart + '\n' +
-      '(Report only on the missing-keyword placements; do not re-report on the rest of the batch.)\n' +
-      AA_DELIMITERS.salvageReevalEnd + '\n\n' +
-      'IMPORTANT: Do NOT output the full Topics Layout Table. Only the three delimited blocks above.';
-
-    // Reuse the same system prompt (initial + primer) so prompt cache stays warm.
-    let systemText = initialPrompt;
-    systemText = systemText.replace(/\[bursitis\]/gi, '[' + seed + ']');
-    systemText = systemText.replace(/\[PRIMARY_SEED_WORDS\]/g, seed);
-    systemText = systemText.replace(/\[VOLUME_THRESHOLD\]/g, String(volumeThreshold));
-    if (primerPrompt) {
-      systemText += '\n\n--- TOPICS LAYOUT TABLE PRIMER ---\n\n' + primerPrompt;
-    }
-    systemText += AA_OUTPUT_INSTRUCTIONS;
-
-    const requestBody = buildRequestBody(systemText, userContent);
-
-    let apiResponse: { content: { type: string; text?: string }[]; usage: { input_tokens: number; output_tokens: number; cache_creation_input_tokens: number; cache_read_input_tokens: number }; stop_reason: string | null };
-    try {
-      apiResponse = await callApi(requestBody, batch.batchNum);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      aaLog('  ⚠ Salvage API call failed: ' + msg + ' — falling back to full retry', 'warn');
-      return { mergedTsv: null, archivedKeywordIds: [], error: msg };
-    }
-
-    const text = apiResponse.content.filter(b => b.type === 'text').map(b => b.text || '').join('\n');
-
-    // Cost: salvage attempts always charge tokens. batch.cost accumulates.
-    const tokensUsed = {
-      input: (apiResponse.usage.input_tokens || 0) + (apiResponse.usage.cache_creation_input_tokens || 0) + (apiResponse.usage.cache_read_input_tokens || 0),
-      output: apiResponse.usage.output_tokens || 0,
-    };
-    const salvageCost = calcCost(tokensUsed);
-    batch.cost += salvageCost;
-    setTotalSpent(prev => prev + salvageCost);
-    totalSpentRef.current += salvageCost;
-    aaLog('  Salvage API call complete. Cost: $' + salvageCost.toFixed(3), 'info');
-
-    // Parse the three salvage blocks.
-    const deltaTsv = extractBlock(text, AA_DELIMITERS.salvageDeltaStart, AA_DELIMITERS.salvageDeltaEnd);
-    const irrTsv = extractBlock(text, AA_DELIMITERS.salvageIrrStart, AA_DELIMITERS.salvageIrrEnd);
-
-    // Auto-archive irrelevants. POST per-keyword to preserve individual reasoning.
-    const archivedKeywordIds: string[] = [];
-    if (irrTsv) {
-      const irrItems: { keyword: string; reason: string }[] = irrTsv.split('\n')
-        .map(l => l.trim())
-        .filter(Boolean)
-        .map(l => {
-          const parts = l.split('\t');
-          return { keyword: (parts[0] || '').trim(), reason: (parts[1] || '').trim() };
-        })
-        .filter(x => x.keyword);
-
-      for (const item of irrItems) {
-        const kwObj = allKeywords.find(k => k.keyword.toLowerCase() === item.keyword.toLowerCase());
-        if (!kwObj) {
-          aaLog('  ⚠ Salvage flagged "' + item.keyword + '" as irrelevant but no matching AST keyword found — skipping', 'warn');
-          continue;
-        }
-        try {
-          const res = await authFetch('/api/projects/' + projectId + '/removed-keywords', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              keywordIds: [kwObj.id],
-              removedSource: 'auto-ai-detected-irrelevant',
-              aiReasoning: item.reason || null,
-            }),
-          });
-          if (res.ok) {
-            archivedKeywordIds.push(kwObj.id);
-            aaLog('  ↻ Salvage auto-archived "' + item.keyword + '"' + (item.reason ? ' — ' + item.reason : ''), 'info');
-          } else {
-            aaLog('  ⚠ Salvage auto-archive failed for "' + item.keyword + '" (status ' + res.status + ')', 'warn');
-          }
-        } catch (e) {
-          aaLog('  ⚠ Salvage auto-archive error for "' + item.keyword + '": ' + (e instanceof Error ? e.message : ''), 'warn');
-        }
-      }
-      if (archivedKeywordIds.length > 0) {
-        // Refresh parent state so HC3 re-validation sees the archived keywords as gone.
-        await onRefreshKeywords();
-      }
-    }
-
-    // Merge delta rows into the original Mode-A response (NOT the live canvas —
-    // the canvas hasn't been touched yet because validation failed).
-    let mergedTsv: string | null = null;
-    if (deltaTsv) {
-      // The salvage prompt asks for headerless data rows. Synthesize a
-      // header so mergeDelta can parse them; aIdx will be -1 (no 'action'
-      // column) so mergeDelta defaults each row to 'ADD'/upgrade-to-UPDATE
-      // when a title match is found.
-      const fakeHeader = 'Depth\tTopic\tAlternate Titles\tRelationship\tParent Topic\tConversion Path\tSister Nodes\tKeywords\tTopic Description';
-      const augmented = fakeHeader + '\n' + deltaTsv;
-      mergedTsv = mergeDelta(augmented, originalResult.topicsTableTsv);
-    }
-
-    return { mergedTsv, archivedKeywordIds, error: null };
-  }
-
-  /* ── Validate result ───────────────────────────────────────── */
-  function validateResult(result: BatchResult, batch: BatchObj): { ok: boolean; errors: string[]; warnings: string[] } {
-    const errors: string[] = [];
-    const warnings: string[] = [];
-
-    // HC1: result exists
-    if (!result) { errors.push('No result'); return { ok: false, errors, warnings }; }
-
-    // HC2: Topics table present
-    if (!result.topicsTableTsv) {
-      errors.push('Topics Layout Table not found in response');
-    } else {
-      const lines = result.topicsTableTsv.split('\n').filter(l => l.trim());
-      if (lines.length < 2) errors.push('Topics table has no data rows');
-    }
-
-    // HC3: All batch keywords placed
-    if (result.topicsTableTsv) {
-      const allKwsInTable = new Set<string>();
-      result.topicsTableTsv.split('\n').slice(1).forEach(line => {
-        const cols = line.split('\t');
-        if (cols.length > 7 && cols[7]) {
-          cols[7].split(',').map(k => k.trim().replace(/\s*\[(p|s)\]\s*$/i, '').toLowerCase()).forEach(k => { if (k) allKwsInTable.add(k); });
-        }
-      });
-      const missing = batch.keywords.filter(kw => !allKwsInTable.has(kw.toLowerCase()));
-      if (missing.length > 0) {
-        errors.push('Missing ' + missing.length + ' batch keywords: ' + missing.slice(0, 5).join(', '));
-        batch._correctionContext = 'Missing keywords: ' + missing.join(', ') + '. Please place them in appropriate topics.';
-      }
-    }
-
-    // HC4: No topic deletions
-    if (result.topicsTableTsv) {
-      const existing = new Set(nodesRef.current.map(n => n.title));
-      if (existing.size > 0) {
-        const newTitles = new Set<string>();
-        result.topicsTableTsv.split('\n').slice(1).forEach(line => {
-          const cols = line.split('\t');
-          if (cols.length >= 2 && cols[1].trim()) newTitles.add(cols[1].trim());
-        });
-        const deleted = [...existing].filter(t => !newTitles.has(t));
-        if (deleted.length > 0) {
-          errors.push('Deleted ' + deleted.length + ' topics: ' + deleted.slice(0, 5).join(', '));
-          batch._correctionContext = 'Deleted topics: ' + deleted.join(', ') + '. Never delete existing topics.';
-        }
-      }
-    }
-
-    // HC5: No keyword losses
-    if (result.topicsTableTsv) {
-      const existingKws = new Set<string>();
-      nodesRef.current.forEach(n => {
-        (n.linkedKwIds || []).forEach(id => {
-          const kw = keywordsRef.current.find(k => k.id === id);
-          if (kw) existingKws.add(kw.keyword.toLowerCase());
-        });
-      });
-      if (existingKws.size > 0) {
-        const newKws = new Set<string>();
-        result.topicsTableTsv.split('\n').slice(1).forEach(line => {
-          const cols = line.split('\t');
-          if (cols.length > 7 && cols[7]) {
-            cols[7].split(',').map(k => k.trim().replace(/\s*\[(p|s)\]\s*$/i, '').toLowerCase()).forEach(k => { if (k) newKws.add(k); });
-          }
-        });
-        const lost = [...existingKws].filter(k => !newKws.has(k));
-        if (lost.length > 0) {
-          errors.push('Lost ' + lost.length + ' keywords: ' + lost.slice(0, 5).join(', '));
-          batch._correctionContext = 'Lost keywords: ' + lost.join(', ') + '. Keywords must not disappear.';
-        }
-      }
-    }
-
-    // Soft checks
-    if (result.newTopics.length > 25) warnings.push('Unusually high: ' + result.newTopics.length + ' new topics');
-    warnings.forEach(w => aaLog('  ⚠ ' + w, 'warn'));
-    return { ok: errors.length === 0, errors, warnings };
-  }
-
-  /* ── Apply result to canvas (diff-based atomic rebuild) ────── */
-  async function doApply(batch: BatchObj, result: BatchResult) {
-    if (!result.topicsTableTsv) return;
-
-    // 1. Parse TSV
-    const lines = result.topicsTableTsv.split('\n').filter(l => l.trim());
-    if (lines.length < 2) return;
-
-    const parsed: { depth: number; title: string; altTitles: string[]; rel: string; parentTitle: string; convPath: string; sisters: string; kwRaw: string; desc: string }[] = [];
-    for (let i = 1; i < lines.length; i++) {
-      const cols = lines[i].split('\t');
-      parsed.push({
-        depth: parseInt(cols[0]) || 0,
-        title: (cols[1] || '').trim(),
-        altTitles: (cols[2] || '').split(',').map(s => s.trim()).filter(Boolean),
-        rel: (cols[3] || '').trim().toLowerCase(),
-        parentTitle: (cols[4] || '').trim(),
-        convPath: (cols[5] || '').trim(),
-        sisters: (cols[6] || '').trim(),
-        kwRaw: (cols[7] || '').trim(),
-        desc: (cols[8] || '').trim(),
-      });
-    }
-
-    // 2. Diff: match AI titles against existing nodes
-    const existingByTitle = new Map<string, CanvasNode>();
-    for (const n of nodesRef.current) {
-      existingByTitle.set(n.title, n);
-    }
-    const aiTitles = new Set(parsed.filter(r => r.title).map(r => r.title));
-
-    // Nodes to delete: existing nodes whose title is NOT in the AI output
-    const deleteNodeIds = nodesRef.current
-      .filter(n => !aiTitles.has(n.title))
-      .map(n => n.id);
-
-    // 3. Build node objects — reuse existing ID/position when title matches
-    const NODE_W = 220;
-    const NODE_H = 160;
-    const H_GAP = 60;
-    const V_GAP = 40;
-
-    // Get next available node ID
-    const canvasStateRes = await authFetch('/api/projects/' + projectId + '/canvas');
-    const canvasStateData = await canvasStateRes.json();
-    let nextNodeId = canvasStateData.canvasState?.nextNodeId ?? 1;
-
-    const titleToBuilt = new Map<string, { id: number; x: number; y: number; w: number; h: number; isNew: boolean }>();
-    const rebuildNodes: Record<string, unknown>[] = [];
-    const depthXOffset = new Map<number, number>();
-
-    for (const row of parsed) {
-      if (!row.title) continue;
-
-      const existing = existingByTitle.get(row.title);
-      let id: number;
-      let x: number;
-      let y: number;
-      let w: number;
-      let h: number;
-      let isNew = false;
-
-      if (existing) {
-        // Reuse existing node — preserve user position/size customizations
-        id = existing.id;
-        x = existing.x;
-        y = existing.y;
-        w = existing.w;
-        h = existing.h;
-      } else {
-        // New node — auto-layout
-        id = nextNodeId++;
-        isNew = true;
-        w = NODE_W;
-        h = NODE_H;
-
-        if (row.parentTitle && titleToBuilt.has(row.parentTitle)) {
-          const parent = titleToBuilt.get(row.parentTitle)!;
-          x = parent.x + H_GAP;
-          let maxChildY = parent.y;
-          for (const [, n] of titleToBuilt) {
-            if (n.x >= x && n.y > maxChildY) maxChildY = n.y;
-          }
-          y = maxChildY + NODE_H + V_GAP;
-        } else {
-          if (!depthXOffset.has(0)) depthXOffset.set(0, 0);
-          x = depthXOffset.get(0)!;
-          let maxY = -NODE_H - V_GAP;
-          for (const [, n] of titleToBuilt) {
-            if (Math.abs(n.x - x) < NODE_W && n.y > maxY) maxY = n.y;
-          }
-          y = maxY + NODE_H + V_GAP;
-          if (y > 2000) {
-            depthXOffset.set(0, x + NODE_W + H_GAP * 3);
-            x = depthXOffset.get(0)!;
-            y = 0;
-          }
-        }
-      }
-
-      titleToBuilt.set(row.title, { id, x, y, w, h, isNew });
-
-      // Parse keywords for this node
-      const linkedIds: string[] = [];
-      const placements: Record<string, string> = {};
-      if (row.kwRaw) {
-        const entries = row.kwRaw.split(',').map(s => s.trim()).filter(Boolean);
-        for (const entry of entries) {
-          const m = entry.match(/^(.+?)\s*\[([ps])\]\s*$/i);
-          const kwText = m ? m[1].trim() : entry.replace(/\s*\[[ps]\]\s*$/i, '').trim();
-          const placement = m ? m[2].toLowerCase() : 'p';
-          const kwObj = allKeywords.find(k => k.keyword.toLowerCase() === kwText.toLowerCase());
-          if (kwObj) {
-            linkedIds.push(kwObj.id);
-            placements[kwObj.id] = placement;
-          }
-        }
-      }
-
-      rebuildNodes.push({
-        id,
-        title: row.title,
-        description: existing ? (row.desc || existing.description) : (row.desc || ''),
-        altTitles: row.altTitles.length > 0 ? row.altTitles : (existing?.altTitles || []),
-        x, y, w, h,
-        relationshipType: row.rel === 'linear' || row.rel === 'nested' ? row.rel : (existing?.relationshipType || ''),
-        linkedKwIds: linkedIds.length > 0 ? linkedIds : (existing?.linkedKwIds || []),
-        kwPlacements: Object.keys(placements).length > 0 ? placements : (existing?.kwPlacements || {}),
-        narrativeBridge: existing?.narrativeBridge || '',
-        collapsedLinear: existing?.collapsedLinear || false,
-        collapsedNested: existing?.collapsedNested || false,
-        userMinH: existing?.userMinH || null,
-        connCP: existing?.connCP || null,
-        connOutOff: existing?.connOutOff || null,
-        connInOff: existing?.connInOff || null,
-        sortOrder: rebuildNodes.length,
-      });
-    }
-
-    // 4. Set parent relationships on the built nodes
-    for (const row of parsed) {
-      if (!row.title) continue;
-      const built = rebuildNodes.find(n => n.title === row.title);
-      if (!built) continue;
-
-      if (row.parentTitle && titleToBuilt.has(row.parentTitle)) {
-        built.parentId = titleToBuilt.get(row.parentTitle)!.id;
-        if (!built.relationshipType) built.relationshipType = 'nested';
-      } else {
-        built.parentId = null;
-      }
-    }
-
-    // 4b. Chain depth-0 nodes linearly
-    const depth0Rows = parsed.filter(r => r.depth === 0 && r.title && titleToBuilt.has(r.title));
-    for (let i = 1; i < depth0Rows.length; i++) {
-      const prev = titleToBuilt.get(depth0Rows[i - 1].title);
-      const curr = titleToBuilt.get(depth0Rows[i].title);
-      if (prev && curr) {
-        const node = rebuildNodes.find(n => n.id === curr.id);
-        if (node) {
-          node.parentId = prev.id;
-          node.relationshipType = 'linear';
-        }
-      }
-    }
-
-    // 5. Build pathways for depth-0 nodes
-    const existingPathwayIds = new Set(pathways.map(p => p.id));
-    let nextPathwayId = canvasStateData.canvasState?.nextPathwayId ?? 1;
-    const newPathways: { id: number }[] = [];
-
-    for (const row of depth0Rows) {
-      const built = titleToBuilt.get(row.title);
-      if (!built) continue;
-      const existingNode = existingByTitle.get(row.title);
-
-      // If node already had a pathway, keep it
-      if (existingNode?.pathwayId && existingPathwayIds.has(existingNode.pathwayId)) {
-        const nodeObj = rebuildNodes.find(n => n.id === built.id);
-        if (nodeObj) nodeObj.pathwayId = existingNode.pathwayId;
-        // Assign same pathway to descendants
-        function assignExistingPw(title: string, pwId: number) {
-          for (const r of parsed) {
-            if (r.parentTitle === title && titleToBuilt.has(r.title)) {
-              const desc = rebuildNodes.find(n => n.id === titleToBuilt.get(r.title)!.id);
-              if (desc) desc.pathwayId = pwId;
-              assignExistingPw(r.title, pwId);
-            }
-          }
-        }
-        assignExistingPw(row.title, existingNode.pathwayId);
-      } else {
-        // New pathway needed
-        const pwId = nextPathwayId++;
-        newPathways.push({ id: pwId });
-        const nodeObj = rebuildNodes.find(n => n.id === built.id);
-        if (nodeObj) nodeObj.pathwayId = pwId;
-        function assignNewPw(title: string, pwId: number) {
-          for (const r of parsed) {
-            if (r.parentTitle === title && titleToBuilt.has(r.title)) {
-              const desc = rebuildNodes.find(n => n.id === titleToBuilt.get(r.title)!.id);
-              if (desc) desc.pathwayId = pwId;
-              assignNewPw(r.title, pwId);
-            }
-          }
-        }
-        assignNewPw(row.title, pwId);
-      }
-    }
-
-    // 6. Build sister links
-    const existingSisterKeys = new Set(sisterLinks.map(sl => [sl.nodeA, sl.nodeB].sort().join('-')));
-    const newSisterLinks: { nodeA: number; nodeB: number }[] = [];
-    for (const row of parsed) {
-      if (!row.sisters || !row.title) continue;
-      const built = titleToBuilt.get(row.title);
-      if (!built) continue;
-      const sisterNames = row.sisters.split(',').map(s => s.trim()).filter(Boolean);
-      for (const sName of sisterNames) {
-        const sBuilt = titleToBuilt.get(sName);
-        if (!sBuilt || sBuilt.id === built.id) continue;
-        const key = [built.id, sBuilt.id].sort().join('-');
-        if (existingSisterKeys.has(key)) continue;
-        existingSisterKeys.add(key);
-        newSisterLinks.push({ nodeA: built.id, nodeB: sBuilt.id });
-      }
-    }
-
-    // 7. Delete pathways for removed depth-0 nodes
-    const keptPathwayIds = new Set<number>();
-    for (const n of rebuildNodes) {
-      if (n.pathwayId) keptPathwayIds.add(n.pathwayId as number);
-    }
-    const deletePathwayIds = pathways
-      .filter(p => !keptPathwayIds.has(p.id))
-      .map(p => p.id);
-
-    // Delete sister links involving deleted nodes
-    const deleteNodeIdSet = new Set(deleteNodeIds);
-    const deleteSisterLinkIds = sisterLinks
-      .filter(sl => deleteNodeIdSet.has(sl.nodeA) || deleteNodeIdSet.has(sl.nodeB))
-      .map(sl => sl.id);
-
-    // 7.5. P3-F8 layout pass. Recompute each node's content-driven height
-    //     via calcNodeHeight, then run the holistic 4-step push-down pass
-    //     (reset roots → tree-walk type-aware placement → 60-pass overlap
-    //     resolution → pathway separation). Mutates rebuildNodes' x/y/h
-    //     in place so the rebuild call below persists the laid-out
-    //     positions in a single transaction. Q1 answer: runs after every
-    //     batch apply (not just run-end).
-    const layoutNodes: LayoutNode[] = rebuildNodes.map(n => ({
-      id: n.id as number,
-      title: (n.title as string) || '',
-      description: (n.description as string) || '',
-      altTitles: (n.altTitles as string[]) || [],
-      x: n.x as number,
-      y: n.y as number,
-      w: n.w as number,
-      h: n.h as number,
-      baseY: (n.baseY as number | undefined) ?? (n.y as number),
-      parentId: (n.parentId as number | null) ?? null,
-      pathwayId: (n.pathwayId as number | null) ?? null,
-      relationshipType: (n.relationshipType as string) || '',
-      linkedKwIds: (n.linkedKwIds as string[]) || [],
-      userMinH: (n.userMinH as number | null) ?? null,
-    }));
-    for (const ln of layoutNodes) {
-      ln.h = calcNodeHeight(ln);
-    }
-    runLayoutPass(layoutNodes, [...pathways, ...newPathways]);
-    // Mirror computed positions/heights back onto rebuildNodes for the
-    // rebuild API call.
-    const byId = new Map<number, LayoutNode>();
-    for (const ln of layoutNodes) byId.set(ln.id, ln);
-    for (const rn of rebuildNodes) {
-      const ln = byId.get(rn.id as number);
-      if (!ln) continue;
-      rn.x = ln.x;
-      rn.y = ln.y;
-      rn.h = ln.h;
-      rn.baseY = ln.baseY ?? ln.y;
-    }
-    aaLog('  Layout pass complete (' + rebuildNodes.length + ' nodes positioned)', 'info');
-
-    // 8. ATOMIC REBUILD — single transaction
-    aaLog('  Applying to canvas (atomic rebuild)...', 'info');
-    try {
-      const res = await authFetch('/api/projects/' + projectId + '/canvas/rebuild', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          nodes: rebuildNodes,
-          pathways: newPathways,
-          sisterLinks: newSisterLinks,
-          canvasState: { nextNodeId, nextPathwayId },
-          deleteNodeIds,
-          deletePathwayIds,
-          deleteSisterLinkIds,
-        }),
-      });
-      if (!res.ok) {
-        const errText = await res.text();
-        throw new Error('Canvas rebuild failed: ' + errText);
-      }
-      aaLog('  ✓ Canvas rebuilt atomically (' + rebuildNodes.length + ' nodes, ' + deleteNodeIds.length + ' removed)', 'ok');
-    } catch (e) {
-      aaLog('  ✗ Canvas rebuild FAILED — all changes rolled back. ' + (e instanceof Error ? e.message : ''), 'error');
-      return;
-    }
-
-    // 9. Update keyword records with topic names and canvasLoc
-    const kwTopicUpdates: { id: string; [key: string]: unknown }[] = [];
-    for (const row of parsed) {
-      if (!row.kwRaw || !row.title) continue;
-      const entries = row.kwRaw.split(',').map(s => s.trim()).filter(Boolean);
-      for (const entry of entries) {
-        const m = entry.match(/^(.+?)\s*\[([ps])\]\s*$/i);
-        const kwText = m ? m[1].trim() : entry.replace(/\s*\[[ps]\]\s*$/i, '').trim();
-        const kwObj = allKeywords.find(k => k.keyword.toLowerCase() === kwText.toLowerCase());
-        if (kwObj) {
-          const existingTopics = (kwObj.topic || '').split('|').map(s => s.trim()).filter(Boolean);
-          if (!existingTopics.includes(row.title)) existingTopics.push(row.title);
-          const existingLoc = (typeof kwObj.canvasLoc === 'object' && kwObj.canvasLoc) ? { ...kwObj.canvasLoc } : {};
-          if (row.desc) (existingLoc as Record<string, string>)[row.title] = row.desc;
-          kwTopicUpdates.push({ id: kwObj.id, topic: existingTopics.join(' | '), canvasLoc: existingLoc });
-        }
-      }
-    }
-    if (kwTopicUpdates.length > 0) onBatchUpdateKeywords(kwTopicUpdates);
-
-    // 10. Refresh UI
-    await onRefreshCanvas();
-    await onRefreshKeywords();
-
-    // 11. Identify which batch keywords landed on the canvas (input to
-    //     salvage detection in step 12 below).
-    const allLinkedIds = new Set<string>();
-    for (const n of rebuildNodes) {
-      if (Array.isArray(n.linkedKwIds)) (n.linkedKwIds as string[]).forEach(id => allLinkedIds.add(id));
-    }
-
-    const unplaced: string[] = [];
-    for (const id of batch.keywordIds) {
-      if (!allLinkedIds.has(id)) {
-        const kw = allKeywords.find(k => k.id === id);
-        if (kw) unplaced.push(kw.keyword);
-      }
-    }
-
-    if (unplaced.length > 0) {
-      aaLog('  ⚠ ' + unplaced.length + ' keyword(s) NOT placed: ' + unplaced.join(', '), 'warn');
-      batch._unplacedKws = unplaced;
-    } else {
-      aaLog('  ✓ All ' + batch.keywordIds.length + ' keywords verified on canvas.', 'ok');
-    }
-
-    // 12. P3-F7 backup reconciliation pass. Heals status-vs-canvas drift
-    //     across the ENTIRE AST table (not just this batch's keywords).
-    //     Two flips, both logged with structured info that's
-    //     forward-compatible with the future ai_feedback_records schema
-    //     per AI_TOOL_FEEDBACK_PROTOCOL §2.3.
-    //
-    //     (a) keyword IS on canvas but status is 'Unsorted' or 'Reshuffled'
-    //         → flip to 'AI-Sorted'. Catches Bug 1 silent placements
-    //         (Mode A re-mentions of prior-batch keywords) AND any
-    //         Reshuffled keyword the AI just re-placed.
-    //
-    //     (b) keyword is NOT on canvas but status is 'AI-Sorted'
-    //         → flip to 'Reshuffled'. Catches Bug 2 sub-group 1 reshuffle
-    //         casualties. Reshuffled keywords appear with a yellow badge
-    //         in the AST (visible alarm) and are re-eligible for placement
-    //         under the default Auto-Analyze scope.
-    const reconcileUpdates: { id: string; sortingStatus: string }[] = [];
-    let flippedToAiSorted = 0;
-    let flippedToReshuffled = 0;
-    for (const kw of allKeywords) {
-      const onCanvas = allLinkedIds.has(kw.id);
-      if (onCanvas && (kw.sortingStatus === 'Unsorted' || kw.sortingStatus === 'Reshuffled')) {
-        reconcileUpdates.push({ id: kw.id, sortingStatus: 'AI-Sorted' });
-        flippedToAiSorted++;
-      } else if (!onCanvas && kw.sortingStatus === 'AI-Sorted') {
-        reconcileUpdates.push({ id: kw.id, sortingStatus: 'Reshuffled' });
-        aaLog(
-          '  ↻ Reconcile: "' + kw.keyword + '" (id ' + kw.id + ') was AI-Sorted, no longer on canvas → Reshuffled',
-          'warn'
-        );
-        flippedToReshuffled++;
-      }
-    }
-    if (reconcileUpdates.length > 0) {
-      onBatchUpdateKeywords(reconcileUpdates);
-      aaLog(
-        '  ↻ Reconciliation: ' + flippedToAiSorted + ' on-canvas → AI-Sorted, ' +
-        flippedToReshuffled + ' off-canvas → Reshuffled',
-        flippedToReshuffled > 0 ? 'warn' : 'ok'
-      );
-    }
-  }
-
-  /* ════════════════════════════════════════════════════════════
-     Pivot Session D — V3 operation-based path (default)
-     The functions below run when outputContract === 'v3-operations'.
-     They replace processBatch + doApply for V3 mode. The V2 code
-     above is preserved as defense-in-depth and runs when the user
-     selects the v2-tsv contract in the config picker.
-     ════════════════════════════════════════════════════════════ */
-
-  /* ── V3: assemble prompt ───────────────────────────────────── */
+  /* ── Assemble prompt for a batch ───────────────────────────── */
   function assemblePromptV3(batch: BatchObj): { systemText: string; userContent: string } {
     let systemText = initialPrompt;
     systemText = systemText.replace(/\[PRIMARY_SEED_WORDS\]/g, seedWords);
@@ -1553,8 +538,6 @@ export default function AutoAnalyze({
     if (primerPrompt) {
       systemText += '\n\n--- TOPICS LAYOUT TABLE PRIMER ---\n\n' + primerPrompt;
     }
-    // V3 prompts already contain the operations-block instructions; do NOT
-    // append AA_OUTPUT_INSTRUCTIONS (which is the V2 Mode A/B contract).
 
     const inputTsv = buildOperationsInputTsv(
       nodesRef.current,
@@ -1635,9 +618,9 @@ export default function AutoAnalyze({
     // safe and side-effect-free.
     const canvasStateRes = nodesRef.current;
     const sisterLinksNow = sisterLinksRef.current;
-    // We pass the largest plausible nextNodeId — the actual one is fetched in
-    // doApplyV3. For dry-run validation we just need a counter that is at
-    // least one greater than the highest existing stableId integer.
+    // For dry-run validation, derive the stableId counter from the loaded
+    // nodes — at least one greater than every existing stableId integer suffix.
+    // doApplyV3 fetches the canonical value from /canvas before the real apply.
     let counter = 1;
     for (const n of canvasStateRes) {
       const m = /^t-(\d+)$/.exec(n.stableId);
@@ -1689,18 +672,17 @@ export default function AutoAnalyze({
     batch: BatchObj,
     ops: ReturnType<typeof parseOperationsJsonl>['operations'],
   ) {
-    // Fetch canonical nextNodeId / nextPathwayId so issued stableIds and new
-    // pathway ids cannot collide with anything that may have changed since
-    // page load (e.g., admin manually added a node in another tab).
+    // Fetch canonical nextStableIdN so issued stableIds cannot collide with
+    // anything that may have changed since page load (e.g., admin manually
+    // added a node in another tab).
     const canvasStateRes = await authFetch('/api/projects/' + projectId + '/canvas');
     const canvasStateData = await canvasStateRes.json();
-    const nextNodeId = canvasStateData.canvasState?.nextNodeId ?? 1;
-    const nextPathwayId = canvasStateData.canvasState?.nextPathwayId ?? 1;
+    const nextStableIdN = canvasStateData.canvasState?.nextStableIdN ?? 1;
 
     const originalNodes = nodesRef.current;
     const originalSisterLinks = sisterLinksRef.current;
 
-    const state = buildCanvasStateForApplier(originalNodes, originalSisterLinks, nextNodeId);
+    const state = buildCanvasStateForApplier(originalNodes, originalSisterLinks, nextStableIdN);
     const applyResult = applyOperations(state, ops);
     if (!applyResult.ok) {
       // Should not happen because validateResultV3 ran the same call and
@@ -1724,12 +706,11 @@ export default function AutoAnalyze({
       originalSisterLinks,
       originalPathwayIds: pathways.map(p => p.id),
       applierNewState: applyResult.newState,
-      nextPathwayId,
     });
 
-    // Layout pass over the materialized nodes (P3-F8 same as V2 doApply).
+    // P3-F8 layout pass over the materialized nodes.
     const layoutNodes: LayoutNode[] = payload.nodes.map(n => ({
-      id: n.id as number,
+      id: n.id as string,
       title: (n.title as string) || '',
       description: (n.description as string) || '',
       altTitles: (n.altTitles as string[]) || [],
@@ -1738,18 +719,18 @@ export default function AutoAnalyze({
       w: n.w as number,
       h: n.h as number,
       baseY: ((n.baseY as number | undefined) ?? (n.y as number)) || 0,
-      parentId: (n.parentId as number | null) ?? null,
-      pathwayId: (n.pathwayId as number | null) ?? null,
+      parentId: (n.parentId as string | null) ?? null,
+      pathwayId: (n.pathwayId as string | null) ?? null,
       relationshipType: (n.relationshipType as string) || '',
       linkedKwIds: (n.linkedKwIds as string[]) || [],
       userMinH: (n.userMinH as number | null) ?? null,
     }));
     for (const ln of layoutNodes) ln.h = calcNodeHeight(ln);
     runLayoutPass(layoutNodes, [...pathways, ...payload.pathways]);
-    const byId = new Map<number, LayoutNode>();
+    const byId = new Map<string, LayoutNode>();
     for (const ln of layoutNodes) byId.set(ln.id, ln);
     for (const rn of payload.nodes) {
-      const ln = byId.get(rn.id as number);
+      const ln = byId.get(rn.id as string);
       if (!ln) continue;
       rn.x = ln.x;
       rn.y = ln.y;
@@ -1838,9 +819,9 @@ export default function AutoAnalyze({
     await onRefreshCanvas();
     await onRefreshKeywords();
 
-    // Status reconciliation across the full keyword table — same as V2's
-    // step 12 (P3-F7). Catches any keyword whose status drifted from its
-    // canvas presence.
+    // P3-F7 status reconciliation: heal any keyword whose status drifted from
+    // its canvas presence (on-canvas but Unsorted/Reshuffled → AI-Sorted;
+    // off-canvas but AI-Sorted → Reshuffled).
     const placedSet = new Set(placementsByKeyword.keys());
     const archivedSet = new Set(applyResult.archivedKeywords.map(a => a.keywordId));
     const reconcileUpdates: { id: string; sortingStatus: string }[] = [];
@@ -1899,62 +880,28 @@ export default function AutoAnalyze({
       aaLog('Batch ' + batch.batchNum + ' — processing ' + batch.keywords.length + ' keywords (attempt ' + batch.attempts + ')…', 'info');
 
       try {
-        // ── V3 dispatch (Pivot Session D) ──────────────────────
-        if (outputContractRef.current === 'v3-operations') {
-          const v3Result = await processBatchV3(batch);
-          if (abortRef.current) break;
+        const v3Result = await processBatchV3(batch);
+        if (abortRef.current) break;
 
-          const v3AttemptCost = calcCost(v3Result.tokensUsed);
-          batch.tokensUsed = v3Result.tokensUsed;
-          batch.cost += v3AttemptCost;
-          setTotalSpent(prev => prev + v3AttemptCost);
-          totalSpentRef.current += v3AttemptCost;
-          aaLog('  Batch ' + batch.batchNum + ' attempt ' + batch.attempts + ' — API call complete. Cost: $' + v3AttemptCost.toFixed(3), 'info');
+        const v3AttemptCost = calcCost(v3Result.tokensUsed);
+        batch.tokensUsed = v3Result.tokensUsed;
+        batch.cost += v3AttemptCost;
+        setTotalSpent(prev => prev + v3AttemptCost);
+        totalSpentRef.current += v3AttemptCost;
+        aaLog('  Batch ' + batch.batchNum + ' attempt ' + batch.attempts + ' — API call complete. Cost: $' + v3AttemptCost.toFixed(3), 'info');
 
-          const v3Validation = validateResultV3(v3Result, batch);
-          if (!v3Validation.ok) {
-            if (batch.attempts < batch.maxAttempts) {
-              const headline = v3Validation.errors.slice(0, 3).join('; ');
-              aaLog('Batch ' + batch.batchNum + ' validation failed: ' + headline + ' — retrying…', 'warn');
-              batch.status = 'queued';
-              continue;
-            } else {
-              batch.status = 'failed';
-              batch.error = 'Validation failed: ' + v3Validation.errors.join('; ');
-              batch.completedAt = Date.now();
-              aaLog('Batch ' + batch.batchNum + ' FAILED: ' + batch.error, 'error');
-              setCurrentIdx(prev => prev + 1);
-              currentIdxRef.current++;
-              setBatches([...batchesRef.current]);
-              continue;
-            }
-          }
-
-          // Populate the BatchResult's newTopics with the titles from each
-          // ADD_TOPIC op so the BATCH_REVIEW screen can display them. Without
-          // this the review screen shows "Topics: None" even when V3 is about
-          // to create new topics.
-          v3Result.newTopics = v3Validation.ops
-            .filter((o): o is Extract<typeof v3Validation.ops[number], { type: 'ADD_TOPIC' }> => o.type === 'ADD_TOPIC')
-            .map(o => o.title);
-          batch.result = v3Result;
-          batch.reevalReport = '';
-          batch.newTopicCount = v3Result.newTopics.length;
-          aaLog('Batch ' + batch.batchNum + ' — passed validation. Total cost (all attempts): $' + batch.cost.toFixed(3), 'ok');
-
-          if (reviewMode) {
-            setPendingResult(v3Result);
-            batch._v3Ops = v3Validation.ops;
-            batch.status = 'reviewing';
-            setAaState('BATCH_REVIEW');
-            setBatches([...batchesRef.current]);
-            return;
+        const v3Validation = validateResultV3(v3Result, batch);
+        if (!v3Validation.ok) {
+          if (batch.attempts < batch.maxAttempts) {
+            const headline = v3Validation.errors.slice(0, 3).join('; ');
+            aaLog('Batch ' + batch.batchNum + ' validation failed: ' + headline + ' — retrying…', 'warn');
+            batch.status = 'queued';
+            continue;
           } else {
-            await doApplyV3(batch, v3Validation.ops);
-            batch.status = 'complete';
+            batch.status = 'failed';
+            batch.error = 'Validation failed: ' + v3Validation.errors.join('; ');
             batch.completedAt = Date.now();
-            aaLog('Batch ' + batch.batchNum + ' — applied.', 'ok');
-            saveCheckpoint();
+            aaLog('Batch ' + batch.batchNum + ' FAILED: ' + batch.error, 'error');
             setCurrentIdx(prev => prev + 1);
             currentIdxRef.current++;
             setBatches([...batchesRef.current]);
@@ -1962,110 +909,24 @@ export default function AutoAnalyze({
           }
         }
 
-        // ── V2 (legacy full-table) path ────────────────────────
-        const result = await processBatch(batch);
-        if (abortRef.current) break;
-
-        // Record cost for this attempt as soon as the API call returns. Anthropic
-        // bills for tokens regardless of whether our validation passes downstream,
-        // so failed-validation retries and Mode A→B auto-switches must still
-        // accumulate cost. batch.cost accumulates across attempts; batch.tokensUsed
-        // reflects the most recent attempt.
-        const attemptCost = calcCost(result.tokensUsed);
-        batch.tokensUsed = result.tokensUsed;
-        batch.cost += attemptCost;
-        setTotalSpent(prev => prev + attemptCost);
-        totalSpentRef.current += attemptCost;
-        aaLog('  Batch ' + batch.batchNum + ' attempt ' + batch.attempts + ' — API call complete. Cost: $' + attemptCost.toFixed(3), 'info');
-
-        let validation = validateResult(result, batch);
-        if (!validation.ok) {
-          // HC4/HC5 signal Mode A dropped pre-existing data; Mode B (delta) recovers faster than retrying Mode A.
-          const isLostDataError = validation.errors.some(e =>
-            e.startsWith('Deleted ') || e.startsWith('Lost ')
-          );
-          if (isLostDataError && !deltaModeRef.current && processingMode === 'adaptive') {
-            setDeltaMode(true);
-            deltaModeRef.current = true;
-            aaLog('⚡ AUTO-SWITCH: ' + validation.errors.join('; ') + ' — switching to DELTA mode (Mode B)', 'warn');
-            batch.attempts--;
-            batch.status = 'queued';
-            continue;
-          }
-
-          // Salvage path. Fires when HC3 ("Missing N batch keywords") is the
-          // only failure mode and no HC4/HC5 lost-data errors are present.
-          // Targeted follow-up prompt re-asks the model for just the missing
-          // keywords (place them OR flag irrelevant); cheaper than a full
-          // batch retry. See Change 6 in AUTO_ANALYZE_PROMPT_V2_PROPOSED_CHANGES.
-          const isMissingOnlyFailure = !isLostDataError &&
-            validation.errors.length > 0 &&
-            validation.errors.every(e => e.startsWith('Missing '));
-          if (isMissingOnlyFailure && batch._correctionContext) {
-            const m = batch._correctionContext.match(/^Missing keywords:\s*(.+?)\.\s*Please/);
-            const missingKws = m ? m[1].split(',').map(s => s.trim()).filter(Boolean) : [];
-            if (missingKws.length > 0) {
-              const salvage = await runSalvage(batch, missingKws, result);
-              if (salvage.error) {
-                // Salvage failed at API level — fall through to standard retry.
-              } else {
-                // Replace result.topicsTableTsv with the merged version (if any
-                // placements came back) and drop archived keywords from the
-                // batch's responsibility set so HC3 re-validation passes.
-                if (salvage.mergedTsv) result.topicsTableTsv = salvage.mergedTsv;
-                if (salvage.archivedKeywordIds.length > 0) {
-                  const archivedSet = new Set(salvage.archivedKeywordIds);
-                  batch.keywordIds = batch.keywordIds.filter(id => !archivedSet.has(id));
-                  // batch.keywords mirrors keywordIds; drop the same texts.
-                  batch.keywords = batch.keywords.filter(_kwText => {
-                    const kwObj = allKeywords.find(k => k.keyword === _kwText);
-                    return !(kwObj && archivedSet.has(kwObj.id));
-                  });
-                }
-                batch._correctionContext = '';
-                validation = validateResult(result, batch);
-                if (validation.ok) {
-                  aaLog('  ✓ Salvage round resolved all missing keywords.', 'ok');
-                } else {
-                  aaLog('  ⚠ Salvage round did not fully resolve: ' + validation.errors.join('; '), 'warn');
-                  // Fall through to standard retry below.
-                }
-              }
-            }
-          }
-
-          if (!validation.ok) {
-            if (batch.attempts < batch.maxAttempts) {
-              aaLog('Batch ' + batch.batchNum + ' validation failed: ' + validation.errors.join('; ') + ' — retrying…', 'warn');
-              batch.status = 'queued';
-              continue;
-            } else {
-              batch.status = 'failed';
-              batch.error = 'Validation failed: ' + validation.errors.join('; ');
-              batch.completedAt = Date.now();
-              aaLog('Batch ' + batch.batchNum + ' FAILED: ' + batch.error, 'error');
-              setCurrentIdx(prev => prev + 1);
-              currentIdxRef.current++;
-              setBatches([...batchesRef.current]);
-              continue;
-            }
-          }
-        }
-
-        batch.result = result;
-        batch.reevalReport = result.reevalReport;
-        batch.newTopicCount = result.newTopics.length;
-
+        // Populate newTopics from ADD_TOPIC ops so BATCH_REVIEW can display them.
+        v3Result.newTopics = v3Validation.ops
+          .filter((o): o is Extract<typeof v3Validation.ops[number], { type: 'ADD_TOPIC' }> => o.type === 'ADD_TOPIC')
+          .map(o => o.title);
+        batch.result = v3Result;
+        batch.reevalReport = '';
+        batch.newTopicCount = v3Result.newTopics.length;
         aaLog('Batch ' + batch.batchNum + ' — passed validation. Total cost (all attempts): $' + batch.cost.toFixed(3), 'ok');
 
         if (reviewMode) {
-          setPendingResult(result);
+          setPendingResult(v3Result);
+          batch._v3Ops = v3Validation.ops;
           batch.status = 'reviewing';
           setAaState('BATCH_REVIEW');
           setBatches([...batchesRef.current]);
-          return; // exit — user will apply/skip
+          return;
         } else {
-          await doApply(batch, result);
+          await doApplyV3(batch, v3Validation.ops);
           batch.status = 'complete';
           batch.completedAt = Date.now();
           aaLog('Batch ' + batch.batchNum + ' — applied.', 'ok');
@@ -2073,19 +934,14 @@ export default function AutoAnalyze({
           setCurrentIdx(prev => prev + 1);
           currentIdxRef.current++;
           setBatches([...batchesRef.current]);
+          continue;
         }
 
       } catch (err: unknown) {
         if (abortRef.current) break;
-        const errObj = err as Error & { _deltaSwitch?: boolean; _isStall?: boolean; _noRetry?: boolean };
+        const errObj = err as Error & { _isStall?: boolean; _noRetry?: boolean };
         const errMsg = errObj.message || String(err);
 
-        if (errObj._deltaSwitch) {
-          batch.attempts--;
-          aaLog('⚡ AUTO-SWITCH: ' + errMsg, 'warn');
-          batch.status = 'queued';
-          continue;
-        }
         if (errObj._isStall) {
           batch.attempts--;
           batch.stallAttempts++;
@@ -2143,15 +999,17 @@ export default function AutoAnalyze({
     setTotalSpent(0);
     totalSpentRef.current = 0;
     setLogEntries([]);
-    setDeltaMode(false);
-    deltaModeRef.current = false;
     setBatchTier(0);
     batchTierRef.current = 0;
     abortRef.current = false;
     startTimeRef.current = Date.now();
 
     aaLog('Auto-Analyze started. ' + queue.length + ' batches, ' + unsorted.length + ' keywords.', 'info');
-    aaLog('Model: ' + model + ' | Mode: ' + processingMode + ' | Scope: ' + keywordScope, 'info');
+    const scopeLabel =
+      keywordScope === 'unsorted-only' ? 'Unsorted + Reshuffled'
+      : keywordScope === 'non-ai-sorted' ? 'Non-AI-Sorted'
+      : 'All keywords';
+    aaLog('Model: ' + model + ' | Mode: ' + processingMode + ' | Scope: ' + scopeLabel, 'info');
 
     setAaState('RUNNING');
     runningRef.current = true;
@@ -2185,6 +1043,11 @@ export default function AutoAnalyze({
     clearCheckpoint();
     runningRef.current = false;
     if (abortControllerRef.current) { abortControllerRef.current.abort(); abortControllerRef.current = null; }
+    const cleared = batchesRef.current.map(b =>
+      b.status === 'in_progress' ? { ...b, status: 'failed' as const } : b
+    );
+    batchesRef.current = cleared;
+    setBatches(cleared);
     setAaState('IDLE');
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
   }
@@ -2192,12 +1055,12 @@ export default function AutoAnalyze({
   async function handleApplyBatch() {
     if (aaState !== 'BATCH_REVIEW' || !pendingResult) return;
     const batch = batchesRef.current[currentIdxRef.current];
-    if (outputContractRef.current === 'v3-operations' && batch._v3Ops) {
-      await doApplyV3(batch, batch._v3Ops);
-      batch._v3Ops = undefined;
-    } else {
-      await doApply(batch, pendingResult);
+    if (!batch._v3Ops) {
+      aaLog('Batch ' + batch.batchNum + ' — cannot apply: no parsed operations', 'error');
+      return;
     }
+    await doApplyV3(batch, batch._v3Ops);
+    batch._v3Ops = undefined;
     batch.status = 'complete';
     batch.completedAt = Date.now();
     setPendingResult(null);
@@ -2378,13 +1241,6 @@ export default function AutoAnalyze({
                 <div className={`aa-toggle-track${reviewMode ? ' on' : ''}`}><div className="aa-toggle-thumb" /></div>
                 <span>Review each batch</span>
               </div>
-            </div>
-            <div className="aa-row">
-              <span className="aa-label">Output contract<span className="aa-help">ⓘ<span className="aa-tip">V3 (operations) is the new default — the AI emits a list of change operations, the tool applies them deterministically, keywords cannot silently disappear, cost stops scaling with canvas size. V2 (full table) is the legacy contract kept selectable as a fallback.</span></span></span>
-              <select className="aa-select" value={outputContract} onChange={e => setOutputContract(e.target.value as typeof outputContract)} disabled={aaState !== 'IDLE'}>
-                <option value="v3-operations">V3 — operations (default)</option>
-                <option value="v2-tsv">V2 — full table (legacy)</option>
-              </select>
             </div>
           </div>
 

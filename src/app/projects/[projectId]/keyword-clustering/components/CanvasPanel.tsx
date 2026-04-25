@@ -49,13 +49,13 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
   const [isPanning, setIsPanning] = useState(false);
   const panStart = useRef({ x: 0, y: 0, vx: 0, vy: 0 });
 
-  const [dragNodeId, setDragNodeId] = useState<number | null>(null);
+  const [dragNodeId, setDragNodeId] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const dragMoved = useRef(false);
 
   /* ── Multi-select state ──────────────────────────────────────── */
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; nodeId: number } | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; nodeId: string } | null>(null);
 
   /* ── Selection box state (shift+drag on background) ──────────── */
   const [selBox, setSelBox] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
@@ -64,27 +64,27 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
   const selBoxAnimFrame = useRef<number | null>(null);
 
   /* ── Multi-drag: offsets for all selected nodes ──────────────── */
-  const multiDragOffsets = useRef<Map<number, { dx: number; dy: number }>>(new Map());
+  const multiDragOffsets = useRef<Map<string, { dx: number; dy: number }>>(new Map());
 
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [editVal, setEditVal] = useState('');
 
-  const [editPanelNodeId, setEditPanelNodeId] = useState<number | null>(null);
+  const [editPanelNodeId, setEditPanelNodeId] = useState<string | null>(null);
   const [canvasMode, setCanvasMode] = useState<"mindmap" | "table">("mindmap");
 
   /* ── Hover popover state ─────────────────────────────────────── */
-  const [hoverNodeId, setHoverNodeId] = useState<number | null>(null);
-  const [kwPopoverNodeId, setKwPopoverNodeId] = useState<number | null>(null);
+  const [hoverNodeId, setHoverNodeId] = useState<string | null>(null);
+  const [kwPopoverNodeId, setKwPopoverNodeId] = useState<string | null>(null);
   const [hoverPos, setHoverPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /* ── Node resize state ──────────────────────────────────────── */
-  const [resizeNodeId, setResizeNodeId] = useState<number | null>(null);
+  const [resizeNodeId, setResizeNodeId] = useState<string | null>(null);
   const resizeStart = useRef<{ w: number; h: number; mx: number; my: number }>({ w: 0, h: 0, mx: 0, my: 0 });
   /* ── Collapse/expand state ──────────────────────────────────── */
-  const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
   const [linkMode, setLinkMode] = useState<'linear' | 'nested' | null>(null);
-  const [linkSource, setLinkSource] = useState<number | null>(null);
+  const [linkSource, setLinkSource] = useState<string | null>(null);
 
   const [toast, setToast] = useState('');
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -199,7 +199,7 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
 
         // Only select if box has some size (avoid accidental micro-drags)
         if (maxX - minX > 5 || maxY - minY > 5) {
-          const hits = new Set<number>();
+          const hits = new Set<string>();
           nodes.forEach(n => {
             if (n.x + n.w > minX && n.x < maxX && n.y + n.h > minY && n.y < maxY) {
               if (!isHiddenByCollapse(n.id)) hits.add(n.id);
@@ -261,7 +261,7 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
     } else { setZoom(newZoom); saveViewport(viewX, viewY, newZoom); }
   }
 
-  function isDescendant(nodeId: number, ancestorId: number): boolean {
+  function isDescendant(nodeId: string, ancestorId: string): boolean {
     let current = nodes.find(n => n.id === nodeId);
     while (current && current.parentId !== null) {
       if (current.parentId === ancestorId) return true;
@@ -270,7 +270,7 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
     return false;
   }
 
-  function handleLinkClick(nodeId: number) {
+  function handleLinkClick(nodeId: string) {
     if (!linkMode) return;
     if (linkSource === null) {
       setLinkSource(nodeId); setSelectedIds(new Set([nodeId]));
@@ -317,7 +317,7 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
       }
       // Coalesce position changes + the parent-link change into a single
       // updateNodes call (server-side PATCH applies all in one round-trip).
-      const updateMap = new Map<number, Partial<CanvasNode>>();
+      const updateMap = new Map<string, Partial<CanvasNode>>();
       updateMap.set(nodeId, { id: nodeId, parentId: linkSource, relationshipType: relType });
       for (const ln of layoutNodes) {
         const orig = nodes.find(n => n.id === ln.id);
@@ -353,7 +353,7 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
     showToast('\u2713 Node detached from parent');
   }
 
-  function handleNodeMouseDown(e: React.MouseEvent, nodeId: number) {
+  function handleNodeMouseDown(e: React.MouseEvent, nodeId: string) {
     if (e.button !== 0) return;
     e.stopPropagation();
     if (linkMode) { handleLinkClick(nodeId); return; }
@@ -382,7 +382,7 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
 
     // Start drag — compute offsets for all selected nodes
     const dragSet = isInSelection ? selectedIds : new Set([nodeId]);
-    const offsets = new Map<number, { dx: number; dy: number }>();
+    const offsets = new Map<string, { dx: number; dy: number }>();
     dragSet.forEach(id => {
       const n = nodes.find(n => n.id === id);
       if (n) offsets.set(id, { dx: pos.x - n.x, dy: pos.y - n.y });
@@ -452,7 +452,7 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
   }, [dragNodeId]);
 
   /* ── Overlap resolution ─────────────────────────────────────── */
-  function resolveOverlap(nodeId: number) {
+  function resolveOverlap(nodeId: string) {
     const node = nodes.find(n => n.id === nodeId);
     if (!node) return;
     const GAP = 20;
@@ -486,7 +486,7 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
   const [, setTick] = useState(0);
   function forceUpdate() { setTick(t => t + 1); }
 
-  function handleNodeContextMenu(e: React.MouseEvent, nodeId: number) {
+  function handleNodeContextMenu(e: React.MouseEvent, nodeId: string) {
     e.preventDefault(); e.stopPropagation();
     setCtxMenu({ x: e.clientX, y: e.clientY, nodeId });
     // Add to selection if not already selected
@@ -516,7 +516,7 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
     }
   }
 
-  function handleNodeDblClick(nodeId: number) {
+  function handleNodeDblClick(nodeId: string) {
     if (linkMode) return;
     const node = nodes.find(n => n.id === nodeId);
     if (!node) return;
@@ -626,7 +626,7 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
   }
 
   /* ── Node resize handlers ──────────────────────────────────── */
-  function handleResizeStart(e: React.MouseEvent, nodeId: number) {
+  function handleResizeStart(e: React.MouseEvent, nodeId: string) {
     e.stopPropagation();
     e.preventDefault();
     const node = nodes.find(n => n.id === nodeId);
@@ -660,7 +660,7 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
   }, [resizeNodeId]);
 
   /* ── Collapse/expand helpers ────────────────────────────────── */
-  function toggleCollapse(nodeId: number) {
+  function toggleCollapse(nodeId: string) {
     setCollapsed(prev => {
       const next = new Set(prev);
       if (next.has(nodeId)) next.delete(nodeId); else next.add(nodeId);
@@ -668,7 +668,7 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
     });
   }
 
-  function isHiddenByCollapse(nodeId: number): boolean {
+  function isHiddenByCollapse(nodeId: string): boolean {
     let current = nodes.find(n => n.id === nodeId);
     while (current && current.parentId !== null) {
       if (collapsed.has(current.parentId)) return true;
@@ -692,9 +692,13 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
     }
   }
 
-  function getPathwayColor(pathwayId: number | null): string {
+  function getPathwayColor(pathwayId: string | null): string {
     if (pathwayId === null) return '#475569';
-    return PATHWAY_COLORS[(pathwayId - 1) % PATHWAY_COLORS.length];
+    let h = 0;
+    for (let i = 0; i < pathwayId.length; i++) {
+      h = ((h << 5) - h + pathwayId.charCodeAt(i)) | 0;
+    }
+    return PATHWAY_COLORS[Math.abs(h) % PATHWAY_COLORS.length];
   }
 
   const viewBox = `${viewX} ${viewY} ${(canvasAreaRef.current?.clientWidth || containerRef.current?.clientWidth || 800) / zoom} ${(canvasAreaRef.current?.clientHeight || containerRef.current?.clientHeight || 600) / zoom}`;
