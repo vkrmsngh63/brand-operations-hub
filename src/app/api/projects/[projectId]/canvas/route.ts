@@ -32,13 +32,28 @@ export async function GET(
       prisma.pathway.aggregate({ _max: { id: true } }),
     ]);
 
+    // When CanvasState row doesn't exist (project never had Auto-Analyze or
+    // canvas activity), synthesize defaults that include the global-max-aware
+    // counters. Otherwise V3's doApplyV3 falls back to nextNodeId=1 and the
+    // applier issues colliding ids — exactly what the autoheal exists to
+    // prevent. Pivot Session D Test 2 fix part 2.
+    const safeNextNodeId = (maxNodeGlobal._max.id ?? 0) + 1;
+    const safeNextPathwayId = (maxPathwayGlobal._max.id ?? 0) + 1;
     const healedCanvasState = canvasState
       ? {
           ...canvasState,
-          nextNodeId: Math.max(canvasState.nextNodeId, (maxNodeGlobal._max.id ?? 0) + 1),
-          nextPathwayId: Math.max(canvasState.nextPathwayId, (maxPathwayGlobal._max.id ?? 0) + 1),
+          nextNodeId: Math.max(canvasState.nextNodeId, safeNextNodeId),
+          nextPathwayId: Math.max(canvasState.nextPathwayId, safeNextPathwayId),
         }
-      : null;
+      : {
+          id: '',
+          projectWorkflowId,
+          nextNodeId: safeNextNodeId,
+          nextPathwayId: safeNextPathwayId,
+          viewX: 0,
+          viewY: 0,
+          zoom: 1,
+        };
 
     return NextResponse.json({ canvasState: healedCanvasState, pathways, sisterLinks });
   } catch (error) {
