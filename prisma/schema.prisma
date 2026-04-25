@@ -115,11 +115,17 @@ model CanvasNode {
   connOutOff        Json?
   connInOff         Json?
   sortOrder         Int      @default(0)
+  // Pivot Session B Step 3: tightened to NOT NULL after the Step 2 backfill
+  // populated every existing row. Per-project uniqueness enforced by the
+  // index below.
+  stableId          String
+  stabilityScore    Float    @default(0.0)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
   projectWorkflow ProjectWorkflow @relation(fields: [projectWorkflowId], references: [id], onDelete: Cascade)
 
+  @@unique([projectWorkflowId, stableId])
   @@index([projectWorkflowId])
 }
 

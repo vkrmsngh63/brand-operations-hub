@@ -1,8 +1,9 @@
 # PIVOT DESIGN
 ## Operation-based output contract for Auto-Analyze (Keyword Clustering)
 
-**Last updated:** April 25, 2026 (created — Pivot Session A complete; design captured here for Pivot Sessions B/C/D/E to build against)
-**Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-A (Claude Code)
+**Last updated:** April 25, 2026 (Pivot Session B complete — DB migration shipped (live), backfill ran on 104 Bursitis rows, operation-applier + 43 unit tests landed; production routes patched to supply `stableId` at create time)
+**Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-B (Claude Code)
+**Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-A (Claude Code)
 **Group:** B (tool-specific to Keyword Clustering's Auto-Analyze; loaded when pivot work is in scope)
 
 **Purpose:** This is the canonical reference doc for the Auto-Analyze architectural pivot from "AI as state-rebuilder" to "AI as state-mutator." It captures the locked design from Pivot Session A and is the build spec Pivot Sessions B/C/D/E reference.
@@ -165,13 +166,15 @@ These tables are NOT changed in the pivot's database migration:
 ### Pivot Session A — DONE 2026-04-25 (this session)
 Design + locked decisions. This doc is the deliverable. No code changes; no database changes.
 
-### Pivot Session B — Database migration + deterministic operation applier + validation
-- Apply the 3-step migration from §3 (with Rule-8 approval before each step).
-- Write `src/lib/operation-applier.ts` — pure function `(existing canvas, operation list) → (new canvas, validation result)`.
-- Per-operation pre-validators (internal consistency: no orphan moves, no duplicate adds, all referenced IDs/aliases exist).
-- Post-application invariant checks (no unlinked keywords, all topics have valid parents, etc.).
-- Unit tests against synthetic operation sets — no AI involvement at this stage.
-- Director's Rule-8 approval gate at start of session (before `prisma db push`); director's Rule-9 approval gate at end of session (before push).
+### Pivot Session B — ✅ DONE (2026-04-25)
+- ✅ 3-step migration applied to live database (Bursitis): Step 1 added nullable `stableId` + defaulted `stabilityScore`; Step 2 backfill script populated all 104 Bursitis rows (`t-1` … `t-104`); Step 3 tightened `stableId` to NOT NULL + added `@@unique([projectWorkflowId, stableId])`. Both schema pushes received explicit Rule-8 approval.
+- ✅ `src/lib/operation-applier.ts` written — pure function, no I/O. 13 operations + atomic batch apply + alias resolver + invariant checks. ~600 LOC.
+- ✅ Per-operation pre-validators inline within each apply function (referenced IDs/aliases resolve, REMOVE_KEYWORD requires another placement, JUSTIFY_RESTRUCTURE on stability ≥ 7.0, no parent cycles, no orphan splits/deletes, no self-merges).
+- ✅ Post-application invariant checks: parents exist, no cycles, sister links reference real nodes, no original keyword silently lost.
+- ✅ 43 unit tests in `src/lib/operation-applier.test.ts` against synthetic operation sets — runs via `node --test`. All passing. No AI, no DB.
+- ✅ Production routes patched to supply `stableId: \`t-${id}\`` at create time (`src/app/api/projects/[projectId]/canvas/nodes/route.ts` POST + `src/app/api/projects/[projectId]/canvas/rebuild/route.ts` upsert.create) — necessary because Step 3's NOT NULL constraint shipped to production.
+- ✅ Backfill script (`scripts/backfill-stable-ids.ts`) + duplicate-check script (`scripts/verify-no-stable-id-duplicates.ts`) committed for historical/diagnostic value. Idempotent; re-running finds nothing to do.
+- One Rule-13 zoom-out miss flagged + corrected mid-session: Claude shipped Step 3's NOT NULL push before noticing two pre-existing production routes would now fail at runtime. Director approved the patch (Option A) inside the same session. Captured in `CORRECTIONS_LOG.md` 2026-04-25 pivot-session-B entry.
 
 ### Pivot Session C — Prompt rewrite
 - Rewrite Initial Prompt: keep philosophy/context/conversion-funnel framing; replace "complete updated Integrated Topics Layout Table" instruction with "emit a list of operations using the following vocabulary"; rewrite reevaluation-pass section so triggers issue `MERGE` / `SPLIT` / `RENAME` / `MOVE_TOPIC` operations.

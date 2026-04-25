@@ -1,9 +1,10 @@
 # KEYWORD CLUSTERING — ACTIVE DOCUMENT
 ## Current state of the Keyword Clustering workflow tool (Group B, tool-specific)
 
-**Last updated:** April 25, 2026 (Phase 1g-test follow-up Part 3 — Pivot Session A — director committed to the architectural pivot; three deliverables locked: operation vocabulary + stable-ID format + DB migration plan; full spec in new Group B doc `docs/PIVOT_DESIGN.md`; design-only session, no code, no DB changes; new POST-PIVOT-SESSION-A STATE block added below to record commitment + lock-status; previous POST-VERIFICATION block preserved as historical context with "Decision pending" line updated to "Decision committed")
-**Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-A (Claude Code)
-**Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-session3b-verify (Claude Code)
+**Last updated:** April 25, 2026 (Phase 1g-test follow-up Part 3 — Pivot Session B — DB migration shipped live (3 steps), 104 Bursitis rows backfilled with `t-1`…`t-104` stableIds, `src/lib/operation-applier.ts` + 43 unit tests added, two pre-existing production routes patched to supply stableId at create time; new POST-PIVOT-SESSION-B STATE block added above)
+**Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-B (Claude Code)
+**Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-A (Claude Code)
+**Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-session3b-verify (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-session3b (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-24_phase1g-test-followup-part3-session3a (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-24_phase1g-test-followup-part3-session2b (Claude Code)
@@ -20,7 +21,65 @@
 
 ---
 
-## ⚠️ POST-PIVOT-SESSION-A STATE (READ FIRST — updated 2026-04-25 Pivot Session A)
+## ⚠️ POST-PIVOT-SESSION-B STATE (READ FIRST — updated 2026-04-25 Pivot Session B)
+
+**As of 2026-04-25 Pivot Session B (DB migration shipped live; operation-applier + unit tests landed; two production routes patched):**
+
+### What this session did
+
+Pivot Session B's full scope per `docs/PIVOT_DESIGN.md` §3 + §4 landed in one session:
+
+1. **3-step DB migration applied to live Supabase.**
+   - Step 1: `npx prisma db push` after editing `prisma/schema.prisma` to add `stableId String?` (nullable) + `stabilityScore Float @default(0.0)` to `CanvasNode`. Pure additive. Rule-8 explicit approval.
+   - Step 2: ran `node scripts/backfill-stable-ids.ts` after a self-test on a fresh temporary project (the design doc's "test on a fresh project first" gate). Self-test created 3 fake CanvasNode rows with no stableId, restricted-scope backfill set them to `t-{id}`, cleaned up. Live run then populated all 104 Bursitis rows: `t-1` through `t-104`. Verification: 0 rows remained empty.
+   - Step 3: `npx prisma db push --accept-data-loss` after editing schema to `stableId String` (NOT NULL) + `@@unique([projectWorkflowId, stableId])`. Pre-flight verification confirmed 104 rows, 0 nulls, 0 duplicates. Rule-8 explicit re-approval after the `--accept-data-loss` flag was needed (Prisma's generic safety prompt — no actual data loss).
+   - Other tables (`SisterLink`, `Pathway`, `RemovedKeyword`, `Keyword`) — unchanged per §3.5.
+
+2. **`src/lib/operation-applier.ts` written** (~600 LOC, pure function, no I/O). Public surface: `applyOperations(state, operations) → { ok, newState, archivedKeywords, aliasResolutions } | { ok: false, errors }`. All 13 operations from PIVOT_DESIGN §1 implemented: 7 topic ops + 4 keyword ops + 2 sister-link ops. Atomic batch apply via deep-cloned scratch state — input never mutated. Sequential within-batch ordering with alias resolver (`$newN` → `t-N` at apply time). Per-operation pre-validators inline. Post-application invariant checks: parent chain acyclic, parents exist, sister links reference real nodes, no original keyword silently lost. JUSTIFY_RESTRUCTURE 6-field gate at stability ≥ 7.0 enforced for `MERGE_TOPICS`, `SPLIT_TOPIC`, `DELETE_TOPIC`, `MOVE_TOPIC`, `UPDATE_TOPIC_TITLE` per PIVOT_DESIGN §1.4 rule 6.
+
+3. **`src/lib/operation-applier.test.ts` — 43 unit tests, all passing.** Runs via `node --test src/lib/operation-applier.test.ts`. Coverage spans every op type (happy + error paths) + alias chaining + atomic rollback + JUSTIFY_RESTRUCTURE gate + invariant violations. No AI involvement, no DB. Built-in `node:test` + `node:assert/strict` — no new dependencies.
+
+4. **Two pre-existing production routes patched** to supply `stableId: \`t-${id}\`` at `prisma.canvasNode.create(...)` time:
+   - `src/app/api/projects/[projectId]/canvas/nodes/route.ts` (POST — manual node creation)
+   - `src/app/api/projects/[projectId]/canvas/rebuild/route.ts` (the upsert's create branch — fires on every Auto-Analyze batch apply)
+   This was a **necessary scope expansion** because Step 3's NOT NULL constraint shipped to production before the pivot's own wiring was in place — without these patches the next manual node create OR the next Auto-Analyze run would fail at runtime with a not-null violation. Director approved the patch via Option A.
+
+5. **Two diagnostic scripts kept in `scripts/`** for historical/diagnostic value, idempotent and re-runnable:
+   - `scripts/backfill-stable-ids.ts` — populates any `CanvasNode` row whose `stableId` doesn't yet start with `t-`. After Pivot Session B, no rows match (every new row gets `stableId` at insert time).
+   - `scripts/verify-no-stable-id-duplicates.ts` — read-only check for duplicate `(projectWorkflowId, stableId)` pairs. Useful spot-check.
+
+6. **Minor tsconfig change:** added `"allowImportingTsExtensions": true` so the test file's explicit `.ts` import resolves under both `tsc --noEmit` (for IDE/CI) and `node --test` (for runtime, which requires `.ts` extensions in type-strip mode).
+
+### What did NOT change this session
+
+- No UI / frontend code touched. AutoAnalyze.tsx, CanvasPanel.tsx, etc. — untouched. The applier is dormant: no callers invoke it yet.
+- No prompt changes. The Initial Prompt and Primer Prompt still drive the legacy full-table-rewrite output contract. Rewriting them is Pivot Session C.
+- No Auto-Analyze runs triggered. Pivot Session D will wire the applier into the rebuild flow.
+- Existing band-aid code paths (reconciliation pass + Reshuffled status + salvage mechanism + Mode A→B switches) all still operate as before. They keep running through Pivot Sessions C/D as defense-in-depth and get deprecated in Pivot Session E.
+
+### Live-database state after this session
+
+- Every existing `CanvasNode` row has a `stableId` (`t-1` … `t-104` for Bursitis, plus `stabilityScore = 0.0` on every row).
+- Database constraint `@@unique([projectWorkflowId, stableId])` enforces "within one project, no two nodes share a stable ID."
+- Every new `CanvasNode` created through the patched routes also gets `stableId = "t-${id}"` automatically.
+- No data was lost; no row was rewritten beyond the additive backfill.
+
+### Cost & risk profile
+
+- Production safety: confirmed working. `npm run build` clean post-patch (17/17 pages, zero TypeScript errors).
+- Reversibility: every step is reversible. The two new columns can be dropped; the unique index can be dropped; the route patches can be reverted. No destructive operations occurred.
+- Bursitis canvas: untouched in any user-visible way. Same 104 nodes, same titles, same descriptions, same parent relationships, same keyword placements. Only the new `stableId` and `stabilityScore` columns are populated.
+
+### Standing instructions for next session — Pivot Session C
+
+- Read `docs/PIVOT_DESIGN.md` §4 Pivot Session C. Scope: rewrite Initial Prompt + Primer Prompt to emit operations instead of complete TSV table.
+- Pivot Session B's applier is the target the new prompt teaches the AI to emit FOR. The vocabulary in `src/lib/operation-applier.ts` Operation type is canonical.
+- Director re-pastes new prompts into Auto-Analyze UI at end of Session C; no code wiring yet (Pivot Session D wires).
+- Existing band-aid code paths stay running as defense-in-depth.
+
+---
+
+## ⚠️ POST-PIVOT-SESSION-A STATE (updated 2026-04-25 Pivot Session A — preserved as historical context)
 
 **As of 2026-04-25 Pivot Session A (director committed to the architectural pivot from "AI as state-rebuilder" to "AI as state-mutator"; design-heavy session; no code, no DB changes):**
 

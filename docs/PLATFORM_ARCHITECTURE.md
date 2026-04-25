@@ -1,8 +1,9 @@
 # PLATFORM ARCHITECTURE
 ## Technical architecture of the Product Launch Operating System (PLOS)
 
-**Last updated:** April 24, 2026 (Phase 1g-test follow-up Part 3 — Session 3a — schema gains new `RemovedKeyword` model (FK to ProjectWorkflow) for soft-archive flow; two new API routes `GET/POST /api/projects/[projectId]/removed-keywords` and `POST .../[removedId]/restore`; canvas GET endpoint now self-heals stale `nextNodeId`/`nextPathwayId` on read)
-**Last updated in chat:** session_2026-04-24_phase1g-test-followup-part3-session3a (Claude Code)
+**Last updated:** April 25, 2026 (Phase 1g-test follow-up Part 3 — Pivot Session B — `CanvasNode` schema gains two columns: `stableId String` (NOT NULL, `t-N` format, persistent identifier the AI uses across batches) + `stabilityScore Float @default(0.0)` (0.0–10.0; gates JUSTIFY_RESTRUCTURE at ≥7.0; populated later by stability-scoring algorithm). New unique index `@@unique([projectWorkflowId, stableId])`. Two pre-existing canvas-node-create call sites updated to supply `stableId` at insert time: `src/app/api/projects/[projectId]/canvas/nodes/route.ts` (POST) + `src/app/api/projects/[projectId]/canvas/rebuild/route.ts` (upsert.create). New pure-function module `src/lib/operation-applier.ts` (no DB / no I/O) — operation-vocabulary applier for the Auto-Analyze pivot; not yet wired into any caller. Backfill scripts at `scripts/backfill-stable-ids.ts` + `scripts/verify-no-stable-id-duplicates.ts`. tsconfig.json gains `allowImportingTsExtensions: true` for unit-test type-strip compatibility.)
+**Last updated in chat:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-B (Claude Code)
+**Previously updated in chat:** session_2026-04-24_phase1g-test-followup-part3-session3a (Claude Code)
 **Previously updated:** April 17, 2026 (Phase M COMPLETE — Ckpts 9 + 9.5 deployed)
 
 **Purpose:** Defines the technical structure of the platform — routes, database schema, authentication, shared systems, file organization. Loaded in every chat as part of Group A.

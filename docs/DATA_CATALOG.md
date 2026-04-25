@@ -1,9 +1,10 @@
 # DATA CATALOG
 ## Master index of all data captured across the PLOS platform, with Human Reference Language
 
-**Last updated:** April 25, 2026 (Phase 1g-test follow-up Part 3 — Session 3b — §5.1 Keywords gains new `'Reshuffled'` `sortingStatus` value assigned by the P3-F7 post-batch reconciliation pass)
-**Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-session3b (Claude Code)
-**Previously updated in session:** session_2026-04-24_phase1g-test-followup-part3-session3a (Claude Code)
+**Last updated:** April 25, 2026 (Phase 1g-test follow-up Part 3 — Pivot Session B — `CanvasNode` gains two new data items: `stableId` (Human Reference Language: "the persistent topic identifier the AI uses across batches"; format `t-N` per project; backfilled from existing `id` for legacy rows; unique within a ProjectWorkflow) + `stabilityScore` (Human Reference Language: "how well-established a topic is, on a 0-to-10 scale"; gates JUSTIFY_RESTRUCTURE payload requirement at ≥7.0; default 0.0 for all rows until stability-scoring algorithm ships in a follow-up session). Both columns populated on every existing row of the live database (104 Bursitis rows have `stableId="t-1"`…`"t-104"` and `stabilityScore=0.0`).)
+**Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-B (Claude Code)
+**Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-session3b (Claude Code)
+**Previously updated in session (earlier):** session_2026-04-24_phase1g-test-followup-part3-session3a (Claude Code)
 **Previously updated:** April 18, 2026 (Phase 1g-test partial — corrected §5.8 and §5.9 Auto-Analyze drift)
 **Previously updated (claude.ai era):** https://claude.ai/chat/cc15409c-5000-4f4f-a5ce-a42784b5a94f
 

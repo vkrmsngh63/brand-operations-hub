@@ -111,6 +111,9 @@ export async function POST(
             },
             create: {
               id: n.id,
+              // Pivot Session B: stableId mirrors the integer id at create
+              // time (backfill convention from scripts/backfill-stable-ids.ts).
+              stableId: `t-${n.id}`,
               projectWorkflowId,
               title: n.title || '',
               description: n.description || '',

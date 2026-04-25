@@ -58,6 +58,9 @@ export async function POST(
     const node = await prisma.canvasNode.create({
       data: {
         id: nodeId,
+        // Pivot Session B: stableId mirrors the integer id at create time
+        // (backfill convention from scripts/backfill-stable-ids.ts).
+        stableId: `t-${nodeId}`,
         projectWorkflowId,
         title: body.title || '',
         description: body.description || '',

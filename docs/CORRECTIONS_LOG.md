@@ -2,9 +2,10 @@
 ## Append-only record of mistakes made during chats and lessons learned
 
 **Started:** April 16, 2026
-**Last updated:** April 25, 2026 (Phase 1g-test follow-up Part 3 — Pivot Session A — 1 new entry: low-severity communication slip — Claude jumped into pivot vocabulary mechanics (Q1-Q4) without first anchoring each design choice to the four root-cause failures the pivot exists to address; director correctly pushed back; Claude redid the analysis with failure-mode mapping; lesson captured for future architectural-decision sessions)
-**Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-A (Claude Code)
-**Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-session3b-verify (Claude Code)
+**Last updated:** April 25, 2026 (Phase 1g-test follow-up Part 3 — Pivot Session B — 1 new entry: medium-severity Rule-16 zoom-out miss — Claude shipped the Step-3 `stableId` NOT NULL constraint to live production before noticing two pre-existing production routes would fail at runtime on the next node-create / Auto-Analyze run; director approved the in-session patch (Option A) which restored production safety; lesson captured for future migration-with-existing-callers sequencing)
+**Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-B (Claude Code)
+**Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-A (Claude Code)
+**Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-session3b-verify (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-session3b (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-24_phase1g-test-followup-part3-session3a (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-24_phase1g-test-followup-part3-session2b (Claude Code)
@@ -41,6 +42,35 @@
 ---
 
 ## Entries
+
+### 2026-04-25 — Shipped a NOT NULL DB constraint to production before checking existing callers (medium severity, Rule-16 zoom-out miss; corrected mid-session via in-session patch)
+**Session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-B (Claude Code)
+**Tool/Phase affected:** Keyword Clustering / Auto-Analyze / Pivot Session B / live database schema
+**Severity:** Medium (live production exposure introduced and held for under 5 minutes; corrected in the same session before any user-facing failure)
+
+**What happened:** Pivot Session B's 3-step migration plan called for Step 3 to tighten `stableId` from nullable to NOT NULL + add a unique index. Claude proposed the Step 3 push to the director with a Rule-8 STOP gate as designed. Director approved. After the push succeeded, Claude ran `npx tsc --noEmit` and discovered that two pre-existing production routes (`src/app/api/projects/[projectId]/canvas/nodes/route.ts` POST + `src/app/api/projects/[projectId]/canvas/rebuild/route.ts` upsert's create branch) call `prisma.canvasNode.create({ data: {...} })` without supplying `stableId`. With the NOT NULL constraint live, the next manual canvas-node creation OR the next Auto-Analyze run would fail at runtime with `null value in column "stableId" violates not-null constraint`. Production exposure was real even though no user-facing failure was triggered (no one happened to be using the site between the push and the patch).
+
+**Root cause:** Claude treated Step 3's "tighten the constraint" plan as a self-contained step whose risk model was "is the data clean enough to add the constraint?" The pre-flight verification (104 rows / 0 nulls / 0 duplicates) answered that question correctly, and Step 3 shipped. But the migration plan's blast radius wasn't just the *current* data — it was *every future write*. Existing production callers that didn't supply `stableId` would hit the constraint, and Pivot Session D's design assumed those callers would be updated alongside the wiring. Claude failed to ask, before Step 3, *"who else writes to this column today and will they all keep working with this constraint?"* That's a Rule-16 zoom-out question — not a Rule-8 destructive-op question.
+
+**How caught:** Claude itself, immediately after the Step 3 push, when running `npx tsc --noEmit` to verify the new operation-applier file. TypeScript flagged the missing-stableId errors on the two existing production routes. Claude surfaced the issue to the director within the same response that ran the type-check, including: (a) the explicit acknowledgment that "this is on me — I shipped the Step 3 NOT NULL constraint before the production code was wired," (b) the concrete two-route patch proposal (Option A — add `stableId: \`t-${id}\`` to each create call, ~3 lines per file), (c) the alternative rollback option (Option B — restore the constraint to nullable until Pivot Session D wires properly), (d) plain-language framing of the runtime exposure ("the live site is currently fine — but the next time anyone creates a node OR Auto-Analyze runs, the database will reject it"). Director picked Option A; patch shipped in the same session before the end-of-session push approval gate; production safety restored.
+
+**Correction:** Two route patches landed in the same commit:
+- `src/app/api/projects/[projectId]/canvas/nodes/route.ts` line 60 area: added `stableId: \`t-${nodeId}\`` adjacent to the existing `id: nodeId` field.
+- `src/app/api/projects/[projectId]/canvas/rebuild/route.ts` line 113 area: added `stableId: \`t-${n.id}\`` adjacent to the existing `id: n.id` field.
+
+Both patches use the exact same convention as the backfill script — `stableId = "t-" + id` — so all rows (existing + future) follow one rule. `npm run build` clean post-patch (17/17 pages, zero TypeScript errors).
+
+**Prevention:** When proposing any DB constraint change that *narrows* what's accepted (NOT NULL, unique, foreign key, check), run the explicit Rule-16 zoom-out before the push gate: *"Who else writes to this column today and will they all keep working under the narrower constraint? List the call sites; verify each one supplies a value compatible with the constraint."* If any caller doesn't, the choice is (a) patch the callers in the same session before tightening, OR (b) defer tightening until those callers are wired by their respective sessions, OR (c) explicitly accept the in-session-patch path as a planned scope-expansion. The mistake to avoid is shipping the constraint *first* and discovering caller breakage *after*.
+
+This is a generalization of the existing Rule 8 (STOP before destructive ops) — adding one row to its mental checklist: **"a constraint-narrowing migration is destructive in the future tense — it doesn't lose existing data but it can break future writes from any pre-existing caller. Audit the writers before pushing."**
+
+**Architectural pattern named (procedural, generalizable):** "schema constraints have callers, not just data — audit both before tightening." Applies to any future DB migration that narrows what writes are accepted. The current data passing pre-flight verification is *necessary* but not *sufficient* for safety; existing call sites must also be checked.
+
+**Rule compliance during the surfacing:**
+- Rule 7 (acknowledge slips openly, don't minimize) — Claude's text opened with *"I need to flag a Rule 13/16 zoom-out concern"* and *"This is on me. I shipped the Step 3 NOT NULL constraint before the production code was wired to supply stableId. I considered this an in-scope risk but didn't proactively flag it before the push. That's a Rule 16 zoom-out miss."* No deflection.
+- Rule 8 (destructive-op confirmation) — observed for both Step-1 and Step-3 pushes via explicit "what this command will do / reversibility / your options" framing.
+- Rule 14a + 14b (plain language + per-option context + recommendation) — the issue framing distinguished "currently fine" from "next time anyone creates a node would fail," and presented two options (A patch / B rollback) with reasoning and reversibility for each, plus the escape-hatch option.
+- Rule 16 (zoom in / zoom out) — the *miss* is the whole entry; the *correction path* honored the rule by proactively flagging before the next destructive step (would have been the end-of-session push).
 
 ### 2026-04-25 — Jumped into pivot vocabulary mechanics without anchoring to root-cause failures (low severity, communication slip)
 **Session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-A (Claude Code)

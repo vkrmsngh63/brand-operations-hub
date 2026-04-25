@@ -1,9 +1,10 @@
 # ROADMAP
 ## Product Launch Operating System (PLOS) — Development Execution Plan
 
-**Last updated:** April 25, 2026 (Phase 1g-test follow-up Part 3 — Pivot Session A — director committed to the architectural pivot after re-examining the insight from Session 3b verification; Pivot Session A's three deliverables are locked: (1) operation vocabulary — 13 operations with atomic batch apply, sequential within-batch ordering, new-topic aliases `$new1`/`$new2`, keywords-by-database-UUID, JUSTIFY_RESTRUCTURE on stability ≥7 from day one; (2) stable-ID format `t-1`/`t-2`/... per project with backfill rule `stableId = "t-" + id`; (3) DB migration plan — additive `stableId` + `stabilityScore` columns on `CanvasNode` via 3-step sequence (nullable add → committed-script backfill → tighten NOT NULL + unique index), ships in Pivot Session B with Rule-8 approval; new Group B doc `docs/PIVOT_DESIGN.md` created as build spec for Pivot Sessions B/C/D/E; design-only session, no code, no DB changes)
-**Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-A (Claude Code)
-**Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-session3b-verify (Claude Code)
+**Last updated:** April 25, 2026 (Phase 1g-test follow-up Part 3 — Pivot Session B — DB migration shipped to live Supabase across all 3 steps with Rule-8 approval at each push; 104 Bursitis CanvasNode rows backfilled with stableId="t-1"…"t-104" via committed Prisma script after self-test on a fresh temporary project; new `src/lib/operation-applier.ts` (~600 LOC pure function — 13 operations, atomic batch apply, alias resolver, per-op pre-validators, post-apply invariants, JUSTIFY_RESTRUCTURE gate); `src/lib/operation-applier.test.ts` 43 unit tests all passing; two pre-existing production routes patched to supply stableId at create time; minor tsconfig change (`allowImportingTsExtensions`); commit pending Rule-9 approval)
+**Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-B (Claude Code)
+**Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-A (Claude Code)
+**Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-session3b-verify (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-session3b (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-24_phase1g-test-followup-part3-session3a (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-24_phase1g-test-followup-part3-session2b (Claude Code)
@@ -163,10 +164,11 @@ This migration is logged as a roadmap item (this section) and captured in `docs/
   1. ✅ **Session-3b push DONE 2026-04-25** (`6c09e50` + `8afcb9f` + `aa7eb4b` pushed, Vercel deployed).
   2. ✅ **Tier-1 + activity-log Tier-2 verification on vklf.com DONE 2026-04-25** (5 of 5 UI checks pass; canvas-layout engine + atomic rebuild + reconciliation pass all confirmed firing; reconciliation produced exact 58/74 match to Session 2 P3-F7 diagnosis).
   3. ✅ **Pivot decision committed + Pivot Session A complete 2026-04-25** (this session — three deliverables locked; full spec in `docs/PIVOT_DESIGN.md`).
-  4. 🎯 **NEXT: Pivot Session B** — DB migration (3-step) + operation-applier code + per-operation pre-validators + post-application invariant checks + unit tests against synthetic operation sets. Two Rule-gated approvals: Rule 8 before each `prisma db push`; Rule 9 before push at end of session.
-  5. **Blank-canvas visual verification of canvas-layout engine** — Phase-1 polish item; can run as standalone quick task or be folded into Pivot Session D's small-test-Project work (which already creates a fresh canvas).
-  6. Add UI hint recommending Direct mode for large-keyword Projects (deferred from kickoff session — possibly obsolete after pivot since cost no longer scales with canvas size; revisit at Pivot Session E).
-  7. Add warning when Adaptive Thinking is selected with a large prompt (0-output-tokens risk — possibly obsolete after pivot since output tokens drop dramatically; revisit at Pivot Session E).
+  4. ✅ **Pivot Session B DONE 2026-04-25** — see Pivot Session B section below for what shipped.
+  5. 🎯 **NEXT: Pivot Session C** — Initial Prompt + Primer Prompt rewrite. Replace "complete updated Integrated Topics Layout Table" output instruction with "emit a list of operations using this vocabulary" (the vocabulary from `src/lib/operation-applier.ts`'s Operation type is canonical). Rewrite reevaluation-pass section so triggers issue MERGE/SPLIT/RENAME/MOVE_TOPIC operations. Update or create `docs/AUTO_ANALYZE_PROMPT_V2.md` (or `_V3.md`). Director re-pastes new prompts at end of session. No code wiring (that's Session D).
+  6. **Blank-canvas visual verification of canvas-layout engine** — Phase-1 polish item; can run as standalone quick task or be folded into Pivot Session D's small-test-Project work (which already creates a fresh canvas).
+  7. Add UI hint recommending Direct mode for large-keyword Projects (deferred from kickoff session — possibly obsolete after pivot since cost no longer scales with canvas size; revisit at Pivot Session E).
+  8. Add warning when Adaptive Thinking is selected with a large prompt (0-output-tokens risk — possibly obsolete after pivot since output tokens drop dramatically; revisit at Pivot Session E).
 
 ### Phase 1g-test follow-up Part 3 Findings (2026-04-20 session) — critical issues surfaced
 
@@ -382,7 +384,38 @@ Director-flagged process correction during session: Claude jumped into design me
 
 Full locked design specification: see `docs/PIVOT_DESIGN.md` (new Group B doc).
 
-**Next session — Pivot Session B (database migration + applier code + validation).** See PIVOT_DESIGN.md §4 Pivot Session B for scope. Two Rule-gated approvals: Rule 8 (DB migration) at start of session, before each `prisma db push`; Rule 9 (deploy) at end of session, before push.
+### Pivot Session B — ✅ COMPLETE (2026-04-25, this session)
+
+Code-heavy session. All scope from PIVOT_DESIGN.md §3 + §4 shipped. Both Rule gates honored: Rule 8 explicit approval before each `prisma db push`; Rule 9 explicit approval gate pending at end of session before `git push origin main`.
+
+**1. 3-step DB migration applied to live Supabase.**
+- **Step 1** — `npx prisma db push` after editing `prisma/schema.prisma` to add `stableId String?` (nullable) + `stabilityScore Float @default(0.0)` to `CanvasNode`. Pure additive; existing data untouched. Director's Rule-8 approval before push.
+- **Step 2** — Self-test first: `scripts/test-backfill-on-fresh-project.ts` (since cleaned up post-success) created a temporary `Project` + `ProjectWorkflow` + 3 `CanvasNode` rows, ran the backfill restricted to that project, verified `stableId` correctly set, deleted the temp data via cascade. PASS. Then ran `node scripts/backfill-stable-ids.ts` unconstrained on live DB — populated all 104 Bursitis rows: `t-1` through `t-104`. Verification: 0 null/missing rows remained.
+- **Step 3** — `npx prisma db push --accept-data-loss` after editing schema to `stableId String` (NOT NULL) + `@@unique([projectWorkflowId, stableId])`. Pre-flight verification (`scripts/verify-no-stable-id-duplicates.ts`) confirmed 104 rows / 0 nulls / 0 duplicates. Rule-8 explicit re-approval after director understood the `--accept-data-loss` flag was Prisma's generic safety prompt, not actual data destruction.
+- Other tables (`SisterLink`, `Pathway`, `RemovedKeyword`, `Keyword`) — no changes per §3.5.
+
+**2. `src/lib/operation-applier.ts` (~600 LOC, pure function, no I/O, no Prisma).**
+Public API: `applyOperations(state, operations) → { ok: true, newState, archivedKeywords, aliasResolutions } | { ok: false, errors }`. Implements all 13 operations from PIVOT_DESIGN §1: 7 topic ops (`ADD_TOPIC`, `UPDATE_TOPIC_TITLE`, `UPDATE_TOPIC_DESCRIPTION`, `MOVE_TOPIC`, `MERGE_TOPICS`, `SPLIT_TOPIC`, `DELETE_TOPIC`) + 4 keyword ops (`ADD_KEYWORD`, `MOVE_KEYWORD`, `REMOVE_KEYWORD`, `ARCHIVE_KEYWORD`) + 2 sister-link ops (`ADD_SISTER_LINK`, `REMOVE_SISTER_LINK`). Atomic batch apply via deep-cloned scratch state — input state never mutated; bad op rolls everything back. Alias resolver (`$newN` → `t-N` at apply time) honors sequential within-batch ordering; forward-refs to undefined aliases rejected. Per-operation pre-validators inline within each apply function. Post-application invariant checks: parent chain acyclic, parents resolve, sister links reference real nodes, no original keyword silently lost (every original keyword must be either still placed OR in the archive list). JUSTIFY_RESTRUCTURE 6-field shape enforced for `MERGE_TOPICS`/`SPLIT_TOPIC`/`DELETE_TOPIC`/`MOVE_TOPIC`/`UPDATE_TOPIC_TITLE` when a target node has stabilityScore ≥ 7.0 — matches `MODEL_QUALITY_SCORING.md §4`.
+
+**3. `src/lib/operation-applier.test.ts` — 43 unit tests, all passing.**
+Runs via `node --test src/lib/operation-applier.test.ts`. Built-in `node:test` + `node:assert/strict` — no new dependencies. Coverage: every op type happy + error paths, alias chaining, atomic rollback on bad late op, JUSTIFY_RESTRUCTURE gate behavior, invariant violations, realistic batch combining adds + keywords + sister links + description update.
+
+**4. Two pre-existing production routes patched** to supply `stableId: \`t-${id}\`` at create time:
+- `src/app/api/projects/[projectId]/canvas/nodes/route.ts` (POST — manual canvas-node creation).
+- `src/app/api/projects/[projectId]/canvas/rebuild/route.ts` (the upsert.create branch — fires every time Auto-Analyze applies a batch).
+Both patches were a **necessary scope expansion** because Step 3's NOT NULL constraint shipped to production before Pivot Session D's wiring. Without these patches, the next manual node create OR Auto-Analyze run would fail at runtime. Director approved Option A (patch now, ~3 lines per file) over Option B (roll back NOT NULL).
+
+**5. Diagnostic scripts kept in `scripts/`** for historical/diagnostic value:
+- `scripts/backfill-stable-ids.ts` — populates any `CanvasNode` row whose `stableId` doesn't yet start with `t-`. Idempotent. After this session, no rows match. Optional `--project-workflow-id=<uuid>` flag for scope-restricted runs.
+- `scripts/verify-no-stable-id-duplicates.ts` — read-only check for duplicate `(projectWorkflowId, stableId)` pairs. Useful spot-check.
+
+**6. Minor tsconfig change** — added `"allowImportingTsExtensions": true` so the test file's explicit `.ts` import resolves under both `tsc --noEmit` and `node --test`'s type-strip mode.
+
+**Build status:** `npm run build` clean (17/17 pages, zero TypeScript errors); `npx tsc --noEmit` clean (apart from a pre-existing unrelated `.next/dev/types/validator.ts` reference to a deleted route — Phase M build cruft, not introduced this session); `node --test src/lib/operation-applier.test.ts` 43/43 pass.
+
+**Live data state:** `CanvasNode` table has `stableId` (NOT NULL) + `stabilityScore` (default 0.0) columns; `@@unique([projectWorkflowId, stableId])` enforced at DB level; 104 Bursitis rows have `t-1`…`t-104`; no row's user-visible content was changed.
+
+**Next session — Pivot Session C** — Initial Prompt + Primer Prompt rewrite per PIVOT_DESIGN.md §4. The vocabulary in `src/lib/operation-applier.ts`'s `Operation` discriminated union is the canonical reference for what the AI must emit.
 
 ---
 
