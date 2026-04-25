@@ -107,7 +107,7 @@ I am the director of the PLOS (Product Launch Operating System) project. **I am 
 
 ### Doc access
 
-17. **Handoff docs live in `/docs/` in the repo.** Read them directly from disk at session start — no uploads. The 13 Group A docs are authoritative on platform-wide facts; Group B docs (e.g., `KEYWORD_CLUSTERING_ACTIVE.md`) are tool-specific and loaded when that tool is in scope.
+17. **Handoff docs live in `/docs/` in the repo.** Read them directly from disk at session start — no uploads. The 15 Group A docs are authoritative on platform-wide facts; Group B docs (e.g., `KEYWORD_CLUSTERING_ACTIVE.md`) are tool-specific and loaded when that tool is in scope.
 
 18. **When docs contradict code, code wins** (HANDOFF_PROTOCOL Rule 3). Log the doc drift to `CORRECTIONS_LOG.md` and update the doc.
 
@@ -119,7 +119,7 @@ I am the director of the PLOS (Product Launch Operating System) project. **I am 
 
 1. Confirm you've read this file and will follow every rule.
 2. Read `docs/HANDOFF_PROTOCOL.md` end-to-end.
-3. Read the 13 Group A docs (see `docs/DOCUMENT_MANIFEST.md` for the list).
+3. Read the 15 Group A docs (see `docs/DOCUMENT_MANIFEST.md` for the list).
 4. Read any Group B docs relevant to today's expected work.
 5. Run `git log --oneline -10` and `git status` to understand current repo state.
 6. Produce a drift check: "Here's where we are. Here's what looks off, if anything. Here's what I understand today's task to be. Ready to proceed?"

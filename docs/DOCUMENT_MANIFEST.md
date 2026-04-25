@@ -1,9 +1,10 @@
 # DOCUMENT MANIFEST
 ## Ground-truth registry of every handoff document in the PLOS system
 
-**Last updated:** April 25, 2026 (Phase 1g-test follow-up Part 3 — Session 3b verification — pushed Session 3a + 3b commits to origin/main; vklf.com verified; reconciliation pass produced exact 58/74 match to Session 2 P3-F7 diagnosis; visual verification deferred to blank-canvas test next session; **HIGH-SEVERITY ARCHITECTURAL INSIGHT at end of session** — AI is being used as state-rebuilder when it should be state-mutator; all three pain points trace to one architectural mismatch; recommended pivot to operation-based output contract added to ROADMAP as new top-priority "🚨 ARCHITECTURAL PIVOT" section; Sessions 4-6 re-scoped with contingency notes; CORRECTIONS_LOG gets high-severity architectural-insight entry; KEYWORD_CLUSTERING_ACTIVE POST-VERIFICATION block extended with the insight; 4 docs updated this session — second commit of session, on top of the earlier wrap-up commit; 0 new docs; 0 code changes)
-**Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-session3b-verify (Claude Code)
-**Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-session3b (Claude Code)
+**Last updated:** April 25, 2026 (Phase 1g-test follow-up Part 3 — Pivot Session A — director committed to the architectural pivot; design-only session; three deliverables locked (operation vocabulary, stable-ID format, DB migration plan); new Group B doc `docs/PIVOT_DESIGN.md` created as build spec for Pivot Sessions B/C/D/E; 5 existing docs updated; 1 new doc; 0 code changes; 0 DB changes; one low-severity CORRECTIONS_LOG entry — communication slip on failure-mode anchoring; corrected mid-session)
+**Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-A (Claude Code)
+**Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-session3b-verify (Claude Code)
+**Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-session3b (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-24_phase1g-test-followup-part3-session3a (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-24_phase1g-test-followup-part3-session2b (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-24_phase1g-test-followup-part3-session2 (Claude Code)
@@ -30,20 +31,26 @@ These 13 documents form the persistent handoff context.
 | 3 | `PLATFORM_REQUIREMENTS.md` | Platform-wide requirements — scale, user-model, review cycle, audit, concurrency, phasing | 2026-04-17 | NO |
 | 4 | `NAVIGATION_MAP.md` | Every route + click path through PLOS — UI navigation source of truth | 2026-04-17 | NO |
 | 5 | `DATA_CATALOG.md` | Every data item — where it lives, Human Reference Language, cross-workflow sharing contracts | 2026-04-25 (Session 3b — §5.1 Keywords gains new `'Reshuffled'` `sortingStatus` value assigned by the P3-F7 post-batch reconciliation pass) | NO |
-| 6 | `ROADMAP.md` | Development execution plan — completed work + remaining phases | 2026-04-25 (Session 3b verify — Session 3b block marked PUSHED + verified; new "Session 3b verification — DONE" sub-block; new Phase-1 polish item "Blank-canvas visual verification of canvas-layout engine" added; Phase 1g-test follow-up REMAINING list updated) | ✅ YES |
-| 7 | `CORRECTIONS_LOG.md` | Append-only log of mistakes + extracted patterns | 2026-04-25 (Session 3b verify — 1 new entry: informational verification finding (58/74 reconciliation match to Session 2 P3-F7 diagnosis) + low-severity planning miss (recommended classic-mode batch on populated canvas without flagging visual-verification ambiguity); new architectural-pattern entry "verification-baseline matters as much as verification-target" captured) | ✅ YES |
-| 8 | `CHAT_REGISTRY.md` | Chronological log of chats + URLs + work-summaries (post-Ckpt-9: Claude Code sessions use session-identifier format) | 2026-04-25 (Session 3b verify — new row for session_2026-04-25_phase1g-test-followup-part3-session3b-verify; ninth Claude Code session) | ✅ YES |
+| 6 | `ROADMAP.md` | Development execution plan — completed work + remaining phases | 2026-04-25 (Pivot Session A — "Decision still open" → "Decision committed 2026-04-25"; new Pivot Session A complete summary with 11 director-locked design choices; Phase 1g-test follow-up REMAINING list updated; Pivot Session B promoted to next priority) | ✅ YES |
+| 7 | `CORRECTIONS_LOG.md` | Append-only log of mistakes + extracted patterns | 2026-04-25 (Pivot Session A — 1 new low-severity entry: Claude jumped into vocabulary mechanics Q1-Q4 without anchoring choices to the four root-cause failures; director correctly pushed back; redone with failure-mode mapping; new procedural pattern named "lead with failure-mode-to-mechanism mapping in architectural-decision sessions") | ✅ YES |
+| 8 | `CHAT_REGISTRY.md` | Chronological log of chats + URLs + work-summaries (post-Ckpt-9: Claude Code sessions use session-identifier format) | 2026-04-25 (Pivot Session A — new row for session_2026-04-25_phase1g-test-followup-part3-pivot-session-A; tenth Claude Code session) | ✅ YES |
 | 9 | `HANDOFF_PROTOCOL.md` | Rules for how chats operate — start/mid/end protocols, communication rules, interview rules | 2026-04-18 | NO |
 | 10 | `DOCUMENTATION_ARCHITECTURE.md` | Design of the doc-system itself (DLMS, tool graduation, group A/B, workflow interview pattern, Claude Code migration) | 2026-04-17 | NO |
 | 11 | `NEW_CHAT_PROMPT.md` | **Historical** — claude.ai era briefing template. Post-Phase-M, Claude Code sessions use `CLAUDE_CODE_STARTER.md` instead. | 2026-04-17 | NO |
-| 12 | `DOCUMENT_MANIFEST.md` | This file — ground-truth doc registry | 2026-04-25 (Session 3b verify — timestamps + modified flags) | ✅ YES |
+| 12 | `DOCUMENT_MANIFEST.md` | This file — ground-truth doc registry | 2026-04-25 (Pivot Session A — timestamps + modified flags + new Group B entry for `PIVOT_DESIGN.md` + starter doc-count drift fix noted) | ✅ YES |
 | 13 | `CLAUDE_CODE_MIGRATION.md` | Migration plan and operational rules for shifting from claude.ai to Claude Code. Executed successfully in Ckpt 9+9.5. | 2026-04-17 | NO |
 | 14 | `AI_TOOL_FEEDBACK_PROTOCOL.md` | Platform-wide standard for every AI-using tool in PLOS. Defines required integration points (structured decision output with reasoning, admin review surface with 3 actions + 2 feedback channels, feedback-repo write/read-back, quality scoring, model/provider registry), 3-phase implementation roll-out, and the primer text to include in every new workflow's design doc. | 2026-04-20 | NO |
 | 15 | `MODEL_QUALITY_SCORING.md` | Stability-score algorithm spec. Defines 0-10 stability_score per AI output item, factors that add/subtract to score, model's interpretation instructions, JUSTIFY_RESTRUCTURE payload requirement for high-score modifications, admin scoring guidelines (1-5 scale with 4 evaluation dimensions), meta-note on how algorithm was derived + review triggers + how to propose weight changes. | 2026-04-20 | NO |
 
 **Group A count: 15 documents.** 4 modified this session (ROADMAP, CORRECTIONS_LOG, CHAT_REGISTRY, DOCUMENT_MANIFEST). No new Group A docs created this session. The 11 not-modified Group A docs retain their timestamps from prior sessions.
 
-**Not created this session:** no new docs.
+**Not created this session (Group A):** no new Group A docs.
+
+**Created this session (Group B):** 1 new doc — `docs/PIVOT_DESIGN.md` (build spec for Pivot Sessions B/C/D/E). See Group B section below for entry.
+
+**Also modified this session (operational file, not Group A):** `docs/CLAUDE_CODE_STARTER.md` — one-line drift fix changing "13 Group A docs" → "15 Group A docs" in two places (§17 and START-OF-SESSION-ROUTINE step 3). No semantic change to the rules or the start-of-session sequence; just an accuracy fix.
+
+**Also modified this session (Group B):** `docs/KEYWORD_CLUSTERING_ACTIVE.md` — new POST-PIVOT-SESSION-A STATE block above POST-VERIFICATION; "Decision pending" line in POST-VERIFICATION block updated to "Decision committed 2026-04-25 in Pivot Session A."
 
 **Also modified this session (non-Group-A):**
 - `KEYWORD_CLUSTERING_ACTIVE.md` (Group B) — New POST-VERIFICATION STATE block added above the POST-SESSION-3b STATE block (which is preserved as historical "previous-session" context). Contains: push status (`8afcb9f` + `6c09e50` + `aa7eb4b` deployed), Tier-1 verification results (5/5 PASS), Tier-2 engine verification (canvas-layout fires + atomic rebuild + reconciliation pass all confirmed via activity log), MAJOR FINDING (58/74 exact match to Session 2 P3-F7 diagnosis), cost data point ($1.89 per Sonnet 4.6 classic batch on 95-node canvas), state changes to Bursitis canvas (95→104 nodes, 58 keywords status-corrected, 74 keywords Reshuffled-flagged), 5 deferred items captured per Rule 14e, updated standing instructions. Header timestamp updated.
@@ -88,7 +95,8 @@ These are tool-specific working documents. They travel with chats that touch the
 
 | Document | Tool/System | Status | Last modified | Modified this chat? |
 |---|---|---|---|---|
-| `KEYWORD_CLUSTERING_ACTIVE.md` | Keyword Clustering (workflow 1) | Active development | 2026-04-24 (this session — new POST-SESSION-2 STATE block with P3-F7 + Removed Terms diagnoses + fix directions + DB snapshot + architectural-pattern note) | ✅ YES |
+| `KEYWORD_CLUSTERING_ACTIVE.md` | Keyword Clustering (workflow 1) | Active development | 2026-04-25 (Pivot Session A — new POST-PIVOT-SESSION-A STATE block; Decision-pending line in POST-VERIFICATION block updated to Decision-committed) | ✅ YES |
+| `PIVOT_DESIGN.md` | Keyword Clustering / Auto-Analyze architectural pivot | Active design — build spec for Pivot Sessions B/C/D/E | 2026-04-25 (created — Pivot Session A) | ✅ NEW |
 
 ### Graduated Group B documents (split into Archive + Data Contract)
 

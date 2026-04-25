@@ -1,9 +1,10 @@
 # KEYWORD CLUSTERING — ACTIVE DOCUMENT
 ## Current state of the Keyword Clustering workflow tool (Group B, tool-specific)
 
-**Last updated:** April 25, 2026 (Phase 1g-test follow-up Part 3 — Session 3b verification — pushed `8afcb9f` + `6c09e50` + `aa7eb4b` to origin/main; vklf.com confirmed live; reconciliation pass produced exact 58/74 match to Session 2 P3-F7 diagnosis on first verification batch, validating both new code AND prior diagnosis; visual verification deferred to blank-canvas test next session; **HIGH-SEVERITY ARCHITECTURAL INSIGHT** surfaced at end of session — AI is being used as state-rebuilder when it should be state-mutator; all three pain points (keyword loss + cost scaling + slow batches) trace to one architectural mismatch; recommended pivot to operation-based output contract supersedes Sessions 4-6 as currently planned; ROADMAP restructured with new "🚨 ARCHITECTURAL PIVOT" top-priority section)
-**Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-session3b-verify (Claude Code)
-**Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-session3b (Claude Code)
+**Last updated:** April 25, 2026 (Phase 1g-test follow-up Part 3 — Pivot Session A — director committed to the architectural pivot; three deliverables locked: operation vocabulary + stable-ID format + DB migration plan; full spec in new Group B doc `docs/PIVOT_DESIGN.md`; design-only session, no code, no DB changes; new POST-PIVOT-SESSION-A STATE block added below to record commitment + lock-status; previous POST-VERIFICATION block preserved as historical context with "Decision pending" line updated to "Decision committed")
+**Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-A (Claude Code)
+**Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-session3b-verify (Claude Code)
+**Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-session3b (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-24_phase1g-test-followup-part3-session3a (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-24_phase1g-test-followup-part3-session2b (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-24_phase1g-test-followup-part3-session2 (Claude Code)
@@ -19,7 +20,47 @@
 
 ---
 
-## ⚠️ POST-VERIFICATION STATE (READ FIRST — updated 2026-04-25 Session 3b verify)
+## ⚠️ POST-PIVOT-SESSION-A STATE (READ FIRST — updated 2026-04-25 Pivot Session A)
+
+**As of 2026-04-25 Pivot Session A (director committed to the architectural pivot from "AI as state-rebuilder" to "AI as state-mutator"; design-heavy session; no code, no DB changes):**
+
+### What this session decided
+
+After the Session-3b-verification end-of-session captured the architectural insight at high severity in `CORRECTIONS_LOG.md`, the director used this session to re-examine the case for the pivot before committing. The four root-cause failures the pivot exists to address (keywords dropping during batch application; keywords correctly placed in earlier batches being silently removed in later batches; cost per batch skyrocketing; time per batch growing significantly) were all evaluated against the recommended pivot design. Director committed to the pivot.
+
+### Three deliverables locked
+
+Full specification lives in **`docs/PIVOT_DESIGN.md`** (new Group B doc — load when pivot work is in scope, alongside this active doc).
+
+1. **Operation vocabulary** — 13 operations across topics, keywords, and sister-links. Atomic batch apply (all-or-nothing). Sequential within-batch ordering. New-topic aliases (`$new1`, `$new2`, ... resolved at apply time). Keywords referenced by database UUID, not text. Reasons on every structural op. JUSTIFY_RESTRUCTURE 6-field payload on stability ≥7.0 from day one (gate exists immediately even though no topic crosses 7.0 until the stability-scoring algorithm ships in a follow-up). `ARCHIVE_KEYWORD` operation replaces the earlier "Irrelevant Keywords floating topic" idea — cleaner direct mechanism that flows straight to the existing `RemovedKeyword` table. Pathway operations and position/size operations deliberately excluded. See PIVOT_DESIGN.md §1 for full specification.
+
+2. **Stable-ID format** — `t-1`, `t-2`, ... per project. Backfill rule: existing `CanvasNode` row with database `id=N` becomes `stableId="t-N"` (preserves debugging value). New-topic aliases within a batch: `$new1`, `$new2` (`$` prefix is reserved syntax). See PIVOT_DESIGN.md §2.
+
+3. **Database migration plan (ships in Pivot Session B with Rule-8 approval — NOT this session)** — additive `stableId String` (NOT NULL after backfill) + `stabilityScore Float @default(0.0)` columns on `CanvasNode`. Three-step sequence: Step 1 nullable add → Step 2 committed Prisma-based backfill script (`scripts/backfill-stable-ids.ts`, idempotent, logs every update, tested on fresh project before live run) → Step 3 tighten to NOT NULL + add unique index `@@unique([projectWorkflowId, stableId])`. Other tables (`SisterLink`, `Pathway`, `RemovedKeyword`, `Keyword`) — no schema changes. See PIVOT_DESIGN.md §3.
+
+### Failure-mode mapping (the four pain points and how the design addresses each)
+
+| Failure | How the design addresses it |
+|---|---|
+| Keywords drop during batch application | Operation vocabulary is the only legal way to change anything; "anything not mentioned stays exactly where it was" is a structural property of the applier, not a model behaviour we hope for. |
+| Keywords correctly placed in earlier batches get silently removed | (a) Atomic batch apply prevents half-applied state; (b) JUSTIFY_RESTRUCTURE on stability ≥7 prevents silent overwrites of well-placed work; (c) Stable IDs make rename-vs-drop unambiguous. |
+| Cost per batch has skyrocketed | Operations-only output drops per-batch tokens from 100k+ to under 1k. Cost stops scaling with canvas size. Bursitis $1.89 → expected $0.03–0.10 in Pivot Session D. |
+| Time per batch has gone up significantly | Wall-clock is bottlenecked by output-token generation rate. Operations-only → ~1k tokens → under 1 minute. Bursitis 26 minutes → expected <1 minute. |
+
+### Director-flagged process correction this session
+
+Mid-session, when Claude presented Q1-Q4 design choices for vocabulary, Claude framed them as mechanics-with-recommendations without anchoring each choice to the four root-cause failures. Director correctly pushed back: *"You didn't even address the reasons for the pivot... The goal now is to address the fundamental flaws in our approach and fix them."* Claude redid the analysis, mapping each Q1-Q4 answer to the specific failure it prevents (Q1 vocabulary completeness → keyword loss + silent overwrites; Q2 atomic apply → ghost-state class; Q3 ARCHIVE_KEYWORD → homograph drop class; Q4 JUSTIFY_RESTRUCTURE → silent-overwrite-of-good-work class). Captured as a low-severity entry in `CORRECTIONS_LOG.md` 2026-04-25 — reminder to lead with failure-mode mapping when locking architectural decisions.
+
+### Standing instructions for next session (Pivot Session B)
+
+- Read `docs/PIVOT_DESIGN.md` end-to-end before starting code work. It IS the build spec.
+- Pivot Session B's scope: §3 DB migration (3-step) + write `src/lib/operation-applier.ts` + per-operation pre-validators + post-application invariant checks + unit tests against synthetic operation sets. NO AI involvement at this stage — the applier is pure deterministic code.
+- Two Rule-gated approvals during the session: **Rule 8** (DB migration) at start of session, before each `prisma db push`; **Rule 9** (deploy) at end of session, before `git push origin main`.
+- Existing band-aid code paths (reconciliation pass, Reshuffled status, salvage mechanism) stay running through Pivot Sessions B-D as defense-in-depth. Pivot Session E plans the deprecation after the pivot core has been validated end-to-end.
+
+---
+
+## ⚠️ POST-VERIFICATION STATE (updated 2026-04-25 Session 3b verify — preserved as historical context)
 
 **As of 2026-04-25 Session 3b verification (the 3 unpushed Session 3b commits + the Session 3a doc-update commit have been pushed to origin/main and visually verified live on vklf.com; Bursitis batch-1 verification batch run + cancelled; canvas state changed in a small, recoverable way per the reconciliation pass design):**
 
@@ -139,7 +180,7 @@ Director's pushback at end of session: *"We have been progressively fixing thing
 
 **Pivot session plan in ROADMAP.md** under the "🚨 ARCHITECTURAL PIVOT" section: A (design + stable IDs) → B (deterministic applier + validation) → C (prompt rewrite) → D (wire it together + end-to-end test) → E (deprecate band-aids) → F (re-scope Sessions 4-6). 4-6 sessions across 2-3 weeks vs. continuing the existing ~6-9-session patching plan.
 
-**Decision pending:** director chose "capture insight + restructure roadmap" at end of session. Decision on whether to actually start Pivot Session A vs. continue with existing Sessions 4-6 plan reserved for next session — director may think on it overnight.
+**Decision committed 2026-04-25 in Pivot Session A.** Director re-examined the insight with fresh focus, considered the 4-6 session redirection cost vs. continuing with Sessions 4-6, and committed to the pivot. Pivot Session A's three deliverables (operation vocabulary, stable-ID format, DB migration plan) are now locked. See new POST-PIVOT-SESSION-A STATE block above for session record + new Group B doc `docs/PIVOT_DESIGN.md` for the full locked design.
 
 **Architectural pattern named (cross-tool, generalizable):** "AI as state-mutator (operations) vs. AI as state-rebuilder (full re-emission)." Re-emission scales O(state); operations scale O(change). For long-lived structured artifacts maintained across batches, default to operation-based output. Applies to any future PLOS workflow where AI maintains state across iterations.
 

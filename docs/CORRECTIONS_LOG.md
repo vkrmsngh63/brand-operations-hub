@@ -2,9 +2,10 @@
 ## Append-only record of mistakes made during chats and lessons learned
 
 **Started:** April 16, 2026
-**Last updated:** April 25, 2026 (Phase 1g-test follow-up Part 3 — Session 3b verification — 3 new entries: (1) informational verification finding (58/74 reconciliation match to Session 2 P3-F7 diagnosis); (2) low-severity planning miss on visual-verification-on-populated-canvas; (3) **HIGH SEVERITY architectural-insight entry** — director surfaced root-cause framing during wrap-up: AI is being used as state-rebuilder when it should be state-mutator; all three symptoms (keyword loss + cost scaling + slow batches) trace to one architectural mismatch; recent fixes have been band-aiding symptoms not root cause; recommended architectural pivot to operation-based output contract supersedes Sessions 4-6 as currently planned; ROADMAP restructured accordingly)
-**Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-session3b-verify (Claude Code)
-**Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-session3b (Claude Code)
+**Last updated:** April 25, 2026 (Phase 1g-test follow-up Part 3 — Pivot Session A — 1 new entry: low-severity communication slip — Claude jumped into pivot vocabulary mechanics (Q1-Q4) without first anchoring each design choice to the four root-cause failures the pivot exists to address; director correctly pushed back; Claude redid the analysis with failure-mode mapping; lesson captured for future architectural-decision sessions)
+**Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-A (Claude Code)
+**Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-session3b-verify (Claude Code)
+**Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-session3b (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-24_phase1g-test-followup-part3-session3a (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-24_phase1g-test-followup-part3-session2b (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-24_phase1g-test-followup-part3-session2 (Claude Code)
@@ -40,6 +41,27 @@
 ---
 
 ## Entries
+
+### 2026-04-25 — Jumped into pivot vocabulary mechanics without anchoring to root-cause failures (low severity, communication slip)
+**Session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-A (Claude Code)
+**Tool/Phase affected:** Keyword Clustering / Auto-Analyze / Pivot Session A
+**Severity:** Low (process / communication; corrected mid-session; no production impact)
+
+**What happened:** Pivot Session A's purpose is to lock the design that fixes four named root-cause failures (keywords drop during batch application; keywords correctly placed in earlier batches get silently removed; cost per batch has skyrocketed; time per batch has gone up significantly). When Claude presented Q1-Q4 design choices for the operation vocabulary (vocabulary completeness; atomic batch apply; ARCHIVE_KEYWORD vs Irrelevant Keywords floating topic; JUSTIFY_RESTRUCTURE timing), Claude framed each as a mechanics-with-recommendation question — explained the trade-offs and gave a recommendation — but did NOT anchor each choice back to which specific failure mode it prevents. Director correctly pushed back: *"Also, you didn't even address the reasons for the pivot... The goal now is to address the fundamental flaws in our approach and fix them."*
+
+**Root cause:** Treated the design questions as discrete mechanics decisions rather than as the answers-to-the-failure-modes that the entire pivot exists to deliver. The result was that the director's product judgment was invited at the level of "do you prefer this or that" rather than at the level of "does this design choice actually fix the failure mode it claims to address." Lower-resolution decision input.
+
+**How caught:** Director, mid-session, after seeing Q1-Q4 framing land without failure-mode anchoring.
+
+**Correction:** Claude redid the analysis with explicit failure-mode mapping: Q1 vocabulary completeness → keyword drop class + silent overwrite class; Q2 atomic apply → ghost-state-from-half-applied-batches class; Q3 ARCHIVE_KEYWORD → homograph-keyword-drop class (Turkish-Bursa); Q4 JUSTIFY_RESTRUCTURE → silent-overwrite-of-correctly-placed-work class. Cost/time impact made concrete: $1.89 / 26 minutes for the Bursitis verification batch → expected $0.03–0.10 / under 1 minute under the operations-only output contract; cost stops scaling with canvas size. Director then accepted Q1-Q4 (with Q4 sharper than Claude's recommendation — Q4 carries from day one, not deferred). Subsequent question clusters (Q5-Q11 on stable-ID format and DB migration) were less load-bearing on root-cause framing, so the same correction was carried forward implicitly without re-stating.
+
+**Prevention:** When locking architectural decisions, lead with the failure-mode-to-design-mechanism mapping, not bury it after-the-fact. For every design choice in an architectural-pivot session, the question to the director should be shaped as *"Failure F is one of the things this pivot exists to fix. Design choice X addresses F by mechanism M. Does mechanism M look right to you?"* — not as *"here's a design choice; here are options A/B/C; my recommendation is A; what do you pick?"* The latter framing is correct for low-stakes implementation choices where mechanics genuinely is the question; the former is correct for architectural-decision sessions where the WHY of every design choice is load-bearing.
+
+**Architectural pattern named (procedural, generalisable):** "Lead with the failure-mode-to-mechanism mapping in architectural-decision sessions." Distinguish architectural-decision sessions (where every choice should map to the named failure modes) from implementation-decision sessions (where mechanics framing is fine). The marker for an architectural-decision session is a high-severity insight in `CORRECTIONS_LOG.md` that motivates the session, plus an explicit list of failure modes the work is supposed to address. When those exist, framing matters more than usual.
+
+**Rule compliance during the surfacing:**
+- Rule 7 (acknowledge slips openly, don't minimize) — Claude opened the next response with *"You're right — that was a slip and I'll own it."* and then re-did the analysis. No deflection.
+- Rule 16 (zoom in / zoom out on every significant decision) — director's pushback was the zoom-out signal. Going forward: in architectural-decision sessions, the failure-mode-to-mechanism mapping IS the zoom-out — it's not optional decoration.
 
 ### 2026-04-25 — Architectural insight (high severity): AI being used as state-rebuilder when it should be state-mutator; recent fixes are band-aids not root-cause work; recommended pivot supersedes Sessions 4-6
 **Session:** session_2026-04-25_phase1g-test-followup-part3-session3b-verify (Claude Code) — surfaced post-verification during wrap-up
