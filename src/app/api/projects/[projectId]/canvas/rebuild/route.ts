@@ -67,9 +67,20 @@ export async function POST(
     // ── Node upserts (create or update) ──────────────────────
     if (Array.isArray(body.nodes)) {
       for (const n of body.nodes) {
+        // Pivot Session D Test 2 fix: switched the upsert key from the loose
+        // { id, projectWorkflowId } shape (Prisma 6 returns P2025 because that
+        // pair is not a registered unique key — id alone is the global @id)
+        // to the per-project composite unique @@unique([projectWorkflowId,
+        // stableId]) introduced in Pivot Session B. Stable IDs follow the
+        // convention "t-{id}" everywhere (backfill + node-create routes), so
+        // the lookup is unambiguous for both pre-existing and freshly-issued
+        // nodes.
+        const stableId = n.stableId || `t-${n.id}`;
         ops.push(
           prisma.canvasNode.upsert({
-            where: { id: n.id, projectWorkflowId },
+            where: {
+              projectWorkflowId_stableId: { projectWorkflowId, stableId },
+            },
             update: {
               ...(n.title !== undefined && { title: n.title }),
               ...(n.description !== undefined && {
@@ -113,7 +124,10 @@ export async function POST(
               id: n.id,
               // Pivot Session B: stableId mirrors the integer id at create
               // time (backfill convention from scripts/backfill-stable-ids.ts).
-              stableId: `t-${n.id}`,
+              // Pivot Session D: V3 callers may also send an explicit stableId
+              // matching what the operation-applier issued; either way the
+              // value resolves to the same "t-{id}" string.
+              stableId,
               projectWorkflowId,
               title: n.title || '',
               description: n.description || '',
