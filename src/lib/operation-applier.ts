@@ -63,7 +63,8 @@ export interface AddTopicOp {
   title: string;
   description: string;
   parent: TopicRef | null;
-  relationship: Relationship;
+  /** "linear" | "nested" for non-root topics; ignored (any value) for roots. */
+  relationship: Relationship | null;
 }
 
 export interface UpdateTopicTitleOp {
@@ -363,15 +364,19 @@ function indexKeywordPlacements(s: Scratch): Map<KeywordId, StableId[]> {
 function applyAddTopic(s: Scratch, op: AddTopicOp, i: number): void {
   if (!isAlias(op.id)) fail(i, op.type, `id "${op.id}" must be an alias starting with "$"`);
   if (s.aliasResolutions.has(op.id)) fail(i, op.type, `alias "${op.id}" is already defined in this batch`);
-  if (op.relationship !== 'linear' && op.relationship !== 'nested') {
-    fail(i, op.type, `relationship must be "linear" or "nested"`);
-  }
   if (typeof op.title !== 'string' || op.title.trim().length === 0) {
     fail(i, op.type, `title must be a non-empty string`);
   }
   let parentStableId: StableId | null = null;
   if (op.parent !== null) {
     parentStableId = resolveTopicRef(s, op.parent, i, op.type, 'parent');
+  }
+  // Relationship is only meaningful for non-root topics. Per PIVOT_DESIGN §1.1
+  // and AUTO_ANALYZE_PROMPT_V3.md ("relationship: ... required for non-root
+  // topics; ignored for root"), root topics (parent === null) ignore whatever
+  // the AI emitted — it gets nulled out below either way.
+  if (parentStableId !== null && op.relationship !== 'linear' && op.relationship !== 'nested') {
+    fail(i, op.type, `relationship must be "linear" or "nested" for non-root topics`);
   }
   const stableId = issueStableId(s);
   s.aliasResolutions.set(op.id, stableId);

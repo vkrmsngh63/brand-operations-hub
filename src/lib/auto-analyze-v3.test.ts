@@ -222,6 +222,46 @@ test('Parser: ADD_TOPIC parent=null is preserved', () => {
   if (op.type === 'ADD_TOPIC') assert.equal(op.parent, null);
 });
 
+test('Parser: ADD_TOPIC root with relationship=null parses to null (not rejected)', () => {
+  const raw = `=== OPERATIONS ===
+{"op":"ADD_TOPIC","id":"$root","title":"R","description":"d","parent":null,"relationship":null}
+=== END OPERATIONS ===`;
+  const r = parseOperationsJsonl(raw);
+  assert.equal(r.errors.length, 0);
+  const op = r.operations[0];
+  if (op.type === 'ADD_TOPIC') assert.equal(op.relationship, null);
+});
+
+test('Parser: ADD_TOPIC root with relationship omitted parses to null', () => {
+  const raw = `=== OPERATIONS ===
+{"op":"ADD_TOPIC","id":"$root","title":"R","description":"d","parent":null}
+=== END OPERATIONS ===`;
+  const r = parseOperationsJsonl(raw);
+  assert.equal(r.errors.length, 0);
+  const op = r.operations[0];
+  if (op.type === 'ADD_TOPIC') assert.equal(op.relationship, null);
+});
+
+test('E2E regression: empty canvas + ADD_TOPIC root with null relationship applies cleanly', () => {
+  // This is the bug Test 1 hit on 2026-04-25: model emitted ADD_TOPIC for a
+  // root topic with relationship=null/missing, and the applier rejected the
+  // entire batch atomically. Per PIVOT_DESIGN §1.1 and the V3 prompt,
+  // relationship is "ignored for root" — root topics get their relationship
+  // nulled out at apply time regardless of what was emitted.
+  const state = buildCanvasStateForApplier([], [], 1);
+  const ops = parseOperationsJsonl(`=== OPERATIONS ===
+{"op":"ADD_TOPIC","id":"$root","title":"What is bursitis?","description":"d","parent":null,"relationship":null}
+{"op":"ADD_TOPIC","id":"$child","title":"Hip bursitis","description":"d","parent":"$root","relationship":"nested"}
+{"op":"ADD_KEYWORD","topic":"$child","keyword_id":"kw-1","placement":"primary"}
+=== END OPERATIONS ===`).operations;
+  const result = applyOperations(state, ops);
+  assert.ok(result.ok, 'apply should succeed for root with null relationship');
+  if (!result.ok) return;
+  const root = result.newState.nodes.find(n => n.title === 'What is bursitis?')!;
+  assert.equal(root.parentStableId, null);
+  assert.equal(root.relationship, null);
+});
+
 test('Parser: snake_case keys translated to camelCase (MOVE_TOPIC)', () => {
   const raw = `=== OPERATIONS ===
 {"op":"MOVE_TOPIC","id":"t-5","new_parent":"t-2","new_relationship":"nested","reason":"better fit"}

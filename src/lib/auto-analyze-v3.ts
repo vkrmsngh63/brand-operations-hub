@@ -247,15 +247,21 @@ function translateOperation(
     obj[k] === null || obj[k] === undefined ? null : (obj[k] as string);
 
   switch (opType) {
-    case 'ADD_TOPIC':
+    case 'ADD_TOPIC': {
+      // For root topics (parent === null), relationship is ignored by the
+      // applier — pass through whatever was emitted (or null if absent).
+      const rawRel = obj.relationship;
+      const relationship: Relationship | null =
+        rawRel === 'linear' || rawRel === 'nested' ? rawRel : null;
       return {
         type: 'ADD_TOPIC',
         id: s('id'),
         title: s('title'),
         description: (obj.description as string) ?? '',
         parent: sn('parent'),
-        relationship: s('relationship') as Relationship,
+        relationship,
       };
+    }
     case 'UPDATE_TOPIC_TITLE':
       return {
         type: 'UPDATE_TOPIC_TITLE',
