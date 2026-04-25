@@ -1,9 +1,11 @@
 # KEYWORD CLUSTERING — ACTIVE DOCUMENT
 ## Current state of the Keyword Clustering workflow tool (Group B, tool-specific)
 
-**Last updated:** April 24, 2026 (Phase 1g-test follow-up Part 3 — Session 3a — first code-write session of Part 3; 5 of 9 Session 3 items shipped + deployed: model dropdown gets Opus 4.7 (#6), CanvasState.nextNodeId self-heals on read (#5), cost tracker counts failed-attempt costs (#7), Auto-Analyze settings persist via UserPreference + apiKey-in-localStorage split (#8), RemovedKeyword table + soft-archive flow + ASTTable rewrite (#3); Session 3b carries the 3 bigger items: P3-F7 reconciliation (#1), salvage mechanism (#2), four-function P3-F8 layout port (#4); commit `25811c3` pushed)
-**Last updated in session:** session_2026-04-24_phase1g-test-followup-part3-session2b (Claude Code)
-**Previously updated in session:** session_2026-04-24_phase1g-test-followup-part3-session2 (Claude Code)
+**Last updated:** April 25, 2026 (Phase 1g-test follow-up Part 3 — Session 3b — second code-write session of Part 3; 3 of 3 deferred Session 3 items shipped: P3-F7 post-batch reconciliation pass (#1) including new 'Reshuffled' status with yellow badge per director's Option B framing, salvage-ignored-keywords mechanism (#2) with HC3-only trigger and IRRELEVANT_KEYWORDS auto-archive to Session-3a /removed-keywords endpoint, P3-F8 four-function canvas-layout port (#4) as new src/lib/canvas-layout.ts; build clean 22.5s; commit `6c09e50` — NOT YET PUSHED, awaiting director approval; two NEW Phase-1-polish ROADMAP items captured: P3-F7 root-cause audit + keyword accounting / ghost detection panel)
+**Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-session3b (Claude Code)
+**Previously updated in session:** session_2026-04-24_phase1g-test-followup-part3-session3a (Claude Code)
+**Previously updated in session (earlier):** session_2026-04-24_phase1g-test-followup-part3-session2b (Claude Code)
+**Previously updated in session (earlier):** session_2026-04-24_phase1g-test-followup-part3-session2 (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-20_phase1g-test-followup-part3 (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-19_phase1g-test-followup-part2 (Claude Code)
 **Previously updated (claude.ai era):** https://claude.ai/chat/fc8025bf-551a-4b3c-8483-ec6d8ed9e33c
@@ -16,7 +18,88 @@
 
 ---
 
-## ⚠️ POST-SESSION-3a STATE (READ FIRST — updated 2026-04-24 Session 3a)
+## ⚠️ POST-SESSION-3b STATE (READ FIRST — updated 2026-04-25 Session 3b)
+
+**As of 2026-04-25 Session 3b (Phase 1g-test follow-up Part 3 — Session 3b — second code-write session of Part 3; the 3 deferred items from Session 3a all shipped; commit `6c09e50` NOT YET PUSHED awaiting director approval):**
+
+### What shipped this session
+
+1. **(#1) P3-F7 post-batch reconciliation pass — Option B framing per director.** New step 12 in `AutoAnalyze.doApply` runs after step 11 (placement detection for salvage). Walks the ENTIRE AST table (not just `batch.keywordIds`); two flips:
+   - on canvas + status `'Unsorted'` or `'Reshuffled'` → flip to `'AI-Sorted'` (heals Bug 1 silent placements + reabsorbs Reshuffled keywords the AI just re-placed)
+   - off canvas + status `'AI-Sorted'` → flip to NEW `'Reshuffled'` status (Bug 2 reshuffle ghosts surfaced as visible alarm)
+   - Each off-canvas flip emits a structured `aaLog` line with keyword text + id + reason — forward-compatible with future `ai_feedback_records` schema per AI_TOOL_FEEDBACK_PROTOCOL §2.3.
+   - The old step-11 batch-only update (`onBatchUpdateKeywords(placed.map(... AI-Sorted))`) is now subsumed by step 12's table-wide pass — step 11 retained only for `unplaced` detection that feeds salvage.
+
+2. **`'Reshuffled'` as a new sortingStatus value.** Type union in `useKeywords.ts` extended; column is `String @default("Unsorted")` in Postgres so no schema migration. New yellow badge style `.ast-pill-r` (#fef3c7 / #92400e) added to ast-table.css; new `.tif-st-r` style added to tif-table.css. Pill-class lookups in ASTTable (live + RemovedKeyword display) and TIFTable updated. ASTTable + MTTable + TIFTable filter logic treats Reshuffled as Unsorted-equivalent (the "Show Unsorted" toggle reveals both).
+
+3. **AutoAnalyze "Unsorted only" scope renamed to "Unsorted + Reshuffled".** The default-scope filter now picks up both `'Unsorted'` and `'Reshuffled'` keywords so reshuffled keywords are auto-eligible for placement on the next run with zero admin action. Stored value remains `'unsorted-only'` so existing UserPreference saves don't break. Tooltip + dropdown label updated.
+
+4. **(#2) Salvage-ignored-keywords mechanism — Q5-resolution wording.** New `runSalvage(batch, missingKeywords, originalResult)` function in AutoAnalyze. Fires from `runLoop`'s validation flow when `validateResult` returns HC3-only failures (every error starts with "Missing " — no HC4/HC5 lost-data triggers). Builds the Change-6-template follow-up prompt at runtime with Session-2b refined wording (auto-archive language baked in). Calls `callApi`; salvage cost added to `batch.cost`; parses three blocks (`=== DELTA ROWS FOR PLACEMENTS ===`, `=== IRRELEVANT_KEYWORDS ===`, `=== REEVALUATION REPORT ===`). Delta rows are merged into `originalResult.topicsTableTsv` via the refactored `mergeDelta(deltaTsv, baseTsv?)` (the optional second arg is new — defaults to live canvas via `buildCurrentTsv()` for the existing Mode-B flow; salvage passes the original Mode-A response). IRRELEVANT_KEYWORDS POSTed PER-keyword to `/api/projects/[projectId]/removed-keywords` with `removedSource='auto-ai-detected-irrelevant'` + the model's reason as `aiReasoning`; `onRefreshKeywords()` then syncs parent state. Archived ids are removed from `batch.keywordIds` + `batch.keywords` so HC3 re-validation passes. Re-validates after merge; if pass → `doApply` proceeds; if still failing → falls through to existing retry path. Salvage API errors fall through to retry (NOT eat the error).
+
+5. **(#4) P3-F8 four-function canvas-layout port — one-shot per Q3.** New `src/lib/canvas-layout.ts` module (321 lines) with all four functions as pure exports that mutate the passed nodes array in place:
+   - **`calcNodeHeight(node)`** — content-driven node height using browser `CanvasRenderingContext2D.measureText`. Word-aware text wrap matching HTML's `cvsWrap`. Accounts for title + altTitles + description + kw-count badge row. Respects `userMinH`. SSR fallback returns `Math.max(userMinH || NODE_MIN_H, 160)`.
+   - **`runLayoutPass(nodes, pathways, collapsed?)`** — 4-step holistic pass: (1) reset roots to baseY; (2) tree-walk via `layoutChildren` placing nested children type-aware (parent-center+indent below other nested siblings only) then linear children below all nested content (parent-left below all peer descendants); (3) up-to-60-pass overlap resolution skipping intra-pathway tree-walk-positioned pairs; (4) calls `separatePathways`.
+   - **`autoLayoutChild(child, parent, relType, allNodes, collapsed?)`** — type-aware auto-positioning when a parent-child link is formed. Linear: align child-left with parent-left below all peer subtrees. Nested: align child-left with parent-center + indent, below nested siblings only. Moves entire child subtree by the delta.
+   - **`separatePathways(nodes, pathways, collapsed?)`** — horizontal push-apart for overlapping pathway bounding boxes (Q2: NOT deferred). Sorts pathways by x; for each later pathway whose bounds overlap an earlier one in both axes, pushes the entire pathway's nodes right by `(a.x + a.w + PATHWAY_GAP) - b.x`.
+   - Constants mirror HTML tool's `cvsXxx` constants except **NODE_W stays 220** (React's existing default; HTML uses 240) and **NESTED_INDENT stays 30** (React's existing default; HTML uses 15) so nodes don't visibly resize for legacy data.
+
+6. **Layout pass wired into `AutoAnalyze.doApply` step 7.5.** After step 7 sets parent/pathway/sister relationships on `rebuildNodes`, before step 8 ATOMIC REBUILD, the layout pass runs: `calcNodeHeight` per rebuildNode → `runLayoutPass(layoutNodes, [...pathways, ...newPathways])` → mirror computed positions/heights back onto rebuildNodes → atomic rebuild persists everything in one transaction. Q1 answer honored: layout pass runs after every batch.
+
+7. **Layout pass wired into `CanvasPanel.handleLinkClick`.** When admin clicks the second node in P-P or P-C link mode, the parent/child relationship gets set locally on the in-memory nodes array, then `autoLayoutChild` slides the new child + its subtree into the right slot relative to its new parent (type-aware), then a single `updateNodes` call coalesces parent-link change + position changes for all moved nodes into one server PATCH. `forceUpdate()` triggers immediate re-render. Failure fallback: if parent/child node is missing, just applies the link without layout.
+
+### What did NOT change this session
+
+- `baseY`/`y` separation for clean collapse/expand restoration — Q2 was narrowly about pathway separation; deferred to a follow-up session as captured in Session 2b lockdown.
+- Drag-end + content-edit + detail-view layout-pass triggers — secondary triggers per the docs; only the Q1 trigger (Auto-Analyze batch apply) and parent-child link form are wired today. Existing `resolveOverlap(nodeId)` single-node nudge on drag-end + resize-end stays as the immediate-feedback layer.
+- Resize-end height recomputation via `calcNodeHeight`. Currently `node.h = nh` set directly from drag distance; future enhancement could call `calcNodeHeight` to ensure h respects content. NOT today.
+- HC5 audit / HC6 "no keyword unlinks" check / canvas-rebuild text-match audit — captured as new **P3-F7 root-cause audit** ROADMAP item (Phase 1 polish; pairs with Session 4 or 5).
+- Stable topic IDs / stability scoring / Changes Ledger — Sessions 4-5+ as before.
+- Auto-Remove Irrelevant Terms BUTTON — still gated by director's standing instruction. Salvage's per-batch auto-archive ≠ Auto-Remove BUTTON (per Q5).
+- `AUTO_ANALYZE_PROMPT_V2.md` text — Session 6 mechanical merge.
+- The Change-6 SALVAGE prompt template lives as runtime tool code (in `runSalvage`), NOT in `AUTO_ANALYZE_PROMPT_V2.md` — by design per Change 6's "tool-generated, not canonical V2" framing.
+
+### Director-locked design choices captured this session
+
+These were design questions the director answered live during Session 3b's drift-check. All locked into ROADMAP for future reference:
+
+1. **Q1 (off-canvas-AI-Sorted flip target): `'Reshuffled'`, NOT `'Unsorted'`.** Director chose Option B framing — every off-canvas-AI-Sorted flip is alarming, not silent. Yellow badge in AST table. New status added to Auto-Analyze default scope so reshuffled keywords get re-eligible for placement on next run automatically. Director's reasoning: a reconciliation flip means EITHER (a) HC5 leaked, (b) the rebuild silently dropped a keyword, or (c) legacy data — all three deserve admin visibility, not silent healing.
+2. **Q2 (salvage trigger): HC3-only failure, NOT post-doApply unplaced > 0.** Director chose Option A. The reconciliation pass (Item #1) already heals post-doApply text-mismatch leftovers by flipping their status to Reshuffled (picked up next run, zero extra API cost). Adding salvage at Moment 2 would risk paying for retries that fail the same way (text mismatch).
+
+### Director-raised root-cause concerns (NEW Phase 1 polish ROADMAP entry: "P3-F7 root-cause audit")
+
+Director correctly raised the meta-question during drift-check: *"Why would AI bump a keyword off the canvas when that is strictly forbidden by our prompts?"* and *"If it is our tool triggering this, then shouldn't we be preventing this from happening rather than trying to figure out what the status of the bumped keyword should be?"*
+
+The reconciliation pass shipped today is the BACKUP per Session 2 director-locked framing. The PRIMARY fix work needs a separate audit, captured as a NEW Phase 1 polish ROADMAP item:
+
+- **Audit HC5 for text-matching edge cases.** Specifically: internal whitespace normalization (multiple spaces, tabs, non-breaking spaces), unicode variants, smart quotes vs straight quotes. Add test cases for each.
+- **Audit the canvas rebuild's keyword text-matching** (the `allKeywords.find(...toLowerCase()...)` step at AutoAnalyze.tsx line 1228). When the AI's response includes a keyword text but the AST table's matching fails, the keyword is silently dropped. Either (a) match more aggressively (normalize whitespace + unicode) or (b) fail the rebuild loudly when a keyword text in the response doesn't match any AST keyword.
+- **Add a new safety net "HC6 — no keyword unlinks."** Compare the set of keywords currently linked to ANY canvas topic against the set after the rebuild. If any pre-existing keyword stops being linked to any topic, fail the batch. Stricter than HC5 (which checks only that the keyword text appears somewhere in the response).
+- **One-time spot-audit of Bursitis's 49 ghost AI-Sorted keywords** to confirm whether they're (1) legacy from old code or (2)/(3) active bugs. Direct DB query, like Session 2 used.
+
+Scheduled for Session 4 or 5 (whichever has lighter scope). Not blocking.
+
+### Director-raised NEW feature (NEW Phase 1 polish ROADMAP entry: "Keyword accounting + ghost detection panel")
+
+Defense-in-depth feature for catching keywords that disappear from BOTH the AST table AND Removed Terms. Complements Item #1's reconciliation pass.
+
+- System maintains a permanent record of every keyword ever added to a project's AST table (likely a new history table that captures each new-keyword event so the record is immutable even if a keyword is later hard-deleted by accident).
+- Reconciliation check compares historical record against (a) keywords currently in AST + (b) keywords currently in Removed Terms. Anything in history NOT in either is a "ghost."
+- Reconciliation runs on-demand from the panel + automatically as a background check on workspace load.
+- New "Ghost Keywords" admin panel — common place to see all ghosts. Per-row: keyword text, when added (and by whom if known), last-known location/status before disappearing, suspected disappearance timeframe. Per-row actions: **Restore** (re-add to AST as Unsorted) or **Archive to Removed Terms** (move with reason "auto-archived during ghost recovery"). Bulk select supported.
+- Panel location TBD when scheduled — either inside Keyword Clustering workspace (if tool-specific) OR a project-wide admin page (if pattern generalizes).
+- Schedules with Session 4 or as its own session right after. Not blocking.
+
+### Director's explicit instructions preserved for Session 4+
+
+- **NEW 2026-04-25 Session 3b:** Reconciliation flips are alarming, not silent (Option B). Salvage trigger is HC3-only failure (Option A). Two new Phase-1 polish items captured (root-cause audit + ghost detection panel) — schedule with Session 4 or 5.
+- **Carried from 2026-04-24 Session 2b:** Layout pass after every Auto-Analyze batch apply (Q1) ✅ shipped this session. Pathway separation in scope (Q2) ✅ shipped. Canvas layout ships as one-shot commit (Q3) ✅ shipped. Keyword reassignment out of ≥7.0 topic requires JUSTIFY_RESTRUCTURE (Q4) — Session 5/6. Salvage IRRELEVANT_KEYWORDS auto-archive ≠ Auto-Remove BUTTON (Q5) ✅ honored. Stability Score is the 10th TSV column (Q6) — Session 5/6.
+- **Carried from 2026-04-24 Session 2:** Root-cause-first + reconciliation-as-backup philosophy. Removed Terms UI distinguishes manual vs AI-auto. Direct DB queries are standard practice.
+- **Carried from 2026-04-20:** Do NOT program Auto-Remove Irrelevant Terms BUTTON without explicit director-provided specifics. Ask for parallel-chat workflow-fundamentals conclusions at or before Session 5. Stay lucid.
+- **Carried from 2026-04-24 Session 3a:** Two autonomous design calls await director review (self-heal-on-read for nextNodeId; apiKey in localStorage). No new override this session.
+
+---
+
+## ⚠️ POST-SESSION-3a STATE (READ SECOND — updated 2026-04-24 Session 3a)
 
 **As of 2026-04-24 Session 3a (Phase 1g-test follow-up Part 3 — Session 3a — first code-write session of Part 3; 5 of 9 Session 3 items shipped + deployed to vklf.com; Session 3b carries the 3 bigger items):**
 

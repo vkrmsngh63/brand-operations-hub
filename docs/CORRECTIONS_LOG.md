@@ -2,9 +2,10 @@
 ## Append-only record of mistakes made during chats and lessons learned
 
 **Started:** April 16, 2026
-**Last updated:** April 24, 2026 (Phase 1g-test follow-up Part 3 — Session 3a — 1 new informational entry on Session 3a code shipping — 5 of 9 Session 3 items implemented + deployed; zero mistakes this session; "self-heal-on-read for stale persistent counters" pattern + "split-secret-from-shared-prefs for sensitive UserPreference fields" pattern captured for future tools)
-**Last updated in session:** session_2026-04-24_phase1g-test-followup-part3-session3a (Claude Code)
-**Previously updated in session:** session_2026-04-24_phase1g-test-followup-part3-session2b (Claude Code)
+**Last updated:** April 25, 2026 (Phase 1g-test follow-up Part 3 — Session 3b — 1 new informational entry on Session 3b code shipping — 3 of 3 deferred Session 3 items implemented; zero mistakes this session; new architectural-pattern entry "reconciliation-as-visible-alarm vs reconciliation-as-silent-heal" captured; two new Phase-1 polish items added to ROADMAP at director's prompting)
+**Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-session3b (Claude Code)
+**Previously updated in session:** session_2026-04-24_phase1g-test-followup-part3-session3a (Claude Code)
+**Previously updated in session (earlier):** session_2026-04-24_phase1g-test-followup-part3-session2b (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-24_phase1g-test-followup-part3-session2 (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-20_phase1g-test-followup-part3 (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-19_phase1g-test-followup-part2 (Claude Code)
@@ -38,6 +39,39 @@
 ---
 
 ## Entries
+
+### 2026-04-25 — Session 3b code shipped (3 of 3 deferred Session 3 items; informational; reconciliation-as-visible-alarm framing locked in by director; two new Phase-1 polish items added to ROADMAP)
+**Session:** session_2026-04-25_phase1g-test-followup-part3-session3b (Claude Code)
+**Tool/Phase affected:** Keyword Clustering / Auto-Analyze / ASTTable / CanvasPanel / Phase 1g-test follow-up Part 3 — Session 3b
+**Severity:** Informational (clean code session, zero mistakes; logging design decisions + new architectural pattern + ROADMAP additions for future reference)
+
+**What happened:** Session 3b shipped the three items deferred from Session 3a — P3-F7 post-batch reconciliation pass (#1), salvage-ignored-keywords mechanism (#2), and the four-function P3-F8 canvas-layout port (#4). Single commit `6c09e50`. Build clean (22.5s, 17/17 pages, zero TypeScript errors). NOT YET PUSHED — awaiting director approval per Rule 9 deploy gate.
+
+**Director-locked design decisions during drift-check (per Rule 14b/14f question framing — every multi-option question included per-option context + recommendation + escape-hatch + free-text invitation):**
+
+1. **Reconciliation off-canvas-AI-Sorted flip target = `'Reshuffled'` (Option B), NOT `'Unsorted'` (Option A).** Director's framing: any reconciliation flip means EITHER (a) HC5 leaked, (b) the rebuild silently dropped a keyword, or (c) legacy data — all three deserve admin visibility, not silent healing. Option B introduces a yellow `.ast-pill-r` badge in the AST table so admin can spot the alarm at a glance. AutoAnalyze's default scope picks them up automatically so no admin action is required for re-placement.
+2. **Salvage trigger = HC3-only validation failure (Option A), NOT post-doApply unplaced > 0 (Option B).** The reconciliation pass already heals post-doApply text-mismatch leftovers by flipping their status to Reshuffled (picked up next run, zero extra API cost). Adding salvage at Moment 2 would risk paying for retries that fail the same way (text mismatch keeps failing the same way regardless of how many times the AI is asked).
+
+**Director-raised root-cause concern (NEW Phase-1 polish ROADMAP item):** During drift-check, director correctly raised the meta-question: *"Why would AI bump a keyword off the canvas when that is strictly forbidden by our prompts? ... If it is our tool triggering this, then shouldn't we be preventing this from happening rather than trying to figure out what the status of the bumped keyword should be?"* Honest answer: yes — the reconciliation pass is the BACKUP per Session-2 framing; the root-cause work is separate. Captured as new ROADMAP item "P3-F7 root-cause audit" with four sub-items (HC5 text-matching audit; canvas-rebuild text-match audit; new HC6 "no keyword unlinks" check; one-time spot-audit of Bursitis's 49 ghosts to determine legacy-vs-active-bug breakdown). Schedules with Session 4 or 5.
+
+**Director-raised NEW feature (NEW Phase-1 polish ROADMAP item):** Defense-in-depth "Keyword accounting + ghost detection panel." System maintains a permanent record of every keyword ever added to a project's AST; reconciliation check compares against (AST ∪ RemovedTerms); anything in history not in either is a "ghost" surfaced in a new admin Ghost Keywords panel with Restore + Archive bulk actions. Captured to ROADMAP. Schedules with Session 4 or as its own session.
+
+**One architectural pattern named (fourth in this Part-3 series):**
+
+5. **"Reconciliation-as-visible-alarm vs reconciliation-as-silent-heal."** When a reconciliation pass detects state drift, the choice is between (a) silently healing the drift (cheap; preserves UI ergonomics; hides the existence of the bug from the admin) and (b) surfacing the drift via a distinct user-visible status/badge (slightly more code; admin can monitor whether drift is rare-and-shrinking or persistent-and-hiding-a-bug). Option (b) is the right default whenever the underlying drift is a symptom of an unsolved root-cause bug — the alarm IS the diagnostic signal. If after a few sessions the alarm-badge is consistently empty, downgrading to silent-heal becomes a cheap follow-up. If the alarm badge keeps filling up, that's evidence to schedule the root-cause work. Recorded for future tools that build similar reconciliation passes.
+
+**How caught:** Planned Session-3b scope. No mistake.
+
+**Prevention:** Not applicable.
+
+**Lessons captured for future sessions:**
+1. The reconciliation-as-visible-alarm pattern (above) generalizes — any tool building a state-reconciliation pass should default to surfacing detected drift in the UI, not silently healing it.
+2. Drift-check is the right moment to surface root-cause concerns. Director's "why does this happen at all" question during drift-check produced two new high-value ROADMAP items that wouldn't have been captured otherwise. Future Claudes: when the user pushes back on a "patch the symptom" framing, treat that as a roadmap-input opportunity.
+3. The Q1/Q2 forced-pick framing per Rule 14f gave the director clean letter answers AND a follow-on root-cause concern that wouldn't fit either option. The escape-hatch worked — director didn't pick A or B mechanically, asked the meta-question first, then made an informed pick.
+
+**Meta-procedural note (positive):** No Rule 13 fatigue triggers fired. Single session ~75 min of active work. No Rule 14 plain-language slips. Rule 9 deploy gate honored — code committed but not pushed; awaiting director approval. Rule 11 Option A clean-split honored — only today's 9 files in the commit, no leftover untracked or .bak files swept in.
+
+---
 
 ### 2026-04-24c — Session 3a code shipped (5 of 9 Session 3 items, informational, autonomous design calls noted for director review)
 **Session:** session_2026-04-24_phase1g-test-followup-part3-session3a (Claude Code)

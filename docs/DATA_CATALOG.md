@@ -1,8 +1,9 @@
 # DATA CATALOG
 ## Master index of all data captured across the PLOS platform, with Human Reference Language
 
-**Last updated:** April 24, 2026 (Phase 1g-test follow-up Part 3 — Session 3a — §5.8 Auto-Analyze settings now DB-backed (apiKey local; others UserPreference); §5.10 Removed Terms migrated from localStorage to new `RemovedKeyword` DB table)
-**Last updated in session:** session_2026-04-24_phase1g-test-followup-part3-session3a (Claude Code)
+**Last updated:** April 25, 2026 (Phase 1g-test follow-up Part 3 — Session 3b — §5.1 Keywords gains new `'Reshuffled'` `sortingStatus` value assigned by the P3-F7 post-batch reconciliation pass)
+**Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-session3b (Claude Code)
+**Previously updated in session:** session_2026-04-24_phase1g-test-followup-part3-session3a (Claude Code)
 **Previously updated:** April 18, 2026 (Phase 1g-test partial — corrected §5.8 and §5.9 Auto-Analyze drift)
 **Previously updated (claude.ai era):** https://claude.ai/chat/cc15409c-5000-4f4f-a5ce-a42784b5a94f
 
@@ -182,7 +183,7 @@ These data items are required for Phase 2 (multi-user infrastructure) per `PLATF
 - **HUMAN REF (PROVISIONAL):** "the keywords" / "the search terms" / "the list of keywords"
 - **CAPTURED IN:** Keyword Clustering → AST (All Search Terms) table via import, manual entry, or paste
 - **TECHNICAL NAME:** `Keyword` table; foreign key `projectWorkflowId` (live)
-- **PER-KEYWORD FIELDS:** `keyword`, `volume`, `sortingStatus` (Unsorted/Partially/Completely/AI-Sorted), `tags`, `topic`, `canvasLoc`, `topicApproved`
+- **PER-KEYWORD FIELDS:** `keyword`, `volume`, `sortingStatus` (Unsorted/Partially Sorted/Completely Sorted/AI-Sorted/**Reshuffled** — last value added 2026-04-25 Session 3b; assigned by P3-F7 reconciliation pass when a keyword that was previously AI-Sorted is no longer linked to any topic on the canvas after a batch-rebuild; surfaced as a yellow badge in the AST so admin can spot the alarm; auto-eligible for re-placement under Auto-Analyze's default scope), `tags`, `topic`, `canvasLoc`, `topicApproved`
 - **SHARED WITH:** TBD — likely Content Development, Conversion Funnel, Marketplace Optimization
 - **R/W DOWNSTREAM:** TBD at per-workflow design time
 
