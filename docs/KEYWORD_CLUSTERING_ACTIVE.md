@@ -1,9 +1,10 @@
 # KEYWORD CLUSTERING — ACTIVE DOCUMENT
 ## Current state of the Keyword Clustering workflow tool (Group B, tool-specific)
 
-**Last updated:** April 25, 2026 (Phase 1g-test follow-up Part 3 — Pivot Session E — V2 code paths deleted from `AutoAnalyze.tsx` (Mode A/B + delta merge + salvage + V2 picker); UUID-PK schema migration shipped (CanvasNode + Pathway ids now String UUIDs; SisterLink FKs follow; CanvasState drops nextNodeId/nextPathwayId, gains nextStableIdN); 3 cosmetic Infrastructure TODOs from Pivot D resolved; 74 unit tests pass; build clean; new POST-PIVOT-SESSION-E STATE block added above)
-**Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-E (Claude Code)
-**Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-D (Claude Code)
+**Last updated:** April 26, 2026 (Phase-1 polish bundle — three deferred Phase-1 items shipped (canvas-layout visual verification on populated 40-topic canvas DONE + Direct-mode UI hint DONE + Adaptive-Thinking warning DONE); one cosmetic `+x more` cut-off bug surfaced + fixed in two-attempt cycle (commits `950e4b5` then `c891c36`); one new architectural Phase-1 polish item identified (Funnel-Order Pass — design captured, build deferred); one new follow-up item identified (empirical validation of UI-hint thresholds); new POST-PHASE-1-POLISH-BUNDLE STATE block added above)
+**Last updated in session:** session_2026-04-26_phase1-polish-bundle (Claude Code)
+**Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-E (Claude Code)
+**Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-pivot-session-D (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-pivot-session-C (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-pivot-session-B (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-pivot-session-A (Claude Code)
@@ -24,7 +25,70 @@
 
 ---
 
-## ⚠️ POST-PIVOT-SESSION-E STATE (READ FIRST — updated 2026-04-25 Pivot Session E)
+## ⚠️ POST-PHASE-1-POLISH-BUNDLE STATE (READ FIRST — updated 2026-04-26 Phase-1 polish bundle)
+
+**As of 2026-04-26 Phase-1 polish bundle session (three deferred Phase-1 items shipped + one cosmetic canvas bug fixed in two-attempt cycle + one new architectural polish item identified + one new follow-up item identified):**
+
+### What this session did
+
+Director picked option (a) post-Pivot-E from the previous session's "NEXT" guidance and bundled three deferred Phase-1 items in one session. All three shipped, all on vklf.com.
+
+1. **Visual verification of canvas-layout engine.** Director used existing populated 40-topic canvas (cleanliness met the bar — no overlap, no description overflow visible at session start). Confirmed: no overlap, descriptions fit inside boxes, type-aware placement working, pathway separation acceptable. The original "blank-canvas" framing from the prior session's deferred item was relaxed by mutual agreement once director's existing project met the cleanliness bar (faster than spinning up a fresh project; valid test against new-batch-on-existing-canvas integration). Activity-log-confirmed engine behavior from Session 3b verify still holds. **One cosmetic bug surfaced:** the `+x more` keyword-count indicator on topic boxes was vertically clipped (bottom of letterforms cut off along a horizontal line) when a topic box had 6+ keywords. Two-attempt fix:
+   - **First attempt** (commit `950e4b5`): Claude added CSS `white-space: nowrap; flex-shrink: 0; margin-right: 4px` to `.cvs-kw-more` based on the hypothesis that the text was being word-broken. Director: "still broken." Hypothesis was wrong.
+   - **Second attempt** (commit `c891c36`, after director uploaded a screenshot to `docs/cutoff.png` for diagnostic — since deleted): removed the standalone `+x more` element entirely; folded the hidden-count info into the expand button label (button now reads `▼ N (+M)` instead of `▼ N` when there are M keywords beyond the preview). Structurally cannot wrap or clip. Director-confirmed fixed.
+   - Lesson logged in `CORRECTIONS_LOG.md` 2026-04-26 entry: when fixing a UI bug Claude can't see directly, ask for a screenshot or specific verbal disambiguation BEFORE coding.
+
+2. **Direct-mode UI hint (under API Mode dropdown).** Conditional inline hint added in `AutoAnalyze.tsx`. Visible only when `apiMode === 'server'` AND `est.nKeywords >= 100`. Wording: *"⚠ With N unsorted keywords (~M batches), batches may exceed Vercel's 5-min server timeout and fail mid-flight. Switch API Mode to Direct (browser → Anthropic) to avoid this."* Code comment notes the hint becomes obsolete after AWS migration (per Phase 2 server-side execution plan).
+
+3. **Adaptive-Thinking 0-output warning (under Thinking row).** Conditional inline warning added in `AutoAnalyze.tsx`. Visible only when `thinkingMode === 'adaptive'` AND `nodes.length >= 50`. Wording: *"⚠ With N topics on the canvas, Adaptive Thinking can occasionally produce 0 output tokens (a fully wasted API call). If you see a batch fail with empty output, switch Thinking to Enabled with a Budget of 12000+."* Code comment notes V3 may have made this obsolete; revisit once empirical data from V3 runs confirms.
+
+### What did NOT change this session
+
+- **No DB schema changes.** No new migrations.
+- **No API route changes.** All edits were in client-side React components + CSS.
+- **No prompt changes.** AUTO_ANALYZE_PROMPT_V3.md is unchanged.
+- **No new operations or applier-vocabulary changes.** The architectural state from Pivot Session E is preserved.
+- **74 unit tests still pass.** No test changes.
+- **Build clean throughout.** Each commit verified with `npm run build` before push.
+
+### New Phase-1 polish item identified — Funnel-Order Pass
+
+Director observed mid-session during the visual verification: the AI does great semantic clustering (right keywords → right topics; right sub-topics under right parents) BUT root-level (depth-1) topics on canvas appear in the order the model emitted them (essentially internal processing order), not in conversion-funnel arc order (awareness → consideration → decision → treatment). Same applies to ordering of nested children within a common parent.
+
+V3 prompt's Step 7 explicitly asks the model to think about funnel ordering, but the operation vocabulary deliberately excludes position operations (PIVOT_DESIGN.md §1.5: *"Layout is the layout engine's concern; the AI never positions nodes manually"*), so the model has no mechanism to express that ordering. Layout engine sorts siblings by `baseY` (`src/lib/canvas-layout.ts` line 224-225 + 257-259), which for new topics defaults to creation order.
+
+**Recommended design** (locked this session, build deferred to a future session):
+- Run as a dedicated pass, separate from clustering (avoids piling cognitive load on already-complex per-batch prompt; ordering is canvas-global while clustering is batch-local).
+- Operate per-parent (one ordering call per non-leaf parent; each call sees just that parent's children + funnel-stage hint; cheap).
+- Apply via `baseY` overwrites OR a new `funnelOrder` field — exact mechanism deferred to design session.
+- Lives in Workflow #1 (Keyword Clustering), NOT Workflow #5 (Conversion Funnel & Narrative Architecture). W#5 is far away (W#2 hasn't started); W#1 needs ordering today.
+
+**Manual workaround in the meantime:** layout engine respects `baseY` from manual drag, so admin can drag root-level topics into preferred order on small canvases.
+
+Full spec captured in `docs/ROADMAP.md` Phase 1 polish items section.
+
+### New follow-up item — Empirical validation of UI-hint thresholds
+
+Director's call: the 100-keyword and 50-topic thresholds for Items 2 and 3 are placeholders chosen by Claude as round-number defaults. Validate against real-batch-run data over the next 3-5 runs and adjust the thresholds (or remove the hints entirely if they're never warranted on V3). Captured in `docs/ROADMAP.md` Phase 1 polish items section. Zero net effort — data collection happens during natural test runs; threshold adjustment is a 1-line code change per hint when data warrants.
+
+### Live-site state after this session
+
+- vklf.com runs commits `950e4b5` (Phase-1 polish bundle code) + `c891c36` (`+x more` corrected fix) on top of the prior `f282c64` (Pivot Session E end-of-session docs).
+- Auto-Analyze panel UI now shows two new conditional hints when their trigger conditions are met (Direct-mode hint at 100+ unsorted keywords in server mode; Adaptive-Thinking warning at 50+ canvas topics with adaptive thinking).
+- Canvas topic boxes with 6+ keywords now show the hidden count in the expand button label (e.g., `▼ 8 (+3)`) instead of as a separate `+x more` line.
+- All canvas-layout engine behavior from Pivot Session 3b is unchanged.
+- Bursitis canvas state (post-Pivot-E wipe + any subsequent runs by director) is unchanged — this session made no DB writes.
+
+### Standing instructions for next session
+
+- Three "NEXT" choices from Pivot E remain: (a) more Phase-1 polish items (the new Funnel-Order Pass is the highest-value architectural one; the empirical-threshold-validation item happens passively during normal runs), (b) Sessions 7-9 Human-in-Loop mode build per `AI_TOOL_FEEDBACK_PROTOCOL.md`, or (c) Workflow #2 (Competition Scraping) — needs new Workflow Requirements Interview per HANDOFF_PROTOCOL Rule 18 first.
+- If running Auto-Analyze on a project with 100+ unsorted keywords in server mode, the Direct-mode hint will fire — director can verify the wording matches what's documented above.
+- If running Auto-Analyze on a project with 50+ canvas topics with Adaptive Thinking selected, the warning will fire — same.
+- During any large-batch run: capture wall-clock per server-mode batch + watch for Adaptive-Thinking 0-output failures; data feeds the empirical-threshold-validation item.
+
+---
+
+## ⚠️ POST-PIVOT-SESSION-E STATE (updated 2026-04-25 Pivot Session E — preserved as historical context)
 
 **As of 2026-04-25 Pivot Session E (V3 made the only path; V2 band-aid code paths deleted; UUID-PK schema migration shipped; 3 cosmetic Pivot-D Infrastructure TODOs resolved; data loss accepted by director because Bursitis was test-only):**
 

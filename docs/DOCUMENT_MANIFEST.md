@@ -1,9 +1,10 @@
 # DOCUMENT MANIFEST
 ## Ground-truth registry of every handoff document in the PLOS system
 
-**Last updated:** April 25, 2026 (Phase 1g-test follow-up Part 3 — Pivot Session E — V2 code paths deleted from `AutoAnalyze.tsx`; UUID-PK schema migration shipped (Option D — beyond original ROADMAP scope, unlocked by director's "data loss is OK" disclosure); 3 cosmetic Pivot-D Infrastructure TODOs resolved; AutoAnalyze.tsx 2486 → 1331 lines; build clean; 74 unit tests pass)
-**Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-E (Claude Code)
-**Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-D (Claude Code)
+**Last updated:** April 26, 2026 (Phase-1 polish bundle — three deferred Phase-1 items shipped (canvas-layout visual verification on populated 40-topic canvas DONE + Direct-mode UI hint DONE + Adaptive-Thinking warning DONE); one cosmetic `+x more` cut-off bug surfaced + fixed in two-attempt cycle; one new architectural Phase-1 polish item identified (Funnel-Order Pass — design captured, build deferred); one new follow-up item identified (empirical validation of UI-hint thresholds))
+**Last updated in session:** session_2026-04-26_phase1-polish-bundle (Claude Code)
+**Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-E (Claude Code)
+**Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-pivot-session-D (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-pivot-session-C (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-pivot-session-B (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-pivot-session-A (Claude Code)
@@ -31,17 +32,17 @@ These 13 documents form the persistent handoff context.
 | # | Document | Purpose | Last modified | Modified this session? |
 |---|---|---|---|---|
 | 1 | `PROJECT_CONTEXT.md` | Big-picture project context, philosophy, methodology, discover-as-you-build approach | 2026-04-17 | NO |
-| 2 | `PLATFORM_ARCHITECTURE.md` | Technical architecture — routes, schema, auth, file structure, tech debt | 2026-04-25 (Pivot Session E — UUID-PK migration shipped; CanvasNode + Pathway ids now String UUIDs; SisterLink FKs follow; CanvasState drops nextNodeId/nextPathwayId, gains nextStableIdN; Race-condition Known Tech Debt entry marked RESOLVED) | ✅ YES |
+| 2 | `PLATFORM_ARCHITECTURE.md` | Technical architecture — routes, schema, auth, file structure, tech debt | 2026-04-25 (Pivot Session E — UUID-PK migration shipped; CanvasNode + Pathway ids now String UUIDs; SisterLink FKs follow; CanvasState drops nextNodeId/nextPathwayId, gains nextStableIdN; Race-condition Known Tech Debt entry marked RESOLVED) | NO |
 | 3 | `PLATFORM_REQUIREMENTS.md` | Platform-wide requirements — scale, user-model, review cycle, audit, concurrency, phasing | 2026-04-17 | NO |
 | 4 | `NAVIGATION_MAP.md` | Every route + click path through PLOS — UI navigation source of truth | 2026-04-17 | NO |
 | 5 | `DATA_CATALOG.md` | Every data item — where it lives, Human Reference Language, cross-workflow sharing contracts | 2026-04-25 (Pivot Session B — §5 CanvasNode entries gain `stableId` (`t-N` format, persistent identifier the AI uses across batches) + `stabilityScore` (0.0–10.0; gates JUSTIFY_RESTRUCTURE at ≥7.0; populated later by stability-scoring algorithm)) | NO |
-| 6 | `ROADMAP.md` | Development execution plan — completed work + remaining phases | 2026-04-25 (Pivot Session E — Pivot E ✅ DONE summary; the "audit-only transition window" foreshortened by mutual agreement; 3 Infrastructure TODOs all RESOLVED; new "NEXT (post-pivot)" guidance: pick from Phase-1 polish / HIL build / Workflow #2) | ✅ YES |
-| 7 | `CORRECTIONS_LOG.md` | Append-only log of mistakes + extracted patterns | 2026-04-25 (Pivot Session D — last update; no new entries this session — Rule-16 zoom-out about the "preserve Bursitis data" unstated assumption was raised and corrected mid-session, not a slip worth its own entry) | NO |
-| 8 | `CHAT_REGISTRY.md` | Chronological log of chats + URLs + work-summaries (post-Ckpt-9: Claude Code sessions use session-identifier format) | 2026-04-25 (Pivot Session E — new row for session_2026-04-25_phase1g-test-followup-part3-pivot-session-E; fourteenth Claude Code session) | ✅ YES |
+| 6 | `ROADMAP.md` | Development execution plan — completed work + remaining phases | 2026-04-26 (Phase-1 polish bundle — items 9/10/11 from Phase 1g-test follow-up REMAINING marked DONE; new "Phase-1 polish bundle (2026-04-26)" section added with full delivery summary; new "Funnel-Order Pass" Phase-1 polish item added to Phase 1 polish items section; new "Empirical validation of UI-hint thresholds" follow-up item; new "Phase-2 server-side execution — explicit tie-back to Direct-mode UI hint" note) | ✅ YES |
+| 7 | `CORRECTIONS_LOG.md` | Append-only log of mistakes + extracted patterns | 2026-04-26 (Phase-1 polish bundle — 1 new low-medium-severity entry: shipped CSS fix for `+x more` cut-off bug based on guess about cause without first asking for screenshot; first attempt didn't address actual cause; second attempt after director uploaded screenshot succeeded; lesson named — when fixing a UI bug Claude can't see, ask for screenshot or specific verbal disambiguation BEFORE coding) | ✅ YES |
+| 8 | `CHAT_REGISTRY.md` | Chronological log of chats + URLs + work-summaries (post-Ckpt-9: Claude Code sessions use session-identifier format) | 2026-04-26 (Phase-1 polish bundle — new row for session_2026-04-26_phase1-polish-bundle; fifteenth Claude Code session) | ✅ YES |
 | 9 | `HANDOFF_PROTOCOL.md` | Rules for how chats operate — start/mid/end protocols, communication rules, interview rules | 2026-04-18 | NO |
 | 10 | `DOCUMENTATION_ARCHITECTURE.md` | Design of the doc-system itself (DLMS, tool graduation, group A/B, workflow interview pattern, Claude Code migration) | 2026-04-17 | NO |
 | 11 | `NEW_CHAT_PROMPT.md` | **Historical** — claude.ai era briefing template. Post-Phase-M, Claude Code sessions use `CLAUDE_CODE_STARTER.md` instead. | 2026-04-17 | NO |
-| 12 | `DOCUMENT_MANIFEST.md` | This file — ground-truth doc registry | 2026-04-25 (Pivot Session E — timestamps + modified flags + Pivot E summary) | ✅ YES |
+| 12 | `DOCUMENT_MANIFEST.md` | This file — ground-truth doc registry | 2026-04-26 (Phase-1 polish bundle — timestamps + modified flags + Phase-1-polish-bundle summary) | ✅ YES |
 | 13 | `CLAUDE_CODE_MIGRATION.md` | Migration plan and operational rules for shifting from claude.ai to Claude Code. Executed successfully in Ckpt 9+9.5. | 2026-04-17 | NO |
 | 14 | `AI_TOOL_FEEDBACK_PROTOCOL.md` | Platform-wide standard for every AI-using tool in PLOS. Defines required integration points (structured decision output with reasoning, admin review surface with 3 actions + 2 feedback channels, feedback-repo write/read-back, quality scoring, model/provider registry), 3-phase implementation roll-out, and the primer text to include in every new workflow's design doc. | 2026-04-20 | NO |
 | 15 | `MODEL_QUALITY_SCORING.md` | Stability-score algorithm spec. Defines 0-10 stability_score per AI output item, factors that add/subtract to score, model's interpretation instructions, JUSTIFY_RESTRUCTURE payload requirement for high-score modifications, admin scoring guidelines (1-5 scale with 4 evaluation dimensions), meta-note on how algorithm was derived + review triggers + how to propose weight changes. | 2026-04-20 | NO |
@@ -51,29 +52,25 @@ These 13 documents form the persistent handoff context.
 **Not created this session (Group A):** no new Group A docs.
 
 **Modified this session (Group B):**
-- `docs/PIVOT_DESIGN.md` — Pivot Session D marked ✅ DONE in §4 with full delivery summary; §6 metrics rewritten with real numbers from end-to-end Bursitis testing; header timestamp updated.
-- `docs/KEYWORD_CLUSTERING_ACTIVE.md` — new POST-PIVOT-SESSION-D STATE block added above POST-PIVOT-SESSION-C (which is preserved as historical context); header timestamp updated.
+- `docs/KEYWORD_CLUSTERING_ACTIVE.md` — new POST-PHASE-1-POLISH-BUNDLE STATE block added above POST-PIVOT-SESSION-E (which is preserved as historical context); header timestamp updated; full record of three deferred Phase-1 items shipped, the two-attempt `+x more` fix, the Funnel-Order Pass design captured, and the empirical-threshold validation item.
 
 **Code changes this session (src/):**
-- NEW `src/lib/auto-analyze-v3.ts` (~470 LOC; pure-data wiring layer — TSV serializer + JSONL parser + applier-state translation + rebuild-payload materializer).
-- NEW `src/lib/auto-analyze-v3.test.ts` (28 unit tests).
-- MODIFIED `src/lib/operation-applier.ts` (1 bug fix — ADD_TOPIC root-topic relationship validation; AddTopicOp type widened to `Relationship | null`).
-- MODIFIED `src/hooks/useCanvas.ts` (additive: `stableId: string` + `stabilityScore: number` on CanvasNode interface).
-- MODIFIED `src/app/projects/[projectId]/keyword-clustering/components/AutoAnalyze.tsx` (~444 lines added — V3 integration: outputContract setting + UI picker + assemblePromptV3 + processBatchV3 + validateResultV3 + doApplyV3 + dispatch in runLoop and handleApplyBatch).
-- MODIFIED `src/app/api/projects/[projectId]/canvas/rebuild/route.ts` (composite-key upsert via `projectWorkflowId_stableId` + diagnostic detail field on 500 response).
-- MODIFIED `src/app/api/projects/[projectId]/canvas/route.ts` (autoheal switched from per-project to global max + synthesized CanvasState defaults when row missing).
+- MODIFIED `src/app/projects/[projectId]/keyword-clustering/components/AutoAnalyze.tsx` (added two conditional inline UI hints: Direct-mode hint under API Mode dropdown, Adaptive-Thinking warning under Thinking row).
+- MODIFIED `src/app/projects/[projectId]/keyword-clustering/components/CanvasPanel.tsx` (removed standalone `+x more` span element; updated expand button label to include hidden-count `(+M)` when `kwIds.length > 5`).
+- MODIFIED `src/app/projects/[projectId]/keyword-clustering/components/canvas-panel.css` (removed now-unused `.cvs-kw-more` rule entirely after the `+x more` element was removed; mid-session interim addition of `white-space: nowrap; flex-shrink: 0; margin-right: 4px` to that rule was rolled back as dead code in the second-attempt fix).
 
-**Files in commit (this session):**
-- `docs/AUTO_ANALYZE_PROMPT_V3.md` (NEW, ~640 lines).
-- `docs/PIVOT_DESIGN.md` (Session C marked DONE in §4).
-- `docs/KEYWORD_CLUSTERING_ACTIVE.md` (POST-PIVOT-SESSION-C STATE block added).
-- `docs/ROADMAP.md` (header + REMAINING list re-numbered; new Pivot Session C section added; Pivot Session D promoted to NEXT).
-- `docs/CHAT_REGISTRY.md` (new top row for session_2026-04-25_phase1g-test-followup-part3-pivot-session-C).
-- `docs/DOCUMENT_MANIFEST.md` (this file — timestamps + flags + Pivot Session C summary).
+**Code commits already pushed mid-session (per fix-and-verify cycle, both pushed with director's explicit Rule-9 approval):**
+- `950e4b5` — Phase-1 polish bundle: `+x more` cut-off CSS fix attempt (turned out not to address the actual cause) + 2 conditional UI hints (Direct-mode + Adaptive-Thinking).
+- `c891c36` — Canvas: fold "+x more" indicator into expand button label (the actual fix that worked).
 
-**Single commit:** pending Rule-9 approval at end of session before `git push origin main`. Branch is currently in sync with origin/main (Pivot Session B already pushed at `1c281da`).
+**End-of-session doc commit (this commit, pending Rule-9 push approval):**
+- `docs/ROADMAP.md` (Phase-1 polish bundle section added; items 9/10/11 marked DONE; new Funnel-Order Pass polish item; new empirical-threshold validation item; Phase-2 server-side tie-back note).
+- `docs/CORRECTIONS_LOG.md` (1 new entry: diagnostic-without-screenshot pattern).
+- `docs/KEYWORD_CLUSTERING_ACTIVE.md` (new POST-PHASE-1-POLISH-BUNDLE STATE block).
+- `docs/CHAT_REGISTRY.md` (new top row for session_2026-04-26_phase1-polish-bundle).
+- `docs/DOCUMENT_MANIFEST.md` (this file — timestamps + flags + Phase-1-polish-bundle summary).
 
-**Earlier-session code changes (Pivot Session B and prior — already documented in this manifest under previous-header sections; not duplicated here):** see the Pivot Session B header summary at the top of this file for the full list shipped at `1c281da`.
+**Earlier-session code changes (Pivot Session E and prior — already documented in this manifest under previous-header sections; not duplicated here).**
 
 ---
 

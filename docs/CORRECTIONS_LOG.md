@@ -2,9 +2,10 @@
 ## Append-only record of mistakes made during chats and lessons learned
 
 **Started:** April 16, 2026
-**Last updated:** April 25, 2026 (Phase 1g-test follow-up Part 3 — Pivot Session D — 1 new entry: medium-severity consolidated entry covering 5 mid-session bugs surfaced by live testing of the new V3 wiring layer (root-topic relationship validation drift; Prisma-6 P2025 on loose upsert where shape; global-PK collision band-aided via global autoheal; missing-CanvasState synthesis; BATCH_REVIEW newTopics not populated). All 5 caught + fixed in-session via flag-then-fix-then-test cycles; live-site never showed user-visible symptoms beyond the test runs; structural keyword-preservation property of the V3 design held throughout. Two architectural lessons named (interface-drift between applier and prompt; global-PK design needs schema migration for proper fix))
-**Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-D (Claude Code)
-**Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-B (Claude Code)
+**Last updated:** April 26, 2026 (Phase-1 polish bundle — 1 new low-medium-severity entry: shipped a CSS fix for the `+x more` cut-off bug based on a guess about the cause without first asking for a screenshot. Term "cut off horizontally" was ambiguous (Claude read it as "right side clipped"; director meant "cut along a horizontal line through the middle"). First attempt didn't address the actual cause (vertical clipping from foreignObject overflow); second attempt after director uploaded a screenshot succeeded. Lesson named: when fixing a UI bug without ability to see the rendered output, ask for a screenshot or specific verbal disambiguation BEFORE coding the fix.)
+**Last updated in session:** session_2026-04-26_phase1-polish-bundle (Claude Code)
+**Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-D (Claude Code)
+**Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-pivot-session-B (Claude Code)
 **Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-A (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-session3b-verify (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-session3b (Claude Code)
@@ -43,6 +44,32 @@
 ---
 
 ## Entries
+
+### 2026-04-26 — Shipped a UI-fix attempt based on a guess about the cause without asking for a screenshot first (low-medium severity)
+**Session:** session_2026-04-26_phase1-polish-bundle (Claude Code)
+**Tool/Phase affected:** Keyword Clustering / CanvasPanel rendering / Phase-1 polish bundle
+**Severity:** Low-Medium (no production damage, no data loss; one wasted commit + push + Vercel deploy + director hard-refresh round-trip; ~10 min lost; the second attempt succeeded after diagnosis-with-screenshot)
+
+**What happened:** Director reported the `+x more` keyword-count indicator on canvas topic boxes was "cut off horizontally within the topics box by some kind of padding... I think it is because the next line shows the xkw ych in the lower right." Claude inspected the rendering code (`CanvasPanel.tsx` lines 889-915, `canvas-panel.css` `.cvs-kw-list` + `.cvs-kw-more` blocks) and the SVG/foreignObject geometry, then formed a hypothesis: "+x more" was getting word-broken (text content "+5 more" splitting into "+5 mo" on the visible row and "re" wrapping below into the clipped overflow region). Shipped CSS fix in commit `950e4b5`: added `white-space: nowrap; flex-shrink: 0; margin-right: 4px` to `.cvs-kw-more`. Pushed to main, Vercel redeployed, asked director to hard-refresh and verify. Director: "still broken." Then director uploaded a screenshot to `docs/cutoff.png` (since deleted) showing the actual failure mode: "+3 more" was rendered as one whole unit (not word-broken — meaning Claude's CSS fix did make the text stay whole), but the bottom half of the letterforms was sliced off by a horizontal cut line — vertical clipping from the kw-preview foreignObject's `KW_PREVIEW_H=36` overflow boundary. The "+x more" wraps to a third row that extends past the foreignObject's bottom edge; `.cvs-node-kw-preview` has `overflow: hidden`; bottom of letters gets clipped. Claude's first fix addressed the wrong failure mode entirely. Second fix (commit `c891c36`): removed the standalone `+x more` element; folded the hidden-count info into the expand button label (button now reads `▼ N (+M)` instead of `▼ N`). Director-confirmed fixed.
+
+**Root cause:** Claude formed a hypothesis about the cause of a UI bug from the verbal description alone, without seeing the rendered output. The director's wording — "cut off horizontally" — was ambiguous between two distinct failure modes:
+- **Mode A — "cut off in the horizontal direction"** = right side of text missing (Claude's read; would be addressed by `white-space: nowrap`).
+- **Mode B — "cut along a horizontal line through the middle"** = top or bottom half of text missing (director's actual meaning; would NOT be addressed by `white-space: nowrap` because the text rendering itself is fine — the foreignObject overflow is the cause).
+Claude picked Mode A and shipped without verifying. The fix made the text stay whole horizontally (which it would have done anyway) but did not address the vertical clipping.
+
+**How caught:** Director's "still broken" reply followed by the uploaded screenshot, which immediately disambiguated which failure mode was real.
+
+**Correction:** Second attempt (`c891c36`) addressed the actual cause structurally — by removing the third-row content entirely. The hidden-count info moved into the button label, which is on a row that always has space (the chip row, not the wrapped overflow row). No more clipping risk regardless of foreignObject height.
+
+**Prevention:**
+
+1. **When fixing a UI bug without ability to see the rendered output, ask for a screenshot OR for verbal disambiguation BEFORE coding the fix.** Specifically: if the user's bug description contains an ambiguous spatial term (cut off horizontally, looks weird, doesn't fit, overlaps), pose two or three concrete alternative interpretations back to the user and ask which one matches before picking a fix mechanism. Example: *"When you say 'cut off horizontally,' do you mean (a) the right side of the text is missing, like '+5 mo' instead of '+5 more,' OR (b) the bottom of the letters is sliced off along a horizontal line so the top half of the characters is visible but the bottom is gone?"* — that single question would have caught the misinterpretation in 30 seconds without a wasted commit.
+
+2. **Generalizable rule for any visual bug Claude can't see:** the cost of asking for a screenshot or a verbal-disambiguation question is one round-trip (~30 sec). The cost of guessing wrong and shipping is one round-trip + commit + push + Vercel deploy + hard-refresh (~10 min). Always ask first.
+
+3. **Pattern recognition:** this is the second instance in the project where Claude shipped a fix based on hypothesis-from-symptoms rather than direct observation. The earlier instance was the V2 Mode-A→B reactive switch design assumption (later corrected during 2026-04-20 follow-up). Both were addressed in retrospect; both could have been caught by ask-first-before-coding.
+
+---
 
 ### 2026-04-25 — Five mid-session V3 wiring bugs surfaced by live testing (medium severity consolidated; all caught + fixed in-session via flag-then-fix-then-test cycles)
 **Session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-D (Claude Code)
