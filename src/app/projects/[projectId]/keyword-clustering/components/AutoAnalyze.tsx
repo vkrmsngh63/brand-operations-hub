@@ -1154,6 +1154,12 @@ export default function AutoAnalyze({
                 <option value="server">Server proxy (browser → Vercel → Anthropic)</option>
               </select>
             </div>
+            {/* Direct-mode hint: relevant only while we're on Vercel's 5-min serverless ceiling. After AWS migration (per ROADMAP Phase 2 server-side execution), server-side handles long-running jobs natively and this hint becomes obsolete — remove it then. */}
+            {apiMode === 'server' && est.nKeywords >= 100 && (
+              <div style={{ fontSize: '10px', color: '#92400e', background: '#fef3c7', padding: '6px 8px', borderRadius: '4px', margin: '0 0 6px 0', border: '1px solid #fde68a', lineHeight: 1.4 }}>
+                ⚠ With {est.nKeywords} unsorted keywords (~{est.nBatches} batches), batches may exceed Vercel&rsquo;s 5-min server timeout and fail mid-flight. Switch API Mode to <strong>Direct (browser → Anthropic)</strong> to avoid this.
+              </div>
+            )}
             {apiMode === 'direct' && (
               <div className="aa-row">
                 <span className="aa-label">API Key</span>
@@ -1227,6 +1233,12 @@ export default function AutoAnalyze({
                 disabled={aaState !== 'IDLE'}
               />
             </div>
+            {/* Adaptive-Thinking 0-output-tokens hint: V2-era issue first observed in Phase 1g-test 2026-04-18 kickoff session — Adaptive Thinking on a large prompt occasionally produced 0 output tokens (wasted call). V3 outputs are smaller so this may no longer trigger; until we have V3 test data either way, keep this hint as defensive UI nudge for any non-trivial canvas. Revisit (and possibly remove) once a few V3 runs confirm the bug is gone. */}
+            {thinkingMode === 'adaptive' && nodes.length >= 50 && (
+              <div style={{ fontSize: '10px', color: '#92400e', background: '#fef3c7', padding: '6px 8px', borderRadius: '4px', margin: '0 0 6px 0', border: '1px solid #fde68a', lineHeight: 1.4 }}>
+                ⚠ With {nodes.length} topics on the canvas, Adaptive Thinking can occasionally produce 0 output tokens (a fully wasted API call). If you see a batch fail with empty output, switch Thinking to <strong>Enabled</strong> with a Budget of <strong>12000+</strong>.
+              </div>
+            )}
             <div className="aa-row">
               <span className="aa-label">Vol threshold<span className="aa-help">ⓘ<span className="aa-tip">Keywords with volume above this are flagged for priority placement in the topic hierarchy.</span></span></span>
               <input
