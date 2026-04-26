@@ -1,9 +1,11 @@
 # ROADMAP
 ## Product Launch Operating System (PLOS) — Development Execution Plan
 
-**Last updated:** April 25, 2026 (Phase 1g-test follow-up Part 3 — Pivot Session E — V2 code paths deleted from `AutoAnalyze.tsx`; UUID-PK schema migration shipped (CanvasNode + Pathway ids are now String UUIDs); 3 cosmetic Pivot-D Infrastructure TODOs resolved; 74 unit tests pass; build clean; AutoAnalyze.tsx 2486 → 1331 lines; pivot complete)
-**Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-D (Claude Code)
-**Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-C (Claude Code)
+**Last updated:** April 26, 2026 (Workflow-transition architecture session — Strategy 3 layered placement + intent-equivalence binding rule baked into `AUTO_ANALYZE_PROMPT_V3.md`; Workflow #5 narrative-driven-comprehensiveness directive captured under Workflow #5 entry; cross-tool integration methodology codified — Cross-Tool Data Flow Map promoted in `DATA_CATALOG.md` §7; `HANDOFF_PROTOCOL.md` Rules 21 (Pre-interview directive scan), 22 (Graduated-Tool Re-Entry Protocol), 23 (Change Impact Audit) added; Rule 18 expanded with §A/§B DESIGN doc convention + mid-build Read-It-Back + reciprocal output declaration; §4 Step 2 Scenario B Tool Graduation deliverables list expanded to 16 items.)
+**Last updated in session:** session_2026-04-26_workflow-transition-architecture-and-v3-prompt-refinement (Claude Code)
+**Previously updated in session:** session_2026-04-26_phase1-polish-bundle (Claude Code)
+**Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-pivot-session-D (Claude Code)
+**Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-pivot-session-C (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-pivot-session-B (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-pivot-session-A (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-session3b-verify (Claude Code)
@@ -646,7 +648,21 @@ Reconciliation pass after every successful apply reported `0 off-canvas → Resh
 **Status:** ❌ NOT STARTED.
 
 #### Workflow 5 — Conversion Funnel & Narrative Architecture (🎯)
-**Status:** ❌ NOT STARTED.
+**Status:** ❌ NOT STARTED. Prereq: scaffold + W#1, W#2, W#3, W#4 Data Contracts.
+
+**NARRATIVE-DRIVEN COMPREHENSIVENESS — director directive captured 2026-04-26:**
+
+Topic creation in PLOS has TWO layers:
+
+1. **Keyword-driven comprehensiveness — Workflow #1's job.** Each keyword is decomposed into compound intent + component dimensions; primary placement at the most-specific compound topic + secondary placements at each dimension topic ensure every facet has a topic home; bridge topics + complementary topics are created when the dimension pattern suggests them. This is what's specified in `AUTO_ANALYZE_PROMPT_V3.md` (Strategy 3 layered placement + intent-equivalence rule). Workflow #1's complement-detection (Step 4c) is bounded — it operates only on keyword-surfaced dimensions with natural complements (age → young/old, gender → men/women, severity → mild/severe, etc.).
+
+2. **Narrative-driven comprehensiveness — Workflow #5's job.** AFTER Workflow #1's keyword-driven pass, the conversion funnel is reviewed for **narrative gaps that no keyword surfaced**. Director's explicit example: given existing topics "How bursitis affects you differently based on age" and "How bursitis affects men and women differently", Workflow #5 may identify that a higher-level unifying parent "How does bursitis affect different people differently depending on their situation" is needed for narrative cohesion, AND that a sibling such as "Bursitis in athletes" should be added even though no keyword surfaced it — because it plugs a hole in the conversion funnel that allows for smoother **overarching narratives** (across the funnel from awareness to conversion), **micro-narratives** (within a single page or section), and **cross-narratives** (where a link within one piece of text connects to another piece of text on another page).
+
+**The goal is not comprehensiveness for its own sake — it is to plug holes in the conversion funnel so narratives flow smoothly.** Topics added at this stage may have NO primary keywords and few or no secondary keywords; they exist purely to scaffold the narrative path from awareness to conversion. This is broader than W#1's complement-detection — W#5 generates topics from a holistic narrative-arc view of the funnel, not from keyword-surfaced dimension patterns.
+
+**Reminder mechanism (per `HANDOFF_PROTOCOL.md` Rule 21):** when the Workflow #5 design session begins, this directive must be explicitly surfaced to the director at the start of the session. The Workflow Requirements Interview for W#5 must treat narrative-driven comprehensiveness as a first-class design requirement, not an afterthought. Forward-pointer to this entry is in `DATA_CATALOG.md` §6.4 to ensure the W#5 design session loads it.
+
+**Build prerequisites:** Shared Workflow-Tool Scaffold (Phase 1α), W#1 Data Contract, plus dependencies on W#2, W#3, W#4 Data Contracts (which produce the competitive landscape, product-strategy, and brand-identity data the funnel must accommodate). Full Workflow Requirements Interview happens at W#5 design time.
 
 #### Workflow 6 — Content Development (✍️)
 **Status:** ❌ NOT STARTED.

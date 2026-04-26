@@ -267,6 +267,7 @@ Entries will be added during each workflow's Tool Graduation Ritual:
 - 6.2 Therapeutic Strategy & Product Family Design
 - 6.3 Brand Identity & IP
 - 6.4 Conversion Funnel & Narrative Architecture
+  - **Forward-pointer (captured 2026-04-26):** see `ROADMAP.md` Workflow #5 entry — narrative-driven comprehensiveness is a first-class W#5 directive. Per `HANDOFF_PROTOCOL.md` Rule 21, the W#5 design session must surface this directive at interview start.
 - 6.5 Content Development
 - 6.6 Multi-Media Assets & App Development
 - 6.7 Marketplace Optimization & Launch
@@ -280,25 +281,67 @@ Entries will be added during each workflow's Tool Graduation Ritual:
 
 ---
 
-## 7. Shared Data Registry
+## 7. Cross-Tool Data Flow Map (PROMOTED 2026-04-26 from "Shared Data Registry")
 
-Data items explicitly shared across workflows, with R/W flags per consumer.
+This map is the central reference for cross-workflow data integration. Every workflow tool declares (a) what it READS from upstream workflows and (b) what it PRODUCES for downstream workflows. As tools graduate, their entries move from PROVISIONAL to finalized.
 
-### 7.1 Currently shared
+The Map is an always-loaded index that points OUT to per-tool Data Contracts for full detail. It stays lean by being a router, not a destination.
 
-**Project metadata (name, description)** — shared across all 14 workflows
-- FROM: Project table (created on `/projects` page)
-- TECHNICAL REFERENCE: `Project.name`, `Project.description`
-- CONSUMING WORKFLOWS: All 14 — any workflow can read these to display project context
-- R/W: READ-ONLY from within a specific workflow's tool (editing name/description happens on `/projects` page)
+**Load-bearing roles:**
+- Per `HANDOFF_PROTOCOL.md` Rule 18 reciprocal output declarations, every Workflow Requirements Interview adds entries here for the new tool's row (produced data) AND column (read upstream data).
+- Per `HANDOFF_PROTOCOL.md` Rule 23 (Change Impact Audit), this Map is the load-bearing lookup mechanism for cascade-prevention before any change to a graduated tool. Every audit consults the Map first.
+- Per Tool Graduation Ritual (`HANDOFF_PROTOCOL.md` §4 Step 2 Scenario B), the Map is updated as part of the graduation deliverables stack.
 
-**ProjectWorkflow.lastActivityAt** — shared for aggregate "last activity" display
-- FROM: Updated by any workflow's API on meaningful mutation (via `markWorkflowActive()` helper)
-- TECHNICAL REFERENCE: `ProjectWorkflow.lastActivityAt`
-- CONSUMING: `/projects` page (for "most recently worked on" sort)
-- R/W: Write from individual workflow APIs; Read from /projects page
+### 7.1 Summary table — what's shared today
 
-### 7.1.1 Planned Phase 2 shared items (NOT YET BUILT)
+| Producer | Data item | Consumer(s) | R/W | Status |
+|---|---|---|---|---|
+| Project record | `Project.name`, `Project.description` | All 14 workflows | READ-ONLY (edit on `/projects` page only) | LIVE |
+| All workflows | `ProjectWorkflow.lastActivityAt` | `/projects` page (sort-by-last-activity) | WRITE from workflow APIs; READ from `/projects` page | LIVE |
+| Workflow #1 (Keyword Clustering) | (full contract pending W#1 graduation) | TBD per per-workflow design interviews | TBD | PROVISIONAL — see §7.2.1 |
+
+### 7.2 Per-tool detail (filled in as workflows graduate / get designed)
+
+#### 7.2.1 Workflow #1 — Keyword Clustering
+
+**Status:** Active development; Data Contract not yet ratified (will be at graduation).
+
+**Produces (provisional list; will be finalized at graduation per Rule 18 reciprocal output declarations):**
+
+- Topic hierarchy (canvas) — the structured conversion-funnel topic tree with primary + secondary keyword placements per Strategy 3 layered placement (per `AUTO_ANALYZE_PROMPT_V3.md`)
+- Per-topic stable IDs (`t-N` format) and stability scores (0.0-10.0)
+- Per-keyword classification (topic placement + sortingStatus + tags)
+- Removed Terms (soft-archived irrelevant keywords with `removedSource` + `aiReasoning`)
+- Pathways (conversion pathways through the canvas)
+- Sister Links (cross-cutting topic relationships)
+
+**Anticipated downstream consumers (per `PROJECT_CONTEXT.md` §2; specific R/W flags decided per-consumer at consumer's design interview):**
+
+- Workflow #2 (Competition Scraping) — likely reads topic hierarchy to seed competitor-content gap analysis. R/W TBD at W#2 design interview.
+- Workflow #3 (Therapeutic Strategy) — likely reads per-topic primary keywords to inform product family architecture. R/W TBD.
+- Workflow #4 (Brand Identity) — likely reads searcher-centric topic titles to inform brand-language alignment. R/W TBD.
+- Workflow #5 (Conversion Funnel & Narrative Architecture) — reads topic hierarchy as the structural foundation for narrative-driven funnel design; per the 2026-04-26 directive (see `ROADMAP.md` Workflow #5 entry), W#5 ALSO adds new narrative-bridge topics that are NOT surfaced by W#1's keyword analysis. R/W: READ from W#1's hierarchy + WRITE new narrative-bridge topics back to the canvas (canonical placement TBD at W#5 design interview — could be a separate W#5-owned table referencing W#1's canvas, or augmentation of W#1's canvas via a new `narrativeBridge` flag).
+- Workflow #6 (Content Development) — reads topic hierarchy to determine content production scope. R/W TBD.
+- Workflow #7 (Multi-Media Assets) — reads topic hierarchy to determine asset production scope. R/W TBD.
+- Workflows #8-14 — reads TBD per individual interview.
+
+**Reads:**
+- `Project.name`, `Project.description` (READ-ONLY, all workflows)
+
+#### 7.2.2 Workflow #2 — Competition Scraping & Deep Analysis
+
+**Status:** ❌ NOT STARTED. Workflow Requirements Interview pending.
+
+**Produces:** TBD at design interview.
+**Reads (anticipated):** W#1 topic hierarchy. Specifics at design interview.
+
+#### 7.2.3-7.2.14 Remaining workflows
+
+Entries created at each workflow's design interview (per Rule 18 reciprocal output declarations).
+
+### 7.3 Phase 2 platform-shared items (designed; NOT YET BUILT)
+
+These are platform-level shared items — not workflow-to-workflow data, but cross-cutting infrastructure that every Phase 2 tool must respect.
 
 **Assignment** — shared across the platform
 - FROM: Admin assignment UI (Phase 2, TBD)
@@ -326,15 +369,17 @@ Data items explicitly shared across workflows, with R/W flags per consumer.
 - CONSUMING: Downstream workflows (read-only typically), admin (full access)
 - R/W: Per-workflow write policy; generally read-only downstream unless specific workflow designs otherwise
 
-### 7.2 Decision criteria (for future entries)
-When a new workflow needs data from upstream, Claude must ask the user:
+### 7.4 Decision criteria (for future entries)
+
+When a new workflow needs data from upstream, Claude must ask the director (Living Questions per `HANDOFF_PROTOCOL.md` Rule 7):
 
 1. **"Which data does [NEW WORKFLOW] need from [UPSTREAM WORKFLOW]?"**
 2. **"Is this data read-only, or editable?"**
 3. **"If editable, should edits in [NEW WORKFLOW] be visible to [UPSTREAM WORKFLOW]?"**
 4. **"Edge cases or constraints?"**
 
-Each entry format:
+Each entry format (used in §7.2 sub-sections):
+
 ```
 ### [Data Item Name]
 - FROM (upstream): [Workflow name]
@@ -346,10 +391,12 @@ Each entry format:
 - RATIONALE: [why this decision]
 ```
 
-### 7.3 Maintenance
-- New entries added during per-workflow design
-- R/W flags updated if changed
-- Never silently delete — mark `DEPRECATED` with date and reason
+### 7.5 Maintenance
+
+- Map is updated at every Tool Graduation per `HANDOFF_PROTOCOL.md` §4 Step 2 Scenario B item 5.
+- Map is updated when a new Workflow Requirements Interview produces an upstream-read or downstream-write declaration (per Rule 18 reciprocal output declarations).
+- Per `HANDOFF_PROTOCOL.md` Rule 23 (Change Impact Audit), the Map is the load-bearing lookup mechanism for cascade-prevention before any change to a graduated tool. Every audit consults this Map first.
+- Never silently delete entries — mark `DEPRECATED` with date and reason.
 
 ---
 

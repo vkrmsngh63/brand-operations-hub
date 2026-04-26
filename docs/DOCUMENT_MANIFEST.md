@@ -1,9 +1,10 @@
 # DOCUMENT MANIFEST
 ## Ground-truth registry of every handoff document in the PLOS system
 
-**Last updated:** April 26, 2026 (Phase-1 polish bundle — three deferred Phase-1 items shipped (canvas-layout visual verification on populated 40-topic canvas DONE + Direct-mode UI hint DONE + Adaptive-Thinking warning DONE); one cosmetic `+x more` cut-off bug surfaced + fixed in two-attempt cycle; one new architectural Phase-1 polish item identified (Funnel-Order Pass — design captured, build deferred); one new follow-up item identified (empirical validation of UI-hint thresholds))
-**Last updated in session:** session_2026-04-26_phase1-polish-bundle (Claude Code)
-**Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-E (Claude Code)
+**Last updated:** April 26, 2026 (Workflow-transition architecture + V3 prompt refinement session — methodology + prompt-quality session; no code changes; substantial doc updates across HANDOFF_PROTOCOL, DATA_CATALOG, ROADMAP, AUTO_ANALYZE_PROMPT_V3, KEYWORD_CLUSTERING_ACTIVE, CHAT_REGISTRY, DOCUMENT_MANIFEST)
+**Last updated in session:** session_2026-04-26_workflow-transition-architecture-and-v3-prompt-refinement (Claude Code)
+**Previously updated in session:** session_2026-04-26_phase1-polish-bundle (Claude Code)
+**Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-pivot-session-E (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-pivot-session-D (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-pivot-session-C (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-pivot-session-B (Claude Code)
@@ -35,42 +36,41 @@ These 13 documents form the persistent handoff context.
 | 2 | `PLATFORM_ARCHITECTURE.md` | Technical architecture — routes, schema, auth, file structure, tech debt | 2026-04-25 (Pivot Session E — UUID-PK migration shipped; CanvasNode + Pathway ids now String UUIDs; SisterLink FKs follow; CanvasState drops nextNodeId/nextPathwayId, gains nextStableIdN; Race-condition Known Tech Debt entry marked RESOLVED) | NO |
 | 3 | `PLATFORM_REQUIREMENTS.md` | Platform-wide requirements — scale, user-model, review cycle, audit, concurrency, phasing | 2026-04-17 | NO |
 | 4 | `NAVIGATION_MAP.md` | Every route + click path through PLOS — UI navigation source of truth | 2026-04-17 | NO |
-| 5 | `DATA_CATALOG.md` | Every data item — where it lives, Human Reference Language, cross-workflow sharing contracts | 2026-04-25 (Pivot Session B — §5 CanvasNode entries gain `stableId` (`t-N` format, persistent identifier the AI uses across batches) + `stabilityScore` (0.0–10.0; gates JUSTIFY_RESTRUCTURE at ≥7.0; populated later by stability-scoring algorithm)) | NO |
-| 6 | `ROADMAP.md` | Development execution plan — completed work + remaining phases | 2026-04-26 (Phase-1 polish bundle — items 9/10/11 from Phase 1g-test follow-up REMAINING marked DONE; new "Phase-1 polish bundle (2026-04-26)" section added with full delivery summary; new "Funnel-Order Pass" Phase-1 polish item added to Phase 1 polish items section; new "Empirical validation of UI-hint thresholds" follow-up item; new "Phase-2 server-side execution — explicit tie-back to Direct-mode UI hint" note) | ✅ YES |
-| 7 | `CORRECTIONS_LOG.md` | Append-only log of mistakes + extracted patterns | 2026-04-26 (Phase-1 polish bundle — 1 new low-medium-severity entry: shipped CSS fix for `+x more` cut-off bug based on guess about cause without first asking for screenshot; first attempt didn't address actual cause; second attempt after director uploaded screenshot succeeded; lesson named — when fixing a UI bug Claude can't see, ask for screenshot or specific verbal disambiguation BEFORE coding) | ✅ YES |
-| 8 | `CHAT_REGISTRY.md` | Chronological log of chats + URLs + work-summaries (post-Ckpt-9: Claude Code sessions use session-identifier format) | 2026-04-26 (Phase-1 polish bundle — new row for session_2026-04-26_phase1-polish-bundle; fifteenth Claude Code session) | ✅ YES |
-| 9 | `HANDOFF_PROTOCOL.md` | Rules for how chats operate — start/mid/end protocols, communication rules, interview rules | 2026-04-18 | NO |
+| 5 | `DATA_CATALOG.md` | Every data item — where it lives, Human Reference Language, cross-workflow sharing contracts | 2026-04-26 (Workflow-transition architecture session — §7 PROMOTED from "Shared Data Registry" to "Cross-Tool Data Flow Map" with new structure: §7.1 summary table, §7.2 per-tool detail (W#1 entry with provisional outputs + anticipated downstream consumers), §7.3 Phase 2 platform-shared items, §7.4 decision criteria, §7.5 maintenance referenced by Rules 18 + 23. §6.4 (W#5 placeholder) gets a forward-pointer to ROADMAP W#5 entry per Rule 21.) | ✅ YES |
+| 6 | `ROADMAP.md` | Development execution plan — completed work + remaining phases | 2026-04-26 (Workflow-transition architecture session — Workflow #5 entry expanded with narrative-driven-comprehensiveness directive captured per director's 2026-04-26 instruction; W#5 reminder mechanism via Rule 21 documented; header timestamp updated. Earlier same-day: Phase-1 polish bundle session — Funnel-Order Pass + empirical-threshold validation items added.) | ✅ YES |
+| 7 | `CORRECTIONS_LOG.md` | Append-only log of mistakes + extracted patterns | 2026-04-26 (Phase-1 polish bundle — 1 new low-medium-severity entry: shipped CSS fix for `+x more` cut-off bug based on guess about cause without first asking for screenshot; first attempt didn't address actual cause; second attempt after director uploaded screenshot succeeded; lesson named — when fixing a UI bug Claude can't see, ask for screenshot or specific verbal disambiguation BEFORE coding) | NO |
+| 8 | `CHAT_REGISTRY.md` | Chronological log of chats + URLs + work-summaries (post-Ckpt-9: Claude Code sessions use session-identifier format) | 2026-04-26 (Workflow-transition architecture session — new row for session_2026-04-26_workflow-transition-architecture-and-v3-prompt-refinement; sixteenth Claude Code session) | ✅ YES |
+| 9 | `HANDOFF_PROTOCOL.md` | Rules for how chats operate — start/mid/end protocols, communication rules, interview rules | 2026-04-26 (Workflow-transition architecture session — Rule 18 expanded with §A/§B DESIGN doc structure + mid-build Read-It-Back + reciprocal output declaration; new Rule 21 (Pre-interview directive scan); new Rule 22 (Graduated-Tool Re-Entry Protocol with canonical Resume Prompt template); new Rule 23 (Change Impact Audit + versioned Data Contracts pattern); §4 Step 2 Scenario B (Tool Graduation Ritual) expanded from 7 items to 16 items covering both outgoing tool graduation deliverables and incoming tool setup deliverables.) | ✅ YES |
 | 10 | `DOCUMENTATION_ARCHITECTURE.md` | Design of the doc-system itself (DLMS, tool graduation, group A/B, workflow interview pattern, Claude Code migration) | 2026-04-17 | NO |
 | 11 | `NEW_CHAT_PROMPT.md` | **Historical** — claude.ai era briefing template. Post-Phase-M, Claude Code sessions use `CLAUDE_CODE_STARTER.md` instead. | 2026-04-17 | NO |
-| 12 | `DOCUMENT_MANIFEST.md` | This file — ground-truth doc registry | 2026-04-26 (Phase-1 polish bundle — timestamps + modified flags + Phase-1-polish-bundle summary) | ✅ YES |
+| 12 | `DOCUMENT_MANIFEST.md` | This file — ground-truth doc registry | 2026-04-26 (Workflow-transition architecture session — timestamps + modified flags + this-session summary) | ✅ YES |
 | 13 | `CLAUDE_CODE_MIGRATION.md` | Migration plan and operational rules for shifting from claude.ai to Claude Code. Executed successfully in Ckpt 9+9.5. | 2026-04-17 | NO |
 | 14 | `AI_TOOL_FEEDBACK_PROTOCOL.md` | Platform-wide standard for every AI-using tool in PLOS. Defines required integration points (structured decision output with reasoning, admin review surface with 3 actions + 2 feedback channels, feedback-repo write/read-back, quality scoring, model/provider registry), 3-phase implementation roll-out, and the primer text to include in every new workflow's design doc. | 2026-04-20 | NO |
 | 15 | `MODEL_QUALITY_SCORING.md` | Stability-score algorithm spec. Defines 0-10 stability_score per AI output item, factors that add/subtract to score, model's interpretation instructions, JUSTIFY_RESTRUCTURE payload requirement for high-score modifications, admin scoring guidelines (1-5 scale with 4 evaluation dimensions), meta-note on how algorithm was derived + review triggers + how to propose weight changes. | 2026-04-20 | NO |
 
-**Group A count: 15 documents.** 4 modified this session (ROADMAP, CORRECTIONS_LOG, CHAT_REGISTRY, DOCUMENT_MANIFEST). No new Group A docs created this session. The 11 not-modified Group A docs retain their timestamps from prior sessions.
+**Group A count: 15 documents.** 5 modified this session (DATA_CATALOG, ROADMAP, CHAT_REGISTRY, HANDOFF_PROTOCOL, DOCUMENT_MANIFEST). No new Group A docs created this session. The 10 not-modified Group A docs retain their timestamps from prior sessions.
 
 **Not created this session (Group A):** no new Group A docs.
 
 **Modified this session (Group B):**
-- `docs/KEYWORD_CLUSTERING_ACTIVE.md` — new POST-PHASE-1-POLISH-BUNDLE STATE block added above POST-PIVOT-SESSION-E (which is preserved as historical context); header timestamp updated; full record of three deferred Phase-1 items shipped, the two-attempt `+x more` fix, the Funnel-Order Pass design captured, and the empirical-threshold validation item.
+- `docs/KEYWORD_CLUSTERING_ACTIVE.md` — new POST-2026-04-26-V3-PROMPT-REFINEMENT STATE block added above POST-PHASE-1-POLISH-BUNDLE (which is preserved as historical context); header timestamp updated; full record of the layered placement + intent-equivalence prompt refinement, expected behavior change on next run, recommended small-batch test before full Bursitis re-analyze, cross-tool integration methodology cross-references, and updated standing instructions for next session.
+- `docs/AUTO_ANALYZE_PROMPT_V3.md` — Strategy 3 layered placement + intent-equivalence binding rule baked in. Added intent-equivalence preamble; added Step 0 (seed-word stripping); rewrote Steps 1-4 around compound intent + component dimensions framing; rewrote Step 4b math + worked example to 1+N(dimensions) with 4-placement form; added new Step 4c (complement detection + unifying parent); strengthened Step 5 on empty bridge topics as deliberate scaffolding feature; updated Reevaluation Pass (3) Topic Splitting signal with intent-equivalence-violation high-priority variant; updated MULTI-PLACEMENT example to 4-placement layered form; updated seed-word note at bottom to point at Step 0. File grew 629 → 769 lines (+140). Topics Layout Table Primer (operation vocabulary) preserved untouched.
 
 **Code changes this session (src/):**
-- MODIFIED `src/app/projects/[projectId]/keyword-clustering/components/AutoAnalyze.tsx` (added two conditional inline UI hints: Direct-mode hint under API Mode dropdown, Adaptive-Thinking warning under Thinking row).
-- MODIFIED `src/app/projects/[projectId]/keyword-clustering/components/CanvasPanel.tsx` (removed standalone `+x more` span element; updated expand button label to include hidden-count `(+M)` when `kwIds.length > 5`).
-- MODIFIED `src/app/projects/[projectId]/keyword-clustering/components/canvas-panel.css` (removed now-unused `.cvs-kw-more` rule entirely after the `+x more` element was removed; mid-session interim addition of `white-space: nowrap; flex-shrink: 0; margin-right: 4px` to that rule was rolled back as dead code in the second-attempt fix).
+- NONE. This was a pure methodology + prompt-refinement session. No src/ changes.
 
-**Code commits already pushed mid-session (per fix-and-verify cycle, both pushed with director's explicit Rule-9 approval):**
-- `950e4b5` — Phase-1 polish bundle: `+x more` cut-off CSS fix attempt (turned out not to address the actual cause) + 2 conditional UI hints (Direct-mode + Adaptive-Thinking).
-- `c891c36` — Canvas: fold "+x more" indicator into expand button label (the actual fix that worked).
+**Code commits already pushed mid-session:** none (no code changes).
 
 **End-of-session doc commit (this commit, pending Rule-9 push approval):**
-- `docs/ROADMAP.md` (Phase-1 polish bundle section added; items 9/10/11 marked DONE; new Funnel-Order Pass polish item; new empirical-threshold validation item; Phase-2 server-side tie-back note).
-- `docs/CORRECTIONS_LOG.md` (1 new entry: diagnostic-without-screenshot pattern).
-- `docs/KEYWORD_CLUSTERING_ACTIVE.md` (new POST-PHASE-1-POLISH-BUNDLE STATE block).
-- `docs/CHAT_REGISTRY.md` (new top row for session_2026-04-26_phase1-polish-bundle).
-- `docs/DOCUMENT_MANIFEST.md` (this file — timestamps + flags + Phase-1-polish-bundle summary).
+- `docs/AUTO_ANALYZE_PROMPT_V3.md` (Strategy 3 layered + intent-equivalence rewrite per above)
+- `docs/HANDOFF_PROTOCOL.md` (Rule 18 expanded with §A/§B + mid-build Read-It-Back + reciprocal output declaration; new Rule 21 Pre-interview directive scan; new Rule 22 Graduated-Tool Re-Entry Protocol; new Rule 23 Change Impact Audit; §4 Step 2 Scenario B Tool Graduation deliverables list expanded from 7 to 16 items)
+- `docs/DATA_CATALOG.md` (§7 PROMOTED to Cross-Tool Data Flow Map with new structure; §6.4 W#5 forward-pointer added per Rule 21)
+- `docs/ROADMAP.md` (Workflow #5 entry expanded with narrative-driven-comprehensiveness directive; header timestamp)
+- `docs/KEYWORD_CLUSTERING_ACTIVE.md` (new POST-2026-04-26-V3-PROMPT-REFINEMENT STATE block)
+- `docs/CHAT_REGISTRY.md` (new top row for session_2026-04-26_workflow-transition-architecture-and-v3-prompt-refinement; sixteenth Claude Code session)
+- `docs/DOCUMENT_MANIFEST.md` (this file — timestamps + modified flags + this-session summary)
 
-**Earlier-session code changes (Pivot Session E and prior — already documented in this manifest under previous-header sections; not duplicated here).**
+**Earlier-session code changes (Phase-1 polish bundle and prior — already documented in this manifest's prior-session entries; not duplicated here).**
 
 ---
 
@@ -82,9 +82,9 @@ These are tool-specific working documents. They travel with chats that touch the
 
 | Document | Tool/System | Status | Last modified | Modified this chat? |
 |---|---|---|---|---|
-| `KEYWORD_CLUSTERING_ACTIVE.md` | Keyword Clustering (workflow 1) | Active development | 2026-04-25 (Pivot Session C — new POST-PIVOT-SESSION-C STATE block above POST-PIVOT-SESSION-B; header timestamp updated) | ✅ YES |
-| `PIVOT_DESIGN.md` | Keyword Clustering / Auto-Analyze architectural pivot | Active build — spec for Pivot Sessions D/E (Sessions B + C done) | 2026-04-25 (Pivot Session C — Session C section marked DONE in §4 with delivery summary) | ✅ YES |
-| `AUTO_ANALYZE_PROMPT_V3.md` | Keyword Clustering / Auto-Analyze prompts | NEW — operation-based output contract; canonical for what the director re-pastes into the Auto-Analyze panel after Session C | 2026-04-25 (Pivot Session C — created; ~640 lines; Initial Prompt + Primer rewrite mirroring the operation vocabulary in `src/lib/operation-applier.ts`) | ✅ YES (created) |
+| `KEYWORD_CLUSTERING_ACTIVE.md` | Keyword Clustering (workflow 1) | Active development | 2026-04-26 (Workflow-transition architecture session — new POST-2026-04-26-V3-PROMPT-REFINEMENT STATE block above POST-PHASE-1-POLISH-BUNDLE; header timestamp updated) | ✅ YES |
+| `PIVOT_DESIGN.md` | Keyword Clustering / Auto-Analyze architectural pivot | Pivot complete (Sessions A-E done); doc retained for historical reference | 2026-04-25 (Pivot Session E — Session E marked DONE in §4) | NO |
+| `AUTO_ANALYZE_PROMPT_V3.md` | Keyword Clustering / Auto-Analyze prompts | LIVE — canonical for what the director re-pastes into the Auto-Analyze panel; updated 2026-04-26 with Strategy 3 layered placement + intent-equivalence binding rule | 2026-04-26 (Workflow-transition architecture session — Strategy 3 layered placement + intent-equivalence rewrite; file grew 629 → 769 lines; director must re-paste into Auto-Analyze UI before next run) | ✅ YES |
 | `AUTO_ANALYZE_PROMPT_V2.md` | Keyword Clustering / Auto-Analyze prompts (HISTORICAL) | Historical reference only — the V2 full-table-rewrite contract that ran every Bursitis batch through Session 3b verification; preserved untouched until V3 is field-validated through Pivot Sessions D + E, then archivable | 2026-04-18 (last canonical edit predating the pivot) | NO |
 | `AUTO_ANALYZE_PROMPT_V2_PROPOSED_CHANGES.md` | Keyword Clustering / Auto-Analyze prompts (HISTORICAL) | Mostly superseded by V3 — surviving wording (Change 1 tie-breaker, Change 3 Comprehensiveness Verification redrafted, Change 4 JUSTIFY_RESTRUCTURE 6-field payload, Change 5 multi-placement, Change 2 Loc 1 cross-canvas scan) folded into V3 with locked wording; obsolete pieces (Reevaluation Report block, never-delete rule, full-table-rewrite output format, salvage IRRELEVANT_KEYWORDS template, session-boundary continuation) obsolete by construction; archivable in future cleanup | 2026-04-24 (Session 2b — last design refinement; locked then for "mechanical Session 6 merge" which is now subsumed by V3) | NO |
 

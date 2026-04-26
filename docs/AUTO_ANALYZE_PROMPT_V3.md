@@ -1,7 +1,8 @@
 # Auto-Analyze V3 Prompts — Operation-Based Output Contract
 
-**Last updated:** 2026-04-25 (Pivot Session C — first version of the operation-based prompts; replaces the V2 full-table-rewrite contract per `docs/PIVOT_DESIGN.md`)
-**Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-C (Claude Code)
+**Last updated:** 2026-04-26 (Strategy 3 layered placement + intent-equivalence binding rule baked in: new intent-equivalence preamble; new Step 0 seed-word stripping; Step 1 reframed around compound intent + component dimensions; Step 2 rewritten with most-specific-compound primary + intent-equivalence rule + updated tie-breaker; Step 3 reframed as dimension validation; Step 4 reframed as one secondary topic per validated dimension; Step 4b math updated to 1+N(dimensions) with worked example showing 4 placements; new Step 4c complement detection + unifying parent; Step 5 strengthened on empty bridge topics as deliberate scaffolding feature; Reevaluation Pass (3) Topic Splitting signal updated to flag intent-equivalence violations as high-priority; MULTI-PLACEMENT example updated to layered 4-placement form; seed-word note at bottom updated to point at Step 0. Director must re-paste this V3 into the Auto-Analyze UI before the next run.)
+**Last updated in session:** session_2026-04-26_workflow-transition-architecture-and-v3-prompt-refinement (Claude Code)
+**Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-C (Claude Code)
 
 **Purpose:** The two text prompts used by the Keyword Clustering tool's Auto-Analyze feature, rewritten for the architectural pivot from "AI as state-rebuilder" to "AI as state-mutator" per `docs/PIVOT_DESIGN.md`. Under V3, the AI receives the existing canvas as input and emits a list of change operations against it (defined by the vocabulary in `src/lib/operation-applier.ts`). It no longer re-emits the entire Topics Layout Table on every batch.
 
@@ -72,6 +73,25 @@ Guidelines for topic naming:
 (e) When naming a topic, always ask: "If a sufferer saw this as a heading on a page, would they feel compelled to read on?" If the answer is no, rephrase.
 
 
+The Intent-Equivalence Principle (binding end-state rule):
+
+The Topics Layout Table you build, batch by batch, has a target end-state. In its ideal finished form:
+
+(1) Every unique searcher intent has its own primary topic. No two distinct intents are bundled into a single topic. The primary topic IS the intent — they are the same thing.
+
+(2) Each primary topic sits within a deliberate, progressive hierarchy of parent topics that organizes the searcher's narrative journey from awareness through to conversion.
+
+(3) Two keywords share a primary topic ONLY IF they share the same compound intent — the same searcher in the same situation seeking the same outcome. Word-level similarity (similar tokens, similar phrasing) is INSUFFICIENT for primary co-placement; intent-equivalence is the binding test.
+
+(4) Empty bridge topics, complementary topic pairs, and unifying parent topics are FEATURES of a well-structured funnel — they are deliberate narrative scaffolding, not exceptions to be tolerated. They give the conversion funnel its chapter-and-section structure.
+
+CONSEQUENCE: as you process each batch, every primary placement decision must respect intent-equivalence. The compound topic for "[condition] [symptom] in [age] [gender]" is NOT the same as the compound topic for "[condition] [symptom] in [age] [gender_other]" — the demographic dimension changes the intent, so they get different primary topics.
+
+EXISTING TOPICS THAT VIOLATE INTENT-EQUIVALENCE: when you encounter an existing topic that bundles multiple distinct compound intents (created during prior batches before this rule was made explicit, or due to a prior placement mistake), SPLIT_TOPIC is warranted regardless of cluster size — bundling violates the binding intent-equivalence constraint and downstream content suffers when one page tries to address multiple distinct intents. See the Post-Batch Funnel Reevaluation Pass below for how to detect and fix these.
+
+THE MODEL'S JOB: converge the canvas toward the intent-equivalent end state, batch by batch. Add new primary topics when a keyword's compound intent has no existing equivalence-class home. Add secondary placements at dimension topics so every meaningful angle of every keyword is structurally captured. Build complete upstream chains with deliberate empty bridge topics where the narrative arc benefits.
+
+
 Where we currently are in the workflow:
 
 We have a table (which we refer to as the 'Normal Keywords Extended Table') that has thousands of keywords and data associated with those keywords (such as search term volume). In this table, the 'Keyword' column has the individual search terms and among the many columns, there is also a column for 'Topics' in which we are supposed to list the individual search term intents that represent the worries/concerns, motives, goals, etc of the searchers that used that specific search term. We refer to this data as 'Topics' because, as you saw in the context laid out above, these 'Topics' then guide us towards creating narratives, identifying other narrative-supporting topics and sub-topics and towards developing fully fleshed out, well thought out conversion funnel paths that lead to our desired micro-goals (such as reading the next piece of content on the same page or clicking on a link to read the next part of the content further down the conversion path) and eventually lead to our desired macro-goals (signing up for an email newsletter or making an eager, emotionally satisfying sale).
@@ -107,7 +127,13 @@ Keyword Placement Decision Framework — Primary and Secondary Topic Placement:
 
 MULTI-PLACEMENT IS A FEATURE, NOT A COMPROMISE.
 
-When a keyword's intent genuinely spans multiple topics — for example, "bursitis pain in older women" belongs under "bursitis pain" (symptom focus) AND "bursitis in women" (gender facet) AND "bursitis in older people" (age-group facet) — the keyword SHOULD be placed under all three topics: one primary ([p]) and two secondary ([s]) placements.
+When a keyword's intent has multiple meaningful dimensions — for example, "bursitis pain in older women" — the keyword belongs under FOUR topics in a layered placement:
+- PRIMARY at "Bursitis pain in older women" (the compound topic that captures the EXACT compound intent of the whole keyword)
+- SECONDARY at "Bursitis pain" (symptom dimension)
+- SECONDARY at "How bursitis affects women differently" (gender dimension)
+- SECONDARY at "How bursitis affects older people" (age dimension)
+
+Total: one primary ([p]) at the compound topic + one secondary ([s]) per validated dimension = 1 + N(dimensions) placements per keyword.
 
 Multi-placement is NOT:
 - A way to hedge when you cannot decide between two topics (pick the more specific one as primary; use secondary only if the other topic represents a meaningfully distinct facet);
@@ -129,63 +155,172 @@ DEFINITIONS:
 
 PLACEMENT PROCESS — For each keyword, follow these steps:
 
-Step 1 — Identify the Core Intent:
-Ask: "What does this searcher want to learn, solve, or do?" Strip away all demographic, situational, temporal, and severity qualifiers. The answer is the candidate for the primary topic. For example, for "[condition] [body location] [symptom] in [age] year old [gender]" — the core intent is learning about that specific condition's symptoms at that body location.
+Step 0 — Strip the primary seed word:
 
-Step 2 — Create or Identify the Primary Topic:
-The primary topic should be the most specific existing topic that matches the core intent. If no sufficiently specific topic exists, create one. The primary topic must be specific enough that semantically and thematically similar keywords naturally cluster together. Keywords should only share a primary topic if they would be well-served by the same page of content.
+The primary seed word [PRIMARY_SEED_WORDS] appears in almost every keyword and carries no intent-distinguishing signal across keywords. For analysis purposes (Steps 1-4 below), conceptually strip the seed word from the keyword and reason about the remainder.
 
-CRITICAL: If the keyword contains a facet that meaningfully changes what content should say (e.g., a gender, age group, or severity qualifier), the primary topic should reflect that specificity. Do not place "female [condition] [body location] symptoms" into a generic "[Condition] [body location] symptoms" topic — create a nested sub-topic like "[Condition] [body location] symptoms in women" and make that the primary topic. The parent topic "[Condition] [body location] symptoms" remains in the hierarchy as a broader organizational node.
+EXCEPTION: if the keyword IS just the primary seed word alone (with no qualifiers), treat it as the topmost generic intent — its primary placement goes at the root-level topic for the niche, no secondary placements are warranted, and skip the dimension analysis below.
 
-TIE-BREAKER RULE — When uncertain between placing a keyword in an existing topic versus creating a new one, DEFAULT TO THE EXISTING TOPIC. Apply this test: "Would content written for the existing topic substantively serve this keyword's intent, even if a slightly more specific new topic could serve it marginally better?" If yes, place the keyword in the existing topic with primary placement. Reserve new-topic creation for keywords whose intent is meaningfully distinct — not just nominally different.
+Note: the seed word is conceptually stripped for analysis but remains part of the keyword's text identity. You do not modify the keyword text — operations still reference the keyword by its UUID, and the keyword's text stays intact in the canvas record.
 
-A marginal improvement in topic specificity does NOT justify a new topic. A meaningful improvement — one that would change what content says, how the searcher is addressed, or which conversion-funnel stage the topic belongs in — does.
+Step 1 — Identify the keyword's compound intent and its component dimensions:
 
-If you do create a new topic despite this tie-breaker, briefly note in the ADD_TOPIC operation's description (or in the reason field of any structural operation that follows) why the existing topic(s) were insufficient. This surfaces close-call decisions for admin review.
+Two parallel analyses (both required):
 
-Step 3 — Identify Qualifying Facets:
-List every facet in the keyword that describes the searcher's identity or circumstances: demographic qualifiers (age, gender, ethnicity), situational qualifiers (occupation, activity, lifestyle), temporal qualifiers (acute, chronic, duration, post-surgical), severity qualifiers (mild, severe, recurring), and any other contextual modifier. Qualifying facets do NOT include the core intent (that's the primary topic's focus and is counted separately as the primary placement).
+(a) Compound intent (the whole-keyword intent). Ask: "Considering ALL components of this keyword together, what specific situation is this searcher in, what specific concern do they have, what specific outcome are they seeking, what specific funnel stage are they at?" The compound intent is what the PRIMARY topic captures — it's the intent of the keyword as a whole.
 
-Step 4 — Create Secondary Placements for Meaningful Facets:
-For each qualifying facet, ask: "Does this facet create a meaningfully different therapeutic consideration, content angle, or product positioning need?" If yes, the keyword gets a secondary placement under a topic dedicated to that facet.
+Example for "pain in older women" (seed "bursitis" stripped per Step 0): "an older woman seeking content specifically about how bursitis pain manifests for older women — addressing both the age-specific and gender-specific aspects of her symptoms, distinct from how bursitis pain manifests in younger women, in older men, or generically."
 
-Secondary placements require complete topic hierarchies. For each facet-based secondary placement:
-(a) Identify or create the cross-cutting organizational topic for that facet dimension. Use searcher-centric language for the topic title (e.g., "Who does [condition] affect?" rather than "[Condition] demographics").
-(b) Create the facet-specific topic nested under it (e.g., "How [condition] affects women differently" nested under "Who does [condition] affect?").
-(c) Ensure the full chain of parent topics exists back to a root-level topic. If any intermediate topics are missing, ADD_TOPIC them as empty narrative-bridging topics.
-(d) ADD_KEYWORD the keyword under the most specific facet topic with placement="secondary".
+(b) Component dimensions. Decompose the keyword (with seed stripped) into its meaningful component dimensions. Each dimension is a distinct intent-angle the keyword carries. Dimensions include:
+- Symptom or core concern (pain, swelling, stiffness, weakness, etc.)
+- Demographic qualifiers (age, gender, ethnicity, body type)
+- Situational qualifiers (occupation, activity, lifestyle, hobby)
+- Temporal qualifiers (acute, chronic, post-surgical, duration)
+- Severity qualifiers (mild, severe, recurring, persistent)
+- Body-location qualifiers (hip, shoulder, knee, etc.)
+- Treatment-context qualifiers (home remedies, professional treatment, surgery, prevention)
+- Any other meaningful contextual modifier
+
+Example for "pain in older women": dimensions = [pain-as-symptom, older-as-age, women-as-gender] → 3 dimensions.
+
+Important: the symptom or concern dimension (here "pain") is treated as a dimension just like the demographic dimensions. Under the layered placement strategy, every dimension becomes its own secondary placement (per Step 4); there is no privileged "core intent" that escapes dimension treatment. The PRIMARY captures the compound; each SECONDARY captures one dimension.
+
+Step 2 — Find or create the PRIMARY topic — the topic whose intent EXACTLY MATCHES the keyword's compound intent:
+
+The primary topic captures the WHOLE keyword's intent — the compound. For "pain in older women" (seed "bursitis" stripped), the primary topic is "Bursitis pain in older women" (or near-equivalent searcher-centric phrasing) — a topic that addresses the EXACT compound situation, not a broader generalization.
+
+INTENT-EQUIVALENCE RULE (binding constraint).
+
+Two keywords share a primary topic ONLY IF they share the same compound intent. Two keywords with different compound intents — even slightly different — must have DIFFERENT primary topics.
+
+Word-level similarity (similar tokens, similar phrasing) is INSUFFICIENT for primary co-placement. The primary topic is an intent-equivalence class: every keyword placed there as primary must be served by the same page of content for the same searcher in the same situation seeking the same outcome.
+
+CONSEQUENCE: never bundle two distinct compound intents under one primary topic. If two keywords look similar in words but have different compound intents (different demographic, different concern within the symptom, different funnel stage, different desired outcome), they get separate primary topics.
+
+EXAMPLES OF DISTINCT COMPOUND INTENTS THAT MUST GET SEPARATE PRIMARY TOPICS:
+- "[condition] pain in older women" vs. "[condition] pain in young women" — age dimension differs → distinct intents → separate primary topics.
+- "[condition] pain at home treatment" vs. "[condition] pain doctor treatment" — treatment-context dimension differs → distinct intents → separate primary topics.
+- "[condition] symptoms" vs. "[condition] severe symptoms" — severity dimension differs → distinct intents → separate primary topics.
+
+If no existing topic captures the keyword's exact compound intent, create one via ADD_TOPIC — even if an existing topic's title is broad enough to superficially accommodate the keyword's words. Each compound intent that doesn't yet have an equivalence-class home gets a new ADD_TOPIC for its primary placement.
+
+TIE-BREAKER RULE (binding form of the intent-equivalence rule).
+
+When uncertain between using an existing topic for primary placement vs. creating a new one, default to the existing topic ONLY IF the existing topic's intent EXACTLY MATCHES this keyword's compound intent. Apply this test: "Would content written for the existing topic substantively serve THIS specific searcher in THIS specific situation seeking THIS specific outcome — without addressing any other searcher's distinct compound intent?" If yes, the intents match — use the existing topic. If the existing topic's intent differs in any meaningful way from this keyword's compound intent — even if its title is broader and would superficially fit the keyword's words — create a new topic.
+
+Word-level fit is not the test; intent-equivalence is. A new topic's existence is justified by the appearance of a meaningfully distinct compound intent. Do not create new topics for marginal differences in wording when the underlying intent matches. Do not bundle distinct intents to reduce topic count. Both errors degrade the funnel's structural integrity.
+
+If you do create a new topic despite the tie-breaker, briefly note in the ADD_TOPIC operation's description (or in the reason field of any structural operation that follows) why the existing topic(s) failed the intent-match test. This surfaces close-call decisions for admin review.
+
+Step 3 — Validate component dimensions for secondary placement:
+
+For each component dimension identified in Step 1(b), confirm: does this dimension represent a meaningfully different angle on the searcher's intent — one that warrants its own dedicated cross-cutting topic and downstream content? Reject from secondary placement only:
+
+- Stop-words and filler words that carry no intent signal (rare in keyword decomposition but possible);
+- Dimensions that are strict sub-cases of another dimension already placed (rare — typically each component is a distinct dimension worth separate placement).
+
+Every dimension that survives validation gets a secondary placement at a topic dedicated to that single dimension. Per the layered placement strategy, EVERY validated dimension — including the symptom or concern dimension — gets its own secondary topic. Do not skip the symptom dimension just because the primary topic also contains the symptom; the dimension topic ("Bursitis pain") aggregates many keywords with the symptom across different demographic and situational contexts, while the primary topic ("Bursitis pain in older women") captures only the exact compound.
+
+Step 4 — Create or find one SECONDARY topic per validated dimension:
+
+For each dimension that survived Step 3 validation, place the keyword under a dimension-specific topic with placement="secondary". For each such secondary placement:
+
+(a) Identify or create the dimension-specific topic. Use searcher-centric language for the topic title (e.g., "How bursitis affects older people" rather than "Bursitis demographics: age"; "Bursitis pain" rather than "[Condition] symptom: pain"; "Bursitis from running" rather than "[Condition] activity: running").
+
+(b) Each dimension topic is itself an intent-equivalence class for that single dimension — every keyword placed there as a PRIMARY placement must share that dimension's intent in the broader sense (e.g., the primary keywords of "How bursitis affects older people" should all be searchers whose primary intent IS understanding the older-age angle of bursitis, not just keywords that happen to mention age). SECONDARY placements at the dimension topic don't need to share intent — they're cross-cuts from keywords whose primary intent lives elsewhere (in their compound topic).
+
+(c) Identify or create the cross-cutting organizational parent. Most dimension topics nest under a parent that organizes the dimension category (e.g., "How bursitis affects older people" might nest under "Who does bursitis affect?" — a parent that organizes all demographic dimensions; "Bursitis pain" might nest under "Bursitis symptoms" — a parent that organizes all symptom dimensions). These parents are typically empty narrative-bridging topics (no primary keywords) that exist to organize the hierarchy.
+
+(d) Ensure the full chain of parent topics exists from the dimension topic up to a root-level topic. If any intermediate topics are missing, ADD_TOPIC them as empty narrative-bridging topics (per Step 5).
+
+(e) ADD_KEYWORD the keyword under the dimension-specific topic with placement="secondary".
+
+Comprehensiveness: every validated dimension MUST get a secondary placement. Skipping a dimension to reduce output length under-places the keyword and degrades the funnel's structural integrity. See Step 4b for the mandatory self-check.
 
 Step 4b — Comprehensiveness Verification (MANDATORY per-keyword self-check):
 
-Before moving to Step 5, perform an explicit verification for each keyword you just analyzed:
+Before moving to Step 4c and Step 5, perform an explicit verification for each keyword you just analyzed:
 
-(i) How many distinct QUALIFYING FACETS did you identify in this keyword? Qualifying facets are demographic, situational, temporal, severity, and contextual modifiers — NOT the core intent. The core intent is the primary topic's focus and is counted separately as the primary placement.
+(i) How many distinct DIMENSIONS did you identify in Step 1(b) and validate in Step 3 for this keyword?
 
-(ii) How many total topic placements does this keyword have in your output? Count 1 primary + N secondary placements.
+(ii) How many total topic placements does this keyword have in your output? Count 1 primary (at the compound topic from Step 2) + N secondary (at the dimension topics from Step 4).
 
-(iii) The correct total is: (1 primary for the core intent) + (1 secondary per qualifying facet) = 1 + N(facets). If your total in (ii) is less than 1 + (i), you have SKIPPED FACETS. For each skipped facet, EITHER:
+(iii) The correct total is: 1 primary (for the compound intent) + 1 secondary per validated dimension = 1 + N(dimensions). If your total in (ii) is less than 1 + (i), you have SKIPPED DIMENSIONS. For each skipped dimension, EITHER:
 - Add the missing secondary placement with full upstream chain (one ADD_KEYWORD operation, plus ADD_TOPIC operations for any missing intermediate topics), OR
-- Explicitly justify why this facet does NOT warrant a secondary placement (e.g., the facet is a stopword, is redundant with the primary topic's focus, or is too niche for cross-cutting topic creation). The justification lives in the ADD_KEYWORD operation's surrounding context — admin reviews the operation list as a whole.
+- Explicitly justify why this dimension does NOT warrant a secondary placement (e.g., the dimension is a stop-word, is a strict sub-case of another dimension already placed, or is too niche for cross-cutting topic creation). The justification lives in the ADD_KEYWORD operation's surrounding context — admin reviews the operation list as a whole.
 
-(iv) For each secondary placement, verify the full upstream chain exists from the facet-specific sub-topic up to a root-level topic. Missing intermediate topics must be created as empty narrative-bridging topics via ADD_TOPIC.
+(iv) For each placement (the primary AND every secondary), verify the full upstream chain exists from the placement topic up to a root-level topic. Missing intermediate topics must be created as empty narrative-bridging topics via ADD_TOPIC.
 
-COMPREHENSIVENESS PRINCIPLE — A keyword that carries N qualifying facets should generate 1 primary placement (for the core intent) and up to N secondary placements (one per facet), each with its own complete upstream chain. Under-placement (omitting secondary placements to save output length) degrades the funnel's structural integrity and is a worse failure mode than over-placement.
+COMPREHENSIVENESS PRINCIPLE — A keyword that carries N dimensions should generate 1 primary placement (at the compound topic) and N secondary placements (one per dimension), each with its own complete upstream chain. Under-placement (omitting secondary placements to save output length) degrades the funnel's structural integrity and is a worse failure mode than over-placement.
 
-Worked example for keyword "bursitis pain in older women":
-- Core intent (primary placement): "Bursitis pain"
-- Qualifying facets identified: [older-age, gender-women] → (i) = 2
-- Secondary placements: "How bursitis affects older people" + "How bursitis affects women differently" → 2 secondary
-- Total placements: 1 primary + 2 secondary = 3 → (ii) = 3
-- Check: 1 + (i) = 1 + 2 = 3. (ii) = 3. Match. No facets skipped.
-- Upstream chain verified for each secondary placement.
+Worked example for keyword "pain in older women" (seed "bursitis" stripped per Step 0):
+
+- Step 1(b) component dimensions: [pain-as-symptom, older-as-age, women-as-gender] → (i) = 3
+- Step 2 PRIMARY topic: "Bursitis pain in older women" (the most-specific compound topic that captures the EXACT compound intent of the whole keyword — not "Bursitis pain" or "Bursitis in women" alone, but the full compound)
+- Step 4 SECONDARY topics, one per validated dimension:
+  - "Bursitis pain" (dimension: pain-as-symptom) — captures all keywords sharing the pain symptom across different demographic and situational contexts
+  - "How bursitis affects older people" (dimension: older-as-age) — captures all keywords sharing the older-age angle across different symptom and situational contexts
+  - "How bursitis affects women differently" (dimension: women-as-gender) — captures all keywords sharing the gender angle across different symptom and demographic contexts
+- Total placements: 1 primary + 3 secondary = 4 → (ii) = 4
+- Check: 1 + (i) = 1 + 3 = 4. (ii) = 4. Match. No dimensions skipped.
+- Upstream chain verified for each placement.
+
+Note on the layered structure: there is no privileged "core intent" placement in this model. The symptom dimension ("pain") is treated as a dimension just like the demographic dimensions ("older", "women") — each gets its own secondary topic. The PRIMARY captures the COMPOUND of all dimensions; the SECONDARIES each capture ONE dimension. This is the layered placement strategy.
+
+CONTRAST WITH UNDER-PLACEMENT (incorrect):
+
+- If you placed "pain in older women" as PRIMARY at "Bursitis pain" with secondaries at "How bursitis affects older people" and "How bursitis affects women differently" only (3 placements total, primary at the symptom dimension), you would be UNDER-PLACING — the primary should be at the compound topic "Bursitis pain in older women", and "Bursitis pain" itself becomes a secondary placement. This error also typically indicates an intent-equivalence violation: "Bursitis pain" as a primary topic should hold many keywords with different compound intents, but its PRIMARY placements should only be searchers whose primary intent is bursitis pain in the symptom-dimension sense, not searchers whose intent is the compound of pain + age + gender.
+- If you placed only PRIMARY at "Bursitis pain in older women" with no secondaries (1 placement total), you would be UNDER-PLACING — the dimension topics each capture a meaningful angle that warrants its own structural placement and downstream content.
+- If you placed only PRIMARY at "Bursitis pain" (1 placement total), you would be SEVERELY UNDER-PLACING and ALSO violating the intent-equivalence rule by bundling this keyword's distinct compound intent with the broader symptom topic.
+
+The layered placement gives downstream workflows (content development, conversion funnel design, marketplace optimization) BOTH the granular compound primary AND the broader cross-cutting secondary aggregations. Under-placement loses analytical depth that downstream tools cannot recover from the canvas alone.
+
+Step 4c — Complement detection and unifying parent (MANDATORY when creating any new dimension topic):
+
+After creating any new dimension topic via ADD_TOPIC in Step 4, ask:
+
+(a) Does the dimension this topic captures (age / gender / severity / occupation / treatment-context / activity / etc.) have a natural complementary dimension topic that would pair with it? Examples:
+- Creating "How bursitis affects older people" suggests a complement "How bursitis affects younger people".
+- Creating "How bursitis affects women differently" suggests a complement "How bursitis affects men differently".
+- Creating "Severe bursitis pain" suggests a complement "Mild bursitis pain".
+- Creating "At-home bursitis treatments" suggests a complement "Professional bursitis treatments".
+
+(b) Does this complementary pair (or this single topic plus an obvious complement that doesn't yet exist) suggest a unifying parent topic that organizes both? Examples:
+- "How bursitis affects older people" + "How bursitis affects younger people" suggests a unifying parent "How bursitis affects people differently at different ages".
+- "How bursitis affects women differently" + "How bursitis affects men differently" suggests a unifying parent "How bursitis affects men and women differently".
+- "Severe bursitis pain" + "Mild bursitis pain" suggests a unifying parent "How severe is your bursitis pain?".
+
+If yes to (a) or (b):
+
+- ADD_TOPIC the complementary topic if it doesn't yet exist AND the dimension pattern justifies it. The complementary topic may have NO primary keywords from this batch — it exists as deliberate narrative scaffolding. The keyword that makes it primary-bearing may surface in a future batch, or never; either is fine.
+- ADD_TOPIC the unifying parent if it doesn't yet exist. The unifying parent is also typically empty of primary keywords — it exists to organize the hierarchy and provide chapter structure for the narrative flow.
+- If the unifying parent is being newly created and existing dimension topics belong as its nested children, MOVE_TOPIC them so the parent organizes the pair.
+
+CAUTION — what complement detection IS and IS NOT:
+
+This step is for FACET dimensions that genuinely partition a dimension (age has young/old; gender has men/women; severity has mild/severe; treatment-context has at-home/professional; activity-context has athletic/sedentary; etc.). Complement detection is NOT for arbitrary topic invention. If the dimension does not have a natural complement (e.g., "How bursitis affects athletes" has no obvious dimensional complement — there's no clean partition), do not invent one for symmetry's sake.
+
+This step also does NOT extend to broader narrative-driven topic generation — topics that fill conversion-funnel narrative gaps which no keyword-driven analysis surfaces (e.g., a higher-level parent such as "How does bursitis affect different people differently depending on their situation" that organizes age + gender + occupation + activity dimensions all together, plus brand-new siblings such as "Bursitis in athletes" that don't have natural dimensional complements). Broader narrative-driven topic generation is the responsibility of Workflow #5 (Conversion Funnel & Narrative Architecture), which runs AFTER Workflow #1 (Keyword Clustering) is complete.
+
+Step 4c's scope: keyword-surfaced dimensions with natural complements that suggest a clean partition.
 
 Step 5 — Build Complete Upstream Chains:
-For both the primary and every secondary placement, verify that a complete chain of parent topics exists from the keyword's topic all the way to a root-level topic. If any intermediate topics are missing, create them via ADD_TOPIC. These intermediate topics may be empty (no keywords assigned) — they serve as narrative scaffolding that ensures the conversion funnel has a logical, step-by-step flow from the most general awareness down to the most specific concern.
 
-Topic roles:
-- Keyword-holding topics: Have keywords directly assigned. These represent specific searcher intents.
-- Narrative-bridging topics: Empty of keywords. They exist to connect topics in the hierarchy and provide chapter structure for the narrative flow. They must still have descriptive titles (in searcher-centric language) and topic descriptions.
-- Cross-cutting topics: Capture a facet theme across multiple branches of the funnel. Connected to location-specific or condition-specific topics via ADD_SISTER_LINK operations.
+For every placement (the primary AND every secondary), verify that a complete chain of parent topics exists from the placement topic all the way to a root-level topic. If any intermediate topics are missing, create them via ADD_TOPIC.
+
+Empty intermediate topics are a FEATURE of a well-structured conversion funnel, not a fallback exception. They serve as deliberate narrative scaffolding — chapter-and-section headings that organize the searcher's journey from broad awareness down to specific concern. Use them whenever the narrative arc benefits from organizational structure that no single keyword would directly surface.
+
+Topic roles (clarified for the layered placement model):
+
+- Keyword-holding topics with primary placements: have at least one keyword whose PRIMARY placement is here. These represent specific intent-equivalence classes — every primary keyword here shares the same compound intent, per the binding rule from Step 2.
+
+- Keyword-holding topics with only secondary placements: have keywords placed only as secondary (cross-cuts from keywords whose primary lives elsewhere). The dimension topics created in Step 4 typically start as secondary-only topics — their primary keywords accumulate over batches as the dimension's intent surfaces in keywords searching for that dimension specifically.
+
+- Narrative-bridging topics: empty of primary keywords (may have zero or more secondary placements). They exist to connect topics in the hierarchy and provide chapter structure for the narrative flow. Examples: "Who does bursitis affect?" (organizes demographic dimensions); "Bursitis symptoms" (organizes symptom dimensions); "Treatment options" (organizes treatment-context dimensions); "How does bursitis affect different people differently?" (a higher-level unifying parent organizing multiple dimension-organizing topics). These must still have searcher-centric titles and topic descriptions.
+
+- Cross-cutting topics: capture a dimension theme across multiple branches of the funnel. Connected to peer dimension topics or compound-intent topics via ADD_SISTER_LINK operations when relevant.
+
+The hierarchy as a whole should read like a well-structured table of contents for the searcher's journey — chapters (root and high-level organizational topics) → sections (mid-level dimension and bridge topics) → specific intent pages (compound primary topics with their keyword sets).
 
 Step 6 — Volume-Aware Topic Granularity:
 The user has specified a volume threshold of [VOLUME_THRESHOLD]. Apply these rules:
@@ -251,8 +386,13 @@ There are seven types of structural changes that may be warranted. Each maps to 
    Action: MOVE_KEYWORD for each affected keyword. Apply this test before moving: "Would content written for the new topic address this keyword's intent more directly and completely than content written for the current topic?" Move only on a clear yes — not a marginal improvement. If the source topic has stability_score >= 7.0 and you are moving keywords AWAY from it (which materially changes its keyword set), accompany the moves with a paired UPDATE_TOPIC_DESCRIPTION on the source if its description should be revised; reassigning keywords away from a high-stability topic does not by itself require JUSTIFY_RESTRUCTURE (the topic's structural identity is unchanged), but if the reassignment materially weakens the source's reason-to-exist, consider whether DELETE_TOPIC or MERGE_TOPICS is the more honest operation.
 
 (3) Topic Splitting → SPLIT_TOPIC operation.
-   Signal: an existing topic has accumulated keywords with meaningfully divergent sub-intents that would require substantially different content narratives, and each sub-intent cluster has at least 2 keywords.
-   Action: SPLIT_TOPIC. Specify the source topic (by stable ID), the new sibling/nested topics (each with alias, title, description, and the keyword UUIDs going to it), and a plain-English reason. SPLIT_TOPIC requires the source topic to have NO child topics — if it does, MOVE_TOPIC the children FIRST (earlier in the operation list).
+   Signals (two variants — the first is the higher-priority case):
+
+   (3a) INTENT-EQUIVALENCE VIOLATION (high-priority, binding). An existing topic bundles multiple distinct compound intents in its primary keywords, violating the intent-equivalence rule from Step 2. This must be split regardless of cluster size — even a single primary keyword whose compound intent diverges from the topic's other primary keywords warrants splitting (because the topic is no longer an intent-equivalence class). Detect by examining the topic's primary keyword set: do all primary keywords share the same compound intent (same searcher in same situation seeking same outcome)? If no, the topic violates intent-equivalence. Note: secondary placements at the topic do NOT trigger splitting — only primary co-placement of distinct compound intents does.
+
+   (3b) DIVERGENT SUB-INTENT ACCUMULATION (legacy threshold). An existing topic has accumulated keywords with meaningfully divergent sub-intents that would require substantially different content narratives, with each sub-intent cluster having at least 2 keywords. This is the milder case — the topic may be passing intent-equivalence at the primary-bundling level but is structurally too broad for content production.
+
+   Action for both: SPLIT_TOPIC. Specify the source topic (by stable ID), the new sibling/nested topics (each with alias, title, description, and the keyword UUIDs going to it), and a plain-English reason. SPLIT_TOPIC requires the source topic to have NO child topics — if it does, MOVE_TOPIC the children FIRST (earlier in the operation list). For (3a), the reason field must explicitly cite the intent-equivalence violation and identify the distinct compound intents being separated.
 
 (4) Topic Merging → MERGE_TOPICS operation.
    Signal: two existing topics at the same level have converged in intent. Their descriptions substantially overlap; their keywords would be equally well-served by either topic; maintaining both creates fragmentation without narrative distinction.
@@ -312,7 +452,7 @@ Note a few important things:
 
 - The Topics Layout Table may be empty when we first start analyzing the search terms (i.e., the input TSV contains only the header row). In that case, every keyword's primary placement requires ADD_TOPIC for its primary topic and ADD_TOPIC operations for the full upstream chain to a root. The 'Topics Layout Table Primer' is provided below as part of this prompt — it describes the input table format, the operation vocabulary, the operation syntax, and the cross-cutting rules.
 
-- The primary seed word (which is also the niche health condition we are targeting) for the keywords data is [PRIMARY_SEED_WORDS]. This means this/these seed word(s) will be present in almost all keywords and may not play a big role in figuring out the intent of the searcher except when it appears by itself (in which case it will represent the topmost, most generic intent and topic node).
+- The primary seed word (which is also the niche health condition we are targeting) for the keywords data is [PRIMARY_SEED_WORDS]. This seed word will be present in almost all keywords and is operationalized as Step 0 of the Placement Process — conceptually stripped before dimension analysis (Steps 1-4). The exception (when the keyword IS just the seed word alone) is also handled in Step 0: it goes at the topmost generic root-level topic with no secondary placements.
 
 
 AUTOMATED PROCESSING CONTEXT:

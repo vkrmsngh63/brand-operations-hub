@@ -1,9 +1,10 @@
 # KEYWORD CLUSTERING — ACTIVE DOCUMENT
 ## Current state of the Keyword Clustering workflow tool (Group B, tool-specific)
 
-**Last updated:** April 26, 2026 (Phase-1 polish bundle — three deferred Phase-1 items shipped (canvas-layout visual verification on populated 40-topic canvas DONE + Direct-mode UI hint DONE + Adaptive-Thinking warning DONE); one cosmetic `+x more` cut-off bug surfaced + fixed in two-attempt cycle (commits `950e4b5` then `c891c36`); one new architectural Phase-1 polish item identified (Funnel-Order Pass — design captured, build deferred); one new follow-up item identified (empirical validation of UI-hint thresholds); new POST-PHASE-1-POLISH-BUNDLE STATE block added above)
-**Last updated in session:** session_2026-04-26_phase1-polish-bundle (Claude Code)
-**Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-E (Claude Code)
+**Last updated:** April 26, 2026 (V3 prompt refinement session — Strategy 3 layered placement + intent-equivalence binding rule baked into `AUTO_ANALYZE_PROMPT_V3.md`; new POST-2026-04-26-V3-PROMPT-REFINEMENT STATE block added above POST-PHASE-1-POLISH-BUNDLE)
+**Last updated in session:** session_2026-04-26_workflow-transition-architecture-and-v3-prompt-refinement (Claude Code)
+**Previously updated in session:** session_2026-04-26_phase1-polish-bundle (Claude Code)
+**Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-pivot-session-E (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-pivot-session-D (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-pivot-session-C (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-pivot-session-B (Claude Code)
@@ -25,7 +26,86 @@
 
 ---
 
-## ⚠️ POST-PHASE-1-POLISH-BUNDLE STATE (READ FIRST — updated 2026-04-26 Phase-1 polish bundle)
+## ⚠️ POST-2026-04-26-V3-PROMPT-REFINEMENT STATE (READ FIRST — updated 2026-04-26 second session)
+
+**As of 2026-04-26 V3 prompt refinement session (Strategy 3 layered placement + intent-equivalence binding rule baked into the prompt; no code changes; doc-only session):**
+
+### What this session did to W#1
+
+The V3 Auto-Analyze prompt (`docs/AUTO_ANALYZE_PROMPT_V3.md`) was refined to encode a different primary-placement strategy and a new binding rule for topic creation.
+
+**Before this session (V3 as shipped 2026-04-25 Pivot Session C):**
+- Primary placement = the broadest core-intent topic (e.g., for "bursitis pain in older women" → primary at "Bursitis pain"; secondaries at "How bursitis affects older people" + "How bursitis affects women differently"). Total = 3 placements (1 primary + 2 secondary).
+- Worked example in Step 4b matched this framing.
+- Step 2 CRITICAL clause pointed in a contradictory direction (suggesting most-specific primary) — internal inconsistency.
+- No explicit intent-equivalence rule.
+- No explicit complement-detection step.
+- Seed-word stripping mentioned only at the bottom of the prompt as a passing note.
+
+**After this session (V3 as updated 2026-04-26):**
+- **Strategy 3 layered placement.** Primary at the most-specific compound topic (e.g., for "bursitis pain in older women" → primary at "Bursitis pain in older women"); secondaries at EACH validated dimension topic (e.g., "Bursitis pain", "How bursitis affects older people", "How bursitis affects women differently"). Total = 4 placements (1 primary + 3 secondary). The symptom dimension is treated equally with demographic dimensions — no privileged "core intent".
+- **Intent-equivalence binding rule.** Two keywords share a primary topic ONLY IF they share the same compound intent — same searcher in same situation seeking same outcome. Word-similarity is insufficient. Distinct compound intents (e.g., "[condition] pain in older women" vs. "[condition] pain in young women") get separate primary topics. Existing topics that bundle distinct compound intents must be split via SPLIT_TOPIC.
+- **Step 0 (seed-word stripping)** added as an explicit first step with the "keyword IS just the seed" exception.
+- **New Step 4c (complement detection + unifying parent)** added as a mandatory step when creating any new dimension topic. Bounded scope — only for facet dimensions with natural partitions (age young/old, gender men/women, severity mild/severe, etc.). Broader narrative-driven topic generation explicitly assigned to Workflow #5.
+- **Step 5 strengthened** — empty bridge topics are now described as a FEATURE of a well-structured funnel, not a fallback exception.
+- **Reevaluation Pass (3) Topic Splitting** updated with two-variant signal — (3a) intent-equivalence violation (high-priority, binding) + (3b) divergent sub-intent accumulation (legacy threshold).
+- **Topics Layout Table Primer (operation vocabulary)** preserved untouched — operation contract is unchanged by this refinement.
+
+File grew from 629 → 769 lines (+140, ~22%).
+
+### Director must re-paste this V3 prompt into the Auto-Analyze UI before the next run
+
+The file change in `docs/AUTO_ANALYZE_PROMPT_V3.md` does not auto-update the browser-side text inputs. Open the Auto-Analyze panel at vklf.com and re-paste the new Initial Prompt + Topics Layout Table Primer (the second prompt is unchanged but re-pasting both is the safe move).
+
+### Expected behavior change on next Bursitis run
+
+The new prompt will produce **more topic-creation operations per batch** than V3-as-shipped:
+- ~+1 ADD_TOPIC per keyword on average (for the compound primary topic that frequently doesn't exist yet)
+- ~+1 ADD_KEYWORD per keyword (the broad-core dimension is now an additional secondary, not the primary)
+- Step 4c will sometimes add 1-2 ADD_TOPIC operations per dimension (complement + unifying parent)
+
+**Cost / wall-clock impact:** modest increase in output tokens per batch — possibly 30-50% above the Pivot-D baseline. Still far below pre-pivot V2 levels because we're in the operation-based contract.
+
+**Recommendation:** test on a small batch first (5-10 keywords on a clean canvas) to validate the new operation patterns look right before running a full Bursitis re-analyze. Watch for:
+- Compound primary topics being correctly created (vs. the model defaulting to broad-core primary out of habit)
+- Each dimension getting its own secondary topic (Step 4b math should be 1+N(dimensions))
+- Empty bridge topics + complementary topics + unifying parents appearing in Step 4c situations
+- SPLIT_TOPIC operations on existing topics that violate intent-equivalence (Reevaluation 3a)
+
+### What did NOT change this session
+
+- **No code changes.** Pure prompt + methodology session.
+- **No DB schema changes.**
+- **No tests run / built / re-run.** Test suite and build state unchanged from prior session.
+- **No live-data state changes.** vklf.com runs commits `c891c36` + `4f017a3` from the prior session.
+- **The operation vocabulary** (`src/lib/operation-applier.ts` + Topics Layout Table Primer V3) is unchanged. The new prompt uses the same operations, just emits more of them per keyword.
+
+### Cross-tool integration methodology added (platform-wide, not W#1-specific)
+
+The session also produced platform-wide methodology updates that affect how W#1 will eventually graduate and how every future workflow's design + transition + re-entry happens. See:
+- `docs/HANDOFF_PROTOCOL.md` Rule 18 (expanded — §A/§B DESIGN doc + mid-build Read-It-Back + reciprocal output declaration)
+- `docs/HANDOFF_PROTOCOL.md` Rule 21 (NEW — Pre-interview directive scan)
+- `docs/HANDOFF_PROTOCOL.md` Rule 22 (NEW — Graduated-Tool Re-Entry Protocol)
+- `docs/HANDOFF_PROTOCOL.md` Rule 23 (NEW — Change Impact Audit)
+- `docs/HANDOFF_PROTOCOL.md` §4 Step 2 Scenario B (expanded — 16-item Tool Graduation deliverables list)
+- `docs/DATA_CATALOG.md` §7 (PROMOTED — Cross-Tool Data Flow Map)
+- `docs/ROADMAP.md` Workflow #5 entry (NEW — narrative-driven-comprehensiveness directive captured)
+
+When W#1 eventually graduates (likely at the start of the W#2 transition), it follows the new 16-item Scenario B deliverables stack: Active doc splits into Archive + Data Contract; Data Contract gets a §Resume Prompt section; Cross-Tool Data Flow Map fills in W#1's row with finalized R/W flags; etc.
+
+### Standing instructions for next session
+
+The three "NEXT" choices from before this session still apply, with refinements:
+
+(a) **More Phase-1 polish items.** The Funnel-Order Pass remains the highest-value architectural one. Note that Funnel-Order Pass is keyword-driven (orders existing topics by funnel stage) — distinct from W#5's narrative-driven topic creation captured this session. Also: a small-batch test of the refined V3 prompt should happen before any other Phase-1 polish work to validate the new placement strategy on a real run.
+
+(b) **Sessions 7-9 Human-in-Loop mode build per `AI_TOOL_FEEDBACK_PROTOCOL.md`.** Unchanged scope.
+
+(c) **Workflow #2 (Competition Scraping) — Workflow Requirements Interview.** Now uses the expanded Rule 18 (§A/§B DESIGN doc + reciprocal output declaration). Per Rule 21, the interview's first item will be: "Are there any prior director directives addressed to W#2 in the docs?" — a quick scan of ROADMAP §Workflow 2 entry + DATA_CATALOG §6.1 will surface anything captured in advance.
+
+---
+
+## ⚠️ POST-PHASE-1-POLISH-BUNDLE STATE (updated 2026-04-26 Phase-1 polish bundle — preserved as historical context)
 
 **As of 2026-04-26 Phase-1 polish bundle session (three deferred Phase-1 items shipped + one cosmetic canvas bug fixed in two-attempt cycle + one new architectural polish item identified + one new follow-up item identified):**
 

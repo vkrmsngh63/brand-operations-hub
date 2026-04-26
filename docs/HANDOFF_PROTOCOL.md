@@ -278,6 +278,24 @@ Claude is responsible for conducting the interview in clusters of 3–5 related 
 
 **The deliverable of the interview is a `<WORKFLOW_NAME>_DESIGN.md` doc** that captures all answers in structured form. This doc is Group B (tool-specific), uploaded whenever that workflow is being worked on in subsequent chats.
 
+**Structure of the DESIGN doc — §A and §B (NEW 2026-04-26):**
+
+Every `<WORKFLOW_NAME>_DESIGN.md` has two parallel sections:
+
+- **§A — Initial Requirements Interview answers.** Captures the 14-question answers from the interview that produced the doc. Frozen at end-of-interview. Treated as the authoritative initial spec for the workflow.
+
+- **§B — In-flight refinements (append-only).** Each entry: date, session ID, what the director said, what alternatives were considered, what was decided. Mid-session captures land here at end-of-session per Rule 19. Append-only — never edit prior entries.
+
+This separation lets a future session distinguish "decided at the original interview" from "decided in flight" instantly, and surfaces drift between §A and §B explicitly. If §B's accumulated decisions supersede §A's spec, that's a flag to surface — usually it means §A needs updating to reflect the new spec, in a deliberate update with the director's confirmation rather than silently.
+
+**Mid-build directive Read-It-Back (NEW 2026-04-26):**
+
+When the director adds scope or refines the workflow design mid-build (between the initial interview and Tool Graduation), Claude must echo back the planned §B entry BEFORE coding. Example: *"Capturing this in §B of the design doc as: <date> — director added <X>. Alternatives I'm setting aside: <Y>. Reasoning: <Z>. Sound right?"* This is the Read-It-Back test (Rule 14a) applied to mid-build scope changes — it prevents Claude from quietly absorbing a directive without the director knowing how it was interpreted.
+
+**Reciprocal output declaration (NEW 2026-04-26):**
+
+Question 5 of the interview — "Outputs" — must be answered with explicit declaration of data the tool will produce, even if no downstream consumer is identified yet. Each declared output becomes an entry in the workflow's row of the Cross-Tool Data Flow Map (`DATA_CATALOG.md` §7). This builds a forward registry — when a downstream workflow's interview later happens, it can pull from the upstream tool's pre-declared output registry rather than asking each upstream workflow's chat to answer "do you produce X?". The declaration may be PROVISIONAL (specific Human Reference Language refined at Tool Graduation), but the existence and shape of each output must be named.
+
 ### Rule 19 — Platform-truths audit at end of every Workflow Requirements Interview
 The final step of every interview is a platform-truths audit. Claude asks:
 > "In answering these questions, did you reveal any platform-level fact that isn't yet in `PLATFORM_REQUIREMENTS.md`?"
@@ -298,6 +316,109 @@ Per `PLATFORM_REQUIREMENTS.md §12`, a Shared Workflow-Tool Scaffold (standard t
 When building a new workflow, Claude proposes **"this workflow plugs into the scaffold as follows: [details]"** rather than re-architecting from scratch. If the user or the workflow's nature requires a special-case architecture (like Keyword Clustering's dual-state canvas), Claude flags that explicitly, describes what scaffold features are being waived and why, and confirms with the user before proceeding.
 
 Building the scaffold itself is a prerequisite to building workflow #2 and is tracked as a first-class roadmap item.
+
+### Rule 21 — Pre-interview directive scan (NEW 2026-04-26)
+
+At the start of any Workflow Requirements Interview (per Rule 18), Claude must scan for any director directives addressed to the specific workflow under interview that may have been captured during prior sessions. These are directives the director gave when the workflow wasn't yet under build but they wanted future intent recorded — for example, the W#5 Conversion Funnel narrative-driven-comprehensiveness directive captured 2026-04-26.
+
+**Scan locations (in order):**
+1. `ROADMAP.md` — primary location for forward-looking directives addressed to specific workflows; check the workflow's section.
+2. `DATA_CATALOG.md` §6.x placeholders — secondary location for forward-looking data-design directives or pointers back to ROADMAP.
+3. The workflow's own `<TOOL>_DESIGN.md` if one was drafted in advance — directives may live in §B (in-flight refinements) even before formal interview.
+
+**What to do with found directives:**
+
+Surface every found directive to the director as the FIRST item of the interview, before the standard 14-question structure. The director may confirm the directive still applies, refine it, or retire it. If confirmed, the directive becomes a binding input to the interview answers.
+
+**Why this rule exists:** without it, a director gives a forward-looking directive in session N, and session N+M (months later) starts the workflow's interview without surfacing the prior directive — the directive is silently lost. The scan ensures continuity across the gap.
+
+### Rule 22 — Graduated-Tool Re-Entry Protocol (NEW 2026-04-26)
+
+A graduated tool's Active doc has been split into Archive + Data Contract (per §4 Step 2 Scenario B); subsequent sessions that revisit the tool follow this protocol instead of the standard new-session flow.
+
+**Triggering condition:** the director's session-start prompt contains the phrase "graduated-tool re-entry" or references "Rule 22", AND names a specific graduated workflow tool. The canonical re-entry prompt is stored in the tool's Data Contract under §Resume Prompt and emitted to the director at the end of the tool's graduation session.
+
+**Protocol:**
+
+1. Run the mandatory start-of-session sequence (Group A docs).
+
+2. Additionally load these Group B docs for the named tool:
+   - `<TOOL>_DATA_CONTRACT.md` — read fully (small, canonical)
+   - `<TOOL>_DESIGN.md` — read fully (initial requirements §A + in-flight refinements §B per Rule 18)
+   - `<TOOL>_ARCHIVE.md` — skim the table of contents; load specific sections only if the change requires them
+   - `<TOOL>_POLISH_BACKLOG.md` — if it exists
+
+3. Per Rule 21, scan `ROADMAP.md` and `DATA_CATALOG.md` for any director directives addressed to this workflow that may have been captured since graduation; surface them in the drift check.
+
+4. Per Rule 23, before any code change run a Change Impact Audit: identify affected fields, look up downstream consumers in `DATA_CATALOG.md`'s Cross-Tool Data Flow Map, classify the change, surface the audit before coding.
+
+5. Produce the standard drift check with this added context. Wait for explicit go-ahead before any work.
+
+**Canonical Resume Prompt template (filled per-tool at graduation time, stored in `<TOOL>_DATA_CONTRACT.md` §Resume Prompt):**
+
+```
+Read docs/CLAUDE_CODE_STARTER.md and follow every rule in it.
+Today's task: return to Workflow #<N> (<tool name>) — <your specific
+reason / what you want to do>. This is a graduated-tool re-entry
+session, NOT a transition session.
+
+Per HANDOFF_PROTOCOL.md Rule 22 (Graduated-Tool Re-Entry Protocol):
+
+1. Run the mandatory start-of-session sequence (Group A docs).
+2. Additionally load these Group B docs:
+   - docs/<TOOL>_DATA_CONTRACT.md
+   - docs/<TOOL>_DESIGN.md
+   - docs/<TOOL>_ARCHIVE.md (skim TOC; load sections as needed)
+   - docs/<TOOL>_POLISH_BACKLOG.md (if it exists)
+3. Per Rule 21, scan ROADMAP.md for prior directives addressed to
+   this workflow.
+4. Per Rule 23, run a Change Impact Audit before any code change.
+5. Produce the drift check with this added context. Wait for go-ahead.
+```
+
+**Why this protocol exists:** graduated tools' Active docs are heavy and would bloat the working set if loaded for every visit. The Data Contract is the small, stable artifact downstream tools consume — it's also the right entry point for revisit. The Archive provides full history when needed but is loaded selectively. Without this protocol, re-entry would default to either skipping context (risky — the tool's history matters) or loading everything (heavy and unnecessary).
+
+### Rule 23 — Change Impact Audit (NEW 2026-04-26)
+
+Before any code change to a graduated workflow tool (per Rule 22), Claude runs a Change Impact Audit and surfaces it to the director before coding.
+
+**The audit:**
+
+1. Identify the fields, data items, operation vocabulary, or behaviors affected by the proposed change.
+
+2. Look up each affected item in `DATA_CATALOG.md`'s Cross-Tool Data Flow Map (§7). Identify:
+   - Direct downstream consumers (workflows that read this data today)
+   - Anticipated future consumers (workflows that have declared they will read this data per Rule 18 reciprocal output declarations)
+
+3. For each downstream consumer, load that consumer's Data Contract (short, fast). Verify whether the change breaks their assumptions.
+
+4. Classify the change:
+   - **Additive (safe):** new optional field, new operation, new metadata. Downstream tools unaffected unless they choose to read the new thing. Default classification when only adding.
+   - **Compatible-modifying (caution):** semantic change to existing data, BUT downstream tools' behavior is unchanged because they treat the affected field generically. Verify by reading the consumer's code path that uses the field.
+   - **Breaking (hard):** rename, removal, type change, semantic redefinition that consumers must adapt to. Each downstream consumer must be updated in lockstep, OR the change must be staged via versioned Data Contracts (see below).
+
+5. Surface the audit to the director BEFORE coding, in the format:
+
+   ```
+   CHANGE IMPACT AUDIT
+   - Proposed change: <plain description>
+   - Affected fields/items: <list>
+   - Direct downstream consumers: <list with R/W flags from the Map>
+   - Future declared consumers: <list>
+   - Classification: <Additive | Compatible-modifying | Breaking>
+   - For each affected consumer: <does this break them? what would need to change?>
+   - Recommendation: <proceed / proceed with versioned contract / stop and rescope>
+   ```
+
+6. Wait for explicit director approval before coding.
+
+**Versioned Data Contracts (for Breaking changes):**
+
+When a change is classified Breaking, the recommended pattern is to bump the Data Contract version (e.g., `KEYWORD_CLUSTERING_DATA_CONTRACT_v1.md` → `KEYWORD_CLUSTERING_DATA_CONTRACT_v2.md`) rather than updating in place. Downstream tools choose when to migrate — `v1` continues to be served alongside `v2` until all consumers have moved over. This pattern scales as the platform grows; without it, a single breaking change in W#1 could require simultaneous coordinated updates across W#2, W#3, etc.
+
+When all consumers have migrated, `v1` can be archived.
+
+**Why this rule exists:** as the platform grows from 1 tool to 14, a change to W#1 might transitively affect 13 downstream tools. Without the audit, a developer (Claude or director) might ship a change that silently breaks downstream consumers — discovered weeks later when a downstream tool exhibits mysterious failures. The audit surfaces the cascade before code is written.
 
 ---
 
@@ -337,14 +458,46 @@ No deferred item is allowed to leave a chat uncaptured.
 Update docs identified in the checklist. Tailor `NEW_CHAT_PROMPT.md` with resume instructions for next chat.
 
 **Scenario B — Current tool is COMPLETE, new tool starting next chat:**
-Execute full Tool Graduation Ritual:
-1. Split current `<TOOL>_ACTIVE.md` into `<TOOL>_ARCHIVE.md` + `<TOOL>_DATA_CONTRACT.md`
-2. Conduct Data Capture Interview with user (see questions in Doc Architecture §5)
-3. Update `DATA_CATALOG.md` with Human Reference entries
-4. Conduct Next-Tool Setup Interview
-5. Create `<NEXT_TOOL>_ACTIVE.md`
-6. Create tailored `NEW_CHAT_PROMPT.md` for the next chat
-7. Update `DOCUMENT_MANIFEST.md` with new docs + archive old ones
+
+Execute the full Tool Graduation Ritual. The deliverables stack (UPDATED 2026-04-26 to incorporate the Workflow Requirements Interview, Cross-Tool Data Flow Map, and Resume Prompt artifacts):
+
+**Outgoing tool's graduation deliverables:**
+
+1. Split current `<W_OUT>_ACTIVE.md` into `<W_OUT>_ARCHIVE.md` (full history; loaded only if revisiting) + `<W_OUT>_DATA_CONTRACT.md` (small, stable; <200 lines target; what downstream consumers need).
+
+2. Add §Resume Prompt section to the Data Contract, filled in with the canonical re-entry prompt template (per Rule 22). Emit the filled prompt to the director explicitly at end of session so they can copy it directly when they next want to return to the tool.
+
+3. Conduct Data Capture Interview with director (Doc Architecture §5) to finalize Human Reference Language for every data item the tool captured.
+
+4. Update `DATA_CATALOG.md` — entries for outgoing tool's data items move from "PROVISIONAL" to finalized HRL + Data Contract pointer.
+
+5. Update Cross-Tool Data Flow Map in `DATA_CATALOG.md` §7 — outgoing tool's row gets filled in with data items, R/W flags, and downstream consumers identified or "TBD."
+
+6. Move outgoing tool's outstanding polish items into `<W_OUT>_POLISH_BACKLOG.md` (a thin sidecar — so the polish list doesn't lock the tool in active state). The Active doc is no longer needed and can be deleted (full history preserved in Archive).
+
+7. Update `ROADMAP.md` — outgoing tool moves to ✅ COMPLETE; the polish backlog sidecar is referenced.
+
+8. Update `DOCUMENT_MANIFEST.md` — Active doc archived; Data Contract added to Group B inventory; Resume Prompt location documented.
+
+**Incoming tool's setup deliverables (Workflow Requirements Interview deliverables — Rule 18):**
+
+9. Conduct Workflow Requirements Interview for incoming tool, producing `<W_IN>_DESIGN.md` with §A (initial answers — frozen) + §B (empty, append-only mid-build) per Rule 18.
+
+10. Per Rule 21, surface any prior director directives addressed to the incoming workflow as the first item of the interview.
+
+11. Per Rule 19, run the Platform-Truths Audit at the end of the interview — update `PLATFORM_REQUIREMENTS.md` if anything platform-level surfaced.
+
+12. Update Cross-Tool Data Flow Map in `DATA_CATALOG.md` §7 — incoming tool's column gets prepopulated with what it'll READ from upstream tools (per the interview's Q4 upstream-data answers); incoming tool's row gets prepopulated with what it'll PRODUCE for downstream tools (per the Q5 reciprocal output declarations).
+
+13. Update `DATA_CATALOG.md` §6.x — provisional entries for the incoming tool's expected data outputs (so future workflows have something to plan against, even before the incoming tool ships).
+
+14. Create `<W_IN>_ACTIVE.md` (or — under the post-Phase-1α scaffold model — confirm scaffold fit per Rule 20 and create the workflow-specific extensions).
+
+15. Update `ROADMAP.md` — incoming tool moves to 🔄 IN PROGRESS.
+
+16. Update `DOCUMENT_MANIFEST.md` with the new DESIGN + Active docs.
+
+A transition session is heavy. Two sessions may be warranted if the incoming tool's interview is long. Steps 1-8 (graduation) and Steps 9-16 (incoming setup) can split across two sessions if needed — graduate the outgoing tool first; conduct the incoming interview second.
 
 ### Step 3 — URL confirmation
 Ask the user: **"Final step — confirm the URL I'm logging matches your current browser address bar. If you've opened this chat in a new window or the URL changed, paste the current one now. I'll write the final CHAT_REGISTRY.md entry with this URL."**
