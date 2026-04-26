@@ -227,13 +227,6 @@
   max-width: 80px;
   display: inline-block;
 }
-.cvs-kw-more {
-  color: #64748b;
-  font-size: 8px;
-  white-space: nowrap;
-  flex-shrink: 0;
-  margin-right: 4px;
-}
 .cvs-node-title-wrap {
   color: #1e293b;
   font-size: 13px;

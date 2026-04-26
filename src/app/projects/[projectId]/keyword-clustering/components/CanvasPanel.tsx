@@ -901,10 +901,9 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
                             {secondaryKws.slice(0, 2).map((k, i) => (
                               <span key={'s' + i} className="cvs-kw-secondary">{k!.keyword}</span>
                             ))}
-                            {kwIds.length > 5 && <span className="cvs-kw-more">+{kwIds.length - 5} more</span>}
                           </div>
                           <button className="cvs-kw-expand-btn" onClick={e => { e.stopPropagation(); setKwPopoverNodeId(kwPopoverNodeId === node.id ? null : node.id); }}>
-                            {kwPopoverNodeId === node.id ? '▲' : '▼'} {kwIds.length}
+                            {kwPopoverNodeId === node.id ? '▲' : '▼'} {kwIds.length}{kwIds.length > 5 ? ` (+${kwIds.length - 5})` : ''}
                           </button>
                         </div>
                       </foreignObject>
