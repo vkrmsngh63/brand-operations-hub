@@ -1,8 +1,9 @@
 # PLATFORM ARCHITECTURE
 ## Technical architecture of the Product Launch Operating System (PLOS)
 
-**Last updated:** April 25, 2026 (Phase 1g-test follow-up Part 3 — Pivot Session E — UUID-PK migration: `CanvasNode.id` and `Pathway.id` switched from `Int @id` to `String @id @default(uuid())`; `CanvasNode.parentId`/`pathwayId` and `SisterLink.nodeA`/`nodeB` are now `String`. `CanvasState` drops `nextNodeId` + `nextPathwayId`; gains `nextStableIdN Int @default(1)` (per-project counter for issuing `t-N` stableIds the AI uses). Race condition on the old shared counters is gone by construction. Migration via `prisma db push --accept-data-loss` after Rule-8 approval — Bursitis test canvas wiped (no production data outside the canvas tables touched).)
-**Last updated in chat:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-E (Claude Code)
+**Last updated:** April 27, 2026 (V3 small-batch test + context-scaling concern session — §10 Known Technical Debt updated with new top-level architectural concern: 🚨 Canvas Serialization INPUT Context-Scaling. V3 solved output-side scaling (operations vs full TSV re-emission) but did NOT solve input-side scaling — canvas TSV still serialized in full every batch; per-topic ≈ 150-300 tokens; will exceed Sonnet 4.6's standard 200k context window between roughly 600-1,000 topics. Trade-off was acknowledged in `PIVOT_DESIGN.md` lines 205+246 since 2026-04-25 but no mitigation was designed; surfaced as a designed-concern requiring its own design session per director's directive 2026-04-27.)
+**Last updated in session:** session_2026-04-27_v3-prompt-small-batch-test-and-context-scaling-concern (Claude Code)
+**Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-E (Claude Code)
 **Previously updated in chat:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-B (Claude Code)
 **Previously updated:** April 17, 2026 (Phase M COMPLETE — Ckpts 9 + 9.5 deployed)
 
@@ -486,6 +487,9 @@ From Phase M Ckpt 9.5 (2026-04-17) — **post-deploy bug fixes:**
 - ✅ `src/app/projects/[projectId]/page.tsx` — **built for the first time** (487 lines). Ckpts 6-8 docs all claimed it was built; in reality the file never existed on disk. Discovered during Ckpt 9 visual verification post-deploy. Pattern 7 recurrence documented in CORRECTIONS_LOG.
 
 **Deploy status:** Phase M is fully deployed on vklf.com as of commits `3a2b928` + `fcf2373`. Full Phase 1 happy-path verified working end-to-end.
+
+From Workflow #1 / Auto-Analyze (2026-04-27 V3 small-batch test):
+- 🚨 **NEW: Canvas Serialization INPUT Context-Scaling — Architectural Concern (open).** V3's operations-based output contract (Pivot Sessions A-E, 2026-04-25) solved THREE of four scaling concerns (keyword preservation, output-token scaling, wall-clock per batch) but did NOT solve the fourth — INPUT scaling. The full canvas TSV is serialized into every batch's prompt; per-topic cost ≈ 150-300 tokens; on long Auto-Analyze runs the input will exceed Sonnet 4.6's standard 200k context window somewhere between roughly 600-1,000 topics — well within reach of a full Bursitis (2,329 keyword) project run. The trade-off was acknowledged in `PIVOT_DESIGN.md` lines 205 + 246 since 2026-04-25 but no mitigation was designed. V2's Mode A→B (deleted in Pivot E) was an OUTPUT-side delta mechanism credited with "avoiding the projected 200k context wall" — but it is NOT a viable rebuild target for this concern, which is INPUT-side. **This is explicitly NOT polish — it is a fundamental architectural limitation requiring a designed solution before any build work proceeds.** Solution must scale WITHOUT compromising V3's quality-preserving properties (intent-equivalence detection requires whole-canvas reasoning). Full detail + possible-directions list in `ROADMAP.md` 🚨 Canvas Serialization INPUT Context-Scaling section + `PIVOT_DESIGN.md §5` (retroactively added 2026-04-27) + `KEYWORD_CLUSTERING_ACTIVE.md` POST-2026-04-27-V3-VALIDATION-AND-CONTEXT-SCALING-CONCERN STATE block. Empirical data point (2026-04-27 small-batch test on clean canvas): empty canvas ≈ 19,925 input tokens; 25 topics ≈ 23,854 input tokens. Code reality: `src/lib/auto-analyze-v3.ts` line 98 `buildOperationsInputTsv` takes the FULL canvas every batch — verified 2026-04-27.
 
 ---
 

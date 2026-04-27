@@ -1,9 +1,10 @@
 # KEYWORD CLUSTERING — ACTIVE DOCUMENT
 ## Current state of the Keyword Clustering workflow tool (Group B, tool-specific)
 
-**Last updated:** April 26, 2026 (V3 prompt refinement session — Strategy 3 layered placement + intent-equivalence binding rule baked into `AUTO_ANALYZE_PROMPT_V3.md`; new POST-2026-04-26-V3-PROMPT-REFINEMENT STATE block added above POST-PHASE-1-POLISH-BUNDLE)
-**Last updated in session:** session_2026-04-26_workflow-transition-architecture-and-v3-prompt-refinement (Claude Code)
-**Previously updated in session:** session_2026-04-26_phase1-polish-bundle (Claude Code)
+**Last updated:** April 27, 2026 (V3 small-batch test + context-scaling concern session — V3-refined prompt VALIDATED via small-batch test on a brand-new clean canvas with the 2,329-keyword Bursitis dataset (compound primaries, complement pairs, unifying parents, empty bridge topics ALL observed through the in-progress run's batches 1-4); 4 new Phase-1 polish items captured to ROADMAP (Apply button feedback during apply; BATCH_REVIEW screen as scannable tables; search-volume display on canvas topic boxes + cross-tool display convention with W#3+W#5 forward-pointers); 1 NEW top-level architectural concern (🚨 Canvas Serialization INPUT Context-Scaling — explicitly NOT polish per director). Also: HANDOFF_PROTOCOL Rule 24 (Pre-capture search) added in response to a HIGH-severity Claude mistake captured in CORRECTIONS_LOG 2026-04-27 entry. New POST-2026-04-27-V3-VALIDATION-AND-CONTEXT-SCALING-CONCERN STATE block added above prior blocks.)
+**Last updated in session:** session_2026-04-27_v3-prompt-small-batch-test-and-context-scaling-concern (Claude Code)
+**Previously updated in session:** session_2026-04-26_workflow-transition-architecture-and-v3-prompt-refinement (Claude Code)
+**Previously updated in session (earlier):** session_2026-04-26_phase1-polish-bundle (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-pivot-session-E (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-pivot-session-D (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-pivot-session-C (Claude Code)
@@ -26,7 +27,116 @@
 
 ---
 
-## ⚠️ POST-2026-04-26-V3-PROMPT-REFINEMENT STATE (READ FIRST — updated 2026-04-26 second session)
+## ⚠️ POST-2026-04-27-V3-VALIDATION-AND-CONTEXT-SCALING-CONCERN STATE (READ FIRST — updated 2026-04-27)
+
+**As of 2026-04-27 V3 small-batch test + context-scaling concern session (V3-refined prompt validated qualitatively on a brand-new clean canvas; 4 new polish items + 1 architectural concern captured; HANDOFF_PROTOCOL Rule 24 added in response to a HIGH-severity Claude synthesis-failure mistake):**
+
+### What this session did to W#1
+
+#### V3-refined prompt validation — PASSED qualitatively
+
+Director set up a brand-new test Project from scratch, re-pasted the refined V3 prompts (post-2026-04-26 Strategy 3 layered placement + intent-equivalence rule) into the Auto-Analyze UI, and ran Auto-Analyze with these settings:
+
+| Setting | Value |
+|---|---|
+| Model | Sonnet 4.6 |
+| API Mode | Direct (browser → Anthropic) |
+| Thinking | Adaptive (NOT Enabled with budget 12000 as Claude recommended) |
+| Batch size | 8 (NOT 4 as Claude recommended) |
+| Vol threshold | (low value) |
+| Keyword scope | Unsorted + Reshuffled |
+| AST table | 2,329 keywords loaded (full Bursitis dataset on a clean test project) |
+| Review each batch | ON |
+
+The director reviewed each batch's BATCH_REVIEW screen and clicked Apply on each. Run was still in progress at session-end (batch 4 in flight). First three batches' metrics:
+
+| Batch | Wall-clock | Input tokens | Cache hit | Output tokens | Cost | Operations | Topics on canvas after | Reconciliation |
+|---|---|---|---|---|---|---|---|---|
+| 1 | ~1:51 | ~19,925 (425 billed) | N/A (first batch) | 7,731 | $0.172 | 22 | 9 | 8/0 perfect |
+| 2 | ~5 min (1 stall+reconnect) | ~21,066 (7 billed) | 18,136 | 7,343 | $0.170 | 21 | 11 (+2 new) | 8/0 perfect |
+| 3 | ~9 min | ~21,629 (2,732 billed) | 18,136 | 11,460 | $0.235 | 37 | 25 (+14 new) | 8/0 perfect |
+| 4 | in flight | ~23,854 | (expected ~18k) | TBD | TBD | TBD | TBD | TBD |
+
+**Validation criteria — all four PASSED on director's qualitative inspection of the canvas:**
+
+1. ✅ **Compound primary topics observed** — multi-modifier titles like "Bursitis pain in older women" appearing as distinct primary topics, not just broad-core dimension topics being reused.
+2. ✅ **Complement pairs observed** — Step 4c complement detection firing (e.g., older + younger pair; men + women pair).
+3. ✅ **Unifying parents observed** — Step 4c unifying-parent topics created above complement pairs (e.g., "How bursitis affects people differently at different ages").
+4. ✅ **Empty bridge topics observed** — Step 5 narrative-bridging topics with searcher-centric titles, no primary keywords, organizing chapter structure.
+
+**Bonus signals:**
+- Prompt caching is working beautifully: from batch 2 onward, only the variable parts (canvas TSV + new keyword batch) are billed at full input rate; the 16-18k V3 prompt body is read from cache. Per-batch cost stays near $0.17-0.24 even as canvas grows.
+- Reconciliation pass shows `8 on-canvas → AI-Sorted, 0 off-canvas → Reshuffled` on every batch — V3's structural keyword-preservation property is rock-solid.
+- Adaptive thinking did NOT fail with 0-output tokens on this clean canvas — one data point toward the empirical-threshold-validation polish item (the failure mode appears to require a large existing canvas, not present here).
+- Operation density picked up substantially in batch 3 (2.9 placements/keyword, 14 new topics for 8 keywords) — V3-refined behavior is firing at full strength once the model has a skeleton to layer on top of. Batches 1-2 looked conservative because the model was rationally building scaffolding first (Step 5 complete upstream chains) before layered placement could exhibit fully.
+
+**Director's headline conclusion:** *"As far as the output quality goes, everything is working perfectly so far. There are compound primary topics, there are complement pairs, there are unifying parents and there are empty bridge topics."* The V3-refined prompt's Strategy 3 layered placement + intent-equivalence rule has passed its first real-world validation.
+
+#### Two UX issues identified during BATCH_REVIEW use → captured as Phase-1 polish
+
+1. **BATCH_REVIEW Apply button gives no feedback during apply.** Button visually unchanged while apply is running. Director's design: disable + fade during apply; success → dismiss; error → re-enable. Captured to `ROADMAP.md` Phase-1 polish.
+
+2. **BATCH_REVIEW screen shows new topics + analyzed keywords but NOT operations as scannable tables.** Without operation-level visibility (existing-topic edits, splits/merges/moves, sister-link changes, JUSTIFY_RESTRUCTURE payloads), admin can't fully validate before applying. Director's design: scannable tables grouped by operation type. Captured to `ROADMAP.md` Phase-1 polish.
+
+#### One NEW UX feature → captured as Phase-1 polish + cross-tool platform-level directive
+
+**Search-volume display on canvas topic boxes (W#1) + cross-tool display convention (W#3, W#5, future workflows):**
+- Each topic box shows two volume totals (primary keywords total in primary color + secondary keywords total in secondary color)
+- Each keyword shows volume in parens to the right (in topic box preview AND expand-arrow overlay)
+- Bold formatting based on Auto-Analyze volume threshold (≥ → bold; < → not bold)
+- W#1 implementation is canvas-only (NOT W#1 tables — director explicit)
+- **Cross-tool platform directive:** same convention applies wherever topics + keywords are surfaced in W#3 (Therapeutic Strategy), W#5 (Conversion Funnel), and future workflows. Forward-pointers added to W#3 and W#5 ROADMAP entries per Rule 21 so the directive surfaces at the start of those workflows' Workflow Requirements Interviews.
+
+#### One ARCHITECTURAL CONCERN raised → captured as 🚨 top-level (NOT polish)
+
+**Canvas Serialization INPUT Context-Scaling.** During the test, director asked: "based on the data provided, when (if at all) do you expect our tool to run into a context wall or another issue since there are so many keywords in our keywords list. Is our system designed to handle those issues or should we figure out fixes for those anticipated issues."
+
+**Initial Claude analysis (which the director caught as inadequate):** projected the run would hit a 200k context wall somewhere between 600-1,000 topics; framed as "the system was not explicitly designed to handle it"; proposed adding as Phase-1 polish item.
+
+**After director-prompted deep doc study + code verification:**
+
+- V3's pivot solved THREE of four scaling concerns: keyword preservation (zero ghosts via "silence is preservation"), output-token scaling (operations-only output), wall-clock per batch (~4× reduction).
+- V3 did NOT solve the fourth: INPUT scaling. The full canvas TSV is serialized into every batch's prompt; per-topic ≈ 150-300 tokens; will exceed Sonnet 4.6's standard 200k context window between roughly 600-1,000 topics — well within the size of a full Bursitis run.
+- This trade-off was acknowledged in `PIVOT_DESIGN.md` lines 205 + 246 since 2026-04-25: *"the canvas TSV input grows per batch and isn't cached"* and *"the cost-stops-scaling-with-canvas claim is partly true — the input TSV grows linearly with canvas size."* But no mitigation was designed.
+- V2 had a Mode A→B auto-switch with delta OUTPUT credited with "avoiding the projected 200k context wall" on the 2026-04-20 51-batch Bursitis run. Pivot Session E (2026-04-25) deleted Mode A→B in full (correctly for output-side concerns; inadvertently leaving input-side without any mitigation).
+- Code verification: `src/lib/auto-analyze-v3.ts` line 98 `buildOperationsInputTsv` takes the FULL canvas every batch — zero filtering, truncation, subset, summarization.
+
+**Director's directive: this is NOT polish. It is a fundamental architectural limitation requiring a designed solution before any build proceeds. Solution must scale WITHOUT compromising V3's quality-preserving properties.** Captured as a top-level 🚨 architectural concern in ROADMAP.md (peer to the Architectural Pivot section), cross-referenced in PLATFORM_ARCHITECTURE.md §10, and PIVOT_DESIGN.md §5 retroactively updated to add input-scaling to the Open questions / deferred items table (it should have been there since 2026-04-25).
+
+#### One HIGH-severity Claude mistake → CORRECTIONS_LOG entry + new HANDOFF_PROTOCOL Rule 24
+
+**Mistake:** Claude proposed the context-scaling concern as a new ROADMAP item without first searching existing docs for prior treatment, despite having READ the relevant content earlier in the same session (`ROADMAP.md` line 162's "200k context wall" reference + `PIVOT_DESIGN.md` lines 205+246's input-scaling acknowledgment were both in Claude's working context). Claude failed to synthesize them when writing the new ROADMAP entry. Director caught the mistake and explicitly flagged it as critical, requesting an instruction-set update.
+
+**Captured:**
+- `CORRECTIONS_LOG.md` 2026-04-27 entry — HIGH severity
+- `HANDOFF_PROTOCOL.md` Rule 24 (NEW) — Pre-capture search before adding any ROADMAP item or proposing new architectural concern
+- `CLAUDE_CODE_STARTER.md` non-negotiable rule #21 (NEW) — corresponding entry so the rule is loaded at the start of every session
+
+### What did NOT change this session
+
+- **No code changes.** Pure validation + doc-update + protocol-update session.
+- **No DB schema changes.**
+- **No tests run / built / re-run.** Test suite and build state unchanged.
+- **No live-data state changes** by Claude. Director's in-progress Auto-Analyze run is creating canvas state on the brand-new test project; Bursitis canvas is unchanged.
+- **AUTO_ANALYZE_PROMPT_V3.md is unchanged this session** (last updated 2026-04-26).
+
+### Standing instructions for next session
+
+The director is mid-Auto-Analyze-run on the test project. The test is intentionally limited via cancellation — they will let some number of batches complete and apply, then cancel rather than running all 292 batches (which would hit the context wall well before completion).
+
+**Three "NEXT" choices for the next session:**
+
+(a) **Continue Phase-1 polish** — pick from existing list: the new Apply-button-feedback / BATCH_REVIEW-tables / search-volume-display items captured this session, OR the Funnel-Order Pass / empirical-threshold-validation items from prior sessions, OR Sessions 7-9 Human-in-Loop mode build per `AI_TOOL_FEEDBACK_PROTOCOL.md`.
+
+(b) **🚨 Design session for Canvas Serialization INPUT Context-Scaling.** Per the architectural concern captured this session, no build work proceeds until a designed solution exists. This is the highest-priority forward item if the director wants to be able to complete a full Bursitis-sized Auto-Analyze run. Recommended approach: dedicated design session (no code) producing a design doc + locked decisions + multi-session implementation plan (analogous to Pivot Session A's role for the V3 architectural pivot).
+
+(c) **Workflow #2 (Competition Scraping)** — needs new Workflow Requirements Interview per HANDOFF_PROTOCOL Rule 18 first. Per Rule 21, the interview's first item will scan ROADMAP for prior W#2 directives.
+
+**Director's explicit framing:** the context-scaling concern needs us to "fundamentally understand the issue and come up with a sturdy solution that not only scales up but does so without compromising quality." That framing maps to choice (b) being the next-session priority unless the director chooses otherwise.
+
+---
+
+## ⚠️ POST-2026-04-26-V3-PROMPT-REFINEMENT STATE (preserved as historical context — last updated 2026-04-26 second session)
 
 **As of 2026-04-26 V3 prompt refinement session (Strategy 3 layered placement + intent-equivalence binding rule baked into the prompt; no code changes; doc-only session):**
 

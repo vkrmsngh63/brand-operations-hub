@@ -1,8 +1,9 @@
 # ROADMAP
 ## Product Launch Operating System (PLOS) — Development Execution Plan
 
-**Last updated:** April 26, 2026 (Workflow-transition architecture session — Strategy 3 layered placement + intent-equivalence binding rule baked into `AUTO_ANALYZE_PROMPT_V3.md`; Workflow #5 narrative-driven-comprehensiveness directive captured under Workflow #5 entry; cross-tool integration methodology codified — Cross-Tool Data Flow Map promoted in `DATA_CATALOG.md` §7; `HANDOFF_PROTOCOL.md` Rules 21 (Pre-interview directive scan), 22 (Graduated-Tool Re-Entry Protocol), 23 (Change Impact Audit) added; Rule 18 expanded with §A/§B DESIGN doc convention + mid-build Read-It-Back + reciprocal output declaration; §4 Step 2 Scenario B Tool Graduation deliverables list expanded to 16 items.)
-**Last updated in session:** session_2026-04-26_workflow-transition-architecture-and-v3-prompt-refinement (Claude Code)
+**Last updated:** April 27, 2026 (V3 small-batch test + context-scaling concern session — V3-refined prompt VALIDATED via small-batch test (compound primaries, complement pairs, unifying parents, empty bridge topics all observed on the brand-new test project's canvas through batches 1-4 of the in-progress run); 4 new Phase-1 polish items captured (Apply button feedback during apply; BATCH_REVIEW screen as scannable tables; search-volume display on canvas topic boxes + cross-tool display convention with W#3 + W#5 forward-pointers); 1 NEW top-level architectural concern captured (🚨 Canvas Serialization INPUT Context-Scaling — explicitly NOT polish per director's framing; sits as peer to the Architectural Pivot section); pre-capture search per new Rule 24 surfaced V2 Mode A→B lineage that was deleted in Pivot E and the PIVOT_DESIGN.md §5 retroactive update for input-scaling.)
+**Last updated in session:** session_2026-04-27_v3-prompt-small-batch-test-and-context-scaling-concern (Claude Code)
+**Previously updated in session:** session_2026-04-26_workflow-transition-architecture-and-v3-prompt-refinement (Claude Code)
 **Previously updated in session:** session_2026-04-26_phase1-polish-bundle (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-pivot-session-D (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-pivot-session-C (Claude Code)
@@ -206,6 +207,57 @@ Both UI hints from the Phase-1 polish bundle (Direct-mode hint, Adaptive-Thinkin
 
 **Estimated effort:** zero net effort — the data collection happens during natural test runs; threshold update is a 1-line code change per hint when the data warrants it.
 
+### NEW Phase-1 polish item — BATCH_REVIEW screen Apply button feedback (raised 2026-04-27)
+
+When admin clicks the Apply button in the BATCH_REVIEW screen, the button currently stays visually unchanged during the apply operation. Admin can't tell if the click registered. There's no visual feedback during the apply step (which can take several seconds for canvas rebuild + reconciliation). If the apply fails (validation error, network issue, etc.), the button stays in its same state, masking the failure too.
+
+**Director's design (2026-04-27):**
+- During apply: button becomes **disabled** + **faded color** (not clickable; visually distinct from normal state)
+- On apply **success**: button + entire BATCH_REVIEW overlay dismiss automatically (current behavior, but now visually clear that "click → fade → success → dismiss")
+- On apply **error**: button returns to normal enabled state (overlay stays open so admin can retry or skip)
+
+**Implementation note:** straightforward React state change in the BATCH_REVIEW component. ~30-60 min of code work. Captured as polish, not architectural.
+
+### NEW Phase-1 polish item — BATCH_REVIEW screen show operations as scannable tables (raised 2026-04-27)
+
+The BATCH_REVIEW screen currently shows new topics created (per Pivot D commit `d624556` fix) and the analyzed keywords list — but not the full operation set in a way admin can scan quickly. Without operation visibility, "Review each batch" cannot fully serve its design purpose: the admin can see WHAT was created but not the structural changes (existing-topic edits, splits/merges/moves, sister-link changes, JUSTIFY_RESTRUCTURE payloads) the model emitted alongside.
+
+**Director's design (2026-04-27):** render the batch's operations as scannable tables, NOT prose. Distinct tables for:
+- (a) **New topics created** — columns: title, description, parent, relationship
+- (b) **Keyword placements** — columns: keyword text, target topic, primary/secondary
+- (c) **Existing-topic modifications** — UPDATE_TOPIC_TITLE / UPDATE_TOPIC_DESCRIPTION / MOVE_TOPIC / MERGE_TOPICS / SPLIT_TOPIC / DELETE_TOPIC, each with reason
+- (d) **Sister-link changes** — ADD_SISTER_LINK / REMOVE_SISTER_LINK
+- (e) **JUSTIFY_RESTRUCTURE payloads** prominently flagged when present (high-stability-topic modifications)
+
+**Goal:** admin can scan a batch's full effect in seconds, not parse paragraphs. Surfaced during 2026-04-27 V3 small-batch test when director observed the screen was insufficient for validation.
+
+**Implementation note:** moderate effort. The `processBatchV3` function already returns parsed operations; the BATCH_REVIEW UI component needs to organize them by operation type and render each group as a table. ~2-4 hours of code work depending on table styling polish. Captured as polish, not architectural.
+
+### NEW Phase-1 polish item — Search-volume display on canvas topic boxes + cross-tool display convention (raised 2026-04-27)
+
+**Behavior on canvas topic boxes (W#1 only at this layer):**
+
+(a) **Each topic box** shows TWO total-volume figures:
+- Total search volume across all PRIMARY keywords on that topic, in the **primary keyword color**
+- Total search volume across all SECONDARY keywords on that topic, in the **secondary keyword color**
+
+(b) **For each keyword displayed:**
+- In the topic box's keyword-preview area (the first few keywords shown directly on the topic): the volume appears in **parentheses to the right** of the keyword text
+- In the expand-arrow overlay (the box that opens when admin clicks ▼ on the topic): same — volume in parentheses to the right of each keyword
+
+(c) **Bold formatting based on Auto-Analyze panel's volume threshold:**
+- Keyword volume **≥ threshold** → **bold**
+- Keyword volume **< threshold** → not bold
+- Applied in BOTH the topic box preview AND the expand-arrow overlay
+
+**Out of scope at this layer:** W#1 tables (AST / MT / TIF / KAS / TVT). The director explicitly confirmed canvas-only for the W#1 implementation.
+
+**Cross-tool display convention (PLATFORM-LEVEL DIRECTIVE, NEW 2026-04-27):** the same display convention applies anywhere topics + keywords are surfaced in downstream workflow tools — Therapeutic Strategy (W#3), Conversion Funnel & Narrative Architecture (W#5), and any future workflow that displays topics + keywords. The same volume-totals + per-keyword-volumes-in-parens + bold-by-threshold convention follows the data into those tools. Forward-pointers added to W#3 and W#5 ROADMAP entries per `HANDOFF_PROTOCOL.md` Rule 21 (pre-interview directive scan) so the convention is surfaced as the first item of those workflows' Workflow Requirements Interviews when they happen.
+
+**Implementation note:** W#1 canvas implementation is moderate scope (CanvasPanel topic box rendering + expand-arrow overlay + per-keyword chip rendering — multiple files touched). The cross-tool convention is captured as a directive but does not require any W#1-time code work for downstream tools — those tools will implement when they're built.
+
+**Open question to resolve at implementation time:** does this display convention also belong codified in `PLATFORM_ARCHITECTURE.md` as a "shared display conventions" subsection so it's discoverable independently of ROADMAP entries? Director's call when implementation lands.
+
 ### Phase-2 server-side execution — explicit tie-back to Direct-mode UI hint (added 2026-04-26)
 
 Per existing Phase 2 plan ("🚨 Server-side execution of AI jobs"), AI jobs will move from browser-direct to server-side persistent workers when the platform leaves Vercel (likely AWS migration). The Direct-mode UI hint added in the 2026-04-26 polish bundle exists *only* as a workaround for Vercel's 5-min serverless timeout. Once server-side execution is live and not bound by a 5-min ceiling, server-side becomes the preferred default for AI jobs and Direct mode is retained only as an escape hatch (admin ad-hoc testing, debugging, privacy-sensitive scenarios). The Direct-mode UI hint can be removed at that point. Code comment in `AutoAnalyze.tsx` (next to the hint conditional) notes this dependency.
@@ -323,6 +375,55 @@ Schedules with Session 4 or as its own session right after. Not blocking.
 
 **Session 3 cleanup item (deferred — capture for later):**
 - The hard-delete `DELETE /api/projects/[projectId]/keywords` endpoint is no longer called by ASTTable (replaced by soft-archive). Likely dead code — verify no other caller, then remove. Low priority; not blocking. Logged here as an Infrastructure TODO.
+
+### 🚨 Canvas Serialization INPUT Context-Scaling — Architectural Concern (NEW 2026-04-27, OPEN)
+
+**This is NOT a polish item. It is a fundamental architectural limitation requiring a designed solution before any build work proceeds.** Captured per `HANDOFF_PROTOCOL.md` Rule 24 (Pre-capture search performed; lineage section below documents the search results).
+
+**The concern:** Under V3's operations-based output contract (Pivot Sessions A-E, 2026-04-25), THREE of four scaling concerns were solved — keyword preservation (zero ghosts via "silence is preservation"), output-token scaling (operations-only output stays small), wall-clock per batch (~4× reduction). The fourth — **input scaling** — was acknowledged as a known trade-off but no mitigation was designed. The full canvas TSV is serialized into every batch's prompt; per-topic cost ≈ 150-300 tokens; on long runs the input will grow past Sonnet 4.6's 200k context window somewhere between roughly 600-1,000 topics — well within the size of a full Bursitis (2,329 keyword) run.
+
+**Empirical data point — 2026-04-27 V3 small-batch test (clean canvas, 8 keywords/batch):**
+
+| Canvas size | Approx input tokens | Cache hit (after batch 1) | Headroom (200k) |
+|---|---|---|---|
+| Empty | ~19,925 | 0 | comfortable |
+| 9 topics (after batch 1) | ~21,066 | ~18,136 | comfortable |
+| 11 topics (after batch 2) | ~21,629 | ~18,136 | comfortable |
+| 25 topics (after batch 3) | ~23,854 | ~18,136 | comfortable |
+| 100 topics (projected) | ~40-50k | growing | comfortable |
+| 300 topics (projected) | ~80-100k | growing | tightening |
+| 500 topics (projected) | ~120-160k | growing | warning zone |
+| 800-1,000 topics (projected) | ~180-300k | growing | **wall** |
+
+**Code reality (verified 2026-04-27):** `src/lib/auto-analyze-v3.ts` line 98 `buildOperationsInputTsv` takes the full `nodesRef.current`, `sisterLinksRef.current`, `keywordsRef.current` every batch. Zero filtering, zero truncation, zero subset, zero summarization. `src/app/projects/[projectId]/keyword-clustering/components/AutoAnalyze.tsx` line 542 calls it unconditionally with full canvas state.
+
+**Why this is critical, not polish:**
+- Caps the size of project canvas a single Auto-Analyze run can complete
+- Will affect every keyword-clustering project at PLOS scale (50 Projects/week Phase 1 → 500/week Phase 3 — many projects will have 1,000+ keywords)
+- Requires a designed solution that scales WITHOUT compromising V3's quality-preserving properties — particularly the intent-equivalence detection (`AUTO_ANALYZE_PROMPT_V3.md` Step 2 + Reevaluation Pass 3a) which depends on the model reasoning about the WHOLE canvas to detect distinct compound intents bundled into one topic
+
+**HISTORICAL LINEAGE — search results per Rule 24 (do not rebuild already-deleted work):**
+
+V2 had a `Mode A → Mode B auto-switch` with delta OUTPUT that was credited with **"avoiding the projected 200k context wall"** during the 2026-04-20 51-batch Bursitis run (this same `ROADMAP.md`, line 162). Pivot Session E (2026-04-25) **deleted that mechanism in full** — `assemblePrompt`, `processBatch`, `validateResult`, `doApply`, `runSalvage`, `mergeDelta`, `parseKatMapping`, `extractBlock`, `buildCurrentTsv`, `AA_DELIMITERS`, `AA_OUTPUT_INSTRUCTIONS`, output-contract picker UI, Mode A→B auto-switch, `_deltaSwitch` error path, `deltaMode` state — all gone. The deletion was correct for output-side concerns (V3's operations-output is structurally small) but inadvertently left input-side context-scaling without ANY mitigation in V3.
+
+`PIVOT_DESIGN.md` lines 205 + 246 explicitly acknowledged this trade-off at the time: *"the canvas TSV input grows per batch and isn't cached"* and *"the cost-stops-scaling-with-canvas claim is partly true — the input TSV grows linearly with canvas size."* But `PIVOT_DESIGN.md §5` Open questions / deferred items did NOT include input-scaling at the time. The §5 retroactive update (2026-04-27) corrects that omission.
+
+**This means: V3's Mode A→B is NOT a viable rebuild target. Mode A→B was an OUTPUT-side delta mechanism. The remaining concern is INPUT-side and needs a different design.**
+
+**Required before any build (REQUIRED, not suggested):** dedicated design session(s) to fundamentally understand the issue and produce a sturdy solution. Possible directions to evaluate (none tested yet — list is starter set, NOT a recommendation):
+- **Higher-context model variants** if/when available for Sonnet 4.6 (e.g., 1M context). Buys 5× headroom; doesn't solve the underlying scaling problem.
+- **Selective subtree serialization** — ship only the canvas branches relevant to the current keyword batch's likely placements + a separately-maintained cross-canvas index for intent-equivalence detection. Preserves whole-canvas reasoning via the index, ships smaller TSV.
+- **Periodic out-of-band consolidation passes** — separate sessions that compact the canvas (merge near-duplicates, archive low-volume orphans, prune empty bridges no longer load-bearing). Reduces canvas size between Auto-Analyze runs.
+- **Topic-summary mode** — mature stable topics (high stabilityScore, settled keyword set) ship as compact stubs (title + keyword count + summary) instead of full description + keyword list. Variable-detail TSV.
+- **Hybrid serialization** — full TSV for branches recently touched by the last N batches; summary mode for branches not touched in the last N batches. Captures "recent activity is high-detail; stale activity is low-detail."
+
+**Status:** Design session pending. No build work begins until a designed solution is approved by the director. **Solution must NOT regress on the four root causes V3 solved** (keyword preservation, output scaling, wall-clock, intent-equivalence detection).
+
+**Cross-references:**
+- `PIVOT_DESIGN.md §5` (input-scaling row, retroactively added 2026-04-27)
+- `PLATFORM_ARCHITECTURE.md §10` Known Technical Debt (cross-reference)
+- `KEYWORD_CLUSTERING_ACTIVE.md` POST-2026-04-27-V3-VALIDATION-AND-CONTEXT-SCALING-CONCERN STATE block
+- `CORRECTIONS_LOG.md` 2026-04-27 entry (the synthesis-failure that surfaced this concern + Rule 24 capture)
 
 ### 🚨 ARCHITECTURAL PIVOT — TOP PRIORITY (NEW 2026-04-25 Session 3b verify, supersedes Sessions 4-6 below)
 
@@ -644,6 +745,8 @@ Reconciliation pass after every successful apply reported `0 off-canvas → Resh
 #### Workflow 3 — Therapeutic Strategy & Product Family Design (🧬)
 **Status:** ❌ NOT STARTED. Prereq: scaffold + Workflow 2 Data Contract.
 
+**Forward-directive captured 2026-04-27 (per `HANDOFF_PROTOCOL.md` Rule 21):** when this workflow displays topics + keywords (which it will, since therapeutic strategy depends on the W#1 keyword-clustered conversion funnel as input), it must use the platform-wide **search-volume display + bold-by-threshold convention** established for W#1's canvas. Spec: each topic displayed shows two volume totals (primary keywords total in primary color + secondary keywords total in secondary color); each keyword shows its volume in parentheses to the right; keywords with volume ≥ Auto-Analyze threshold are bold, below are not bold. See the W#1 ROADMAP entry "NEW Phase-1 polish item — Search-volume display on canvas topic boxes + cross-tool display convention (raised 2026-04-27)" for the full spec. This directive must be surfaced as the FIRST item of the W#3 Workflow Requirements Interview when it happens.
+
 #### Workflow 4 — Brand Identity & IP (🏷️)
 **Status:** ❌ NOT STARTED.
 
@@ -663,6 +766,8 @@ Topic creation in PLOS has TWO layers:
 **Reminder mechanism (per `HANDOFF_PROTOCOL.md` Rule 21):** when the Workflow #5 design session begins, this directive must be explicitly surfaced to the director at the start of the session. The Workflow Requirements Interview for W#5 must treat narrative-driven comprehensiveness as a first-class design requirement, not an afterthought. Forward-pointer to this entry is in `DATA_CATALOG.md` §6.4 to ensure the W#5 design session loads it.
 
 **Build prerequisites:** Shared Workflow-Tool Scaffold (Phase 1α), W#1 Data Contract, plus dependencies on W#2, W#3, W#4 Data Contracts (which produce the competitive landscape, product-strategy, and brand-identity data the funnel must accommodate). Full Workflow Requirements Interview happens at W#5 design time.
+
+**Forward-directive captured 2026-04-27 (per `HANDOFF_PROTOCOL.md` Rule 21):** when this workflow displays topics + keywords (which it will, since the conversion funnel is built directly on top of W#1's topic hierarchy + augmented per the narrative-driven directive above), it must use the platform-wide **search-volume display + bold-by-threshold convention** established for W#1's canvas. Spec: each topic displayed shows two volume totals (primary keywords total in primary color + secondary keywords total in secondary color); each keyword shows its volume in parentheses to the right; keywords with volume ≥ Auto-Analyze threshold are bold, below are not bold. See the W#1 ROADMAP entry "NEW Phase-1 polish item — Search-volume display on canvas topic boxes + cross-tool display convention (raised 2026-04-27)" for the full spec. This directive must be surfaced as the SECOND item of the W#5 Workflow Requirements Interview (the first is the narrative-driven-comprehensiveness directive captured 2026-04-26 above).
 
 #### Workflow 6 — Content Development (✍️)
 **Status:** ❌ NOT STARTED.

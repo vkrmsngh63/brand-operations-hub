@@ -113,6 +113,16 @@ I am the director of the PLOS (Product Launch Operating System) project. **I am 
 
 19. **Do NOT make changes to the handoff docs mid-session silently.** Track what needs updating, then batch all doc updates at end-of-session per the checklist.
 
+### ROADMAP capture discipline
+
+21. **Pre-capture search before adding ANY ROADMAP item or proposing a new architectural concern** (`HANDOFF_PROTOCOL.md` Rule 24, NEW 2026-04-27). Before reading back any proposed ROADMAP entry to me, Claude MUST first search existing docs for prior treatment of the same concern. The search must cover: (a) direct keyword grep with synonyms across `ROADMAP.md`, the relevant tool's `<TOOL>_DESIGN.md` / `_ACTIVE.md` / `_DATA_CONTRACT.md` / `_ARCHIVE.md`, `PLATFORM_ARCHITECTURE.md`, `CORRECTIONS_LOG.md`, and any architectural-pivot or design doc relevant to the concern (e.g., `PIVOT_DESIGN.md` for Auto-Analyze concerns); (b) read-through of the canonical doc's "Known limitations" / "Open questions / deferred items" / "Infrastructure TODOs" sections; (c) CORRECTIONS_LOG entries from the last 5-10 sessions; (d) verify against actual code when the concern relates to specific behavior — Read the source files, not just trust doc claims.
+
+    **If prior treatment IS found:** surface it explicitly to me BEFORE reading back the proposed entry — *"I found this was already discussed in [doc] [section] on [date]. The prior treatment was: [summary]. Compared to my current proposal: [diff]."* I decide whether to (a) update the existing item, (b) create a new related item with cross-reference, or (c) consolidate.
+
+    **If prior treatment is NOT found:** surface the search performed — *"I checked [list of locations: doc names + sections searched] and found no prior treatment. Proceeding with new capture."*
+
+    **Why this rule exists:** logged in `CORRECTIONS_LOG.md` 2026-04-27 entry (HIGH severity). Claude proposed a context-scaling ROADMAP item without first searching, framing the concern as "the system was not explicitly designed to handle it" — when `PIVOT_DESIGN.md` lines 205 + 246 had explicitly acknowledged the trade-off and `ROADMAP.md` line 162 documented that V2's Mode A→B (deleted in Pivot E) had been credited with avoiding the same issue. Claude had read both pieces earlier in the same session but failed to synthesize them when writing the new ROADMAP entry. Synthesis from working memory is unreliable; the structured search forces a deliberate re-read at the moment the verification matters.
+
 ---
 
 ## START-OF-SESSION ROUTINE (do these before asking me to confirm task)

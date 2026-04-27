@@ -1,8 +1,10 @@
 # HANDOFF PROTOCOL
 ## The rules Claude must follow at the start, during, and end of EVERY chat
 
-**Last updated:** April 17, 2026 (Phase M Ckpt 8 complete — added §9 Claude Code vs claude.ai applicability section)
-**Last updated in chat:** https://claude.ai/chat/fc8025bf-551a-4b3c-8483-ec6d8ed9e33c
+**Last updated:** April 27, 2026 (V3 small-batch test + context-scaling concern session — new Rule 24 added: Pre-capture search before adding any ROADMAP item or proposing new architectural concern. Drafted in response to a HIGH-severity mistake captured in `CORRECTIONS_LOG.md` 2026-04-27 entry — Claude proposed a context-scaling ROADMAP item without first searching existing docs for prior treatment, producing a misframed entry that would have misrepresented the system's design history. Rule 24 is the operational scaffolding for verify-before-write specifically at ROADMAP-capture moments.)
+**Last updated in session:** session_2026-04-27_v3-prompt-small-batch-test-and-context-scaling-concern (Claude Code)
+**Previously updated in session:** session_2026-04-26_workflow-transition-architecture-and-v3-prompt-refinement (Claude Code)
+**Previously updated (claude.ai era):** https://claude.ai/chat/fc8025bf-551a-4b3c-8483-ec6d8ed9e33c
 
 **Audience:** This document is written for Claude to read at the start of every chat. The user should not need to enforce these rules — Claude enforces them on itself.
 
@@ -419,6 +421,34 @@ When a change is classified Breaking, the recommended pattern is to bump the Dat
 When all consumers have migrated, `v1` can be archived.
 
 **Why this rule exists:** as the platform grows from 1 tool to 14, a change to W#1 might transitively affect 13 downstream tools. Without the audit, a developer (Claude or director) might ship a change that silently breaks downstream consumers — discovered weeks later when a downstream tool exhibits mysterious failures. The audit surfaces the cascade before code is written.
+
+### Rule 24 — Pre-capture search before adding any ROADMAP item or proposing new architectural concern (NEW 2026-04-27)
+
+Whenever Claude proposes capturing a new ROADMAP item — polish, architectural concern, infrastructure TODO, or any other entry — Claude MUST first perform a structured search for prior treatment of the same concern, BEFORE reading back the proposed entry to the director. This rule applies even when Claude believes confidently that the concern is novel; the cost of the search is small (one or two greps + a section-read), and the cost of operating on partial information has been demonstrated to produce ROADMAP entries that misrepresent system history and risk future re-implementation of already-evaluated-and-deleted mechanisms.
+
+**The search must cover (in order):**
+
+1. **Direct keyword grep** of `ROADMAP.md`, the relevant tool's `<TOOL>_DESIGN.md` and `<TOOL>_ACTIVE.md` (or DATA_CONTRACT + ARCHIVE if graduated), `PLATFORM_ARCHITECTURE.md`, `CORRECTIONS_LOG.md`, and any architectural-pivot or design doc relevant to the concern (e.g., `PIVOT_DESIGN.md` for Auto-Analyze concerns) — using the concern's name AND obvious synonyms. Examples of synonym pairs: "context wall" / "200k limit" / "input scaling" / "TSV grows"; "ghost keyword" / "missing keyword" / "silent drop" / "Reshuffled"; "stability score" / "JUSTIFY_RESTRUCTURE" / "well-validated topic."
+
+2. **Read-through of the canonical doc's "Known limitations" / "Open questions / deferred items" / "Infrastructure TODOs" sections** — these often contain prior captures using different wording than the grep would find.
+
+3. **CORRECTIONS_LOG entries from the last 5-10 sessions** — for related architectural insights, prior decisions the proposed item may supersede, or earlier discussions of the same concern that didn't make it onto ROADMAP.
+
+4. **Verify against actual code** when the concern relates to a specific behavior, capability, or limitation — the docs may describe intent that doesn't match the implementation, or an implementation may exist that the docs don't credit. Use `Read` against the relevant source files (e.g., `src/lib/auto-analyze-v3.ts`, `src/lib/operation-applier.ts`, `src/app/.../AutoAnalyze.tsx`) and not just the doc claims.
+
+**Surfacing the search to the director:**
+
+If prior treatment IS found, Claude must surface it explicitly to the director BEFORE reading back the proposed ROADMAP entry: *"I found this was already discussed in [doc] [section] on [date]. The prior treatment was: [summary]. Compared to my current proposal: [what's different / what's the same]."* Director then decides whether to (a) update the existing item with new framing, (b) create a new related item with cross-reference back to the prior treatment, or (c) consolidate the prior treatment into the new item.
+
+If prior treatment is NOT found, Claude must surface the search performed: *"I checked [list of locations: doc names + sections searched] and found no prior treatment. Proceeding with new capture."*
+
+**Specific failure mode this rule prevents:** Claude has the relevant docs in context (because they were read at session start per the mandatory start-of-session sequence), and could in principle synthesize prior treatment from working memory. But synthesis from working memory has been shown to fail under cognitive load — Claude jumps from "I remember V3 fixed the cost issues" to "therefore input scaling wasn't considered" without going back to verify against what the docs actually said. The structured search forces a deliberate re-read at the moment of writing the new ROADMAP item, which is when the verification matters.
+
+**Relationship to existing rules:** This rule is operationally adjacent to Rule 1 (Verify Before You Write), Rule 3 (Code is the ultimate source of truth), and Rule 14a (Read-It-Back test). Those rules establish the principle of verify-before-act. Rule 24 is the operational scaffolding that makes verify-before-act actually fire at the specific moment of proposing a ROADMAP capture — a moment where the failure mode of "operating on partial information" has been demonstrated to produce duplicate or contradictory entries that future sessions will inherit and act on.
+
+**Relationship to Rule 18's mid-build Read-It-Back (2026-04-26 expansion):** Rule 18 addressed Claude not echoing back the director's directives before coding. Rule 24 addresses Claude not echoing back the system's own prior decisions before adding to the system's forward plan. Together they bracket the input side (director's intent) and the historical side (prior decisions) of the verify-before-write principle.
+
+**Why this rule exists:** Logged in `CORRECTIONS_LOG.md` 2026-04-27 entry. Claude proposed a ROADMAP item for the input-side context-scaling concern, framing it as "the system was not explicitly designed to handle it" — when in fact `PIVOT_DESIGN.md` lines 205 + 246 explicitly acknowledged the trade-off, and `ROADMAP.md` line 162 documented that V2's Mode A→B (deleted in Pivot E) had been credited with "avoiding the projected 200k context wall." Claude had read both pieces of content earlier in the same session but failed to synthesize them when writing the new ROADMAP entry. Director caught the mistake, requested the instruction-set update, and approved Rule 24.
 
 ---
 

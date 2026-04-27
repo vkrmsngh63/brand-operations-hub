@@ -2,9 +2,10 @@
 ## Append-only record of mistakes made during chats and lessons learned
 
 **Started:** April 16, 2026
-**Last updated:** April 26, 2026 (Phase-1 polish bundle — 1 new low-medium-severity entry: shipped a CSS fix for the `+x more` cut-off bug based on a guess about the cause without first asking for a screenshot. Term "cut off horizontally" was ambiguous (Claude read it as "right side clipped"; director meant "cut along a horizontal line through the middle"). First attempt didn't address the actual cause (vertical clipping from foreignObject overflow); second attempt after director uploaded a screenshot succeeded. Lesson named: when fixing a UI bug without ability to see the rendered output, ask for a screenshot or specific verbal disambiguation BEFORE coding the fix.)
-**Last updated in session:** session_2026-04-26_phase1-polish-bundle (Claude Code)
-**Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-D (Claude Code)
+**Last updated:** April 27, 2026 (V3 small-batch test + context-scaling concern session — 1 new HIGH-severity entry: failed to synthesize prior treatment of input-side context-scaling when proposing a new ROADMAP item, despite having read the relevant docs (`ROADMAP.md` line 162 + `PIVOT_DESIGN.md` lines 205+246) earlier in the same session. Framed the concern as "the system was not explicitly designed to handle it" when the more accurate framing is "input scaling was acknowledged as a known trade-off in V3 design but no mitigation was designed; V2's Mode A→B had partially addressed it on the output side and was deleted in Pivot E." Director caught + flagged as a critical mistake requiring an instruction-set update. New `HANDOFF_PROTOCOL.md` Rule 24 (Pre-capture search) added in same session to prevent recurrence; corresponding entry added to `CLAUDE_CODE_STARTER.md` non-negotiable rules.)
+**Last updated in session:** session_2026-04-27_v3-prompt-small-batch-test-and-context-scaling-concern (Claude Code)
+**Previously updated in session:** session_2026-04-26_phase1-polish-bundle (Claude Code)
+**Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-pivot-session-D (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-pivot-session-B (Claude Code)
 **Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-A (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-session3b-verify (Claude Code)
@@ -44,6 +45,46 @@
 ---
 
 ## Entries
+
+### 2026-04-27 — Failed to synthesize prior treatment when proposing context-scaling ROADMAP item — operating on partial information despite having relevant docs in context (HIGH severity)
+**Session:** session_2026-04-27_v3-prompt-small-batch-test-and-context-scaling-concern (Claude Code)
+**Tool/Phase affected:** Cross-session methodology / ROADMAP item capture / Auto-Analyze architectural concern framing
+**Severity:** HIGH (no production damage, no data loss, no wasted code commits — but a class-of-failures mistake that the director explicitly flagged as critical, requiring an instruction-set update; if not caught, would have produced a ROADMAP entry that misrepresented the system's design history and risked a future session re-implementing V2 Mode A→B without knowing it had been considered and deleted)
+
+**What happened:** During the 2026-04-27 V3 small-batch test session, after the V3-refined prompt validation passed qualitatively, the director asked: "based on the data provided, when (if at all) do you expect our tool to run into a context wall or another issue since there are so many keywords in our keywords list. Is our system designed to handle those issues or should we figure out fixes for those anticipated issues."
+
+Claude responded with an analysis projecting that the run would hit a 200k context wall somewhere between 600-1,000 topics (based on per-topic TSV cost of 150-300 tokens × Sonnet 4.6's standard 200k window). Claude framed this as: *"The system was not explicitly designed to handle it."* Claude then proposed adding the context-wall as a new ROADMAP item under "Phase-1 polish."
+
+Director responded: *"Didn't we have some adaptive feature that was supposed to prevent the context wall issue (for example, only passing delta rather than the entire TSV? I might be mistaken?). Can you study all the keyword sorting tool documents deeply and tell me if this still needs fixing? Be thorough in your analysis and answer. If you did miss this, I want you to understand that this was a critical mistake on your end and I want you to update the instructions set to absolutely and always prevent this kind of issue again where you are operating on partial information because it will add things to the roadmap that we already issued."*
+
+Upon doing the deep study (greps across `PIVOT_DESIGN.md`, `AUTO_ANALYZE_PROMPT_V3.md`, `AUTO_ANALYZE_PROMPT_V2.md`, `KEYWORD_CLUSTERING_ACTIVE.md`, `ROADMAP.md`, `PLATFORM_ARCHITECTURE.md`, plus reading the actual code in `src/lib/auto-analyze-v3.ts` and `src/app/.../AutoAnalyze.tsx`), Claude found:
+
+1. **`ROADMAP.md` line 162** explicitly credited the V2 Mode A→B auto-switch with **"avoiding the projected 200k context wall"** during the 2026-04-20 51-batch Bursitis run. So a relevant adaptive feature DID exist in V2.
+2. **`PIVOT_DESIGN.md` line 205 + 246** explicitly acknowledged the input-scaling trade-off in V3: *"the canvas TSV input grows per batch and isn't cached"* and *"the cost-stops-scaling-with-canvas claim is partly true — the input TSV grows linearly with canvas size."* So the issue WAS considered during V3 design, just not solved.
+3. **Pivot Session E (2026-04-25)** deleted Mode A→B entirely on the rationale that V3's operations-output makes output-side mitigation unnecessary. V3's deletion was correct for output-side concerns but inadvertently left input-side context-scaling without any mitigation in the V3 architecture.
+4. **Code verification** confirmed `buildOperationsInputTsv` (auto-analyze-v3.ts line 98) takes the FULL canvas every batch — zero filtering, truncation, subset, or summarization. There is NO input-side adaptive mechanism in V3.
+
+So Claude's proposed ROADMAP item was NOT a duplicate (V3 has no mitigation; capturing the concern as a new item is correct), but Claude's framing was sloppy in two ways: (a) said "not explicitly designed to handle it" when it was acknowledged but not solved; (b) didn't surface that V2 had a deleted mechanism (Mode A→B) that addressed a related concern, which means a future session reading the new ROADMAP entry could rebuild Mode A→B without knowing the team had already evaluated and deleted it.
+
+**Root cause:** Claude had READ the relevant content earlier in the same session (during the start-of-session document reading: `ROADMAP.md` line 162 was visible in the Read output; `PIVOT_DESIGN.md` was not fully read at that point but `KEYWORD_CLUSTERING_ACTIVE.md` referenced the historical context). The information was available in Claude's working memory. Claude failed to SYNTHESIZE it when writing the context-wall analysis — going from "V3 fixed the cost/wall-clock issues" to "therefore input scaling wasn't considered" without going back to verify against what the docs actually said.
+
+This is exactly the failure mode `HANDOFF_PROTOCOL.md` Rule 3 ("code is source of truth"), Rule 1 ("verify before you write"), and Rule 14a ("read it back") exist to prevent. The rules were in place; Claude didn't apply them at the moment of writing the new ROADMAP item. Claude proposed a new ROADMAP entry without first searching existing docs for prior treatment of the same concern.
+
+**How caught:** Director directly asked the disambiguation question ("didn't we have some adaptive feature... can you study all the keyword sorting tool documents deeply"), pushing Claude to actually verify before answering definitively.
+
+**Correction:** Refined the proposed ROADMAP entry with corrected framing — explicitly references the V2 Mode A→B lineage, the V3 PIVOT_DESIGN acknowledgment of the trade-off, and the Pivot Session E deletion. Also added input-scaling retroactively to PIVOT_DESIGN.md §5 (Open questions / deferred items) — that section should have included it since 2026-04-25.
+
+**Prevention:**
+
+1. **NEW HANDOFF_PROTOCOL.md Rule 24 — Pre-capture search before adding any ROADMAP item or proposing new architectural concern.** Before reading back any proposed ROADMAP entry to the director, Claude MUST perform a structured search of existing docs (ROADMAP, PIVOT_DESIGN, KEYWORD_CLUSTERING_ACTIVE / relevant tool ACTIVE doc, PLATFORM_ARCHITECTURE, CORRECTIONS_LOG, tool-specific design docs) for prior treatment of the same concern. The search must include: direct keyword grep with synonyms; read-through of "Known limitations" / "Open questions / deferred items" / "Infrastructure TODOs" sections; CORRECTIONS_LOG entries from the last 5-10 sessions; verification against actual code when the concern relates to specific behavior. If prior treatment is found, surface it explicitly to the director BEFORE the read-back: *"I found this was already discussed in [doc] [section] on [date]. Compared to my current proposal: [diff]."* If not found, surface the search performed: *"I checked [list of locations] and found no prior treatment."*
+
+2. **Corresponding entry added to `CLAUDE_CODE_STARTER.md` non-negotiable rules** so the search requirement is loaded at the start of every session.
+
+3. **Pattern recognition:** this failure is in the same family as the 2026-04-26 "diagnostic-without-screenshot" mistake (Claude formed a hypothesis from indirect signals rather than direct verification) and the 2026-04-25 Pivot-Session-B Rule-13 zoom-out miss (Claude shipped Step 3's NOT NULL push before noticing two pre-existing production routes would now fail at runtime). All three share a common shape: Claude has the information needed to verify but doesn't actually do the verification step before acting. The new Rule 24 addresses ROADMAP-capture specifically; the broader principle (verify before you write/commit/propose) is already covered by Rules 1 + 3 + 14a but apparently needs operational scaffolding to actually fire at the moment of writing.
+
+4. **Director-stated severity framing — "critical mistake."** This rating is recorded as the director's framing, not an attempt to grade severity Claude's way. The director's threshold for what counts as critical for instruction-set-update purposes is the binding standard.
+
+---
 
 ### 2026-04-26 — Shipped a UI-fix attempt based on a guess about the cause without asking for a screenshot first (low-medium severity)
 **Session:** session_2026-04-26_phase1-polish-bundle (Claude Code)
