@@ -1,8 +1,9 @@
 # KEYWORD CLUSTERING — ACTIVE DOCUMENT
 ## Current state of the Keyword Clustering workflow tool (Group B, tool-specific)
 
-**Last updated:** April 27, 2026 (V3 small-batch test + context-scaling concern session — V3-refined prompt VALIDATED via small-batch test on a brand-new clean canvas with the 2,329-keyword Bursitis dataset (compound primaries, complement pairs, unifying parents, empty bridge topics ALL observed through the in-progress run's batches 1-4); 4 new Phase-1 polish items captured to ROADMAP (Apply button feedback during apply; BATCH_REVIEW screen as scannable tables; search-volume display on canvas topic boxes + cross-tool display convention with W#3+W#5 forward-pointers); 1 NEW top-level architectural concern (🚨 Canvas Serialization INPUT Context-Scaling — explicitly NOT polish per director). Also: HANDOFF_PROTOCOL Rule 24 (Pre-capture search) added in response to a HIGH-severity Claude mistake captured in CORRECTIONS_LOG 2026-04-27 entry. New POST-2026-04-27-V3-VALIDATION-AND-CONTEXT-SCALING-CONCERN STATE block added above prior blocks.)
-**Last updated in session:** session_2026-04-27_v3-prompt-small-batch-test-and-context-scaling-concern (Claude Code)
+**Last updated:** April 27, 2026 (Scale Session A — input-side context-scaling design session — produced `docs/INPUT_CONTEXT_SCALING_DESIGN.md` capturing the unified Tiered Canvas Serialization design + locked decisions across 5 clusters + multi-session implementation plan (Scale Sessions A through E) with test-before-build reframe. Scale Session 0 — empirical validation on Opus 4.7 1M-context — is the next action; Scale Sessions B–E gated behind Outcome C from Session 0. New POST-2026-04-27-INPUT-CONTEXT-SCALING-DESIGN STATE block added above prior STATE blocks. No code, DB, schema, or prompt changes this session.)
+**Last updated in session:** session_2026-04-27_input-context-scaling-design (Claude Code)
+**Previously updated in session:** session_2026-04-27_v3-prompt-small-batch-test-and-context-scaling-concern (Claude Code)
 **Previously updated in session:** session_2026-04-26_workflow-transition-architecture-and-v3-prompt-refinement (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-26_phase1-polish-bundle (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-pivot-session-E (Claude Code)
@@ -27,7 +28,65 @@
 
 ---
 
-## ⚠️ POST-2026-04-27-V3-VALIDATION-AND-CONTEXT-SCALING-CONCERN STATE (READ FIRST — updated 2026-04-27)
+## ⚠️ POST-2026-04-27-INPUT-CONTEXT-SCALING-DESIGN STATE (READ FIRST — updated 2026-04-27)
+
+**As of 2026-04-27 Scale Session A (input-side context-scaling design session — design-only, no code; produced `docs/INPUT_CONTEXT_SCALING_DESIGN.md`):**
+
+### What this session did to W#1
+
+**One deliverable: a captured locked design + multi-session plan for the input-side context-scaling architectural concern.** No code changes. No DB changes. No schema changes. No prompt changes.
+
+**`docs/INPUT_CONTEXT_SCALING_DESIGN.md` (NEW, Group B, ~470 lines)** captures:
+
+1. **The unified mechanism — Tiered Canvas Serialization.** Every topic on the canvas, every batch, the tier decider picks one of three tiers (Tier 0 Full / Tier 1 Summary / Tier 2 Skeleton) using three signals: recency (touched in last N batches; default N=5, configurable); batch-relevance (local stem-based heuristic matching new keywords against existing topic title + intent fingerprint + existing keyword text; one-hop neighborhood promotion); stability score (≥7.0 eligible for Tier 1 demotion — same threshold as JUSTIFY_RESTRUCTURE; dormant until stability-scoring algorithm ships in a future session). Folds the original five candidate directions (D1 1M-context, D2 selective subtree, D3 consolidation, D4 stable-topic summary, D5 recency-hybrid) into one coherent design. D3 layered as orthogonal complement (auto every 10 batches when canvas > 100 topics + admin-triggered "Consolidate Now" button); D1 layered as cap-headroom.
+
+2. **Intent fingerprint mechanism.** Short canonical phrase (5–15 words, searcher-centric language; ~20 tokens average). Written by the AI as a required field on `ADD_TOPIC` / `MERGE_TOPICS` / `SPLIT_TOPIC` / `UPDATE_TOPIC_TITLE`; optional on `UPDATE_TOPIC_DESCRIPTION`. Stored as new `intentFingerprint String` column on `CanvasNode` (NOT NULL after backfill). Existing ~104 Bursitis + ~25 test-project topics get fingerprints via one-time AI-generated backfill script (~$1–$2 one-time per project; runs in Scale Session B).
+
+3. **Constraint preservation.** The four V3 quality-preserving properties (silence is preservation; intent-equivalence detection; Reevaluation Pass coverage; JUSTIFY_RESTRUCTURE on stability ≥ 7.0) are addressed in the design's §5 constraint-mapping table. The load-bearing assumption is that the intent fingerprint carries enough signal for the model to detect intent-equivalence cross-canvas at Tier 1 — to be validated in Scale Session D when the V4 prompts ship.
+
+4. **Multi-session implementation plan (Scale Sessions A through E).** A done (this session). **Scale Session 0 — empirical validation on Opus 4.7 1M-context — runs next, before any build commitment.** Scale Sessions B–E (schema migration; tier serialization wiring; V4 prompt rewrite; consolidation pass) are gated behind Outcome C from Session 0.
+
+5. **Trigger conditions for proceeding to Scale Session B (BUILD path):** (a) V3 + Opus 4.7 1M test reveals quality regression on intent-equivalence / compound primaries / Reevaluation Pass triggers, OR (b) any production project's canvas exceeds ~600 topics under standard 200k window, OR (c) Anthropic deprecates 1M context or 1M-tier pricing becomes economically prohibitive at Phase 3 scale.
+
+### The director's pivotal Cluster-5 question that produced the test-before-build reframe
+
+After Cluster 5's session-sequence proposal, the director asked: *"What if we ran the test on V3 and it looks like it worked on the new model Opus 4.7 with the expanded context window with no issues? I don't anticipate having more than 500 topics per keyword analysis per project anyway."*
+
+Math anchored honestly: at 500 topics, the standard 200k Sonnet 4.6 wall sits ~50k tokens away (~150k total input usage) — comfortable. On 1M-context: ~15% utilization — trivial. **If the director's 500-topic forecast holds AND a V3 + Opus 4.7 1M test shows no quality regression, the unified design is overengineered for the actual problem.** Director picked the test-before-build reframe (Option A from the post-Cluster-5 question).
+
+### What did NOT change this session
+
+- **No code changes.** Pure design + doc-update session.
+- **No DB schema changes.**
+- **No prompt changes.** `AUTO_ANALYZE_PROMPT_V3.md` is unchanged; director's existing in-flight test run continues to use V3 as currently pasted.
+- **No tests run / built / re-run.** Test suite and build state unchanged.
+- **No live-data state changes** by Claude. Director's in-flight test project is unaffected; Bursitis canvas unchanged.
+
+### Standing instructions for next session
+
+The next session is **Scale Session 0 — empirical validation on Opus 4.7 1M-context** (per the locked Cluster 5 sequence). Pre-work for that session:
+
+1. **Verify Opus 4.7's 1M-context tier availability + pricing** via Anthropic docs / API capability check.
+2. **Switch the Auto-Analyze model selector to Opus 4.7** (1M context if available); director's existing in-flight test project can serve as the starting point or use a fresh test.
+3. **Run focused tests on V3:** production-typical (200–500-keyword project; verify quality holds; observe input-token usage, cost, wall-clock); stress test optional (push toward 500+ topics; observe whether wall is hit at all and at what cost).
+4. **Decision based on outcome:**
+   - **Outcome A — V3 + Opus 4.7 works cleanly within forecast scale.** Defer Scale Sessions B–E indefinitely; switch production model; update `INPUT_CONTEXT_SCALING_DESIGN.md` §0 with "VALIDATED [date] on Opus 4.7 — design unbuilt."
+   - **Outcome B — V3 + Opus 4.7 has quality regression.** Diagnose: prompt re-tune for Opus 4.7 specifically (separate prompt-refinement session), NOT a scaling problem.
+   - **Outcome C — V3 + Opus 4.7 still hits wall or unacceptable cost.** Trigger fires; proceed to Scale Session B (schema + applier + fingerprint backfill) per the locked plan.
+
+### Three "NEXT" choices for the next session
+
+(a) **🎯 Scale Session 0 (recommended next)** — empirical validation on Opus 4.7 1M. Highest-priority forward item per the locked sequence. Outcome determines whether Scale Sessions B–E ever fire.
+
+(b) **Phase-1 polish** — pick from existing list: 4 polish items captured 2026-04-27 (Apply button feedback; BATCH_REVIEW screen as scannable tables; search-volume display on canvas topic boxes + cross-tool display convention with W#3+W#5 forward-pointers); Funnel-Order Pass; empirical-threshold-validation; Sessions 7-9 Human-in-Loop mode build per `AI_TOOL_FEEDBACK_PROTOCOL.md`.
+
+(c) **Workflow #2 (Competition Scraping)** — needs new Workflow Requirements Interview per HANDOFF_PROTOCOL Rule 18 first. Per Rule 21, the interview's first item will scan ROADMAP for prior W#2 directives.
+
+**Director's framing:** the test-before-build reframe is locked. Scale Session 0 should run before any commitment to Scale Sessions B–E. If the director wants to mix in a polish item from (b) before or alongside Scale Session 0, that's fine — Scale Session 0 doesn't require any code or doc changes beforehand, just running the existing tool with a different model selector.
+
+---
+
+## ⚠️ POST-2026-04-27-V3-VALIDATION-AND-CONTEXT-SCALING-CONCERN STATE (preserved as historical context — last updated 2026-04-27)
 
 **As of 2026-04-27 V3 small-batch test + context-scaling concern session (V3-refined prompt validated qualitatively on a brand-new clean canvas; 4 new polish items + 1 architectural concern captured; HANDOFF_PROTOCOL Rule 24 added in response to a HIGH-severity Claude synthesis-failure mistake):**
 

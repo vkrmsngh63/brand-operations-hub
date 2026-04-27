@@ -1,8 +1,9 @@
 # ROADMAP
 ## Product Launch Operating System (PLOS) — Development Execution Plan
 
-**Last updated:** April 27, 2026 (V3 small-batch test + context-scaling concern session — V3-refined prompt VALIDATED via small-batch test (compound primaries, complement pairs, unifying parents, empty bridge topics all observed on the brand-new test project's canvas through batches 1-4 of the in-progress run); 4 new Phase-1 polish items captured (Apply button feedback during apply; BATCH_REVIEW screen as scannable tables; search-volume display on canvas topic boxes + cross-tool display convention with W#3 + W#5 forward-pointers); 1 NEW top-level architectural concern captured (🚨 Canvas Serialization INPUT Context-Scaling — explicitly NOT polish per director's framing; sits as peer to the Architectural Pivot section); pre-capture search per new Rule 24 surfaced V2 Mode A→B lineage that was deleted in Pivot E and the PIVOT_DESIGN.md §5 retroactive update for input-scaling.)
-**Last updated in session:** session_2026-04-27_v3-prompt-small-batch-test-and-context-scaling-concern (Claude Code)
+**Last updated:** April 27, 2026 (Scale Session A — input-side context-scaling design session; produced `docs/INPUT_CONTEXT_SCALING_DESIGN.md` capturing the unified Tiered Canvas Serialization design + locked decisions across 5 clusters + multi-session plan with test-before-build reframe; Scale Session 0 — empirical validation on Opus 4.7 1M-context — is the next action, NOT Scale Session B; build path B–E gated behind Outcome C from Session 0; no code, no DB, no schema, no prompt changes this session.)
+**Last updated in session:** session_2026-04-27_input-context-scaling-design (Claude Code)
+**Previously updated in session:** session_2026-04-27_v3-prompt-small-batch-test-and-context-scaling-concern (Claude Code)
 **Previously updated in session:** session_2026-04-26_workflow-transition-architecture-and-v3-prompt-refinement (Claude Code)
 **Previously updated in session:** session_2026-04-26_phase1-polish-bundle (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-pivot-session-D (Claude Code)
@@ -376,9 +377,11 @@ Schedules with Session 4 or as its own session right after. Not blocking.
 **Session 3 cleanup item (deferred — capture for later):**
 - The hard-delete `DELETE /api/projects/[projectId]/keywords` endpoint is no longer called by ASTTable (replaced by soft-archive). Likely dead code — verify no other caller, then remove. Low priority; not blocking. Logged here as an Infrastructure TODO.
 
-### 🚨 Canvas Serialization INPUT Context-Scaling — Architectural Concern (NEW 2026-04-27, OPEN)
+### 🚨 Canvas Serialization INPUT Context-Scaling — Architectural Concern (NEW 2026-04-27; DESIGN CAPTURED 2026-04-27 in `INPUT_CONTEXT_SCALING_DESIGN.md`; BUILD GATED PENDING SCALE SESSION 0 OUTCOME)
 
-**This is NOT a polish item. It is a fundamental architectural limitation requiring a designed solution before any build work proceeds.** Captured per `HANDOFF_PROTOCOL.md` Rule 24 (Pre-capture search performed; lineage section below documents the search results).
+**Status as of 2026-04-27 end-of-day:** the architectural concern has a captured, locked design (`docs/INPUT_CONTEXT_SCALING_DESIGN.md`, Group B, ~470 lines). Implementation is NOT automatically next — it is gated behind the empirical validation of **Scale Session 0** (V3 + Opus 4.7 1M-context test) per the test-before-build reframe at the end of Scale Session A. **If Outcome A from Scale Session 0 fires (V3 + Opus 4.7 1M handles the director's anticipated production scale of ≤500 topics per project without quality regression), Scale Sessions B–E are deferred indefinitely.** If Outcome C fires (V3 + Opus 4.7 still hits the wall or has unacceptable quality regression), the locked design becomes the build spec.
+
+**This is NOT a polish item. It is a fundamental architectural limitation that, if it fires, requires the designed solution to be built before any project larger than ~500-600 topics can complete an Auto-Analyze run.** Captured per `HANDOFF_PROTOCOL.md` Rule 24 (Pre-capture search performed; lineage section below documents the search results).
 
 **The concern:** Under V3's operations-based output contract (Pivot Sessions A-E, 2026-04-25), THREE of four scaling concerns were solved — keyword preservation (zero ghosts via "silence is preservation"), output-token scaling (operations-only output stays small), wall-clock per batch (~4× reduction). The fourth — **input scaling** — was acknowledged as a known trade-off but no mitigation was designed. The full canvas TSV is serialized into every batch's prompt; per-topic cost ≈ 150-300 tokens; on long runs the input will grow past Sonnet 4.6's 200k context window somewhere between roughly 600-1,000 topics — well within the size of a full Bursitis (2,329 keyword) run.
 
@@ -417,12 +420,17 @@ V2 had a `Mode A → Mode B auto-switch` with delta OUTPUT that was credited wit
 - **Topic-summary mode** — mature stable topics (high stabilityScore, settled keyword set) ship as compact stubs (title + keyword count + summary) instead of full description + keyword list. Variable-detail TSV.
 - **Hybrid serialization** — full TSV for branches recently touched by the last N batches; summary mode for branches not touched in the last N batches. Captures "recent activity is high-detail; stale activity is low-detail."
 
-**Status:** Design session pending. No build work begins until a designed solution is approved by the director. **Solution must NOT regress on the four root causes V3 solved** (keyword preservation, output scaling, wall-clock, intent-equivalence detection).
+**Status:** Design captured 2026-04-27 (Scale Session A) in `docs/INPUT_CONTEXT_SCALING_DESIGN.md`. Build deferred pending Scale Session 0 outcome. **Solution does NOT regress on the four root causes V3 solved** (keyword preservation, output scaling, wall-clock, intent-equivalence detection — see design doc §5 constraint-mapping table).
+
+**Locked design summary (full detail in `INPUT_CONTEXT_SCALING_DESIGN.md`):** unified Tiered Canvas Serialization mechanism — every topic on the canvas, every batch, the tier decider picks one of three tiers (Tier 0 Full / Tier 1 Summary / Tier 2 Skeleton) using three signals (recency in the last N batches, batch-relevance via local stem-based heuristic, stability score ≥ 7.0). Plus periodic consolidation pass (D3) as orthogonal complement that recovers Reevaluation coverage on demoted topics. Plus 1M-context model (D1) as cap-headroom. Folds the original five candidate directions (D1+D2+D3+D4+D5) into a single coherent design.
+
+**Multi-session implementation plan (Scale Sessions A through E):** A done; **0 next** (empirical validation on Opus 4.7); B–E conditional on Outcome C from Scale Session 0. Trigger conditions for proceeding to Scale Session B: (a) V3 + Opus 4.7 1M test reveals quality regression on intent-equivalence / compound primaries / Reevaluation Pass triggers, OR (b) any production project's canvas exceeds ~600 topics under standard 200k window, OR (c) Anthropic deprecates 1M context or it becomes economically prohibitive at Phase 3 scale.
 
 **Cross-references:**
-- `PIVOT_DESIGN.md §5` (input-scaling row, retroactively added 2026-04-27)
+- `INPUT_CONTEXT_SCALING_DESIGN.md` (the locked design and multi-session plan — primary build spec)
+- `PIVOT_DESIGN.md §5` (input-scaling row, retroactively added 2026-04-27; pointer to the design doc)
 - `PLATFORM_ARCHITECTURE.md §10` Known Technical Debt (cross-reference)
-- `KEYWORD_CLUSTERING_ACTIVE.md` POST-2026-04-27-V3-VALIDATION-AND-CONTEXT-SCALING-CONCERN STATE block
+- `KEYWORD_CLUSTERING_ACTIVE.md` POST-2026-04-27-INPUT-CONTEXT-SCALING-DESIGN STATE block (session-specific state)
 - `CORRECTIONS_LOG.md` 2026-04-27 entry (the synthesis-failure that surfaced this concern + Rule 24 capture)
 
 ### 🚨 ARCHITECTURAL PIVOT — TOP PRIORITY (NEW 2026-04-25 Session 3b verify, supersedes Sessions 4-6 below)
