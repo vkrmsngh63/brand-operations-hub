@@ -1,8 +1,9 @@
 # ROADMAP
 ## Product Launch Operating System (PLOS) — Development Execution Plan
 
-**Last updated:** April 28, 2026 (Scale Session 0 — empirical validation, Outcome C fired; full Bursitis V3 run on Sonnet 4.6 hit the 200k context wall at batch 151 + Opus 4.7 cost test confirmed model-upgrade-only is economically prohibitive; Scale Sessions B–E now triggered per the locked plan in `INPUT_CONTEXT_SCALING_DESIGN.md §6`; THREE new high-priority items captured: (1) HIGH-severity canvas-blanking bug found in the run log at batches 70 + 134 — wiring layer intermittently sent ~20k tokens of input instead of full canvas state, causing model to rebuild from scratch + reconciliation to flip 168 keywords across the two events to Reshuffled status that then never re-process; (2) mid-run batch queue refresh polish item; (3) 3 new UX polish items — Skeleton View on canvas + AST split-view topic-vs-description row alignment + Topics table row numbers; ONE new architectural design item — action-by-action feedback table + second-pass refinement workflow extending `AI_TOOL_FEEDBACK_PROTOCOL.md`; ONE new architectural design item — intelligent hybrid cost/quality strategy. No code, no DB, no schema, no prompt changes this session.)
-**Last updated in session:** session_2026-04-28_scale-session-0-outcome-c-and-full-run-feedback (Claude Code)
+**Last updated:** April 28, 2026 (Deeper-analysis session — read-only DB queries against live Bursitis canvas + code reading of `useCanvas.ts` / `AutoAnalyze.tsx` / `auto-analyze-v3.ts` / `/canvas/rebuild` and `/canvas/nodes` API routes diagnosed the canvas-blanking bug to root cause: `useCanvas.fetchCanvas` line 75 silently sets `nodes = []` on any non-array response from `/canvas/nodes` GET. Fix design locked. Investigation also surfaced a NEW HIGH-severity bug — Reconciliation-Pass Closure-Staleness — `AutoAnalyze.tsx:830` reads stale prop instead of `keywordsRef.current`, regression of the documented 2026-04-18 stale-closure pattern. Both bugs together explain all 84 currently-Reshuffled keywords (all 84 still ON canvas) + 232 status drift residuals (147 ghost AI-Sorted + 85 silent placements) in the live DB. ALSO captured: NEW design item for Redundancy + Defense-in-Depth Audit (motivated by both bugs landing on a V3 architecture with deliberately-deleted backup mechanisms). 8-item director feedback table fully addressed across this STATE block + earlier STATE block. No code, DB, schema, or prompt changes this session.)
+**Last updated in session:** session_2026-04-28_deeper-analysis-and-fix-design (Claude Code)
+**Previously updated in session:** session_2026-04-28_scale-session-0-outcome-c-and-full-run-feedback (Claude Code)
 **Previously updated in session:** session_2026-04-27_input-context-scaling-design (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-27_v3-prompt-small-batch-test-and-context-scaling-concern (Claude Code)
 **Previously updated in session:** session_2026-04-26_workflow-transition-architecture-and-v3-prompt-refinement (Claude Code)
@@ -474,7 +475,169 @@ V2 had a `Mode A → Mode B auto-switch` with delta OUTPUT that was credited wit
 - `KEYWORD_CLUSTERING_ACTIVE.md` POST-2026-04-27-INPUT-CONTEXT-SCALING-DESIGN STATE block (session-specific state)
 - `CORRECTIONS_LOG.md` 2026-04-27 entry (the synthesis-failure that surfaced this concern + Rule 24 capture)
 
-### 🚨 Canvas-Blanking Intermittent Bug (NEW 2026-04-28; HIGH severity; investigation pending)
+### 🚨 Canvas-Blanking Intermittent Bug (NEW 2026-04-28; HIGH severity; ROOT CAUSE DIAGNOSED 2026-04-28 deeper-analysis session; fix design locked)
+
+**Status:** Empirically observed in 2026-04-28 full-Bursitis V3 run on Sonnet 4.6 — twice, at batches 70 and 134 of a 151-batch run. **Root cause diagnosed in 2026-04-28 deeper-analysis session: `src/hooks/useCanvas.ts` line 75 silently sets `nodes = []` whenever `/api/projects/[id]/canvas/nodes` returns a non-array body (e.g., a 5xx error JSON `{ error: '...' }`).** Fix design locked. **Captured as a top-level architectural concern, NOT polish, because it silently abandons keywords from the run mid-flight.**
+
+**Root cause (diagnosed 2026-04-28):**
+
+Two design defects in `useCanvas.fetchCanvas` (`src/hooks/useCanvas.ts:66-84`) combine:
+
+1. **`response.ok` is never checked** for the `/canvas/nodes` GET request. A 5xx response with a JSON error body parses fine via `await nodesRes.json()`, so we never enter the catch block.
+2. **The "not an array" fallback is `[]` instead of `prev`** at line 75: `setNodes(Array.isArray(nodesData) ? nodesData : []);`. Treating an error body as "no nodes exist" silently destroys client state.
+
+The matching API route at `src/app/api/projects/[projectId]/canvas/nodes/route.ts:24-30` returns exactly the shape that triggers the bug whenever Prisma errors (`{ error: 'Failed to fetch nodes' }`, status 500). Connection-pool flake on the Supabase pgbouncer pooler under sustained run load (~2,500-3,800 transactions in ~3 hours of a 151-batch run) is the most likely 5xx trigger — empirically that happened twice in 151 batches (~1.3% rate).
+
+**The cascade after a single failed GET:**
+
+| Step | File:line | What happens |
+|---|---|---|
+| 1 | `useCanvas.ts:75` | `setNodes([])` fires silently. |
+| 2 | `AutoAnalyze.tsx:158` | `useEffect` → `nodesRef.current = []`. |
+| 3 | `AutoAnalyze.tsx:542-546` | Next batch's `assemblePromptV3` builds input TSV from empty `nodesRef.current`. |
+| 4 | `auto-analyze-v3.ts:115` | `buildOperationsInputTsv` early-returns the bare 9-column header. |
+| 5 | (Anthropic) | User message = ~2k tokens. System prompt cached at ~18k. **Total ~19,929 input tokens — exact match to the run-log observation.** |
+| 6 | Model | Sees an empty canvas; builds 11-12 fresh root/near-root topics from scratch using only the 8 batch keywords. |
+| 7 | `AutoAnalyze.tsx:619-633, 682-685` | `validateResultV3` and `doApplyV3` use the same empty `nodesRef.current` → applier runs over empty state → succeeds. |
+| 8 | `auto-analyze-v3.ts:610-613` | `materializeRebuildPayload` computes `deleteNodeIds = []` (because `originalNodes = []`). |
+| 9 | `canvas/rebuild/route.ts` | Receives 12 new nodes + empty `deleteNodeIds`. Upserts → CREATE the 12. **The 284 pre-existing nodes are NOT deleted.** DB ends with 296 nodes. |
+| 10 | `AutoAnalyze.tsx:819` | `await onRefreshCanvas()` — usually succeeds this time (pooler recovers). DB returns 296 nodes; canvas state recovers in next batch. |
+
+**Forensic confirmation in live Bursitis DB (queried 2026-04-28 deeper-analysis session):**
+- `nextStableIdN = 691`, total nodes = 690 — every stable ID `t-1`..`t-690` contiguous. No nodes were destroyed.
+- 4 orphan ROOT topics with NO PARENT, all created in two single transactions with identical timestamps:
+  - `t-285`, `t-286`, `t-287` + descendants `t-288`..`t-291` — created `2026-04-28T00:45:41.836Z` (the batch-70 blanking event). Titles match the V3 prompt's example funnel-stage roots almost verbatim.
+  - `t-594` + descendants `t-595`..`t-604` — created `2026-04-28T03:16:35.901Z` (the batch-134 blanking event).
+- `t-286` "What is bursitis?" duplicates `t-2` (28 keywords). `t-285` "What can you do about bursitis?" duplicates `t-13` (71 keywords). `t-595` and `t-600` duplicate the same titles a third time. **Pure blanking artifacts.**
+- The model's behavior was correct for the inputs it received (an empty TSV → build a fresh funnel skeleton). The bug is upstream of the model.
+
+**Cascade impact — keywords silently abandoned:**
+- 84 + 84 = **168 keywords** flipped to Reshuffled status across the two events.
+- Batch queue is built once at run-start (`buildQueue` in `AutoAnalyze.tsx`) and is fixed for the run's duration. Reshuffled-status keywords created mid-run are NOT re-batched into the running session.
+- Even though the run's scope is "Unsorted + Reshuffled" (which would pick up these keywords on a NEW run), within THIS run they're stuck.
+- Result: director's "many keywords are simply skipped in the AST table" feedback is partially explained by this bug — those 168 keywords sit at Reshuffled status until the user starts a fresh run.
+- (Live DB now shows only 84 of 168 stuck Reshuffled — see "Reconciliation-Pass Closure-Staleness Bug" below for why the second event's 84 weren't re-flipped over the first event's 84, and why neither were healed by later batches.)
+
+**Likely-cause checklist verdicts (was speculative; now resolved):**
+- ✗ React state staleness between batches — not the cause of blanking (but is the cause of the no-heal cascade — see closure-staleness section).
+- ✗ Server-side rebuild API race — not the cause; rebuild succeeded.
+- ✗ Cancel/restart artifact — not the cause; no other `setNodes([])` exists.
+- ✗ Anthropic prompt-cache mis-handling — not the cause; the wiring layer literally serializes empty TSV at `auto-analyze-v3.ts:115`.
+- ✓ **`fetchCanvas` silently blanks on non-array response** — confirmed; only path producing the empty-TSV signature.
+
+**Fix design (locked 2026-04-28 deeper-analysis session):**
+
+1. **Primary** — make `useCanvas.fetchCanvas` defensive (`src/hooks/useCanvas.ts:69-75`):
+   - Check `nodesRes.ok && stateRes.ok` before parsing.
+   - On any failure (HTTP error, non-array body, parse exception), preserve previous state instead of zeroing — change the fallback to `if (Array.isArray(nodesData)) setNodes(nodesData);` and likewise drop the `|| null`/`|| []` defaults inside the same branch.
+   - Surface the failure to the caller via thrown error so `AutoAnalyze` can pause the run instead of silently rolling forward.
+2. **Secondary** — fail-fast pre-flight in `runLoop` (`AutoAnalyze.tsx`): at top of per-batch start, if `nodesRef.current.length === 0` AND we know the previous batch had nodes, set `aaState = 'API_ERROR'` and pause. Catches any future failure mode that produces the same symptom from a different root cause. ~10 lines.
+3. **Belt-and-braces (in-batch)** — wire up the pause-the-run handling at `AutoAnalyze.tsx:819-820` so a refresh failure doesn't silently roll into the next batch.
+4. **Post-fix cleanup of live data** — soft-archive the ≤8 keywords directly attached to the 17 orphan-root nodes (`t-285`..`t-291`, `t-594`..`t-604`); delete the 17 nodes. The keywords return to "Unsorted" and get re-placed in a future run. This cleanup should ride along with the fix-deployment session, NOT be done before the fix lands (otherwise a future run could regenerate the same orphans).
+- **Estimated effort:** ~1-2 hours code + a small unit test on `useCanvas` for the non-array branch + the orphan cleanup. Build clean. Push gated by Rule 9.
+
+**Cross-references:**
+- `src/hooks/useCanvas.ts:75` — the smoking-gun line.
+- `src/app/api/projects/[projectId]/canvas/nodes/route.ts:24-30` — the matching server-side error response.
+- `src/app/projects/[projectId]/keyword-clustering/components/AutoAnalyze.tsx:542-546, 619-633, 682-685` — the cascade points.
+- `auto-analyze-v3.ts:115, 610-613` — pure-functional cascade points.
+- `KEYWORD_CLUSTERING_ACTIVE.md` POST-2026-04-28-DEEPER-ANALYSIS STATE block — session-specific context with full forensic detail.
+- `PLATFORM_ARCHITECTURE.md §10` Known Technical Debt — cross-reference entry.
+- "🚨 Reconciliation-Pass Closure-Staleness Bug" section below — orthogonal but compounding bug; both motivate the Defense-in-Depth Audit item further below.
+- This entry's symptom + reconciliation behavior were captured in the 2026-04-28 session activity log (preserved in CHAT_REGISTRY entry for the session).
+
+---
+
+### 🚨 Reconciliation-Pass Closure-Staleness Bug (NEW 2026-04-28; HIGH severity; fix design locked)
+
+**Status:** Diagnosed during the 2026-04-28 deeper-analysis session against the live Bursitis canvas. Fix design is one-token; tests + push gated by Rule 9.
+
+**Pattern recurrence:** This is a regression of the documented closure-staleness pattern from `CORRECTIONS_LOG.md` 2026-04-18 (Bug A: `buildCurrentTsv` reading props instead of refs) + 2026-04-19 (fix validated live). The prevention rule was added: a code comment now sits at `AutoAnalyze.tsx:153` saying *"runLoop-reachable code must read nodes/allKeywords/sisterLinks via *Ref.current, not raw props — the async runLoop closure freezes props. See CORRECTIONS_LOG 2026-04-18."* The Pivot Session E rewrite (2026-04-25) deleted the original `buildCurrentTsv` along with all V2 code paths. The reconciliation pass added later in Session 3b wrote new code at `AutoAnalyze.tsx:822-848` that mostly honors the line-153 invariant — `keywordsRef.current` is used at line 656 in the same function — but **line 830's `for (const kw of allKeywords)` violates it**.
+
+**Symptom:** the reconciliation pass walks `allKeywords` (the React prop, frozen into `doApplyV3`'s closure at component-render time) instead of `keywordsRef.current` (the always-fresh ref). When a prior batch's reconciliation flips a keyword's status to `Reshuffled`, the parent's keyword state updates, but the closure's view of that keyword still says `AI-Sorted`. So:
+
+- The `if (onCanvas && status === 'Reshuffled') → flip to AI-Sorted` healing branch never fires for that keyword on later batches — closure says it's `AI-Sorted`, no flip needed.
+- The `if (!onCanvas && status === 'AI-Sorted') → flip to Reshuffled` punishment branch can fire on a misleadingly-stale view.
+
+**Empirical confirmation in live DB (2026-04-28 Bursitis canvas):**
+- 84 keywords currently `Reshuffled` — ALL still ON the canvas (`linkedKwIds` includes them). They could have been healed by reconciliation in batches 71-133 and 135-151 but weren't.
+- 147 keywords AI-Sorted but actually OFF canvas (ghost AI-Sorted) — partly attributable to the same closure-staleness preventing punishment-branch recognition in some batches.
+- 85 keywords Unsorted/Reshuffled but actually ON canvas (silent placements) — same root cause from the healing direction.
+
+**The math (why the 84 number is exactly 84, not 168):** at run start, the project carried ~84 `AI-Sorted` keywords from a prior in-flight run. The closure-frozen `allKeywords` showed those 84 as AI-Sorted forever. When batch 70 canvas-blanked and reconciliation ran with `placedSet = {8 batch keywords}`, each of the 84 hit `!onCanvas && status === 'AI-Sorted'` → flipped to Reshuffled. Batches 71-133 (healthy canvases) saw the same 84 in stale closure as `AI-Sorted` AND on canvas → no flip → no healing. Batch 134 re-flipped the same 84 (idempotent PATCH). Batches 135-151 same as 71-133. End state: 84 stuck Reshuffled despite being on canvas. **This count exactly matches the live DB.**
+
+**Fix design (locked):** change `for (const kw of allKeywords)` to `for (const kw of keywordsRef.current)` at `AutoAnalyze.tsx:830`. Single-line change. Restores the line-153 invariant. Add a regression test that simulates the closure-stale scenario (mock `allKeywords` prop to an outdated copy while `keywordsRef.current` reflects updated statuses; verify reconciliation reads the ref).
+
+**Post-fix cleanup of live data:** after the fix ships, the 232 status drift residuals (147 + 85) plus the 84 stuck Reshuffled won't be healed automatically by future runs unless those keywords come into scope. Two options:
+- (a) Add a one-shot **"Reconcile Now"** admin button that walks AST × canvas with current-from-server data and fires `reconcileUpdates` against the live DB. ~50 lines code; localized to AutoAnalyze.tsx or a sibling utility component.
+- (b) Run a one-off SQL/Prisma script with explicit confirmation. ~20 lines, ~10 min admin time.
+Option (a) is more useful long-term — it doubles as a forensic tool for future runs and is captured as a candidate redundancy in the Defense-in-Depth Audit item below.
+
+**Scope:** ~5 minutes code + ~15 minutes test + standard build/push gating. Independent of the canvas-blanking fix; can ship separately or together (recommended together — both are wiring-layer fixes; both heal the visible "skipped keywords" symptom; ~3 hours total in one focused session).
+
+**Why this matters (not just for the 84):** the bug's blast radius is bigger than the 84 stuck Reshuffled keywords. Every reconciliation pass on every batch of every run on every project has been reading stale `allKeywords` since Session 3b shipped (2026-04-25). The 232 status-drift residuals (147 + 85) visible in the live DB are partly explained by this — though sorting out which residuals are from this bug vs. P3-F7 silent-placement vs. canvas-blanking would require a forensic pass we haven't done.
+
+**Cross-references:**
+- `CORRECTIONS_LOG.md` 2026-04-18 entry (the foundational stale-closure diagnosis) + 2026-04-19 entry (the fix validation).
+- `AutoAnalyze.tsx:153` (the canonical invariant comment).
+- `AutoAnalyze.tsx:656` (correct usage of `keywordsRef.current` in the same function — proves the invariant was understood when most of `doApplyV3` was written; line 830 is the lone regression).
+- `PLATFORM_ARCHITECTURE.md` line 407 (platform-level recognition of the refs-vs-stale-closure pattern).
+- This bug compounds the canvas-blanking bug (above) but is INDEPENDENT — fixing one does not fix the other.
+- `KEYWORD_CLUSTERING_ACTIVE.md` POST-2026-04-28-DEEPER-ANALYSIS STATE block (this session's findings).
+- "🛡️ Redundancy + Defense-in-Depth Audit" item below — this bug's escape despite the documented invariant is one of the two motivating cases for that item.
+
+---
+
+### 🛡️ Redundancy + Defense-in-Depth Audit (NEW 2026-04-28; design pending)
+
+**Status:** Captured as a forward-pointing design item; needs a dedicated design session analogous to Scale Session A. Design output is a per-fix redundancy matrix + concrete additions to the codebase.
+
+**Director's framing (verbatim 2026-04-28):** *"think if redundancies may be needed and if so, to add them, in case our fixes fail during a session (which has happened before)."*
+
+**The pattern this addresses.** The Auto-Analyze pipeline went through a deliberate simplification in Pivot Session E (2026-04-25) that DELETED several defense-in-depth mechanisms: Mode A→B reactive switch, salvage, the full-table-rewrite correction path, and the IRRELEVANT_KEYWORDS recovery template. The deletions were correct for V2's failure modes; they make sense under V3's "silence is preservation" architecture. BUT the live 2026-04-28 run revealed two NEW failure modes the deletions left uncovered:
+
+- The canvas-blanking bug (`useCanvas.fetchCanvas` silent zero-set) — silently abandoned 168 keywords mid-run. There was NO server-side or client-side guard that caught it; reconciliation surfaced it but didn't prevent it.
+- The closure-staleness reconciliation regression — silent status drift across every run since Session 3b. The line-153 invariant comment exists but didn't prevent the line-830 violation from being written.
+
+Both bugs would have been caught earlier by belt-and-braces mechanisms that V3 deliberately doesn't have. The principle holds: post-pivot architectures need their own defense-in-depth, not just structural correctness.
+
+**Goals of the design session:**
+
+1. **Per-fix redundancy matrix.** For each fix on the current backlog (Bug A: canvas-blanking; Bug B: closure-staleness; Mid-run queue refresh; Cleanup C orphan-roots; Scale Sessions B-E; second-pass refinement), enumerate:
+   - What does the primary fix do?
+   - What is the failure mode if the primary fix breaks or is incompletely applied?
+   - What's the visible signature of that failure?
+   - What backup mechanism (if any) would catch it independently?
+   - Is the backup worth the code complexity it adds?
+2. **Codebase-wide invariant enforcement.** The line-153 invariant ("runLoop-reachable code must read via *Ref.current") is a code-comment-only convention. Consider:
+   - A custom ESLint rule that flags prop reads inside identified runLoop-reachable functions.
+   - A runtime invariant check that asserts ref freshness at key boundaries (e.g., dev-mode warning if `nodesRef.current.length === 0` at start of a batch when canvas had >0 nodes at end of previous batch).
+   - A unit-test pattern that simulates closure-stale scenarios for any new runLoop-reachable function.
+3. **Forensic instrumentation.** Some bugs only show their signature in production-scale runs. Consider:
+   - Optional verbose logging of canvas/keyword sizes at each batch boundary, written to a structured log file the admin can download.
+   - "Dry-run" mode that runs the full pipeline against synthetic data and verifies invariants without DB writes.
+   - A "Reconcile Now" admin button that re-runs reconciliation against current-from-server state at any time (heals residual drift; doubles as a forensic tool).
+4. **Server-side guards.** Some failures could be caught at the API boundary rather than relying on client-side state hygiene:
+   - `/canvas/rebuild` could reject payloads where `deleteNodeIds.length === 0` AND the new-node count is dramatically smaller than the existing canvas size (potential canvas-blanking signature).
+   - `/canvas/nodes` GET could be wrapped in a retry-on-transient-error layer so the underlying connection-pool flake doesn't surface as "canvas is empty."
+5. **Pre-flight checks at run start.** Before any batches process, run a self-test: confirm `nodesRef.current` matches DB; confirm `keywordsRef.current` matches DB; confirm the prompts loaded correctly. Fail fast if anything is off, before $50 of API spend.
+
+**Estimated effort:** 1 design session (3-4 hours) producing the matrix + the locked list of redundancies to build + a multi-session implementation plan. The implementation work itself depends on what the matrix recommends — could be 1 session for ESLint+runtime-invariant alone, or more if server-side guards are in scope.
+
+**Sequencing:** EITHER ride alongside the canvas-blanking + closure-staleness fix session (so the redundancies for those two specific fixes get added in the same commit), OR run as its own session AFTER those fixes ship (so the design matrix can use the empirical signal from the fixes' first production runs). Director's call.
+
+**Cross-references:**
+- `PIVOT_DESIGN.md` (the original simplification rationale; this item revisits what was deleted vs. what should be re-added under V3 framing).
+- `AI_TOOL_FEEDBACK_PROTOCOL.md` (the action-by-action-feedback design item is partly redundant-by-design — second pass catches what first pass missed).
+- `MODEL_QUALITY_SCORING.md` (stability scoring is a redundancy mechanism for preventing structural churn on well-validated topics).
+- `CORRECTIONS_LOG.md` 2026-04-18 entry (the original stale-closure pattern whose recurrence motivates the codebase-wide-invariant-enforcement goal).
+- This entry's TWO DIRECT MOTIVATING BUGS:
+  - "🚨 Canvas-Blanking Intermittent Bug" section above.
+  - "🚨 Reconciliation-Pass Closure-Staleness Bug" section above.
+
+---
+
+### 🚨 Canvas-Blanking Intermittent Bug — ORIGINAL CAPTURE (2026-04-28 Scale Session 0; superseded by the diagnosed entry above; preserved for reference)
 
 **Status:** Empirically observed in 2026-04-28 full-Bursitis V3 run on Sonnet 4.6 — twice, at batches 70 and 134 of a 151-batch run. Root cause not yet diagnosed; needs code reading + DB query before fix design. **Captured as a top-level architectural concern, NOT polish, because it silently abandons keywords from the run mid-flight.**
 

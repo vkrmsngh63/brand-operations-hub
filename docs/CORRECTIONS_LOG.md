@@ -2,8 +2,9 @@
 ## Append-only record of mistakes made during chats and lessons learned
 
 **Started:** April 16, 2026
-**Last updated:** April 27, 2026 (V3 small-batch test + context-scaling concern session — 1 new HIGH-severity entry: failed to synthesize prior treatment of input-side context-scaling when proposing a new ROADMAP item, despite having read the relevant docs (`ROADMAP.md` line 162 + `PIVOT_DESIGN.md` lines 205+246) earlier in the same session. Framed the concern as "the system was not explicitly designed to handle it" when the more accurate framing is "input scaling was acknowledged as a known trade-off in V3 design but no mitigation was designed; V2's Mode A→B had partially addressed it on the output side and was deleted in Pivot E." Director caught + flagged as a critical mistake requiring an instruction-set update. New `HANDOFF_PROTOCOL.md` Rule 24 (Pre-capture search) added in same session to prevent recurrence; corresponding entry added to `CLAUDE_CODE_STARTER.md` non-negotiable rules.)
-**Last updated in session:** session_2026-04-27_v3-prompt-small-batch-test-and-context-scaling-concern (Claude Code)
+**Last updated:** April 28, 2026 (Deeper-analysis session — 1 new MEDIUM-severity entry: omitted 5 of 8 director feedback items from initial fix-recommendations response; director caught + flagged as a coverage failure requiring handoff updates to address ALL 8 items explicitly. Mistake was scope-discipline-related — when the director gave a multi-item feedback list, the initial response cherry-picked the bug-flavored items and treated the polish + design items as if mentioning them was redundant given they were already in ROADMAP. It wasn't redundant — the director needed a status reading on every item to feel the feedback was heard and to make sequencing decisions.)
+**Last updated in session:** session_2026-04-28_deeper-analysis-and-fix-design (Claude Code)
+**Previously updated in session:** session_2026-04-27_v3-prompt-small-batch-test-and-context-scaling-concern (Claude Code)
 **Previously updated in session:** session_2026-04-26_phase1-polish-bundle (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-pivot-session-D (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-pivot-session-B (Claude Code)
@@ -45,6 +46,44 @@
 ---
 
 ## Entries
+
+### 2026-04-28 — Omitted 5 of 8 director feedback items from initial fix-recommendations response (MEDIUM severity)
+**Session:** session_2026-04-28_deeper-analysis-and-fix-design (Claude Code)
+**Tool/Phase affected:** Cross-session communication discipline / handoff completeness / W#1 Keyword Clustering deeper-analysis-session output
+
+**Severity:** MEDIUM (no production damage, no data loss, no wrong code shipped — but a coverage failure that left the director feeling 5 of 8 items they raised in the prior session weren't being addressed; required them to call it out explicitly and re-request handoff updates that include all 8 items; risk if uncaught: those items quietly drift in priority and the director loses confidence that their feedback is being tracked).
+
+**What happened:** During the 2026-04-28 deeper-analysis session, after producing the bug report and quality-issue catalog, I produced a "Fix Recommendations" laydown covering 7 issues (A canvas-blanking, B closure-staleness, C orphan-roots cleanup, D body-part ladder, E status-drift, F empty leaves, plus an architectural cost/quality discussion). The fix laydown was structured around the issues I had freshly diagnosed in this session — bugs and bug-residuals — and did NOT cycle back to the director's earlier 8-item feedback list captured in the POST-2026-04-28-SCALE-SESSION-0-OUTCOME-C STATE block of `KEYWORD_CLUSTERING_ACTIVE.md` (lines 60-69 at session start). My fix recommendations directly addressed only items #1, #2, and #7 from that list; touched item #6 glancingly; and OMITTED items #3 (Skeleton View polish), #4 (AST split-view alignment polish), #5 (Topics table row numbers polish), and #8 (Intelligent cost/quality strategy).
+
+Director's response: *"You also did not mentioned all my feedback issues and I want your handoff updates to include addressing those specific issues as well."* — flagged the coverage gap and corrected the deliverable scope.
+
+**Root cause:** scope-discipline failure adjacent to but distinct from the 2026-04-27 Rule-24 mistake. The 2026-04-27 mistake was about not searching prior treatment before adding a new ROADMAP item. This mistake is about not cycling back to a director's existing list of items when producing a session deliverable that was implicitly expected to track ALL of them. The mental shortcut: "items #3, #4, #5 are already captured in ROADMAP as polish — mentioning them again in fix-recommendations would be redundant." That shortcut was wrong. The director needed:
+
+(a) Explicit acknowledgment that I read all 8 items, not just the bug-flavored ones.
+(b) A status reading per item — done, deferred, captured-where, planned-when — so they can sequence work and feel the feedback is being tracked.
+(c) Surface visibility of items already in ROADMAP, even if I'm not advancing them this session, because the director is using the deliverable as their working summary of the project's open list.
+
+In short: when the director gives a multi-item list, every item gets a status row in every subsequent deliverable that addresses any item from that list. "Already captured" is a status, not a reason to omit.
+
+**How caught:** Director directly flagged: *"You also did not mentioned all my feedback issues and I want your handoff updates to include addressing those specific issues as well."*
+
+**Correction:** Produced a complete 8-item feedback table (`#`, director's words, status from this session, where captured, plan), included it in the new POST-2026-04-28-DEEPER-ANALYSIS STATE block of `KEYWORD_CLUSTERING_ACTIVE.md` AND in the personalized handoff message at session end. Each item gets a row regardless of whether THIS session advanced it — "already captured as Phase-1 polish, scheduled with the next UI session" is a complete status row.
+
+**Prevention:** New procedural pattern for cross-session deliverable production:
+
+1. **At the start of any deliverable that responds to director-raised feedback, re-read the director's feedback list verbatim from the source doc** (the prior STATE block, the chat where they raised it, etc.). Don't rely on working memory of "what I think they raised."
+2. **For every item on that list, produce a status row in the deliverable** — done, deferred, captured-where, planned-when, dispositioned. "Already in ROADMAP" is a status, not an omission license.
+3. **If 5+ items, produce a status table not just prose** — the director scans tables faster and the format makes coverage gaps immediately visible to me too.
+4. **Cycle the table through every deliverable in the session that touches any item** — the bug-report deliverable AND the fix-recommendations deliverable AND the handoff message. Repetition isn't redundancy when the director is using these as working summaries.
+
+This rule generalizes beyond Auto-Analyze deliverables: any session that responds to a multi-item director ask (a list of bugs to triage, a list of features to scope, a list of polish items to prioritize, a list of design questions to answer) gets a status table that covers every item.
+
+Relationship to existing rules:
+- Adjacent to HANDOFF_PROTOCOL Rule 24 (pre-capture search before ROADMAP entries) — both are about verifying coverage before claiming to have addressed something.
+- Adjacent to Rule 14e (capture-what-you-defer) — Rule 14e is about not letting flagged items leave the session uncaptured; this rule is about not letting director's items disappear from VISIBLE STATUS in the session deliverable.
+- Possibly should become a HANDOFF_PROTOCOL rule in a future session if the pattern recurs. For now, captured here for next-session awareness.
+
+---
 
 ### 2026-04-27 — Failed to synthesize prior treatment when proposing context-scaling ROADMAP item — operating on partial information despite having relevant docs in context (HIGH severity)
 **Session:** session_2026-04-27_v3-prompt-small-batch-test-and-context-scaling-concern (Claude Code)

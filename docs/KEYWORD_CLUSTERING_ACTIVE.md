@@ -1,8 +1,9 @@
 # KEYWORD CLUSTERING — ACTIVE DOCUMENT
 ## Current state of the Keyword Clustering workflow tool (Group B, tool-specific)
 
-**Last updated:** April 28, 2026 (Scale Session 0 — empirical validation; Outcome C fired. Director ran a full-Bursitis V3 Auto-Analyze (151 of 281 batches on Sonnet 4.6) plus Opus 4.7 cost test at run start. Sonnet 4.6 hit the 200k context wall at batch 151; Opus 4.7 was economically prohibitive. Scale Sessions B–E now triggered per the locked plan in `INPUT_CONTEXT_SCALING_DESIGN.md §6`. Run also surfaced a HIGH-severity canvas-blanking bug at batches 70 + 134 (wiring layer sent ~20k tokens of input instead of full canvas; 168 keywords stuck in Reshuffled status across the 2 events) plus 4 new Phase-1 polish items + 2 new architectural design items. New POST-2026-04-28 STATE block added above prior STATE blocks. No code, DB, schema, or prompt changes this session.)
-**Last updated in session:** session_2026-04-28_scale-session-0-outcome-c-and-full-run-feedback (Claude Code)
+**Last updated:** April 28, 2026 (Deeper-analysis session — read-only DB queries + code reading diagnosed canvas-blanking bug to root cause [`useCanvas.fetchCanvas:75` silently zeroes nodes on non-array response from `/canvas/nodes` GET]; SECOND HIGH-severity bug found — Reconciliation-Pass Closure-Staleness at `AutoAnalyze.tsx:830`, regression of 2026-04-18 stale-closure pattern; both fix designs locked; quality-issue catalog produced [4 orphan-root nodes from blanking events + 17 descendants; 84 stuck-Reshuffled keywords all on canvas; 232 status drift residuals; 95+ body-part topics scattered across intent branches; 3 duplicate-title pairs]; NEW Redundancy + Defense-in-Depth Audit design item captured; full director-feedback table addressed. No code, DB, schema, or prompt changes this session.)
+**Last updated in session:** session_2026-04-28_deeper-analysis-and-fix-design (Claude Code)
+**Previously updated in session:** session_2026-04-28_scale-session-0-outcome-c-and-full-run-feedback (Claude Code)
 **Previously updated in session:** session_2026-04-27_input-context-scaling-design (Claude Code)
 **Previously updated in session:** session_2026-04-27_v3-prompt-small-batch-test-and-context-scaling-concern (Claude Code)
 **Previously updated in session:** session_2026-04-26_workflow-transition-architecture-and-v3-prompt-refinement (Claude Code)
@@ -29,7 +30,111 @@
 
 ---
 
-## ⚠️ POST-2026-04-28-SCALE-SESSION-0-OUTCOME-C STATE (READ FIRST — updated 2026-04-28)
+## ⚠️ POST-2026-04-28-DEEPER-ANALYSIS STATE (READ FIRST — updated 2026-04-28)
+
+**As of 2026-04-28 deeper-analysis + fix-design session (read-only DB queries + code reading of `useCanvas.ts` / `AutoAnalyze.tsx` / `auto-analyze-v3.ts` / `/canvas/rebuild` and `/canvas/nodes` API routes; produced a concrete bug report + quality-issue catalog; produced ROADMAP + KEYWORD_CLUSTERING_ACTIVE + PLATFORM_ARCHITECTURE + CORRECTIONS_LOG + CHAT_REGISTRY + DOCUMENT_MANIFEST updates):**
+
+### What this session did to W#1
+
+**Two HIGH-severity bugs diagnosed; fix designs locked. One NEW design item captured. Full quality-issue catalog produced against the live Bursitis canvas. Director's full 8-item feedback table addressed.**
+
+This session was option (a) from the prior STATE block's three "NEXT" choices. No code changes; no DB writes; no schema changes; no prompt changes. The previous run's 2026-04-28T00:18..04:06 Bursitis canvas state is unchanged.
+
+### Bug 1 — Canvas-Blanking Intermittent Bug — ROOT CAUSE DIAGNOSED
+
+The bug surfaced (not diagnosed) in the prior STATE block. Today's session diagnosed it to root cause.
+
+**Root cause:** `src/hooks/useCanvas.ts` line 75 — `setNodes(Array.isArray(nodesData) ? nodesData : [])`. When `/api/projects/[id]/canvas/nodes` GET returns a 5xx error (the response body is `{ error: 'Failed to fetch nodes' }`), the response is non-array → `setNodes([])` fires silently. Two design defects combine: (a) `response.ok` is never checked; (b) the "not an array" fallback is `[]` instead of `prev`. Connection-pool flake on the Supabase pgbouncer pooler under sustained run load is the most likely 5xx trigger — twice in 151 batches matches the empirical ~1.3% rate.
+
+**Forensic confirmation against live DB:**
+- `nextStableIdN = 691`, total nodes = 690, all stableIds `t-1`..`t-690` contiguous → no nodes destroyed.
+- 4 orphan ROOT topics created in two single transactions with identical timestamps:
+  - `t-285` "What can you do about bursitis?" (duplicates `t-13` with 71 keywords), `t-286` "What is bursitis?" (duplicates `t-2` with 28 keywords), `t-287` "What does bursitis feel like?", + descendants `t-288`..`t-291` — all at `2026-04-28T00:45:41.836Z` (batch-70 blanking event).
+  - `t-594` "Something doesn't feel right — could it be bursitis?" + descendants `t-595`..`t-604` (including a third "What is bursitis?" duplicate at `t-595`) — all at `2026-04-28T03:16:35.901Z` (batch-134 blanking event).
+- Titles match V3 prompt's example funnel-stage roots almost verbatim → confirms the model's behavior was correct for the inputs it received (an empty TSV → build a fresh funnel skeleton). The bug is upstream of the model.
+
+**Fix design (locked):** see `ROADMAP.md` "🚨 Canvas-Blanking Intermittent Bug" section. Three defensive changes in `useCanvas.fetchCanvas` + a fail-fast pre-flight in `runLoop` + post-fix cleanup of the 17 orphan nodes. Estimated 1-2 hours code + small unit test.
+
+### Bug 2 — Reconciliation-Pass Closure-Staleness — NEW finding (regression of 2026-04-18 pattern)
+
+**The smoking gun:** `AutoAnalyze.tsx:830` — `for (const kw of allKeywords)`. This violates the documented invariant at line 153 ("runLoop-reachable code must read via *Ref.current, not raw props — see CORRECTIONS_LOG 2026-04-18"). The reconciliation pass walks the closure-frozen `allKeywords` prop instead of the always-fresh `keywordsRef.current`. Every other variable read in `doApplyV3` correctly uses the refs (line 656 in the same function uses `keywordsRef.current`) — line 830 is the lone regression.
+
+**Empirical math (matches DB exactly):** at run start, the project carried ~84 `AI-Sorted` keywords from a prior in-flight run. The closure-frozen `allKeywords` showed those 84 as AI-Sorted forever. Batch 70's blanking + reconciliation flipped all 84 to Reshuffled (closure said "AI-Sorted" + `placedSet` = 8 batch keywords). Healthy batches 71-133 saw the same 84 in stale closure as still-AI-Sorted → no flip → no healing. Batch 134 re-flipped the same 84 (idempotent PATCH). Final state: **84 keywords stuck Reshuffled — all 84 currently still ON the canvas in DB.** Live DB confirms exactly 84.
+
+**Pattern recurrence:** the 2026-04-18 stale-closure bug was in `buildCurrentTsv`. That function was deleted in Pivot Session E (2026-04-25). The reconciliation pass added in Session 3b (2026-04-25) is post-deletion code. The line-153 invariant was already documented; line 830 was written without applying it. Rule 24 search this session confirmed prior treatment exists (CORRECTIONS_LOG 2026-04-18 + 2026-04-19 + line-153 comment + PLATFORM_ARCHITECTURE.md line 407) and the new ROADMAP entry cross-references all four.
+
+**Fix design (locked):** one-token change — `for (const kw of allKeywords)` → `for (const kw of keywordsRef.current)`. ~5 min code + ~15 min test. See `ROADMAP.md` "🚨 Reconciliation-Pass Closure-Staleness Bug" section.
+
+**Post-fix cleanup:** the live DB has 232 status drift residuals (147 ghost AI-Sorted + 85 silent placements) plus the 84 stuck Reshuffled. Either a "Reconcile Now" admin button (recommended — doubles as forensic tool) or a one-off SQL/Prisma script will clear them.
+
+### NEW design item — Redundancy + Defense-in-Depth Audit
+
+Captured per director's framing: *"think if redundancies may be needed and if so, to add them, in case our fixes fail during a session (which has happened before)."* See `ROADMAP.md` "🛡️ Redundancy + Defense-in-Depth Audit" section. Five design goals: per-fix redundancy matrix; codebase-wide invariant enforcement (ESLint rule + runtime check + unit-test pattern for the line-153 rule and similar); forensic instrumentation; server-side guards; pre-flight checks at run start. Sequencing: ride alongside the bug-fix session OR run as its own session after fixes ship; director's call.
+
+### Quality-issue catalog (live Bursitis canvas, 2026-04-28)
+
+Run against `Bursitis Test` project `9e0ffc58-9ea2-4ea3-b840-144f760fb960`, projectWorkflow `d1ade277-ba14-429a-a71f-b57dd2b39efc`.
+
+| Issue | Severity | Detail |
+|---|---|---|
+| 17 orphan-root + descendant nodes from blanking events | HIGH (structural) | `t-285`..`t-291`, `t-594`..`t-604`. ≤8 keywords directly attached. Soft-archive + delete after Bug 1 ships. |
+| 3 duplicate-title pairs/triples | MEDIUM | "What is bursitis?" (t-2, t-286, t-595); "What can you do about bursitis?" (t-13, t-285, t-600); "natural remedies for hip bursitis" (t-425, t-442). First two are blanking artifacts; third is a healthy-batch intent-equivalence violation. |
+| Body-part ladder violation: ~95 misplaced topics | HIGH (architectural quality) | 33 hip topics outside `t-5 Hip bursitis`, 12 shoulder outside `t-7`, 9 pes anserine outside `t-11`, 8 elbow outside `t-8`, 7 knee outside `t-10`, 7 heel outside `t-35`, 6 trochanteric outside `t-6`, 4 iliopsoas outside `t-36`, 4 ischial outside `t-23`, etc. Pattern: compound-primary topics like "Treating hip bursitis" placed under intent branches without a SECONDARY at the body-part anchor. Under-placement failure mode the V3 prompt's Step 4b is supposed to prevent — but Step 4b is self-policed and the applier doesn't enforce it. Likely cause: model shed dimension-secondaries to manage output length as canvas TSV grew past 100k tokens. **This is the structural problem Scale Sessions B-E (Tiered Canvas Serialization + intentFingerprint) are designed to address.** |
+| 232 status drift residuals + 84 stuck Reshuffled | HIGH | Partly Bug 2; also residuals of P3-F7 silent placements / ghost AI-Sorted. Heal via "Reconcile Now" button after Bug 2 fix. |
+| 5 truly empty leaf topics | LOW (working as designed) | `t-290`, `t-18`, `t-74`, `t-112`, `t-176`. Per V3 prompt Step 4c (complement detection) — second halves of complement pairs that didn't pick up keywords this run. NOT a bug. Recommendation: leave them. |
+| 0 singleton roots | — | Healthy. |
+
+### V3-prompt context for why the model did what it did
+
+The model was following the V3 prompt **literally** in every observed case:
+
+- The orphan-root titles are uncannily close to the prompt's example funnel-stage root titles (V3 prompt line 359). When fed an empty canvas, Step 7 (Conversion Funnel Stage Ordering) correctly built the canonical awareness→action skeleton. **The model wasn't confused; the wiring layer told it the canvas was empty.**
+- The 95+ scattered body-part topics show the under-placement failure mode the V3 prompt's Step 4b is supposed to prevent (1 + N(dimensions) placements per keyword; line 136). The applier doesn't enforce Step 4b; the model self-polices. Under canvas-TSV growth past 100k tokens, the model started shedding the dimension-secondaries to manage output length.
+- The 5 empty leaves are deliberate scaffolding (V3 prompt Step 4c, line 295) — complement-pair second halves that didn't accumulate keywords this run. Working as designed.
+
+**Three distinct quality causes underneath the surface symptoms:**
+1. Canvas-blanking bug (wiring layer) — produces orphan roots + the duplicate "What is bursitis?" / "What can you do about bursitis?" entries.
+2. Closure-staleness reconciliation (wiring layer) — preserves the 84 Reshuffled and is part of the 147+85 status drift residuals.
+3. Input-TSV scaling failure mode (architectural) — produces under-placement (no body-part secondaries), the "natural remedies for hip bursitis" duplicate, and probably a long tail of subtler intent-equivalence misses we haven't surfaced. This is what `INPUT_CONTEXT_SCALING_DESIGN.md` Tiered Canvas Serialization is designed to address.
+
+### Director's full 8-item feedback table — status as of 2026-04-28 deeper-analysis session
+
+| # | Director feedback | Status from THIS session | Where captured | Plan |
+|---|---|---|---|---|
+| 1 | "Many keywords AI-sorted don't have status changed to AI-Sorted" | **Diagnosed.** Two co-causes: canvas-blanking bug created stuck-Reshuffled (Bug 1); closure-staleness prevented healing (Bug 2). Live DB shows 85 silent placements + 84 stuck Reshuffled = 169 affected; plus 147 ghost AI-Sorted. | This STATE block + ROADMAP §"Canvas-Blanking" + ROADMAP §"Reconciliation-Pass Closure-Staleness". | Bugs 1 + 2 fixed in one wiring-layer session (~3 hrs); "Reconcile Now" run heals existing residuals. |
+| 2 | "Many keywords skipped in AST table" | **Diagnosed.** Same root causes as #1, plus the fixed-at-run-start batch queue. After Bugs 1 + 2 fix, future runs won't produce stuck Reshuffled. The existing "Mid-run batch queue refresh" polish item is the belt-and-braces and is independent. | Same as #1; queue-refresh item at ROADMAP §"Mid-run batch queue refresh". | Bugs 1 + 2 solve the dominant cause. Queue-refresh polish ships when convenient. |
+| 3 | "Skeleton View on canvas" | **Already captured as Phase-1 polish.** UI work, not bug work. Director's spec is locked. | ROADMAP §"Skeleton View on canvas". | Schedule alongside other UI polish items. ~2-3 hours. |
+| 4 | "AST split-view topic-vs-description row alignment" | **Already captured as Phase-1 polish.** UI work. | ROADMAP §"AST table split-view topic-vs-description row alignment". | Same as #3. ~1-2 hours. |
+| 5 | "Topics table row numbering" | **Already captured as Phase-1 polish.** UI work. | ROADMAP §"Topics table row numbering". | Same as #3. ~30-60 min. |
+| 6 | "Do we do a second pass? Were reshuffles warranted?" | **Definitively answered.** All 84 currently-Reshuffled keywords are still ON the canvas → reshuffles in this run were NOT warranted; they're reconciliation noise from Bugs 1 + 2. After fixes, future Reshuffle counts will be honest signal. **A second pass IS warranted, but for a different reason** — to address structural quality issues (body-part ladder, intent-equivalence violations) Pass 1 misses at scale. | This STATE block + ROADMAP §"Action-by-action feedback + second-pass refinement". | Bug fixes first (data hygiene). Then dedicated design session for second pass + action-by-action feedback workflow. |
+| 7 | "Action-by-action feedback table with admin adjustment column + ability to add missing actions + drives second pass" | **Already captured as architectural design item.** Today's findings strengthen the case: the 95+ body-part-ladder violations are exactly what admin would flag in an adjustment column. | ROADMAP §"Action-by-action feedback + second-pass refinement". | Dedicated design session, sized analogous to Scale Session A. Sequence after Scale Session B-E ships. |
+| 8 | "Intelligent way to reduce cost without sacrificing quality" | **Already captured as architectural design item.** Today's findings sharpen the question: per-batch cost grew $0.20 → $0.85 driven entirely by canvas-TSV input growth. Tiered Canvas Serialization (Scale Sessions B-E) addresses this directly. The new Defense-in-Depth Audit + the action-by-action feedback design also contribute. | ROADMAP §"Intelligent hybrid cost/quality strategy". | Design AFTER Scale Sessions B-E ship. |
+
+### What did NOT change this session
+
+- **No code changes.** Pure analysis + doc-update session.
+- **No DB schema changes.**
+- **No DB write operations.** All DB queries this session were read-only via Prisma `findMany`/`groupBy`/`count`.
+- **No prompt changes.** `AUTO_ANALYZE_PROMPT_V3.md` is unchanged.
+- **No live-data state changes** by Claude. The Bursitis canvas reflects whatever state the director left it in after stopping the run at batch 152.
+
+### Standing instructions for next session — three "NEXT" choices
+
+(a) **🎯 Bug-fix session: ship Bug 1 + Bug 2 + post-fix cleanup (recommended next).** Both wiring-layer fixes; both heal the visible "skipped keywords" symptom. ~3 hours including unit tests + build + Bursitis-test verification + the 17-orphan-node cleanup + a "Reconcile Now" run to clear the 232+84 status drift residuals. Push gated by Rule 9. **This subsumes most of option (d) from the prior STATE block** — it's the highest-impact item from the polish bundle.
+
+(b) **Scale Session B build (the Tiered Canvas Serialization build path).** Per `INPUT_CONTEXT_SCALING_DESIGN.md §6`. Addresses the body-part ladder violation (95+ scattered topics) and the input-side cost growth structurally. Risk profile: medium (schema constraint change). Estimated full session.
+
+(c) **Dedicated design session for Redundancy + Defense-in-Depth Audit.** New item from this session. Could ride alongside (a) — adding the redundancies for the two specific fixes in the same commit. Or stand alone after (a) ships. Estimated full session if standalone.
+
+(d) **Phase-1 UI polish bundle** — the three remaining UI items from the director's feedback list (#3 Skeleton View, #4 AST split-view alignment, #5 Topics table row numbering). Pure UI; ~4-5 hours total. Independent of bugs.
+
+(e) **Dedicated design session for action-by-action feedback + second-pass refinement workflow.** Item #7 from the director's feedback list. Analogous to Scale Session A — produces a design doc + locked decisions + multi-session implementation plan. Director was explicit: *"this is what I want us to engage in next"* — but priority vs. (a)/(b) is the director's call.
+
+**Director's framing:** sequence (a) → (c) → (b) → (e) → (d) is the sensible default — diagnose-and-fix the dominant bug pair first; lock in defense-in-depth so future regressions are caught earlier; then ship the structural input-scaling fix; then design the second-pass workflow; then UI polish. But director's call.
+
+---
+
+## ⚠️ POST-2026-04-28-SCALE-SESSION-0-OUTCOME-C STATE (preserved as historical context — last updated 2026-04-28)
 
 **As of 2026-04-28 Scale Session 0 + full-run feedback session (empirical validation; no code, no DB, no schema, no prompt changes; produced ROADMAP + KEYWORD_CLUSTERING_ACTIVE + INPUT_CONTEXT_SCALING_DESIGN + PLATFORM_ARCHITECTURE + DOCUMENT_MANIFEST + CHAT_REGISTRY updates):**
 
