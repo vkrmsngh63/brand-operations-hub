@@ -1,8 +1,9 @@
 # DOCUMENT MANIFEST
 ## Ground-truth registry of every handoff document in the PLOS system
 
-**Last updated:** April 27, 2026 (Scale Session A — input-side context-scaling design session — produced `docs/INPUT_CONTEXT_SCALING_DESIGN.md` (NEW Group B, ~470 lines) capturing the unified Tiered Canvas Serialization design + locked decisions across 5 clusters + multi-session implementation plan with test-before-build reframe; Scale Session 0 — empirical validation on Opus 4.7 1M-context — is the next action; Scale Sessions B–E gated behind Outcome C from Session 0; no code, DB, schema, or prompt changes this session.)
-**Last updated in session:** session_2026-04-27_input-context-scaling-design (Claude Code)
+**Last updated:** April 28, 2026 (Scale Session 0 — empirical validation; Outcome C fired. Director ran a full-Bursitis V3 Auto-Analyze (151 of 281 batches on Sonnet 4.6) plus Opus 4.7 cost test at run start. Sonnet 4.6 hit the 200k context wall at batch 151; Opus 4.7 was economically prohibitive. Scale Sessions B–E now triggered. Run also surfaced HIGH-severity canvas-blanking bug at batches 70 + 134 (168 keywords stuck in Reshuffled status across the 2 events) plus 4 new Phase-1 polish items + 2 new architectural design items. No code, DB, schema, or prompt changes this session.)
+**Last updated in session:** session_2026-04-28_scale-session-0-outcome-c-and-full-run-feedback (Claude Code)
+**Previously updated in session:** session_2026-04-27_input-context-scaling-design (Claude Code)
 **Previously updated in session:** session_2026-04-27_v3-prompt-small-batch-test-and-context-scaling-concern (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-26_workflow-transition-architecture-and-v3-prompt-refinement (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-26_phase1-polish-bundle (Claude Code)
@@ -35,47 +36,46 @@ These 13 documents form the persistent handoff context.
 | # | Document | Purpose | Last modified | Modified this session? |
 |---|---|---|---|---|
 | 1 | `PROJECT_CONTEXT.md` | Big-picture project context, philosophy, methodology, discover-as-you-build approach | 2026-04-17 | NO |
-| 2 | `PLATFORM_ARCHITECTURE.md` | Technical architecture — routes, schema, auth, file structure, tech debt | 2026-04-27 (V3 small-batch test + context-scaling concern session — §10 Known Technical Debt updated with new top-level architectural concern: 🚨 Canvas Serialization INPUT Context-Scaling. Cross-references ROADMAP, PIVOT_DESIGN.md §5, KEYWORD_CLUSTERING_ACTIVE.md POST-2026-04-27 STATE block.) | ✅ YES |
+| 2 | `PLATFORM_ARCHITECTURE.md` | Technical architecture — routes, schema, auth, file structure, tech debt | 2026-04-28 (Scale Session 0 outcome session — §10 Known Technical Debt updated to (1) reflect Scale Sessions B–E activated as the build path AND (2) add NEW HIGH-severity entry for canvas-blanking bug observed at batches 70 + 134 of the 2026-04-28 full-Bursitis V3 run.) | ✅ YES |
 | 3 | `PLATFORM_REQUIREMENTS.md` | Platform-wide requirements — scale, user-model, review cycle, audit, concurrency, phasing | 2026-04-17 | NO |
 | 4 | `NAVIGATION_MAP.md` | Every route + click path through PLOS — UI navigation source of truth | 2026-04-17 | NO |
 | 5 | `DATA_CATALOG.md` | Every data item — where it lives, Human Reference Language, cross-workflow sharing contracts | 2026-04-26 (Workflow-transition architecture session — §7 PROMOTED from "Shared Data Registry" to "Cross-Tool Data Flow Map" with new structure: §7.1 summary table, §7.2 per-tool detail (W#1 entry with provisional outputs + anticipated downstream consumers), §7.3 Phase 2 platform-shared items, §7.4 decision criteria, §7.5 maintenance referenced by Rules 18 + 23. §6.4 (W#5 placeholder) gets a forward-pointer to ROADMAP W#5 entry per Rule 21.) | NO |
-| 6 | `ROADMAP.md` | Development execution plan — completed work + remaining phases | 2026-04-27 (V3 small-batch test + context-scaling concern session — 4 new Phase-1 polish items added (Apply button feedback during apply; BATCH_REVIEW screen as scannable tables; search-volume display on canvas topic boxes + cross-tool display convention); 1 NEW top-level architectural concern added (🚨 Canvas Serialization INPUT Context-Scaling — peer to Architectural Pivot section, NOT polish per director); W#3 + W#5 forward-pointers added per Rule 21 for the cross-tool display convention; header timestamp updated.) | ✅ YES |
+| 6 | `ROADMAP.md` | Development execution plan — completed work + remaining phases | 2026-04-28 (Scale Session 0 outcome session — top-of-doc Scale Session 0 Outcome C summary block added announcing build-path activation; Canvas Serialization INPUT section updated with empirical run data + status flip from "build gated" to "build activated"; NEW HIGH-severity Canvas-Blanking Intermittent Bug section added (peer to Architectural Pivot); 4 new Phase-1 polish items (Mid-run batch queue refresh, Skeleton View on canvas, AST split-view row alignment, Topics table row numbers); 2 new architectural design items (Action-by-action feedback + second-pass refinement workflow extending AI_TOOL_FEEDBACK_PROTOCOL; Intelligent hybrid cost/quality strategy); header timestamp updated.) | ✅ YES |
 | 7 | `CORRECTIONS_LOG.md` | Append-only log of mistakes + extracted patterns | 2026-04-27 (V3 small-batch test + context-scaling concern session — 1 new HIGH-severity entry: failed to synthesize prior treatment of input-side context-scaling when proposing a new ROADMAP item, despite having read the relevant docs earlier in the same session. Director caught + flagged as critical, requesting instruction-set update. New HANDOFF_PROTOCOL Rule 24 (Pre-capture search) + CLAUDE_CODE_STARTER non-negotiable rule #21 added in same session.) | NO |
-| 8 | `CHAT_REGISTRY.md` | Chronological log of chats + URLs + work-summaries (post-Ckpt-9: Claude Code sessions use session-identifier format) | 2026-04-27 (V3 small-batch test + context-scaling concern session — new row for session_2026-04-27_v3-prompt-small-batch-test-and-context-scaling-concern; seventeenth Claude Code session) | ✅ YES |
+| 8 | `CHAT_REGISTRY.md` | Chronological log of chats + URLs + work-summaries (post-Ckpt-9: Claude Code sessions use session-identifier format) | 2026-04-28 (Scale Session 0 outcome session — new row for session_2026-04-28_scale-session-0-outcome-c-and-full-run-feedback; nineteenth Claude Code session) | ✅ YES |
 | 9 | `HANDOFF_PROTOCOL.md` | Rules for how chats operate — start/mid/end protocols, communication rules, interview rules | 2026-04-27 (V3 small-batch test + context-scaling concern session — NEW Rule 24 added: Pre-capture search before adding any ROADMAP item or proposing new architectural concern. Mandatory structured search of ROADMAP, tool's ACTIVE/DESIGN docs, PLATFORM_ARCHITECTURE, CORRECTIONS_LOG, plus code verification for behavior-related concerns; surfacing of search results to director before reading back proposed entry. Drafted in response to a HIGH-severity Claude mistake captured in CORRECTIONS_LOG 2026-04-27 entry.) | NO |
 | 10 | `DOCUMENTATION_ARCHITECTURE.md` | Design of the doc-system itself (DLMS, tool graduation, group A/B, workflow interview pattern, Claude Code migration) | 2026-04-17 | NO |
 | 11 | `NEW_CHAT_PROMPT.md` | **Historical** — claude.ai era briefing template. Post-Phase-M, Claude Code sessions use `CLAUDE_CODE_STARTER.md` instead. | 2026-04-17 | NO |
-| 12 | `DOCUMENT_MANIFEST.md` | This file — ground-truth doc registry | 2026-04-27 (V3 small-batch test + context-scaling concern session — timestamps + modified flags + this-session summary) | ✅ YES |
+| 12 | `DOCUMENT_MANIFEST.md` | This file — ground-truth doc registry | 2026-04-28 (Scale Session 0 outcome session — timestamps + modified flags + this-session summary) | ✅ YES |
 | 13 | `CLAUDE_CODE_MIGRATION.md` | Migration plan and operational rules for shifting from claude.ai to Claude Code. Executed successfully in Ckpt 9+9.5. | 2026-04-17 | NO |
 | 14 | `AI_TOOL_FEEDBACK_PROTOCOL.md` | Platform-wide standard for every AI-using tool in PLOS. Defines required integration points (structured decision output with reasoning, admin review surface with 3 actions + 2 feedback channels, feedback-repo write/read-back, quality scoring, model/provider registry), 3-phase implementation roll-out, and the primer text to include in every new workflow's design doc. | 2026-04-20 | NO |
 | 15 | `MODEL_QUALITY_SCORING.md` | Stability-score algorithm spec. Defines 0-10 stability_score per AI output item, factors that add/subtract to score, model's interpretation instructions, JUSTIFY_RESTRUCTURE payload requirement for high-score modifications, admin scoring guidelines (1-5 scale with 4 evaluation dimensions), meta-note on how algorithm was derived + review triggers + how to propose weight changes. | 2026-04-20 | NO |
 
-**Group A count: 15 documents.** 4 modified this session (ROADMAP, PLATFORM_ARCHITECTURE, CHAT_REGISTRY, DOCUMENT_MANIFEST). 11 not modified this session — including the docs modified yesterday but untouched today (CORRECTIONS_LOG, HANDOFF_PROTOCOL — their flags flip to NO this session even though their content was modified yesterday). No new Group A docs created this session.
+**Group A count: 15 documents.** 5 modified this session (ROADMAP, PLATFORM_ARCHITECTURE, KEYWORD_CLUSTERING_ACTIVE [Group B], INPUT_CONTEXT_SCALING_DESIGN [Group B], CHAT_REGISTRY, DOCUMENT_MANIFEST). 10 not modified this session.
 
 **Not created this session (Group A):** no new Group A docs.
 
 **Created this session (Group B):**
-- **NEW: `docs/INPUT_CONTEXT_SCALING_DESIGN.md`** (~470 lines, Group B, tool-specific to Keyword Clustering's Auto-Analyze) — captures the Scale Session A locked design (unified Tiered Canvas Serialization mechanism + 5 clusters of locked decisions + multi-session implementation plan with test-before-build reframe). Analogous to `PIVOT_DESIGN.md`'s role for the V3 architectural pivot. Build gated pending Scale Session 0 outcome.
+- None — pure analysis + ROADMAP-update session; no new Group B docs created. Two architectural design items captured (action-by-action feedback workflow; intelligent hybrid cost/quality strategy) as forward-pointing ROADMAP entries; their dedicated design docs will be created in future design sessions.
 
 **Modified this session (Group B):**
-- `docs/KEYWORD_CLUSTERING_ACTIVE.md` — new POST-2026-04-27-INPUT-CONTEXT-SCALING-DESIGN STATE block added above the prior POST-2026-04-27-V3-VALIDATION block (which is now demoted to "preserved as historical context"); header timestamp updated; standing instructions for next session updated to reflect Scale Session 0 as recommended next.
-- `docs/PIVOT_DESIGN.md` — §5 input-scaling row pointer updated to reference the new design doc (Resolution status: design captured 2026-04-27; build gated pending Scale Session 0); header timestamp updated.
+- `docs/KEYWORD_CLUSTERING_ACTIVE.md` — new POST-2026-04-28-SCALE-SESSION-0-OUTCOME-C STATE block added above the prior POST-2026-04-27-INPUT-CONTEXT-SCALING-DESIGN block (which is now demoted to "preserved as historical context"); header timestamp updated; standing instructions for next session updated with 4 NEXT choices.
+- `docs/INPUT_CONTEXT_SCALING_DESIGN.md` — §0 status update added (Outcome C fired; build path activated; threshold (b) also fired); header `Last updated` line added; ~50 lines of new content.
 
 **Modified this session (operational, not Group A):**
 - None this session.
 
 **Code changes this session (src/):**
-- NONE. This was a pure design-only session. No src/ changes.
+- NONE. This was a pure analysis + doc-update session. No src/ changes.
 
 **Code commits already pushed mid-session:** none (no code changes).
 
 **End-of-session doc commit (this commit, pending Rule-9 push approval):**
-- `docs/INPUT_CONTEXT_SCALING_DESIGN.md` (NEW — captures the Scale Session A locked design)
-- `docs/ROADMAP.md` (🚨 Canvas Serialization INPUT Context-Scaling section updated to reference design doc + test-before-build reframe; header timestamp)
-- `docs/PIVOT_DESIGN.md` (§5 input-scaling row pointer updated; header timestamp)
-- `docs/KEYWORD_CLUSTERING_ACTIVE.md` (new POST-2026-04-27-INPUT-CONTEXT-SCALING-DESIGN STATE block above prior STATE block)
-- `docs/PLATFORM_ARCHITECTURE.md` (§10 entry updated to point at design doc + header)
-- `docs/CHAT_REGISTRY.md` (new top row for session_2026-04-27_input-context-scaling-design; eighteenth Claude Code session)
+- `docs/ROADMAP.md` (top-of-doc Scale Session 0 Outcome C summary block; Canvas Serialization INPUT section updated with empirical run data + status flip; NEW Canvas-Blanking Intermittent Bug section; 4 new Phase-1 polish items; 2 new architectural design items; header timestamp)
+- `docs/KEYWORD_CLUSTERING_ACTIVE.md` (new POST-2026-04-28-SCALE-SESSION-0-OUTCOME-C STATE block above prior STATE blocks)
+- `docs/INPUT_CONTEXT_SCALING_DESIGN.md` (§0 status update; outcome C fired; build path activated; threshold (b) also fired; header)
+- `docs/PLATFORM_ARCHITECTURE.md` (§10 Canvas Serialization INPUT entry updated to reflect Outcome C + new Canvas-Blanking Intermittent Bug entry; header)
+- `docs/CHAT_REGISTRY.md` (new top row for session_2026-04-28_scale-session-0-outcome-c-and-full-run-feedback; nineteenth Claude Code session)
 - `docs/DOCUMENT_MANIFEST.md` (this file — timestamps + modified flags + this-session summary)
 
 **Earlier-session code changes (Phase-1 polish bundle and prior — already documented in this manifest's prior-session entries; not duplicated here).**
@@ -90,12 +90,12 @@ These are tool-specific working documents. They travel with chats that touch the
 
 | Document | Tool/System | Status | Last modified | Modified this chat? |
 |---|---|---|---|---|
-| `KEYWORD_CLUSTERING_ACTIVE.md` | Keyword Clustering (workflow 1) | Active development | 2026-04-26 (Workflow-transition architecture session — new POST-2026-04-26-V3-PROMPT-REFINEMENT STATE block above POST-PHASE-1-POLISH-BUNDLE; header timestamp updated) | ✅ YES |
+| `KEYWORD_CLUSTERING_ACTIVE.md` | Keyword Clustering (workflow 1) | Active development | 2026-04-28 (Scale Session 0 outcome session — new POST-2026-04-28-SCALE-SESSION-0-OUTCOME-C STATE block above prior STATE blocks; header timestamp updated) | ✅ YES |
 | `PIVOT_DESIGN.md` | Keyword Clustering / Auto-Analyze architectural pivot | Pivot complete (Sessions A-E done); doc retained for historical reference | 2026-04-27 (Scale Session A — §5 input-scaling row pointer updated to reference new INPUT_CONTEXT_SCALING_DESIGN.md; header timestamp) | ✅ YES |
 | `AUTO_ANALYZE_PROMPT_V3.md` | Keyword Clustering / Auto-Analyze prompts | LIVE — canonical for what the director re-pastes into the Auto-Analyze panel; updated 2026-04-26 with Strategy 3 layered placement + intent-equivalence binding rule | 2026-04-26 (Workflow-transition architecture session — Strategy 3 layered placement + intent-equivalence rewrite; file grew 629 → 769 lines; director must re-paste into Auto-Analyze UI before next run) | ✅ YES |
 | `AUTO_ANALYZE_PROMPT_V2.md` | Keyword Clustering / Auto-Analyze prompts (HISTORICAL) | Historical reference only — the V2 full-table-rewrite contract that ran every Bursitis batch through Session 3b verification; preserved untouched until V3 is field-validated through Pivot Sessions D + E, then archivable | 2026-04-18 (last canonical edit predating the pivot) | NO |
 | `AUTO_ANALYZE_PROMPT_V2_PROPOSED_CHANGES.md` | Keyword Clustering / Auto-Analyze prompts (HISTORICAL) | Mostly superseded by V3 — surviving wording (Change 1 tie-breaker, Change 3 Comprehensiveness Verification redrafted, Change 4 JUSTIFY_RESTRUCTURE 6-field payload, Change 5 multi-placement, Change 2 Loc 1 cross-canvas scan) folded into V3 with locked wording; obsolete pieces (Reevaluation Report block, never-delete rule, full-table-rewrite output format, salvage IRRELEVANT_KEYWORDS template, session-boundary continuation) obsolete by construction; archivable in future cleanup | 2026-04-24 (Session 2b — last design refinement; locked then for "mechanical Session 6 merge" which is now subsumed by V3) | NO |
-| `INPUT_CONTEXT_SCALING_DESIGN.md` | Keyword Clustering / Auto-Analyze input-side context-scaling architectural concern | NEW 2026-04-27 — design captured in Scale Session A; build gated pending Scale Session 0 outcome (empirical validation on Opus 4.7 1M-context); defines unified Tiered Canvas Serialization mechanism + locked decisions across 5 clusters + multi-session implementation plan (Scale Sessions A through E) | 2026-04-27 (Scale Session A — initial creation) | ✅ NEW THIS SESSION |
+| `INPUT_CONTEXT_SCALING_DESIGN.md` | Keyword Clustering / Auto-Analyze input-side context-scaling architectural concern | 2026-04-28 — Outcome C fired; build path activated; design now the build spec for Scale Sessions B–E (next-priority forward action for W#1) | 2026-04-28 (Scale Session 0 outcome session — §0 status update; outcome C fired; build path activated; threshold (b) also fired; header) | ✅ YES |
 
 ### Graduated Group B documents (split into Archive + Data Contract)
 

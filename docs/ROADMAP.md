@@ -1,9 +1,10 @@
 # ROADMAP
 ## Product Launch Operating System (PLOS) — Development Execution Plan
 
-**Last updated:** April 27, 2026 (Scale Session A — input-side context-scaling design session; produced `docs/INPUT_CONTEXT_SCALING_DESIGN.md` capturing the unified Tiered Canvas Serialization design + locked decisions across 5 clusters + multi-session plan with test-before-build reframe; Scale Session 0 — empirical validation on Opus 4.7 1M-context — is the next action, NOT Scale Session B; build path B–E gated behind Outcome C from Session 0; no code, no DB, no schema, no prompt changes this session.)
-**Last updated in session:** session_2026-04-27_input-context-scaling-design (Claude Code)
-**Previously updated in session:** session_2026-04-27_v3-prompt-small-batch-test-and-context-scaling-concern (Claude Code)
+**Last updated:** April 28, 2026 (Scale Session 0 — empirical validation, Outcome C fired; full Bursitis V3 run on Sonnet 4.6 hit the 200k context wall at batch 151 + Opus 4.7 cost test confirmed model-upgrade-only is economically prohibitive; Scale Sessions B–E now triggered per the locked plan in `INPUT_CONTEXT_SCALING_DESIGN.md §6`; THREE new high-priority items captured: (1) HIGH-severity canvas-blanking bug found in the run log at batches 70 + 134 — wiring layer intermittently sent ~20k tokens of input instead of full canvas state, causing model to rebuild from scratch + reconciliation to flip 168 keywords across the two events to Reshuffled status that then never re-process; (2) mid-run batch queue refresh polish item; (3) 3 new UX polish items — Skeleton View on canvas + AST split-view topic-vs-description row alignment + Topics table row numbers; ONE new architectural design item — action-by-action feedback table + second-pass refinement workflow extending `AI_TOOL_FEEDBACK_PROTOCOL.md`; ONE new architectural design item — intelligent hybrid cost/quality strategy. No code, no DB, no schema, no prompt changes this session.)
+**Last updated in session:** session_2026-04-28_scale-session-0-outcome-c-and-full-run-feedback (Claude Code)
+**Previously updated in session:** session_2026-04-27_input-context-scaling-design (Claude Code)
+**Previously updated in session (earlier):** session_2026-04-27_v3-prompt-small-batch-test-and-context-scaling-concern (Claude Code)
 **Previously updated in session:** session_2026-04-26_workflow-transition-architecture-and-v3-prompt-refinement (Claude Code)
 **Previously updated in session:** session_2026-04-26_phase1-polish-bundle (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-pivot-session-D (Claude Code)
@@ -67,6 +68,31 @@ Phase 4 — Scale hardening
 | **Phase 2 — Multi-user infrastructure** | ❌ NOT STARTED — architectural sketches exist; no build work |
 | **Phase 3 — Worker ramp** | ❌ NOT STARTED |
 | **Phase 4 — Scale hardening** | ❌ NOT STARTED |
+
+---
+
+## 🔔 SCALE SESSION 0 — OUTCOME C FIRED 2026-04-28 (build path activated)
+
+The empirical validation pre-step of `INPUT_CONTEXT_SCALING_DESIGN.md` (Scale Session 0) ran 2026-04-28. Director ran a full-Bursitis V3 Auto-Analyze on Sonnet 4.6 (151 of 281 batches completed before stopping) plus a separate Opus 4.7 cost test at run start.
+
+**Empirical findings:**
+
+1. **Sonnet 4.6 hit the 200k context wall at batch 151** — input grew from 19,929 tokens (empty canvas) → 220,091 tokens (canvas of ~700 topics). The wall was reached well before the run could complete; an additional ~130 batches would have been needed.
+2. **Opus 4.7 was economically prohibitive** — director's cost test at run start showed per-batch costs approached or exceeded $1, vs. ~$0.30–$0.85 on Sonnet 4.6. Director switched back to Sonnet 4.6.
+3. **Per-batch cost on Sonnet 4.6 grew monotonically** with canvas size (~$0.20 → ~$0.85), driven entirely by input-token growth (the prompt body itself stays cached at ~18k tokens). Total run cost: ~$70–80 for 54% completion.
+
+**Trigger conditions met (per `INPUT_CONTEXT_SCALING_DESIGN.md §0`):**
+- Outcome C: V3 + Opus 4.7 still hits wall or has unacceptable cost — **YES, fired**.
+- Threshold (b): a production project's canvas exceeded ~600 topics under standard 200k window — **YES, the Bursitis run reached ~700 topics**.
+
+**Effect on roadmap:**
+- **Scale Session B is now the next-priority forward action** for Workflow #1 build work (per `INPUT_CONTEXT_SCALING_DESIGN.md §6` locked plan): schema migration adding `intentFingerprint` column + applier extension + AI-generated backfill script.
+- Scale Sessions C, D, E follow B in sequence per the locked plan.
+
+**Three additional findings from the same run that are NOT scaling-related (separate sections below):**
+- 🚨 **HIGH-severity canvas-blanking bug** (batches 70 + 134) — wiring layer intermittently sent ~20k tokens of input (no canvas state) instead of full canvas; model rebuilt from scratch; reconciliation flipped 84 keywords/event to Reshuffled status; 168 keywords across the two events stuck in Reshuffled forever because batch queue is fixed at run-start. NOT polish — see "Canvas-blanking bug" section below.
+- 4 new Phase-1 polish items (Mid-run batch queue refresh + Skeleton View on canvas + AST split-view row alignment + Topics table row numbers) — see "NEW Phase-1 polish item" entries below.
+- 2 new architectural design items (action-by-action feedback + second-pass refinement workflow; intelligent hybrid cost/quality strategy) — see new sections below.
 
 ---
 
@@ -377,9 +403,24 @@ Schedules with Session 4 or as its own session right after. Not blocking.
 **Session 3 cleanup item (deferred — capture for later):**
 - The hard-delete `DELETE /api/projects/[projectId]/keywords` endpoint is no longer called by ASTTable (replaced by soft-archive). Likely dead code — verify no other caller, then remove. Low priority; not blocking. Logged here as an Infrastructure TODO.
 
-### 🚨 Canvas Serialization INPUT Context-Scaling — Architectural Concern (NEW 2026-04-27; DESIGN CAPTURED 2026-04-27 in `INPUT_CONTEXT_SCALING_DESIGN.md`; BUILD GATED PENDING SCALE SESSION 0 OUTCOME)
+### 🚨 Canvas Serialization INPUT Context-Scaling — Architectural Concern (NEW 2026-04-27; DESIGN CAPTURED 2026-04-27 in `INPUT_CONTEXT_SCALING_DESIGN.md`; OUTCOME C FIRED 2026-04-28; SCALE SESSIONS B–E NOW TRIGGERED)
 
-**Status as of 2026-04-27 end-of-day:** the architectural concern has a captured, locked design (`docs/INPUT_CONTEXT_SCALING_DESIGN.md`, Group B, ~470 lines). Implementation is NOT automatically next — it is gated behind the empirical validation of **Scale Session 0** (V3 + Opus 4.7 1M-context test) per the test-before-build reframe at the end of Scale Session A. **If Outcome A from Scale Session 0 fires (V3 + Opus 4.7 1M handles the director's anticipated production scale of ≤500 topics per project without quality regression), Scale Sessions B–E are deferred indefinitely.** If Outcome C fires (V3 + Opus 4.7 still hits the wall or has unacceptable quality regression), the locked design becomes the build spec.
+**Status as of 2026-04-28:** Scale Session 0 ran empirically. **Outcome C fired** — V3 on Sonnet 4.6 full-Bursitis run hit the 200k context wall at batch 151 (input 220k tokens, well over standard 200k limit), and the director's separate Opus 4.7 cost test confirmed that model-upgrade-only is economically prohibitive (per-batch cost approached $1+ on Opus 4.7 vs. ~$0.30–$0.85 on Sonnet 4.6 across 151 batches). **The locked design in `INPUT_CONTEXT_SCALING_DESIGN.md` is now the build spec; Scale Sessions B–E are activated per `INPUT_CONTEXT_SCALING_DESIGN.md §6`.** Updated 2026-04-28 from "build gated pending Scale Session 0 outcome" → "build path triggered."
+
+**Empirical evidence — full-Bursitis V3 run on Sonnet 4.6 (2026-04-28):**
+
+| Batch | Canvas size | Input tokens | Per-batch cost |
+|---|---|---|---|
+| 1 | 9 topics | ~19,925 | $0.30 |
+| 30 | 141 topics | ~61,770 | $0.36 |
+| 60 | 232 topics | ~87,013 | $0.38 |
+| 90 | 384 topics | ~126,594 | $0.51 |
+| 120 | 528 topics | ~169,365 | $0.64 |
+| 151 | ~700 topics | **~220,000** | **$0.87** (over context limit) |
+
+Total cost for 151 batches (54% of planned 281): ~$70–80. Wall hit before director could complete the run. **Confirms the projection in `INPUT_CONTEXT_SCALING_DESIGN.md §0` that "production-typical" 500-topic projects sit at ~80% utilization on standard 200k window — too tight for safety even if not strictly broken.**
+
+**Status legend:** the architectural concern has a captured, locked design (`docs/INPUT_CONTEXT_SCALING_DESIGN.md`, Group B, ~470 lines). Implementation is NOW the next action.
 
 **This is NOT a polish item. It is a fundamental architectural limitation that, if it fires, requires the designed solution to be built before any project larger than ~500-600 topics can complete an Auto-Analyze run.** Captured per `HANDOFF_PROTOCOL.md` Rule 24 (Pre-capture search performed; lineage section below documents the search results).
 
@@ -432,6 +473,177 @@ V2 had a `Mode A → Mode B auto-switch` with delta OUTPUT that was credited wit
 - `PLATFORM_ARCHITECTURE.md §10` Known Technical Debt (cross-reference)
 - `KEYWORD_CLUSTERING_ACTIVE.md` POST-2026-04-27-INPUT-CONTEXT-SCALING-DESIGN STATE block (session-specific state)
 - `CORRECTIONS_LOG.md` 2026-04-27 entry (the synthesis-failure that surfaced this concern + Rule 24 capture)
+
+### 🚨 Canvas-Blanking Intermittent Bug (NEW 2026-04-28; HIGH severity; investigation pending)
+
+**Status:** Empirically observed in 2026-04-28 full-Bursitis V3 run on Sonnet 4.6 — twice, at batches 70 and 134 of a 151-batch run. Root cause not yet diagnosed; needs code reading + DB query before fix design. **Captured as a top-level architectural concern, NOT polish, because it silently abandons keywords from the run mid-flight.**
+
+**Symptom:** Between batch 69 (canvas 284 topics, healthy) and batch 70 (canvas count drops to 12 nodes after apply), the wiring layer sent only ~19,929 tokens of input to the model — the size of the cached prompt body alone, with NO canvas state attached. The model, seeing essentially an empty canvas, built a small fresh one from scratch using just the 8 keywords in that batch. The reconciliation pass correctly caught the symptom: `Reconciliation: 2 on-canvas → AI-Sorted, 84 off-canvas → Reshuffled` — 84 keywords lost their canvas anchor in one batch.
+
+**Confirmed twice in a single run (~64 batches apart, no obvious common trigger):**
+
+| Batch | Input tokens sent | Canvas before | Canvas after apply | Reshuffled |
+|---|---|---|---|---|
+| 69 | ~100,403 | 284 topics | 284 topics | 0 (healthy) |
+| **70** | **~19,929** | 284 topics | **12 topics** | **84** |
+| 71 | ~103,519 | (back to ~290) | 298 topics | 0 (recovered) |
+| 133 | ~186,769 | 584 topics | 584 topics | 0 (healthy) |
+| **134** | **~19,937** | 584 topics | **11 topics** | **84** |
+| 135 | ~192,834 | (back to ~600) | 607 topics | 0 (recovered) |
+
+**Note:** the canvas appears to "recover" in the next batch because the rebuild-API state is intact server-side (reconciliation reads server state, not the model's response) — the model's view of an empty canvas was the only thing actually empty.
+
+**Cascade impact — keywords silently abandoned:**
+- 84 + 84 = **168 keywords** flipped to Reshuffled status across the two events.
+- Batch queue is built once at run-start (`buildQueue` in `AutoAnalyze.tsx`) and is fixed for the run's duration. Reshuffled-status keywords created mid-run are NOT re-batched into the running session.
+- Even though the run's scope is "Unsorted + Reshuffled" (which would pick up these keywords on a NEW run), within THIS run they're stuck.
+- Result: director's "many keywords are simply skipped in the AST table" feedback is partially explained by this bug — those 168 keywords sit at Reshuffled status until the user starts a fresh run.
+
+**Likely cause space (not yet diagnosed):**
+- React state staleness between batches — `nodesRef.current` / `keywordsRef.current` momentarily empty at the moment `buildOperationsInputTsv` is called.
+- Server-side rebuild API race — atomic-rebuild API returns success but ref-state hasn't yet reflected the rebuild on subsequent batch start.
+- Cancel/restart artifact — a hidden state-reset path being triggered intermittently.
+- Anthropic prompt-cache mis-handling — the wiring layer thinks the canvas is in cache and elides it from the user message; not yet observed but worth checking.
+
+**Investigation plan (next session, OPTION B from director's choices):**
+1. Read `src/lib/auto-analyze-v3.ts` `buildOperationsInputTsv` end-to-end + tracing how `nodesRef.current` / `keywordsRef.current` / `sisterLinksRef.current` get populated and refreshed between batches.
+2. Read `AutoAnalyze.tsx` `runLoop` step-by-step looking for any path that could empty the refs between batch N apply and batch N+1 start.
+3. Read the canvas-rebuild API + atomic-rebuild flow looking for race-condition risk.
+4. DB query against the live test project's CanvasNode + Keyword tables right now: what's the actual canvas state? How many keywords are stuck in Reshuffled status today?
+5. Check if there's a way to log the canvas size at the start of each batch's `buildOperationsInputTsv` call (forensics for next run).
+
+**Fix design — TBD pending diagnosis. Possible directions:**
+- Pre-flight check at batch start: if `nodesRef.current.length === 0` and `nodesOnLastApply > 0`, fail fast with a clear error and pause the run (stop the cascade).
+- Forced refetch of canvas state from server before each batch's `buildOperationsInputTsv` call (defensive — slower but eliminates state-staleness window).
+- Mid-run queue refresh (smaller, separate polish item below) — even if this bug is fixed, the queue-refresh fix is independently useful.
+
+**Why this is HIGH severity, not polish:**
+- Silent data loss mid-run — director's quality feedback on the run is partially confounded by which keywords were genuinely placed vs. which ended up Reshuffled because of this bug.
+- Frequency: ~1.3% of batches (2 in 151) — low absolute rate but high blast radius (~1% of total keywords per event).
+- Director's "many keywords skipped" feedback IS this bug — fix it and the visible symptom largely disappears.
+- Combined with the "Mid-run batch queue refresh" polish item below, the keywords-skipped problem is structurally addressed.
+
+**Cross-references:**
+- This entry's symptom + reconciliation behavior were captured in the 2026-04-28 session activity log (preserved in CHAT_REGISTRY entry for the session).
+- `KEYWORD_CLUSTERING_ACTIVE.md` POST-2026-04-28 STATE block — session-specific context.
+- `PLATFORM_ARCHITECTURE.md §10` Known Technical Debt — cross-reference entry.
+- Related to but DISTINCT from P3-F7 silent-placements + ghost-AI-Sorted bugs (P3-F7 was about status-flip drift in `doApply`; this is about the wiring layer not sending canvas state to the model in the first place).
+
+---
+
+### NEW Phase-1 polish item — Mid-run batch queue refresh (raised 2026-04-28)
+
+When the post-batch reconciliation pass creates new `Reshuffled` status keywords mid-run (whether from the canvas-blanking bug above or from any future Reshuffled-causing event), those keywords are NOT picked up by the current Auto-Analyze session — the batch queue is built once at run-start in `buildQueue` and is fixed.
+
+**Director's design (2026-04-28):** at each batch's apply step, after reconciliation runs, scan for any keyword whose status was just flipped to Reshuffled AND that was not already in the run's batch queue → append those keywords to the queue (as new tail batches). The estimated-batches counter in the activity log updates accordingly. This way the run self-heals from any mid-run reshuffles regardless of cause.
+
+**Edge cases to handle:**
+- Avoid infinite loops: a batch processed at the tail that triggers MORE reshuffles must not append yet again from the same set (track origin batch).
+- Cap the run at a sane multiple of the original queue length (e.g., 1.5×) to prevent runaway.
+- Activity log line: `Queue extended: +N keywords from reconciliation reshuffles`.
+
+**Implementation note:** Localized to `AutoAnalyze.tsx` `doApply` and `buildQueue` — no DB schema changes. ~1–2 hours of code work after design lock-in.
+
+**Captured as polish, not architectural** — it's a defensive / UX-quality enhancement, not a fundamental design change. The architectural canvas-blanking bug above is the PRIMARY problem; this is the BACKUP.
+
+---
+
+### NEW Phase-1 polish item — Skeleton View on canvas (raised 2026-04-28)
+
+Director-requested canvas display mode that maximizes node density per field of view by rendering each topic as a minimalist box (title + first 3 keywords only, no description, no expand chevron, smaller box dimensions).
+
+**Use case:** with canvases now reaching 600+ topics, the standard view becomes unwieldy for whole-canvas review. Skeleton View lets admin scan structure quickly + spot orphans / misplacements / duplicates.
+
+**Director's spec:**
+- Toggle in canvas top-bar: "Skeleton View" / "Full View" (default Full).
+- Skeleton View renders: title, parent_id (for hierarchy), first 3 keywords only (no volumes, no badges).
+- Box dimensions reduced (~50% of full size) to fit ~4× the nodes per viewport.
+- Toggling back to Full View restores the layout pass output (positions don't shift).
+
+**Implementation note:** Localized to `CanvasPanel.tsx` topic-box rendering + a state variable toggling between the two render modes. Layout engine doesn't need to change (heights are computed dynamically per node anyway). ~2–3 hours of code work.
+
+---
+
+### NEW Phase-1 polish item — AST table split-view topic-vs-description row alignment (raised 2026-04-28)
+
+In the AST table's split view, each keyword row has cells in the 'Topics' column and the 'Topic Descriptions' column. The cell heights drift apart because:
+- Topic Description cells typically have more text → taller height.
+- Topic cells have less text → shorter height.
+- Result: a topic and its description aren't on the same horizontal line; the description is far below where its associated topic appears.
+
+**Observation:** the columns share a moveable border that auto-adjusts cell heights. **And** during apply, the table briefly shows the cells perfectly aligned (so the rendering CAN handle alignment) — but the moment the data finishes applying, the alignment breaks again.
+
+**Director's design:** topic cell and topic-description cell for the same keyword row must always have the same height — equal to the larger of the two natural heights — so the description aligns flush with its topic. Same behavior the table has during the brief apply window, but persistent.
+
+**Implementation note:** Localized to AST table CSS/JS — likely a flexbox / grid cell-stretching issue. The brief-during-apply correct rendering suggests a CSS rule fires only during a transient state. Find that rule, make it the default. ~1–2 hours of code work.
+
+---
+
+### NEW Phase-1 polish item — Topics table row numbering (raised 2026-04-28)
+
+Add a row-number column (1, 2, 3, …) as the leftmost column in the Topics table, so admin can reference "topic #47" in conversation / notes.
+
+**Implementation note:** Localized to Topics table rendering — pure UI, no schema. ~30–60 min of code work.
+
+---
+
+### NEW Architectural Design Item — Action-by-action feedback + second-pass refinement workflow (raised 2026-04-28; design pending; extends `AI_TOOL_FEEDBACK_PROTOCOL.md`)
+
+**Status:** captured as a forward-pointing design item; full design needs a dedicated session analogous to Scale Session A. The director was explicit: "this is what I want us to engage in next" — but priority vs. Scale Sessions B–E TBD by director.
+
+**Purpose:** today's BATCH_REVIEW screen shows the post-state of a batch (new topics + analyzed keywords) but does NOT show admin the structural decision-by-decision rationale of the model. Director needs:
+- (1) Each action with **WHEN** it happened (batch / order within batch) and **WHY** (model's reasoning for that specific operation).
+- (2) An admin-editable **adjustment column** where admin can write "your reasoning was wrong because X" / "the right reasoning would have been Y."
+- (3) An admin-add-row capability for actions NOT taken but that SHOULD have been taken — admin types in the missing op + the reason it should have happened.
+- (4) A workflow downstream of the feedback: the model runs a **second pass** that uses the feedback to refine the run, AND ALSO refines pass-1 output autonomously (separate from feedback).
+
+**Relationship to existing docs:**
+- `AI_TOOL_FEEDBACK_PROTOCOL.md` defines the platform-wide standard for AI feedback: structured decision output with reasoning, admin review surface with 3 actions + 2 feedback channels, feedback-repo write/read-back, quality scoring, model/provider registry. **The director's ask EXTENDS this** with per-action reasoning capture (the current op vocabulary in `operation-applier.ts` doesn't have a `reason` field on each op; it would need to be added) + admin adjustment column + admin-add-row capability + second-pass orchestration.
+- `MODEL_QUALITY_SCORING.md` defines the 0-10 stability score per output item and 1-5 admin scoring with 4 dimensions. Compatible with the new design but doesn't cover it.
+- The "Changes Ledger" concept from P3-F1 (Mode A / Mode B distinction) is the same family of mechanism — full per-action provenance — that this design item builds on.
+
+**Preliminary scope (will be locked in at the dedicated design session):**
+- Add `reason` field to every operation in the V3 vocabulary (`AddTopicOp`, `MergeTopicsOp`, `MoveKeywordOp`, etc.). Schema migration analogous to Pivot Session B's `stableId` and Scale Session B's `intentFingerprint` patterns.
+- New BATCH_REVIEW UI: scannable table per operation type (per the `BATCH_REVIEW screen show operations as scannable tables` polish item from 2026-04-27 — this design subsumes that one and supersedes it).
+- New "Action Adjustments" panel for admin to write feedback per action.
+- New "Missed Action" form for admin to add rows with op + reason.
+- Second-pass orchestration: a new Auto-Analyze mode that takes the feedback corpus + current canvas as input + emits new operations to refine.
+- Storage: extend the existing `ai_feedback_records`-pattern table family.
+
+**Estimated effort (rough; will be refined at the dedicated design session):** ~3–5 build sessions analogous to Pivot Sessions B–E.
+
+**Director's framing (verbatim 2026-04-28):** *"what the tool should have provided to me is not just what topics were created but when and why and what modifications were made, when and why. I want to be able to see each action in a table format with an associated reason why and a column to its right where I can provide an adjustment to that reasoning. I should also be able to provide feedback and reasoning for actions that were not taken (so that data is not in the table) but should have been taken and the reason why (by adding those specific things in the table). Then I want us to figure out which things can be addressed by the prompt, which things can be addressed by workflow changes or programmatic changes in our tool, etc. I am also considering adding a second pass to our workflow to fix things that your proposed fixes may not address so that this kind of action-by-action feedback can allow the tool to address specific issues in the second pass in addition to refining the pass 1 output on its own aside from my feedback."*
+
+**Cross-references:**
+- `AI_TOOL_FEEDBACK_PROTOCOL.md` — base pattern this extends.
+- `MODEL_QUALITY_SCORING.md` — adjacent mechanism (stability score; admin 1-5 grading).
+- `INPUT_CONTEXT_SCALING_DESIGN.md §4.1` — the consolidation pass concept is one form of "second pass" but is mechanically distinct from this director-feedback-driven second pass; the two should be evaluated together at design time to decide whether they collapse into one mechanism or stay separate.
+
+---
+
+### NEW Architectural Design Item — Intelligent hybrid cost/quality strategy (raised 2026-04-28; design pending)
+
+**Status:** captured as a forward-pointing design item; will be designed AFTER Scale Sessions B–E ship (so we know the post-Tiered-Serialization cost baseline).
+
+**The question:** *"Is there an intelligent way to improve output while reducing cost while not overhauling all the code/approach we have come up with so far? Note that cost reduction should take a lower priority to quality improvements."*
+
+**Candidate levers (starter set, NOT a recommendation; full design will evaluate):**
+- **Hybrid model use** — Sonnet 4.6 for routine batches, Opus 4.7 for batches with high-difficulty signals (e.g., new keyword-cluster terrain, high-stability-score restructures, JUSTIFY_RESTRUCTURE-bearing batches), Haiku 4.5 for trivial batches (e.g., post-canvas-mature stretches with no new compound intents). Dispatcher logic decides per-batch model.
+- **Smaller batches with denser per-batch context** — fewer keywords per batch (4 instead of 8) might let the model do more per keyword without overall token explosion. Trade-off: more API calls, more wall-clock; possibly lower per-token cost via better Tier-0 hit rate.
+- **Prompt-caching optimization** — current setup caches the prompt body (~18k tokens) but not the canvas TSV. If the canvas TSV could be split into a stable-prefix breakpoint + a delta, prompt caching could absorb the stable part. Need to verify Anthropic prompt-cache semantics + breakpoint behavior.
+- **Second-pass-only-for-low-confidence regions** — pass 1 is fast/cheap (Sonnet, batch size 8); pass 2 is slow/expensive (Opus, batch size 4) but ONLY runs on batches that pass-1 flagged as low-confidence (e.g., high stability-score modifications, intent-equivalence violations, JUSTIFY_RESTRUCTURE payloads). Combines the action-by-action feedback design above.
+- **Stability-score-weighted per-batch effort** — high-stability topics ship as Tier 1/2 (already in the Tiered Serialization design); low-stability topics get extra reasoning passes. Composes with the Tier mechanism.
+
+**Director's quality-over-cost framing (verbatim 2026-04-28):** *"Note that cost reduction should take a lower priority to quality improvements."* — Any design produced for this item must lead with quality and treat cost as a secondary optimization.
+
+**Estimated effort:** ~1 dedicated design session producing a design doc analogous to `INPUT_CONTEXT_SCALING_DESIGN.md`; build effort then depends on which levers are chosen.
+
+**Cross-references:**
+- `INPUT_CONTEXT_SCALING_DESIGN.md` — the Tiered Canvas Serialization design is the FIRST cost-reduction-while-preserving-quality lever; this item extends the conversation to OTHER levers AFTER B–E ship.
+- `MODEL_QUALITY_SCORING.md` — stability score is the primary signal candidate for the dispatcher logic.
+- `AI_TOOL_FEEDBACK_PROTOCOL.md` model registry — the dispatcher logic's per-model decisions tie into the model registry concept.
+
+---
 
 ### 🚨 ARCHITECTURAL PIVOT — TOP PRIORITY (NEW 2026-04-25 Session 3b verify, supersedes Sessions 4-6 below)
 

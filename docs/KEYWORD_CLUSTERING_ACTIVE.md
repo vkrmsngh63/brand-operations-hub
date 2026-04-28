@@ -1,8 +1,9 @@
 # KEYWORD CLUSTERING — ACTIVE DOCUMENT
 ## Current state of the Keyword Clustering workflow tool (Group B, tool-specific)
 
-**Last updated:** April 27, 2026 (Scale Session A — input-side context-scaling design session — produced `docs/INPUT_CONTEXT_SCALING_DESIGN.md` capturing the unified Tiered Canvas Serialization design + locked decisions across 5 clusters + multi-session implementation plan (Scale Sessions A through E) with test-before-build reframe. Scale Session 0 — empirical validation on Opus 4.7 1M-context — is the next action; Scale Sessions B–E gated behind Outcome C from Session 0. New POST-2026-04-27-INPUT-CONTEXT-SCALING-DESIGN STATE block added above prior STATE blocks. No code, DB, schema, or prompt changes this session.)
-**Last updated in session:** session_2026-04-27_input-context-scaling-design (Claude Code)
+**Last updated:** April 28, 2026 (Scale Session 0 — empirical validation; Outcome C fired. Director ran a full-Bursitis V3 Auto-Analyze (151 of 281 batches on Sonnet 4.6) plus Opus 4.7 cost test at run start. Sonnet 4.6 hit the 200k context wall at batch 151; Opus 4.7 was economically prohibitive. Scale Sessions B–E now triggered per the locked plan in `INPUT_CONTEXT_SCALING_DESIGN.md §6`. Run also surfaced a HIGH-severity canvas-blanking bug at batches 70 + 134 (wiring layer sent ~20k tokens of input instead of full canvas; 168 keywords stuck in Reshuffled status across the 2 events) plus 4 new Phase-1 polish items + 2 new architectural design items. New POST-2026-04-28 STATE block added above prior STATE blocks. No code, DB, schema, or prompt changes this session.)
+**Last updated in session:** session_2026-04-28_scale-session-0-outcome-c-and-full-run-feedback (Claude Code)
+**Previously updated in session:** session_2026-04-27_input-context-scaling-design (Claude Code)
 **Previously updated in session:** session_2026-04-27_v3-prompt-small-batch-test-and-context-scaling-concern (Claude Code)
 **Previously updated in session:** session_2026-04-26_workflow-transition-architecture-and-v3-prompt-refinement (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-26_phase1-polish-bundle (Claude Code)
@@ -28,7 +29,77 @@
 
 ---
 
-## ⚠️ POST-2026-04-27-INPUT-CONTEXT-SCALING-DESIGN STATE (READ FIRST — updated 2026-04-27)
+## ⚠️ POST-2026-04-28-SCALE-SESSION-0-OUTCOME-C STATE (READ FIRST — updated 2026-04-28)
+
+**As of 2026-04-28 Scale Session 0 + full-run feedback session (empirical validation; no code, no DB, no schema, no prompt changes; produced ROADMAP + KEYWORD_CLUSTERING_ACTIVE + INPUT_CONTEXT_SCALING_DESIGN + PLATFORM_ARCHITECTURE + DOCUMENT_MANIFEST + CHAT_REGISTRY updates):**
+
+### What this session did to W#1
+
+**Empirical validation of `INPUT_CONTEXT_SCALING_DESIGN.md`'s test-before-build gate.** Director ran a full-Bursitis V3 Auto-Analyze on Sonnet 4.6 (151 of 281 planned batches completed before stopping; ~1,208 keywords processed; total cost ~$70-80) plus a separate Opus 4.7 cost test at run start. Empirical results:
+
+1. **Sonnet 4.6 hit the 200k context wall at batch 151** — input grew from 19,929 tokens (empty canvas) → 220,091 tokens (canvas of ~700 topics). Beyond standard 200k limit. Director stopped the run at batch 152.
+2. **Opus 4.7 was economically prohibitive** at run start — per-batch cost approached $1+ vs. Sonnet's $0.30-$0.85. Director switched to Sonnet 4.6.
+3. **Per-batch cost on Sonnet 4.6 grew monotonically** ($0.20 → $0.85) driven entirely by input-token growth (canvas TSV grows linearly with canvas size; static prompt body stays cached at ~18k tokens).
+
+**Scale Session 0 outcome decision:** Outcome C fired (V3 + Opus 4.7 still hits wall AND cost is unacceptable). Per `INPUT_CONTEXT_SCALING_DESIGN.md §0` trigger conditions, **Scale Sessions B–E now activate** as the build path for Workflow #1.
+
+### One HIGH-severity bug found in the run log — canvas-blanking at batches 70 + 134
+
+Discovered during Claude's review of the activity log. Director flagged it as worth investigating; captured to ROADMAP as a top-level architectural concern (NOT polish).
+
+**Symptom:** twice in the 151-batch run (at batches 70 and 134), the wiring layer sent ~19,929 tokens of input to the model instead of the expected ~80–200k tokens (canvas state was missing from the prompt). The model rebuilt a canvas from scratch using only the 8 keywords in that batch. The reconciliation pass correctly caught the symptom and flagged 84 keywords/event as `Reshuffled` (off-canvas).
+
+**Cascade impact:** **168 keywords across the 2 events** silently abandoned for the rest of the run because the batch queue is built once at run-start and is fixed. These 168 keywords sat at Reshuffled status until end-of-run.
+
+**Director's "many keywords are simply skipped" feedback IS this bug** — fix it and the visible symptom largely disappears. Combined with the new Phase-1 "Mid-run batch queue refresh" polish item (also captured this session), the keywords-skipped problem becomes structurally addressed.
+
+**Investigation pending:** code reading + DB query needed before fix design. Captured as ROADMAP top-level item (peer to architectural-pivot section).
+
+### Director's other feedback (mapped to existing or new docs per Rule 24)
+
+| Feedback item | Status / where captured |
+|---|---|
+| "Many keywords AI-sorted don't have status changed to AI-Sorted" | Likely the canvas-blanking bug above creating Reshuffled-status keywords; also possibly P3-F7 Bug 1 silent placements (which Session 3b's reconciliation pass was supposed to fix). Needs DB query to confirm which is dominant. |
+| "Many keywords skipped in AST table" | Same — the canvas-blanking bug + the fixed batch queue together create stuck-Reshuffled keywords. |
+| "Skeleton View on canvas" | NEW Phase-1 polish item captured 2026-04-28. |
+| "AST split-view topic-vs-description row alignment" | NEW Phase-1 polish item captured 2026-04-28. |
+| "Topics table row numbers" | NEW Phase-1 polish item captured 2026-04-28. |
+| "Do we do a second pass? Were reshuffles warranted?" | Reshuffles in this run were NOT model-decided reshuffles — they were reconciliation correctly raising alarms about the canvas-blanking bug. Second-pass: consolidation pass already designed in `INPUT_CONTEXT_SCALING_DESIGN.md §4.1`; ALSO new architectural design item below for action-by-action feedback + second-pass refinement workflow. |
+| "Action-by-action feedback table with admin adjustment column + ability to add missing actions + drives second pass" | NEW architectural design item captured 2026-04-28 (extends `AI_TOOL_FEEDBACK_PROTOCOL.md`). Needs dedicated design session. |
+| "Intelligent way to reduce cost without sacrificing quality" | NEW architectural design item captured 2026-04-28. To be designed AFTER Scale Sessions B–E ship (so we know the post-Tiered-Serialization cost baseline). |
+
+### Other applier-rejection / validation-failure events from the run log (captured for reference)
+
+- **Batches 7, 71** — model emitted parent-cycle in canvas tree ("parent chain contains a cycle that includes 't-1'"). Applier rejected; retry succeeded.
+- **Batch 12** — model used the same alias `$new1` twice in one batch. Applier rejected; retry succeeded.
+- **Batch 33** — model emitted MOVE_KEYWORD against a placement that didn't exist on the canvas it was looking at. Applier rejected; retry succeeded.
+- **Batches 9, 31, 41, 57, 104, 151** — model failed to address all 8 keywords in the batch on first attempt ("Missing N batch keywords"). Retry succeeded.
+
+Total retry overhead: ~$5-7 of the ~$75 run cost (~8%). Not a dominant cost driver. These are smaller-scale issues that would benefit from prompt clarification or applier pre-validation; captured here for cross-reference but not yet promoted to ROADMAP polish items (the action-by-action feedback design above subsumes them).
+
+### What did NOT change this session
+
+- **No code changes.** Pure analysis + doc-update session.
+- **No DB schema changes.**
+- **No prompt changes.** `AUTO_ANALYZE_PROMPT_V3.md` is unchanged.
+- **No tests run / built / re-run.** Test suite and build state unchanged.
+- **No live-data state changes** by Claude. The Bursitis test project canvas reflects whatever state the director left it in after stopping the run at batch 152.
+
+### Standing instructions for next session — three "NEXT" choices
+
+(a) **🎯 Deeper analysis of the 2026-04-28 run (recommended next; Option B from Claude's 2026-04-28 framing).** Read-only DB queries against the live Bursitis canvas to characterize: actual canvas tree structure (Hip topics misplaced under Knee parent; singleton topics; intent-equivalence violations); how many keywords stuck in Reshuffled status; comparison of activity log vs. actual DB state. Plus code reading on `auto-analyze-v3.ts` + `AutoAnalyze.tsx` to diagnose the canvas-blanking bug root cause. Output: concrete bug report + concrete quality-issue catalog with line/topic references. Estimated 60-90 min.
+
+(b) **Scale Session B build (the Tiered Canvas Serialization build path).** Per `INPUT_CONTEXT_SCALING_DESIGN.md §6`: 3-step schema migration adding `intentFingerprint` column + applier extension + AI-generated backfill script + caller patches. Risk profile: medium (schema constraint change). Estimated full session.
+
+(c) **Dedicated design session for action-by-action feedback + second-pass refinement workflow.** Analogous to Scale Session A — produces a design doc + locked decisions + multi-session implementation plan. Estimated full session.
+
+(d) **Phase-1 polish bundle including the 4 new items captured this session** (canvas-blanking fix + mid-run queue refresh + Skeleton View + AST split alignment + Topics row numbers). Multiple smaller items in one session. Estimated full session.
+
+**Director's framing:** the canvas-blanking bug is HIGH severity and likely the dominant cause of the "skipped keywords" complaint. Recommended sequencing is **(a) → (d) → (b) → (c)** — diagnose the bug first, then ship the polish bundle to address visible symptoms, then build the Tiered Serialization to address the cost/wall issue, then design the feedback workflow last. But director's call.
+
+---
+
+## ⚠️ POST-2026-04-27-INPUT-CONTEXT-SCALING-DESIGN STATE (preserved as historical context — last updated 2026-04-27)
 
 **As of 2026-04-27 Scale Session A (input-side context-scaling design session — design-only, no code; produced `docs/INPUT_CONTEXT_SCALING_DESIGN.md`):**
 

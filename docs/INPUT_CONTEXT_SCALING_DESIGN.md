@@ -3,6 +3,8 @@
 
 **Created:** April 27, 2026 (Scale Session A — design-only session producing this doc + locked decisions + multi-session plan; no code, no DB)
 **Created in session:** session_2026-04-27_input-context-scaling-design (Claude Code)
+**Last updated:** April 28, 2026 (Scale Session 0 — empirical validation; Outcome C fired; build path activated; §0 + §6 updated to reflect activation)
+**Last updated in session:** session_2026-04-28_scale-session-0-outcome-c-and-full-run-feedback (Claude Code)
 **Group:** B (tool-specific to Keyword Clustering's Auto-Analyze; loaded when scaling-related work is in scope)
 
 **Purpose:** This is the canonical reference doc for the proposed input-side context-scaling solution for Auto-Analyze. It captures the locked design from Scale Session A (this session) and serves as the build spec for Scale Sessions B–E **if and when their trigger conditions fire**. Until then, the design is a contingent specification — the build path is gated behind the empirical validation of Scale Session 0 (next session).
@@ -19,7 +21,7 @@ The director's directive entering Scale Session A (verbatim from `KEYWORD_CLUSTE
 
 ---
 
-## 0. Scope reframe — test before build (NEW 2026-04-27, Cluster 5 lock)
+## 0. Scope reframe — test before build (NEW 2026-04-27, Cluster 5 lock; OUTCOME C FIRED 2026-04-28 — build path activated)
 
 Before Scale Session B begins, **Scale Session 0 — empirical validation on Opus 4.7 1M-context** runs first. The director's anticipated production project size (≤ 500 topics per project) sits comfortably below the standard 200k Sonnet 4.6 wall (~600–800 topics) and trivially below a 1M-context window. **A model-upgrade-only solution may suffice without any of the design below being built.**
 
@@ -31,7 +33,35 @@ Before Scale Session B begins, **Scale Session 0 — empirical validation on Opu
 
 If none of these fire, the design stays captured but unbuilt. This avoids the Pivot Session A failure mode in reverse: don't engineer a sturdy solution to a failure that doesn't actually fire at real-world scale.
 
-**Status as of 2026-04-27 (end of Scale Session A):** design captured (this doc); Scale Session 0 pending; Scale Sessions B–E pending Outcome C.
+### Status update — 2026-04-28: Outcome C FIRED + threshold (b) also FIRED
+
+Scale Session 0 ran 2026-04-28. Director ran a full-Bursitis V3 Auto-Analyze on Sonnet 4.6 (151 of 281 batches) plus a separate Opus 4.7 cost test at run start.
+
+**Empirical findings:**
+
+| Trigger condition | Result | Status |
+|---|---|---|
+| Outcome A (V3 + Opus 4.7 1M handles ≤500 topics cleanly) | Opus 4.7 was economically prohibitive at run start (per-batch cost approached $1+ vs. Sonnet's $0.30-$0.85). Director switched back to Sonnet 4.6 after the cost test. | ❌ NOT FIRED |
+| Outcome B (V3 + Opus 4.7 quality regression) | Not tested — director never ran enough batches on Opus 4.7 to evaluate quality. | (n/a) |
+| Outcome C (V3 + Opus 4.7 still hits wall OR unacceptable cost) | Cost was unacceptable (Opus 4.7) AND wall was hit on Sonnet 4.6 at batch 151 (input 220,091 tokens, beyond standard 200k limit). | ✅ **FIRED** |
+| Threshold (b) — production project exceeds ~600 topics under standard 200k window | Bursitis run reached ~700 topics at batch 151 before being stopped. | ✅ **FIRED** |
+
+**Effect:** Scale Sessions B–E are now activated as the build path per `§6` below. **Build path is no longer gated; it is the next-priority forward action for Workflow #1.**
+
+**Run cost data points (full activity log preserved in CHAT_REGISTRY entry):**
+
+| Batch | Canvas size | Input tokens sent | Per-batch cost |
+|---|---|---|---|
+| 1 | 9 topics | ~19,925 | $0.30 |
+| 30 | 141 topics | ~61,770 | $0.36 |
+| 60 | 232 topics | ~87,013 | $0.38 |
+| 90 | 384 topics | ~126,594 | $0.51 |
+| 120 | 528 topics | ~169,365 | $0.64 |
+| 151 | ~700 topics | **~220,000** | **$0.87 (over context limit)** |
+
+Total cost for 151 of 281 batches: ~$70-80. Approximately $130-150 projected if the run had completed (which it could not, due to the wall).
+
+**Status as of 2026-04-28 (end of Scale Session 0):** design from Scale Session A is the build spec. Scale Session B is the next session.
 
 ---
 
