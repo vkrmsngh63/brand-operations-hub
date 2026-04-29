@@ -3,6 +3,7 @@
 
 **Created:** April 29, 2026 (Defense-in-Depth Audit design session — design-only, no code, no DB, no schema, no prompt changes)
 **Created in session:** session_2026-04-29_defense-in-depth-audit-design (Claude Code)
+**Implementation Session 1 shipped:** April 29, 2026 (`session_2026-04-29-b_defense-in-depth-impl-1`) — Option β Session 1 landed §2 ESLint rule + 4 annotations + §3.R2 post-Reconcile-Now diff-empty WARN + §5.G1 `/canvas/rebuild` payload-sanity at 50% threshold (per director Q1=A) + §5.G2 `/canvas/nodes` GET retry on Prisma transient codes with backoff [100ms,500ms]. R3 deferred to Scale Session B; R4 deferred per director Q2=B; G3 deferred to Scale Session B. 30 new src/lib unit tests + 13 ESLint rule tests; build clean. **Session 2 (§4 forensic instrumentation + §6 pre-flight self-test) still pending.**
 **Group:** B (tool-specific to Keyword Clustering's Auto-Analyze; loaded when defense-in-depth or invariant-enforcement work is in scope)
 
 **Purpose:** This is the canonical reference doc for the proposed redundancy + defense-in-depth mechanisms layered around the Auto-Analyze pipeline. It captures the locked design from this session and serves as the build spec for follow-up implementation sessions. The design covers SIX areas:
@@ -36,6 +37,8 @@ This design fills the codebase-wide gap.
 ## 0. Status, scope, and what this design assumes
 
 ### 0.1 What's already shipped (counts toward this design's per-fix matrix, not separate work)
+
+**Updated 2026-04-29-b after Implementation Session 1 (Option β Session 1):** the rows below were the table-stakes from the prior bug-fix session; in this session we layered the codebase-wide defenses on top — ESLint rule (§2), runtime invariant R2 (§3), and server-side guards G1+G2 (§5) all SHIPPED. See the per-section "Status updated" notes below for current state of each piece.
 
 The 2026-04-29 bug-fix session shipped these defenses **for the two specific shipped bugs**:
 
@@ -202,6 +205,9 @@ The Reconcile Now button shipped 2026-04-29. Defense-in-depth notes:
 
 ## 2. ESLint custom-rule design — `no-prop-reads-in-runloop`
 
+**Status updated 2026-04-29-b: SHIPPED.** Rule lives at `eslint-rules/no-prop-reads-in-runloop.js` (~165 lines including doc); unit tests at `eslint-rules/no-prop-reads-in-runloop.test.mjs` (13 tests, passing); wired into `eslint.config.mjs` as a local plugin. `@runloop-reachable` annotations added to `AutoAnalyze.tsx` on `runLoop`, `doApplyV3`, `processBatchV3`, `validateResultV3`. Smoke test verified the rule fires on a temporary `for (const kw of allKeywords)` insertion in `runLoop`. Lint clean for the new rule across the codebase.
+
+
 ### 2.1 The problem this rule solves
 
 Bug 2 was a violation of a documented convention. The line-163 comment said "runLoop-reachable code MUST read via `*Ref.current`." A future engineer wrote `for (const kw of allKeywords)` at line 830 and the convention was silently broken. The 2026-04-29 fix shipped a structural defense (shadow-binding at function entry), but ONLY for `doApplyV3`. Every OTHER runLoop-reachable function — `runLoop` itself, `processBatchV3`, `validateResultV3`, future ones — still relies on documented convention.
@@ -317,6 +323,8 @@ This section designs the FULL set of runtime invariant checks the codebase shoul
 
 #### 3.2.2 Invariant R2: Reconciliation diff after PATCH must be empty
 
+**Status updated 2026-04-29-b: SHIPPED.** Implemented in `handleReconcileNow` (`AutoAnalyze.tsx`) immediately after the successful PATCH and before `onRefreshKeywords`. Re-runs `computeReconciliationUpdates` against the in-memory post-PATCH keyword set; logs WARN to the activity log if `verify.updates.length > 0` instructing admin to re-click Reconcile Now. ~22 lines including comment. WARN-level only.
+
 **New.** This is the optional Layer 2 backup for Reconcile Now (Section 1.F).
 
 - **Location:** `handleReconcileNow` after the successful PATCH, before `onRefreshKeywords`.
@@ -336,6 +344,8 @@ This section designs the FULL set of runtime invariant checks the codebase shoul
 - **Estimated effort:** ~5 lines per the Scale Session B implementation.
 
 #### 3.2.4 Invariant R4: Refs match props at function entry (dev-mode only)
+
+**Status updated 2026-04-29-b: DEFERRED per director Q2 = Option B** ("ship R1, R2, R3 first; consider R4 only after the cheap ones are in place and we've seen whether the dev-mode signal is useful"). Easily added later — ~25 lines.
 
 **New.** A targeted assertion for the line-163 invariant pattern at runtime.
 
@@ -452,6 +462,9 @@ Server-side guards do two things:
 
 ### 5.2 Guard G1: `/canvas/rebuild` payload sanity check
 
+**Status updated 2026-04-29-b: SHIPPED.** Pure helper at `src/lib/canvas-rebuild-guard.ts` (~75 lines) exposing `evaluateRebuildPayload({ newNodeCount, currentNodeCount, hasExplicitDeletes, nodesProvided })` and `G1_SHRINK_THRESHOLD = 0.5`. Threshold locked at **50%** per director's Q1 = Option A. Wired into POST `/api/projects/[projectId]/canvas/rebuild` at the top of the `try` block (after auth, before any DB op): if `body.nodes` is provided, the route counts current rows and rejects HTTP 400 with a structured reason if the helper says "blocked." 13 unit tests covering matrix cells (pass-through: delete-only, explicit-deletes, empty current, growth, no-change, 40%, exactly 50%; block: 51%, 95% / batch-70 signature, 98% / batch-134 signature, full-wipe).
+
+
 **Location:** `src/app/api/projects/[projectId]/canvas/rebuild/route.ts` POST handler, at the top of the `try` block (after auth, before any DB op).
 
 **Check (lock-1):** if `body.nodes` is provided and `body.deleteNodeIds` is empty AND the new node count is dramatically smaller than the existing canvas size (>50% drop), reject with HTTP 400 and the message: *"Rebuild rejected: payload would shrink canvas from N to M nodes without explicit deletions. This is the canvas-blanking signature. If intentional, include deleteNodeIds."*
@@ -465,6 +478,9 @@ Server-side guards do two things:
 **Estimated effort:** ~10 lines in the route handler + a unit test on the count-comparison logic. ~30 minutes.
 
 ### 5.3 Guard G2: `/canvas/nodes` GET retry-on-transient-error wrapper
+
+**Status updated 2026-04-29-b: SHIPPED.** Pure helper at `src/lib/prisma-retry.ts` (~85 lines) exposing `withRetry(fn, options)` and `isTransientPrismaError(e)`. Transient codes: P1001, P1002, P1008, P2034. Backoff: 100ms before retry 1, 500ms before retry 2 — total worst-case extra latency ≈ 600ms. Hard errors pass through immediately. Wired into GET `/api/projects/[projectId]/canvas/nodes` only this session (the bug's exact trigger surface). 17 unit tests including transient-then-success on attempt 2/3, hard-error-after-transient stops retry, custom predicate honored, sleep-mock verifies backoff sequence.
+
 
 **Location:** `src/app/api/projects/[projectId]/canvas/nodes/route.ts` GET handler, wrapping the `prisma.canvasNode.findMany` call.
 

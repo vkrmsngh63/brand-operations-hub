@@ -1,8 +1,9 @@
 # KEYWORD CLUSTERING — ACTIVE DOCUMENT
 ## Current state of the Keyword Clustering workflow tool (Group B, tool-specific)
 
-**Last updated:** April 29, 2026 (Defense-in-Depth Audit design session — design-only, no code, no DB writes, no schema, no prompt changes. New Group B doc `DEFENSE_IN_DEPTH_AUDIT_DESIGN.md` (~720 lines) created covering the 6 design areas. NEW POST-2026-04-29-DEFENSE-IN-DEPTH-AUDIT-DESIGN STATE block prepended below; prior STATE blocks preserved as historical context.)
-**Last updated in session:** session_2026-04-29_defense-in-depth-audit-design (Claude Code)
+**Last updated:** April 29, 2026 (Defense-in-Depth Audit Implementation Session 1 — Option β. Shipped: ESLint custom rule `no-prop-reads-in-runloop` + 4 `@runloop-reachable` annotations on AutoAnalyze.tsx; runtime invariant R2 (post-Reconcile-Now diff-empty WARN) wired into `handleReconcileNow`; server-side guard G1 (`/canvas/rebuild` payload-sanity, 50% shrink threshold without explicit deletes) backed by pure helper `src/lib/canvas-rebuild-guard.ts`; server-side guard G2 (`/canvas/nodes` GET retry-on-transient for Prisma codes P1001/P1002/P1008/P2034 with backoff [100ms, 500ms]) backed by pure helper `src/lib/prisma-retry.ts`. 30 new unit tests + 13 new ESLint rule tests; 130 src/lib tests total; build clean. R3 (Tier-1 intentFingerprint invariant) explicitly deferred to Scale Session B per design §3.2.3. R4 (dev-mode ref-vs-prop watermark) explicitly deferred per design §3.2.4 + director Q2 = Option B. Schema unchanged; prompts unchanged; DB unchanged. NEW POST-2026-04-29-DEFENSE-IN-DEPTH-IMPL-1 STATE block prepended below.)
+**Last updated in session:** session_2026-04-29-b_defense-in-depth-impl-1 (Claude Code)
+**Previously updated in session:** session_2026-04-29_defense-in-depth-audit-design (Claude Code)
 **Previously updated in session:** session_2026-04-28_canvas-blanking-and-closure-staleness-fix (Claude Code)
 **Previously updated in session:** session_2026-04-28_deeper-analysis-and-fix-design (Claude Code)
 **Previously updated in session:** session_2026-04-28_scale-session-0-outcome-c-and-full-run-feedback (Claude Code)
@@ -32,7 +33,104 @@
 
 ---
 
-## ⚠️ POST-2026-04-29-DEFENSE-IN-DEPTH-AUDIT-DESIGN STATE (READ FIRST — updated 2026-04-29 end-of-day)
+## ⚠️ POST-2026-04-29-DEFENSE-IN-DEPTH-IMPL-1 STATE (READ FIRST — updated 2026-04-29 second session of day)
+
+**As of 2026-04-29 Defense-in-Depth Audit Implementation Session 1 — Option β from the prior STATE block's NEXT choices, choice (a). Code session — schema unchanged, prompts unchanged, DB unchanged.**
+
+### What this session shipped to W#1
+
+**Four structural defenses landed.** Each is the primary mechanism documented in `DEFENSE_IN_DEPTH_AUDIT_DESIGN.md` for the relevant section; all are independently reversible per design §0.4.
+
+#### 1. ESLint custom rule `no-prop-reads-in-runloop` (per design §2)
+
+- New folder `eslint-rules/` with the rule file `no-prop-reads-in-runloop.js` (~165 lines incl. doc) and unit tests `no-prop-reads-in-runloop.test.mjs` (13 tests, all passing).
+- Wired into `eslint.config.mjs` as a local plugin via `defineConfig` — no plugin extraction needed.
+- Allow-list of guarded prop names: `nodes`, `allKeywords`, `sisterLinks`, `pathways` (the four refs identified in the line-163 invariant).
+- Trigger: any function whose preceding JSDoc comment contains `@runloop-reachable`.
+- Bootstrap annotations added to `AutoAnalyze.tsx`: `runLoop` (line 902), `doApplyV3` (line 690), `processBatchV3` (line 586), `validateResultV3` (line 619).
+- **Smoke test verified:** temporary insertion of `if (allKeywords.length === 0) return;` at the top of `runLoop` was caught by the rule (`local/no-prop-reads-in-runloop` error on the offending line); reverted before commit.
+- Future regressions of the 2026-04-28 closure-staleness pattern (Bug 2) will fail `npm run build` at the lint step rather than running silently in production.
+
+#### 2. Runtime invariant R2 — post-Reconcile-Now diff-empty assertion (per design §3.2.2)
+
+- Added to `handleReconcileNow` in `AutoAnalyze.tsx` immediately after the successful PATCH, before `onRefreshKeywords`.
+- Re-runs `computeReconciliationUpdates` against the in-memory post-PATCH keyword set; if `verify.updates.length > 0`, logs a WARN to the activity log instructing the admin to click Reconcile Now again.
+- Cheap (no extra I/O — works against the data already in scope). ~22 lines including the comment.
+- WARN-level only — does not pause anything; does not block UI.
+
+**R3 status:** explicitly deferred to Scale Session B per design §3.2.3 (depends on the `intentFingerprint` schema column that doesn't exist yet).
+
+**R4 status:** explicitly deferred per design §3.2.4 + director's Q2 = Option B decision this session ("ship R1, R2, R3 first; consider R4 only after the cheap ones are in place and we've seen whether the dev-mode signal is useful"). Easily added later (~30 minutes, ~25 lines).
+
+#### 3. Server-side guard G1 — `/canvas/rebuild` payload sanity (per design §5.2)
+
+- New pure helper `src/lib/canvas-rebuild-guard.ts` (~75 lines) exposing `evaluateRebuildPayload({ newNodeCount, currentNodeCount, hasExplicitDeletes, nodesProvided })` and `G1_SHRINK_THRESHOLD = 0.5`.
+- Wired into `POST /api/projects/[projectId]/canvas/rebuild` at the top of the `try` block: if `body.nodes` is provided, the route counts current rows, calls the helper, and returns HTTP 400 with a structured reason if the payload would shrink the canvas by >50% without explicit `deleteNodeIds`.
+- Threshold locked at 50% per director's Q1 = Option A this session. The 2026-04-28 events were 95% and 98% drops; legitimate batch ops modify <5%. The rejection message tells the caller exactly how to express intent if a legitimate cleanup hits the bar (pass `deleteNodeIds`).
+- 13 unit tests covering all the matrix cells: pass-through cases (delete-only, explicit-deletes, empty current, growth, no-change, 40% shrink, exactly 50%) and block cases (51%, 95% — batch-70 signature, 98% — batch-134 signature, full wipe).
+
+#### 4. Server-side guard G2 — `/canvas/nodes` GET retry-on-transient (per design §5.3)
+
+- New pure helper `src/lib/prisma-retry.ts` (~85 lines) exposing `withRetry(fn, options)` and `isTransientPrismaError(e)`.
+- Transient codes matched: P1001 (can't reach DB), P1002 (timeout), P1008 (ops timed out), P2034 (write conflict / deadlock / serialization).
+- Backoff: 100ms before retry 1, 500ms before retry 2 — total worst-case extra latency before a persistent transient surfaces ≈ 600ms.
+- Hard errors (auth, validation, NOT_FOUND, etc.) pass through immediately — no retry on the wrong errors.
+- Wired into `GET /api/projects/[projectId]/canvas/nodes` only this session — wrapping `prisma.canvasNode.findMany`. The pattern is reusable for other GET handlers as a future polish item but not blocking.
+- 17 unit tests covering: each transient code, each hard code, plain Errors, success-on-1st, success-on-2nd, success-on-3rd, persistent-fail, custom isTransient predicate, hard-after-transient stops retrying, sleep-mock verifies backoff sequence.
+
+**G3 status:** explicitly deferred — folded into Scale Session B per design §5.4 (depends on the `intentFingerprint` field that doesn't exist yet).
+
+### Tests + build
+
+- **130 src/lib tests pass** (was 100; added 13 G1 + 17 G2).
+- **13 ESLint rule tests pass** (separate file in `eslint-rules/`).
+- **`npm run lint` clean** — 0 violations of the new rule across the codebase. (Pre-existing 16 errors + 41 warnings in other rules are out of scope for this session, untouched.)
+- **`npm run build` clean** — TypeScript clean in 12.2s; 17/17 static pages generated; all routes present including the touched `/api/projects/[projectId]/canvas/{nodes,rebuild}`.
+
+### What did NOT change this session
+
+- **Schema:** no changes.
+- **Prompts:** `AUTO_ANALYZE_PROMPT_V3.md` unchanged.
+- **API route shapes:** G1 + G2 are additive — no behavior change for any current happy-path caller. G1 returns 400 only on the bug signature; G2 makes the GET more resilient to transients without altering the response shape.
+- **DB:** no writes.
+- **Live site:** no deploy.
+- **R3, R4, G3:** explicitly deferred — see per-section notes above.
+
+### Files touched this session
+
+**Modified (4):**
+- `eslint.config.mjs` — local plugin wired in, .test.mjs ignored.
+- `src/app/api/projects/[projectId]/canvas/nodes/route.ts` — GET wrapped in `withRetry`.
+- `src/app/api/projects/[projectId]/canvas/rebuild/route.ts` — G1 guard at top of POST.
+- `src/app/projects/[projectId]/keyword-clustering/components/AutoAnalyze.tsx` — 4× `@runloop-reachable` annotations + R2 invariant in `handleReconcileNow`.
+
+**New (6):**
+- `eslint-rules/no-prop-reads-in-runloop.js`
+- `eslint-rules/no-prop-reads-in-runloop.test.mjs`
+- `src/lib/canvas-rebuild-guard.ts`
+- `src/lib/canvas-rebuild-guard.test.ts`
+- `src/lib/prisma-retry.ts`
+- `src/lib/prisma-retry.test.ts`
+
+### Standing instructions for next session — five "NEXT" choices
+
+(a) **Implementation Session 2 of Defense-in-Depth Audit (Option β cont.).** Ships forensic structured log (NDJSON ring buffer + download button) per design §4 + run-start pre-flight self-test P1-P10 per design §6. ~3-4 hours. Reads §4 + §6 of the design doc; resolves open questions 3-5 from §8 (P9 cost gate, forensic log scope, dry-run); writes ~150 lines of code + tests + UI. Independent of any other backlog item.
+
+(b) **Scale Session B build (Tiered Canvas Serialization + intentFingerprint backfill).** Per `INPUT_CONTEXT_SCALING_DESIGN.md §6`. ~4-6 hours. **Now safer to land than before today's session** — the new ESLint rule will catch any closure-stale read inside Scale Session B's larger code surface, and the runtime invariants R1+R2 will catch reconciliation drift. G3 (empty-intentFingerprint reject) is a Scale Session B prerequisite and lands as part of that session.
+
+(c) **Phase-1 UI polish bundle** — Skeleton View on canvas + AST split-view topic-vs-description row alignment + Topics table row numbering. ~4-5 hours total. Independent of architectural work.
+
+(d) **Action-by-action feedback workflow design session.** Analogous to Scale Session A. ~3-4 hours design; implementation 2-4 sessions after.
+
+(e) **Optional out-of-session check-in:** director can fire a small ~2-batch fresh AI run on Bursitis (~$1-2, ~15 min) any time to empirically confirm Bug 1 + Bug 2 fixes hold under live load + that today's defenses don't break the happy path. Not a session — a 15-minute test on a whim.
+
+**Recommendation:** (a) — Implementation Session 2 of the Defense-in-Depth Audit. Completes the audit; produces visible UX (download log button, pre-flight check display); leaves the audit fully shipped before Scale Session B's larger landing.
+
+**Director's framing from prior sessions:** sequence (a-design) → (a-impl-1) → (a-impl-2) → (b) → (e) → (c) — defense-in-depth fully landed before structural input-scaling; UI polish last. With today's impl-1 shipped, the natural next is impl-2 then Scale Session B.
+
+---
+
+## ⚠️ POST-2026-04-29-DEFENSE-IN-DEPTH-AUDIT-DESIGN STATE (preserved as historical context — last updated 2026-04-29 first session of day)
 
 **As of 2026-04-29 Defense-in-Depth Audit design session (option (c) from the prior STATE block's NEXT choices; design-only — no code, no DB writes, no schema changes, no prompt changes):**
 

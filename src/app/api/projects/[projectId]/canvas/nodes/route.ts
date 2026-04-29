@@ -2,10 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { verifyProjectWorkflowAuth } from '@/lib/auth';
 import { markWorkflowActive } from '@/lib/workflow-status';
+import { withRetry } from '@/lib/prisma-retry';
 
 const WORKFLOW = 'keyword-clustering';
 
 // GET /api/projects/[projectId]/canvas/nodes — list all canvas nodes.
+//
+// G2 (per DEFENSE_IN_DEPTH_AUDIT_DESIGN §5.3): the findMany call is
+// wrapped in `withRetry` so a transient pgbouncer connection-pool flake
+// (P1001/P1002/P1008/P2034) is retried 100ms then 500ms before
+// surfacing as a 500. The 2026-04-28 canvas-blanking bug was triggered
+// by exactly this flake; the client now defends against an empty
+// response (Bug 1 Layer 1), but suppressing the transient blip
+// server-side prevents the run from pausing in the first place.
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ projectId: string }> }
@@ -16,10 +25,12 @@ export async function GET(
   const { projectWorkflowId } = auth;
 
   try {
-    const nodes = await prisma.canvasNode.findMany({
-      where: { projectWorkflowId },
-      orderBy: { sortOrder: 'asc' },
-    });
+    const nodes = await withRetry(() =>
+      prisma.canvasNode.findMany({
+        where: { projectWorkflowId },
+        orderBy: { sortOrder: 'asc' },
+      }),
+    );
     return NextResponse.json(nodes);
   } catch (error) {
     console.error('GET canvas nodes error:', error);

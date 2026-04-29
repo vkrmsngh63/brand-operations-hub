@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { verifyProjectWorkflowAuth } from '@/lib/auth';
 import { markWorkflowActive } from '@/lib/workflow-status';
+import { evaluateRebuildPayload } from '@/lib/canvas-rebuild-guard';
 
 const WORKFLOW = 'keyword-clustering';
 
@@ -28,6 +29,27 @@ export async function POST(
 
   try {
     const body = await req.json();
+
+    // ── G1 payload-sanity guard (per DEFENSE_IN_DEPTH_AUDIT_DESIGN §5.2) ──
+    // Reject the canvas-blanking bug signature: a body.nodes payload that
+    // would shrink the canvas by >50% with no explicit deleteNodeIds. The
+    // threshold + reason live in `src/lib/canvas-rebuild-guard.ts`.
+    if (Array.isArray(body.nodes)) {
+      const currentNodeCount = await prisma.canvasNode.count({
+        where: { projectWorkflowId },
+      });
+      const decision = evaluateRebuildPayload({
+        newNodeCount: body.nodes.length,
+        currentNodeCount,
+        hasExplicitDeletes:
+          Array.isArray(body.deleteNodeIds) && body.deleteNodeIds.length > 0,
+        nodesProvided: true,
+      });
+      if (decision.blocked) {
+        return NextResponse.json({ error: decision.reason }, { status: 400 });
+      }
+    }
+
     const ops: unknown[] = [];
 
     // ── Deletions ────────────────────────────────────────────

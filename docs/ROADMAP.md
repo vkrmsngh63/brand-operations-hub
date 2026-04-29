@@ -1,8 +1,9 @@
 # ROADMAP
 ## Product Launch Operating System (PLOS) — Development Execution Plan
 
-**Last updated:** April 29, 2026 (Defense-in-Depth Audit design session — design-only, no code, no DB writes, no schema, no prompt changes. Created new Group B doc `DEFENSE_IN_DEPTH_AUDIT_DESIGN.md` (~720 lines) covering the 6 design areas: per-fix redundancy matrix, ESLint custom rule, runtime invariants, forensic instrumentation, server-side guards, run-start pre-flight self-test. ROADMAP "🛡️ Redundancy + Defense-in-Depth Audit" item flipped from PARTIAL to 📋 DESIGNED ONLY with implementation-sequencing options laid out. Active Tools table row for W#1 updated. Working tree contains 1 new file + 4 doc-update files staged for commit.)
-**Last updated in session:** session_2026-04-29_defense-in-depth-audit-design (Claude Code)
+**Last updated:** April 29, 2026 (Defense-in-Depth Audit Implementation Session 1 — Option β. Shipped: ESLint custom rule `no-prop-reads-in-runloop` + 4 `@runloop-reachable` annotations; runtime invariant R2 (post-Reconcile-Now diff-empty WARN); server-side guards G1 (`/canvas/rebuild` payload-sanity, 50% threshold) + G2 (`/canvas/nodes` GET retry-on-transient for P1001/P1002/P1008/P2034 with backoff [100ms, 500ms]). 30 new src/lib unit tests + 13 ESLint rule tests; build clean; lint clean for the new rule. R3 deferred to Scale Session B; R4 deferred per director Q2 = Option B. ROADMAP "🛡️ Redundancy + Defense-in-Depth Audit" item flipped from 📋 DESIGNED ONLY to 🔄 IN PROGRESS (Session 1 of 2 done). Active Tools table row for W#1 updated.)
+**Last updated in session:** session_2026-04-29-b_defense-in-depth-impl-1 (Claude Code)
+**Previously updated in session:** session_2026-04-29_defense-in-depth-audit-design (Claude Code)
 **Previously updated in session:** session_2026-04-28_canvas-blanking-and-closure-staleness-fix (Claude Code)
 **Previously updated in session:** session_2026-04-28_deeper-analysis-and-fix-design (Claude Code)
 **Previously updated in session:** session_2026-04-28_scale-session-0-outcome-c-and-full-run-feedback (Claude Code)
@@ -43,7 +44,7 @@
 
 | Workflow | Status | Branch | Last Session | Next Session | Schema-change in flight? |
 |---|---|---|---|---|---|
-| W#1 Keyword Clustering | 🔄 Active dev — stabilization | `main` | 2026-04-29 defense-in-depth-audit-design (DEFENSE_IN_DEPTH_AUDIT_DESIGN.md created — 6 sections: per-fix redundancy matrix, ESLint custom rule, runtime invariants R1-R4, forensic instrumentation + dry-run, server-side guards G1/G2/G3, run-start pre-flight P1-P10; 3 implementation-sequencing options with β recommended) | Implementation Session 1 of Defense-in-Depth Audit (Option β: ESLint + runtime invariants R1-R3 + server-side guards G1+G2; ~3-4 hrs) — OR (b) Scale Session B build / (d) Phase-1 UI polish / (e) Action-by-action feedback design | No |
+| W#1 Keyword Clustering | 🔄 Active dev — stabilization | `main` | 2026-04-29-b defense-in-depth-impl-1 (Option β Session 1: shipped ESLint rule `no-prop-reads-in-runloop` + 4 annotations on AutoAnalyze.tsx; R2 post-Reconcile-Now diff-empty WARN; G1 `/canvas/rebuild` payload-sanity at 50% threshold; G2 `/canvas/nodes` GET retry on P1001/P1002/P1008/P2034 with backoff [100ms,500ms]; 30 new src/lib tests + 13 ESLint rule tests; build clean. R3+G3 deferred to Scale Session B; R4 deferred per director Q2=B) | Implementation Session 2 of Defense-in-Depth Audit (Option β cont.: forensic NDJSON log + run-start pre-flight P1-P10; ~3-4 hrs) — OR (b) Scale Session B build / (c) Phase-1 UI polish / (d) Action-by-action feedback design | No |
 | W#2 Competition Scraping & Deep Analysis | 🆕 About to start | `workflow-2-competition-scraping` (created by W#2's first session) | (none yet) | Workflow Requirements Interview per HANDOFF_PROTOCOL Rule 18 | No |
 | W#3 Therapeutic Strategy | Not yet started | — | — | — | — |
 | W#4–14 | Not yet started | — | — | — | — |
@@ -637,27 +638,38 @@ Option (a) is more useful long-term — it doubles as a forensic tool for future
 
 ---
 
-### 🛡️ Redundancy + Defense-in-Depth Audit (📋 DESIGNED ONLY — captured 2026-04-28; partially implemented 2026-04-29; design session completed 2026-04-29; implementation pending)
+### 🛡️ Redundancy + Defense-in-Depth Audit (🔄 IN PROGRESS — captured 2026-04-28; partially implemented 2026-04-29; design completed 2026-04-29; **Implementation Session 1 of 2 completed 2026-04-29-b**; Implementation Session 2 pending)
 
-**Status (updated 2026-04-29 end-of-day):** **Design session completed. Full design lives in `DEFENSE_IN_DEPTH_AUDIT_DESIGN.md` (Group B; ~720 lines).** The design covers six areas: §1 per-fix redundancy matrix (covering shipped bugs 1+2 plus pending items C-F including Scale Session B, queue refresh, action-by-action feedback workflow, Reconcile Now); §2 ESLint custom-rule `no-prop-reads-in-runloop` codifying the line-163 invariant as a build-time gate; §3 four runtime invariants R1-R4 (R1 already shipped as runLoop fail-fast pre-flight); §4 forensic instrumentation (NDJSON structured log + ring buffer + download button; dry-run mode deferred per design §0.4); §5 three server-side guards G1 (`/canvas/rebuild` payload sanity ≥50% drop without explicit deletes), G2 (`/canvas/nodes` retry-on-transient-error wrapper for Prisma error codes P1001/P1002/P1008/P2034), G3 (PATCH rejects empty intentFingerprint — Scale Session B prerequisite); §6 ten pre-flight self-test items P1-P10 including ref-vs-DB consistency check + cheap test API call. §7 lays out three implementation-sequencing options (α full bundle / β two-session split / γ cherry-pick) with β recommended. §8 lists six open questions for director. Implementation work itself is now scoped and ready to start in a follow-up session.
+**Status (updated 2026-04-29 second session of day):** **Implementation Session 1 (Option β) shipped.** Per the design's two-session split, Session 1 shipped the structural defenses: ESLint custom rule `no-prop-reads-in-runloop` (codifies the line-163 invariant as a build-time gate; bootstrapped on `runLoop` / `doApplyV3` / `processBatchV3` / `validateResultV3`); runtime invariant R2 (post-Reconcile-Now diff-empty WARN); server-side guard G1 (`/canvas/rebuild` rejects payloads with >50% shrink and no explicit deleteNodeIds — locked at 50% per director's Q1 = Option A); server-side guard G2 (`/canvas/nodes` GET retries Prisma transient codes P1001/P1002/P1008/P2034 with backoff [100ms, 500ms]). 30 new src/lib unit tests + 13 ESLint rule tests; `npm run build` clean; `npm run lint` clean for the new rule. R3 (Tier-1 intentFingerprint invariant) and G3 (empty-intentFingerprint reject) explicitly deferred to Scale Session B per design. R4 (dev-mode ref-vs-prop watermark) explicitly deferred per design §3.2.4 + director's Q2 = Option B.
+
+**Implementation Session 2 (still pending):** ships forensic structured log (§4 — NDJSON ring buffer + download button) + run-start pre-flight self-test (§6 — P1-P10). ~3-4 hours. Independent of any other backlog item.
+
+**Design doc (now annotated with what's shipped):** `DEFENSE_IN_DEPTH_AUDIT_DESIGN.md` (Group B; ~720 lines).
 
 **Earlier — Partially implemented 2026-04-29 as part of the Bug 1 + Bug 2 fixes**, per director's *"fix the fundamental problem long term"* directive. The per-fix redundancy matrix for those two specific bugs is implicit in the 3-layer-each defense pattern shipped (see the two FIXED entries above and Sections 1.A + 1.B of the design doc).
 
-**What shipped this session (counts toward this item, not a separate item):**
-- Per-fix redundancy matrix for Bug 1: 3 layers (defensive `useCanvas` contract + runLoop fail-fast pre-flight + existing API_ERROR routing). Each layer alone catches the bug; all three must fail simultaneously for recurrence.
-- Per-fix redundancy matrix for Bug 2: 3 layers (pure helper extraction + shadow pattern + line-153 convention rewrite). Each layer alone prevents the bug class; the structural Layer 1 + Layer 2 make it impossible for the inline-loop bug to recur inside `doApplyV3`.
-- Reconcile Now admin button (`AutoAnalyze.tsx` `handleReconcileNow`): client-side forensic + healing tool that walks any project's full keyword list against fresh server state and heals any drift in one click. Doubles as a verification tool for any future bug.
+**What shipped in earlier sessions (counts toward this item, not a separate item):**
+- 2026-04-29 (bug-fix session) — per-fix redundancy matrix for Bug 1: 3 layers (defensive `useCanvas` contract + runLoop fail-fast pre-flight = R1 + existing API_ERROR routing). Each layer alone catches the bug.
+- 2026-04-29 (bug-fix session) — per-fix redundancy matrix for Bug 2: 3 layers (pure helper extraction + shadow pattern + line-153 convention rewrite). Each layer alone prevents the bug class.
+- 2026-04-29 (bug-fix session) — Reconcile Now admin button. Doubles as a verification tool for any future bug.
+- **2026-04-29-b (Implementation Session 1) — ESLint rule `no-prop-reads-in-runloop`** turning the line-163 invariant into a build-time gate (Layer 4 of Bug 2's per-fix matrix).
+- **2026-04-29-b (Implementation Session 1) — runtime invariant R2** post-Reconcile-Now diff-empty WARN (extra Layer 2 for Reconcile Now's matrix entry).
+- **2026-04-29-b (Implementation Session 1) — server-side guard G1** `/canvas/rebuild` payload-sanity (independent server-side defense for Bug 1's matrix entry, regardless of which client connects).
+- **2026-04-29-b (Implementation Session 1) — server-side guard G2** `/canvas/nodes` GET retry-on-transient (suppresses the underlying pgbouncer flake server-side so the run never pauses on a transient).
 
-**What's still pending design (the dedicated session's scope):**
+**What's still pending implementation (Session 2 scope, per design §4 + §6):**
 
-1. **Codebase-wide invariant enforcement** — ESLint custom rule that flags prop reads inside identified runLoop-reachable functions (so the shadow pattern becomes lint-enforced, not just convention-enforced); runtime invariant checks (e.g., dev-mode warning if `nodesRef.current.length === 0` at start of a batch when canvas had >0 nodes at end of previous batch — this is partly shipped as the runLoop fail-fast pre-flight but in production-warn mode rather than dev-mode-assert).
-2. **Forensic instrumentation** — optional verbose logging of canvas/keyword sizes at each batch boundary, written to a structured log file the admin can download; "Dry-run" mode that runs the full pipeline against synthetic data and verifies invariants without DB writes.
-3. **Server-side guards** — `/canvas/rebuild` could reject payloads where `deleteNodeIds.length === 0` AND the new-node count is dramatically smaller than the existing canvas size (potential canvas-blanking signature); `/canvas/nodes` GET could be wrapped in a retry-on-transient-error layer so the underlying connection-pool flake doesn't surface as "canvas is empty" at the client.
-4. **Pre-flight checks at run start** — before any batches process, run a self-test: confirm `nodesRef.current` matches DB; confirm `keywordsRef.current` matches DB; confirm prompts loaded correctly. Fail fast if anything is off, before $50 of API spend.
+1. **Forensic instrumentation** — NDJSON per-batch structured log (in-memory ring buffer up to 1000 records ≈ 250KB) + "Download log" button next to Reconcile Now. Records: ts, session_id, project_id, batch_num, phase (pre/post apply, pre/post API call), canvas counts, TSV input/output tokens, model, cost, reconciliation counts, errors. Client-side download only in v1 (Phase 2 multi-user can promote to server-side per-run logging later). Dry-run mode designed but DEFERRED per design §0.4.
+2. **Run-start pre-flight self-test (P1-P10)** — expanding the existing 3 checks (API key + seed words + prompt length) to 10: add primer-prompt parseable, `nodesRef.current` matches `/canvas/nodes` GET (count + sample stableIds), `keywordsRef.current` matches `/keywords` GET, pathways consistency, cheap test API call (~$0.001 with Sonnet 4.6 to verify key + model availability), localStorage probe. Per-check display in the panel; "Skip pre-flight" checkbox off by default. Total runtime ~2-3 seconds before $50 of API spend.
 
-**Estimated effort (design — DONE 2026-04-29):** 1 session producing the design doc + locked decisions + multi-session implementation plan. **Implementation effort (pending):** per design §7, three options. Option β (recommended): two-session implementation split — Session 1 ships ESLint + runtime invariants R1-R3 + server-side guards G1+G2 (~3-4 hrs); Session 2 ships forensic instrumentation + pre-flight self-test (~3-4 hrs).
+**What's deferred beyond Session 2:**
+- **R3** (Tier-1 intentFingerprint runtime invariant) and **G3** (empty-fingerprint reject server-side) — both depend on the `intentFingerprint` schema column from Scale Session B; folded into that build's tests.
+- **R4** (dev-mode ref-vs-prop watermark check) — director Q2 = Option B (defer until R1+R2 prove value, per design §3.2.4 recommendation).
+- **Dry-run mode** — design §4.3; recommended deferred per §0.4 until empirical signal warrants.
 
-**Sequencing:** Implementation Session 1 (per Option β) recommended BEFORE Scale Session B build, because (a) ESLint rule + runtime invariants catch regressions in Scale Session B's larger code surface, and (b) server-side guard G3 (empty-fingerprint reject) is a Scale Session B prerequisite. Director's call.
+**Estimated effort:** Session 1 (DONE 2026-04-29-b) ~3-4 hrs. **Session 2 (pending):** ~3-4 hrs. **Director's framing matches the two-session split** — see design §7 Option β recommendation.
+
+**Sequencing:** Session 1 done. Session 2 OR Scale Session B build is the natural next-priority. Per design §7's note, completing the audit (Session 2) before Scale Session B is the cleanest sequencing — pre-flight P5/P6 catches Scale Session B's tier-decider regressions and structured logging gives forensic data on Scale Session B's first production runs. But Scale Session B is also unblocked now (G3 lands as part of that session, R3 is built into its serializer). Director's call.
 
 **Director's framing (verbatim 2026-04-28):** *"think if redundancies may be needed and if so, to add them, in case our fixes fail during a session (which has happened before)."*
 

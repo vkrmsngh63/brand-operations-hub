@@ -583,6 +583,7 @@ export default function AutoAnalyze({
   }
 
   /* ── V3: process a batch ───────────────────────────────────── */
+  /** @runloop-reachable */
   async function processBatchV3(batch: BatchObj): Promise<BatchResult> {
     const { systemText, userContent } = assemblePromptV3(batch);
     const estTokens = Math.ceil((systemText.length + userContent.length) / 4);
@@ -616,6 +617,7 @@ export default function AutoAnalyze({
   }
 
   /* ── V3: validate result ───────────────────────────────────── */
+  /** @runloop-reachable */
   function validateResultV3(
     result: BatchResult,
     batch: BatchObj,
@@ -687,6 +689,7 @@ export default function AutoAnalyze({
   }
 
   /* ── V3: apply operations to canvas ────────────────────────── */
+  /** @runloop-reachable */
   async function doApplyV3(
     batch: BatchObj,
     ops: ReturnType<typeof parseOperationsJsonl>['operations'],
@@ -899,6 +902,7 @@ export default function AutoAnalyze({
   }
 
   /* ── Main run loop ─────────────────────────────────────────── */
+  /** @runloop-reachable */
   async function runLoop() {
     // Initialise the canvas-size watermark on first entry to runLoop. The
     // pre-flight below uses this to detect a non-zero → zero transition
@@ -1236,6 +1240,31 @@ export default function AutoAnalyze({
         result.flippedToReshuffled + ' → Reshuffled).',
         'ok',
       );
+
+      // R2 invariant (per DEFENSE_IN_DEPTH_AUDIT_DESIGN §3.2.2): if the
+      // PATCH succeeded but a follow-up diff against the same fresh
+      // canvas/archive state is still non-empty, something stopped the
+      // updates from landing as the diff predicted. Re-run the diff
+      // in-memory by applying our update set and recomputing — cheap, no
+      // extra I/O. A non-empty result is a soft warning (admin can re-run
+      // the button), not a fatal error.
+      const updatedById = new Map(result.updates.map(u => [u.id, u.sortingStatus] as const));
+      const postPatchKeywords = keywords.map(k =>
+        updatedById.has(k.id)
+          ? { ...k, sortingStatus: updatedById.get(k.id) as string }
+          : k,
+      );
+      const verify = computeReconciliationUpdates(postPatchKeywords, placedSet, archivedSet);
+      if (verify.updates.length > 0) {
+        aaLog(
+          '⚠ Reconcile Now: post-PATCH self-check still shows ' +
+          verify.updates.length + ' pending update(s). Either the server ' +
+          'didn\'t apply all updates, or the canvas/archive state changed ' +
+          'mid-operation. Click Reconcile Now again to verify.',
+          'warn',
+        );
+      }
+
       await onRefreshKeywords();
     } catch (err) {
       aaLog('Reconcile Now: error — ' + (err instanceof Error ? err.message : String(err)), 'error');
