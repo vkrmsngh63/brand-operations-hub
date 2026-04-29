@@ -3,7 +3,8 @@
 
 **Created:** April 29, 2026 (Defense-in-Depth Audit design session — design-only, no code, no DB, no schema, no prompt changes)
 **Created in session:** session_2026-04-29_defense-in-depth-audit-design (Claude Code)
-**Implementation Session 1 shipped:** April 29, 2026 (`session_2026-04-29-b_defense-in-depth-impl-1`) — Option β Session 1 landed §2 ESLint rule + 4 annotations + §3.R2 post-Reconcile-Now diff-empty WARN + §5.G1 `/canvas/rebuild` payload-sanity at 50% threshold (per director Q1=A) + §5.G2 `/canvas/nodes` GET retry on Prisma transient codes with backoff [100ms,500ms]. R3 deferred to Scale Session B; R4 deferred per director Q2=B; G3 deferred to Scale Session B. 30 new src/lib unit tests + 13 ESLint rule tests; build clean. **Session 2 (§4 forensic instrumentation + §6 pre-flight self-test) still pending.**
+**Implementation Session 1 shipped:** April 29, 2026 (`session_2026-04-29-b_defense-in-depth-impl-1`) — Option β Session 1 landed §2 ESLint rule + 4 annotations + §3.R2 post-Reconcile-Now diff-empty WARN + §5.G1 `/canvas/rebuild` payload-sanity at 50% threshold (per director Q1=A) + §5.G2 `/canvas/nodes` GET retry on Prisma transient codes with backoff [100ms,500ms]. R3 deferred to Scale Session B; R4 deferred per director Q2=B; G3 deferred to Scale Session B. 30 new src/lib unit tests + 13 ESLint rule tests; build clean.
+**Implementation Session 2 shipped:** April 29, 2026 (`session_2026-04-29-c_defense-in-depth-impl-2`) — Option β Session 2 landed §4 forensic NDJSON ring buffer (`src/lib/forensic-log.ts`) with 4-phase emits per batch + 📥 Download log button + §6 run-start pre-flight self-test P1-P10 (`src/lib/preflight.ts`) + UI panel section + Skip-pre-flight checkbox off-by-default. Director Q3=A (P9 ~$0.001 cheap API ping included), Q4=A (client-side download only — no server persistence in v1), Q5=A (dry-run mode deferred per §0.4). 58 new src/lib unit tests (20 forensic-log + 38 preflight); 188 src/lib tests passing total. Build clean; lint at baseline parity (16 errors / 41 warnings — zero new). **Audit complete except design's deliberately-deferred items (R3, G3, R4, dry-run).**
 **Group:** B (tool-specific to Keyword Clustering's Auto-Analyze; loaded when defense-in-depth or invariant-enforcement work is in scope)
 
 **Purpose:** This is the canonical reference doc for the proposed redundancy + defense-in-depth mechanisms layered around the Auto-Analyze pipeline. It captures the locked design from this session and serves as the build spec for follow-up implementation sessions. The design covers SIX areas:
@@ -384,6 +385,8 @@ R4: ~25 lines + per-function calls, removable trivially.
 
 ## 4. Forensic instrumentation design
 
+**Status updated 2026-04-29-c: §4.2 SHIPPED. §4.3 dry-run mode DEFERRED per director Q5=A.** Forensic NDJSON ring buffer at `src/lib/forensic-log.ts` (~140 lines including doc) + 4-phase emit calls in `processBatchV3` (pre_api_call, post_api_call) + `doApplyV3` (pre_apply, post_apply) + `runLoop` catch path on errors. Buffer capped at 1000 records, FIFO eviction. 📥 Download log button in panel footer next to Reconcile Now writes `aa-forensic-{session-prefix}-{ts}.ndjson` to user's Downloads folder. Buffer cleared at fresh `handleStart`; survives Pause/Resume. Per director Q4=A: client-side only in v1; Phase 2 multi-user can promote to server-side per-run logging later. 20 unit tests passing (capacity, FIFO eviction, NDJSON serialization shape, defensive copy, optional-field omission, filename safety). Dry-run mode (§4.3) deferred per Q5=A — fixture maintenance burden not yet justified.
+
 ### 4.1 The problem this section solves
 
 The 2026-04-28 canvas-blanking bug fired at batches 70 and 134. The director only spotted the symptom by reading the activity log carefully after the fact. There was no automatic capture of "the canvas was 284 topics at the start of batch 70, then became 12 nodes after apply" — that detail had to be reconstructed by reading the activity log line-by-line.
@@ -536,6 +539,8 @@ G3: 3 lines, trivial.
 ---
 
 ## 6. Run-start pre-flight self-test design
+
+**Status updated 2026-04-29-c: SHIPPED.** Pre-flight runner at `src/lib/preflight.ts` (~340 lines including doc) implementing P1-P10 per §6.2. Pure runner takes a `PreflightContext` with injectable `fetcher` (authFetch) + `rawFetcher` (raw fetch for direct-mode P9 cross-origin call) + `storage` (localStorage-shaped) so unit tests mock the network without touching real APIs. Sequential execution; first ✗ aborts the chain (no further checks executed). Wired into `AutoAnalyze.tsx` via async `handleStart`: when user clicks Start, runs preflight, displays ✓/✗ per check in a panel section, proceeds to `runLoop()` on pass. "Skip pre-flight" checkbox below Start (off by default). Per director Q3=A: P9 (cheap API ping) included — sends `max_tokens: 10` non-streaming request to verify API key + model availability before committing to a $50+ run. 38 unit tests passing covering individual checks (server-mode pass-through, half-paste guard on P4, sample-id mismatch on P5/P6, network-throw paths, pathway consistency edge cases) + runner sequencing (all-pass, fail-stops-chain, P9 error message surfaces).
 
 ### 6.1 The problem this section solves
 

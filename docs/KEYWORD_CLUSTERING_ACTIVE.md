@@ -1,8 +1,9 @@
 # KEYWORD CLUSTERING — ACTIVE DOCUMENT
 ## Current state of the Keyword Clustering workflow tool (Group B, tool-specific)
 
-**Last updated:** April 29, 2026 (Defense-in-Depth Audit Implementation Session 1 — Option β. Shipped: ESLint custom rule `no-prop-reads-in-runloop` + 4 `@runloop-reachable` annotations on AutoAnalyze.tsx; runtime invariant R2 (post-Reconcile-Now diff-empty WARN) wired into `handleReconcileNow`; server-side guard G1 (`/canvas/rebuild` payload-sanity, 50% shrink threshold without explicit deletes) backed by pure helper `src/lib/canvas-rebuild-guard.ts`; server-side guard G2 (`/canvas/nodes` GET retry-on-transient for Prisma codes P1001/P1002/P1008/P2034 with backoff [100ms, 500ms]) backed by pure helper `src/lib/prisma-retry.ts`. 30 new unit tests + 13 new ESLint rule tests; 130 src/lib tests total; build clean. R3 (Tier-1 intentFingerprint invariant) explicitly deferred to Scale Session B per design §3.2.3. R4 (dev-mode ref-vs-prop watermark) explicitly deferred per design §3.2.4 + director Q2 = Option B. Schema unchanged; prompts unchanged; DB unchanged. NEW POST-2026-04-29-DEFENSE-IN-DEPTH-IMPL-1 STATE block prepended below.)
-**Last updated in session:** session_2026-04-29-b_defense-in-depth-impl-1 (Claude Code)
+**Last updated:** April 29, 2026 (Defense-in-Depth Audit Implementation Session 2 — Option β cont. — completes the audit. Shipped: forensic NDJSON ring buffer (`src/lib/forensic-log.ts`) with 4-phase emit calls per batch (`pre_api_call`, `post_api_call`, `pre_apply`, `post_apply`) wired into `processBatchV3` + `doApplyV3` + `runLoop` catch; 📥 Download log button in panel footer next to Reconcile Now (writes `aa-forensic-{session-prefix}-{ts}.ndjson` to Downloads). Run-start pre-flight self-test P1-P10 (`src/lib/preflight.ts`) + per-check ✓/✗ display section + Skip-pre-flight checkbox off-by-default. Director Q3=A (P9 cheap API ping ~$0.001 included), Q4=A (client-side download only — no server persistence in v1), Q5=A (dry-run mode deferred per design §0.4). 58 new src/lib unit tests (20 forensic-log + 38 preflight) → 188 src/lib tests passing total. `npm run build` clean (TypeScript 13.3s, compiled 17.9s, 17/17 routes). `npm run lint` at baseline parity (16 errors / 41 warnings — zero new from this session). ROADMAP "🛡️ Redundancy + Defense-in-Depth Audit" item flipped from 🔄 IN PROGRESS to ✅ COMPLETE. Schema unchanged; prompts unchanged; DB unchanged. NEW POST-2026-04-29-DEFENSE-IN-DEPTH-IMPL-2 STATE block prepended below.)
+**Last updated in session:** session_2026-04-29-c_defense-in-depth-impl-2 (Claude Code)
+**Previously updated in session:** session_2026-04-29-b_defense-in-depth-impl-1 (Claude Code)
 **Previously updated in session:** session_2026-04-29_defense-in-depth-audit-design (Claude Code)
 **Previously updated in session:** session_2026-04-28_canvas-blanking-and-closure-staleness-fix (Claude Code)
 **Previously updated in session:** session_2026-04-28_deeper-analysis-and-fix-design (Claude Code)
@@ -33,7 +34,101 @@
 
 ---
 
-## ⚠️ POST-2026-04-29-DEFENSE-IN-DEPTH-IMPL-1 STATE (READ FIRST — updated 2026-04-29 second session of day)
+## ⚠️ POST-2026-04-29-DEFENSE-IN-DEPTH-IMPL-2 STATE (READ FIRST — updated 2026-04-29 third session of day)
+
+**As of 2026-04-29 Defense-in-Depth Audit Implementation Session 2 — Option β Session 2 of 2 — completes the audit. Code session — schema unchanged, prompts unchanged, DB unchanged.**
+
+### What this session shipped to W#1
+
+**Two user-facing defenses landed.** Both are documented in `DEFENSE_IN_DEPTH_AUDIT_DESIGN.md` §4 + §6 and resolve open questions Q3/Q4/Q5 from §8. With this session, the Defense-in-Depth Audit ROADMAP item flips from 🔄 IN PROGRESS to ✅ COMPLETE — only deliberately-deferred items remain (R3, G3 gated on Scale Session B; R4 deferred per Q2=B; dry-run mode deferred per §0.4).
+
+#### 1. Forensic NDJSON ring buffer (per design §4.2) + 📥 Download log button
+
+- New module `src/lib/forensic-log.ts` (~140 lines including doc) exposing the `ForensicLog` class (FIFO ring, capped at 1000 records ≈ 250 KB by default), the `ForensicRecord` shape, and a pure `buildForensicDownload` helper that builds the NDJSON content + a timestamped filename.
+- Per-record schema matches design §4.2 verbatim: `ts`, `session_id`, `project_id`, `batch_num`, `phase`, `canvas_node_count`, `canvas_keyword_count`, `tsv_input_tokens`, `tsv_output_tokens`, `model`, `cost_this_batch`, `reconciliation: { to_ai_sorted, to_reshuffled }`, `errors[]`. Optional fields are omitted from JSON when undefined (validated by unit test).
+- 4 emit phases per batch boundary, all wired in `AutoAnalyze.tsx`:
+  - **`pre_api_call`** at top of `processBatchV3` — captures canvas+keyword counts before request fires.
+  - **`post_api_call`** at bottom of `processBatchV3` — adds tokens used + cost computed.
+  - **`pre_apply`** at top of `doApplyV3` — captures counts before applier mutates state.
+  - **`post_apply`** at end of `doApplyV3` — captures new canvas counts + reconciliation flips + any post-apply errors (currently the unplaced-keyword warning surfaces here).
+  - **Error path:** the runLoop's outer catch emits a `post_api_call` record with `errors: [errMsg]` so failed batches still produce a diagnostic record.
+- Buffer + session id stored in component refs (`forensicLogRef`, `sessionIdRef`). `crypto.randomUUID()` mints a fresh session id at `handleStart`; both buffer and id are reset there. Pause/Resume preserves both — same session id continues.
+- `📥 Download log` button added to the panel footer (after Reconcile Now, before Close). Disabled when `forensicCount === 0`. Click triggers a browser blob-URL download via `URL.createObjectURL` + anchor-click; cleans up the URL after click. Filename: `aa-forensic-{first-8-chars-of-session-id}-{ISO-ts-with-colons-replaced}.ndjson`.
+- Per director Q4 = Option A: **client-side only in v1.** No server persistence; no third-party telemetry. Phase 2 multi-user can promote to server-side per-run logging when/if needed.
+- 20 new unit tests covering: default capacity (1000), custom capacity, zero/negative capacity throws, empty buffer behavior, FIFO eviction at capacity (with degenerate capacity=1 case), defensive copy on `getAll`, NDJSON one-record-per-line shape, nested reconciliation field, errors array, optional-field omission, `clear()` then re-emit, filename safety (no colons, session-id prefix, "no-session" placeholder for empty session id).
+
+#### 2. Run-start pre-flight self-test P1-P10 (per design §6) + UI section + Skip checkbox
+
+- New module `src/lib/preflight.ts` (~340 lines including doc) exposing `runPreflight(ctx)` returning `{ passed, checks[], firstFailIndex }`, plus individual exported `checkP1ApiKey` … `checkP10LocalStorage` for unit testing.
+- The runner is pure — its dependencies (network fetcher, raw fetcher for cross-origin direct-mode P9, localStorage-shaped storage) are passed in via `PreflightContext`. Unit tests substitute mocks; production wiring at `handleStart` uses real `authFetch` + `globalThis.fetch` + `globalThis.localStorage`.
+- Sequential execution. **First ✗ aborts the chain** — no subsequent checks execute and they're not included in the returned `checks[]`. Matches design §6.2 "first ✗ stops the chain" semantics.
+- The 10 checks (mapped to design §6.2):
+  - **P1 API key** — direct-mode: must be non-empty; server-proxy mode: pass-through (server uses env var).
+  - **P2 Seed words** — non-empty after trim; word count derived by splitting on whitespace + commas.
+  - **P3 Initial Prompt** — ≥100 chars (matches existing handleStart guard).
+  - **P4 Primer Prompt** — optional with half-paste guard: empty → pass-with-info; non-empty but <30 chars → fail (likely partial paste); ≥30 chars → pass.
+  - **P5 Canvas refs vs server** — fetches `/api/projects/{projectId}/canvas/nodes`; compares count + 5-stableId sample (sorted) against `nodesRef.current`.
+  - **P6 Keyword refs vs server** — same shape against `/api/projects/{projectId}/keywords` and `keywordsRef.current`.
+  - **P7 Pathway refs** — collects distinct `pathwayId` values from canvas; fails if canvas references pathways but `pathwaysRef.current` is empty.
+  - **P8 Keyword scope** — `unsortedKeywordCount > 0` (matches existing handleStart guard).
+  - **P9 Cheap test API call** — per director Q3 = Option A. Sends a `max_tokens: 10` non-streaming request via the same path the run will use (direct → Anthropic, server-proxy → `/api/ai/analyze`). Cost ~$0.001 per Start. Surfaces 401/404/network errors with the exact upstream message.
+  - **P10 localStorage probe** — write+read+delete a probe key; fails on private-browsing / quota-exceeded / storage-disabled / lossy-write.
+- UI: new section in the Auto-Analyze panel between Estimate and Progress. Shows `⏳ Pre-flight checks running…` while in flight, then per-check ✓/✗/⏳ rows with label + message. Failure mode keeps the section visible so the user can see what failed. Section hides itself only after the next successful Start.
+- "Skip pre-flight" checkbox below the Start button (off by default per design §6.5). When checked, the preflight chain is bypassed entirely — the existing fast `alert()` guards still fire for obvious gaps (empty API key, empty seed words, prompt <100 chars, no keywords in scope).
+- Start button shows `⏳ Pre-flight…` and is disabled while the chain is running so the user can't double-click.
+- Per director Q5 = Option A: **dry-run mode deferred** per design §0.4. Fixture-maintenance burden not yet justified; revisit after months of production use.
+- 38 new unit tests covering each check independently (every fail path + the happy path) plus runner sequencing (all-pass returns 10 checks + firstFailIndex=-1, P3 fails after 3, P1 fails after 1, P9 error message preserved through runner).
+
+### Tests + build
+
+- **188 src/lib tests pass** (was 130; added 20 forensic-log + 38 preflight = 58 new).
+- **13 ESLint rule tests pass** (separate file in `eslint-rules/`, unchanged this session).
+- **`npm run lint`** — 16 errors, 41 warnings — same baseline as the previous session ("Pre-existing 16 errors + 41 warnings in other rules are out of scope"). **Zero new errors or warnings introduced.**
+- **`npm run build` clean** — TypeScript clean in 13.3s; compiled in 17.9s; 17/17 static pages generated; all routes present.
+
+### What did NOT change this session
+
+- **Schema:** no changes. (Multi-workflow protocol Rule 25 honoured — schema-change-in-flight flag was "No" at session start; remains "No.")
+- **Prompts:** `AUTO_ANALYZE_PROMPT_V3.md` unchanged.
+- **API route shapes:** no changes. The pre-flight P5 + P6 + P9 use existing routes (`/canvas/nodes`, `/keywords`, `/api/ai/analyze`) without modifying them.
+- **DB:** no writes.
+- **Live site:** no deploy. Push gated by Rule 9 — director's call when ready.
+- **R3, G3, R4, dry-run:** explicitly deferred — see per-section notes above.
+
+### Files touched this session
+
+**Modified (3):**
+- `docs/ROADMAP.md` — Active Tools table row for W#1 + "🛡️ Redundancy + Defense-in-Depth Audit" item flipped to ✅ COMPLETE + top-of-file timestamp.
+- `docs/DEFENSE_IN_DEPTH_AUDIT_DESIGN.md` — header updated with Session 2 ship note + §4 status note + §6 status note.
+- `src/app/projects/[projectId]/keyword-clustering/components/AutoAnalyze.tsx` — imports for new modules; `forensicLogRef` + `sessionIdRef` + `forensicCount` state + 4 preflight state vars; `emitForensic` helper; `handleDownloadForensicLog` handler; `newSessionId` + `preflightFetcher` + `startRunLoop` helpers; `handleStart` rewritten as async with preflight gate; 4 forensic emit call sites in `processBatchV3` + `doApplyV3` + `runLoop` catch; preflight UI section; Start-button disabled-during-preflight + Skip-pre-flight checkbox + 📥 Download log button in controls bar.
+
+**New (4):**
+- `src/lib/forensic-log.ts`
+- `src/lib/forensic-log.test.ts`
+- `src/lib/preflight.ts`
+- `src/lib/preflight.test.ts`
+
+**Doc updates (in progress as of this STATE block):** `docs/KEYWORD_CLUSTERING_ACTIVE.md` (this file), `docs/CHAT_REGISTRY.md`, `docs/DOCUMENT_MANIFEST.md`.
+
+### Standing instructions for next session — four "NEXT" choices (option (a) from the prior session retired)
+
+(a) ~~Implementation Session 2 of Defense-in-Depth Audit~~ — RETIRED. Shipped this session.
+
+(b) **Scale Session B build (Tiered Canvas Serialization + intentFingerprint backfill).** Per `INPUT_CONTEXT_SCALING_DESIGN.md §6`. ~4-6 hours. **Now even safer to land than after Session 1** — pre-flight P5/P6 catches any tier-decider regression that desyncs refs from server, and the structured forensic log gives Scale Session B's first production runs cheap-to-attach diagnostic data. G3 (empty-fingerprint reject) lands as part of this session; R3 (Tier-1 fingerprint invariant) is built into the serializer.
+
+(c) **Phase-1 UI polish bundle** — Skeleton View on canvas + AST split-view topic-vs-description row alignment + Topics table row numbering. ~4-5 hours total. Independent of architectural work.
+
+(d) **Action-by-action feedback workflow design session.** Analogous to Scale Session A. ~3-4 hours design; implementation 2-4 sessions after.
+
+(e) **Optional out-of-session check-in:** director can fire a small ~2-batch fresh AI run on Bursitis (~$1-2, ~15 min) any time to empirically confirm Bug 1 + Bug 2 fixes hold under live load AND that the new pre-flight + forensic log don't disrupt the happy path. Not a session — a 15-minute test on a whim. **Newly useful this session** — exercising the pre-flight UX + generating real forensic records the director can inspect.
+
+**Recommendation:** (b) — Scale Session B build. With the Defense-in-Depth Audit fully shipped, Scale Session B is unblocked and is the highest-impact remaining architectural item. Pre-flight + structured logging will catch its regressions cheaply.
+
+**Director's framing from prior sessions:** sequence (a-design) → (a-impl-1) → (a-impl-2) → (b) → (e) → (c). With (a-impl-2) shipped, the natural next is (b).
+
+---
+
+## ⚠️ POST-2026-04-29-DEFENSE-IN-DEPTH-IMPL-1 STATE (preserved as historical context — last updated 2026-04-29 second session of day)
 
 **As of 2026-04-29 Defense-in-Depth Audit Implementation Session 1 — Option β from the prior STATE block's NEXT choices, choice (a). Code session — schema unchanged, prompts unchanged, DB unchanged.**
 

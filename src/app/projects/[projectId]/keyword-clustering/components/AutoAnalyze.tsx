@@ -11,6 +11,13 @@ import {
   parseOperationsJsonl,
 } from '@/lib/auto-analyze-v3';
 import { computeReconciliationUpdates } from '@/lib/reconciliation';
+import {
+  ForensicLog,
+  buildForensicDownload,
+  type ForensicPhase,
+  type ForensicReconciliation,
+} from '@/lib/forensic-log';
+import { runPreflight, type PreflightCheckResult } from '@/lib/preflight';
 import './auto-analyze.css';
 
 /* ── Types ─────────────────────────────────────────────────── */
@@ -160,6 +167,24 @@ export default function AutoAnalyze({
   // event can corrupt a run again. See ROADMAP §"🚨 Canvas-Blanking Intermittent Bug".
   const lastSeenNodesCountRef = useRef<number>(-1);
 
+  // Forensic NDJSON ring buffer (DEFENSE_IN_DEPTH_AUDIT_DESIGN §4). One
+  // record per batch boundary across 4 phases (pre_api_call, post_api_call,
+  // pre_apply, post_apply). Capped at 1000 records ≈ 250 KB. Downloadable
+  // from the panel footer (📥 Download log button). Cleared at handleStart
+  // so each fresh run starts with an empty buffer; survives Pause/Resume.
+  const forensicLogRef = useRef<ForensicLog>(new ForensicLog());
+  const sessionIdRef = useRef<string>('');
+  const [forensicCount, setForensicCount] = useState(0);
+
+  // Run-start pre-flight (DEFENSE_IN_DEPTH_AUDIT_DESIGN §6). When the user
+  // clicks Start, runPreflight() executes P1..P10 sequentially; the first
+  // ✗ aborts the chain. UI displays per-check status. `skipPreflight` is
+  // an opt-out checkbox (off by default) for power users / debugging.
+  const [skipPreflight, setSkipPreflight] = useState(false);
+  const [preflightRunning, setPreflightRunning] = useState(false);
+  const [preflightChecks, setPreflightChecks] = useState<PreflightCheckResult[]>([]);
+  const [preflightFailed, setPreflightFailed] = useState(false);
+
   // runLoop-reachable code MUST read nodes/allKeywords/sisterLinks/pathways
   // via *Ref.current, not raw props — the async runLoop closure freezes props
   // at component-render time. The 2026-04-18 stale-closure bug (Bug A) and
@@ -255,6 +280,72 @@ export default function AutoAnalyze({
     setLogEntries(prev => [...prev, { ts, msg, type }]);
     setTimeout(() => logRef.current?.scrollTo(0, logRef.current.scrollHeight), 50);
   }, []);
+
+  /* ── Forensic emit helper (DEFENSE_IN_DEPTH_AUDIT_DESIGN §4) ───
+     Single entry point for every per-batch-boundary record. Pulls
+     ts + session_id + project_id from the closure / refs so call
+     sites only have to provide the phase + the phase-specific data.
+     Updates `forensicCount` so the panel's record-count badge re-renders. */
+  const emitForensic = useCallback(
+    (
+      phase: ForensicPhase,
+      batchNum: number,
+      extra: {
+        canvasNodeCount?: number;
+        canvasKeywordCount?: number;
+        tsvInputTokens?: number;
+        tsvOutputTokens?: number;
+        costThisBatch?: number;
+        reconciliation?: ForensicReconciliation;
+        errors?: string[];
+      } = {},
+    ) => {
+      forensicLogRef.current.emit({
+        ts: new Date().toISOString(),
+        session_id: sessionIdRef.current,
+        project_id: projectId,
+        batch_num: batchNum,
+        phase,
+        canvas_node_count: extra.canvasNodeCount,
+        canvas_keyword_count: extra.canvasKeywordCount,
+        tsv_input_tokens: extra.tsvInputTokens,
+        tsv_output_tokens: extra.tsvOutputTokens,
+        model,
+        cost_this_batch: extra.costThisBatch,
+        reconciliation: extra.reconciliation,
+        errors: extra.errors,
+      });
+      setForensicCount(forensicLogRef.current.count());
+    },
+    [projectId, model],
+  );
+
+  /* ── Forensic download handler ────────────────────────────────
+     Browser-only — `URL.createObjectURL` + anchor-click dance.
+     Helper `buildForensicDownload` builds the content + filename;
+     this function does the DOM glue. */
+  function handleDownloadForensicLog() {
+    const buf = forensicLogRef.current;
+    if (buf.count() === 0) {
+      aaLog('No forensic records yet. Start a run to populate the log.', 'warn');
+      return;
+    }
+    const dl = buildForensicDownload(buf, sessionIdRef.current);
+    try {
+      const blob = new Blob([dl.content], { type: dl.mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = dl.filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      aaLog('📥 Forensic log downloaded (' + buf.count() + ' records)', 'ok');
+    } catch (e) {
+      aaLog('Download failed: ' + (e instanceof Error ? e.message : String(e)), 'error');
+    }
+  }
 
   /* ── Checkpoint persistence ─────────────────────────────────── */
   const cpKey = 'aa_checkpoint_' + projectId;
@@ -589,6 +680,13 @@ export default function AutoAnalyze({
     const estTokens = Math.ceil((systemText.length + userContent.length) / 4);
     aaLog('Batch ' + batch.batchNum + ' (V3) — sending ~' + estTokens.toLocaleString() + ' input tokens…', 'info');
 
+    // Forensic emit: pre_api_call. Captures the canvas + keyword shape the
+    // model is about to see; tokens/cost not yet known.
+    emitForensic('pre_api_call', batch.batchNum, {
+      canvasNodeCount: nodesRef.current.length,
+      canvasKeywordCount: keywordsRef.current.length,
+    });
+
     const requestBody = buildRequestBody(systemText, userContent);
     const apiResponse = await callApi(requestBody, batch.batchNum);
 
@@ -601,6 +699,16 @@ export default function AutoAnalyze({
     };
     if (apiResponse.usage.cache_read_input_tokens > 0) aaLog('  Cache hit: ' + apiResponse.usage.cache_read_input_tokens + ' tokens', 'info');
     if (apiResponse.stop_reason === 'max_tokens') aaLog('  ⚠ Response truncated (max_tokens)', 'warn');
+
+    // Forensic emit: post_api_call. Tokens + cost now known; canvas state
+    // unchanged from pre_api_call (apply happens later in doApplyV3).
+    emitForensic('post_api_call', batch.batchNum, {
+      canvasNodeCount: nodesRef.current.length,
+      canvasKeywordCount: keywordsRef.current.length,
+      tsvInputTokens: tokensUsed.input,
+      tsvOutputTokens: tokensUsed.output,
+      costThisBatch: calcCost(tokensUsed),
+    });
 
     return {
       // V3 carries the raw operations text in the topicsTableTsv slot purely
@@ -705,6 +813,14 @@ export default function AutoAnalyze({
     // therefore don't need a shadow.
     const allKeywords = keywordsRef.current;
     const pathways = pathwaysRef.current;
+
+    // Forensic emit: pre_apply. Counts captured immediately before the
+    // applier mutates state, so a pre/post pair characterizes what the
+    // apply did to the canvas.
+    emitForensic('pre_apply', batch.batchNum, {
+      canvasNodeCount: nodesRef.current.length,
+      canvasKeywordCount: keywordsRef.current.length,
+    });
 
     // Fetch canonical nextStableIdN so issued stableIds cannot collide with
     // anything that may have changed since page load (e.g., admin manually
@@ -889,16 +1005,35 @@ export default function AutoAnalyze({
 
     // Mark batch keywords as ✓.
     const verified = batch.keywordIds.filter(id => placedSet.has(id) || archivedSet.has(id));
+    const unplacedAfterApply = batch.keywordIds.filter(id => !placedSet.has(id) && !archivedSet.has(id));
     if (verified.length === batch.keywordIds.length) {
       aaLog('  ✓ All ' + batch.keywordIds.length + ' keywords verified (placed or archived).', 'ok');
     } else {
-      const unplacedIds = batch.keywordIds.filter(id => !placedSet.has(id) && !archivedSet.has(id));
-      aaLog('  ⚠ ' + unplacedIds.length + ' batch keyword(s) unplaced after apply: ' + unplacedIds.join(', '), 'warn');
-      batch._unplacedKws = unplacedIds.map(id => {
+      aaLog('  ⚠ ' + unplacedAfterApply.length + ' batch keyword(s) unplaced after apply: ' + unplacedAfterApply.join(', '), 'warn');
+      batch._unplacedKws = unplacedAfterApply.map(id => {
         const k = allKeywords.find(x => x.id === id);
         return k ? k.keyword : id;
       });
     }
+
+    // Forensic emit: post_apply. Captures the new canvas counts after the
+    // rebuild, the reconciliation outcome, and any batch-level errors
+    // (currently the unplaced-keyword warning surfaces here as a soft error).
+    const postApplyErrors: string[] = [];
+    if (unplacedAfterApply.length > 0) {
+      postApplyErrors.push(
+        unplacedAfterApply.length + ' batch keyword(s) unplaced after apply: ' + unplacedAfterApply.join(','),
+      );
+    }
+    emitForensic('post_apply', batch.batchNum, {
+      canvasNodeCount: applyResult.newState.nodes.length,
+      canvasKeywordCount: keywordsRef.current.length,
+      reconciliation: {
+        to_ai_sorted: reconcile.flippedToAiSorted,
+        to_reshuffled: reconcile.flippedToReshuffled,
+      },
+      errors: postApplyErrors.length > 0 ? postApplyErrors : undefined,
+    });
   }
 
   /* ── Main run loop ─────────────────────────────────────────── */
@@ -1011,6 +1146,16 @@ export default function AutoAnalyze({
         const errObj = err as Error & { _isStall?: boolean; _noRetry?: boolean };
         const errMsg = errObj.message || String(err);
 
+        // Forensic emit: batch error. Phase=post_api_call carries the
+        // error message so the diagnostic record has clear "this batch
+        // failed at the API stage with X" signal even when subsequent
+        // pre/post_apply pairs never fire.
+        emitForensic('post_api_call', batch.batchNum, {
+          canvasNodeCount: nodesRef.current.length,
+          canvasKeywordCount: keywordsRef.current.length,
+          errors: [errMsg],
+        });
+
         if (errObj._isStall) {
           batch.attempts--;
           batch.stallAttempts++;
@@ -1053,14 +1198,36 @@ export default function AutoAnalyze({
   }
 
   /* ── Control functions ─────────────────────────────────────── */
-  function handleStart() {
-    if (apiMode === 'direct' && !apiKey.trim()) { alert('Please enter your Anthropic API key.'); return; }
-    if (!seedWords.trim()) { alert('Please enter seed words.'); return; }
-    if (!initialPrompt || initialPrompt.length < 100) { alert('Please paste your AI Analysis Prompt (expand the prompt section).'); setPromptExpanded(true); return; }
-    const unsorted = getUnsortedKws();
-    if (!unsorted.length) { alert('No keywords matching scope.'); return; }
+  /**
+   * Generates a fresh session id for forensic-log records. Uses
+   * `crypto.randomUUID()` when available (modern browsers); falls back
+   * to a timestamp+random concatenation if not. The id ties together
+   * every record from one run; multiple Pause/Resume cycles share one
+   * session id.
+   */
+  function newSessionId(): string {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+    return 'sess-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+  }
 
-    const queue = buildQueue();
+  /**
+   * Wraps the existing `authFetch` for the preflight runner's fetcher
+   * dependency. authFetch throws on missing JWT, which the preflight
+   * checks correctly classify as P5/P6/P9 fail; no special handling.
+   */
+  async function preflightFetcher(url: string, init?: RequestInit): Promise<Response> {
+    return authFetch(url, init);
+  }
+
+  /**
+   * Cleared-state initialiser shared by handleStart's "actually start the
+   * run" path. Was inlined inside handleStart pre-preflight; extracted so
+   * the preflight gate can call it after the chain passes without
+   * duplicating the body.
+   */
+  function startRunLoop(queue: BatchObj[], unsortedCount: number) {
     setBatches(queue);
     batchesRef.current = queue;
     setCurrentIdx(0);
@@ -1073,7 +1240,14 @@ export default function AutoAnalyze({
     abortRef.current = false;
     startTimeRef.current = Date.now();
 
-    aaLog('Auto-Analyze started. ' + queue.length + ' batches, ' + unsorted.length + ' keywords.', 'info');
+    // Fresh forensic session: clear the buffer + mint a new id. Any prior
+    // run's records are gone after this — the user has had the chance to
+    // download them via the panel button before clicking Start again.
+    forensicLogRef.current.clear();
+    sessionIdRef.current = newSessionId();
+    setForensicCount(0);
+
+    aaLog('Auto-Analyze started. ' + queue.length + ' batches, ' + unsortedCount + ' keywords.', 'info');
     const scopeLabel =
       keywordScope === 'unsorted-only' ? 'Unsorted + Reshuffled'
       : keywordScope === 'non-ai-sorted' ? 'Non-AI-Sorted'
@@ -1089,6 +1263,74 @@ export default function AutoAnalyze({
     }, 1000);
 
     runLoop();
+  }
+
+  async function handleStart() {
+    // Fast guard: don't even attempt the start if obvious things are missing.
+    // These are also caught by the preflight chain (P1, P2, P3, P8) but the
+    // alert() gives an immediate signal at click time before we render the
+    // preflight UI section.
+    if (apiMode === 'direct' && !apiKey.trim()) { alert('Please enter your Anthropic API key.'); return; }
+    if (!seedWords.trim()) { alert('Please enter seed words.'); return; }
+    if (!initialPrompt || initialPrompt.length < 100) { alert('Please paste your AI Analysis Prompt (expand the prompt section).'); setPromptExpanded(true); return; }
+    const unsorted = getUnsortedKws();
+    if (!unsorted.length) { alert('No keywords matching scope.'); return; }
+
+    const queue = buildQueue();
+
+    // Pre-flight (per DEFENSE_IN_DEPTH_AUDIT_DESIGN §6 + director Q3=A
+    // including P9 cheap test API call). Power-users can opt out via the
+    // Skip checkbox, and the run starts immediately.
+    if (!skipPreflight) {
+      setPreflightRunning(true);
+      setPreflightFailed(false);
+      setPreflightChecks([]);
+      aaLog('Running pre-flight checks (10 checks, ~2 seconds)…', 'info');
+      try {
+        const result = await runPreflight({
+          apiMode,
+          apiKey,
+          model,
+          seedWords,
+          initialPrompt,
+          primerPrompt,
+          projectId,
+          nodes: nodesRef.current.map((n) => ({ stableId: n.stableId, pathwayId: n.pathwayId ?? null })),
+          keywords: keywordsRef.current.map((k) => ({ id: k.id })),
+          pathways: pathwaysRef.current.map((p) => ({ id: p.id })),
+          unsortedKeywordCount: unsorted.length,
+          fetcher: preflightFetcher,
+          rawFetcher: globalThis.fetch.bind(globalThis),
+          storage: globalThis.localStorage,
+        });
+        setPreflightChecks(result.checks);
+        setPreflightRunning(false);
+
+        if (!result.passed) {
+          const failed = result.checks.find((c) => c.status === 'fail');
+          setPreflightFailed(true);
+          aaLog(
+            'Pre-flight FAILED: ' + (failed?.label ?? '?') + ' — ' + (failed?.message ?? '?') + '. Fix and retry, or check "Skip pre-flight" to bypass.',
+            'error',
+          );
+          return;
+        }
+
+        aaLog('Pre-flight passed (' + result.checks.length + ' checks).', 'ok');
+      } catch (e) {
+        setPreflightRunning(false);
+        setPreflightFailed(true);
+        aaLog('Pre-flight runner threw an error: ' + (e instanceof Error ? e.message : String(e)), 'error');
+        return;
+      }
+    } else {
+      // Skip mode — clear any stale check display.
+      setPreflightChecks([]);
+      setPreflightFailed(false);
+      aaLog('Pre-flight SKIPPED by user (Skip pre-flight checkbox).', 'warn');
+    }
+
+    startRunLoop(queue, unsorted.length);
   }
 
   function handlePause() {
@@ -1470,6 +1712,36 @@ export default function AutoAnalyze({
             </div>
           )}
 
+          {/* ── Pre-flight self-test (DEFENSE_IN_DEPTH_AUDIT_DESIGN §6) ── */}
+          {(preflightRunning || preflightChecks.length > 0) && (
+            <div className="aa-section">
+              <div className="aa-section-title">
+                {preflightRunning ? '⏳ Pre-flight checks running…' : preflightFailed ? '✗ Pre-flight failed' : '✓ Pre-flight passed'}
+              </div>
+              <div style={{ fontSize: '11px', lineHeight: 1.6 }}>
+                {preflightRunning && preflightChecks.length === 0 && (
+                  <div style={{ color: '#94a3b8', fontStyle: 'italic' }}>Running 10 checks (~2 seconds)…</div>
+                )}
+                {preflightChecks.map((c) => {
+                  const icon = c.status === 'pass' ? '✓' : c.status === 'fail' ? '✗' : '⏳';
+                  const color = c.status === 'pass' ? '#22c55e' : c.status === 'fail' ? '#ef4444' : '#94a3b8';
+                  return (
+                    <div key={c.id} style={{ display: 'flex', gap: '8px', alignItems: 'baseline' }}>
+                      <span style={{ color, fontWeight: 'bold', minWidth: '14px' }}>{icon}</span>
+                      <span style={{ color: '#cbd5e1', minWidth: '180px' }}>{c.label}:</span>
+                      <span style={{ color: c.status === 'fail' ? '#fca5a5' : '#94a3b8' }}>{c.message}</span>
+                    </div>
+                  );
+                })}
+                {preflightFailed && (
+                  <div style={{ marginTop: '8px', fontSize: '10px', color: '#fca5a5' }}>
+                    Fix the failing check above and click Start again — or check &ldquo;Skip pre-flight&rdquo; below to bypass (not recommended for paid runs).
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* ── Progress ── */}
           {batches.length > 0 && (
             <div className="aa-section">
@@ -1527,10 +1799,33 @@ export default function AutoAnalyze({
 
         {/* ── Control buttons ── */}
         <div className="aa-controls">
-          {aaState === 'IDLE' && <button className="aa-btn aa-btn-start" onClick={handleStart}>▶ Start</button>}
+          {aaState === 'IDLE' && (
+            <button
+              className="aa-btn aa-btn-start"
+              onClick={handleStart}
+              disabled={preflightRunning}
+              title={preflightRunning ? 'Pre-flight checks running…' : 'Start the Auto-Analyze run.'}
+            >
+              {preflightRunning ? '⏳ Pre-flight…' : '▶ Start'}
+            </button>
+          )}
           {aaState === 'RUNNING' && <button className="aa-btn aa-btn-pause" onClick={handlePause}>⏸ Pause</button>}
           {(aaState === 'PAUSED' || aaState === 'API_ERROR' || aaState === 'VALIDATION_ERROR') && <button className="aa-btn aa-btn-resume" onClick={handleResume}>▶ Resume</button>}
           {aaState !== 'IDLE' && aaState !== 'ALL_COMPLETE' && <button className="aa-btn aa-btn-cancel" onClick={handleCancel}>✕ Cancel</button>}
+          {aaState === 'IDLE' && (
+            <label
+              style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '10px', color: '#94a3b8', cursor: 'pointer' }}
+              title="Skip the pre-flight self-test. Off by default — only enable for power-user debugging."
+            >
+              <input
+                type="checkbox"
+                checked={skipPreflight}
+                onChange={(e) => setSkipPreflight(e.target.checked)}
+                style={{ cursor: 'pointer' }}
+              />
+              Skip pre-flight
+            </label>
+          )}
           <button
             className="aa-btn"
             onClick={handleReconcileNow}
@@ -1538,6 +1833,14 @@ export default function AutoAnalyze({
             title="Walk every keyword against the live canvas and fix any status drift. Safe to run any time the panel is not actively running."
           >
             {reconcileBusy ? '⏳ Reconciling…' : '↻ Reconcile Now'}
+          </button>
+          <button
+            className="aa-btn"
+            onClick={handleDownloadForensicLog}
+            disabled={forensicCount === 0}
+            title="Download a structured per-batch log (NDJSON) capturing canvas size, token counts, cost, and reconciliation outcomes for every batch. Use to attach to a bug report."
+          >
+            📥 Download log{forensicCount > 0 ? ' (' + forensicCount + ')' : ''}
           </button>
           <button className="aa-btn aa-btn-close" onClick={handleClose}>Close</button>
         </div>
