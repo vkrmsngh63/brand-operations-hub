@@ -1,8 +1,9 @@
 # DOCUMENT MANIFEST
 ## Ground-truth registry of every handoff document in the PLOS system
 
-**Last updated:** April 29, 2026 (Twenty-first Claude Code session, methodology continuation — multi-workflow protocol shipped. NEW Group A doc #16: `MULTI_WORKFLOW_PROTOCOL.md`. ROADMAP gained "Current Active Tools" table at top. HANDOFF_PROTOCOL gained Rule 25 (multi-workflow coordination). CLAUDE_CODE_STARTER updated for new Group A count + multi-workflow awareness. KEYWORD_CLUSTERING_ACTIVE notes parallel W#2 reality. Methodology: W#1 stays on `main`; W#k for k ≥ 2 uses feature branches `workflow-N-<slug>`; doc section ownership rules + schema-change handshake + active-tools table prevent parallel-chat collisions. Earlier in same session: bug-fix work shipped — Bug 1 + Bug 2 with 3 layers of defense each, 26 new unit tests, build clean, Bursitis canvas wiped wholesale per director's data-deprioritization directive.)
-**Last updated in session:** session_2026-04-28_canvas-blanking-and-closure-staleness-fix (Claude Code)
+**Last updated:** April 29, 2026 (Twenty-second Claude Code session — Defense-in-Depth Audit design session. NEW Group B doc: `DEFENSE_IN_DEPTH_AUDIT_DESIGN.md` (~720 lines) — captures locked design for 6 redundancy + invariant-enforcement areas: per-fix redundancy matrix, ESLint custom rule, runtime invariants, forensic instrumentation, server-side guards, run-start pre-flight self-test. Three implementation-sequencing options laid out with β recommended. ROADMAP "🛡️ Redundancy + Defense-in-Depth Audit" item status flipped from PARTIAL to 📋 DESIGNED ONLY. Active Tools table row for W#1 updated. KEYWORD_CLUSTERING_ACTIVE gained new POST-2026-04-29-DEFENSE-IN-DEPTH-AUDIT-DESIGN STATE block. CHAT_REGISTRY new row. Design-only session — no code, no DB, no schema, no prompt changes.)
+**Last updated in session:** session_2026-04-29_defense-in-depth-audit-design (Claude Code)
+**Previously updated in session:** session_2026-04-28_canvas-blanking-and-closure-staleness-fix (Claude Code)
 **Previously updated in session:** session_2026-04-28_deeper-analysis-and-fix-design (Claude Code)
 **Previously updated in session:** session_2026-04-28_scale-session-0-outcome-c-and-full-run-feedback (Claude Code)
 **Previously updated in session:** session_2026-04-27_input-context-scaling-design (Claude Code)
@@ -54,33 +55,32 @@ These 13 documents form the persistent handoff context.
 | 15 | `MODEL_QUALITY_SCORING.md` | Stability-score algorithm spec. Defines 0-10 stability_score per AI output item, factors that add/subtract to score, model's interpretation instructions, JUSTIFY_RESTRUCTURE payload requirement for high-score modifications, admin scoring guidelines (1-5 scale with 4 evaluation dimensions), meta-note on how algorithm was derived + review triggers + how to propose weight changes. | 2026-04-20 | NO |
 | 16 | `MULTI_WORKFLOW_PROTOCOL.md` | **NEW 2026-04-29.** Methodology for parallel Claude Code chats on different PLOS workflows. Branch strategy (W#1 on `main`; W#k for k ≥ 2 on `workflow-N-<slug>` feature branches). Doc section ownership table (which sections of which Group A docs each chat owns + which are append-only + which need cross-workflow surfacing). Drift coordination (mandatory pull-rebase before commit + before drift check; schema-change handshake; dev-server exclusivity; build/test non-exclusivity). The "Current Active Tools" table at top of `ROADMAP.md` is the single source of truth for parallel-workflow state — every session reads at start, updates its own row at end. Includes Appendix A (canonical W#2 launch prompt) + Appendix B (canonical W#1 continuation prompt) for paste-ready session-start use. Read at session start whenever today's task references W#k for k ≥ 2 OR the Active Tools table shows multiple workflows in flight. | 2026-04-29 (created this session) | ✅ YES |
 
-**Group A count: 16 documents.** 6 modified this session (ROADMAP, HANDOFF_PROTOCOL, CLAUDE_CODE_STARTER, DOCUMENT_MANIFEST, KEYWORD_CLUSTERING_ACTIVE, plus the new MULTI_WORKFLOW_PROTOCOL). Plus the bug-fix work earlier in the same session also modified ROADMAP, PLATFORM_ARCHITECTURE, CORRECTIONS_LOG, CHAT_REGISTRY, KEYWORD_CLUSTERING_ACTIVE, DOCUMENT_MANIFEST. 9 not modified this session.
+**Group A count: 16 documents.** 3 modified this session (ROADMAP, CHAT_REGISTRY, DOCUMENT_MANIFEST). 13 not modified this session.
 
 **Not created this session (Group A):** no new Group A docs.
 
 **Created this session (Group B):**
-- None — pure analysis + fix-design + ROADMAP-update session; no new Group B docs created. New Redundancy + Defense-in-Depth Audit design item captured as forward-pointing ROADMAP entry; its dedicated design doc will be created in a future design session if the director picks option (c) from the next-session menu.
+- `docs/DEFENSE_IN_DEPTH_AUDIT_DESIGN.md` — ~720 lines. Locks the design for the 6 redundancy + invariant-enforcement areas the prior session's POST-bug-fix STATE block listed as still-pending. §0 status + scope + reversibility framing + mechanical assumptions; §1 per-fix redundancy matrix for 6 items (A. canvas-blanking SHIPPED, B. closure-staleness SHIPPED, C. mid-run queue refresh PENDING, D. Scale Session B PENDING, E. action-by-action feedback DESIGN-PENDING, F. Reconcile Now SHIPPED); §2 ESLint custom rule `no-prop-reads-in-runloop` codifying the line-163 invariant via `@runloop-reachable` JSDoc annotation; §3 four runtime invariants R1-R4 (R1 already shipped); §4 forensic instrumentation NDJSON log + ring buffer + download button; dry-run mode designed but DEFERRED; §5 three server-side guards G1 (`/canvas/rebuild` payload sanity ≥50% drop), G2 (`/canvas/nodes` GET retry-wrapper for Prisma transient errors), G3 (PATCH rejects empty intentFingerprint — Scale Session B prerequisite); §6 ten pre-flight self-test items P1-P10; §7 three implementation-sequencing options (α/β/γ) with β recommended (two-session split: Session 1 = §2+§3.R1-R3+§5.G1+§5.G2 in ~3-4 hrs; Session 2 = §4 + §6 in ~3-4 hrs); §8 six open questions for director; §9 cross-references.
 
 **Modified this session (Group B):**
-- `docs/KEYWORD_CLUSTERING_ACTIVE.md` — new POST-2026-04-28-DEEPER-ANALYSIS STATE block added above the prior POST-2026-04-28-SCALE-SESSION-0-OUTCOME-C STATE block (which is now demoted to "preserved as historical context"); header timestamp updated; new STATE block contains: 2 bug diagnoses with locked fixes; quality-issue catalog with topic refs; V3-prompt context section explaining why model behavior was correct given the inputs; full director 8-item feedback table; 5-option NEXT choice menu with recommended sequencing.
+- `docs/KEYWORD_CLUSTERING_ACTIVE.md` — new POST-2026-04-29-DEFENSE-IN-DEPTH-AUDIT-DESIGN STATE block prepended above prior STATE blocks; prior bug-fix STATE block demoted to "preserved as historical context"; header timestamp updated; new STATE block summarizes the 6 design areas + 5-option NEXT menu with (a) Implementation Session 1 of Defense-in-Depth Audit recommended.
 
 **Modified this session (operational, not Group A):**
 - None this session.
 
 **Code changes this session (src/):**
-- NONE. This was a pure analysis + fix-design + doc-update session. No src/ changes. No DB writes (all DB queries were read-only via Prisma `findMany`/`groupBy`/`count`).
+- NONE. This was a pure design-only session. No src/ changes. No DB queries. No prompt changes.
 
 **Code commits already pushed mid-session:** none (no code changes).
 
 **End-of-session doc commit (this commit, pending Rule-9 push approval):**
-- `docs/ROADMAP.md` (Canvas-Blanking section status flipped from "investigation pending" to "ROOT CAUSE DIAGNOSED" with full cascade table + forensic confirmation + locked fix design; NEW HIGH-severity section "Reconciliation-Pass Closure-Staleness Bug"; NEW design item "Redundancy + Defense-in-Depth Audit"; ORIGINAL Canvas-Blanking entry preserved below the new diagnosed entry; header timestamp + session ID)
-- `docs/KEYWORD_CLUSTERING_ACTIVE.md` (new POST-2026-04-28-DEEPER-ANALYSIS STATE block above prior STATE blocks; full forensic detail + 8-item feedback table + 5-option NEXT menu)
-- `docs/PLATFORM_ARCHITECTURE.md` (§10 Canvas-Blanking entry status flipped; NEW Reconciliation-Pass Closure-Staleness entry; header)
-- `docs/CORRECTIONS_LOG.md` (new MEDIUM-severity entry for missing-feedback-items mistake with full procedural prevention pattern)
-- `docs/CHAT_REGISTRY.md` (new top row for session_2026-04-28_deeper-analysis-and-fix-design; twentieth Claude Code session)
-- `docs/DOCUMENT_MANIFEST.md` (this file — timestamps + modified flags + this-session summary)
+- `docs/DEFENSE_IN_DEPTH_AUDIT_DESIGN.md` (NEW — ~720 lines; full design for 6 areas; implementation pending)
+- `docs/ROADMAP.md` (🛡️ Redundancy + Defense-in-Depth Audit item flipped from PARTIAL to 📋 DESIGNED ONLY with implementation-sequencing options laid out; Active Tools table row for W#1 updated; header timestamp + session ID)
+- `docs/KEYWORD_CLUSTERING_ACTIVE.md` (new POST-2026-04-29-DEFENSE-IN-DEPTH-AUDIT-DESIGN STATE block prepended; prior bug-fix STATE block demoted to historical; header)
+- `docs/CHAT_REGISTRY.md` (new top row for session_2026-04-29_defense-in-depth-audit-design; twenty-second Claude Code session; header)
+- `docs/DOCUMENT_MANIFEST.md` (this file — timestamps + Group B row added for new design doc + this-session summary)
 
-**Earlier-session code changes (Phase-1 polish bundle and prior — already documented in this manifest's prior-session entries; not duplicated here).**
+**Earlier-session code changes (bug-fix session and prior — already documented in this manifest's prior-session entries; not duplicated here).**
 
 ---
 
@@ -92,7 +92,8 @@ These are tool-specific working documents. They travel with chats that touch the
 
 | Document | Tool/System | Status | Last modified | Modified this chat? |
 |---|---|---|---|---|
-| `KEYWORD_CLUSTERING_ACTIVE.md` | Keyword Clustering (workflow 1) | Active development | 2026-04-28 (Deeper-analysis session — new POST-2026-04-28-DEEPER-ANALYSIS STATE block above prior STATE blocks; full forensic detail of canvas-blanking root cause + closure-staleness diagnosis + quality-issue catalog + V3-prompt context + 8-item director feedback table + 5-option NEXT choice menu; header timestamp updated) | ✅ YES |
+| `KEYWORD_CLUSTERING_ACTIVE.md` | Keyword Clustering (workflow 1) | Active development | 2026-04-29 (Defense-in-Depth Audit design session — new POST-2026-04-29-DEFENSE-IN-DEPTH-AUDIT-DESIGN STATE block prepended; prior bug-fix STATE block demoted to historical; header timestamp updated; 5-option NEXT menu with (a) Implementation Session 1 of Defense-in-Depth Audit recommended) | ✅ YES |
+| `DEFENSE_IN_DEPTH_AUDIT_DESIGN.md` | Keyword Clustering / Auto-Analyze redundancy + invariant-enforcement design | Active design — implementation pending | 2026-04-29 (created this session — ~720 lines covering 6 design areas: §1 per-fix redundancy matrix, §2 ESLint custom rule `no-prop-reads-in-runloop`, §3 four runtime invariants R1-R4, §4 forensic instrumentation NDJSON log + dry-run mode, §5 three server-side guards G1/G2/G3, §6 ten-item run-start pre-flight P1-P10. §7 three implementation-sequencing options with β recommended. §8 six open questions for director. §9 cross-references.) | ✅ YES (created) |
 | `PIVOT_DESIGN.md` | Keyword Clustering / Auto-Analyze architectural pivot | Pivot complete (Sessions A-E done); doc retained for historical reference | 2026-04-27 (Scale Session A — §5 input-scaling row pointer updated to reference new INPUT_CONTEXT_SCALING_DESIGN.md; header timestamp) | NO |
 | `AUTO_ANALYZE_PROMPT_V3.md` | Keyword Clustering / Auto-Analyze prompts | LIVE — canonical for what the director re-pastes into the Auto-Analyze panel; updated 2026-04-26 with Strategy 3 layered placement + intent-equivalence binding rule | 2026-04-26 (Workflow-transition architecture session — Strategy 3 layered placement + intent-equivalence rewrite; file grew 629 → 769 lines; director must re-paste into Auto-Analyze UI before next run) | NO |
 | `AUTO_ANALYZE_PROMPT_V2.md` | Keyword Clustering / Auto-Analyze prompts (HISTORICAL) | Historical reference only — the V2 full-table-rewrite contract that ran every Bursitis batch through Session 3b verification; preserved untouched until V3 is field-validated through Pivot Sessions D + E, then archivable | 2026-04-18 (last canonical edit predating the pivot) | NO |

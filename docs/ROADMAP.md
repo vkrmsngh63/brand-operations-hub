@@ -1,8 +1,9 @@
 # ROADMAP
 ## Product Launch Operating System (PLOS) — Development Execution Plan
 
-**Last updated:** April 29, 2026 (Bug-fix-and-canvas-wipe session, 2026-04-28 → 2026-04-29 cross-day — Bug 1 + Bug 2 SHIPPED with three independent layers of defense each (NOT just the surgical one-liners originally locked); pure helpers extracted to `src/lib/canvas-fetch-parser.ts` + `src/lib/reconciliation.ts`; `useCanvas` rewritten with uniform throw-on-failure contract; `doApplyV3` shadows closure-frozen props at function entry; `runLoop` gained fail-fast pre-flight; Reconcile Now admin button shipped. 26 new unit tests + 74 existing all pass. Build clean. Bursitis canvas WIPED wholesale per director's data-deprioritization directive: 690 nodes + 241 sister links + 4 pathways deleted in one Prisma transaction; 2,256 keywords reset to Unsorted; canvas state reset to nextStableIdN=1; 73 archived keywords preserved. Working tree clean.)
-**Last updated in session:** session_2026-04-28_canvas-blanking-and-closure-staleness-fix (Claude Code)
+**Last updated:** April 29, 2026 (Defense-in-Depth Audit design session — design-only, no code, no DB writes, no schema, no prompt changes. Created new Group B doc `DEFENSE_IN_DEPTH_AUDIT_DESIGN.md` (~720 lines) covering the 6 design areas: per-fix redundancy matrix, ESLint custom rule, runtime invariants, forensic instrumentation, server-side guards, run-start pre-flight self-test. ROADMAP "🛡️ Redundancy + Defense-in-Depth Audit" item flipped from PARTIAL to 📋 DESIGNED ONLY with implementation-sequencing options laid out. Active Tools table row for W#1 updated. Working tree contains 1 new file + 4 doc-update files staged for commit.)
+**Last updated in session:** session_2026-04-29_defense-in-depth-audit-design (Claude Code)
+**Previously updated in session:** session_2026-04-28_canvas-blanking-and-closure-staleness-fix (Claude Code)
 **Previously updated in session:** session_2026-04-28_deeper-analysis-and-fix-design (Claude Code)
 **Previously updated in session:** session_2026-04-28_scale-session-0-outcome-c-and-full-run-feedback (Claude Code)
 **Previously updated in session:** session_2026-04-27_input-context-scaling-design (Claude Code)
@@ -42,7 +43,7 @@
 
 | Workflow | Status | Branch | Last Session | Next Session | Schema-change in flight? |
 |---|---|---|---|---|---|
-| W#1 Keyword Clustering | 🔄 Active dev — stabilization | `main` | 2026-04-29 bug-fix-and-canvas-wipe (canvas-blanking + closure-staleness fixed with 3 layers each; Reconcile Now button shipped; Bursitis canvas wiped) | (c) Defense-in-Depth Audit design (recommended) — or (b) Scale Session B / (d) Phase-1 UI polish / (e) Action-by-action feedback design | No |
+| W#1 Keyword Clustering | 🔄 Active dev — stabilization | `main` | 2026-04-29 defense-in-depth-audit-design (DEFENSE_IN_DEPTH_AUDIT_DESIGN.md created — 6 sections: per-fix redundancy matrix, ESLint custom rule, runtime invariants R1-R4, forensic instrumentation + dry-run, server-side guards G1/G2/G3, run-start pre-flight P1-P10; 3 implementation-sequencing options with β recommended) | Implementation Session 1 of Defense-in-Depth Audit (Option β: ESLint + runtime invariants R1-R3 + server-side guards G1+G2; ~3-4 hrs) — OR (b) Scale Session B build / (d) Phase-1 UI polish / (e) Action-by-action feedback design | No |
 | W#2 Competition Scraping & Deep Analysis | 🆕 About to start | `workflow-2-competition-scraping` (created by W#2's first session) | (none yet) | Workflow Requirements Interview per HANDOFF_PROTOCOL Rule 18 | No |
 | W#3 Therapeutic Strategy | Not yet started | — | — | — | — |
 | W#4–14 | Not yet started | — | — | — | — |
@@ -636,9 +637,11 @@ Option (a) is more useful long-term — it doubles as a forensic tool for future
 
 ---
 
-### 🛡️ Redundancy + Defense-in-Depth Audit (PARTIAL — captured 2026-04-28; partially implemented 2026-04-29; full design session still pending)
+### 🛡️ Redundancy + Defense-in-Depth Audit (📋 DESIGNED ONLY — captured 2026-04-28; partially implemented 2026-04-29; design session completed 2026-04-29; implementation pending)
 
-**Status (updated 2026-04-29):** **Partially implemented this session as part of the Bug 1 + Bug 2 fixes**, per director's *"fix the fundamental problem long term"* directive. The per-fix redundancy matrix for those two specific bugs is implicit in the 3-layer-each defense pattern shipped (see the two FIXED entries above). What's still pending design is the codebase-wide enforcement infrastructure (ESLint custom rule for the shadow pattern; runtime invariant checks; forensic instrumentation; server-side guards; pre-flight self-tests at run start) — that work needs a dedicated design session analogous to Scale Session A.
+**Status (updated 2026-04-29 end-of-day):** **Design session completed. Full design lives in `DEFENSE_IN_DEPTH_AUDIT_DESIGN.md` (Group B; ~720 lines).** The design covers six areas: §1 per-fix redundancy matrix (covering shipped bugs 1+2 plus pending items C-F including Scale Session B, queue refresh, action-by-action feedback workflow, Reconcile Now); §2 ESLint custom-rule `no-prop-reads-in-runloop` codifying the line-163 invariant as a build-time gate; §3 four runtime invariants R1-R4 (R1 already shipped as runLoop fail-fast pre-flight); §4 forensic instrumentation (NDJSON structured log + ring buffer + download button; dry-run mode deferred per design §0.4); §5 three server-side guards G1 (`/canvas/rebuild` payload sanity ≥50% drop without explicit deletes), G2 (`/canvas/nodes` retry-on-transient-error wrapper for Prisma error codes P1001/P1002/P1008/P2034), G3 (PATCH rejects empty intentFingerprint — Scale Session B prerequisite); §6 ten pre-flight self-test items P1-P10 including ref-vs-DB consistency check + cheap test API call. §7 lays out three implementation-sequencing options (α full bundle / β two-session split / γ cherry-pick) with β recommended. §8 lists six open questions for director. Implementation work itself is now scoped and ready to start in a follow-up session.
+
+**Earlier — Partially implemented 2026-04-29 as part of the Bug 1 + Bug 2 fixes**, per director's *"fix the fundamental problem long term"* directive. The per-fix redundancy matrix for those two specific bugs is implicit in the 3-layer-each defense pattern shipped (see the two FIXED entries above and Sections 1.A + 1.B of the design doc).
 
 **What shipped this session (counts toward this item, not a separate item):**
 - Per-fix redundancy matrix for Bug 1: 3 layers (defensive `useCanvas` contract + runLoop fail-fast pre-flight + existing API_ERROR routing). Each layer alone catches the bug; all three must fail simultaneously for recurrence.
@@ -652,9 +655,9 @@ Option (a) is more useful long-term — it doubles as a forensic tool for future
 3. **Server-side guards** — `/canvas/rebuild` could reject payloads where `deleteNodeIds.length === 0` AND the new-node count is dramatically smaller than the existing canvas size (potential canvas-blanking signature); `/canvas/nodes` GET could be wrapped in a retry-on-transient-error layer so the underlying connection-pool flake doesn't surface as "canvas is empty" at the client.
 4. **Pre-flight checks at run start** — before any batches process, run a self-test: confirm `nodesRef.current` matches DB; confirm `keywordsRef.current` matches DB; confirm prompts loaded correctly. Fail fast if anything is off, before $50 of API spend.
 
-**Estimated effort:** 1 design session (3-4 hours) producing the full matrix + locked list of redundancies to build + multi-session implementation plan. Implementation work itself depends on what the matrix recommends — could be 1 session for ESLint+runtime-invariant alone, or more if server-side guards are in scope.
+**Estimated effort (design — DONE 2026-04-29):** 1 session producing the design doc + locked decisions + multi-session implementation plan. **Implementation effort (pending):** per design §7, three options. Option β (recommended): two-session implementation split — Session 1 ships ESLint + runtime invariants R1-R3 + server-side guards G1+G2 (~3-4 hrs); Session 2 ships forensic instrumentation + pre-flight self-test (~3-4 hrs).
 
-**Sequencing:** With Bug 1 + Bug 2 shipped, the dedicated Defense-in-Depth Audit design session is a strong candidate for "next" before Scale Sessions B-E land more architectural code. Director's call.
+**Sequencing:** Implementation Session 1 (per Option β) recommended BEFORE Scale Session B build, because (a) ESLint rule + runtime invariants catch regressions in Scale Session B's larger code surface, and (b) server-side guard G3 (empty-fingerprint reject) is a Scale Session B prerequisite. Director's call.
 
 **Director's framing (verbatim 2026-04-28):** *"think if redundancies may be needed and if so, to add them, in case our fixes fail during a session (which has happened before)."*
 

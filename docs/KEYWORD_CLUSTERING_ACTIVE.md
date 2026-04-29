@@ -1,8 +1,9 @@
 # KEYWORD CLUSTERING — ACTIVE DOCUMENT
 ## Current state of the Keyword Clustering workflow tool (Group B, tool-specific)
 
-**Last updated:** April 29, 2026 (Bug-fix-and-canvas-wipe session, 2026-04-28 → 2026-04-29 cross-day — Bug 1 + Bug 2 shipped with three independent layers of defense each (NOT just the surgical one-liner originally locked); pure helpers extracted; `useCanvas` rewritten with uniform throw-on-failure contract; `doApplyV3` shadows closure-frozen props at function entry; `runLoop` gained fail-fast pre-flight; Reconcile Now admin button shipped in Auto-Analyze panel footer. 26 new unit tests + 74 existing all pass. Build clean. Bursitis canvas WIPED wholesale per director's data-deprioritization directive: 690 nodes + 241 sister links + 4 pathways deleted in one Prisma transaction; 2,256 keywords reset to Unsorted; canvas state's nextStableIdN reset to 1; 73 archived keywords preserved. Working tree clean.)
-**Last updated in session:** session_2026-04-28_canvas-blanking-and-closure-staleness-fix (Claude Code)
+**Last updated:** April 29, 2026 (Defense-in-Depth Audit design session — design-only, no code, no DB writes, no schema, no prompt changes. New Group B doc `DEFENSE_IN_DEPTH_AUDIT_DESIGN.md` (~720 lines) created covering the 6 design areas. NEW POST-2026-04-29-DEFENSE-IN-DEPTH-AUDIT-DESIGN STATE block prepended below; prior STATE blocks preserved as historical context.)
+**Last updated in session:** session_2026-04-29_defense-in-depth-audit-design (Claude Code)
+**Previously updated in session:** session_2026-04-28_canvas-blanking-and-closure-staleness-fix (Claude Code)
 **Previously updated in session:** session_2026-04-28_deeper-analysis-and-fix-design (Claude Code)
 **Previously updated in session:** session_2026-04-28_scale-session-0-outcome-c-and-full-run-feedback (Claude Code)
 **Previously updated in session:** session_2026-04-27_input-context-scaling-design (Claude Code)
@@ -31,7 +32,69 @@
 
 ---
 
-## ⚠️ POST-2026-04-29-BUG-FIX-SESSION STATE (READ FIRST — updated 2026-04-29)
+## ⚠️ POST-2026-04-29-DEFENSE-IN-DEPTH-AUDIT-DESIGN STATE (READ FIRST — updated 2026-04-29 end-of-day)
+
+**As of 2026-04-29 Defense-in-Depth Audit design session (option (c) from the prior STATE block's NEXT choices; design-only — no code, no DB writes, no schema changes, no prompt changes):**
+
+### What this session did to W#1
+
+**Produced `DEFENSE_IN_DEPTH_AUDIT_DESIGN.md`** — a new Group B doc (~720 lines) that captures the locked design for the 6 redundancy + invariant-enforcement areas the prior STATE block listed as still-pending. Implementation work itself is now scoped and ready to start in a follow-up session.
+
+This was a 100% design session — analogous to Scale Session A (which produced `INPUT_CONTEXT_SCALING_DESIGN.md` for the input-side context-scaling concern). No commits to `src/`. No live-data changes. No prompts touched.
+
+### What's in the design doc
+
+§0 — status, scope, what's shipped already, what's not in scope, reversibility framing, mechanical assumptions (test runner = `node --test --experimental-strip-types`, ESLint config = `defineConfig` with `eslint-config-next/{core-web-vitals,typescript}`).
+
+§1 — **Per-fix redundancy matrix** for six items: A. Canvas-blanking (SHIPPED, 3 layers documented), B. Closure-staleness (SHIPPED, 3 layers documented + future Layer 4 from §2), C. Mid-run queue refresh (PENDING, 3-layer pattern designed), D. Scale Session B (PENDING, 4-layer pattern coordinating with §3+§4+§5), E. Action-by-action feedback workflow (DESIGN-PENDING in own session, 3-layer pattern), F. Reconcile Now (SHIPPED, optional Layer 2 nice-to-have).
+
+§2 — **ESLint custom rule `no-prop-reads-in-runloop`.** Locked contract: flags direct identifier reads of `nodes`/`allKeywords`/`sisterLinks`/`pathways` inside any function annotated `@runloop-reachable`; allows reads via `*Ref.current` or shadow-binding. Mechanical implementation in `eslint-rules/no-prop-reads-in-runloop.js`; wired via `defineConfig`. Bootstraps with annotations on `runLoop`, `doApplyV3`, `processBatchV3`, `validateResultV3`. ~3-4 hours implementation. Removable in 5 minutes.
+
+§3 — **Four runtime invariants R1-R4.** R1 (canvas non-zero → zero between batches) already shipped. R2 (post-Reconcile-Now diff must be empty) ~10 lines. R3 (Tier-1 topic must have non-empty intentFingerprint) gated on Scale Session B. R4 (refs match props at function entry, dev-mode only) ~25 lines, recommended deferred until R1-R3 prove their value.
+
+§4 — **Forensic instrumentation.** NDJSON structured log (10-field per-batch record) + in-memory ring buffer (max 1000 records ≈ 250 KB) + download button next to Reconcile Now. ~3-4 hours. Dry-run mode designed but DEFERRED per §0.4 — fixture maintenance burden is real; revisit after a few months of production use.
+
+§5 — **Three server-side guards.** G1: `/canvas/rebuild` rejects payloads where `body.nodes.length` is >50% smaller than current canvas AND `deleteNodeIds` is empty (the canvas-blanking signature). G2: `/canvas/nodes` GET wraps Prisma in `findManyWithRetry` matching transient error codes P1001/P1002/P1008/P2034 with backoff [100ms, 500ms]. G3: `/canvas/nodes` PATCH rejects empty `intentFingerprint` (Scale Session B prerequisite). G1+G2 together ~75 minutes; G3 folded into Scale Session B.
+
+§6 — **Run-start pre-flight self-test (P1-P10).** Checks expand from the existing 3 (API key + seed words + prompt length) to 10: add primer prompt parseable, refs match `/canvas/nodes` + `/keywords` GETs (count + sample stableIds), pathways consistency, cheap test API call (~$0.001 with Sonnet 4.6 to verify key + model availability), localStorage writable. Per-check display in the panel; "Skip pre-flight" checkbox off by default. ~3-4 hours.
+
+§7 — **Three implementation-sequencing options.** Option α (full bundle, 6-8 hours, ambitious). **Option β recommended** (two-session split: Session 1 ships §2+§3.R1-R3+§5.G1+§5.G2 in ~3-4 hrs; Session 2 ships §4 structured log + §6 pre-flight in ~3-4 hrs). Option γ (cherry-pick: just §2 + §5.G1, ~1.5 hrs).
+
+§8 — **Six open questions for the director** about implementation specifics (G1 threshold, R4 build-or-defer, P9 ~$0.001 cost gate, forensic log scope, dry-run, sequencing option). These are decision points for the implementation session(s), not for today.
+
+§9 — Cross-references to ROADMAP entries, INPUT_CONTEXT_SCALING_DESIGN, PIVOT_DESIGN, AI_TOOL_FEEDBACK_PROTOCOL, MODEL_QUALITY_SCORING, CORRECTIONS_LOG, and the specific code files (`useCanvas.ts`, `canvas-fetch-parser.ts`, `reconciliation.ts`, `AutoAnalyze.tsx:163-171`).
+
+### Sequencing recommendation (from design §7)
+
+Implementation Session 1 (per Option β) BEFORE Scale Session B build, because (a) the ESLint rule + runtime invariants catch regressions in Scale Session B's larger code surface, and (b) server-side guard G3 (empty-fingerprint reject) is a Scale Session B prerequisite. Implementation Session 2 can ship anytime — independent of all other work.
+
+### What did NOT change this session
+
+- **Schema:** no changes.
+- **Prompts:** `AUTO_ANALYZE_PROMPT_V3.md` unchanged.
+- **API routes:** no new routes; no behavior changes to existing routes.
+- **DB:** no writes.
+- **`src/`:** no code changes.
+
+### Standing instructions for next session — five "NEXT" choices
+
+(a) **Implementation Session 1 of Defense-in-Depth Audit (Option β recommended).** Ships ESLint custom rule + runtime invariants R1-R3 + server-side guards G1+G2. ~3-4 hours. Reads §2+§3+§5 of the design doc; resolves open questions 1-2 from §8 (G1 threshold, R4 build-or-defer); writes ~150-200 lines of code + tests.
+
+(b) **Implementation Session 2 of Defense-in-Depth Audit.** Ships forensic structured log + run-start pre-flight self-test. ~3-4 hours. Reads §4+§6 of the design doc; resolves open questions 3-5 from §8 (P9 cost gate, forensic scope, dry-run); writes ~150 lines of code + tests + UI.
+
+(c) **Scale Session B build (Tiered Canvas Serialization + intentFingerprint backfill).** Per `INPUT_CONTEXT_SCALING_DESIGN.md §6`. ~4-6 hours. **Note:** the design recommends Implementation Session 1 of Defense-in-Depth Audit BEFORE Scale Session B because the ESLint rule + runtime invariants catch regressions in Scale Session B's surface, and G3 is a Scale Session B prerequisite.
+
+(d) **Phase-1 UI polish bundle** — Skeleton View on canvas + AST split-view topic-vs-description row alignment + Topics table row numbering. ~4-5 hours total. Independent of architectural work.
+
+(e) **Action-by-action feedback workflow design session.** Analogous to Scale Session A. ~3-4 hours design; implementation 2-4 sessions after.
+
+**Plus an optional out-of-session check-in:** director can fire a small ~2-batch fresh AI run on Bursitis (~$1-2, ~15 min) any time to empirically confirm Bug 1 + Bug 2 fixes hold under live load. Not a session — a 15-minute test on a whim.
+
+**Recommendation:** (a) — Implementation Session 1 of the Defense-in-Depth Audit, per Option β in design §7. Highest leverage; smallest risk; sets up Scale Session B for safer landing.
+
+---
+
+## ⚠️ POST-2026-04-29-BUG-FIX-SESSION STATE (preserved as historical context — last updated 2026-04-29)
 
 **As of 2026-04-29 bug-fix + canvas-wipe session (started 2026-04-28; spanned midnight; first session to ship code since the prior session's diagnosis):**
 
