@@ -94,7 +94,13 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
     toastTimer.current = setTimeout(() => setToast(''), 3000);
   }
 
-  useEffect(() => { fetchCanvas(); }, [fetchCanvas]);
+  // fetchCanvas now throws on failure (see useCanvas.ts error contract).
+  // At mount time the failure isn't actionable from here — the canvas hook's
+  // `error` state is what surfaces "canvas unavailable" to the UI; we just
+  // need to keep the unhandled rejection out of the browser console.
+  useEffect(() => {
+    fetchCanvas().catch(err => console.error('fetchCanvas error (mount):', err));
+  }, [fetchCanvas]);
 
   useEffect(() => {
     if (canvasState) {

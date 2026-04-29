@@ -10,6 +10,7 @@ import {
   materializeRebuildPayload,
   parseOperationsJsonl,
 } from '@/lib/auto-analyze-v3';
+import { computeReconciliationUpdates } from '@/lib/reconciliation';
 import './auto-analyze.css';
 
 /* ── Types ─────────────────────────────────────────────────── */
@@ -149,8 +150,25 @@ export default function AutoAnalyze({
   const nodesRef = useRef(nodes);
   const keywordsRef = useRef(allKeywords);
   const sisterLinksRef = useRef(sisterLinks);
+  const pathwaysRef = useRef(pathways);
+  // Fail-fast pre-flight tracker for Bug 1 (canvas-blanking). Records the
+  // canvas's node count at end of the previous batch's apply. -1 = not yet
+  // observed. The runLoop's per-batch pre-flight pauses the run if the count
+  // ever drops from >0 to 0 between batches — symptom of useCanvas.fetchCanvas
+  // returning empty state on a transient server failure. Independent guard
+  // from the defensive useCanvas contract; both must fail before a blanking
+  // event can corrupt a run again. See ROADMAP §"🚨 Canvas-Blanking Intermittent Bug".
+  const lastSeenNodesCountRef = useRef<number>(-1);
 
-  // runLoop-reachable code must read nodes/allKeywords/sisterLinks via *Ref.current, not raw props — the async runLoop closure freezes props. See CORRECTIONS_LOG 2026-04-18.
+  // runLoop-reachable code MUST read nodes/allKeywords/sisterLinks/pathways
+  // via *Ref.current, not raw props — the async runLoop closure freezes props
+  // at component-render time. The 2026-04-18 stale-closure bug (Bug A) and
+  // the 2026-04-28 reconciliation regression (Bug 2) were both caused by
+  // direct prop reads inside async loop bodies. The current defense:
+  // every run-loop-reachable async function (doApplyV3, runLoop, …) shadows
+  // these props at function entry with the same name pointing at the ref —
+  // so any code inside, current or future, reads fresh state by default.
+  // See CORRECTIONS_LOG 2026-04-18 + ROADMAP §"🚨 Reconciliation-Pass Closure-Staleness Bug".
   useEffect(() => { batchesRef.current = batches; }, [batches]);
   useEffect(() => { currentIdxRef.current = currentIdx; }, [currentIdx]);
   useEffect(() => { batchTierRef.current = batchTier; }, [batchTier]);
@@ -158,6 +176,7 @@ export default function AutoAnalyze({
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
   useEffect(() => { keywordsRef.current = allKeywords; }, [allKeywords]);
   useEffect(() => { sisterLinksRef.current = sisterLinks; }, [sisterLinks]);
+  useEffect(() => { pathwaysRef.current = pathways; }, [pathways]);
 
   /* ── Settings persistence ──────────────────────────────────────
      Load on mount, debounced auto-save on change. apiKey stays in
@@ -672,6 +691,18 @@ export default function AutoAnalyze({
     batch: BatchObj,
     ops: ReturnType<typeof parseOperationsJsonl>['operations'],
   ) {
+    // Shadow the closure-frozen props that are read inside this function
+    // (`allKeywords` at the reconciliation pass + the unplaced-log; `pathways`
+    // at the rebuild payload) with their always-fresh refs. The local names
+    // match the prop names, so the closure-frozen prop is unreachable for
+    // every read inside this function — accidental reintroduction of the
+    // 2026-04-28 closure-staleness regression at line 830 is structurally
+    // prevented. `nodes` and `sisterLinks` already use `nodesRef.current` /
+    // `sisterLinksRef.current` explicitly per the line-153 invariant and
+    // therefore don't need a shadow.
+    const allKeywords = keywordsRef.current;
+    const pathways = pathwaysRef.current;
+
     // Fetch canonical nextStableIdN so issued stableIds cannot collide with
     // anything that may have changed since page load (e.g., admin manually
     // added a node in another tab).
@@ -815,35 +846,41 @@ export default function AutoAnalyze({
     }
     if (kwTopicUpdates.length > 0) onBatchUpdateKeywords(kwTopicUpdates);
 
-    // Refresh UI.
+    // Refresh UI. The hardened useCanvas contract throws on failure, so a
+    // 5xx flake on /canvas/nodes (the 2026-04-28 canvas-blanking trigger)
+    // now propagates here and the runLoop's outer catch routes it to
+    // API_ERROR — instead of silently rolling forward with a blank canvas.
     await onRefreshCanvas();
     await onRefreshKeywords();
 
+    // Bug 1 secondary guard: track canvas size for the runLoop fail-fast
+    // pre-flight. If the next batch sees nodesRef.current.length === 0
+    // with this counter > 0, runLoop pauses immediately. Independent of
+    // useCanvas's defensive contract; both must fail before a blanking
+    // event can corrupt a run again.
+    lastSeenNodesCountRef.current = applyResult.newState.nodes.length;
+
     // P3-F7 status reconciliation: heal any keyword whose status drifted from
     // its canvas presence (on-canvas but Unsorted/Reshuffled → AI-Sorted;
-    // off-canvas but AI-Sorted → Reshuffled).
+    // off-canvas but AI-Sorted → Reshuffled). Pure logic in
+    // src/lib/reconciliation.ts; this call site passes the fresh keyword
+    // list (the function-scoped `allKeywords` shadow above resolves to
+    // `keywordsRef.current`). The 2026-04-28 closure-staleness bug at
+    // line 830 was a `for (const kw of allKeywords)` reading the
+    // closure-frozen prop instead of the ref; the shadow + helper
+    // extraction together make that class of regression structurally
+    // impossible inside this function.
     const placedSet = new Set(placementsByKeyword.keys());
     const archivedSet = new Set(applyResult.archivedKeywords.map(a => a.keywordId));
-    const reconcileUpdates: { id: string; sortingStatus: string }[] = [];
-    let flippedToAiSorted = 0;
-    let flippedToReshuffled = 0;
-    for (const kw of allKeywords) {
-      if (archivedSet.has(kw.id)) continue; // archived keywords are handled by /removed-keywords
-      const onCanvas = placedSet.has(kw.id);
-      if (onCanvas && (kw.sortingStatus === 'Unsorted' || kw.sortingStatus === 'Reshuffled')) {
-        reconcileUpdates.push({ id: kw.id, sortingStatus: 'AI-Sorted' });
-        flippedToAiSorted++;
-      } else if (!onCanvas && kw.sortingStatus === 'AI-Sorted') {
-        reconcileUpdates.push({ id: kw.id, sortingStatus: 'Reshuffled' });
-        flippedToReshuffled++;
-      }
-    }
-    if (reconcileUpdates.length > 0) {
-      onBatchUpdateKeywords(reconcileUpdates);
+    const reconcile = computeReconciliationUpdates(allKeywords, placedSet, archivedSet);
+    if (reconcile.updates.length > 0) {
+      onBatchUpdateKeywords(
+        reconcile.updates as unknown as { id: string; [key: string]: unknown }[],
+      );
       aaLog(
-        '  ↻ Reconciliation: ' + flippedToAiSorted + ' on-canvas → AI-Sorted, ' +
-        flippedToReshuffled + ' off-canvas → Reshuffled',
-        flippedToReshuffled > 0 ? 'warn' : 'ok',
+        '  ↻ Reconciliation: ' + reconcile.flippedToAiSorted + ' on-canvas → AI-Sorted, ' +
+        reconcile.flippedToReshuffled + ' off-canvas → Reshuffled',
+        reconcile.flippedToReshuffled > 0 ? 'warn' : 'ok',
       );
     }
 
@@ -863,7 +900,35 @@ export default function AutoAnalyze({
 
   /* ── Main run loop ─────────────────────────────────────────── */
   async function runLoop() {
+    // Initialise the canvas-size watermark on first entry to runLoop. The
+    // pre-flight below uses this to detect a non-zero → zero transition
+    // between batches — a signature of canvas-blanking. -1 sentinel means
+    // "not yet observed."
+    if (lastSeenNodesCountRef.current === -1) {
+      lastSeenNodesCountRef.current = nodesRef.current.length;
+    }
+
     while (runningRef.current && !abortRef.current && currentIdxRef.current < batchesRef.current.length) {
+      // Bug 1 fail-fast pre-flight: if the canvas was non-empty after the
+      // previous batch's apply but is empty NOW, something silently zeroed
+      // client state between batches (the 2026-04-28 canvas-blanking
+      // signature, or any future failure mode that produces the same
+      // symptom from a different root cause). Pause immediately rather
+      // than feeding empty TSV to the model and silently abandoning a
+      // batch's keywords.
+      if (lastSeenNodesCountRef.current > 0 && nodesRef.current.length === 0) {
+        aaLog(
+          '⚠ Canvas unexpectedly empty between batches (had ' +
+          lastSeenNodesCountRef.current + ' topics, now 0). Pausing run — ' +
+          'investigate before resuming. See ROADMAP "Canvas-Blanking Intermittent Bug".',
+          'error',
+        );
+        setAaState('API_ERROR');
+        runningRef.current = false;
+        setBatches([...batchesRef.current]);
+        return;
+      }
+
       const idx = currentIdxRef.current;
       const batch = batchesRef.current[idx];
 
@@ -1086,6 +1151,97 @@ export default function AutoAnalyze({
     setBatches([...batchesRef.current]);
     runningRef.current = true;
     runLoop();
+  }
+
+  /**
+   * Reconcile Now — admin-only one-shot drift healer. Walks the project's
+   * full keyword list against the live canvas state (fetched fresh from the
+   * server, not from any closure-frozen prop) and fires the same
+   * `computeReconciliationUpdates` the per-batch reconciliation pass uses.
+   * Doubles as a forensic tool: even when there's nothing to fix, the
+   * counts shown confirm "everything is in sync." See ROADMAP §"🚨
+   * Reconciliation-Pass Closure-Staleness Bug" → Post-fix cleanup option (a).
+   */
+  const [reconcileBusy, setReconcileBusy] = useState(false);
+  async function handleReconcileNow() {
+    if (reconcileBusy) return;
+    if (aaState === 'RUNNING') {
+      alert('Cannot reconcile while a run is in progress — pause or cancel first.');
+      return;
+    }
+    setReconcileBusy(true);
+    try {
+      aaLog('Reconcile Now: fetching live state…', 'info');
+      // Fetch all three sources in parallel. Fresh from server every time —
+      // immune to any closure-frozen prop or stale cache.
+      const [kwRes, nodesRes, removedRes] = await Promise.all([
+        authFetch('/api/projects/' + projectId + '/keywords'),
+        authFetch('/api/projects/' + projectId + '/canvas/nodes'),
+        authFetch('/api/projects/' + projectId + '/removed-keywords'),
+      ]);
+      if (!kwRes.ok || !nodesRes.ok || !removedRes.ok) {
+        aaLog('Reconcile Now: fetch failed (' + kwRes.status + '/' + nodesRes.status + '/' + removedRes.status + ')', 'error');
+        return;
+      }
+      const keywords = await kwRes.json() as { id: string; sortingStatus: string }[];
+      const nodesData = await nodesRes.json() as { linkedKwIds?: string[]; kwPlacements?: Record<string, unknown> }[];
+      const removed = await removedRes.json() as { originalKeywordId?: string | null }[];
+
+      // placedSet = every keyword id referenced by any canvas node, via either
+      // legacy `linkedKwIds` array OR the canonical `kwPlacements` map.
+      const placedSet = new Set<string>();
+      for (const n of nodesData) {
+        if (Array.isArray(n.linkedKwIds)) for (const id of n.linkedKwIds) placedSet.add(id);
+        if (n.kwPlacements && typeof n.kwPlacements === 'object') {
+          for (const id of Object.keys(n.kwPlacements)) placedSet.add(id);
+        }
+      }
+      const archivedSet = new Set<string>(
+        removed.map(r => r.originalKeywordId).filter((x): x is string => typeof x === 'string'),
+      );
+
+      const result = computeReconciliationUpdates(keywords, placedSet, archivedSet);
+      if (result.updates.length === 0) {
+        aaLog(
+          '✓ Reconcile Now: nothing to fix — ' + keywords.length + ' keywords / ' +
+          placedSet.size + ' on canvas / ' + archivedSet.size + ' archived all in sync.',
+          'ok',
+        );
+        return;
+      }
+
+      const ok = confirm(
+        'Reconcile Now found ' + result.updates.length + ' keyword(s) with status drift:\n\n' +
+        '  • ' + result.flippedToAiSorted + ' on-canvas → flip to AI-Sorted\n' +
+        '  • ' + result.flippedToReshuffled + ' off-canvas → flip to Reshuffled\n\n' +
+        'Apply these fixes? (Status-only update, easily undoable by running this again.)',
+      );
+      if (!ok) {
+        aaLog('Reconcile Now: cancelled by user (' + result.updates.length + ' updates not applied).', 'warn');
+        return;
+      }
+
+      const patchRes = await authFetch('/api/projects/' + projectId + '/keywords', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keywords: result.updates }),
+      });
+      if (!patchRes.ok) {
+        aaLog('Reconcile Now: PATCH failed (HTTP ' + patchRes.status + ')', 'error');
+        return;
+      }
+      aaLog(
+        '✓ Reconcile Now: applied ' + result.updates.length + ' updates (' +
+        result.flippedToAiSorted + ' → AI-Sorted, ' +
+        result.flippedToReshuffled + ' → Reshuffled).',
+        'ok',
+      );
+      await onRefreshKeywords();
+    } catch (err) {
+      aaLog('Reconcile Now: error — ' + (err instanceof Error ? err.message : String(err)), 'error');
+    } finally {
+      setReconcileBusy(false);
+    }
   }
 
   function handleClose() {
@@ -1346,6 +1502,14 @@ export default function AutoAnalyze({
           {aaState === 'RUNNING' && <button className="aa-btn aa-btn-pause" onClick={handlePause}>⏸ Pause</button>}
           {(aaState === 'PAUSED' || aaState === 'API_ERROR' || aaState === 'VALIDATION_ERROR') && <button className="aa-btn aa-btn-resume" onClick={handleResume}>▶ Resume</button>}
           {aaState !== 'IDLE' && aaState !== 'ALL_COMPLETE' && <button className="aa-btn aa-btn-cancel" onClick={handleCancel}>✕ Cancel</button>}
+          <button
+            className="aa-btn"
+            onClick={handleReconcileNow}
+            disabled={reconcileBusy || aaState === 'RUNNING'}
+            title="Walk every keyword against the live canvas and fix any status drift. Safe to run any time the panel is not actively running."
+          >
+            {reconcileBusy ? '⏳ Reconciling…' : '↻ Reconcile Now'}
+          </button>
           <button className="aa-btn aa-btn-close" onClick={handleClose}>Close</button>
         </div>
       </div>
