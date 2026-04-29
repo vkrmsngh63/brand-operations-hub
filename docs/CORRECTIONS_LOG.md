@@ -2,8 +2,9 @@
 ## Append-only record of mistakes made during chats and lessons learned
 
 **Started:** April 16, 2026
-**Last updated:** April 28, 2026 (Deeper-analysis session — 1 new MEDIUM-severity entry: omitted 5 of 8 director feedback items from initial fix-recommendations response; director caught + flagged as a coverage failure requiring handoff updates to address ALL 8 items explicitly. Mistake was scope-discipline-related — when the director gave a multi-item feedback list, the initial response cherry-picked the bug-flavored items and treated the polish + design items as if mentioning them was redundant given they were already in ROADMAP. It wasn't redundant — the director needed a status reading on every item to feel the feedback was heard and to make sequencing decisions.)
-**Last updated in session:** session_2026-04-28_deeper-analysis-and-fix-design (Claude Code)
+**Last updated:** April 29, 2026 (Bug-fix-and-canvas-wipe session, 2026-04-28 → 2026-04-29 cross-day — 1 new INFORMATIONAL entry: pattern observation on directive-driven scope expansion mid-session. Director gave a meta-directive *"fix the fundamental problem long term; test the tool in a sturdy way"* mid-session that expanded scope from the surgical one-liner fixes locked in ROADMAP to defense-in-depth fixes. Pattern worth preserving: when the director gives a meta-directive like this, Claude should pause, re-survey scope, surface the expanded plan in plain language, get acknowledgment, then proceed — rather than silently absorbing the directive into the existing plan. This session executed the pattern correctly; the entry captures it for future Claudes facing the same dynamic.)
+**Last updated in session:** session_2026-04-28_canvas-blanking-and-closure-staleness-fix (Claude Code)
+**Previously updated in session:** session_2026-04-28_deeper-analysis-and-fix-design (Claude Code)
 **Previously updated in session:** session_2026-04-27_v3-prompt-small-batch-test-and-context-scaling-concern (Claude Code)
 **Previously updated in session:** session_2026-04-26_phase1-polish-bundle (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-25_phase1g-test-followup-part3-pivot-session-D (Claude Code)
@@ -46,6 +47,30 @@
 ---
 
 ## Entries
+
+### 2026-04-29 — Directive-driven scope expansion handled correctly (INFORMATIONAL — pattern preservation, not a mistake)
+
+**Session:** session_2026-04-28_canvas-blanking-and-closure-staleness-fix (Claude Code)
+
+**What happened:** Director gave a meta-directive mid-session — *"I want you to employ an approach that fixes the fundamental problem long term. The same goes for testing the fixes. They should test the tool in a sturdy way."* — while Claude was already in flight on the surgical Bug 1 fix (defensive `useCanvas.fetchCanvas` only, no other hardening). The original locked design in `ROADMAP.md` and the prior session's fix-design block specified the SURGICAL fix only. Director's directive expanded scope without naming what was newly in/out of scope.
+
+**What Claude did right:** Paused work mid-task. Acknowledged the directive. Re-surveyed Bug 1 + Bug 2 + tests at the new scope ("fundamental long-term" = prevent the bug class structurally, not just patch the bug instance; "sturdy testing" = exhaustive test tables covering every failure mode + the regression scenario contrast test). Wrote a plain-language preview describing what was changing vs. the original locked plan: (a) Bug 1 expansion to harden ALL `useCanvas` methods uniformly, not just `fetchCanvas`; (b) Bug 2 expansion to the function-entry shadow pattern that prevents the bug class everywhere in `doApplyV3`, not just the line-830 fix; (c) testing expansion to exhaustive truth-table coverage + regression-scenario reproduction. Listed what was being deferred to the future Defense-in-Depth Audit session (ESLint custom rule, runtime invariants, server-side guards). Asked the director to push back if any of the expansion was wrong before writing more code. Director did not push back; proceeded.
+
+**The pattern this preserves for future sessions:** when a director gives a meta-directive (something framed at the architectural / quality bar level rather than at the specific-bug level), Claude should NOT silently absorb it into the existing plan. The right move:
+
+1. Pause the in-flight task at a clean checkpoint.
+2. Re-survey the scope at the new bar.
+3. Write a plain-language preview that says explicitly: "here's what changes vs. the original plan, here's what stays out, here's what gets deferred."
+4. Surface scope-expansion items that should be deferred (per Rule 14e) — naming where they'll live (ROADMAP item, CORRECTIONS_LOG entry, etc.).
+5. Get acknowledgment (or push-back) before writing more code.
+
+**Why this is INFORMATIONAL not a mistake:** the failure mode of NOT doing this — silently absorbing the directive — is the actual mistake to watch for. This session avoided that mistake. Capturing the positive pattern here gives future Claudes a model for what "right" looks like when the dynamic recurs.
+
+**Related:** The session ALSO had a second meta-directive later — *"Our main priority is fixing the fundamental issues and not saving the data in the current project. Guide me with this in mind."* — that replaced the original surgical-cleanup plan (delete 17 orphan nodes + Reconcile Now on 316 status-drift keywords) with a wholesale Bursitis canvas wipe. Same pattern applied: paused, re-surveyed, presented the new wipe plan with full pre-write counts in a Rule 8 confirmation dialogue, got explicit director YES, then executed.
+
+**No mitigation needed:** the pattern is the mitigation.
+
+---
 
 ### 2026-04-28 — Omitted 5 of 8 director feedback items from initial fix-recommendations response (MEDIUM severity)
 **Session:** session_2026-04-28_deeper-analysis-and-fix-design (Claude Code)

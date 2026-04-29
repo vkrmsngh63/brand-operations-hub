@@ -1,8 +1,9 @@
 # KEYWORD CLUSTERING — ACTIVE DOCUMENT
 ## Current state of the Keyword Clustering workflow tool (Group B, tool-specific)
 
-**Last updated:** April 28, 2026 (Deeper-analysis session — read-only DB queries + code reading diagnosed canvas-blanking bug to root cause [`useCanvas.fetchCanvas:75` silently zeroes nodes on non-array response from `/canvas/nodes` GET]; SECOND HIGH-severity bug found — Reconciliation-Pass Closure-Staleness at `AutoAnalyze.tsx:830`, regression of 2026-04-18 stale-closure pattern; both fix designs locked; quality-issue catalog produced [4 orphan-root nodes from blanking events + 17 descendants; 84 stuck-Reshuffled keywords all on canvas; 232 status drift residuals; 95+ body-part topics scattered across intent branches; 3 duplicate-title pairs]; NEW Redundancy + Defense-in-Depth Audit design item captured; full director-feedback table addressed. No code, DB, schema, or prompt changes this session.)
-**Last updated in session:** session_2026-04-28_deeper-analysis-and-fix-design (Claude Code)
+**Last updated:** April 29, 2026 (Bug-fix-and-canvas-wipe session, 2026-04-28 → 2026-04-29 cross-day — Bug 1 + Bug 2 shipped with three independent layers of defense each (NOT just the surgical one-liner originally locked); pure helpers extracted; `useCanvas` rewritten with uniform throw-on-failure contract; `doApplyV3` shadows closure-frozen props at function entry; `runLoop` gained fail-fast pre-flight; Reconcile Now admin button shipped in Auto-Analyze panel footer. 26 new unit tests + 74 existing all pass. Build clean. Bursitis canvas WIPED wholesale per director's data-deprioritization directive: 690 nodes + 241 sister links + 4 pathways deleted in one Prisma transaction; 2,256 keywords reset to Unsorted; canvas state's nextStableIdN reset to 1; 73 archived keywords preserved. Working tree clean.)
+**Last updated in session:** session_2026-04-28_canvas-blanking-and-closure-staleness-fix (Claude Code)
+**Previously updated in session:** session_2026-04-28_deeper-analysis-and-fix-design (Claude Code)
 **Previously updated in session:** session_2026-04-28_scale-session-0-outcome-c-and-full-run-feedback (Claude Code)
 **Previously updated in session:** session_2026-04-27_input-context-scaling-design (Claude Code)
 **Previously updated in session:** session_2026-04-27_v3-prompt-small-batch-test-and-context-scaling-concern (Claude Code)
@@ -30,7 +31,91 @@
 
 ---
 
-## ⚠️ POST-2026-04-28-DEEPER-ANALYSIS STATE (READ FIRST — updated 2026-04-28)
+## ⚠️ POST-2026-04-29-BUG-FIX-SESSION STATE (READ FIRST — updated 2026-04-29)
+
+**As of 2026-04-29 bug-fix + canvas-wipe session (started 2026-04-28; spanned midnight; first session to ship code since the prior session's diagnosis):**
+
+### What this session did to W#1
+
+**Bug 1 (canvas-blanking) and Bug 2 (closure-staleness) are both FIXED** — and not with the surgical one-liners originally locked into the ROADMAP. Director's mid-session directive *"fix the fundamental problem long term; test the tool in a sturdy way"* expanded scope from "patch the bug instance" to "prevent the bug class structurally." Each bug now has three independent layers of defense; either layer alone would catch the bug, all three layers must fail simultaneously for the bug class to recur.
+
+**Bursitis canvas wiped wholesale** per director's later directive *"ok if we need to start from scratch or delete data; main priority is fixing the fundamental issues."* All canvas data eliminated; keyword inputs preserved; archive history preserved. Future fresh runs start from a clean slate.
+
+**Reconcile Now admin button shipped** as a forward-looking forensic + healing tool — independent of the wipe, useful any time future drift appears.
+
+### Bug 1 — Canvas-Blanking Intermittent Bug — FIXED (3 layers of defense)
+
+**Layer 1 (primary):** New pure helper `parseCanvasFetchResponses` in `src/lib/canvas-fetch-parser.ts` classifies the `/canvas/nodes` + `/canvas` GET responses. `useCanvas.fetchCanvas` now checks `response.ok`, requires array body for nodes + plain-object body for state, **preserves prior client state on any failure** (HTTP error / non-array body / parse exception), and **throws** so callers can pause. Plus uniform throw-on-failure contract applied across all five `useCanvas` methods (`addNode`, `updateNodes`, `deleteNode`, `updateCanvasState` previously silently swallowed errors); state is applied only on success; `deleteNode`'s optimistic remove rolls back on server rejection.
+
+**Layer 2 (independent guard):** `runLoop` gained a fail-fast pre-flight at the top of every iteration. Tracks `lastSeenNodesCountRef`; if the canvas had >0 nodes after the previous batch's apply but is empty NOW, immediately `setAaState('API_ERROR')` and pause. Catches any future failure mode that produces the same symptom from a different root cause.
+
+**Layer 3 (existing infrastructure now wired):** runLoop's outer try/catch at lines ~940-970 already routed thrown errors to `API_ERROR` state. The Layer 1 throw contract now actually propagates through `await onRefreshCanvas()` → `doApplyV3` → runLoop catch, so a transient `/canvas/nodes` 5xx pauses the run instead of silently rolling forward.
+
+### Bug 2 — Reconciliation-Pass Closure-Staleness — FIXED (3 layers of defense)
+
+**Layer 1 (primary — structural):** Reconciliation logic extracted to pure helper `computeReconciliationUpdates(keywords, placedSet, archivedSet)` in `src/lib/reconciliation.ts`. The helper takes its inputs explicitly, has no closure to capture from, and is pure — it cannot be wrong in the same way the inline loop was.
+
+**Layer 2 (shadow pattern):** At `doApplyV3` function entry, `allKeywords` and `pathways` are shadowed by locals pointing at `keywordsRef.current` / `pathwaysRef.current`. The local names match the prop names, so closure-frozen props are physically unreachable for every read inside the function (lines 707 + 858 reads automatically resolve to fresh state). New `pathwaysRef` added to match the existing nodes/keywords/sisterLinks ref pattern.
+
+**Layer 3 (convention enforcement):** The line-153 invariant comment was rewritten from a passive "must read via *Ref.current" to a positive description of the shadow strategy as the new convention. Future code added to `doApplyV3` reads fresh state by default. ESLint enforcement of the shadow pattern is captured in the Defense-in-Depth Audit design item for a future dedicated session.
+
+### Reconcile Now admin button — SHIPPED
+
+New button in the Auto-Analyze panel footer (alongside Pause/Cancel/Close), disabled while a run is in progress. On click:
+1. Fetches keywords + canvas + removed-keywords from server (fresh data, no closure-stale).
+2. Computes reconciliation diff via the same `computeReconciliationUpdates` helper.
+3. Shows `window.confirm` with diff counts.
+4. On OK PATCHes `/keywords` bulk-update endpoint with the diff.
+5. Logs result in the Auto-Analyze activity log.
+
+Reusable forever. Forward-looking utility — the wipe means there's nothing to reconcile right now, but any future run that produces drift gets healed in one click.
+
+### Sturdy testing — 26 new + 74 existing tests, all pass
+
+`src/lib/canvas-fetch-parser.test.ts` — 16 tests: every failure mode the parser must reject (HTTP 500, HTTP 401, exact `{ error: 'Failed to fetch nodes' }` shape, null/undefined/string bodies, both-fail, mixed-success defensive normalization). `src/lib/reconciliation.test.ts` — 10 tests: empty input, archived skip, all four cells of the reconciliation truth table, mixed batch, the 84-keyword 2026-04-28 stale-vs-fresh contrast scenario, hidden-snapshot regression guard, unknown status fallthrough. `npm run build` ✓ Compiled 14.0s; TypeScript clean 11.8s; 0 lint errors / 0 warnings in any file touched.
+
+### Bursitis canvas wipe — completed (Rule 8 destructive-op gate respected)
+
+ProjectWorkflow `d1ade277-ba14-429a-a71f-b57dd2b39efc` (project `9e0ffc58-9ea2-4ea3-b840-144f760fb960`). One Prisma transaction:
+
+| Operation | Rows affected |
+|---|---|
+| `CanvasNode.deleteMany` | 690 |
+| `SisterLink.deleteMany` | 241 |
+| `Pathway.deleteMany` | 4 |
+| `CanvasState.updateMany` (`nextStableIdN: 691 → 1`, viewport reset) | 1 |
+| `Keyword.updateMany` (`sortingStatus → 'Unsorted'`, `topic → ''`, `canvasLoc → {}`) | 2,256 |
+
+**Preserved:** 73 RemovedKeyword rows (intentional archives); all Keyword core fields (volume / tags / keyword text); Project + ProjectWorkflow + AdminNotes + AutoAnalyze settings.
+
+Post-wipe verification queried: 0 nodes / 0 sister links / 0 pathways / 2,256 keywords all Unsorted / 73 archives intact / `nextStableIdN: 1`. Director was given the exact pre-wipe counts in plain-language tabular form before approving; Rule 8 explicit YES received before write.
+
+### What did NOT change this session
+
+- **Schema**: no changes.
+- **Prompts**: `AUTO_ANALYZE_PROMPT_V3.md` unchanged.
+- **API routes**: no new routes. `/canvas/rebuild`, `/canvas/nodes`, `/canvas`, `/keywords`, `/removed-keywords` all unchanged.
+- **The 5 design goals of the Defense-in-Depth Audit** (per-fix redundancy matrix, codebase-wide invariant enforcement via ESLint, forensic instrumentation, server-side guards, pre-flight self-tests at run start): partially shipped — the per-fix redundancy matrix is implicit in this session's 3-layer approach for both bugs; the rest is still a forward-pointing design item awaiting a dedicated session.
+
+### Standing instructions for next session — four "NEXT" choices (option (a) retired this session)
+
+(a) ~~Bug-fix session~~ — RETIRED. Shipped this session.
+
+(b) **Scale Session B build (Tiered Canvas Serialization)** — per `INPUT_CONTEXT_SCALING_DESIGN.md §6`. Addresses the body-part ladder violation (95+ scattered topics — though those topics no longer exist post-wipe; the structural problem will recur on the next big run if not addressed) and the input-side cost growth structurally. **Recommended next** in the prior session's sequence (a) → (c) → (b) → …; with (a) shipped, (b) becomes the highest-impact next item OR the director may prefer (c) first to lock in defense-in-depth before more architectural work lands. ~4-6 hours.
+
+(c) **Defense-in-Depth Audit design session** — produces full per-fix redundancy matrix + codebase-wide invariant enforcement plan (ESLint custom rule for the shadow pattern; runtime invariant checks; forensic instrumentation; server-side guards; pre-flight self-tests). Implementation work scoped after the design lands. ~3-4 hours design; implementation 1-3 sessions after.
+
+(d) **Phase-1 UI polish bundle** — Skeleton View on canvas + AST split-view topic-vs-description row alignment + Topics table row numbering. Pure UI; ~4-5 hours total. Independent of bug + architectural work.
+
+(e) **Action-by-action feedback workflow design session** — analogous to Scale Session A. Produces design doc + locked decisions + multi-session implementation plan. Director was explicit that this is something they want to engage with eventually. ~3-4 hours design; implementation 2-4 sessions after.
+
+**Plus an optional out-of-session check-in:** director can fire a small ~2-batch fresh AI run on Bursitis (~$1-2, ~15 min) any time after deploy to empirically confirm Bug 1 + Bug 2 fixes hold under live load. Not a session — a 15-minute test on a whim. Recommended but not blocking.
+
+**Director's framing from the prior session:** sequence (a) → (c) → (b) → (e) → (d) — bug-fix first; defense-in-depth lock-in second; structural input-scaling third; second-pass design fourth; UI polish last. With (a) shipped, the natural next is (c).
+
+---
+
+## ⚠️ POST-2026-04-28-DEEPER-ANALYSIS STATE (preserved as historical context — last updated 2026-04-28)
 
 **As of 2026-04-28 deeper-analysis + fix-design session (read-only DB queries + code reading of `useCanvas.ts` / `AutoAnalyze.tsx` / `auto-analyze-v3.ts` / `/canvas/rebuild` and `/canvas/nodes` API routes; produced a concrete bug report + quality-issue catalog; produced ROADMAP + KEYWORD_CLUSTERING_ACTIVE + PLATFORM_ARCHITECTURE + CORRECTIONS_LOG + CHAT_REGISTRY + DOCUMENT_MANIFEST updates):**
 

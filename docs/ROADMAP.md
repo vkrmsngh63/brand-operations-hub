@@ -1,8 +1,9 @@
 # ROADMAP
 ## Product Launch Operating System (PLOS) — Development Execution Plan
 
-**Last updated:** April 28, 2026 (Deeper-analysis session — read-only DB queries against live Bursitis canvas + code reading of `useCanvas.ts` / `AutoAnalyze.tsx` / `auto-analyze-v3.ts` / `/canvas/rebuild` and `/canvas/nodes` API routes diagnosed the canvas-blanking bug to root cause: `useCanvas.fetchCanvas` line 75 silently sets `nodes = []` on any non-array response from `/canvas/nodes` GET. Fix design locked. Investigation also surfaced a NEW HIGH-severity bug — Reconciliation-Pass Closure-Staleness — `AutoAnalyze.tsx:830` reads stale prop instead of `keywordsRef.current`, regression of the documented 2026-04-18 stale-closure pattern. Both bugs together explain all 84 currently-Reshuffled keywords (all 84 still ON canvas) + 232 status drift residuals (147 ghost AI-Sorted + 85 silent placements) in the live DB. ALSO captured: NEW design item for Redundancy + Defense-in-Depth Audit (motivated by both bugs landing on a V3 architecture with deliberately-deleted backup mechanisms). 8-item director feedback table fully addressed across this STATE block + earlier STATE block. No code, DB, schema, or prompt changes this session.)
-**Last updated in session:** session_2026-04-28_deeper-analysis-and-fix-design (Claude Code)
+**Last updated:** April 29, 2026 (Bug-fix-and-canvas-wipe session, 2026-04-28 → 2026-04-29 cross-day — Bug 1 + Bug 2 SHIPPED with three independent layers of defense each (NOT just the surgical one-liners originally locked); pure helpers extracted to `src/lib/canvas-fetch-parser.ts` + `src/lib/reconciliation.ts`; `useCanvas` rewritten with uniform throw-on-failure contract; `doApplyV3` shadows closure-frozen props at function entry; `runLoop` gained fail-fast pre-flight; Reconcile Now admin button shipped. 26 new unit tests + 74 existing all pass. Build clean. Bursitis canvas WIPED wholesale per director's data-deprioritization directive: 690 nodes + 241 sister links + 4 pathways deleted in one Prisma transaction; 2,256 keywords reset to Unsorted; canvas state reset to nextStableIdN=1; 73 archived keywords preserved. Working tree clean.)
+**Last updated in session:** session_2026-04-28_canvas-blanking-and-closure-staleness-fix (Claude Code)
+**Previously updated in session:** session_2026-04-28_deeper-analysis-and-fix-design (Claude Code)
 **Previously updated in session:** session_2026-04-28_scale-session-0-outcome-c-and-full-run-feedback (Claude Code)
 **Previously updated in session:** session_2026-04-27_input-context-scaling-design (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-27_v3-prompt-small-batch-test-and-context-scaling-concern (Claude Code)
@@ -475,9 +476,27 @@ V2 had a `Mode A → Mode B auto-switch` with delta OUTPUT that was credited wit
 - `KEYWORD_CLUSTERING_ACTIVE.md` POST-2026-04-27-INPUT-CONTEXT-SCALING-DESIGN STATE block (session-specific state)
 - `CORRECTIONS_LOG.md` 2026-04-27 entry (the synthesis-failure that surfaced this concern + Rule 24 capture)
 
-### 🚨 Canvas-Blanking Intermittent Bug (NEW 2026-04-28; HIGH severity; ROOT CAUSE DIAGNOSED 2026-04-28 deeper-analysis session; fix design locked)
+### ✅ Canvas-Blanking Intermittent Bug (FIXED 2026-04-29 bug-fix session; HIGH severity; 3 layers of defense shipped)
 
-**Status:** Empirically observed in 2026-04-28 full-Bursitis V3 run on Sonnet 4.6 — twice, at batches 70 and 134 of a 151-batch run. **Root cause diagnosed in 2026-04-28 deeper-analysis session: `src/hooks/useCanvas.ts` line 75 silently sets `nodes = []` whenever `/api/projects/[id]/canvas/nodes` returns a non-array body (e.g., a 5xx error JSON `{ error: '...' }`).** Fix design locked. **Captured as a top-level architectural concern, NOT polish, because it silently abandons keywords from the run mid-flight.**
+**Status:** ✅ FIXED in 2026-04-29 bug-fix session via 3 independent layers of defense. The original locked surgical fix was expanded to fundamental long-term per director's mid-session directive *"fix the fundamental problem long term."* All three layers are independent — either layer alone catches the bug; all three must fail simultaneously for the bug class to recur. **Defense layers shipped:**
+
+- **Layer 1 (primary):** New pure helper `parseCanvasFetchResponses` in `src/lib/canvas-fetch-parser.ts` — checks `response.ok`, requires array body for nodes + plain-object body for state, returns structured ok/error result. `useCanvas.fetchCanvas` rewritten to use it: preserves prior client state on any failure, throws so callers can pause, sets `error` state for UI surfacing. Plus uniform throw-on-failure contract across all five `useCanvas` methods (`addNode`/`updateNodes`/`deleteNode`/`updateCanvasState` previously silently swallowed errors); state applied only on success; `deleteNode`'s optimistic remove rolls back on server rejection.
+- **Layer 2 (independent guard):** New `lastSeenNodesCountRef` + per-batch fail-fast pre-flight at top of `runLoop` while-loop. If `nodesRef.current.length === 0` AND `lastSeenNodesCountRef.current > 0`, immediately `setAaState('API_ERROR')` and pause. Catches any future failure mode that produces the same symptom from a different root cause.
+- **Layer 3 (existing infrastructure now wired):** runLoop's outer try/catch already routed thrown errors to `API_ERROR` state. The Layer 1 throw contract now actually propagates through `await onRefreshCanvas()` → `doApplyV3` → runLoop catch, so a transient `/canvas/nodes` 5xx pauses the run instead of silently rolling forward into the next batch.
+
+**Sturdy testing:** 16 unit tests in `src/lib/canvas-fetch-parser.test.ts` covering every failure mode the parser must reject — HTTP 500, HTTP 401, the exact 2026-04-28 trigger shape `{ error: 'Failed to fetch nodes' }`, null/undefined/string bodies, mixed-success cases, defensive normalization of partial state bodies. All pass.
+
+**Live data:** Bursitis canvas was wiped wholesale at end-of-session per director's data-deprioritization directive (one Prisma transaction: 690 nodes + 241 sister links + 4 pathways deleted; 2,256 keywords reset to Unsorted; canvas state reset to nextStableIdN=1; 73 archived keywords preserved). The 17 orphan-root nodes from the original blanking events are gone along with the rest of the canvas. Future runs start clean. Director can fire a small ~2-batch fresh AI run on Bursitis any time to empirically confirm the fixes hold under live load (~$1-2, ~15 min).
+
+**Cross-references for fix-validation purposes:**
+- `src/lib/canvas-fetch-parser.ts` + `src/lib/canvas-fetch-parser.test.ts` (Layer 1 + tests).
+- `src/hooks/useCanvas.ts` (rewritten hook with uniform throw contract; line numbers shifted from prior version).
+- `src/app/projects/[projectId]/keyword-clustering/components/AutoAnalyze.tsx` `runLoop` (Layer 2 fail-fast pre-flight + `lastSeenNodesCountRef` initialization).
+- `src/app/projects/[projectId]/keyword-clustering/components/CanvasPanel.tsx:97` (mount-time `fetchCanvas` wrapped with `.catch(console.error)` to keep browser console clean since the hook now throws).
+
+**Original ROOT-CAUSE DIAGNOSIS detail (preserved for forensic reference):**
+
+The bug surfaced via `src/hooks/useCanvas.ts` line 75 — `setNodes(Array.isArray(nodesData) ? nodesData : [])`. When `/api/projects/[id]/canvas/nodes` returned a 5xx error (response body `{ error: 'Failed to fetch nodes' }`), the response was non-array → `setNodes([])` fired silently. Two design defects combined: `response.ok` was never checked + the "not an array" fallback was `[]` instead of `prev`. Both defects fixed in Layer 1.
 
 **Root cause (diagnosed 2026-04-28):**
 
@@ -548,9 +567,23 @@ The matching API route at `src/app/api/projects/[projectId]/canvas/nodes/route.t
 
 ---
 
-### 🚨 Reconciliation-Pass Closure-Staleness Bug (NEW 2026-04-28; HIGH severity; fix design locked)
+### ✅ Reconciliation-Pass Closure-Staleness Bug (FIXED 2026-04-29 bug-fix session; HIGH severity; 3 layers of defense shipped)
 
-**Status:** Diagnosed during the 2026-04-28 deeper-analysis session against the live Bursitis canvas. Fix design is one-token; tests + push gated by Rule 9.
+**Status:** ✅ FIXED in 2026-04-29 bug-fix session via 3 independent layers of defense. The original locked one-token fix at `AutoAnalyze.tsx:830` was expanded to fundamental long-term per director's mid-session directive *"fix the fundamental problem long term."* The fix prevents the bug class structurally, not just the bug instance — accidental reintroduction of the same closure-capture pattern is now physically prevented inside `doApplyV3`. **Defense layers shipped:**
+
+- **Layer 1 (primary — structural):** Reconciliation logic extracted to pure helper `computeReconciliationUpdates(keywords, placedSet, archivedSet)` in `src/lib/reconciliation.ts`. The helper takes its inputs explicitly, has no closure to capture from, is pure — it cannot be wrong in the same way the inline loop was. The original 2026-04-28 inline loop at lines 822-848 of `AutoAnalyze.tsx` is replaced with a single call to this helper.
+- **Layer 2 (shadow pattern):** At `doApplyV3` function entry, `allKeywords` and `pathways` are SHADOWED by locals pointing at `keywordsRef.current` / `pathwaysRef.current`. The local names match the prop names, so closure-frozen props are physically unreachable for every read inside the function. The reconciliation pass call site automatically resolves to fresh data; line 707 (`originalPathwayIds: pathways.map(...)`) and line 858 (`allKeywords.find(x => x.id === id)` for unplaced-log) automatically resolve to fresh data. New `pathwaysRef` added to match the existing `nodesRef`/`keywordsRef`/`sisterLinksRef` pattern.
+- **Layer 3 (convention enforcement via documented invariant):** Line-153 invariant comment was rewritten from a passive *"runLoop-reachable code must read via *Ref.current"* to a positive description of the shadow strategy as the new convention. Future code added to `doApplyV3` reads fresh state by default. ESLint custom-rule enforcement of the shadow pattern is captured in the Defense-in-Depth Audit design item below for a future dedicated session.
+
+**Sturdy testing:** 10 unit tests in `src/lib/reconciliation.test.ts` covering empty input, archived-skip, all four cells of the reconciliation truth table (on-canvas+Unsorted heal, on-canvas+Reshuffled heal, off-canvas+AI-Sorted punish, on-canvas+AI-Sorted no-op), mixed batch with all four behaviors interleaved, and — critically — the 2026-04-28 stale-vs-fresh contrast test that exactly reproduces the 84-keyword regression scenario. The contrast test passes the helper TWO different keyword lists (the closure-frozen "stale" view showing 84 as AI-Sorted vs. the ref-current "fresh" view showing 84 as Reshuffled, both with the same placedSet); proves the helper's output reflects the input it's given (no hidden snapshot) and that the fresh input correctly heals all 84 stuck-Reshuffled keywords. Plus a hidden-snapshot regression-guard test that pins the helper's purity. All 10 pass.
+
+**Live data:** Bursitis canvas was wiped wholesale at end-of-session per director's data-deprioritization directive. The 84 stuck-Reshuffled keywords + 232 status-drift residuals were eliminated by the wipe along with the rest of the canvas. The Reconcile Now admin button shipped as a forward-looking forensic + healing tool — useful any time future drift appears.
+
+**Cross-references for fix-validation purposes:**
+- `src/lib/reconciliation.ts` + `src/lib/reconciliation.test.ts` (Layer 1 + tests).
+- `src/app/projects/[projectId]/keyword-clustering/components/AutoAnalyze.tsx` (Layer 2 shadow pattern at doApplyV3 entry; Layer 3 line-153 comment rewrite; new `pathwaysRef`).
+- `CORRECTIONS_LOG.md` 2026-04-18 entry (the foundational stale-closure pattern this regression mirrored).
+- "🛡️ Redundancy + Defense-in-Depth Audit" item below — partial implementation: the per-fix redundancy matrix is implicit in this session's 3-layer approach; the rest still pending design.
 
 **Pattern recurrence:** This is a regression of the documented closure-staleness pattern from `CORRECTIONS_LOG.md` 2026-04-18 (Bug A: `buildCurrentTsv` reading props instead of refs) + 2026-04-19 (fix validated live). The prevention rule was added: a code comment now sits at `AutoAnalyze.tsx:153` saying *"runLoop-reachable code must read nodes/allKeywords/sisterLinks via *Ref.current, not raw props — the async runLoop closure freezes props. See CORRECTIONS_LOG 2026-04-18."* The Pivot Session E rewrite (2026-04-25) deleted the original `buildCurrentTsv` along with all V2 code paths. The reconciliation pass added later in Session 3b wrote new code at `AutoAnalyze.tsx:822-848` that mostly honors the line-153 invariant — `keywordsRef.current` is used at line 656 in the same function — but **line 830's `for (const kw of allKeywords)` violates it**.
 
@@ -588,9 +621,25 @@ Option (a) is more useful long-term — it doubles as a forensic tool for future
 
 ---
 
-### 🛡️ Redundancy + Defense-in-Depth Audit (NEW 2026-04-28; design pending)
+### 🛡️ Redundancy + Defense-in-Depth Audit (PARTIAL — captured 2026-04-28; partially implemented 2026-04-29; full design session still pending)
 
-**Status:** Captured as a forward-pointing design item; needs a dedicated design session analogous to Scale Session A. Design output is a per-fix redundancy matrix + concrete additions to the codebase.
+**Status (updated 2026-04-29):** **Partially implemented this session as part of the Bug 1 + Bug 2 fixes**, per director's *"fix the fundamental problem long term"* directive. The per-fix redundancy matrix for those two specific bugs is implicit in the 3-layer-each defense pattern shipped (see the two FIXED entries above). What's still pending design is the codebase-wide enforcement infrastructure (ESLint custom rule for the shadow pattern; runtime invariant checks; forensic instrumentation; server-side guards; pre-flight self-tests at run start) — that work needs a dedicated design session analogous to Scale Session A.
+
+**What shipped this session (counts toward this item, not a separate item):**
+- Per-fix redundancy matrix for Bug 1: 3 layers (defensive `useCanvas` contract + runLoop fail-fast pre-flight + existing API_ERROR routing). Each layer alone catches the bug; all three must fail simultaneously for recurrence.
+- Per-fix redundancy matrix for Bug 2: 3 layers (pure helper extraction + shadow pattern + line-153 convention rewrite). Each layer alone prevents the bug class; the structural Layer 1 + Layer 2 make it impossible for the inline-loop bug to recur inside `doApplyV3`.
+- Reconcile Now admin button (`AutoAnalyze.tsx` `handleReconcileNow`): client-side forensic + healing tool that walks any project's full keyword list against fresh server state and heals any drift in one click. Doubles as a verification tool for any future bug.
+
+**What's still pending design (the dedicated session's scope):**
+
+1. **Codebase-wide invariant enforcement** — ESLint custom rule that flags prop reads inside identified runLoop-reachable functions (so the shadow pattern becomes lint-enforced, not just convention-enforced); runtime invariant checks (e.g., dev-mode warning if `nodesRef.current.length === 0` at start of a batch when canvas had >0 nodes at end of previous batch — this is partly shipped as the runLoop fail-fast pre-flight but in production-warn mode rather than dev-mode-assert).
+2. **Forensic instrumentation** — optional verbose logging of canvas/keyword sizes at each batch boundary, written to a structured log file the admin can download; "Dry-run" mode that runs the full pipeline against synthetic data and verifies invariants without DB writes.
+3. **Server-side guards** — `/canvas/rebuild` could reject payloads where `deleteNodeIds.length === 0` AND the new-node count is dramatically smaller than the existing canvas size (potential canvas-blanking signature); `/canvas/nodes` GET could be wrapped in a retry-on-transient-error layer so the underlying connection-pool flake doesn't surface as "canvas is empty" at the client.
+4. **Pre-flight checks at run start** — before any batches process, run a self-test: confirm `nodesRef.current` matches DB; confirm `keywordsRef.current` matches DB; confirm prompts loaded correctly. Fail fast if anything is off, before $50 of API spend.
+
+**Estimated effort:** 1 design session (3-4 hours) producing the full matrix + locked list of redundancies to build + multi-session implementation plan. Implementation work itself depends on what the matrix recommends — could be 1 session for ESLint+runtime-invariant alone, or more if server-side guards are in scope.
+
+**Sequencing:** With Bug 1 + Bug 2 shipped, the dedicated Defense-in-Depth Audit design session is a strong candidate for "next" before Scale Sessions B-E land more architectural code. Director's call.
 
 **Director's framing (verbatim 2026-04-28):** *"think if redundancies may be needed and if so, to add them, in case our fixes fail during a session (which has happened before)."*
 
