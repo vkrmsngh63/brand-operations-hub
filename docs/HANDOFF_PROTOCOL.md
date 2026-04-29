@@ -450,6 +450,32 @@ If prior treatment is NOT found, Claude must surface the search performed: *"I c
 
 **Why this rule exists:** Logged in `CORRECTIONS_LOG.md` 2026-04-27 entry. Claude proposed a ROADMAP item for the input-side context-scaling concern, framing it as "the system was not explicitly designed to handle it" — when in fact `PIVOT_DESIGN.md` lines 205 + 246 explicitly acknowledged the trade-off, and `ROADMAP.md` line 162 documented that V2's Mode A→B (deleted in Pivot E) had been credited with "avoiding the projected 200k context wall." Claude had read both pieces of content earlier in the same session but failed to synthesize them when writing the new ROADMAP entry. Director caught the mistake, requested the instruction-set update, and approved Rule 24.
 
+### Rule 25 — Multi-workflow coordination (NEW 2026-04-29)
+
+When PLOS has more than one workflow under active development simultaneously, parallel Claude Code chats must coordinate to avoid overwriting each other's work. The full methodology lives in `MULTI_WORKFLOW_PROTOCOL.md` (Group A doc); this rule is its operational summary.
+
+**At session start (in addition to the standard mandatory start-of-session sequence):**
+
+1. **Read `MULTI_WORKFLOW_PROTOCOL.md`** if today's task references any workflow with N ≥ 2, OR if the "Current Active Tools" table at the top of `ROADMAP.md` shows more than one workflow with status 🔄 / 🛠 / 🆕.
+2. **Read the "Current Active Tools" table** in `ROADMAP.md`. Note: which workflows are in flight; which branches they're on; whether any has a schema-change-in-flight flag set to "Yes."
+3. **`git pull --rebase origin <branch>`** before the drift check (catches anything the parallel chat just pushed). On the W#1 branch (`main`); on the appropriate feature branch for W#k for k ≥ 2.
+4. **If today's session intends to modify schema (`prisma/schema.prisma` or run migrations / db push):** confirm in the drift check that no other workflow has the schema-change-in-flight flag set. If any other workflow does, defer schema work to a later session (capture as a deferred item per Rule 14e).
+5. **Surface any cross-workflow doc edits** — if today's session needs to edit a section another workflow owns (per `MULTI_WORKFLOW_PROTOCOL` §3 ownership table), state that intent explicitly in the drift check before doing it.
+
+**Branch discipline:**
+- W#1 (Keyword Clustering) lives on `main`.
+- W#k for k ≥ 2 lives on `workflow-N-<short-slug>` until per-milestone merge to `main`.
+- Each workflow's first session creates its branch as the first git action.
+
+**End-of-session additions (in addition to the standard `§4 Step 1` checklist):**
+- Update the "Current Active Tools" row for this workflow in `ROADMAP.md` (status, last session, next session, schema-change flag if applicable).
+- `git pull --rebase origin <branch>` AGAIN right before commit (catches anything the parallel chat pushed during this session).
+- If a cross-workflow edit happened (rare; surfaced + approved at start), document it in the `CHAT_REGISTRY` row + flag for the other workflow's next session.
+
+**When this rule retires:** if PLOS ever returns to single-workflow-at-a-time mode, this rule + `MULTI_WORKFLOW_PROTOCOL.md` get retired together. Until then, every session in a multi-workflow setup follows this rule.
+
+**Why this rule exists:** drafted 2026-04-29 in `session_2026-04-28_canvas-blanking-and-closure-staleness-fix` after W#1's stabilization grew to ~9-13 more sessions and the director chose to start W#2 in parallel rather than wait. The shared-doc + shared-schema + shared-Codespace risks needed a structured coordination protocol; without it, the two parallel chats would race on `ROADMAP.md` / `prisma/schema.prisma` / the dev server. See `MULTI_WORKFLOW_PROTOCOL.md` §1.
+
 ---
 
 ## 4. END-OF-CHAT PROTOCOL

@@ -36,6 +36,21 @@
 
 ---
 
+## Current Active Tools
+
+**Single source of truth for parallel workflow state.** Every session reads this at start; every session updates its own row at end-of-session. Schema-change-in-flight flag is the coordination point — when "Yes" for any workflow, no other workflow's session may modify `prisma/schema.prisma`. See `MULTI_WORKFLOW_PROTOCOL.md` for the full coordination rules.
+
+| Workflow | Status | Branch | Last Session | Next Session | Schema-change in flight? |
+|---|---|---|---|---|---|
+| W#1 Keyword Clustering | 🔄 Active dev — stabilization | `main` | 2026-04-29 bug-fix-and-canvas-wipe (canvas-blanking + closure-staleness fixed with 3 layers each; Reconcile Now button shipped; Bursitis canvas wiped) | (c) Defense-in-Depth Audit design (recommended) — or (b) Scale Session B / (d) Phase-1 UI polish / (e) Action-by-action feedback design | No |
+| W#2 Competition Scraping & Deep Analysis | 🆕 About to start | `workflow-2-competition-scraping` (created by W#2's first session) | (none yet) | Workflow Requirements Interview per HANDOFF_PROTOCOL Rule 18 | No |
+| W#3 Therapeutic Strategy | Not yet started | — | — | — | — |
+| W#4–14 | Not yet started | — | — | — | — |
+
+**Status-cell vocabulary:** 🆕 about-to-start / 🔄 active-dev / 🛠 schema-change-session / ✅ graduated / ⏸ paused / — no-current-work. See `MULTI_WORKFLOW_PROTOCOL.md` §5 for definitions.
+
+---
+
 ## The 4-phase model (canonical)
 
 Per `PLATFORM_REQUIREMENTS.md §11`, platform development is structured around four phases. This roadmap restructures all roadmap items into these phases.

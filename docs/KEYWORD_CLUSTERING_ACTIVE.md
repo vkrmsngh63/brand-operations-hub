@@ -99,6 +99,8 @@ Post-wipe verification queried: 0 nodes / 0 sister links / 0 pathways / 2,256 ke
 
 ### Standing instructions for next session — four "NEXT" choices (option (a) retired this session)
 
+**Multi-workflow context (added 2026-04-29):** W#2 (Competition Scraping & Deep Analysis) is now also active in parallel — see `ROADMAP.md` "Current Active Tools" table for live state. Per `MULTI_WORKFLOW_PROTOCOL.md` + `HANDOFF_PROTOCOL.md` Rule 25, W#1 sessions stay on `main`; W#2 sessions are on `workflow-2-competition-scraping`. Before any platform-level changes (especially schema), W#1 sessions check the Active Tools table for a W#2 schema-change-in-flight flag — if set, defer schema work to a later session. The canonical W#1 continuation prompt is in `MULTI_WORKFLOW_PROTOCOL.md` Appendix B.
+
 (a) ~~Bug-fix session~~ — RETIRED. Shipped this session.
 
 (b) **Scale Session B build (Tiered Canvas Serialization)** — per `INPUT_CONTEXT_SCALING_DESIGN.md §6`. Addresses the body-part ladder violation (95+ scattered topics — though those topics no longer exist post-wipe; the structural problem will recur on the next big run if not addressed) and the input-side cost growth structurally. **Recommended next** in the prior session's sequence (a) → (c) → (b) → …; with (a) shipped, (b) becomes the highest-impact next item OR the director may prefer (c) first to lock in defense-in-depth before more architectural work lands. ~4-6 hours.

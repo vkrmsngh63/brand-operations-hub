@@ -128,11 +128,11 @@ I am the director of the PLOS (Product Launch Operating System) project. **I am 
 ## START-OF-SESSION ROUTINE (do these before asking me to confirm task)
 
 1. Confirm you've read this file and will follow every rule.
-2. Read `docs/HANDOFF_PROTOCOL.md` end-to-end.
-3. Read the 15 Group A docs (see `docs/DOCUMENT_MANIFEST.md` for the list).
+2. Read `docs/HANDOFF_PROTOCOL.md` end-to-end (Rules 1–25).
+3. Read the 16 Group A docs (see `docs/DOCUMENT_MANIFEST.md` for the list). The list includes `docs/MULTI_WORKFLOW_PROTOCOL.md` — read it if today's task references any workflow with N ≥ 2 OR if the "Current Active Tools" table in `ROADMAP.md` shows more than one workflow in flight.
 4. Read any Group B docs relevant to today's expected work.
-5. Run `git log --oneline -10` and `git status` to understand current repo state.
-6. Produce a drift check: "Here's where we are. Here's what looks off, if anything. Here's what I understand today's task to be. Ready to proceed?"
+5. Run `git log --oneline -10` and `git status` to understand current repo state. If `MULTI_WORKFLOW_PROTOCOL.md` applies (per step 3), also run `git pull --rebase origin <branch>` to catch anything the parallel chat just pushed (per HANDOFF_PROTOCOL Rule 25).
+6. Produce a drift check: "Here's where we are. Here's what looks off, if anything. Here's what I understand today's task to be. Ready to proceed?" If multi-workflow mode applies, note any active sister-workflows (their branches, their schema-change-in-flight flag) in the drift check.
 7. Wait for my explicit go-ahead before executing.
 
 ---
