@@ -31,6 +31,19 @@ export interface CanvasNode {
   relationship: Relationship | null; // null iff root
   keywordPlacements: Record<KeywordId, Placement>;
   stabilityScore: number;
+  /**
+   * Intent fingerprint — short canonical phrase (5–15 words, searcher-centric)
+   * capturing the topic's compound intent. Load-bearing for Tiered Canvas
+   * Serialization (Scale Sessions B–E in INPUT_CONTEXT_SCALING_DESIGN.md).
+   *
+   * Scale Session B (this version): the applier accepts an optional
+   * `intentFingerprint` on AddTopic / UpdateTitle / UpdateDescription / Split-into,
+   * and `mergedIntentFingerprint` on Merge — when present, must be non-empty.
+   * Default for new topics that don't supply one is the empty string. Scale
+   * Session D tightens the AI-emitted ops to require fingerprints once V4
+   * prompts ship.
+   */
+  intentFingerprint: string;
 }
 
 export interface SisterLink {
@@ -65,6 +78,11 @@ export interface AddTopicOp {
   parent: TopicRef | null;
   /** "linear" | "nested" for non-root topics; ignored (any value) for roots. */
   relationship: Relationship | null;
+  /**
+   * Optional in Scale Session B; tightens to required in Scale Session D once
+   * V4 prompts ship. When present, must be a non-empty trimmed string.
+   */
+  intentFingerprint?: string;
 }
 
 export interface UpdateTopicTitleOp {
@@ -72,12 +90,24 @@ export interface UpdateTopicTitleOp {
   id: TopicRef;
   to: string;
   justifyRestructure?: JustifyRestructure;
+  /**
+   * Optional in Scale Session B; tightens to required in Scale Session D.
+   * Refreshes the topic's fingerprint to track the new title's intent.
+   * When present, must be a non-empty trimmed string.
+   */
+  intentFingerprint?: string;
 }
 
 export interface UpdateTopicDescriptionOp {
   type: 'UPDATE_TOPIC_DESCRIPTION';
   id: TopicRef;
   to: string;
+  /**
+   * Optional always — most description edits are pure refinement and the AI
+   * may opt to keep the existing fingerprint. When present, must be a
+   * non-empty trimmed string.
+   */
+  intentFingerprint?: string;
 }
 
 export interface MoveTopicOp {
@@ -97,6 +127,12 @@ export interface MergeTopicsOp {
   mergedDescription: string;
   reason: string;
   justifyRestructure?: JustifyRestructure;
+  /**
+   * Optional in Scale Session B; tightens to required in Scale Session D.
+   * Replaces the merged target's fingerprint. When present, must be a
+   * non-empty trimmed string.
+   */
+  mergedIntentFingerprint?: string;
 }
 
 export interface SplitTopicOp {
@@ -107,6 +143,11 @@ export interface SplitTopicOp {
     title: string;
     description: string;
     keywordIds: KeywordId[];
+    /**
+     * Optional in Scale Session B; tightens to required in Scale Session D.
+     * When present, must be a non-empty trimmed string.
+     */
+    intentFingerprint?: string;
   }>;
   reason: string;
   justifyRestructure?: JustifyRestructure;
@@ -252,6 +293,29 @@ function checkJustifyShape(
   return null;
 }
 
+/**
+ * Validate an optional intent-fingerprint field on an operation. Per Scale
+ * Session B (INPUT_CONTEXT_SCALING_DESIGN.md §6): when present the field
+ * must be a non-empty trimmed string; when absent the operation is accepted
+ * unchanged. Scale Session D will tighten to required for AddTopic /
+ * UpdateTitle / Merge / Split-into once V4 prompts ship.
+ */
+function validateOptionalFingerprint(
+  value: unknown,
+  i: number,
+  opType: string,
+  field: string,
+): string | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string') {
+    fail(i, opType, `${field} must be a string when present`);
+  }
+  if (value.trim().length === 0) {
+    fail(i, opType, `${field} must be a non-empty string when present`);
+  }
+  return value;
+}
+
 // ============================================================
 // Scratch model — internal mutable representation during apply
 // ============================================================
@@ -378,6 +442,9 @@ function applyAddTopic(s: Scratch, op: AddTopicOp, i: number): void {
   if (parentStableId !== null && op.relationship !== 'linear' && op.relationship !== 'nested') {
     fail(i, op.type, `relationship must be "linear" or "nested" for non-root topics`);
   }
+  const intentFingerprint = validateOptionalFingerprint(
+    op.intentFingerprint, i, op.type, 'intentFingerprint',
+  );
   const stableId = issueStableId(s);
   s.aliasResolutions.set(op.id, stableId);
   s.nodesByStableId.set(stableId, {
@@ -388,6 +455,7 @@ function applyAddTopic(s: Scratch, op: AddTopicOp, i: number): void {
     relationship: parentStableId === null ? null : op.relationship,
     keywordPlacements: {},
     stabilityScore: 0.0,
+    intentFingerprint: intentFingerprint ?? '',
   });
 }
 
@@ -401,7 +469,11 @@ function applyUpdateTopicTitle(s: Scratch, op: UpdateTopicTitleOp, i: number): v
     const err = checkJustifyShape(op.justifyRestructure);
     if (err) fail(i, op.type, `topic ${stableId} has stabilityScore=${node.stabilityScore} (≥${STABILITY_RESTRUCTURE_THRESHOLD}); ${err}`);
   }
+  const fp = validateOptionalFingerprint(
+    op.intentFingerprint, i, op.type, 'intentFingerprint',
+  );
   node.title = op.to;
+  if (fp !== undefined) node.intentFingerprint = fp;
 }
 
 function applyUpdateTopicDescription(s: Scratch, op: UpdateTopicDescriptionOp, i: number): void {
@@ -409,7 +481,11 @@ function applyUpdateTopicDescription(s: Scratch, op: UpdateTopicDescriptionOp, i
   const node = s.nodesByStableId.get(stableId)!;
   // No JUSTIFY required: description-only edits are safe even on stable topics
   // (per PIVOT_DESIGN.md §1.4 rule 6).
+  const fp = validateOptionalFingerprint(
+    op.intentFingerprint, i, op.type, 'intentFingerprint',
+  );
   node.description = typeof op.to === 'string' ? op.to : '';
+  if (fp !== undefined) node.intentFingerprint = fp;
 }
 
 function applyMoveTopic(s: Scratch, op: MoveTopicOp, i: number): void {
@@ -460,6 +536,9 @@ function applyMergeTopics(s: Scratch, op: MergeTopicsOp, i: number): void {
     const err = checkJustifyShape(op.justifyRestructure);
     if (err) fail(i, op.type, `merge involves a topic with stabilityScore≥${STABILITY_RESTRUCTURE_THRESHOLD}; ${err}`);
   }
+  const mergedFp = validateOptionalFingerprint(
+    op.mergedIntentFingerprint, i, op.type, 'mergedIntentFingerprint',
+  );
   // 1. Re-parent source's children to target.
   for (const child of s.nodesByStableId.values()) {
     if (child.parentStableId === sourceStableId) {
@@ -474,9 +553,12 @@ function applyMergeTopics(s: Scratch, op: MergeTopicsOp, i: number): void {
       target.keywordPlacements[kwId] = placement;
     }
   }
-  // 4. Apply merged title/description.
+  // 4. Apply merged title/description (and merged fingerprint if provided).
   target.title = op.mergedTitle;
   target.description = op.mergedDescription ?? '';
+  if (mergedFp !== undefined) target.intentFingerprint = mergedFp;
+  // (else target keeps its existing fingerprint — Session B safety since V3
+  //  prompts don't yet emit merged_intent_fingerprint.)
   // 5. Remove source.
   s.nodesByStableId.delete(sourceStableId);
 }
@@ -517,8 +599,10 @@ function applySplitTopic(s: Scratch, op: SplitTopicOp, i: number): void {
       fail(i, op.type, `source topic "${sourceStableId}" has child "${n.stableId}"; MOVE_TOPIC its children before splitting`);
     }
   }
-  // Validate aliases unique and not yet used.
+  // Validate aliases unique and not yet used. Also validate optional
+  // intentFingerprint per entry up-front so we don't half-apply.
   const aliasesInOp = new Set<string>();
+  const fingerprintByAlias = new Map<string, string | undefined>();
   for (const entry of op.into) {
     if (!isAlias(entry.id)) fail(i, op.type, `into[].id "${entry.id}" must be an alias starting with "$"`);
     if (aliasesInOp.has(entry.id)) fail(i, op.type, `alias "${entry.id}" is duplicated within this SPLIT`);
@@ -528,6 +612,12 @@ function applySplitTopic(s: Scratch, op: SplitTopicOp, i: number): void {
       fail(i, op.type, `into[].title must be a non-empty string`);
     }
     if (!Array.isArray(entry.keywordIds)) fail(i, op.type, `into[].keywordIds must be an array`);
+    fingerprintByAlias.set(
+      entry.id,
+      validateOptionalFingerprint(
+        entry.intentFingerprint, i, op.type, `into["${entry.id}"].intentFingerprint`,
+      ),
+    );
   }
   // Keyword partitioning: every source keyword appears in exactly one into entry.
   const sourceKeywords = new Set(Object.keys(source.keywordPlacements));
@@ -564,6 +654,7 @@ function applySplitTopic(s: Scratch, op: SplitTopicOp, i: number): void {
       relationship,
       keywordPlacements: placements,
       stabilityScore: 0.0,
+      intentFingerprint: fingerprintByAlias.get(entry.id) ?? '',
     });
   }
   // Remove source's sister links (model can re-add against the new topics).

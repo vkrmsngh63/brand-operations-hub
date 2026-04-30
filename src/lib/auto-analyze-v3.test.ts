@@ -526,3 +526,96 @@ test('E2E: REMOVE_SISTER_LINK queues the original link id for deletion', () => {
   assert.deepEqual(payload.deleteSisterLinkIds, ['s-doomed']);
   assert.equal(payload.sisterLinks.length, 0);
 });
+
+// ============================================================
+// Scale Session B — intent fingerprint parser translation
+// (per docs/INPUT_CONTEXT_SCALING_DESIGN.md §6 Scale Session B)
+// ============================================================
+
+test('Parser: ADD_TOPIC translates intent_fingerprint → intentFingerprint', () => {
+  const raw = `=== OPERATIONS ===
+{"op":"ADD_TOPIC","id":"$root","title":"R","description":"d","parent":null,"relationship":null,"intent_fingerprint":"Older bursitis sufferers seeking gentle home relief"}
+=== END OPERATIONS ===`;
+  const r = parseOperationsJsonl(raw);
+  assert.equal(r.errors.length, 0);
+  const op = r.operations[0];
+  if (op.type === 'ADD_TOPIC') {
+    assert.equal(
+      op.intentFingerprint,
+      'Older bursitis sufferers seeking gentle home relief',
+    );
+  } else {
+    throw new Error('expected ADD_TOPIC');
+  }
+});
+
+test('Parser: ADD_TOPIC without intent_fingerprint produces undefined', () => {
+  const raw = `=== OPERATIONS ===
+{"op":"ADD_TOPIC","id":"$root","title":"R","description":"d","parent":null,"relationship":null}
+=== END OPERATIONS ===`;
+  const r = parseOperationsJsonl(raw);
+  const op = r.operations[0];
+  if (op.type === 'ADD_TOPIC') {
+    assert.equal(op.intentFingerprint, undefined);
+  }
+});
+
+test('Parser: UPDATE_TOPIC_TITLE translates intent_fingerprint', () => {
+  const raw = `=== OPERATIONS ===
+{"op":"UPDATE_TOPIC_TITLE","id":"t-1","to":"New title","intent_fingerprint":"Refreshed phrase here"}
+=== END OPERATIONS ===`;
+  const r = parseOperationsJsonl(raw);
+  const op = r.operations[0];
+  if (op.type === 'UPDATE_TOPIC_TITLE') {
+    assert.equal(op.intentFingerprint, 'Refreshed phrase here');
+  }
+});
+
+test('Parser: UPDATE_TOPIC_DESCRIPTION translates intent_fingerprint', () => {
+  const raw = `=== OPERATIONS ===
+{"op":"UPDATE_TOPIC_DESCRIPTION","id":"t-1","to":"new desc","intent_fingerprint":"Description-driven phrase"}
+=== END OPERATIONS ===`;
+  const r = parseOperationsJsonl(raw);
+  const op = r.operations[0];
+  if (op.type === 'UPDATE_TOPIC_DESCRIPTION') {
+    assert.equal(op.intentFingerprint, 'Description-driven phrase');
+  }
+});
+
+test('Parser: MERGE_TOPICS translates merged_intent_fingerprint → mergedIntentFingerprint', () => {
+  const raw = `=== OPERATIONS ===
+{"op":"MERGE_TOPICS","source_id":"t-1","target_id":"t-2","merged_title":"M","merged_description":"d","reason":"dup","merged_intent_fingerprint":"Combined searcher intent for merged topic"}
+=== END OPERATIONS ===`;
+  const r = parseOperationsJsonl(raw);
+  const op = r.operations[0];
+  if (op.type === 'MERGE_TOPICS') {
+    assert.equal(
+      op.mergedIntentFingerprint,
+      'Combined searcher intent for merged topic',
+    );
+  }
+});
+
+test('Parser: SPLIT_TOPIC translates intent_fingerprint per into[] entry', () => {
+  const raw = `=== OPERATIONS ===
+{"op":"SPLIT_TOPIC","source_id":"t-1","reason":"two intents","into":[{"id":"$one","title":"First","description":"","keyword_ids":["kw-a"],"intent_fingerprint":"First half phrase"},{"id":"$two","title":"Second","description":"","keyword_ids":["kw-b"],"intent_fingerprint":"Second half phrase"}]}
+=== END OPERATIONS ===`;
+  const r = parseOperationsJsonl(raw);
+  const op = r.operations[0];
+  if (op.type === 'SPLIT_TOPIC') {
+    assert.equal(op.into[0].intentFingerprint, 'First half phrase');
+    assert.equal(op.into[1].intentFingerprint, 'Second half phrase');
+  }
+});
+
+test('Parser: SPLIT_TOPIC without intent_fingerprint per entry yields undefined', () => {
+  const raw = `=== OPERATIONS ===
+{"op":"SPLIT_TOPIC","source_id":"t-1","reason":"two intents","into":[{"id":"$one","title":"First","description":"","keyword_ids":["kw-a"]},{"id":"$two","title":"Second","description":"","keyword_ids":["kw-b"]}]}
+=== END OPERATIONS ===`;
+  const r = parseOperationsJsonl(raw);
+  const op = r.operations[0];
+  if (op.type === 'SPLIT_TOPIC') {
+    assert.equal(op.into[0].intentFingerprint, undefined);
+    assert.equal(op.into[1].intentFingerprint, undefined);
+  }
+});

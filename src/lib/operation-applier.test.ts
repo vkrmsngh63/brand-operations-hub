@@ -37,6 +37,7 @@ function node(
       opts.relationship ?? (opts.parentStableId ? 'linear' : null),
     keywordPlacements: opts.keywordPlacements ?? {},
     stabilityScore: opts.stabilityScore ?? 0,
+    intentFingerprint: opts.intentFingerprint ?? '',
   };
 }
 
@@ -883,4 +884,323 @@ test('Realistic batch: add subtree of new topics + place keywords + sister link'
   assert.ok(r.aliasResolutions['$bursa-types']);
   assert.ok(r.aliasResolutions['$shoulder']);
   assert.ok(r.aliasResolutions['$hip']);
+});
+
+// ============================================================
+// Scale Session B — intent fingerprint tests
+// (per docs/INPUT_CONTEXT_SCALING_DESIGN.md §1.2 + §6 Scale Session B)
+// ============================================================
+
+test('Fingerprint: ADD_TOPIC accepts a non-empty fingerprint and persists it on the new node', () => {
+  const state = emptyState(100);
+  const r = expectOk(
+    applyOperations(state, [
+      {
+        type: 'ADD_TOPIC',
+        id: '$root',
+        title: 'Bursitis pain',
+        description: '',
+        parent: null,
+        relationship: null,
+        intentFingerprint: 'Older bursitis sufferers seeking gentle home relief',
+      },
+    ]),
+  );
+  assert.equal(r.newState.nodes.length, 1);
+  assert.equal(
+    r.newState.nodes[0].intentFingerprint,
+    'Older bursitis sufferers seeking gentle home relief',
+  );
+});
+
+test('Fingerprint: ADD_TOPIC with no intentFingerprint defaults the new node to ""', () => {
+  const state = emptyState(100);
+  const r = expectOk(
+    applyOperations(state, [
+      {
+        type: 'ADD_TOPIC',
+        id: '$root',
+        title: 'Bursitis pain',
+        description: '',
+        parent: null,
+        relationship: null,
+      },
+    ]),
+  );
+  assert.equal(r.newState.nodes[0].intentFingerprint, '');
+});
+
+test('Fingerprint: ADD_TOPIC rejects an empty-string intentFingerprint', () => {
+  const state = emptyState(100);
+  expectErr(
+    applyOperations(state, [
+      {
+        type: 'ADD_TOPIC',
+        id: '$root',
+        title: 'Bursitis pain',
+        description: '',
+        parent: null,
+        relationship: null,
+        intentFingerprint: '',
+      },
+    ]),
+    'intentFingerprint must be a non-empty string when present',
+  );
+});
+
+test('Fingerprint: ADD_TOPIC rejects a whitespace-only intentFingerprint', () => {
+  const state = emptyState(100);
+  expectErr(
+    applyOperations(state, [
+      {
+        type: 'ADD_TOPIC',
+        id: '$root',
+        title: 'Bursitis pain',
+        description: '',
+        parent: null,
+        relationship: null,
+        intentFingerprint: '   \t\n',
+      },
+    ]),
+    'intentFingerprint must be a non-empty string when present',
+  );
+});
+
+test('Fingerprint: UPDATE_TOPIC_TITLE refreshes intentFingerprint when supplied', () => {
+  const state = stateWith(
+    [node('t-1', { title: 'Old', intentFingerprint: 'Old fingerprint phrase' })],
+    100,
+  );
+  const r = expectOk(
+    applyOperations(state, [
+      {
+        type: 'UPDATE_TOPIC_TITLE',
+        id: 't-1',
+        to: 'New title',
+        intentFingerprint: 'Refreshed searcher-centric phrase here',
+      },
+    ]),
+  );
+  assert.equal(
+    r.newState.nodes[0].intentFingerprint,
+    'Refreshed searcher-centric phrase here',
+  );
+});
+
+test('Fingerprint: UPDATE_TOPIC_TITLE without fingerprint keeps the existing one', () => {
+  const state = stateWith(
+    [node('t-1', { title: 'Old', intentFingerprint: 'Existing phrase' })],
+    100,
+  );
+  const r = expectOk(
+    applyOperations(state, [
+      { type: 'UPDATE_TOPIC_TITLE', id: 't-1', to: 'New title' },
+    ]),
+  );
+  assert.equal(r.newState.nodes[0].intentFingerprint, 'Existing phrase');
+});
+
+test('Fingerprint: UPDATE_TOPIC_TITLE rejects empty-string fingerprint', () => {
+  const state = stateWith([node('t-1', { intentFingerprint: 'Existing' })], 100);
+  expectErr(
+    applyOperations(state, [
+      { type: 'UPDATE_TOPIC_TITLE', id: 't-1', to: 'New title', intentFingerprint: '' },
+    ]),
+    'intentFingerprint must be a non-empty string when present',
+  );
+});
+
+test('Fingerprint: UPDATE_TOPIC_DESCRIPTION optionally refreshes fingerprint', () => {
+  const state = stateWith(
+    [node('t-1', { intentFingerprint: 'Old phrase' })],
+    100,
+  );
+  const r = expectOk(
+    applyOperations(state, [
+      {
+        type: 'UPDATE_TOPIC_DESCRIPTION',
+        id: 't-1',
+        to: 'New description',
+        intentFingerprint: 'Updated phrase capturing intent shift',
+      },
+    ]),
+  );
+  assert.equal(
+    r.newState.nodes[0].intentFingerprint,
+    'Updated phrase capturing intent shift',
+  );
+});
+
+test('Fingerprint: UPDATE_TOPIC_DESCRIPTION without fingerprint preserves the existing one', () => {
+  const state = stateWith(
+    [node('t-1', { intentFingerprint: 'Stable existing phrase' })],
+    100,
+  );
+  const r = expectOk(
+    applyOperations(state, [
+      { type: 'UPDATE_TOPIC_DESCRIPTION', id: 't-1', to: 'pure refinement' },
+    ]),
+  );
+  assert.equal(r.newState.nodes[0].intentFingerprint, 'Stable existing phrase');
+});
+
+test('Fingerprint: MERGE_TOPICS replaces target fingerprint when mergedIntentFingerprint provided', () => {
+  const state = stateWith(
+    [
+      node('t-1', { intentFingerprint: 'Source phrase' }),
+      node('t-2', { intentFingerprint: 'Target phrase' }),
+    ],
+    100,
+  );
+  const r = expectOk(
+    applyOperations(state, [
+      {
+        type: 'MERGE_TOPICS',
+        sourceId: 't-1',
+        targetId: 't-2',
+        mergedTitle: 'Merged title',
+        mergedDescription: '',
+        reason: 'duplicate intent',
+        mergedIntentFingerprint: 'Combined searcher intent for merged topic',
+      },
+    ]),
+  );
+  assert.equal(r.newState.nodes.length, 1);
+  assert.equal(
+    r.newState.nodes[0].intentFingerprint,
+    'Combined searcher intent for merged topic',
+  );
+});
+
+test('Fingerprint: MERGE_TOPICS without mergedIntentFingerprint keeps target fingerprint', () => {
+  const state = stateWith(
+    [
+      node('t-1', { intentFingerprint: 'Source phrase' }),
+      node('t-2', { intentFingerprint: 'Original target phrase' }),
+    ],
+    100,
+  );
+  const r = expectOk(
+    applyOperations(state, [
+      {
+        type: 'MERGE_TOPICS',
+        sourceId: 't-1',
+        targetId: 't-2',
+        mergedTitle: 'Merged title',
+        mergedDescription: '',
+        reason: 'duplicate intent',
+      },
+    ]),
+  );
+  assert.equal(r.newState.nodes[0].intentFingerprint, 'Original target phrase');
+});
+
+test('Fingerprint: MERGE_TOPICS rejects an empty mergedIntentFingerprint', () => {
+  const state = stateWith(
+    [node('t-1'), node('t-2')],
+    100,
+  );
+  expectErr(
+    applyOperations(state, [
+      {
+        type: 'MERGE_TOPICS',
+        sourceId: 't-1',
+        targetId: 't-2',
+        mergedTitle: 'Merged',
+        mergedDescription: '',
+        reason: 'duplicate intent',
+        mergedIntentFingerprint: '   ',
+      },
+    ]),
+    'mergedIntentFingerprint must be a non-empty string when present',
+  );
+});
+
+test('Fingerprint: SPLIT_TOPIC into[] entries persist their fingerprints to the new nodes', () => {
+  const state = stateWith(
+    [
+      node('t-1', {
+        keywordPlacements: { 'kw-a': 'primary', 'kw-b': 'primary' },
+      }),
+    ],
+    100,
+  );
+  const r = expectOk(
+    applyOperations(state, [
+      {
+        type: 'SPLIT_TOPIC',
+        sourceId: 't-1',
+        into: [
+          {
+            id: '$one',
+            title: 'First half',
+            description: '',
+            keywordIds: ['kw-a'],
+            intentFingerprint: 'First half fingerprint phrase here',
+          },
+          {
+            id: '$two',
+            title: 'Second half',
+            description: '',
+            keywordIds: ['kw-b'],
+            intentFingerprint: 'Second half fingerprint phrase here',
+          },
+        ],
+        reason: 'two distinct intents',
+      },
+    ]),
+  );
+  const titles = new Map(r.newState.nodes.map((n) => [n.title, n.intentFingerprint]));
+  assert.equal(titles.get('First half'), 'First half fingerprint phrase here');
+  assert.equal(titles.get('Second half'), 'Second half fingerprint phrase here');
+});
+
+test('Fingerprint: SPLIT_TOPIC into[] entries default to "" when no fingerprint supplied', () => {
+  const state = stateWith(
+    [
+      node('t-1', {
+        keywordPlacements: { 'kw-a': 'primary', 'kw-b': 'primary' },
+      }),
+    ],
+    100,
+  );
+  const r = expectOk(
+    applyOperations(state, [
+      {
+        type: 'SPLIT_TOPIC',
+        sourceId: 't-1',
+        into: [
+          { id: '$one', title: 'First', description: '', keywordIds: ['kw-a'] },
+          { id: '$two', title: 'Second', description: '', keywordIds: ['kw-b'] },
+        ],
+        reason: 'two distinct intents',
+      },
+    ]),
+  );
+  for (const n of r.newState.nodes) assert.equal(n.intentFingerprint, '');
+});
+
+test('Fingerprint: SPLIT_TOPIC rejects an empty fingerprint on any into[] entry', () => {
+  const state = stateWith(
+    [
+      node('t-1', {
+        keywordPlacements: { 'kw-a': 'primary', 'kw-b': 'primary' },
+      }),
+    ],
+    100,
+  );
+  expectErr(
+    applyOperations(state, [
+      {
+        type: 'SPLIT_TOPIC',
+        sourceId: 't-1',
+        into: [
+          { id: '$one', title: 'First', description: '', keywordIds: ['kw-a'], intentFingerprint: '' },
+          { id: '$two', title: 'Second', description: '', keywordIds: ['kw-b'] },
+        ],
+        reason: 'two distinct intents',
+      },
+    ]),
+    'into["$one"].intentFingerprint must be a non-empty string when present',
+  );
 });

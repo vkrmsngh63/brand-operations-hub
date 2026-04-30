@@ -84,6 +84,14 @@ export async function POST(
           kwPlacements: body.kwPlacements ?? {},
           altTitles: body.altTitles ?? [],
           sortOrder: body.sortOrder ?? 0,
+          // Scale Session B: non-AI flows ship "" placeholder; the AI later
+          // refreshes via UPDATE_TOPIC_TITLE once V4 prompts emit fingerprints.
+          // G3 (PATCH guard, this same route) blocks empty-string PATCH
+          // updates so a degenerate fingerprint can never be written by an
+          // AI flow.
+          intentFingerprint: typeof body.intentFingerprint === 'string'
+            ? body.intentFingerprint
+            : '',
         },
       });
     });
@@ -121,6 +129,27 @@ export async function PATCH(
       );
     }
 
+    // ── G3 guard (per DEFENSE_IN_DEPTH_AUDIT_DESIGN §5.4) ──
+    // Reject any PATCH that includes `intentFingerprint` set to an empty /
+    // whitespace-only / non-string value. A degenerate fingerprint persisted
+    // to DB causes Tier 1 misclassification for the rest of the topic's life
+    // (Scale Session B failure mode (a)). Force the AI to retry rather than
+    // persist a degenerate value.
+    for (const n of body.nodes as Array<Record<string, unknown>>) {
+      if (Object.prototype.hasOwnProperty.call(n, 'intentFingerprint')) {
+        const v = n.intentFingerprint;
+        if (typeof v !== 'string' || v.trim().length === 0) {
+          return NextResponse.json(
+            {
+              error:
+                'intentFingerprint, when included in a PATCH update, must be a non-empty trimmed string',
+            },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
     const ops = body.nodes.map((n: Record<string, unknown>) =>
       prisma.canvasNode.update({
         where: { id: n.id as string },
@@ -156,6 +185,11 @@ export async function PATCH(
           }),
           ...(n.sortOrder !== undefined && {
             sortOrder: n.sortOrder as number,
+          }),
+          // intentFingerprint: pre-validated above by the G3 guard; only a
+          // non-empty trimmed string can reach this point.
+          ...(n.intentFingerprint !== undefined && {
+            intentFingerprint: n.intentFingerprint as string,
           }),
         },
       })

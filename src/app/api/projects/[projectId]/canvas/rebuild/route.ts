@@ -100,7 +100,26 @@ export async function POST(
     // Keyed by per-project (projectWorkflowId, stableId) composite unique.
     // Caller supplies UUID `id` for both create and update; existing nodes
     // keep their UUID, new nodes get one from the materializer.
+    //
+    // G3 guard echo (per DEFENSE_IN_DEPTH_AUDIT_DESIGN §5.4): if a per-node
+    // entry includes `intentFingerprint`, it must be a non-empty trimmed
+    // string. Pre-validated up-front so the transaction is never partially
+    // applied with a degenerate fingerprint.
     if (Array.isArray(body.nodes)) {
+      for (const n of body.nodes) {
+        if (Object.prototype.hasOwnProperty.call(n, 'intentFingerprint')) {
+          const v = n.intentFingerprint;
+          if (typeof v !== 'string' || v.trim().length === 0) {
+            return NextResponse.json(
+              {
+                error:
+                  'intentFingerprint, when included in a rebuild node entry, must be a non-empty trimmed string',
+              },
+              { status: 400 }
+            );
+          }
+        }
+      }
       for (const n of body.nodes) {
         const stableId = n.stableId;
         if (!stableId) {
@@ -152,6 +171,9 @@ export async function POST(
               ...(n.stabilityScore !== undefined && {
                 stabilityScore: n.stabilityScore,
               }),
+              ...(n.intentFingerprint !== undefined && {
+                intentFingerprint: n.intentFingerprint,
+              }),
             },
             create: {
               ...(n.id !== undefined && { id: n.id }),
@@ -179,6 +201,14 @@ export async function POST(
               connInOff: n.connInOff ?? null,
               sortOrder: n.sortOrder ?? 0,
               stabilityScore: n.stabilityScore ?? 0,
+              // Scale Session B: non-AI rebuild flows ship "" placeholder; the
+              // backfill script + AI-driven UPDATE_TOPIC_TITLE keep canvas
+              // fingerprints fresh. G3 above blocks empty/whitespace from
+              // overwriting a real fingerprint via an explicit per-node entry.
+              intentFingerprint:
+                typeof n.intentFingerprint === 'string'
+                  ? n.intentFingerprint
+                  : '',
             },
           })
         );

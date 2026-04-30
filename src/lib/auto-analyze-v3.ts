@@ -63,6 +63,10 @@ export interface CanvasNodeRow {
   sortOrder: number;
   stableId: string;
   stabilityScore: number;
+  // Nullable through Scale Session B Step 1; tightens to string in Step 3
+  // once the backfill completes. The wiring layer treats null/undefined as
+  // an empty string downstream.
+  intentFingerprint?: string | null;
 }
 
 export interface KeywordLite {
@@ -245,6 +249,13 @@ function translateOperation(
   const s = (k: string): string => obj[k] as string;
   const sn = (k: string): string | null =>
     obj[k] === null || obj[k] === undefined ? null : (obj[k] as string);
+  // Optional string: returns undefined if the key is absent / null. Validation
+  // (non-empty when present) lives in the applier per Scale Session B.
+  const optStr = (k: string): string | undefined => {
+    const v = obj[k];
+    if (v === undefined || v === null) return undefined;
+    return v as string;
+  };
 
   switch (opType) {
     case 'ADD_TOPIC': {
@@ -260,6 +271,7 @@ function translateOperation(
         description: (obj.description as string) ?? '',
         parent: sn('parent'),
         relationship,
+        intentFingerprint: optStr('intent_fingerprint'),
       };
     }
     case 'UPDATE_TOPIC_TITLE':
@@ -268,12 +280,14 @@ function translateOperation(
         id: s('id'),
         to: s('to'),
         justifyRestructure,
+        intentFingerprint: optStr('intent_fingerprint'),
       };
     case 'UPDATE_TOPIC_DESCRIPTION':
       return {
         type: 'UPDATE_TOPIC_DESCRIPTION',
         id: s('id'),
         to: s('to'),
+        intentFingerprint: optStr('intent_fingerprint'),
       };
     case 'MOVE_TOPIC':
       return {
@@ -293,6 +307,7 @@ function translateOperation(
         mergedDescription: (obj.merged_description as string) ?? '',
         reason: s('reason'),
         justifyRestructure,
+        mergedIntentFingerprint: optStr('merged_intent_fingerprint'),
       };
     case 'SPLIT_TOPIC': {
       const into = (obj.into as Array<Record<string, unknown>>) ?? [];
@@ -304,6 +319,10 @@ function translateOperation(
           title: e.title as string,
           description: (e.description as string) ?? '',
           keywordIds: (e.keyword_ids as string[]) ?? [],
+          intentFingerprint:
+            e.intent_fingerprint === undefined || e.intent_fingerprint === null
+              ? undefined
+              : (e.intent_fingerprint as string),
         })),
         reason: s('reason'),
         justifyRestructure,
@@ -419,6 +438,7 @@ export function buildCanvasStateForApplier(
           : 'nested',
       keywordPlacements: placements,
       stabilityScore: n.stabilityScore ?? 0,
+      intentFingerprint: n.intentFingerprint ?? '',
     };
   });
 
@@ -555,6 +575,15 @@ export function materializeRebuildPayload(args: {
       kwPlacements,
       stableId: n.stableId,
       stabilityScore: n.stabilityScore,
+      // Only include intentFingerprint in the rebuild payload when non-empty.
+      // The /canvas/rebuild route's G3 guard (per DEFENSE_IN_DEPTH §5.4 + Scale
+      // Session B) rejects '' as a degenerate fingerprint write. New topics get
+      // '' from the route's create-branch default; existing topics' real
+      // fingerprints (post-backfill) still get carried; transient empty values
+      // are dropped here so they never trigger G3 mid-batch.
+      ...(n.intentFingerprint && n.intentFingerprint.length > 0
+        ? { intentFingerprint: n.intentFingerprint }
+        : {}),
       altTitles: old?.altTitles ?? [],
       collapsedLinear: old?.collapsedLinear ?? false,
       collapsedNested: old?.collapsedNested ?? false,
