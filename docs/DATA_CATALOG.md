@@ -1,7 +1,8 @@
 # DATA CATALOG
 ## Master index of all data captured across the PLOS platform, with Human Reference Language
 
-**Last updated:** April 25, 2026 (Phase 1g-test follow-up Part 3 — Pivot Session B — `CanvasNode` gains two new data items: `stableId` (Human Reference Language: "the persistent topic identifier the AI uses across batches"; format `t-N` per project; backfilled from existing `id` for legacy rows; unique within a ProjectWorkflow) + `stabilityScore` (Human Reference Language: "how well-established a topic is, on a 0-to-10 scale"; gates JUSTIFY_RESTRUCTURE payload requirement at ≥7.0; default 0.0 for all rows until stability-scoring algorithm ships in a follow-up session). Both columns populated on every existing row of the live database (104 Bursitis rows have `stableId="t-1"`…`"t-104"` and `stabilityScore=0.0`).)
+**Last updated:** April 30, 2026 (Scale Session B — `CanvasNode` gains a third Pivot-era data item: `intentFingerprint` (Human Reference Language: "the topic's one-line searcher intent" / "the canonical phrase that captures who is searching and what they want"; format 5–15 words searcher-centric; NOT NULL after 3-step migration completed this session; live-backfilled across 37 Bursitis Test rows by `scripts/backfill-intent-fingerprints.ts`). Section 5.2 amended (FIELDS list extended); new section §5.2a added with full data-item record (format / validation / G3 guard / cross-reference). Foundation for Tiered Canvas Serialization (Sessions C/D/E pending).)
+**Previously updated:** April 25, 2026 (Pivot Session B — `CanvasNode` gained `stableId` + `stabilityScore`; both backfilled across 104 Bursitis rows.)
 **Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-B (Claude Code)
 **Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-session3b (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-24_phase1g-test-followup-part3-session3a (Claude Code)
@@ -192,9 +193,22 @@ These data items are required for Phase 2 (multi-user infrastructure) per `PLATF
 - **HUMAN REF (PROVISIONAL):** "the topics" / "the topic nodes" / "the mindmap topics"
 - **CAPTURED IN:** Canvas (Mindmap or Table mode) → Node creation / Edit Panel
 - **TECHNICAL NAME:** `CanvasNode` table; foreign key `projectWorkflowId` (live)
-- **FIELDS:** `title`, `description`, `altTitles`, `parentId`, `pathwayId`, `relationshipType`, `narrativeBridge`, `linkedKwIds`, `kwPlacements`, position/size, collapse states
+- **FIELDS:** `title`, `description`, `altTitles`, `parentId`, `pathwayId`, `relationshipType`, `narrativeBridge`, `linkedKwIds`, `kwPlacements`, position/size, collapse states, `stableId` (Pivot B), `stabilityScore` (Pivot B), `intentFingerprint` (Scale Session B)
 - **SHARED WITH:** TBD — highly likely Conversion Funnel, Content Development
 - **R/W DOWNSTREAM:** TBD
+
+### 5.2a Topic Intent Fingerprint (NEW 2026-04-30 — Scale Session B)
+- **HUMAN REF (PROVISIONAL):** "the topic's one-line searcher intent" / "the canonical phrase that captures who is searching for this topic and what they want"
+- **CAPTURED IN:** AI emits via `intent_fingerprint` field on `ADD_TOPIC` / `UPDATE_TOPIC_TITLE` / `UPDATE_TOPIC_DESCRIPTION` (optional) ops + `merged_intent_fingerprint` on `MERGE_TOPICS` + `intent_fingerprint` per `into[]` entry on `SPLIT_TOPIC` — once V4 prompts ship in Scale Session D. Until then, populated via the AI-driven backfill script `scripts/backfill-intent-fingerprints.ts` (one-time per project) + the `''` placeholder default that future non-AI canvas-node creates supply.
+- **TECHNICAL NAME:** `CanvasNode.intentFingerprint String NOT NULL` (added 2026-04-30 via 3-step migration)
+- **FORMAT:** Short canonical phrase, 5–15 words, in searcher-centric language. Example: *"Older bursitis sufferers seeking gentle, low-cost home relief."* (Scale Session B live backfill produced 11–13 word phrases on Sonnet 4.6.)
+- **VALIDATION:**
+  - Server-side G3 guard at `/canvas/nodes` PATCH + `/canvas/rebuild` rejects empty/whitespace fingerprints with HTTP 400 — applies whenever the client explicitly includes the field in an update.
+  - Operation applier (`src/lib/operation-applier.ts`) `validateOptionalFingerprint` rejects empty/whitespace strings when supplied on AI ops; absence is permitted in Session B (Session D will tighten to required).
+  - Wiring layer (`src/lib/auto-analyze-v3.ts`) omits the field from rebuild payload when the applier's value is empty — prevents G3 false-positive on transient empty values mid-batch.
+- **SHARED WITH:** Tier serializer (Scale Session C onward — load-bearing for Tier 1 compressed serialization where the full keyword list is dropped); Reevaluation Pass 3a (intent-equivalence detection across canvas via fingerprints alone — Scale Session D).
+- **R/W DOWNSTREAM:** TBD per Sessions C–E.
+- **CROSS-REFERENCE:** `INPUT_CONTEXT_SCALING_DESIGN.md` §1.2 (definition + format + who-writes-it) + §6 Scale Session B (build spec) + `KEYWORD_CLUSTERING_ACTIVE.md` POST-2026-04-30-SCALE-SESSION-B STATE block (live shipped state) + `DEFENSE_IN_DEPTH_AUDIT_DESIGN.md` §5.4 (G3 guard).
 
 ### 5.3 Primary Keywords in a Topic
 - **HUMAN REF (PROVISIONAL):** "the primary keywords of a topic" / "the bold keywords" / "the main keywords under a node"

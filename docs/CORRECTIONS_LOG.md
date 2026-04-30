@@ -2,8 +2,9 @@
 ## Append-only record of mistakes made during chats and lessons learned
 
 **Started:** April 16, 2026
-**Last updated:** April 29, 2026 (Bug-fix-and-canvas-wipe session, 2026-04-28 → 2026-04-29 cross-day — 1 new INFORMATIONAL entry: pattern observation on directive-driven scope expansion mid-session. Director gave a meta-directive *"fix the fundamental problem long term; test the tool in a sturdy way"* mid-session that expanded scope from the surgical one-liner fixes locked in ROADMAP to defense-in-depth fixes. Pattern worth preserving: when the director gives a meta-directive like this, Claude should pause, re-survey scope, surface the expanded plan in plain language, get acknowledgment, then proceed — rather than silently absorbing the directive into the existing plan. This session executed the pattern correctly; the entry captures it for future Claudes facing the same dynamic.)
-**Last updated in session:** session_2026-04-28_canvas-blanking-and-closure-staleness-fix (Claude Code)
+**Last updated:** April 30, 2026 (Scale Session B build session — 1 new LOW-severity entry: `.env.local` has a missing newline that concatenates `ANTHROPIC_API_KEY` onto the prior line's value, breaking `node --env-file=.env.local` for any script that reads ANTHROPIC_API_KEY. Worked around in this session by extracting the key via grep + export before invocation. Director should fix when convenient. Not a Claude mistake — pre-existing config artifact — but captured so future sessions don't waste time diagnosing the same `--env-file` failure.)
+**Last updated in session:** session_2026-04-30_scale-session-b-build (Claude Code)
+**Previously updated in session:** session_2026-04-28_canvas-blanking-and-closure-staleness-fix (Claude Code)
 **Previously updated in session:** session_2026-04-28_deeper-analysis-and-fix-design (Claude Code)
 **Previously updated in session:** session_2026-04-27_v3-prompt-small-batch-test-and-context-scaling-concern (Claude Code)
 **Previously updated in session:** session_2026-04-26_phase1-polish-bundle (Claude Code)
@@ -47,6 +48,26 @@
 ---
 
 ## Entries
+
+### 2026-04-30 — `.env.local` missing newline breaks `--env-file` for ANTHROPIC_API_KEY (LOW — pre-existing config artifact, not a Claude mistake)
+
+**Session:** session_2026-04-30_scale-session-b-build (Claude Code)
+
+**What happened:** While running the new `scripts/backfill-intent-fingerprints.ts` for Scale Session B Step 2, `node --env-file=.env.local` failed with `ANTHROPIC_API_KEY environment variable is required`. Investigation revealed `.env.local` has no newline between the `DIRECT_URL="..."` line's closing quote and the next `ANTHROPIC_API_KEY=` line — they're concatenated as a single line, so the dotenv parser treats the API key as part of `DIRECT_URL`'s value. Visible via `grep "ANTHROPIC" .env.local` showing the entire concatenated line, vs. `cut -d= -f1 .env.local` not listing `ANTHROPIC_API_KEY` as a key.
+
+**Workaround used this session:**
+```
+export ANTHROPIC_API_KEY=$(grep -oP 'ANTHROPIC_API_KEY=\K[^[:space:]"]+' .env.local)
+node --env-file=.env --experimental-strip-types scripts/backfill-intent-fingerprints.ts ...
+```
+
+**Permanent fix (for the director to do when convenient):** edit `.env.local` and insert a newline before `ANTHROPIC_API_KEY=`. The exact byte sequence today is `..."ANTHROPIC_API_KEY=sk-ant-...` — should be `..."\nANTHROPIC_API_KEY=sk-ant-...`.
+
+**Why captured here:** future sessions that try to run a Node script needing `ANTHROPIC_API_KEY` from `.env.local` will hit the same wall. Capturing the workaround + the fix prevents re-discovery overhead.
+
+**Not a Claude mistake:** pre-existing artifact in the user's local config. Auto-Analyze on the dev server reads the key via the proxy route `/api/ai/analyze` which goes through Next's env loading (which apparently tolerates the missing newline — or reads it via a different path). Direct script invocation is the only place the missing newline bites.
+
+---
 
 ### 2026-04-29 — Directive-driven scope expansion handled correctly (INFORMATIONAL — pattern preservation, not a mistake)
 

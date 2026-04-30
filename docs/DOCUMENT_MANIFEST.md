@@ -1,8 +1,9 @@
 # DOCUMENT MANIFEST
 ## Ground-truth registry of every handoff document in the PLOS system
 
-**Last updated:** April 29, 2026 (Twenty-fourth Claude Code session — Defense-in-Depth Audit Implementation Session 2, Option β cont. — completes the audit. CODE session. Two new pure modules in `src/lib/` each with `.test.ts`: `forensic-log.ts` (NDJSON ring buffer) + `preflight.ts` (run-start P1-P10 self-test). 1 modified source file: `AutoAnalyze.tsx` (imports, refs, helpers, 4 forensic emits, handleStart preflight gate, UI section, 📥 Download log button, Skip-preflight checkbox). 58 new src/lib unit tests (20 forensic + 38 preflight) → 188 src/lib tests passing total; `npm run build` clean (TypeScript 13.3s, 17/17 routes); `npm run lint` at exact baseline parity (16 errors / 41 warnings — zero new). Director Q3=A (P9 included ~$0.001), Q4=A (client-side download only — no server persistence in v1), Q5=A (dry-run deferred). Schema unchanged; prompts unchanged; DB unchanged. ROADMAP "🛡️ Redundancy + Defense-in-Depth Audit" item flipped from 🔄 IN PROGRESS to ✅ COMPLETE. Active Tools row updated. KEYWORD_CLUSTERING_ACTIVE gained POST-2026-04-29-DEFENSE-IN-DEPTH-IMPL-2 STATE block (prior block demoted to historical). DEFENSE_IN_DEPTH_AUDIT_DESIGN gained "Session 2 shipped" header note + §4 + §6 status updates. CHAT_REGISTRY new row.)
-**Last updated in session:** session_2026-04-29-c_defense-in-depth-impl-2 (Claude Code)
+**Last updated:** April 30, 2026 (Twenty-fifth Claude Code session — Scale Session B build — first build session since Defense-in-Depth Audit closed yesterday. CODE + SCHEMA session. 3-step migration of `intentFingerprint String` on `CanvasNode` (nullable → AI backfill → NOT NULL); 37 Bursitis Test rows live-backfilled by new `scripts/backfill-intent-fingerprints.ts` (~$0.20). Applier extension + parser snake_case translation + both creator route patches + G3 PATCH-empty-fingerprint guard + wiring-layer omit-when-empty fix. 22 new src/lib tests (16 applier + 6 parser) → 210 total. `npm run build` clean. `npm run lint` at exact baseline parity. Two pushes deployed: Part 1 commit `350e7dc` (today's code paths + yesterday's unpushed Session-2 commit `1aeb66b`); Part 2 (Step 3 schema flip + cleanup + this doc batch). Multi-workflow: schema-change-in-flight flag flipped Yes→No around the migration; W#2 unaffected. Cross-doc: ROADMAP Active Tools row updated; KEYWORD_CLUSTERING_ACTIVE gained POST-2026-04-30-SCALE-SESSION-B STATE block (prior block demoted); INPUT_CONTEXT_SCALING_DESIGN §6 Scale Session B flipped to SHIPPED; DATA_CATALOG §5.2a new section for `intentFingerprint`; PLATFORM_ARCHITECTURE §10 new Scale Session B SHIPPED entry; CHAT_REGISTRY new row; CORRECTIONS_LOG new LOW-severity `.env.local` newline entry.)
+**Last updated in session:** session_2026-04-30_scale-session-b-build (Claude Code)
+**Previously updated in session:** session_2026-04-29-c_defense-in-depth-impl-2 (Claude Code)
 **Previously updated in session:** session_2026-04-29-b_defense-in-depth-impl-1 (Claude Code)
 **Previously updated in session:** session_2026-04-29_defense-in-depth-audit-design (Claude Code)
 **Previously updated in session:** session_2026-04-28_canvas-blanking-and-closure-staleness-fix (Claude Code)
@@ -41,62 +42,66 @@ These 13 documents form the persistent handoff context.
 | # | Document | Purpose | Last modified | Modified this session? |
 |---|---|---|---|---|
 | 1 | `PROJECT_CONTEXT.md` | Big-picture project context, philosophy, methodology, discover-as-you-build approach | 2026-04-17 | NO |
-| 2 | `PLATFORM_ARCHITECTURE.md` | Technical architecture — routes, schema, auth, file structure, tech debt | 2026-04-29-b (Defense-in-Depth Impl Session 1 — §10 gained new "Defense-in-Depth Audit Implementation Session 1" entry: ESLint rule `no-prop-reads-in-runloop` + R2 + G1 + G2 all SHIPPED; R3+G3 deferred to Scale Session B; R4 deferred per director Q2=B. Header timestamp updated.) | ✅ YES |
+| 2 | `PLATFORM_ARCHITECTURE.md` | Technical architecture — routes, schema, auth, file structure, tech debt | 2026-04-30 (Scale Session B — §10 gains "🚀 Scale Session B SHIPPED" entry: 3-step `intentFingerprint` migration, applier extension, parser snake_case translation, route patches, G3 PATCH guard, wiring-layer omit-when-empty, 22 new src/lib tests, R3 still pending in future Scale Session C serializer. Header timestamp.) | ✅ YES |
 | 3 | `PLATFORM_REQUIREMENTS.md` | Platform-wide requirements — scale, user-model, review cycle, audit, concurrency, phasing | 2026-04-17 | NO |
 | 4 | `NAVIGATION_MAP.md` | Every route + click path through PLOS — UI navigation source of truth | 2026-04-17 | NO |
-| 5 | `DATA_CATALOG.md` | Every data item — where it lives, Human Reference Language, cross-workflow sharing contracts | 2026-04-26 (Workflow-transition architecture session — §7 PROMOTED from "Shared Data Registry" to "Cross-Tool Data Flow Map" with new structure: §7.1 summary table, §7.2 per-tool detail (W#1 entry with provisional outputs + anticipated downstream consumers), §7.3 Phase 2 platform-shared items, §7.4 decision criteria, §7.5 maintenance referenced by Rules 18 + 23. §6.4 (W#5 placeholder) gets a forward-pointer to ROADMAP W#5 entry per Rule 21.) | NO |
-| 6 | `ROADMAP.md` | Development execution plan — completed work + remaining phases | 2026-04-29-b (Defense-in-Depth Impl Session 1 — "🛡️ Redundancy + Defense-in-Depth Audit" item flipped from 📋 DESIGNED ONLY to 🔄 IN PROGRESS with Session 1-of-2 marked complete; Active Tools table row for W#1 updated to point at Implementation Session 2 as next; "What shipped in earlier sessions" subsection enriched with the 4 new defenses; "What's still pending implementation" rewritten as Session-2-only scope. Header timestamp.) | ✅ YES |
-| 7 | `CORRECTIONS_LOG.md` | Append-only log of mistakes + extracted patterns | 2026-04-28 (Deeper-analysis session — 1 new MEDIUM-severity entry: omitted 5 of 8 director feedback items from initial fix-recommendations response. Procedural pattern captured: when responding to a multi-item director ask, every item gets a status row in every deliverable that touches any item. "Already in ROADMAP" is a status, not an omission license.) | ✅ YES |
-| 8 | `CHAT_REGISTRY.md` | Chronological log of chats + URLs + work-summaries (post-Ckpt-9: Claude Code sessions use session-identifier format) | 2026-04-29-b (Defense-in-Depth Impl Session 1 — new row for session_2026-04-29-b_defense-in-depth-impl-1; twenty-third Claude Code session) | ✅ YES |
+| 5 | `DATA_CATALOG.md` | Every data item — where it lives, Human Reference Language, cross-workflow sharing contracts | 2026-04-30 (Scale Session B — §5.2 FIELDS list extended to include `intentFingerprint`; new §5.2a section added with full data-item record (HUMAN REF, CAPTURED IN, TECHNICAL NAME with NOT NULL after migration, FORMAT 5–15 words searcher-centric, VALIDATION incl. G3 server-side + applier `validateOptionalFingerprint` + wiring-layer omit-when-empty, SHARED WITH placeholder for Sessions C–E, CROSS-REFERENCE to design doc + active-doc + audit-design G3 spec). Header timestamp.) | ✅ YES |
+| 6 | `ROADMAP.md` | Development execution plan — completed work + remaining phases | 2026-04-30 (Scale Session B — Active Tools table row mid-session: W#1 schema-change-in-flight Yes during migration; end-of-session: row updated to ✅ Active dev (back from 🛠 Schema-change), schema-change-in-flight back to "No", "Last Session" cell summarises today's work, "Next Session" cell points at Scale Session C. Header timestamp.) | ✅ YES |
+| 7 | `CORRECTIONS_LOG.md` | Append-only log of mistakes + extracted patterns | 2026-04-30 (Scale Session B — 1 new LOW-severity entry: `.env.local` missing newline concatenates ANTHROPIC_API_KEY onto prior line, breaks `node --env-file=.env.local`. Workaround captured (grep + export); permanent fix is a 1-line .env.local edit. Pre-existing config artifact, not a Claude mistake.) | ✅ YES |
+| 8 | `CHAT_REGISTRY.md` | Chronological log of chats + URLs + work-summaries (post-Ckpt-9: Claude Code sessions use session-identifier format) | 2026-04-30 (Scale Session B — new top row for session_2026-04-30_scale-session-b-build; twenty-fifth Claude Code session) | ✅ YES |
 | 9 | `HANDOFF_PROTOCOL.md` | Rules for how chats operate — start/mid/end protocols, communication rules, interview rules | 2026-04-27 (V3 small-batch test + context-scaling concern session — NEW Rule 24 added: Pre-capture search before adding any ROADMAP item or proposing new architectural concern. Mandatory structured search of ROADMAP, tool's ACTIVE/DESIGN docs, PLATFORM_ARCHITECTURE, CORRECTIONS_LOG, plus code verification for behavior-related concerns; surfacing of search results to director before reading back proposed entry. Drafted in response to a HIGH-severity Claude mistake captured in CORRECTIONS_LOG 2026-04-27 entry.) | NO |
 | 10 | `DOCUMENTATION_ARCHITECTURE.md` | Design of the doc-system itself (DLMS, tool graduation, group A/B, workflow interview pattern, Claude Code migration) | 2026-04-17 | NO |
 | 11 | `NEW_CHAT_PROMPT.md` | **Historical** — claude.ai era briefing template. Post-Phase-M, Claude Code sessions use `CLAUDE_CODE_STARTER.md` instead. | 2026-04-17 | NO |
-| 12 | `DOCUMENT_MANIFEST.md` | This file — ground-truth doc registry | 2026-04-28 (Deeper-analysis session — timestamps + modified flags + this-session summary) | ✅ YES |
+| 12 | `DOCUMENT_MANIFEST.md` | This file — ground-truth doc registry | 2026-04-30 (Scale Session B — timestamps + modified flags + this-session summary) | ✅ YES |
 | 13 | `CLAUDE_CODE_MIGRATION.md` | Migration plan and operational rules for shifting from claude.ai to Claude Code. Executed successfully in Ckpt 9+9.5. | 2026-04-17 | NO |
 | 14 | `AI_TOOL_FEEDBACK_PROTOCOL.md` | Platform-wide standard for every AI-using tool in PLOS. Defines required integration points (structured decision output with reasoning, admin review surface with 3 actions + 2 feedback channels, feedback-repo write/read-back, quality scoring, model/provider registry), 3-phase implementation roll-out, and the primer text to include in every new workflow's design doc. | 2026-04-20 | NO |
 | 15 | `MODEL_QUALITY_SCORING.md` | Stability-score algorithm spec. Defines 0-10 stability_score per AI output item, factors that add/subtract to score, model's interpretation instructions, JUSTIFY_RESTRUCTURE payload requirement for high-score modifications, admin scoring guidelines (1-5 scale with 4 evaluation dimensions), meta-note on how algorithm was derived + review triggers + how to propose weight changes. | 2026-04-20 | NO |
 | 16 | `MULTI_WORKFLOW_PROTOCOL.md` | **NEW 2026-04-29.** Methodology for parallel Claude Code chats on different PLOS workflows. Branch strategy (W#1 on `main`; W#k for k ≥ 2 on `workflow-N-<slug>` feature branches). Doc section ownership table (which sections of which Group A docs each chat owns + which are append-only + which need cross-workflow surfacing). Drift coordination (mandatory pull-rebase before commit + before drift check; schema-change handshake; dev-server exclusivity; build/test non-exclusivity). The "Current Active Tools" table at top of `ROADMAP.md` is the single source of truth for parallel-workflow state — every session reads at start, updates its own row at end. Includes Appendix A (canonical W#2 launch prompt) + Appendix B (canonical W#1 continuation prompt) for paste-ready session-start use. Read at session start whenever today's task references W#k for k ≥ 2 OR the Active Tools table shows multiple workflows in flight. | 2026-04-29 (created this session) | ✅ YES |
 
-**Group A count: 16 documents.** 4 modified this session (PLATFORM_ARCHITECTURE, ROADMAP, CHAT_REGISTRY, DOCUMENT_MANIFEST). 12 not modified this session.
+**Group A count: 16 documents.** 6 modified this session (PLATFORM_ARCHITECTURE, DATA_CATALOG, ROADMAP, CORRECTIONS_LOG, CHAT_REGISTRY, DOCUMENT_MANIFEST). 10 not modified this session.
 
 **Not created this session (Group A):** no new Group A docs.
 
 **Created this session (Group B):**
-- None this session. (DEFENSE_IN_DEPTH_AUDIT_DESIGN.md was created in the prior 2026-04-29 design session; this session shipped its Session 1 implementation.)
+- None this session.
 
 **Modified this session (Group B):**
-- `docs/KEYWORD_CLUSTERING_ACTIVE.md` — new POST-2026-04-29-DEFENSE-IN-DEPTH-IMPL-1 STATE block prepended above prior STATE blocks; prior design-session STATE block demoted to "preserved as historical context"; header timestamp updated; STATE block summarizes the 4 structural defenses shipped (ESLint rule + R2 + G1 + G2) + 5-option NEXT menu with (a) Implementation Session 2 recommended.
-- `docs/DEFENSE_IN_DEPTH_AUDIT_DESIGN.md` — per-section status updates added: §2 ESLint rule SHIPPED; §3.R2 SHIPPED; §3.R4 DEFERRED per director Q2=B; §5.G1 SHIPPED at 50% threshold per director Q1=A; §5.G2 SHIPPED. Header gained "Implementation Session 1 shipped" line below "Created."
+- `docs/KEYWORD_CLUSTERING_ACTIVE.md` — new POST-2026-04-30-SCALE-SESSION-B STATE block prepended; prior Defense-in-Depth-Impl-2 STATE block demoted to "preserved as historical context"; header timestamp updated; 4-option NEXT menu with (a) Scale Session C build recommended.
+- `docs/INPUT_CONTEXT_SCALING_DESIGN.md` — §6 Scale Session B subsection flipped to ✅ SHIPPED with full live-execution summary (3-step migration + backfill metrics + cross-doc pointers); header timestamp.
 
 **Modified this session (operational, not Group A):**
 - None this session.
 
-**Code changes this session (src/ + eslint-rules/):**
+**Code changes this session (src/ + scripts/):**
 
-*New files (6):*
-- `eslint-rules/no-prop-reads-in-runloop.js` (~165 lines incl. doc) — custom ESLint rule codifying the `AutoAnalyze.tsx:163` invariant as a build-time gate.
-- `eslint-rules/no-prop-reads-in-runloop.test.mjs` — 13 tests (allow paths + flag paths + edge cases).
-- `src/lib/canvas-rebuild-guard.ts` (~75 lines) — pure helper for G1 payload-sanity decision.
-- `src/lib/canvas-rebuild-guard.test.ts` — 13 tests covering matrix cells.
-- `src/lib/prisma-retry.ts` (~85 lines) — pure helper exposing `withRetry` + `isTransientPrismaError`.
-- `src/lib/prisma-retry.test.ts` — 17 tests including timing verification with mocked sleep.
+*New files (1):*
+- `scripts/backfill-intent-fingerprints.ts` (~250 lines) — AI-driven backfill of `intentFingerprint` per topic, mirrors `backfill-stable-ids.ts` pattern; idempotent; supports `--project-workflow-id` + `--batch-size` + `--model` + `--dry-run` flags. Ran live this session (~$0.20 across dry-run + real on 37 Bursitis Test rows).
 
-*Modified files (4):*
-- `eslint.config.mjs` — local plugin wired in; `eslint-rules/**/*.test.mjs` added to globalIgnores.
-- `src/app/api/projects/[projectId]/canvas/rebuild/route.ts` — G1 guard at top of POST `try` block.
-- `src/app/api/projects/[projectId]/canvas/nodes/route.ts` — GET wraps `prisma.canvasNode.findMany` in `withRetry`.
-- `src/app/projects/[projectId]/keyword-clustering/components/AutoAnalyze.tsx` — 4× `@runloop-reachable` annotations on `runLoop`/`doApplyV3`/`processBatchV3`/`validateResultV3` + R2 post-Reconcile-Now diff-empty WARN in `handleReconcileNow`.
+*Modified files (8):*
+- `prisma/schema.prisma` — `intentFingerprint String` on `CanvasNode` (Step 1 nullable add → Step 3 NOT NULL tighten, two `db push` calls).
+- `src/lib/operation-applier.ts` — `CanvasNode` model gains required `intentFingerprint`; 5 op shapes gain optional fingerprint fields; `validateOptionalFingerprint` helper rejects empty/whitespace; per-op persistence (add/refresh/replace/per-entry).
+- `src/lib/operation-applier.test.ts` — 16 new fingerprint tests + builder default.
+- `src/lib/auto-analyze-v3.ts` — parser snake_case → camelCase translation across all 5 op types; `CanvasNodeRow.intentFingerprint?: string \| null`; applier-state mapping converts null → ''; rebuild-payload constructor omits empty fingerprint.
+- `src/lib/auto-analyze-v3.test.ts` — 6 new parser tests (translation + undefined-when-absent).
+- `src/app/api/projects/[projectId]/canvas/nodes/route.ts` — POST `tx.canvasNode.create.data.intentFingerprint` default; PATCH G3 guard rejects empty/whitespace.
+- `src/app/api/projects/[projectId]/canvas/rebuild/route.ts` — G3 echo on body.nodes entries; upsert.create supplies `''` default; upsert.update writes when caller includes it.
+- `docs/ROADMAP.md` — Active Tools row mid-session flag flip; end-of-session row update with full Scale Session B summary.
 
-**Code commits already pushed mid-session:** none.
+**Code commits already pushed mid-session:**
+- `350e7dc` — Scale Session B (Part 1 of 2) — code paths + Step 1 schema. Pushed alongside yesterday's unpushed `1aeb66b` (Defense-in-Depth Session 2 — forensic + pre-flight + Skip checkbox).
+- Director visually verified vklf.com between pushes (📥 Download log button + pre-flight section + Skip-pre-flight checkbox visible).
 
 **End-of-session doc commit (this commit, pending Rule-9 push approval):**
-- 6 new + 4 modified code files (above)
-- `docs/KEYWORD_CLUSTERING_ACTIVE.md` (new POST-IMPL-1 STATE block; header)
-- `docs/DEFENSE_IN_DEPTH_AUDIT_DESIGN.md` (per-section status updates; header)
-- `docs/ROADMAP.md` (Audit item flipped to 🔄 IN PROGRESS; Active Tools row; "what shipped"; "what's pending Session 2"; header)
-- `docs/PLATFORM_ARCHITECTURE.md` (§10 new entry; header)
+- `prisma/schema.prisma` (Step 3 NOT NULL tighten — already applied to live DB via `npx prisma db push`)
+- `scripts/backfill-intent-fingerprints.ts` (predicate simplification post-NOT NULL — `OR: [{intentFingerprint: null}, {intentFingerprint: ''}]` → `{intentFingerprint: ''}`)
+- `docs/KEYWORD_CLUSTERING_ACTIVE.md` (new POST-SCALE-SESSION-B STATE block; header)
+- `docs/INPUT_CONTEXT_SCALING_DESIGN.md` (§6 Scale Session B SHIPPED; header)
+- `docs/ROADMAP.md` (Active Tools row final state; header)
+- `docs/PLATFORM_ARCHITECTURE.md` (§10 new Scale Session B SHIPPED entry; header)
+- `docs/DATA_CATALOG.md` (§5.2 FIELDS list; new §5.2a section; header)
+- `docs/CORRECTIONS_LOG.md` (new LOW-severity .env.local entry; header)
 - `docs/CHAT_REGISTRY.md` (new top row; header)
-- `docs/DOCUMENT_MANIFEST.md` (this file — timestamps + this-session summary)
+- `docs/DOCUMENT_MANIFEST.md` (this file — timestamps + per-doc flags + this-session summary)
 
 **Earlier-session code changes (design + bug-fix sessions and prior — already documented in this manifest's prior-session entries; not duplicated here).**
 
@@ -110,13 +115,13 @@ These are tool-specific working documents. They travel with chats that touch the
 
 | Document | Tool/System | Status | Last modified | Modified this chat? |
 |---|---|---|---|---|
-| `KEYWORD_CLUSTERING_ACTIVE.md` | Keyword Clustering (workflow 1) | Active development | 2026-04-29-b (Defense-in-Depth Impl Session 1 — new POST-2026-04-29-DEFENSE-IN-DEPTH-IMPL-1 STATE block prepended; prior design-session STATE block demoted to historical; header timestamp updated; 5-option NEXT menu with (a) Implementation Session 2 recommended) | ✅ YES |
-| `DEFENSE_IN_DEPTH_AUDIT_DESIGN.md` | Keyword Clustering / Auto-Analyze redundancy + invariant-enforcement design | Active build — Session 1 of 2 SHIPPED 2026-04-29-b; Session 2 pending | 2026-04-29-b (per-section status updates: §2 ESLint rule SHIPPED; §3.R2 SHIPPED; §3.R4 DEFERRED per director Q2=B; §5.G1 SHIPPED at 50% threshold per director Q1=A; §5.G2 SHIPPED. Header timestamp + new "Implementation Session 1 shipped" line added below "Created.") | ✅ YES |
+| `KEYWORD_CLUSTERING_ACTIVE.md` | Keyword Clustering (workflow 1) | Active development | 2026-04-30 (Scale Session B — new POST-2026-04-30-SCALE-SESSION-B STATE block prepended; prior Defense-in-Depth-Impl-2 STATE block demoted to "preserved as historical context"; header timestamp updated; 4-option NEXT menu with (a) Scale Session C build recommended) | ✅ YES |
+| `DEFENSE_IN_DEPTH_AUDIT_DESIGN.md` | Keyword Clustering / Auto-Analyze redundancy + invariant-enforcement design | Audit COMPLETE 2026-04-29-c except deliberately-deferred items (R3, G3 still gated on this Scale Session B — G3 SHIPPED 2026-04-30 in Scale Session B; R3 deferred to Scale Session C serializer). | 2026-04-29-c (per-section status updates from Defense-in-Depth Impl Session 2; this session SHIPPED §5.4 G3 but didn't edit this doc — G3-shipped note will land in a future doc-cleanup pass) | NO |
 | `PIVOT_DESIGN.md` | Keyword Clustering / Auto-Analyze architectural pivot | Pivot complete (Sessions A-E done); doc retained for historical reference | 2026-04-27 (Scale Session A — §5 input-scaling row pointer updated to reference new INPUT_CONTEXT_SCALING_DESIGN.md; header timestamp) | NO |
 | `AUTO_ANALYZE_PROMPT_V3.md` | Keyword Clustering / Auto-Analyze prompts | LIVE — canonical for what the director re-pastes into the Auto-Analyze panel; updated 2026-04-26 with Strategy 3 layered placement + intent-equivalence binding rule | 2026-04-26 (Workflow-transition architecture session — Strategy 3 layered placement + intent-equivalence rewrite; file grew 629 → 769 lines; director must re-paste into Auto-Analyze UI before next run) | NO |
 | `AUTO_ANALYZE_PROMPT_V2.md` | Keyword Clustering / Auto-Analyze prompts (HISTORICAL) | Historical reference only — the V2 full-table-rewrite contract that ran every Bursitis batch through Session 3b verification; preserved untouched until V3 is field-validated through Pivot Sessions D + E, then archivable | 2026-04-18 (last canonical edit predating the pivot) | NO |
 | `AUTO_ANALYZE_PROMPT_V2_PROPOSED_CHANGES.md` | Keyword Clustering / Auto-Analyze prompts (HISTORICAL) | Mostly superseded by V3 — surviving wording (Change 1 tie-breaker, Change 3 Comprehensiveness Verification redrafted, Change 4 JUSTIFY_RESTRUCTURE 6-field payload, Change 5 multi-placement, Change 2 Loc 1 cross-canvas scan) folded into V3 with locked wording; obsolete pieces (Reevaluation Report block, never-delete rule, full-table-rewrite output format, salvage IRRELEVANT_KEYWORDS template, session-boundary continuation) obsolete by construction; archivable in future cleanup | 2026-04-24 (Session 2b — last design refinement; locked then for "mechanical Session 6 merge" which is now subsumed by V3) | NO |
-| `INPUT_CONTEXT_SCALING_DESIGN.md` | Keyword Clustering / Auto-Analyze input-side context-scaling architectural concern | 2026-04-28 — Outcome C fired; build path activated; design now the build spec for Scale Sessions B–E (next-priority forward action for W#1) | 2026-04-28 (Scale Session 0 outcome session — §0 status update; outcome C fired; build path activated; threshold (b) also fired; header) | NO |
+| `INPUT_CONTEXT_SCALING_DESIGN.md` | Keyword Clustering / Auto-Analyze input-side context-scaling architectural concern | 2026-04-30 — Scale Session B SHIPPED; foundation for Tiered Canvas Serialization landed; Sessions C/D/E remain as forward work (Scale Session C is next-priority) | 2026-04-30 (Scale Session B build session — §6 Scale Session B subsection flipped to ✅ SHIPPED with full live-execution summary; header timestamp.) | ✅ YES |
 
 ### Graduated Group B documents (split into Archive + Data Contract)
 

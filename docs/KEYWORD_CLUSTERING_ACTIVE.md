@@ -1,8 +1,9 @@
 # KEYWORD CLUSTERING — ACTIVE DOCUMENT
 ## Current state of the Keyword Clustering workflow tool (Group B, tool-specific)
 
-**Last updated:** April 29, 2026 (Defense-in-Depth Audit Implementation Session 2 — Option β cont. — completes the audit. Shipped: forensic NDJSON ring buffer (`src/lib/forensic-log.ts`) with 4-phase emit calls per batch (`pre_api_call`, `post_api_call`, `pre_apply`, `post_apply`) wired into `processBatchV3` + `doApplyV3` + `runLoop` catch; 📥 Download log button in panel footer next to Reconcile Now (writes `aa-forensic-{session-prefix}-{ts}.ndjson` to Downloads). Run-start pre-flight self-test P1-P10 (`src/lib/preflight.ts`) + per-check ✓/✗ display section + Skip-pre-flight checkbox off-by-default. Director Q3=A (P9 cheap API ping ~$0.001 included), Q4=A (client-side download only — no server persistence in v1), Q5=A (dry-run mode deferred per design §0.4). 58 new src/lib unit tests (20 forensic-log + 38 preflight) → 188 src/lib tests passing total. `npm run build` clean (TypeScript 13.3s, compiled 17.9s, 17/17 routes). `npm run lint` at baseline parity (16 errors / 41 warnings — zero new from this session). ROADMAP "🛡️ Redundancy + Defense-in-Depth Audit" item flipped from 🔄 IN PROGRESS to ✅ COMPLETE. Schema unchanged; prompts unchanged; DB unchanged. NEW POST-2026-04-29-DEFENSE-IN-DEPTH-IMPL-2 STATE block prepended below.)
-**Last updated in session:** session_2026-04-29-c_defense-in-depth-impl-2 (Claude Code)
+**Last updated:** April 30, 2026 (Scale Session B build SHIPPED — first build session since Defense-in-Depth Audit closed yesterday. 3-step schema migration of `intentFingerprint String` on `CanvasNode` (Step 1 nullable → Step 2 AI backfill across 37 Bursitis Test topics → Step 3 NOT NULL, all Rule-8 gated). New `scripts/backfill-intent-fingerprints.ts` ran live (~$0.10 dry-run + ~$0.10 real). Applier (`src/lib/operation-applier.ts`) extended with optional `intentFingerprint` field on AddTopic / UpdateTitle / UpdateDescription / Split-into ops + `mergedIntentFingerprint` on Merge — soft-validation (when present, non-empty trim required). Parser (`src/lib/auto-analyze-v3.ts`) translates snake_case incl. `merged_intent_fingerprint`. Both canvas-node creators (POST + rebuild upsert.create) supply `''` placeholder. G3 guard (per Defense-in-Depth §5.4) shipped on `/canvas/nodes` PATCH + rebuild route — rejects empty/whitespace fingerprints with 400. Wiring layer omits empty fingerprint from rebuild payload to prevent G3 false-positive on transient empty values mid-batch. 22 new src/lib tests → 210 passing; build clean; lint at exact baseline parity. Two pushes: Part 1 (`350e7dc`) deployed today's code; Part 2 deployed Step 3 schema + cleanup + docs. NEW POST-2026-04-30-SCALE-SESSION-B STATE block prepended below.)
+**Last updated in session:** session_2026-04-30_scale-session-b-build (Claude Code)
+**Previously updated in session:** session_2026-04-29-c_defense-in-depth-impl-2 (Claude Code)
 **Previously updated in session:** session_2026-04-29-b_defense-in-depth-impl-1 (Claude Code)
 **Previously updated in session:** session_2026-04-29_defense-in-depth-audit-design (Claude Code)
 **Previously updated in session:** session_2026-04-28_canvas-blanking-and-closure-staleness-fix (Claude Code)
@@ -34,7 +35,110 @@
 
 ---
 
-## ⚠️ POST-2026-04-29-DEFENSE-IN-DEPTH-IMPL-2 STATE (READ FIRST — updated 2026-04-29 third session of day)
+## ⚠️ POST-2026-04-30-SCALE-SESSION-B STATE (READ FIRST — updated 2026-04-30)
+
+**As of 2026-04-30 Scale Session B — first build session since Defense-in-Depth Audit closed. CODE + SCHEMA session — schema CHANGED (3-step migration), prompts unchanged, DB now has `intentFingerprint String NOT NULL` column on CanvasNode with all 37 live rows backfilled.**
+
+### What this session shipped to W#1
+
+**Foundation for Tiered Canvas Serialization landed.** Per `INPUT_CONTEXT_SCALING_DESIGN.md` §6 Scale Session B. Sets up Sessions C/D/E (tier serializer, V4 prompt, consolidation) to ship cleanly. Does NOT yet build the tier decider, batch-relevance heuristic, V4 prompt, or consolidation pass — those are explicit future-session scope.
+
+#### 1. 3-step schema migration of `intentFingerprint`
+
+- **Step 1 (Rule-8 gate, ran ~11:08 AM):** `prisma/schema.prisma` gains `intentFingerprint String?` on `CanvasNode`. `npx prisma db push` — pure additive. All existing rows get NULL.
+- **Step 2 (Rule-8 gate, ran ~11:55 AM after director approved Option B):** Director ran a small fresh AI Auto-Analyze on Bursitis Test on the local dev server (5 batches, ~$1.35, 37 topics created — pre-flight P1-P10 ✓; G3 guard didn't fire; reconciliation 0-Reshuffled across all batches). Then `node --env-file=.env --experimental-strip-types scripts/backfill-intent-fingerprints.ts --project-workflow-id=d1ade277-…  --dry-run` (~$0.10, 2 API calls, all 37 fingerprints generated and printed for director review). Quality bar: 11–13 word range; searcher-centric voice; compound intent (audience + goal + qualifier); type-distinguishing where applicable (pes anserine, prepatellar, subacromial, retrocalcaneal, ischial, iliopsoas, trochanteric, olecranon). Director approved (Option A). Real backfill run (~$0.10) wrote all 37 rows; verification pass (zero NULL/empty in scope).
+- **Step 3 (Rule-8 gate, ran post-deploy):** `prisma/schema.prisma` `String?` → `String`. Pre-Step-3 global verification: 37/37 rows non-empty; zero NULL or empty. `npx prisma db push` — column tightened to NOT NULL. Information_schema query confirms `is_nullable: "NO"`. Prisma client regenerated; new types now reject `where: { intentFingerprint: null }` at compile time.
+
+#### 2. Operation applier extension (`src/lib/operation-applier.ts`)
+
+- `CanvasNode` model gains required `intentFingerprint: string` (default `''`).
+- Op shapes gain optional fields (Session B soft validation; Session D tightens to required after V4 prompts ship):
+  - `AddTopicOp.intentFingerprint?: string`
+  - `UpdateTopicTitleOp.intentFingerprint?: string`
+  - `UpdateTopicDescriptionOp.intentFingerprint?: string` (always optional per design)
+  - `MergeTopicsOp.mergedIntentFingerprint?: string`
+  - `SplitTopicOp.into[].intentFingerprint?: string`
+- New helper `validateOptionalFingerprint` rejects empty/whitespace strings when supplied. Apply paths persist the validated fingerprint on the resulting CanvasNode (refresh on title/description; replace on merge target; per-entry on split; default `''` on add).
+- 16 new fingerprint tests cover accept / default-to-empty / reject empty+whitespace / refresh-on-update / preserve-on-no-update / merge with+without / split persistence + per-entry rejection.
+
+#### 3. Parser snake_case → camelCase (`src/lib/auto-analyze-v3.ts`)
+
+- `intent_fingerprint` translated on ADD_TOPIC / UPDATE_TOPIC_TITLE / UPDATE_TOPIC_DESCRIPTION.
+- `merged_intent_fingerprint` translated on MERGE_TOPICS.
+- `intent_fingerprint` per `into[]` entry on SPLIT_TOPIC.
+- Returns `undefined` when key absent (matches applier's optional-field expectation).
+- `CanvasNodeRow` interface gains `intentFingerprint?: string | null` (Prisma's pre-Step-3 nullable shape; conservative — also accepts post-Step-3 non-null reality without breakage).
+- `buildCanvasStateForApplier` maps `n.intentFingerprint ?? ''` for type safety against either DB shape.
+- Rebuild-payload constructor (post-applier): omits `intentFingerprint` when empty. Critical for G3 compatibility — empty values no longer reach the rebuild route mid-batch where G3 would 400 the request. New topics get `''` from the route's create-branch default; AI-supplied real fingerprints carry through via the upsert.update branch.
+- 6 new parser tests cover snake_case translation across all 5 op types + undefined-when-absent.
+
+#### 4. Route patches (`src/app/api/projects/[projectId]/canvas/...`)
+
+- **`nodes/route.ts` POST:** `tx.canvasNode.create.data` supplies `intentFingerprint: typeof body.intentFingerprint === 'string' ? body.intentFingerprint : ''`. Rule-16 zoom-out clean: only 2 callers in src/, both patched.
+- **`nodes/route.ts` PATCH (G3 per Defense-in-Depth §5.4):** Pre-validate every node update entry — if `intentFingerprint` key is present, value must be a non-empty trimmed string; otherwise 400 with descriptive message. Pre-validated values pass through to the existing transaction.
+- **`rebuild/route.ts` G3 echo:** Same pre-validation across `body.nodes[*]` entries. Upsert.create supplies `''` default; upsert.update writes `intentFingerprint` when caller includes it (already G3-validated).
+
+#### 5. Backfill script (`scripts/backfill-intent-fingerprints.ts`)
+
+- New ~250-line script. Mirrors `scripts/backfill-stable-ids.ts` pattern from Pivot Session B.
+- Idempotent predicate: `intentFingerprint = ''` (post-Step-3; pre-Step-3 also covered NULL via OR clause that was simplified after Prisma client regenerated against NOT NULL column).
+- Configurable via flags: `--project-workflow-id` (test gate), `--batch-size` (default 25), `--model` (default `claude-sonnet-4-6`), `--dry-run`.
+- Per-topic input: title + description + top-volume keywords (primary placements first, ties broken by volume desc then alphabetical).
+- Anthropic API direct via `fetch` (matches `/api/ai/analyze` convention; no SDK dependency).
+- Logs every fingerprint as it's written. Verification pass at end (count of remaining NULL/empty rows).
+
+### Tests + build
+
+- **210 src/lib tests pass** (was 188; added 16 applier fingerprint + 6 parser fingerprint = 22 new).
+- **13 ESLint rule tests pass** (separate file, unchanged).
+- **`npm run lint`** — 16 errors, 41 warnings — exact baseline parity. **Zero new this session.**
+- **`npm run build` clean** — TypeScript clean; 17/17 static pages generated.
+
+### What did NOT change this session
+
+- **Prompts:** `AUTO_ANALYZE_PROMPT_V3.md` unchanged (V3 prompts don't yet emit fingerprints — that's Session D).
+- **AutoAnalyze.tsx UI:** unchanged (no tier serialization toggles, no V4 wiring — those are Sessions C/D).
+- **R3 (Tier-1 fingerprint runtime invariant):** still pending — lives in the future serializer (Session C).
+- **Application-side opportunistic generation:** not in scope. The wiring layer doesn't AI-generate fingerprints itself; that's the AI's job once V4 prompts ship.
+
+### Multi-workflow protocol coordination
+
+- **Schema-change-in-flight flag:** flipped to "Yes" at session start (during the migration); flipped back to "No" after Step 3 shipped. W#2 still 🆕 about-to-start; no parallel chat running.
+- **Branch:** `main` (W#1's home).
+- **Cross-workflow doc edits:** none.
+
+### Files touched this session
+
+**Modified (8):**
+- `prisma/schema.prisma` — `intentFingerprint String` on `CanvasNode` (Step 1 + Step 3 in two edits, two `db push` calls).
+- `src/lib/operation-applier.ts` — types + `validateOptionalFingerprint` + per-op validation/persistence.
+- `src/lib/operation-applier.test.ts` — 16 new fingerprint tests + builder default.
+- `src/lib/auto-analyze-v3.ts` — parser snake_case translation + `CanvasNodeRow` field + applier-state mapping + rebuild-payload omit-when-empty.
+- `src/lib/auto-analyze-v3.test.ts` — 6 new parser tests.
+- `src/app/api/projects/[projectId]/canvas/nodes/route.ts` — POST default + G3 PATCH guard.
+- `src/app/api/projects/[projectId]/canvas/rebuild/route.ts` — G3 echo + upsert.create default + upsert.update pass-through.
+- `docs/ROADMAP.md` — Active Tools row mid-session (flag → Yes); end-of-session row update (flag → No, summary).
+
+**New (1):**
+- `scripts/backfill-intent-fingerprints.ts` — ~250 lines, ran live this session.
+
+### Standing instructions for next session — four "NEXT" choices
+
+(a) **Scale Session C build (Tier serialization + decider + batch-relevance heuristic).** Per `INPUT_CONTEXT_SCALING_DESIGN.md` §6 Scale Session C. Behind feature flag (default OFF); no DB changes; no prompt changes. Lands `buildOperationsInputTsv(serializationMode)`, `decideTier`, `computeBatchRelevantSubtree`, in-memory touch tracker. ~25 unit tests targeted. **Builds on Session B's foundation.**
+
+(b) **Phase-1 UI polish bundle** — Skeleton View on canvas + AST split-view topic-vs-description row alignment + Topics table row numbering. ~4-5 hours total. Independent of architectural work.
+
+(c) **Action-by-action feedback workflow design session.** Analogous to Scale Session A. ~3-4 hours design; implementation 2-4 sessions after.
+
+(d) **Optional out-of-session check-in:** small ~2-batch fresh AI run on Bursitis (~$1-2, ~15 min) to inspect fingerprints from a real V3 batch under live load — useful to confirm the new column-write code path is rock-solid in production before Session C lands more code on top. The 37 topics from this session's local run are already in the DB; a fresh run on vklf.com would create more topics with `intentFingerprint = ''` (per the deployed route default), giving you a chance to spot-check that production behavior matches dev expectations.
+
+**Recommendation:** (a) — Scale Session C. With the foundation shipped and verified end-to-end, Session C is the highest-impact forward action. Can run anytime; no external dependencies.
+
+**Director's framing from prior sessions:** sequence (a-design)→(a-impl-1)→(a-impl-2)→(b)→(e)→(c) — reframed for the next phase as (Scale-B)→(Scale-C)→(Scale-D)→(Scale-E)→(other-polish).
+
+---
+
+## ⚠️ POST-2026-04-29-DEFENSE-IN-DEPTH-IMPL-2 STATE (preserved as historical context — last updated 2026-04-29 third session of day)
 
 **As of 2026-04-29 Defense-in-Depth Audit Implementation Session 2 — Option β Session 2 of 2 — completes the audit. Code session — schema unchanged, prompts unchanged, DB unchanged.**
 

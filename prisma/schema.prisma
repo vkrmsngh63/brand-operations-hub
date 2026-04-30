@@ -121,7 +121,7 @@ model CanvasNode {
   // capturing a topic's compound intent. Load-bearing for Tiered Canvas
   // Serialization (Scale Sessions B–E in INPUT_CONTEXT_SCALING_DESIGN.md).
   // Scale Session B Step 1: nullable. Step 2: AI backfill. Step 3: NOT NULL.
-  intentFingerprint String?
+  intentFingerprint String
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 

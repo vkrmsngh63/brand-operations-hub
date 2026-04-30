@@ -232,10 +232,10 @@ async function main() {
     const scopeLabel = flags.projectWorkflowId
       ? `(scope: projectWorkflowId=${flags.projectWorkflowId})`
       : '(scope: all rows)';
-    // Idempotent predicate: NULL or empty/whitespace only.
-    const needsBackfill = {
-      OR: [{ intentFingerprint: null }, { intentFingerprint: '' }],
-    };
+    // Idempotent predicate: empty-string only (post-Step-3 the column is
+    // NOT NULL, so '' is the only "needs backfill" state). The Prisma client
+    // type system rejects `intentFingerprint: null` here — by construction.
+    const needsBackfill = { intentFingerprint: '' };
 
     const totalRows = await prisma.canvasNode.count({ where: baseFilter });
     const todoRows = await prisma.canvasNode.findMany({

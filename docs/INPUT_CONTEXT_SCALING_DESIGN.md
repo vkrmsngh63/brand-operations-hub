@@ -3,8 +3,9 @@
 
 **Created:** April 27, 2026 (Scale Session A — design-only session producing this doc + locked decisions + multi-session plan; no code, no DB)
 **Created in session:** session_2026-04-27_input-context-scaling-design (Claude Code)
-**Last updated:** April 28, 2026 (Scale Session 0 — empirical validation; Outcome C fired; build path activated; §0 + §6 updated to reflect activation)
-**Last updated in session:** session_2026-04-28_scale-session-0-outcome-c-and-full-run-feedback (Claude Code)
+**Last updated:** April 30, 2026 (Scale Session B SHIPPED — see §6's Scale Session B subsection for SHIPPED notes; foundation for Tiered Canvas Serialization landed; Sessions C/D/E remain as forward work)
+**Last updated in session:** session_2026-04-30_scale-session-b-build (Claude Code)
+**Previously updated in session:** session_2026-04-28_scale-session-0-outcome-c-and-full-run-feedback (Claude Code)
 **Group:** B (tool-specific to Keyword Clustering's Auto-Analyze; loaded when scaling-related work is in scope)
 
 **Purpose:** This is the canonical reference doc for the proposed input-side context-scaling solution for Auto-Analyze. It captures the locked design from Scale Session A (this session) and serves as the build spec for Scale Sessions B–E **if and when their trigger conditions fire**. Until then, the design is a contingent specification — the build path is gated behind the empirical validation of Scale Session 0 (next session).
@@ -270,8 +271,10 @@ Design + locked decisions + multi-session plan. This doc is the deliverable.
 
 **Risk profile:** Low. No code, no schema, no prompt changes. Just running the existing tool with a different model selector.
 
-### Scale Session B — Schema migration + applier + fingerprint backfill (~1 session)
+### Scale Session B — Schema migration + applier + fingerprint backfill (~1 session) — ✅ SHIPPED 2026-04-30
 **Trigger:** Outcome C from Scale Session 0.
+
+**Shipped 2026-04-30 in `session_2026-04-30_scale-session-b-build` (Claude Code).** All deliverables below executed live. Two pushes deployed (Part 1 commit `350e7dc` + Part 2 — Step 3 schema flip + cleanup + docs). 37 Bursitis Test topics live-backfilled by a small fresh AI run on the local dev server before Step 3. Backfill script (`scripts/backfill-intent-fingerprints.ts`) cost ~$0.20 across dry-run + real. 22 new src/lib unit tests (16 applier fingerprint + 6 parser fingerprint) → 210 total. Build clean; lint at exact baseline parity. Per-deliverable status notes in §6's Scale Session B subsection are SHIPPED unless otherwise marked. See `KEYWORD_CLUSTERING_ACTIVE.md` POST-2026-04-30-SCALE-SESSION-B STATE block for full session-level summary. **Scale Session C is the next-priority forward action.**
 
 **Scope:** Add `intentFingerprint` column to DB. Update operation-applier. Run backfill script.
 
