@@ -10,13 +10,24 @@ import assert from 'node:assert/strict';
 
 import {
   applyOperations,
+  batchesSinceTouch,
   buildCanvasStateForApplier,
   buildOperationsInputTsv,
+  computeBatchRelevantSubtree,
+  createTouchTracker,
+  decideTier,
+  deserializeTouchTracker,
+  formatTier1KeywordSummary,
   materializeRebuildPayload,
   parseOperationsJsonl,
+  recordTouchesFromOps,
+  serializeTouchTracker,
+  stemTokens,
+  TIER_HEADERS,
   type CanvasNodeRow,
   type KeywordLite,
   type SisterLinkRow,
+  type TierContext,
 } from './auto-analyze-v3.ts';
 
 // ============================================================
@@ -618,4 +629,471 @@ test('Parser: SPLIT_TOPIC without intent_fingerprint per entry yields undefined'
     assert.equal(op.into[0].intentFingerprint, undefined);
     assert.equal(op.into[1].intentFingerprint, undefined);
   }
+});
+
+// ============================================================
+// Scale Session C — Tiered Canvas Serialization
+// (per docs/INPUT_CONTEXT_SCALING_DESIGN.md §1–§4 + §6 Scale Session C)
+// ============================================================
+
+// ---- Stemmer / tokenizer (Cluster 3 Q12 mechanism) -------------------------
+
+test('stemTokens: lowercase + split on non-alphanumeric', () => {
+  const stems = stemTokens('Hip-Bursitis Treatment, Older-Adults!');
+  assert.ok(stems.has('hip'));
+  assert.ok(stems.has('older'));
+  assert.ok(stems.has('adult'));
+  assert.ok(!stems.has(''));
+});
+
+test('stemTokens: drops stopwords and short tokens', () => {
+  const stems = stemTokens('the of in pain on at');
+  // All stopwords; short tokens (<3 chars) also dropped.
+  assert.equal(stems.size, 1);
+  assert.ok(stems.has('pain'));
+});
+
+test('stemTokens: -ing strip + doubled-consonant collapse', () => {
+  const a = stemTokens('running');
+  const b = stemTokens('run');
+  // "running" → strip -ing → "runn" → collapse doubled n → "run"
+  assert.ok(a.has('run'));
+  assert.ok(b.has('run'));
+});
+
+test('stemTokens: -s strip but preserves -ss / -is / -us / -as', () => {
+  // "topics" → "topic"; "bursitis" stays (-is preserved); "kiss" stays (-ss).
+  const stems = stemTokens('topics bursitis kiss bus atlas');
+  assert.ok(stems.has('topic'));
+  assert.ok(stems.has('bursitis'));
+  assert.ok(stems.has('kiss'));
+  assert.ok(stems.has('bus'));
+  assert.ok(stems.has('atlas'));
+});
+
+test('stemTokens: -ed / -ly / -es stripped', () => {
+  const stems = stemTokens('inflamed slowly bushes');
+  assert.ok(stems.has('inflam'));
+  assert.ok(stems.has('slow'));
+  assert.ok(stems.has('bush'));
+});
+
+// ---- computeBatchRelevantSubtree (Cluster 3 locks) -------------------------
+
+test('computeBatchRelevantSubtree: empty batch → empty subtree', () => {
+  const n = row('node-1', 'Hip Bursitis', { stableId: 't-1' });
+  const sub = computeBatchRelevantSubtree({
+    batchKeywords: [],
+    nodes: [n],
+    keywords: [],
+  });
+  assert.equal(sub.size, 0);
+});
+
+test('computeBatchRelevantSubtree: single match promotes one-hop neighborhood', () => {
+  // Hierarchy: t-1 (root) → t-2 (target of match) → t-4 (child); t-3 sibling
+  // of t-2 under t-1; t-5 unrelated under another root t-99.
+  const root = row('uuid-root', 'Bursitis Overview', { stableId: 't-1' });
+  const target = row('uuid-target', 'Hip Bursitis', {
+    stableId: 't-2',
+    parentId: 'uuid-root',
+    relationshipType: 'nested',
+    intentFingerprint: 'older adults seeking hip pain relief',
+  });
+  const sibling = row('uuid-sib', 'Knee Bursitis', {
+    stableId: 't-3',
+    parentId: 'uuid-root',
+    relationshipType: 'nested',
+    intentFingerprint: 'knee pain in younger athletes',
+  });
+  const child = row('uuid-child', 'Hip Bursitis Exercises', {
+    stableId: 't-4',
+    parentId: 'uuid-target',
+    relationshipType: 'nested',
+    intentFingerprint: 'gentle home exercises for hip joint pain',
+  });
+  const farRoot = row('uuid-far', 'Shoulder Pain', { stableId: 't-99' });
+  const far = row('uuid-far-child', 'Shoulder Bursitis Surgery', {
+    stableId: 't-100',
+    parentId: 'uuid-far',
+    relationshipType: 'nested',
+    intentFingerprint: 'shoulder bursitis surgery options',
+  });
+
+  const sub = computeBatchRelevantSubtree({
+    batchKeywords: [kw('new-1', 'older adults hip bursitis pain')],
+    nodes: [root, target, sibling, child, farRoot, far],
+    keywords: [],
+  });
+
+  // Target itself + parent + sibling + child all promoted to Tier 0.
+  assert.ok(sub.has('t-2'), 'target');
+  assert.ok(sub.has('t-1'), 'parent');
+  assert.ok(sub.has('t-3'), 'sibling');
+  assert.ok(sub.has('t-4'), 'child');
+  // Far branch untouched.
+  assert.ok(!sub.has('t-99'));
+  assert.ok(!sub.has('t-100'));
+});
+
+test('computeBatchRelevantSubtree: multi-match union across topics', () => {
+  const a = row('uuid-a', 'Hip Bursitis', {
+    stableId: 't-1',
+    intentFingerprint: 'hip joint pain in older adults',
+  });
+  const b = row('uuid-b', 'Knee Bursitis', {
+    stableId: 't-2',
+    intentFingerprint: 'knee joint inflammation in athletes',
+  });
+  const sub = computeBatchRelevantSubtree({
+    batchKeywords: [
+      kw('new-1', 'hip pain older adults'),
+      kw('new-2', 'knee inflammation in athletes'),
+    ],
+    nodes: [a, b],
+    keywords: [],
+  });
+  assert.ok(sub.has('t-1'));
+  assert.ok(sub.has('t-2'));
+});
+
+test('computeBatchRelevantSubtree: ≥2-stem threshold filters single-stem matches', () => {
+  // A topic that shares only one stem with a single batch keyword does NOT
+  // qualify. Threshold per Cluster 3 Q12 lock: minimum 2 stems.
+  const weak = row('uuid-weak', 'Pain', {
+    stableId: 't-7',
+    intentFingerprint: 'pain in joints',
+  });
+  const sub = computeBatchRelevantSubtree({
+    batchKeywords: [kw('new-1', 'completely unrelated keyword pain')],
+    nodes: [weak],
+    keywords: [],
+  });
+  // Only "pain" stem matches; single overlap is below the ≥2 threshold.
+  assert.ok(!sub.has('t-7'));
+});
+
+// ---- decideTier (Cluster 2 truth table) ------------------------------------
+
+test('decideTier: in-batch-relevant subtree → Tier 0 (regardless of stability/recency)', () => {
+  const tier = decideTier({
+    stabilityScore: 9.5,
+    batchesSinceTouch: 100,
+    isInBatchRelevantSubtree: true,
+    recencyWindow: 5,
+  });
+  assert.equal(tier, 0);
+});
+
+test('decideTier: low stability (<7.0) → Tier 0', () => {
+  const tier = decideTier({
+    stabilityScore: 6.5,
+    batchesSinceTouch: 100,
+    isInBatchRelevantSubtree: false,
+    recencyWindow: 5,
+  });
+  assert.equal(tier, 0);
+});
+
+test('decideTier: recent touch (within window N) → Tier 0', () => {
+  const tier = decideTier({
+    stabilityScore: 8.0,
+    batchesSinceTouch: 3,
+    isInBatchRelevantSubtree: false,
+    recencyWindow: 5,
+  });
+  assert.equal(tier, 0);
+});
+
+test('decideTier: recency window is configurable', () => {
+  // touched 7 batches ago: with N=5 it's outside the window; with N=10 it's inside.
+  const t1 = decideTier({
+    stabilityScore: 8.0,
+    batchesSinceTouch: 7,
+    isInBatchRelevantSubtree: false,
+    recencyWindow: 5,
+  });
+  assert.equal(t1, 1, 'outside N=5 → Tier 1');
+  const t2 = decideTier({
+    stabilityScore: 8.0,
+    batchesSinceTouch: 7,
+    isInBatchRelevantSubtree: false,
+    recencyWindow: 10,
+  });
+  assert.equal(t2, 0, 'inside N=10 → Tier 0');
+});
+
+test('decideTier: high stability + never touched + not in subtree → Tier 2', () => {
+  const tier = decideTier({
+    stabilityScore: 9.0,
+    batchesSinceTouch: null,
+    isInBatchRelevantSubtree: false,
+    recencyWindow: 5,
+  });
+  assert.equal(tier, 2);
+});
+
+test('decideTier: high stability + just outside window N → Tier 1 (not deeply stale)', () => {
+  // touched 6 batches ago, N=5, deep-stale threshold=10. Outside N but inside
+  // deep-stale window → Tier 1.
+  const tier = decideTier({
+    stabilityScore: 8.0,
+    batchesSinceTouch: 6,
+    isInBatchRelevantSubtree: false,
+    recencyWindow: 5,
+  });
+  assert.equal(tier, 1);
+});
+
+test('decideTier: high stability + deeply stale (>10) → Tier 2', () => {
+  const tier = decideTier({
+    stabilityScore: 8.0,
+    batchesSinceTouch: 11,
+    isInBatchRelevantSubtree: false,
+    recencyWindow: 5,
+  });
+  assert.equal(tier, 2);
+});
+
+test('decideTier: high stability + recent + in subtree → Tier 0 (subtree wins ties)', () => {
+  const tier = decideTier({
+    stabilityScore: 9.5,
+    batchesSinceTouch: 0,
+    isInBatchRelevantSubtree: true,
+    recencyWindow: 5,
+  });
+  assert.equal(tier, 0);
+});
+
+// ---- Touch tracker ---------------------------------------------------------
+
+test('TouchTracker: UPDATE_TOPIC_TITLE stamps the topic at currentBatchNum', () => {
+  const t = createTouchTracker();
+  recordTouchesFromOps(
+    t,
+    [
+      {
+        type: 'UPDATE_TOPIC_TITLE',
+        id: 't-5',
+        to: 'New title',
+      },
+    ],
+    7,
+    {},
+  );
+  assert.equal(t.get('t-5'), 7);
+});
+
+test('TouchTracker: ADD_TOPIC alias resolved through aliasResolutions', () => {
+  const t = createTouchTracker();
+  recordTouchesFromOps(
+    t,
+    [
+      {
+        type: 'ADD_TOPIC',
+        id: '$new1',
+        title: 'New',
+        description: '',
+        parent: null,
+        relationship: null,
+      },
+    ],
+    3,
+    { $new1: 't-99' },
+  );
+  assert.equal(t.get('t-99'), 3);
+  // Alias not stamped directly.
+  assert.equal(t.get('$new1'), undefined);
+});
+
+test('TouchTracker: keyword + sister-link ops stamp endpoint topics', () => {
+  const t = createTouchTracker();
+  recordTouchesFromOps(
+    t,
+    [
+      { type: 'ADD_KEYWORD', topic: 't-1', keywordId: 'k1', placement: 'primary' },
+      { type: 'MOVE_KEYWORD', from: 't-2', to: 't-3', keywordId: 'k1', placement: 'primary' },
+      { type: 'ADD_SISTER_LINK', topicA: 't-4', topicB: 't-5' },
+    ],
+    9,
+    {},
+  );
+  assert.equal(t.get('t-1'), 9);
+  assert.equal(t.get('t-2'), 9);
+  assert.equal(t.get('t-3'), 9);
+  assert.equal(t.get('t-4'), 9);
+  assert.equal(t.get('t-5'), 9);
+});
+
+test('batchesSinceTouch: null for never-touched, arithmetic for touched', () => {
+  const t = createTouchTracker();
+  t.set('t-1', 5);
+  assert.equal(batchesSinceTouch(t, 't-1', 5), 0);
+  assert.equal(batchesSinceTouch(t, 't-1', 8), 3);
+  assert.equal(batchesSinceTouch(t, 't-99', 8), null);
+});
+
+test('TouchTracker: serialize → deserialize round-trip preserves entries', () => {
+  const t = createTouchTracker();
+  t.set('t-1', 5);
+  t.set('t-2', 12);
+  const serialized = serializeTouchTracker(t);
+  // JSON-safe shape.
+  assert.deepEqual(serialized, { 't-1': 5, 't-2': 12 });
+  const round = deserializeTouchTracker(JSON.parse(JSON.stringify(serialized)));
+  assert.equal(round.get('t-1'), 5);
+  assert.equal(round.get('t-2'), 12);
+  // null/undefined input yields a fresh empty tracker.
+  assert.equal(deserializeTouchTracker(null).size, 0);
+  assert.equal(deserializeTouchTracker(undefined).size, 0);
+});
+
+// ---- Tier 1 / Tier 2 row formatters ----------------------------------------
+
+test('formatTier1KeywordSummary: counts placements + picks top-volume keyword', () => {
+  const n = row('node-1', 'Topic', {
+    stableId: 't-1',
+    linkedKwIds: ['k1', 'k2', 'k3'],
+    kwPlacements: { k1: 'p', k2: 'p', k3: 's' },
+  });
+  const keywords: KeywordLite[] = [
+    { id: 'k1', keyword: 'low-volume kw', volume: 100 },
+    { id: 'k2', keyword: 'highest volume kw', volume: 1200 },
+    { id: 'k3', keyword: 'mid-volume kw', volume: 500 },
+  ];
+  const summary = formatTier1KeywordSummary(n, keywords);
+  assert.equal(
+    summary,
+    '3 keywords (2p + 1s), top volume kw: "highest volume kw" (1200)',
+  );
+});
+
+test('formatTier1KeywordSummary: empty topic emits "0 keywords" without top-vol suffix', () => {
+  const n = row('node-1', 'Empty Bridge', { stableId: 't-1' });
+  const summary = formatTier1KeywordSummary(n, []);
+  assert.equal(summary, '0 keywords');
+});
+
+test('formatTier1KeywordSummary: tiebreaker is alphabetical when volumes match', () => {
+  const n = row('node-1', 'Topic', {
+    stableId: 't-1',
+    linkedKwIds: ['k1', 'k2'],
+    kwPlacements: { k1: 'p', k2: 'p' },
+  });
+  const keywords: KeywordLite[] = [
+    { id: 'k1', keyword: 'zebra cure', volume: 500 },
+    { id: 'k2', keyword: 'alpha cure', volume: 500 },
+  ];
+  const summary = formatTier1KeywordSummary(n, keywords);
+  assert.match(summary, /top volume kw: "alpha cure" \(500\)$/);
+});
+
+test('Tier headers: Tier 1 has 6 cols, Tier 2 has 3 cols', () => {
+  assert.equal(TIER_HEADERS.tier1.split('\t').length, 6);
+  assert.equal(TIER_HEADERS.tier2.split('\t').length, 3);
+});
+
+// ---- Integration: buildOperationsInputTsv with serializationMode -----------
+
+test('buildOperationsInputTsv: serializationMode="full" is byte-identical to no-arg call', () => {
+  const root = row('uuid-root', 'Root', {
+    stableId: 't-1',
+    intentFingerprint: 'a fingerprint',
+  });
+  const child = row('uuid-child', 'Child', {
+    stableId: 't-2',
+    parentId: 'uuid-root',
+    relationshipType: 'nested',
+    intentFingerprint: 'another fingerprint',
+    linkedKwIds: ['k1'],
+    kwPlacements: { k1: 'p' },
+    stabilityScore: 8.5,
+  });
+  const sl: SisterLinkRow[] = [];
+  const keywords: KeywordLite[] = [{ id: 'k1', keyword: 'hip pain', volume: 1000 }];
+
+  const a = buildOperationsInputTsv([root, child], sl, keywords);
+  const b = buildOperationsInputTsv([root, child], sl, keywords, {
+    serializationMode: 'full',
+  });
+  assert.equal(a, b, 'no-arg vs explicit "full" must be byte-identical');
+});
+
+test('buildOperationsInputTsv: serializationMode="tiered" emits correct multi-section output', () => {
+  // Mix: t-1 root low stability → Tier 0; t-2 high-stability + recently touched → Tier 0
+  // (recent touch wins); t-3 high-stability + never touched → Tier 2; t-4 high-stability
+  // + 6 batches ago (outside N=5 but inside deep-stale) → Tier 1.
+  const t1 = row('uuid-1', 'Hip', { stableId: 't-1', stabilityScore: 5.0, intentFingerprint: 'hip pain in older adults' });
+  const t2 = row('uuid-2', 'Knee', { stableId: 't-2', stabilityScore: 8.0, intentFingerprint: 'knee pain in athletes' });
+  const t3 = row('uuid-3', 'Shoulder', { stableId: 't-3', stabilityScore: 8.5, intentFingerprint: 'shoulder pain in workers' });
+  const t4 = row('uuid-4', 'Elbow', { stableId: 't-4', stabilityScore: 8.0, intentFingerprint: 'elbow pain in lifters' });
+
+  const tracker = createTouchTracker();
+  // t-2 touched in the previous batch (currentBatchNum=10, so batchesSinceTouch=1).
+  tracker.set('t-2', 9);
+  // t-4 touched 6 batches ago.
+  tracker.set('t-4', 4);
+
+  const ctx: TierContext = {
+    batchKeywords: [], // no batch-relevance — pure recency + stability test
+    touchTracker: tracker,
+    currentBatchNum: 10,
+    recencyWindow: 5,
+  };
+
+  const tsv = buildOperationsInputTsv([t1, t2, t3, t4], [], [], {
+    serializationMode: 'tiered',
+    tierContext: ctx,
+  });
+
+  assert.match(tsv, /=== TIER 0 ===/);
+  assert.match(tsv, /=== TIER 1 ===/);
+  assert.match(tsv, /=== TIER 2 ===/);
+
+  // Tier 0 contains t-1 (low stability) and t-2 (recent touch).
+  const tier0Section = tsv.split('=== TIER 1 ===')[0];
+  assert.match(tier0Section, /\bt-1\b/);
+  assert.match(tier0Section, /\bt-2\b/);
+  assert.ok(!/\bt-3\b/.test(tier0Section));
+  assert.ok(!/\bt-4\b/.test(tier0Section));
+
+  // Tier 1 contains t-4 (settled but not deep-stale).
+  const tier1Section = tsv.split('=== TIER 1 ===')[1].split('=== TIER 2 ===')[0];
+  assert.match(tier1Section, /\bt-4\b/);
+  assert.ok(!/\bt-3\b/.test(tier1Section));
+
+  // Tier 2 contains t-3 (deep-stale, never touched).
+  const tier2Section = tsv.split('=== TIER 2 ===')[1];
+  assert.match(tier2Section, /\bt-3\b/);
+});
+
+test('buildOperationsInputTsv: tiered mode pins fingerprint-less topics to Tier 0', () => {
+  // Even with high stability + never touched + no batch relevance — a topic
+  // with empty intentFingerprint cannot be safely demoted (Tier 1's load-bearing
+  // signal is missing). Per INPUT_CONTEXT_SCALING_DESIGN.md §4.2 last paragraph.
+  const stable = row('uuid-stable', 'Settled Topic', {
+    stableId: 't-1',
+    stabilityScore: 9.0,
+    intentFingerprint: '', // empty
+  });
+  const ctx: TierContext = {
+    batchKeywords: [],
+    touchTracker: createTouchTracker(),
+    currentBatchNum: 100,
+    recencyWindow: 5,
+  };
+  const tsv = buildOperationsInputTsv([stable], [], [], {
+    serializationMode: 'tiered',
+    tierContext: ctx,
+  });
+  assert.match(tsv, /=== TIER 0 ===/);
+  assert.ok(!tsv.includes('=== TIER 1 ==='), 'no Tier 1 section');
+  assert.ok(!tsv.includes('=== TIER 2 ==='), 'no Tier 2 section');
+});
+
+test('buildOperationsInputTsv: tiered mode throws when tierContext is missing', () => {
+  assert.throws(
+    () => buildOperationsInputTsv([], [], [], { serializationMode: 'tiered' }),
+    /requires tierContext/,
+  );
 });

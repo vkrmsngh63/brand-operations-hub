@@ -3,8 +3,9 @@
 
 **Created:** April 27, 2026 (Scale Session A — design-only session producing this doc + locked decisions + multi-session plan; no code, no DB)
 **Created in session:** session_2026-04-27_input-context-scaling-design (Claude Code)
-**Last updated:** April 30, 2026 (Scale Session B SHIPPED — see §6's Scale Session B subsection for SHIPPED notes; foundation for Tiered Canvas Serialization landed; Sessions C/D/E remain as forward work)
-**Last updated in session:** session_2026-04-30_scale-session-b-build (Claude Code)
+**Last updated:** April 30, 2026 (Scale Session C SHIPPED — see §6's Scale Session C subsection for SHIPPED notes; tiered serialization mechanism landed behind a default-OFF feature flag in `src/lib/auto-analyze-v3.ts`; Sessions D/E remain as forward work)
+**Last updated in session:** session_2026-04-30-b_scale-session-c-build (Claude Code)
+**Previously updated in session:** session_2026-04-30_scale-session-b-build (Claude Code)
 **Previously updated in session:** session_2026-04-28_scale-session-0-outcome-c-and-full-run-feedback (Claude Code)
 **Group:** B (tool-specific to Keyword Clustering's Auto-Analyze; loaded when scaling-related work is in scope)
 
@@ -292,22 +293,25 @@ Design + locked decisions + multi-session plan. This doc is the deliverable.
 
 **Risk profile:** Medium. Schema constraint change is the highest-risk piece. Mitigated by Rule-16 caller audit before Step 3.
 
-### Scale Session C — Tier serialization + decider + heuristic (~1 session)
+### Scale Session C — Tier serialization + decider + heuristic (~1 session) — ✅ SHIPPED 2026-04-30
 **Trigger:** Scale Session B complete.
+
+**Shipped 2026-04-30 in `session_2026-04-30-b_scale-session-c-build` (Claude Code).** Second build session of the day, immediately following Scale Session B (commit `1d04a10`). All deliverables landed in `src/lib/auto-analyze-v3.ts` behind a default-OFF feature flag (`serializationMode: 'tiered'` arg; today's only callers pass nothing → default `'full'`). 30 new src/lib unit tests (5 stemmer + 4 batch-relevance + 8 decideTier + 5 touch-tracker + 4 row-formatter / tier-headers + 4 buildOperationsInputTsv integration) → 240 total passing. `npx tsc --noEmit` clean; `npm run build` clean; `npm run lint` at exact baseline parity. Production V3 input TSV byte-identical to commit `1d04a10` (verified by an explicit byte-parity test). See `KEYWORD_CLUSTERING_ACTIVE.md` POST-2026-04-30-SCALE-SESSION-C STATE block for the full session-level summary.
 
 **Scope:** Build the tiered serialization mechanism behind a feature flag. No prompt change yet.
 
 **Deliverables:**
-1. `buildOperationsInputTsv` extended with `serializationMode: 'full' | 'tiered'` arg (default `'full'`).
-2. Tier decider function (`decideTier`) implementing Cluster 2 locks.
-3. Batch-relevance heuristic (`computeBatchRelevantSubtree`) implementing Cluster 3 locks.
-4. Touch tracker — in-memory map persisted to existing `aa_checkpoint_{projectWorkflowId}` localStorage; reset on cancel.
-5. Tier 1 / Tier 2 row format functions.
-6. ~25 unit tests covering decider edge cases, heuristic accuracy, TSV row formats.
+1. **SHIPPED.** `buildOperationsInputTsv` extended with `serializationMode: 'full' | 'tiered'` arg (default `'full'`). Existing 3-arg call sites byte-identical. Existing function body refactored into a private `buildFullTsv` helper.
+2. **SHIPPED.** Tier decider function (`decideTier`) implementing Cluster 2 locks. Pure signal-based — accepts `stabilityScore`, `batchesSinceTouch`, `isInBatchRelevantSubtree`, `recencyWindow`. Subtree wins, then recency, then stability; Tier 2 AND-rule (stability ≥ 7.0 AND not touched in >10 batches AND not in subtree). Constants exported: `STABILITY_TIER_THRESHOLD = 7.0`, `DEFAULT_RECENCY_WINDOW = 5`, `TIER_2_DEEP_STALE_THRESHOLD = 10`.
+3. **SHIPPED.** Batch-relevance heuristic (`computeBatchRelevantSubtree`) implementing Cluster 3 locks. Stem-based token-overlap against (title + intentFingerprint + linked-keyword text); aggregated score across batch keywords; threshold ≥2 stems; one-hop neighborhood (self + parent + siblings + children). `BATCH_RELEVANCE_MIN_STEMS = 2` exported. Hand-rolled simple stemmer with -ss / -is / -us / -as preservation rules (autonomous detail per Rule 14d; swap-in for full Porter is a one-function change).
+4. **SHIPPED (helpers; AutoAnalyze.tsx wire-up deferred to Scale Session D).** Touch tracker — `TouchTracker = Map<stableId, lastTouchedBatchNum>` with `createTouchTracker`, `recordTouchesFromOps` (walks alias resolutions), `batchesSinceTouch`, `serializeTouchTracker` / `deserializeTouchTracker` (JSON-safe for the existing `aa_checkpoint_{projectId}` localStorage round-trip). Q5 → B touch rule applied conservatively (every topic ref in every op body that resolves to a stableId is stamped, including reassign targets and parents). Q5 → C: no propagation to ancestors. Touches against deleted topics become harmless garbage entries.
+5. **SHIPPED.** Tier 1 / Tier 2 row format functions. Tier 1 row: 6 columns (Stable ID, Title, Parent Stable ID, Stability Score, Intent Fingerprint, Keyword Summary). Tier 2 row: 3 columns (Stable ID, Title, Parent Stable ID). Keyword summary string per Cluster 1 Q3 lock: `'{N} keywords ({P}p + {S}s), top volume kw: "{text}" ({V})'`. Empty topic emits `'0 keywords'`. Top-volume picked by volume desc, ties broken alphabetically; missing/non-numeric volumes sort as 0. `KeywordLite.volume` extended to `number | string | undefined` to accept the ambient `Keyword` shape (string from import path; Int in Prisma — formatter coerces). Tiered TSV builder emits three sections delimited by `=== TIER 0 ===` / `=== TIER 1 ===` / `=== TIER 2 ===`; empty tiers omitted.
+6. **SHIPPED.** **Empty-fingerprint pin** (per §4.2 last paragraph): topics with empty `intentFingerprint` cannot be safely demoted (Tier 1's load-bearing intent-equivalence signal would be missing). The serializer force-pins them to Tier 0 regardless of decider signals. Defensive — most live topics have real fingerprints from Session B's backfill, but the safety net catches any future production rows that ever land with `''`.
+7. **SHIPPED.** 30 unit tests (the design's "~25" target was matched-plus-five for full Cluster-2 truth-table coverage and the byte-parity guarantee).
 
-**Validation:** Build clean; ~112 tests passing; manual smoke test on synthetic 200-topic canvas; production V3 unchanged (flag OFF).
+**Validation outcome:** Build clean; `npx tsc --noEmit` clean; 240 src/lib tests passing (was 210; +30 this session); `npm run lint` at exact baseline parity (16 errors / 41 warnings; zero new); production V3 unchanged (flag OFF; byte-parity test explicit).
 
-**Risk profile:** Low. No DB changes; no prompt changes; behind feature flag.
+**Risk profile:** Low. No DB changes; no prompt changes; no UI changes; behind feature flag with default-OFF.
 
 ### Scale Session D — V4 prompt rewrite + integration + small-batch validation (~1 session)
 **Trigger:** Scale Session C complete.

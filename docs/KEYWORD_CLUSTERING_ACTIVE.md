@@ -1,8 +1,9 @@
 # KEYWORD CLUSTERING — ACTIVE DOCUMENT
 ## Current state of the Keyword Clustering workflow tool (Group B, tool-specific)
 
-**Last updated:** April 30, 2026 (Scale Session B build SHIPPED — first build session since Defense-in-Depth Audit closed yesterday. 3-step schema migration of `intentFingerprint String` on `CanvasNode` (Step 1 nullable → Step 2 AI backfill across 37 Bursitis Test topics → Step 3 NOT NULL, all Rule-8 gated). New `scripts/backfill-intent-fingerprints.ts` ran live (~$0.10 dry-run + ~$0.10 real). Applier (`src/lib/operation-applier.ts`) extended with optional `intentFingerprint` field on AddTopic / UpdateTitle / UpdateDescription / Split-into ops + `mergedIntentFingerprint` on Merge — soft-validation (when present, non-empty trim required). Parser (`src/lib/auto-analyze-v3.ts`) translates snake_case incl. `merged_intent_fingerprint`. Both canvas-node creators (POST + rebuild upsert.create) supply `''` placeholder. G3 guard (per Defense-in-Depth §5.4) shipped on `/canvas/nodes` PATCH + rebuild route — rejects empty/whitespace fingerprints with 400. Wiring layer omits empty fingerprint from rebuild payload to prevent G3 false-positive on transient empty values mid-batch. 22 new src/lib tests → 210 passing; build clean; lint at exact baseline parity. Two pushes: Part 1 (`350e7dc`) deployed today's code; Part 2 deployed Step 3 schema + cleanup + docs. NEW POST-2026-04-30-SCALE-SESSION-B STATE block prepended below.)
-**Last updated in session:** session_2026-04-30_scale-session-b-build (Claude Code)
+**Last updated:** April 30, 2026 (Scale Session C build SHIPPED — second build session of the day, immediately following Scale Session B. CODE-ONLY session — no DB, no schema, no prompts, no UI changes; production V3 byte-identical (verified by an explicit byte-parity unit test). All Session C deliverables landed in `src/lib/auto-analyze-v3.ts` behind a default-OFF feature flag (`serializationMode: 'tiered'` arg; today's only callers pass nothing → default `'full'`). Lands: stem-based tokenizer; `computeBatchRelevantSubtree` with one-hop neighborhood; `decideTier` implementing the full Cluster 2 truth table; `TouchTracker` (Map<stableId, lastTouchedBatchNum>) with `recordTouchesFromOps` (walks alias resolutions), `batchesSinceTouch`, JSON-safe serialize/deserialize for the existing `aa_checkpoint_{projectId}` localStorage; Tier 1 / Tier 2 row formatters with the Cluster 1 Q3 keyword-summary string; tiered TSV builder emitting three sections (empty tiers omitted; fingerprint-less topics pinned to Tier 0 per §4.2). 30 new src/lib unit tests → 240 total passing; `npx tsc --noEmit` clean; `npm run build` clean; `npm run lint` at exact baseline parity (16 errors / 41 warnings; zero new). NEW POST-2026-04-30-SCALE-SESSION-C STATE block prepended below.)
+**Last updated in session:** session_2026-04-30-b_scale-session-c-build (Claude Code)
+**Previously updated in session:** session_2026-04-30_scale-session-b-build (Claude Code)
 **Previously updated in session:** session_2026-04-29-c_defense-in-depth-impl-2 (Claude Code)
 **Previously updated in session:** session_2026-04-29-b_defense-in-depth-impl-1 (Claude Code)
 **Previously updated in session:** session_2026-04-29_defense-in-depth-audit-design (Claude Code)
@@ -35,7 +36,110 @@
 
 ---
 
-## ⚠️ POST-2026-04-30-SCALE-SESSION-B STATE (READ FIRST — updated 2026-04-30)
+## ⚠️ POST-2026-04-30-SCALE-SESSION-C STATE (READ FIRST — updated 2026-04-30)
+
+**As of 2026-04-30 Scale Session C — second build session of the day, immediately after Scale Session B. CODE-ONLY session — schema unchanged, prompts unchanged, UI unchanged, DB unchanged. Production V3 input TSV byte-identical (verified by explicit unit test). All new code is gated behind a default-OFF feature flag.**
+
+### What this session shipped to W#1
+
+**Tiered Canvas Serialization mechanism landed behind a feature flag.** Per `INPUT_CONTEXT_SCALING_DESIGN.md` §6 Scale Session C. Builds on Session B's intent-fingerprint foundation (commit `1d04a10`). Sets up Session D (V4 prompt rewrite + flag flip ON + small-batch validation) to ship cleanly.
+
+#### 1. Stemmer + tokenizer (private but exported for unit tests)
+
+- `stemTokens(text)` — lowercase → split on non-alphanumeric → drop stopwords + tokens shorter than 3 chars → simple suffix stripper.
+- Suffix rules: -ing (with doubled-consonant collapse so "running" → "run"), -ed, -ly, -es, -s. Preservation rules: -ss / -is / -us / -as preserved (so "bursitis" stays "bursitis" and isn't hollowed to "bursiti").
+- ~30 LOC. Hand-rolled rather than full Porter — autonomous detail per Rule 14d. Forgiving design (≥2-stem threshold) makes perfect stemming unnecessary; swap-in for richer stemmer is a one-function change if validation reveals poor recall.
+
+#### 2. `computeBatchRelevantSubtree` (Cluster 3 locks)
+
+- Stem-overlap match against (topic title + intent fingerprint + linked-keyword text).
+- Aggregated score across all batch keywords; threshold ≥2 stems shared.
+- One-hop neighborhood expansion: candidate + immediate parent + immediate siblings + immediate children (Cluster 3 Q11 lock).
+- Empty batch → empty subtree (the recency + stability signals still run).
+- ~80 LOC. Cost: bounded local string work — sub-millisecond on a 1,000-topic canvas.
+
+#### 3. `decideTier` (Cluster 2 truth table)
+
+- Pure signal-based decider. Inputs: `stabilityScore`, `batchesSinceTouch` (null when never touched), `isInBatchRelevantSubtree`, `recencyWindow` (Q6 lock; default 5).
+- Tier 0 force conditions (any of): in batch subtree / touched within N / stability < 7.0.
+- Tier 2 eligibility (AND-rule per Q8): stability ≥ 7.0 AND deeply stale (>10 batches) AND not in subtree.
+- Default Tier 1 (stable + settled + off-batch but not deeply stale).
+- Q9 lock: no ancestor force-promotion. Constants exported: `STABILITY_TIER_THRESHOLD` (7.0), `DEFAULT_RECENCY_WINDOW` (5), `TIER_2_DEEP_STALE_THRESHOLD` (10).
+- ~25 LOC.
+
+#### 4. Touch tracker (in-memory Map + ops extractor + serialize/deserialize)
+
+- `TouchTracker = Map<stableId, lastTouchedBatchNum>`. Helper API: `createTouchTracker`, `recordTouchesFromOps`, `batchesSinceTouch`, `serializeTouchTracker`, `deserializeTouchTracker`.
+- `recordTouchesFromOps` walks the post-apply alias resolutions map; `$newN` aliases stamp their resolved `t-N`; bare `t-N` refs pass through. Conservative inclusion: every topic ref in every op body that resolves to a stableId is stamped (Q5 → B; reassign targets, parents, sister-link endpoints all included; ARCHIVE_KEYWORD touches nothing). Q5 → C: no propagation to ancestors.
+- Touches against deleted topics (MERGE source, SPLIT source, DELETE id) become harmless garbage entries that never match a live canvas node.
+- JSON-safe serialize/deserialize so AutoAnalyze.tsx can round-trip the tracker through the existing `aa_checkpoint_{projectId}` localStorage blob (Session D wire-up).
+- ~80 LOC.
+
+#### 5. Tier 1 / Tier 2 row formatters + tiered TSV builder
+
+- `formatTier1KeywordSummary(node, keywords)` per Cluster 1 Q3 lock: `'{N} keywords ({P}p + {S}s), top volume kw: "{text}" ({V})'`. Empty topic emits `'0 keywords'`. Top-volume picked by volume desc, ties broken alphabetically; missing/non-numeric volumes sort as 0.
+- `KeywordLite.volume?: number | string` (loosened from purely-number to accept the ambient `Keyword` shape used by callers — string from import path, Int in Prisma; the formatter coerces).
+- Tier 1 row: 6 columns (Stable ID, Title, Parent, Stability, Intent Fingerprint, Keyword Summary).
+- Tier 2 row: 3 columns (Stable ID, Title, Parent).
+- Tiered TSV builder emits three sections delimited by `=== TIER 0 ===` / `=== TIER 1 ===` / `=== TIER 2 ===`. Empty tiers are omitted entirely. Tier 0 reuses the V3 9-column layout via the refactored `buildFullTsv` helper.
+- **Empty-fingerprint pin (per `INPUT_CONTEXT_SCALING_DESIGN.md` §4.2):** topics with empty `intentFingerprint` cannot be safely demoted (Tier 1's load-bearing intent-equivalence signal would be missing). The serializer force-pins them to Tier 0 regardless of decider signals. Today most live topics have real fingerprints from Session B's backfill, but the safety net is there for any future production rows that ever land with `''`.
+
+#### 6. `buildOperationsInputTsv` extension (the public surface)
+
+- New optional 4th `options` arg: `{ serializationMode?: 'full' | 'tiered'; tierContext?: TierContext }`. Default `serializationMode: 'full'` is byte-identical to the pre-Session-C output (covered by an explicit byte-parity unit test).
+- `'tiered'` requires `tierContext` (`{ batchKeywords, touchTracker, currentBatchNum, recencyWindow? }`); throws with a descriptive error if missing.
+- Existing 3-arg call sites (`AutoAnalyze.tsx` line 652) unchanged — production V3 stays exactly on the `'full'` path.
+- Existing function body refactored into a private `buildFullTsv(...)` for byte-parity guarantees.
+
+### Tests + build
+
+- **240 src/lib tests pass** (was 210; +30 this session). 30 covers: 5 stemmer + 4 batch-relevance + 8 decideTier + 5 touch-tracker + 4 row-formatter / tier-headers + 4 buildOperationsInputTsv integration (full byte-parity, tiered multi-section, fingerprint-pin, throws-on-missing-ctx).
+- **13 ESLint rule tests pass** (separate file, unchanged).
+- `npx tsc --noEmit` clean.
+- `npm run build` clean — 15.0s, 17/17 static pages.
+- `npm run lint` — 57 problems (16 errors, 41 warnings) — **exact baseline parity, zero new this session**.
+
+### What did NOT change this session
+
+- **Schema:** untouched.
+- **Prompts:** `AUTO_ANALYZE_PROMPT_V3.md` unchanged. The new tier-aware input format is documented only via the test bed; the V4 prompt update is Session D.
+- **`AutoAnalyze.tsx` UI:** untouched. No tier-mode toggle, no recency-window settings field, no flag flip.
+- **Routes / scripts / `operation-applier.ts`:** untouched.
+- **Production V3 input TSV:** byte-identical to commit `1d04a10`. Verified by `buildOperationsInputTsv: serializationMode="full" is byte-identical to no-arg call`.
+- **Touch tracker persistence:** the wire-up to round-trip through `aa_checkpoint_{projectId}` localStorage is the AutoAnalyze.tsx caller's job and lands in Session D alongside the flag flip. Session C ships the helpers (`serializeTouchTracker` / `deserializeTouchTracker`) so Session D's wire-up is one-liner per call site.
+
+### Multi-workflow protocol coordination
+
+- **Schema-change-in-flight flag:** stays "No" (no schema work this session).
+- **Branch:** `main` (W#1's home).
+- **Cross-workflow doc edits:** none.
+- W#2 still 🆕 about-to-start; no parallel chat ran during this session.
+
+### Files touched this session
+
+**Modified (2):**
+- `src/lib/auto-analyze-v3.ts` — `KeywordLite.volume` loosened to `number | string`; existing function body refactored into private `buildFullTsv`; public `buildOperationsInputTsv` dispatches on `options.serializationMode`; new ~480 lines for stemmer + batch-relevance + tier decider + touch tracker + tier formatters + tiered TSV builder.
+- `src/lib/auto-analyze-v3.test.ts` — 12 new imports added to the import block; +30 new tests appended.
+
+**Cumulative file size:** `auto-analyze-v3.ts` 674 → ~1,150 lines; `auto-analyze-v3.test.ts` 621 → ~960 lines.
+
+### Standing instructions for next session — four "NEXT" choices
+
+(a) **Scale Session D — V4 prompt rewrite + integration + small-batch validation.** Per `INPUT_CONTEXT_SCALING_DESIGN.md` §6 Scale Session D. Lands `AUTO_ANALYZE_PROMPT_V4.md`; flips `AutoAnalyze.tsx` to call `buildOperationsInputTsv` with `serializationMode: 'tiered'`; adds a "Recency Window (batches)" settings field default N=5; wires touch-tracker round-trip through `aa_checkpoint_{projectId}` localStorage; clears it on cancel; small-batch validation on test project (3–5 batches). ~$5–$15 API spend. **Recommended next** — this is what makes Session C's mechanism actually run in production. Risk: medium (new prompt + new wiring = quality regression risk; mitigated by small-batch validation before any large run).
+
+(b) **Phase-1 UI polish bundle** — Skeleton View on canvas + AST split-view topic-vs-description row alignment + Topics table row numbering. ~4–5 hours total. Independent of architectural work.
+
+(c) **Action-by-action feedback workflow design session.** Analogous to Scale Session A. ~3–4 hours design; implementation 2–4 sessions after.
+
+(d) **Optional out-of-session check-in:** small ~2-batch fresh AI run on Bursitis Test or another project to validate Session B's `intentFingerprint` write path under live load before Session D's V4 prompt rewrite. ~$1–$2, ~15 min. The 37 topics from Session B's local dev run are already in the DB; a fresh run on vklf.com would create more topics with `intentFingerprint = ''` (per the deployed POST default). Could surface any production-vs-dev divergence before Session D adds another moving part.
+
+**Recommendation:** (a) — Scale Session D. Sessions C's mechanism is dormant code until D activates it. Ship the activation cleanly with V4 prompts + small-batch validation, then E (consolidation pass + full-Bursitis validation) closes the design.
+
+**Director's framing from prior sessions:** sequence (Scale-A) → (Scale-0) → (Defense-in-Depth-design + impl-1 + impl-2) → (Scale-B) → **(Scale-C, this session)** → (Scale-D) → (Scale-E) → (other-polish).
+
+---
+
+## ⚠️ POST-2026-04-30-SCALE-SESSION-B STATE (preserved as historical context — last updated 2026-04-30; superseded by Session C above)
 
 **As of 2026-04-30 Scale Session B — first build session since Defense-in-Depth Audit closed. CODE + SCHEMA session — schema CHANGED (3-step migration), prompts unchanged, DB now has `intentFingerprint String NOT NULL` column on CanvasNode with all 37 live rows backfilled.**
 
