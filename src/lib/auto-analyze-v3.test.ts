@@ -865,6 +865,59 @@ test('decideTier: high stability + recent + in subtree → Tier 0 (subtree wins 
   assert.equal(tier, 0);
 });
 
+// ---- D3 mid-run patch: dormant-stability behavior --------------------------
+// Per INPUT_CONTEXT_SCALING_DESIGN.md §6 Scale Session E "D3 mid-run patch":
+// stabilityScore === 0 means "unscored / dormant default" and must NOT force
+// Tier 0; recency does the demotion work until Scale Session F ships.
+
+test('decideTier: dormant stability (0) + within recency → Tier 0 (recency wins)', () => {
+  const tier = decideTier({
+    stabilityScore: 0,
+    batchesSinceTouch: 3,
+    isInBatchRelevantSubtree: false,
+    recencyWindow: 5,
+  });
+  assert.equal(tier, 0);
+});
+
+test('decideTier: dormant stability (0) + outside recency + not deeply stale → Tier 1', () => {
+  const tier = decideTier({
+    stabilityScore: 0,
+    batchesSinceTouch: 6,
+    isInBatchRelevantSubtree: false,
+    recencyWindow: 5,
+  });
+  assert.equal(tier, 1, 'dormant stability must demote to Tier 1, not force Tier 0');
+});
+
+test('decideTier: dormant stability (0) + deeply stale → Tier 1 (not Tier 2; AND-rule guard)', () => {
+  // Without the §2.4 AND-rule guard at the Tier 2 decision point, a never-scored
+  // topic that goes deeply stale would over-compress to Tier 2 (skeleton). The
+  // AND-rule requires `stability ≥ 7.0` for Tier 2 eligibility, so dormant
+  // topics fall through to Tier 1.
+  const tier = decideTier({
+    stabilityScore: 0,
+    batchesSinceTouch: 15,
+    isInBatchRelevantSubtree: false,
+    recencyWindow: 5,
+  });
+  assert.equal(tier, 1);
+});
+
+test('decideTier: positive low stability (e.g., 2.0) outside recency → Tier 0 (forward-compat)', () => {
+  // Once Scale Session F's stability algorithm ships and assigns genuinely low
+  // scores (e.g., 2.0), the gate must still force Tier 0 so the model can
+  // restructure the topic. Distinguishes "deliberately scored low" from
+  // "unscored / dormant default 0".
+  const tier = decideTier({
+    stabilityScore: 2.0,
+    batchesSinceTouch: 6,
+    isInBatchRelevantSubtree: false,
+    recencyWindow: 5,
+  });
+  assert.equal(tier, 0);
+});
+
 // ---- Touch tracker ---------------------------------------------------------
 
 test('TouchTracker: UPDATE_TOPIC_TITLE stamps the topic at currentBatchNum', () => {

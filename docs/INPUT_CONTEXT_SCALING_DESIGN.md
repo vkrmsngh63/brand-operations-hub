@@ -370,6 +370,23 @@ Design + locked decisions + multi-session plan. This doc is the deliverable.
 
 **Risk profile:** Medium-low for the code. Riskiest pieces shipped in B–D; this session adds a separate prompt path + two button surfaces + one runLoop hook, all gated by the cadence + canvas-size + prompt-presence checks. The applier-side restriction provides atomic safety even if the prompt or wiring drift.
 
+#### D3 mid-run patch — dormant-stability fix (2026-05-01, in-flight refinement)
+
+**What surfaced.** During D3's full-Bursitis validation run, batches 1-4 revealed every newly-created topic was force-pinned to Tier 0 — Tier 1 / Tier 2 sections never populated. Verified in code: schema default `stabilityScore: 0.0` (`prisma/schema.prisma:119`); applier hardcodes `stabilityScore: 0.0` on ADD_TOPIC + SPLIT_TOPIC `into[]` (`operation-applier.ts:457, 656`); V4 prompt explicitly tells the AI not to emit `stability_score` on any operation (line 540); and `decideTier` (`auto-analyze-v3.ts:987`) treated the schema default as "deliberately scored low" via `if (stabilityScore < 7.0) return 0`. Net effect: every topic in the run pinned to Tier 0; tier-mode compression dormant in practice; input growth would track V3 exactly and hit the wall around batch 130-150 just like Session 0.
+
+**Mismatch with §2.3.** §2.3's "Dormant in first ship" paragraph stated *"Until [stability] ships, the recency signal does all the demotion work"* — but the Session C implementation force-pinned on stability before recency-not-touched could let any topic fall to Tier 1. Design intent and Session C implementation diverged at the decider's third force-condition.
+
+**Patch (one source change, two surgical lines).**
+
+- **Line 987** changed from `if (stabilityScore < STABILITY_TIER_THRESHOLD) return 0;` to `if (stabilityScore > 0 && stabilityScore < STABILITY_TIER_THRESHOLD) return 0;`. Treats `stabilityScore === 0` as "unscored / dormant default — let recency decide." Forward-compatible: once Session F ships and starts populating values 0.1–10.0, the gate fires for genuinely low-scored topics.
+- **Line 992** changed from `if (deeplyStale) return 2;` to `if (deeplyStale && stabilityScore >= STABILITY_TIER_THRESHOLD) return 2;`. Makes the §2.4 Tier 2 AND-rule (`stability ≥ 7.0 AND deeply stale AND not in subtree`) explicit at the Tier 2 decision point — without it, dormant-stability deeply-stale topics would over-compress to Tier 2.
+
+**Tests added (4).** `auto-analyze-v3.test.ts` gains: dormant + within recency → Tier 0 (recency wins); dormant + outside recency + not deeply stale → Tier 1 (the new behavior); dormant + deeply stale → Tier 1 (AND-rule guard, NOT Tier 2); positive low stability (2.0) outside recency → Tier 0 (forward-compat with Session F). Existing 8 decider tests stay green (they all use positive stability values 6.5–9.5).
+
+**Alternative considered + set aside.** Schema field `stabilityScored: Boolean @default(false)` to disambiguate "never scored" from "deliberately scored 0." Cleaner semantically — eliminates the dormant-zero convention's ambiguity once Session F ships — but violates the multi-workflow no-schema-change-in-flight discipline (`MULTI_WORKFLOW_PROTOCOL.md` §4) and would require a mid-run schema migration. Captured for Session F to revisit (see §7 Open questions).
+
+**Why "in-flight refinement, not new design":** the patch realigns the implementation with §2.3's already-stated dormant-stability intent. No new mechanism added. No semantic change for stability values ≥ 7.0 (high stability still allows Tier 1/2 demotion via the AND-rule path). No semantic change for positive low stability (genuine score 0.1–6.9 still forces Tier 0).
+
 ### Scale Session F — Stability-scoring algorithm (future; conditional on use)
 **Trigger:** Decision to activate the stability signal in the tier decider.
 
@@ -399,7 +416,8 @@ Per `HANDOFF_PROTOCOL.md` Rule 14e — every deferral has an explicit destinatio
 
 | Item | Why deferred | Where captured |
 |---|---|---|
-| Stability-scoring algorithm | Algorithm is a separate workstream. Until it ships, the stability signal in the tier decider is dormant; recency does all demotion work. | This doc §6 Scale Session F + `PIVOT_DESIGN.md §5` |
+| Stability-scoring algorithm | Algorithm is a separate workstream. Until it ships, the stability signal in the tier decider is dormant; recency does all demotion work (per the D3 mid-run patch — see §6 Scale Session E). | This doc §6 Scale Session F + `PIVOT_DESIGN.md §5` |
+| Dormant-zero ambiguity in `stabilityScore` | The D3 mid-run patch treats `stabilityScore === 0` as "unscored / dormant default — let recency decide" but `0.0` is also a valid "deliberately scored low" value once Session F ships. The patch's `> 0` guard preserves forward-compat for values 0.1–6.9 but loses the literal score 0 case. Cleaner alternative: an explicit `stabilityScored: Boolean` schema field to disambiguate. | This doc §6 Scale Session E "D3 mid-run patch" + Session F to revisit |
 | Pre-pass model call as a quality enhancement to batch-relevance heuristic (D-from-Q10) | Heuristic is sufficient for the first ship per the forgiving-design property; pre-pass is a future enhancement if validation reveals heuristic recall is poor. | This doc §3.1 + future ROADMAP item if triggered |
 | Embedding-based semantic batch-relevance | More precise than stem-based token-overlap but adds dependency. Future enhancement. | This doc §3.1 + future ROADMAP item if triggered |
 | Cross-workflow generalization of tiered serialization (W#5 Conversion Funnel, W#3 Therapeutic Strategy may need similar mechanisms) | Far-future workflows; their scaling profiles may differ. Re-evaluate at each workflow's design interview. | `DATA_CATALOG.md` workflow placeholders 6.x; future workflow design interviews |

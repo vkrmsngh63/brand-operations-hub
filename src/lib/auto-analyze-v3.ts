@@ -984,12 +984,19 @@ export function decideTier(input: TierDeciderInput): Tier {
 
   if (isInBatchRelevantSubtree) return 0;
   if (batchesSinceTouch !== null && batchesSinceTouch <= recencyWindow) return 0;
-  if (stabilityScore < STABILITY_TIER_THRESHOLD) return 0;
+  // Dormant-stability convention: schema default `stabilityScore: 0.0` means
+  // "unscored — let recency decide demotion." Only force Tier 0 when stability
+  // has been deliberately set to a positive value below the threshold. Once
+  // Scale Session F's stability-scoring algorithm ships and starts populating
+  // values 0.1-10.0, this gate fires for genuinely low-scored topics.
+  // See INPUT_CONTEXT_SCALING_DESIGN.md §6 Scale Session E "D3 mid-run patch".
+  if (stabilityScore > 0 && stabilityScore < STABILITY_TIER_THRESHOLD) return 0;
 
-  // High stability, off-batch, not recent. Eligible for Tier 1 or Tier 2.
+  // Off-batch, not recent. Eligible for Tier 1 or Tier 2 — Tier 2 requires the
+  // §2.4 AND-rule (high stability AND deeply stale AND not in subtree).
   const deeplyStale =
     batchesSinceTouch === null || batchesSinceTouch > TIER_2_DEEP_STALE_THRESHOLD;
-  if (deeplyStale) return 2;
+  if (deeplyStale && stabilityScore >= STABILITY_TIER_THRESHOLD) return 2;
   return 1;
 }
 
