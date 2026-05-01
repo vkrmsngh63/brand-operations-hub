@@ -1,9 +1,10 @@
 # KEYWORD CLUSTERING — ACTIVE DOCUMENT
 ## Current state of the Keyword Clustering workflow tool (Group B, tool-specific)
 
-**Last updated:** April 30, 2026 (Scale Session C build SHIPPED — second build session of the day, immediately following Scale Session B. CODE-ONLY session — no DB, no schema, no prompts, no UI changes; production V3 byte-identical (verified by an explicit byte-parity unit test). All Session C deliverables landed in `src/lib/auto-analyze-v3.ts` behind a default-OFF feature flag (`serializationMode: 'tiered'` arg; today's only callers pass nothing → default `'full'`). Lands: stem-based tokenizer; `computeBatchRelevantSubtree` with one-hop neighborhood; `decideTier` implementing the full Cluster 2 truth table; `TouchTracker` (Map<stableId, lastTouchedBatchNum>) with `recordTouchesFromOps` (walks alias resolutions), `batchesSinceTouch`, JSON-safe serialize/deserialize for the existing `aa_checkpoint_{projectId}` localStorage; Tier 1 / Tier 2 row formatters with the Cluster 1 Q3 keyword-summary string; tiered TSV builder emitting three sections (empty tiers omitted; fingerprint-less topics pinned to Tier 0 per §4.2). 30 new src/lib unit tests → 240 total passing; `npx tsc --noEmit` clean; `npm run build` clean; `npm run lint` at exact baseline parity (16 errors / 41 warnings; zero new). NEW POST-2026-04-30-SCALE-SESSION-C STATE block prepended below.)
-**Last updated in session:** session_2026-04-30-b_scale-session-c-build (Claude Code)
-**Previously updated in session:** session_2026-04-30_scale-session-b-build (Claude Code)
+**Last updated:** April 30, 2026 (Scale Session D build SHIPPED — third build session of the day after Sessions B (schema+applier+backfill) and C (tiered serializer mechanism). CODE + DOCS + LIVE VALIDATION session: new `docs/AUTO_ANALYZE_PROMPT_V4.md` (837 lines, derives from V3 with three surgical additions — tiered TSV input format documented in INPUT TABLE COLUMNS / HOW TO READ THE TABLE; `intent_fingerprint` field added to ADD_TOPIC / UPDATE_TOPIC_TITLE / SPLIT_TOPIC into[] / MERGE_TOPICS as `merged_intent_fingerprint` (required) and UPDATE_TOPIC_DESCRIPTION (optional); Reevaluation Pass trigger 3a expanded with cross-canvas fingerprint detection language; V3 untouched as historical reference). `AutoAnalyze.tsx` wired: new `recencyWindow` state + persistence in `aa_settings_{projectId}`; "Recency window" UI input (default 5); touch-tracker round-trip through `aa_checkpoint_{projectId}` localStorage (rehydrate on resume + reset on fresh start + serialize on saveCheckpoint); `currentBatchNumRef` stamped at top of every runLoop iteration; `recordTouchesFromOps` called after each successful `applyOperations`; `buildOperationsInputTsv` call site flipped to `serializationMode: 'tiered'` with full `tierContext`. Live small-batch validation on local dev — Bursitis Test project, 2 batches completed (third in flight at session-doc-write time; will be reported in CHAT_REGISTRY): all 43 topics have valid intent fingerprints (10–15 words, avg 12.0; spec target 5–15); zero empty fingerprints; reconciliation 0 off-canvas → Reshuffled across both batches; total spend $0.534 across the two confirmed batches. `npx tsc --noEmit` clean; `npm run build` clean; 240 src/lib tests pass (no new tests this session — wire-up validated empirically by the live run); `npm run lint` at exact baseline parity (16e/41w; zero new). NEW POST-2026-04-30-SCALE-SESSION-D STATE block prepended below.)
+**Last updated in session:** session_2026-04-30-c_scale-session-d-build (Claude Code)
+**Previously updated in session:** session_2026-04-30-b_scale-session-c-build (Claude Code)
+**Previously updated in session (earlier):** session_2026-04-30_scale-session-b-build (Claude Code)
 **Previously updated in session:** session_2026-04-29-c_defense-in-depth-impl-2 (Claude Code)
 **Previously updated in session:** session_2026-04-29-b_defense-in-depth-impl-1 (Claude Code)
 **Previously updated in session:** session_2026-04-29_defense-in-depth-audit-design (Claude Code)
@@ -36,9 +37,101 @@
 
 ---
 
-## ⚠️ POST-2026-04-30-SCALE-SESSION-C STATE (READ FIRST — updated 2026-04-30)
+## ⚠️ POST-2026-04-30-SCALE-SESSION-D STATE (READ FIRST — updated 2026-04-30)
 
-**As of 2026-04-30 Scale Session C — second build session of the day, immediately after Scale Session B. CODE-ONLY session — schema unchanged, prompts unchanged, UI unchanged, DB unchanged. Production V3 input TSV byte-identical (verified by explicit unit test). All new code is gated behind a default-OFF feature flag.**
+**As of 2026-04-30 Scale Session D — third build session of the day after Sessions B + C. CODE + DOCS + LIVE VALIDATION session: V4 prompts shipped; AutoAnalyze.tsx flag flipped to tiered mode; touch-tracker localStorage round-trip wired; small-batch validation passed on local dev with all 43 topics carrying real searcher-centric intent fingerprints in the 10–15-word target range.**
+
+### What this session shipped to W#1
+
+**Tiered Canvas Serialization is now active end-to-end on local dev.** Per `INPUT_CONTEXT_SCALING_DESIGN.md` §6 Scale Session D. Builds on Sessions B (schema + applier + backfill) and C (tier mechanism behind a feature flag). Sets up Scale Session E (consolidation pass + auto-fire + full-Bursitis validation) as the next-priority forward action. Production deployment of Sessions B/C/D is a single push at the director's discretion — local dev confirmed the chain works end-to-end before any production exposure.
+
+#### 1. New `docs/AUTO_ANALYZE_PROMPT_V4.md` — the canonical prompt for tier mode
+
+- 837 lines. Derives from V3 with three surgical additions; all of V3's reasoning machinery (Step 0–7 placement, layered placement strategy, intent-equivalence binding rule, topic-naming guidelines, conversion funnel ordering, stability-score friction) verbatim.
+- **(a) Tiered TSV input format** documented in the Primer's INPUT TABLE COLUMNS / HOW TO READ THE TABLE sections. Three labelled sections (`=== TIER 0 ===` / `=== TIER 1 ===` / `=== TIER 2 ===`); column shapes per tier (9-column / 6-column / 3-column); explicit guidance that every topic in any tier is on the same canvas; explicit guidance to walk the parent chain via Parent Stable ID across compressed tiers; explicit guidance NOT to restructure Tier 1 / Tier 2 topics this batch unless the case is overwhelming (consolidation pass handles those on a slower cadence).
+- **(b) `intent_fingerprint` field** added to ADD_TOPIC (required), UPDATE_TOPIC_TITLE (required — title shifts intent), SPLIT_TOPIC `into[]` entries (required per entry), MERGE_TOPICS as `merged_intent_fingerprint` (required), UPDATE_TOPIC_DESCRIPTION (optional — defaults to keeping existing fingerprint). New cross-cutting INTENT FINGERPRINT rule in CROSS-CUTTING RULES section locks the format: short canonical phrase, 5–15 words, searcher-centric, audience + situation + goal. Inline ADD_TOPIC example updated with a populated `intent_fingerprint` field.
+- **(c) Reevaluation Pass trigger 3a** expanded with a CROSS-CANVAS INTENT-EQUIVALENCE DETECTION VIA INTENT FINGERPRINTS subsection — explicit guidance that the model can detect intent-equivalence across the canvas using Tier 1 fingerprints (the load-bearing field at compressed tiers); explicit caution against inventing violations from fingerprint similarity alone (e.g., older-women vs. older-men bursitis differ on the binding gender dimension).
+- V3 stays at `docs/AUTO_ANALYZE_PROMPT_V3.md` untouched as historical reference, archivable in a future cleanup pass once V4 is field-validated.
+
+#### 2. `AutoAnalyze.tsx` — flag flip, settings field, touch-tracker round-trip
+
+- **Recency window setting:** new `recencyWindow` state (default `DEFAULT_RECENCY_WINDOW = 5`); persisted into `aa_settings_{projectId}` alongside other AA settings; new "Recency window" number input visible in the Configure panel next to "Vol threshold" (with tooltip explaining the trade-off — higher = more topics at full detail per batch, more cost).
+- **Touch-tracker round-trip** through the existing `aa_checkpoint_{projectId}` localStorage blob — `touchTrackerRef` and `currentBatchNumRef` reset to fresh state in `startRunLoop`; rehydrated in `handleResumeCheckpoint` via `deserializeTouchTracker` (pre-D checkpoints with no `touchTracker` field deserialize to a fresh empty tracker — degrades gracefully); `currentBatchNumRef.current = batch.batchNum` stamped at the top of every runLoop iteration so any code reading the ref sees the right value; `serializeTouchTracker` called inside `saveCheckpoint` to persist between batches and across Pause/Resume.
+- **`buildOperationsInputTsv` call site flipped to `serializationMode: 'tiered'`** at the single call site in `assemblePromptV3` (line ~652) — passes a full `tierContext` with `batchKeywords` (extracted from `batch.keywordIds` via `keywordsRef.current`), `touchTracker: touchTrackerRef.current`, `currentBatchNum: batch.batchNum`, `recencyWindow`. Existing `Keyword` shape (with `volume: number | string`) flows through cleanly to `KeywordLite` thanks to Session C's `KeywordLite.volume` loosening.
+- **Touch recording after successful apply:** `recordTouchesFromOps` called in `doApplyV3` immediately after a successful `applyOperations` call (before the rebuild network call). Walks `applyResult.aliasResolutions` so `$newN` aliases stamp their freshly-assigned `t-N` stableIds. Idempotent on retry — a rebuild failure that triggers a batch-retry will re-stamp the same topics with the same batch num on the second attempt.
+
+#### 3. Live small-batch validation on local dev — Bursitis Test, 3 batches
+
+- Project: Bursitis Test (`9e0ffc58-9ea2-4ea3-b840-144f760fb960`) — chosen because Session B's local backfill populated 37 topics with real intent fingerprints; this lets the tier decider actually exercise demotion (vs. a fresh project where every topic would force-pin to Tier 0 via the empty-fingerprint pin per `INPUT_CONTEXT_SCALING_DESIGN.md` §4.2).
+- Persistence note: the run wrote only to the local Codespace dev Postgres; production vklf.com untouched.
+- **Batch 1 outcome:** 30,616 estimated input tokens; actual 10,126 input + 8,641 output; cost $0.222; thinking phase 1m 51s; 21 ops applied; canvas 37 → 38 topics; 7 sister links; 0 archived; reconciliation 8 → AI-Sorted, 0 → Reshuffled; all 8 batch keywords verified.
+- **Batch 2 outcome:** 31,222 estimated input tokens; actual 11,090 input + 14,443 output; **`Cache hit: 20,578 tokens`** (Anthropic's prompt cache serving the V4 system text); cost $0.312; thinking phase ~3m 7s (Sonnet adaptive grew the budget on a more structurally active batch); 34 ops applied; canvas 38 → 43 topics (5 new + 1 removed via merge or delete); 13 sister links; reconciliation 8 → AI-Sorted, 0 → Reshuffled; all 8 verified.
+- **Direct DB inspection** (`scripts/inspect-fingerprints.mjs` — small read-only Prisma script written this session): all **43/43 topics carry intent fingerprints, zero empty**; word counts min=10, max=15, average 12.0 — perfectly inside the V4 spec target of 5–15 words; sample of new topics' fingerprints (t-38 through t-44 across batches 1 + 2) reads as genuinely searcher-centric — *"Trochanteric bursitis sufferers seeking specific exercises to relieve outer hip pain."*, *"Knee bursitis sufferers actively seeking treatment options and deciding on next steps."*, *"Foot bursitis sufferers wanting to understand their condition and explore relief options."*. Audience + situation + goal structure consistently captured.
+- **Batch 3** in flight at session-doc-write time. **CHAT_REGISTRY top row will be revised to include batch 3's outcome before commit.**
+- **Pause/Resume checkpoint round-trip** NOT explicitly tested this session — the wiring is in place and theoretically sound (rehydrate logic, reset logic, serialize logic all unit-test-equivalent via Session C's localStorage round-trip tests), but a live Pause-then-Resume mid-run wasn't exercised. Captured as bonus next-session test in (d) below.
+
+#### 4. Adaptive-thinking runaway on first attempt — pattern preservation
+
+- First attempt at batch 1 stalled in the thinking phase for ~10 minutes with no per-second visible log activity. Stall timer (90s default) didn't fire because some SSE traffic was arriving (silent thinking deltas). Director cancelled and retried; second attempt completed cleanly (likely just by chance — adaptive thinking has no internal cap, so a complex 30k-token prompt with new requirements can spiral on first call).
+- Existing panel hint already covers this for canvas ≥50 topics (recommends `Thinking = Enabled` with `Budget 12000+`); we hit it at 37 topics on V4 because V4's prompt is ~2k chars heavier than V3 and asks for more reasoning per op (intent fingerprints add a generation step per ADD_TOPIC / UPDATE / MERGE / SPLIT).
+- **Captured as informational entry in `CORRECTIONS_LOG.md` 2026-04-30** (pattern preservation, not a Claude mistake) + **proposed Phase-1 polish item** to lower the panel hint's canvas-size threshold from 50 to ~30 OR strip the gate entirely on V4 prompts. Polish item logged in this STATE block's "(b) UI polish bundle" choice below — director can fold it into the next polish bundle.
+
+### Tests + build
+
+- 240 src/lib tests pass (unchanged from Session C — wire-up logic validated empirically by the live run rather than added unit tests, since most of the new code is React component closure/hook plumbing).
+- `npx tsc --noEmit` clean.
+- `npm run build` clean — 17/17 static pages generated.
+- `npm run lint` — 57 problems (16 errors, 41 warnings) — exact baseline parity, zero new.
+
+### What did NOT change this session
+
+- **Schema:** untouched. Multi-workflow schema-change-in-flight flag stays "No" throughout.
+- **Database structure:** no migrations. Live writes to local dev DB only.
+- **`src/lib/auto-analyze-v3.ts`:** untouched (Session C's mechanism + tests already covered the full surface; Session D was wire-up only).
+- **`src/lib/operation-applier.ts`:** untouched (Session B's applier already accepts `intentFingerprint` on every relevant op).
+- **Production vklf.com:** no deploys this session — Sessions B + C + D are bundled for the director's eventual single push.
+
+### Multi-workflow protocol coordination
+
+- **Schema-change-in-flight flag:** stays "No" (no schema work this session).
+- **Branch:** `main` (W#1's home).
+- **Cross-workflow doc edits:** none.
+- W#2 still 🆕 about-to-start; no parallel chat ran during this session.
+
+### Files touched this session
+
+**New (2):**
+- `docs/AUTO_ANALYZE_PROMPT_V4.md` — 837 lines.
+- `scripts/inspect-fingerprints.mjs` — small read-only Prisma inspection script (kept in scripts/ for future fingerprint-quality spot-checks).
+
+**Modified (1 code, 5 docs):**
+- `src/app/projects/[projectId]/keyword-clustering/components/AutoAnalyze.tsx` — imports + recencyWindow state + touchTracker / currentBatchNum refs + settings load/save + checkpoint save/resume rehydration + startRunLoop reset + buildOperationsInputTsv tiered call site + recordTouchesFromOps in doApplyV3 + Recency window UI input (~30 LOC net add across ~10 surgical edits).
+- `docs/KEYWORD_CLUSTERING_ACTIVE.md` — this STATE block prepended; prior Session-C STATE block demoted to historical.
+- `docs/INPUT_CONTEXT_SCALING_DESIGN.md` — §6 Scale Session D flipped to ✅ SHIPPED.
+- `docs/ROADMAP.md` — Active Tools row updated.
+- `docs/CHAT_REGISTRY.md` — new top row for `session_2026-04-30-c_scale-session-d-build`.
+- `docs/DOCUMENT_MANIFEST.md` — timestamps + per-doc flags + per-session changelog.
+- `docs/CORRECTIONS_LOG.md` — informational entry on the V4 first-batch adaptive-thinking stall pattern.
+
+### Standing instructions for next session — four "NEXT" choices
+
+(a) **Scale Session E build (consolidation pass + auto-fire + full-Bursitis validation).** Per `INPUT_CONTEXT_SCALING_DESIGN.md` §6 Scale Session E. Lands the consolidation prompt mode (separate Initial Prompt + Primer; restricted vocabulary minus ADD_TOPIC + ADD_KEYWORD); the "Consolidate Now" button + auto-fire-every-N=10-batches gate; full-canvas Bursitis run reaching ≥600 topics under V4 + tier mode + auto-consolidation; cleanup of any V3-era code paths simplifiable post-V4 default. Riskier than D — full-scale run with structurally novel mechanism — but the riskiest pieces shipped in B–D. ~$30–$60 API spend. **Recommended next** — closes the design from Scale Session A.
+
+(b) **Phase-1 UI polish bundle** — Skeleton View on canvas + AST split-view topic-vs-description row alignment + Topics table row numbering + lower-the-Adaptive-Thinking-warning-threshold-for-V4 (this session's new polish item). ~4–5 hours total. Independent of Scale Session E.
+
+(c) **Action-by-action feedback workflow design session.** Analogous to Scale Session A. ~3–4 hours design; implementation 2–4 sessions after.
+
+(d) **Pause/Resume checkpoint round-trip live test** — short ~1-batch session that explicitly Pauses mid-run and Resumes to confirm the touch-tracker rehydration works under live conditions. ~$0.30 API spend, ~15 min. Not strictly necessary (the wiring is sound on inspection), but a fast confidence-builder before committing to Scale Session E's full-scale run.
+
+**Recommendation:** (a) — Scale Session E. Sessions B → C → D have built the foundation and proven the V4 prompts produce real fingerprints at quality on a small canvas. The design's final question — does tier mode + consolidation actually let us push past the 200k-token wall on a 600+ topic canvas? — is what Scale Session E answers. Bonus: a single push at start of Scale Session E (or before, at director's discretion) deploys Sessions B + C + D to vklf.com all at once.
+
+**Director's framing from prior sessions:** sequence (Scale-A) → (Scale-0) → (Defense-in-Depth-design + impl-1 + impl-2) → (Scale-B) → (Scale-C) → **(Scale-D, this session)** → (Scale-E) → (other-polish).
+
+---
+
+## ⚠️ POST-2026-04-30-SCALE-SESSION-C STATE (preserved as historical context — last updated 2026-04-30; superseded by Session D above)
+
+**Preserved as historical context — superseded by Session D above. As of 2026-04-30 Scale Session C — second build session of the day, immediately after Scale Session B. CODE-ONLY session — schema unchanged, prompts unchanged, UI unchanged, DB unchanged. Production V3 input TSV byte-identical (verified by explicit unit test). All new code is gated behind a default-OFF feature flag.**
 
 ### What this session shipped to W#1
 

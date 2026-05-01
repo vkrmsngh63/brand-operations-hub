@@ -7,8 +7,14 @@ import {
   applyOperations,
   buildCanvasStateForApplier,
   buildOperationsInputTsv,
+  createTouchTracker,
+  DEFAULT_RECENCY_WINDOW,
+  deserializeTouchTracker,
   materializeRebuildPayload,
   parseOperationsJsonl,
+  recordTouchesFromOps,
+  serializeTouchTracker,
+  type TouchTracker,
 } from '@/lib/auto-analyze-v3';
 import { computeReconciliationUpdates } from '@/lib/reconciliation';
 import {
@@ -132,6 +138,9 @@ export default function AutoAnalyze({
   const [initialPrompt, setInitialPrompt] = useState('');
   const [primerPrompt, setPrimerPrompt] = useState('');
   const [promptExpanded, setPromptExpanded] = useState(false);
+  // Cluster 2 Q6 lock — recency window for the tier decider; persists per-project
+  // via aa_settings_{projectId} alongside other settings. INPUT_CONTEXT_SCALING_DESIGN.md §2.2.
+  const [recencyWindow, setRecencyWindow] = useState(DEFAULT_RECENCY_WINDOW);
 
   /* ── Runtime state ─────────────────────────────────────────── */
   const [aaState, setAaState] = useState<AAState>('IDLE');
@@ -175,6 +184,18 @@ export default function AutoAnalyze({
   const forensicLogRef = useRef<ForensicLog>(new ForensicLog());
   const sessionIdRef = useRef<string>('');
   const [forensicCount, setForensicCount] = useState(0);
+
+  // Touch tracker (Scale Session D — INPUT_CONTEXT_SCALING_DESIGN.md §2.1, Cluster 2 Q5).
+  // Map<stableId, lastTouchedBatchNum>. Drives the recency signal for `decideTier` —
+  // a topic touched within `recencyWindow` batches stays at Tier 0. Reset at
+  // handleStart; serialized into aa_checkpoint_{projectId} via saveCheckpoint;
+  // rehydrated by handleResumeCheckpoint. Stamped after each successful doApplyV3
+  // using the applier's aliasResolutions so $newN aliases resolve to their freshly-
+  // assigned t-N stableIds.
+  const touchTrackerRef = useRef<TouchTracker>(createTouchTracker());
+  // 1-indexed current batch number for the tier decider's batchesSinceTouch math.
+  // Driven by `batch.batchNum` at the top of each iteration of runLoop.
+  const currentBatchNumRef = useRef<number>(0);
 
   // Run-start pre-flight (DEFENSE_IN_DEPTH_AUDIT_DESIGN §6). When the user
   // clicks Start, runPreflight() executes P1..P10 sequentially; the first
@@ -238,6 +259,7 @@ export default function AutoAnalyze({
         if (s.reviewMode !== undefined) setReviewMode(s.reviewMode);
         if (s.initialPrompt !== undefined) setInitialPrompt(s.initialPrompt);
         if (s.primerPrompt !== undefined) setPrimerPrompt(s.primerPrompt);
+        if (typeof s.recencyWindow === 'number' && s.recencyWindow > 0) setRecencyWindow(s.recencyWindow);
       } catch (e) {
         console.warn('Failed to load AA settings', e);
       } finally {
@@ -259,7 +281,7 @@ export default function AutoAnalyze({
       const payload = {
         apiMode, model, seedWords, volumeThreshold, batchSize,
         processingMode, thinkingMode, thinkingBudget, keywordScope,
-        stallTimeout, reviewMode, initialPrompt, primerPrompt,
+        stallTimeout, reviewMode, initialPrompt, primerPrompt, recencyWindow,
       };
       authFetch('/api/user-preferences/' + encodeURIComponent(settingsDbKey), {
         method: 'PUT',
@@ -270,7 +292,7 @@ export default function AutoAnalyze({
     return () => clearTimeout(timer);
   }, [settingsLoaded, settingsDbKey, apiMode, model, seedWords, volumeThreshold, batchSize,
       processingMode, thinkingMode, thinkingBudget, keywordScope,
-      stallTimeout, reviewMode, initialPrompt, primerPrompt]);
+      stallTimeout, reviewMode, initialPrompt, primerPrompt, recencyWindow]);
 
   const logRef = useRef<HTMLDivElement>(null);
 
@@ -353,13 +375,18 @@ export default function AutoAnalyze({
     try {
       const cp = {
         ts: Date.now(),
-        config: { apiMode, apiKey, model, seedWords, volumeThreshold, batchSize, processingMode, thinkingMode, thinkingBudget, keywordScope, stallTimeout, reviewMode, initialPrompt, primerPrompt },
+        config: { apiMode, apiKey, model, seedWords, volumeThreshold, batchSize, processingMode, thinkingMode, thinkingBudget, keywordScope, stallTimeout, reviewMode, initialPrompt, primerPrompt, recencyWindow },
         batches: batchesRef.current,
         currentIdx: currentIdxRef.current,
         totalSpent: totalSpentRef.current,
         batchTier: batchTierRef.current,
         elapsed,
         logEntries,
+        // Scale Session D — touch tracker survives Pause/Resume so the recency
+        // signal continues to identify recently-touched topics across the gap.
+        // Plain object form (Map isn't JSON-serializable directly).
+        touchTracker: serializeTouchTracker(touchTrackerRef.current),
+        currentBatchNum: currentBatchNumRef.current,
       };
       localStorage.setItem(cpKey, JSON.stringify(cp));
     } catch (e) { console.warn('Checkpoint save failed', e); }
@@ -398,6 +425,15 @@ export default function AutoAnalyze({
     setKeywordScope(c.keywordScope); setStallTimeout(c.stallTimeout);
     setReviewMode(c.reviewMode); setInitialPrompt(c.initialPrompt);
     setPrimerPrompt(c.primerPrompt || '');
+    if (typeof c.recencyWindow === 'number' && c.recencyWindow > 0) setRecencyWindow(c.recencyWindow);
+    // Scale Session D — rehydrate the touch tracker so the recency signal
+    // continues across the Pause/Resume gap. Pre-D checkpoints have no
+    // touchTracker field; deserializeTouchTracker treats null/undefined as
+    // "fresh empty tracker," so old checkpoints resume cleanly with a cold
+    // tracker (degrades to "every topic looks not-recently-touched" — same as
+    // a fresh run).
+    touchTrackerRef.current = deserializeTouchTracker(cp.touchTracker);
+    currentBatchNumRef.current = typeof cp.currentBatchNum === 'number' ? cp.currentBatchNum : 0;
     const restoredBatches = cp.batches.map((b: BatchObj) =>
       b.status === 'in_progress' ? { ...b, status: 'queued' as const } : b
     );
@@ -649,10 +685,29 @@ export default function AutoAnalyze({
       systemText += '\n\n--- TOPICS LAYOUT TABLE PRIMER ---\n\n' + primerPrompt;
     }
 
+    // Scale Session D — tiered serialization. Builds the canvas TSV in three
+    // sections (Tier 0 / 1 / 2) per INPUT_CONTEXT_SCALING_DESIGN.md §1. The
+    // tier decider reads `recencyWindow` (Q6 lock; configurable from settings)
+    // and the touch tracker; topics in this batch's relevant subtree, recently
+    // touched, or low-stability stay at Tier 0; settled off-batch topics
+    // compress to Tier 1; deeply stale + high-stability + off-batch topics
+    // compress to Tier 2 (rare; gated by AND-rule + dormant-stability-scoring).
+    const batchKeywords = batch.keywordIds
+      .map((id) => keywordsRef.current.find((k) => k.id === id))
+      .filter((k): k is Keyword => Boolean(k));
     const inputTsv = buildOperationsInputTsv(
       nodesRef.current,
       sisterLinksRef.current,
       keywordsRef.current,
+      {
+        serializationMode: 'tiered',
+        tierContext: {
+          batchKeywords,
+          touchTracker: touchTrackerRef.current,
+          currentBatchNum: batch.batchNum,
+          recencyWindow,
+        },
+      },
     );
 
     let userContent = '';
@@ -848,6 +903,18 @@ export default function AutoAnalyze({
       applyResult.newState.sisterLinks.length + ' sister links, ' +
       applyResult.archivedKeywords.length + ' archived keywords',
       'info',
+    );
+
+    // Scale Session D — record touches now that the applier accepted the ops.
+    // recordTouchesFromOps walks aliasResolutions so $newN aliases stamp their
+    // newly-assigned t-N stableIds. Idempotent: a retry after a downstream
+    // rebuild failure would stamp the same topics with the same batch num.
+    // INPUT_CONTEXT_SCALING_DESIGN.md §2.1 (Cluster 2 Q5 — operation-references-touch).
+    recordTouchesFromOps(
+      touchTrackerRef.current,
+      ops,
+      batch.batchNum,
+      applyResult.aliasResolutions,
     );
 
     // Materialize the rebuild payload.
@@ -1077,6 +1144,11 @@ export default function AutoAnalyze({
         continue;
       }
 
+      // Scale Session D — stamp the current batch number for the tier
+      // decider's recency math. saveCheckpoint persists this so Pause/Resume
+      // doesn't drift the touch-tracker frame of reference.
+      currentBatchNumRef.current = batch.batchNum;
+
       batch.status = 'in_progress';
       batch.startedAt = Date.now();
       batch.attempts++;
@@ -1246,6 +1318,13 @@ export default function AutoAnalyze({
     forensicLogRef.current.clear();
     sessionIdRef.current = newSessionId();
     setForensicCount(0);
+
+    // Scale Session D — fresh run starts with an empty touch tracker. Without
+    // this reset, a tracker carried over from a prior cancelled run would
+    // misclassify topics from this run as "recently touched" relative to a
+    // batch numbering that doesn't match.
+    touchTrackerRef.current = createTouchTracker();
+    currentBatchNumRef.current = 0;
 
     aaLog('Auto-Analyze started. ' + queue.length + ' batches, ' + unsortedCount + ' keywords.', 'info');
     const scopeLabel =
@@ -1674,6 +1753,15 @@ export default function AutoAnalyze({
                 value={volumeThreshold || ''}
                 onChange={e => setVolumeThreshold(parseInt(e.target.value) || 0)}
                 onBlur={() => { if (!volumeThreshold) setVolumeThreshold(1000); }}
+                disabled={aaState !== 'IDLE'}
+              />
+              <span className="aa-label" style={{minWidth:'auto',marginLeft:'12px'}}>Recency window<span className="aa-help">ⓘ<span className="aa-tip">How many recent batches a topic stays at full detail (Tier 0) after being touched by an operation. Higher = more topics shown in full each batch (more cost, less compression). Default 5.</span></span></span>
+              <input
+                className="aa-input aa-input-sm"
+                type="number"
+                value={recencyWindow || ''}
+                onChange={e => setRecencyWindow(parseInt(e.target.value) || 0)}
+                onBlur={() => { if (!recencyWindow) setRecencyWindow(DEFAULT_RECENCY_WINDOW); }}
                 disabled={aaState !== 'IDLE'}
               />
               <div className="aa-toggle" onClick={() => { if (aaState === 'IDLE') setReviewMode(!reviewMode); }}>

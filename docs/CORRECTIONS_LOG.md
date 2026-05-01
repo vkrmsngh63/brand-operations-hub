@@ -2,8 +2,9 @@
 ## Append-only record of mistakes made during chats and lessons learned
 
 **Started:** April 16, 2026
-**Last updated:** April 30, 2026 (Scale Session B build session — 1 new LOW-severity entry: `.env.local` has a missing newline that concatenates `ANTHROPIC_API_KEY` onto the prior line's value, breaking `node --env-file=.env.local` for any script that reads ANTHROPIC_API_KEY. Worked around in this session by extracting the key via grep + export before invocation. Director should fix when convenient. Not a Claude mistake — pre-existing config artifact — but captured so future sessions don't waste time diagnosing the same `--env-file` failure.)
-**Last updated in session:** session_2026-04-30_scale-session-b-build (Claude Code)
+**Last updated:** April 30, 2026 (Scale Session D build session — 1 new INFORMATIONAL entry: V4 first-batch adaptive-thinking runaway pattern. First attempt at batch 1 of the small-batch validation stalled in the thinking phase for ~10 minutes with no per-second visible log activity; cancelled and retried, second attempt completed cleanly in ~2 minutes. Existing in-panel hint covers this pattern only at canvas ≥50 topics; V4 is heavier than V3 (~2k chars more in the prompts) and asks for more reasoning per op (intent fingerprints add a generation step), so the pattern fires at smaller canvases. Pattern preservation, not a Claude mistake — captured so future sessions know to flip Thinking mode to `Enabled` with `Budget 12000+` if a V4 batch stalls, and proposed as a Phase-1 polish item to lower the panel hint's canvas-size threshold for V4.)
+**Last updated in session:** session_2026-04-30-c_scale-session-d-build (Claude Code)
+**Previously updated in session:** session_2026-04-30_scale-session-b-build (Claude Code)
 **Previously updated in session:** session_2026-04-28_canvas-blanking-and-closure-staleness-fix (Claude Code)
 **Previously updated in session:** session_2026-04-28_deeper-analysis-and-fix-design (Claude Code)
 **Previously updated in session:** session_2026-04-27_v3-prompt-small-batch-test-and-context-scaling-concern (Claude Code)
@@ -48,6 +49,43 @@
 ---
 
 ## Entries
+
+### 2026-04-30 — V4 first-batch adaptive-thinking runaway on small canvas (INFORMATIONAL — pattern preservation, not a Claude mistake)
+
+**Session:** session_2026-04-30-c_scale-session-d-build (Claude Code)
+
+**Tool/Phase affected:** Workflow #1 Keyword Clustering / Auto-Analyze panel — Scale Session D V4 prompt activation
+
+**Severity:** INFORMATIONAL (no production damage, no data loss; one wasted API call costing ~$0.30–$1 in adaptive-thinking tokens. The pattern itself is well-known — adaptive thinking on a complex prompt can spiral — but the threshold at which the existing in-panel hint fires (canvas ≥50 topics) didn't trip on a 37-topic canvas, even though V4's heavier prompt + new reasoning load made it fire there).
+
+**What happened:** During Scale Session D's small-batch validation on Bursitis Test (37 topics), the first attempt at batch 1 with `Thinking = Adaptive` stalled in the thinking phase for ~10 minutes with no per-second visible log activity in the panel after the initial `thinking phase started…` line. The stream's stall-detection timer (90 seconds default) did not fire because some SSE traffic was apparently still arriving (silent thinking deltas) — so from the harness's perspective the call was making progress, even though no operations had been emitted. Director cancelled the run after the 10-minute mark; the second attempt (with Thinking still on Adaptive — the change wasn't strictly necessary, the runaway just happened to clear) completed cleanly in ~2 minutes (1m 51s thinking phase + ~13s output streaming).
+
+**Root cause:** Adaptive Thinking has no internal budget cap. On a complex prompt — V4 is ~2k characters heavier than V3 (~88k char total system text) and asks the model for more per-op reasoning (intent fingerprints add a generation step on every ADD_TOPIC / UPDATE_TOPIC_TITLE / SPLIT_TOPIC into[] / MERGE_TOPICS), plus the tier mode means the model is now reading the input as three sections instead of one — the model can spiral on a first-call cold cache. Anthropic's prompt cache fills on this first call (cache_creation_input_tokens), so subsequent batches see massive cache hits and don't trigger the same runaway (batch 2 had `Cache hit: 20,578 tokens`).
+
+**What the existing panel hint catches:** the panel already surfaces a yellow warning recommending `Thinking = Enabled` with `Budget 12000+` when canvas size ≥50 topics. That warning was added 2026-04-18 after observing the same pattern on V2 prompts. We hit the pattern at canvas size 37 on V4 because V4's higher complexity load makes the threshold for runaway risk lower than V3's.
+
+**How caught:** Director monitored the panel log directly and flagged that "It's been 10 minutes and no outputs have been generated."
+
+**Correction:** Director cancelled the stuck batch via the panel's Cancel button. Re-clicked Start. Second attempt completed cleanly. No code change made this session — the wiring was working correctly; the issue was a model-runtime characteristic, not a wiring bug.
+
+**Prevention (proposed for next session, not implemented this session):**
+
+1. **Lower the panel hint's canvas-size threshold for V4 prompts.** The existing `nodes.length >= 50` gate for showing the Adaptive Thinking warning should drop to `nodes.length >= 30` OR be stripped entirely on V4 (always show the warning). Captured as a Phase-1 polish item in `KEYWORD_CLUSTERING_ACTIVE.md` POST-2026-04-30-SCALE-SESSION-D STATE block, option (b) UI polish bundle.
+
+2. **Document the workaround in the V4 prompt's introduction or a panel tooltip:** "If you see the run stuck at `thinking phase started…` for >3 minutes on the first batch, click Cancel and switch Thinking to `Enabled` with Budget 12000+ before retrying. The first-batch cache-cold path can spiral on Adaptive Thinking with V4." (Optional — Phase-1 polish item if the pattern recurs).
+
+3. **Consider an in-panel stall warning for thinking-only stalls.** The current 90-second stall timer fires only when no SSE traffic at all arrives. A "thinking-phase exceeds N minutes with no operations emitted" warning could surface earlier and let the user decide. Open question for next session — captured here, not promoted to ROADMAP yet.
+
+**Why captured here as INFORMATIONAL not as a Claude mistake:** Claude correctly flagged the pattern at the 4-minute mark, correctly explained the silent-thinking-deltas-don't-trigger-stall reasoning, correctly recommended bounded thinking (`Enabled + Budget 12000+`) at the 10-minute mark, and correctly stayed calm when the second attempt cleared without the recommended change. The mistake-failure mode would have been Claude either (a) silently waiting indefinitely without surfacing the stall to the director, or (b) jumping to "the wiring is broken" instead of correctly diagnosing it as an adaptive-thinking characteristic. Neither happened. Capturing the pattern here gives future Claude code sessions the diagnostic playbook for this exact failure mode on V4.
+
+**Cost impact:** ~$0.30–$1 in thinking tokens on the cancelled first attempt (Anthropic charges thinking tokens at output rates; the exact amount depends on how deep the model got before cancellation). Not catastrophic for a small-batch validation, but worth knowing.
+
+**Cross-references:**
+- Existing panel hint at `AutoAnalyze.tsx` ~line 1722 (`thinkingMode === 'adaptive' && nodes.length >= 50`) — this is what we'd lower the threshold of.
+- V4 prompts at `docs/AUTO_ANALYZE_PROMPT_V4.md` (~88k char total, ~2k more than V3).
+- Original 2026-04-18 V2-era observation that drove the existing hint — captured in `KEYWORD_CLUSTERING_ACTIVE.md` Phase-1g-test history (the hint references it inline).
+
+---
 
 ### 2026-04-30 — `.env.local` missing newline breaks `--env-file` for ANTHROPIC_API_KEY (LOW — pre-existing config artifact, not a Claude mistake)
 

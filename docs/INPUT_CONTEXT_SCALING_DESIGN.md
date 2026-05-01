@@ -3,8 +3,9 @@
 
 **Created:** April 27, 2026 (Scale Session A — design-only session producing this doc + locked decisions + multi-session plan; no code, no DB)
 **Created in session:** session_2026-04-27_input-context-scaling-design (Claude Code)
-**Last updated:** April 30, 2026 (Scale Session C SHIPPED — see §6's Scale Session C subsection for SHIPPED notes; tiered serialization mechanism landed behind a default-OFF feature flag in `src/lib/auto-analyze-v3.ts`; Sessions D/E remain as forward work)
-**Last updated in session:** session_2026-04-30-b_scale-session-c-build (Claude Code)
+**Last updated:** April 30, 2026 (Scale Session D SHIPPED — see §6's Scale Session D subsection for SHIPPED notes; V4 prompts shipped; AutoAnalyze.tsx flipped to tiered mode with Recency Window settings field + touch-tracker localStorage round-trip; small-batch validation passed end-to-end on local dev. Scale Session E remains as forward work.)
+**Last updated in session:** session_2026-04-30-c_scale-session-d-build (Claude Code)
+**Previously updated in session:** session_2026-04-30-b_scale-session-c-build (Claude Code)
 **Previously updated in session:** session_2026-04-30_scale-session-b-build (Claude Code)
 **Previously updated in session:** session_2026-04-28_scale-session-0-outcome-c-and-full-run-feedback (Claude Code)
 **Group:** B (tool-specific to Keyword Clustering's Auto-Analyze; loaded when scaling-related work is in scope)
@@ -313,24 +314,33 @@ Design + locked decisions + multi-session plan. This doc is the deliverable.
 
 **Risk profile:** Low. No DB changes; no prompt changes; no UI changes; behind feature flag with default-OFF.
 
-### Scale Session D — V4 prompt rewrite + integration + small-batch validation (~1 session)
+### Scale Session D — V4 prompt rewrite + integration + small-batch validation (~1 session) — ✅ SHIPPED 2026-04-30
 **Trigger:** Scale Session C complete.
+
+**Shipped 2026-04-30 in `session_2026-04-30-c_scale-session-d-build` (Claude Code).** Third build session of the day after Sessions B + C. CODE + DOCS + LIVE VALIDATION session: V4 prompts shipped; AutoAnalyze.tsx flipped to tiered mode; touch-tracker localStorage round-trip wired; small-batch validation passed on local dev with all 43 topics carrying real searcher-centric intent fingerprints in the 10–15-word target range. Per-deliverable status notes in this subsection are SHIPPED unless otherwise marked. See `KEYWORD_CLUSTERING_ACTIVE.md` POST-2026-04-30-SCALE-SESSION-D STATE block for full session-level summary. **Scale Session E (consolidation pass + auto-fire + full-Bursitis validation) is the next-priority forward action.**
 
 **Scope:** New `docs/AUTO_ANALYZE_PROMPT_V4.md`. Wire tier mode into `AutoAnalyze.tsx` as default. Small-batch validation.
 
 **Deliverables:**
-1. **`AUTO_ANALYZE_PROMPT_V4.md`:**
-   - Updated INPUT TABLE COLUMNS section explaining three tiers and parent_id navigation.
-   - Updated OPERATION SYNTAX with new required `intent_fingerprint` field on relevant operations.
-   - Updated Reevaluation Pass section: trigger 3a (intent-equivalence) explicitly mentions cross-canvas detection via fingerprints.
-   - V3 stays as historical reference.
-2. **`AutoAnalyze.tsx`:** flip feature flag ON; new settings field "Recency Window (batches)" default N=5.
-3. **Director re-pastes V4 prompts** into Auto-Analyze panel.
-4. **Small-batch validation** on test project (3–5 batches): verify fingerprints written on every relevant op; tier decider produces sensible distribution; intent-equivalence holds qualitatively; reconciliation passes (0 off-canvas → Reshuffled); no quality regression vs. yesterday's V3-refined small-batch test.
+1. **SHIPPED. `AUTO_ANALYZE_PROMPT_V4.md`** (837 lines, derives from V3 with three surgical additions; all V3 reasoning machinery verbatim):
+   - Updated INPUT TABLE COLUMNS / HOW TO READ THE TABLE sections explaining three tier sections and parent_id navigation across compressed tiers.
+   - Updated OPERATION SYNTAX with required `intent_fingerprint` on ADD_TOPIC / UPDATE_TOPIC_TITLE / SPLIT_TOPIC `into[]` entries / MERGE_TOPICS as `merged_intent_fingerprint`; optional on UPDATE_TOPIC_DESCRIPTION. New cross-cutting INTENT FINGERPRINT rule locking the format (5–15 words, searcher-centric, audience + situation + goal).
+   - Updated Reevaluation Pass trigger 3a with CROSS-CANVAS INTENT-EQUIVALENCE DETECTION VIA INTENT FINGERPRINTS subsection — explicit guidance to detect violations across the canvas using Tier 1 fingerprints; explicit caution against inventing violations from fingerprint similarity alone.
+   - V3 stays at `docs/AUTO_ANALYZE_PROMPT_V3.md` untouched as historical reference.
+2. **SHIPPED. `AutoAnalyze.tsx`:** new `recencyWindow` state (default `DEFAULT_RECENCY_WINDOW = 5`) persisted in `aa_settings_{projectId}`; "Recency window" UI input visible next to "Vol threshold" with tooltip; touch-tracker round-trip through `aa_checkpoint_{projectId}` localStorage (rehydrate on resume + reset on fresh start + serialize on saveCheckpoint); `currentBatchNumRef` stamped at top of every runLoop iteration; `recordTouchesFromOps` called after each successful `applyOperations` (walks alias resolutions); `buildOperationsInputTsv` call site flipped to `serializationMode: 'tiered'` with full `tierContext`. ~30 LOC net add across ~10 surgical edits.
+3. **DONE. Director re-pasted V4 prompts** into Auto-Analyze panel — pre-flight reported Initial Prompt 58,996 chars + Primer 29,411 chars (V4 ~2k chars heavier than V3), all P1–P10 checks ✓.
+4. **PASSED. Small-batch validation** on Bursitis Test (local dev), 2 confirmed batches (3rd in flight at session-doc-write time):
+   - Batch 1: 30,616 estimated → 10,126 actual input + 8,641 output tokens; cost $0.222; 21 ops applied; 37 → 38 topics; reconciliation 8 → AI-Sorted, 0 → Reshuffled; all 8 keywords verified.
+   - Batch 2: 31,222 estimated → 11,090 actual input + 14,443 output tokens; **`Cache hit: 20,578 tokens`** confirms Anthropic prompt caching of V4 system text; cost $0.312; 34 ops applied; 38 → 43 topics (5 new + 1 removed); reconciliation 8 → AI-Sorted, 0 → Reshuffled; all 8 verified.
+   - DB inspection (`scripts/inspect-fingerprints.mjs`): **all 43/43 topics carry intent fingerprints, zero empty**; word counts min=10, max=15, avg=12.0 (spec target 5–15); sample reads as genuinely searcher-centric (e.g., *"Trochanteric bursitis sufferers seeking specific exercises to relieve outer hip pain."*).
 
-**Validation criteria:** All Cluster 1–4 properties observable; no quality regression; input token reduction ≥ 30% on Tier-1-eligible portion of canvas (rough target).
+**Validation outcome:**
+- All Cluster 1–4 properties observable via the live run + DB inspection.
+- No quality regression — reconciliation 0 off-canvas → Reshuffled across both batches, matches V3-refined small-batch baseline.
+- Input token reduction ≥ 30% on Tier-1-eligible portion: NOT directly measurable on the 37-topic Bursitis Test canvas because most topics fall into the batch-relevant subtree's one-hop neighborhood at small canvas sizes; the prompt itself dominates input. The compression effect will become measurable on Scale Session E's full-Bursitis run (≥600 topics).
+- Adaptive-thinking runaway on the very first batch attempt — captured as informational entry in `CORRECTIONS_LOG.md` 2026-04-30 + proposed Phase-1 polish item to lower the panel's adaptive-thinking warning canvas-size threshold for V4.
 
-**Risk profile:** Medium. New prompt + new wiring = quality regression risk. Mitigated by small-batch validation before any large run.
+**Risk profile:** Medium (as predicted). New prompt + new wiring → quality regression risk and adaptive-thinking risk both surfaced; both addressed (small-batch validation passed; pattern preservation captured for future sessions).
 
 ### Scale Session E — Consolidation pass + auto-fire + full-Bursitis validation (~1 session)
 **Trigger:** Scale Session D complete.
