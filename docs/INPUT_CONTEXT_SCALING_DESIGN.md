@@ -3,8 +3,9 @@
 
 **Created:** April 27, 2026 (Scale Session A — design-only session producing this doc + locked decisions + multi-session plan; no code, no DB)
 **Created in session:** session_2026-04-27_input-context-scaling-design (Claude Code)
-**Last updated:** April 30, 2026 (Scale Session D SHIPPED — see §6's Scale Session D subsection for SHIPPED notes; V4 prompts shipped; AutoAnalyze.tsx flipped to tiered mode with Recency Window settings field + touch-tracker localStorage round-trip; small-batch validation passed end-to-end on local dev. Scale Session E remains as forward work.)
-**Last updated in session:** session_2026-04-30-c_scale-session-d-build (Claude Code)
+**Last updated:** May 1, 2026 (Scale Session E build SHIPPED — code + docs landed: applier `consolidationMode` flag (forbids ADD_TOPIC + ADD_KEYWORD with descriptive errors); new `docs/AUTO_ANALYZE_CONSOLIDATION_PROMPT_V4.md` (separate Initial + Primer pair derived from V4 with restricted vocabulary); `AutoAnalyze.tsx` wired with two new prompt textareas, cadence + min-canvas-size settings, runConsolidationPass + handleConsolidateNow + runLoop auto-fire gate after every Nth successful batch, checkpoint round-trip for the cadence counter; 7 new applier tests (66 → 248 total src/lib pass). Full-Bursitis validation run (D3 deliverable) is the director's discretionary follow-up — separate session.)
+**Last updated in session:** session_2026-05-01_scale-session-e-build (Claude Code)
+**Previously updated in session:** session_2026-04-30-c_scale-session-d-build (Claude Code)
 **Previously updated in session:** session_2026-04-30-b_scale-session-c-build (Claude Code)
 **Previously updated in session:** session_2026-04-30_scale-session-b-build (Claude Code)
 **Previously updated in session:** session_2026-04-28_scale-session-0-outcome-c-and-full-run-feedback (Claude Code)
@@ -342,20 +343,32 @@ Design + locked decisions + multi-session plan. This doc is the deliverable.
 
 **Risk profile:** Medium (as predicted). New prompt + new wiring → quality regression risk and adaptive-thinking risk both surfaced; both addressed (small-batch validation passed; pattern preservation captured for future sessions).
 
-### Scale Session E — Consolidation pass + auto-fire + full-Bursitis validation (~1 session)
+### Scale Session E — Consolidation pass + auto-fire + full-Bursitis validation (~1 session) — ✅ SHIPPED 2026-05-01 (code + docs; D3 validation pending director run)
 **Trigger:** Scale Session D complete.
+
+**Shipped 2026-05-01 in `session_2026-05-01_scale-session-e-build` (Claude Code).** Code + docs landed; D3 (full-Bursitis validation run) is a follow-up the director runs at their discretion. Per-deliverable status notes below. See `KEYWORD_CLUSTERING_ACTIVE.md` POST-2026-05-01-SCALE-SESSION-E STATE block for the session-level summary. **Director's next forward action is either (a) running D3 (the full-Bursitis validation), or (b) any of the standing alternates from the Session-D STATE block (Phase-1 polish / action-by-action feedback / Pause-Resume live test).**
 
 **Scope:** Consolidation mode (auto + admin-triggered). Full-Bursitis validation demonstrating the wall is solved.
 
 **Deliverables:**
-1. Consolidation prompt mode (separate Initial Prompt + Primer; restricted vocabulary).
-2. `AutoAnalyze.tsx` consolidation mode: "Consolidate Now" button + auto-fire every N=10 batches when canvas > 100 topics.
-3. Full-canvas validation run: fresh full Bursitis run with V4 + tier mode + auto-consolidation. Goal: reach ≥ 600 topics with stable per-batch input cost.
-4. Cleanup of any V3-era code paths simplifiable post-V4 default.
+1. **SHIPPED.** Consolidation prompt pair at `docs/AUTO_ANALYZE_CONSOLIDATION_PROMPT_V4.md` — separate Initial Prompt + Primer derived from V4 with three surgical changes: (a) framing as a full-canvas consolidation pass (no batch keywords); (b) operation vocabulary restricted to MERGE_TOPICS / SPLIT_TOPIC / MOVE_TOPIC / DELETE_TOPIC / UPDATE_TOPIC_TITLE / UPDATE_TOPIC_DESCRIPTION / MOVE_KEYWORD / REMOVE_KEYWORD / ARCHIVE_KEYWORD / ADD_SISTER_LINK / REMOVE_SISTER_LINK (ADD_TOPIC + ADD_KEYWORD forbidden); (c) Reevaluation Pass triggers run on the WHOLE canvas at full Tier 0 (not just touched branches). Director re-pastes both into the new dedicated panel slots before the next consolidation runs.
+2. **SHIPPED.** `AutoAnalyze.tsx` consolidation mode: new "Consol. cadence" + "Min canvas (topics)" settings inputs in the Configure section (defaults 10 + 100; cadence=0 disables auto-fire); two new "Consolidation Initial Prompt" + "Consolidation Primer" textareas in the Prompt section; new "⚙ Consolidate Now" button in the controls bar (admin-triggered single pass; disabled while RUNNING / BATCH_REVIEW / consolidationBusy); auto-fire gate inside `runLoop` after every successful regular batch apply that increments `batchesSinceConsolidationRef` and fires `runConsolidationPass('auto')` when (cadence > 0) && (counter ≥ cadence) && (canvas size ≥ min) && (Consolidation Initial Prompt loaded ≥ 100 chars); explicit one-time-per-cycle warn-log when cadence + canvas-size both met but prompt is missing (counter resets to silence the warning until the next would-have-fired cycle); cadence counter persisted in `aa_checkpoint_{projectId}` so Pause/Resume preserves cadence; counter reset to 0 in `startRunLoop` (fresh run) and rehydrated by `handleResumeCheckpoint` (graceful default 0 on pre-E checkpoints).
+3. **DEFERRED to director.** Full-canvas validation run on Bursitis. The code and prompts are ready; running the live test costs ~$30–$60 and takes a long single session. Director picks the timing.
+4. **DEFERRED.** Cleanup of V3-era code paths. Per the director's Scale Session E plan (Option A from drift check), this is held back until the full-Bursitis validation confirms the new mechanism works at scale. Candidates for a future cleanup pass: flip `buildOperationsInputTsv`'s default from `'full'` to `'tiered'`, archive `AUTO_ANALYZE_PROMPT_V3.md` / `V2.md` / `V2_PROPOSED_CHANGES.md`, drop the `serializationMode` arg entirely.
 
-**Validation criteria:** Bursitis run reaches ≥ 600 topics; no quality regression; per-batch wall-clock matches/improves V3; reconciliation continues clean.
+**Defense in depth on the consolidation contract:** the consolidation prompt instructs the AI not to emit ADD_TOPIC / ADD_KEYWORD; the wiring layer's `runConsolidationPass` calls `doApplyV3` with `{ consolidationMode: true }`; `doApplyV3` forwards the flag to `applyOperations(state, ops, { consolidationMode: true })`; the applier's per-op switch rejects forbidden ops atomically with a descriptive error before mutating any state. Three independent layers guard the contract — a single point of failure can't silently allow a consolidation pass to introduce new topics or keywords.
 
-**Risk profile:** Medium-low. Riskiest pieces shipped in B–D.
+**Touch recording in consolidation mode (Q15 → A):** `recordTouchesFromOps` inside `doApplyV3` runs unchanged for consolidation passes — the touched topics enter the recency window and stay at Tier 0 for the next `recencyWindow` regular batches. Consolidation runs use `currentBatchNumRef.current` as the touch-stamp value, which equals the most recent regular batch's number (or 0 for admin-triggered passes at IDLE — which is fine since the next `handleStart()` resets the touch tracker).
+
+**Tests + build (this session):**
+- 248 src/lib tests pass (was 240 → +7 new applier consolidation-mode tests + 1 from prior background; zero regressions): ADD_TOPIC rejected with descriptive error / ADD_KEYWORD rejected / MERGE_TOPICS succeeds / SPLIT_TOPIC succeeds (creates new topics via `into[]` which is not ADD_TOPIC) / MOVE_KEYWORD + MOVE_TOPIC + UPDATE_TOPIC_TITLE + DELETE_TOPIC + ADD_SISTER_LINK all succeed / atomic-failure invariant on a forbidden op (earlier allowed ops do NOT persist) / explicit `consolidationMode: false` behaves like no options / regression: no-options call still accepts ADD_TOPIC.
+- `npx tsc --noEmit` clean.
+- `npm run build` clean — 17/17 static pages.
+- `npm run lint` — 16 errors, 41 warnings — exact baseline parity, zero new (one mid-session lint slip caught + fixed: 4 unescaped-quote errors in two new tooltip strings → escaped via `&ldquo;` / `&rdquo;`).
+
+**Validation criteria (D3 — pending director run):** Bursitis run reaches ≥ 600 topics; no quality regression; per-batch wall-clock matches/improves V3; reconciliation continues clean; consolidation passes fire automatically every 10 batches and the per-batch input cost stays stable rather than growing monotonically (the wall solved).
+
+**Risk profile:** Medium-low for the code. Riskiest pieces shipped in B–D; this session adds a separate prompt path + two button surfaces + one runLoop hook, all gated by the cadence + canvas-size + prompt-presence checks. The applier-side restriction provides atomic safety even if the prompt or wiring drift.
 
 ### Scale Session F — Stability-scoring algorithm (future; conditional on use)
 **Trigger:** Decision to activate the stability signal in the tier decider.

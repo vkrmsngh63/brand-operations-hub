@@ -1204,3 +1204,172 @@ test('Fingerprint: SPLIT_TOPIC rejects an empty fingerprint on any into[] entry'
     'into["$one"].intentFingerprint must be a non-empty string when present',
   );
 });
+
+// ============================================================
+// Consolidation mode (Scale Session E — INPUT_CONTEXT_SCALING_DESIGN.md §4.1
+// Cluster 4 Q14 lock: ADD_TOPIC + ADD_KEYWORD forbidden; everything else allowed)
+// ============================================================
+
+test('Consolidation: ADD_TOPIC is rejected with descriptive error', () => {
+  const state = emptyState(50);
+  expectErr(
+    applyOperations(
+      state,
+      [{ type: 'ADD_TOPIC', id: '$new1', title: 'X', description: '', parent: null, relationship: null }],
+      { consolidationMode: true },
+    ),
+    'ADD_TOPIC is not allowed in consolidation mode',
+  );
+});
+
+test('Consolidation: ADD_KEYWORD is rejected with descriptive error', () => {
+  const state = stateWith([node('t-1', { keywordPlacements: { 'kw-a': 'primary' } })], 100);
+  expectErr(
+    applyOperations(
+      state,
+      [{ type: 'ADD_KEYWORD', topic: 't-1', keywordId: 'kw-new', placement: 'primary' }],
+      { consolidationMode: true },
+    ),
+    'ADD_KEYWORD is not allowed in consolidation mode',
+  );
+});
+
+test('Consolidation: MERGE_TOPICS succeeds (allowed vocabulary)', () => {
+  const state = stateWith(
+    [
+      node('t-1', { keywordPlacements: { 'kw-a': 'primary' } }),
+      node('t-2', { keywordPlacements: { 'kw-b': 'primary' } }),
+    ],
+    100,
+  );
+  const r = expectOk(
+    applyOperations(
+      state,
+      [
+        {
+          type: 'MERGE_TOPICS',
+          sourceId: 't-1',
+          targetId: 't-2',
+          mergedTitle: 'Merged',
+          mergedDescription: 'Combined',
+          reason: 'consolidation: intent-equivalence violation',
+        },
+      ],
+      { consolidationMode: true },
+    ),
+  );
+  // Source removed, target absorbed both keywords.
+  assert.equal(r.newState.nodes.length, 1);
+  const target = r.newState.nodes[0];
+  assert.equal(target.stableId, 't-2');
+  assert.equal(target.title, 'Merged');
+  assert.deepEqual(Object.keys(target.keywordPlacements).sort(), ['kw-a', 'kw-b']);
+});
+
+test('Consolidation: SPLIT_TOPIC succeeds (allowed vocabulary; creates topics via into[] which is not ADD_TOPIC)', () => {
+  const state = stateWith(
+    [
+      node('t-1', { keywordPlacements: { 'kw-a': 'primary', 'kw-b': 'primary' } }),
+    ],
+    100,
+  );
+  const r = expectOk(
+    applyOperations(
+      state,
+      [
+        {
+          type: 'SPLIT_TOPIC',
+          sourceId: 't-1',
+          into: [
+            { id: '$one', title: 'First', description: '', keywordIds: ['kw-a'] },
+            { id: '$two', title: 'Second', description: '', keywordIds: ['kw-b'] },
+          ],
+          reason: 'consolidation: distinct compound intents',
+        },
+      ],
+      { consolidationMode: true },
+    ),
+  );
+  assert.equal(r.newState.nodes.length, 2);
+});
+
+test('Consolidation: MOVE_KEYWORD, MOVE_TOPIC, UPDATE_TOPIC_TITLE, DELETE_TOPIC, ADD_SISTER_LINK all succeed', () => {
+  const state = stateWith(
+    [
+      node('t-1'),
+      node('t-2', { parentStableId: 't-1', relationship: 'linear', keywordPlacements: { 'kw-a': 'primary' } }),
+      node('t-3', { parentStableId: 't-1', relationship: 'linear', keywordPlacements: { 'kw-b': 'primary' } }),
+      node('t-4', { parentStableId: 't-1', relationship: 'linear' }),
+    ],
+    100,
+  );
+  const r = expectOk(
+    applyOperations(
+      state,
+      [
+        { type: 'MOVE_KEYWORD', keywordId: 'kw-a', from: 't-2', to: 't-3', placement: 'primary' },
+        { type: 'MOVE_TOPIC', id: 't-3', newParent: null, newRelationship: 'linear', reason: 'promote to root' },
+        { type: 'UPDATE_TOPIC_TITLE', id: 't-2', to: 'Renamed' },
+        { type: 'DELETE_TOPIC', id: 't-4', reason: 'empty', reassignKeywordsTo: 'ARCHIVE' },
+        { type: 'ADD_SISTER_LINK', topicA: 't-2', topicB: 't-3' },
+      ],
+      { consolidationMode: true },
+    ),
+  );
+  // t-4 deleted; the rest survive with the structural changes.
+  assert.equal(r.newState.nodes.length, 3);
+  assert.equal(r.newState.nodes.find((n) => n.stableId === 't-2')!.title, 'Renamed');
+  assert.equal(r.newState.nodes.find((n) => n.stableId === 't-3')!.parentStableId, null);
+  assert.equal(r.newState.sisterLinks.length, 1);
+});
+
+test('Consolidation: a forbidden op fails atomically — earlier allowed ops do NOT persist', () => {
+  const state = stateWith(
+    [
+      node('t-1', { keywordPlacements: { 'kw-a': 'primary' } }),
+      node('t-2', { keywordPlacements: { 'kw-b': 'primary' } }),
+    ],
+    100,
+  );
+  const result = applyOperations(
+    state,
+    [
+      // Allowed — would succeed alone
+      { type: 'UPDATE_TOPIC_TITLE', id: 't-1', to: 'New title' },
+      // Forbidden — should reject the whole batch
+      { type: 'ADD_TOPIC', id: '$new1', title: 'X', description: '', parent: null, relationship: null },
+    ],
+    { consolidationMode: true },
+  );
+  expectErr(result, 'ADD_TOPIC is not allowed in consolidation mode');
+  // State is never mutated on a failed apply (atomic contract). Sanity check:
+  // the input state's first node still has its original title.
+  assert.equal(state.nodes[0].title, 't-1');
+});
+
+test('Consolidation: explicit consolidationMode=false behaves like no options (ADD_TOPIC + ADD_KEYWORD allowed)', () => {
+  const state = stateWith([node('t-1', { keywordPlacements: { 'kw-a': 'primary' } })], 100);
+  expectOk(
+    applyOperations(
+      state,
+      [{ type: 'ADD_TOPIC', id: '$new1', title: 'X', description: '', parent: null, relationship: null }],
+      { consolidationMode: false },
+    ),
+  );
+  expectOk(
+    applyOperations(
+      state,
+      [{ type: 'ADD_KEYWORD', topic: 't-1', keywordId: 'kw-new', placement: 'secondary' }],
+      { consolidationMode: false },
+    ),
+  );
+});
+
+test('Consolidation: regression — calling applyOperations without options arg still accepts ADD_TOPIC (backwards compat)', () => {
+  const state = emptyState(50);
+  expectOk(
+    applyOperations(state, [
+      { type: 'ADD_TOPIC', id: '$new1', title: 'Root', description: '', parent: null, relationship: null },
+    ]),
+  );
+});

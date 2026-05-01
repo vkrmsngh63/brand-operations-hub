@@ -1,8 +1,9 @@
 # KEYWORD CLUSTERING — ACTIVE DOCUMENT
 ## Current state of the Keyword Clustering workflow tool (Group B, tool-specific)
 
-**Last updated:** April 30, 2026 (Scale Session D build SHIPPED — third build session of the day after Sessions B (schema+applier+backfill) and C (tiered serializer mechanism). CODE + DOCS + LIVE VALIDATION session: new `docs/AUTO_ANALYZE_PROMPT_V4.md` (837 lines, derives from V3 with three surgical additions — tiered TSV input format documented in INPUT TABLE COLUMNS / HOW TO READ THE TABLE; `intent_fingerprint` field added to ADD_TOPIC / UPDATE_TOPIC_TITLE / SPLIT_TOPIC into[] / MERGE_TOPICS as `merged_intent_fingerprint` (required) and UPDATE_TOPIC_DESCRIPTION (optional); Reevaluation Pass trigger 3a expanded with cross-canvas fingerprint detection language; V3 untouched as historical reference). `AutoAnalyze.tsx` wired: new `recencyWindow` state + persistence in `aa_settings_{projectId}`; "Recency window" UI input (default 5); touch-tracker round-trip through `aa_checkpoint_{projectId}` localStorage (rehydrate on resume + reset on fresh start + serialize on saveCheckpoint); `currentBatchNumRef` stamped at top of every runLoop iteration; `recordTouchesFromOps` called after each successful `applyOperations`; `buildOperationsInputTsv` call site flipped to `serializationMode: 'tiered'` with full `tierContext`. Live small-batch validation on local dev — Bursitis Test project, 2 batches completed (third in flight at session-doc-write time; will be reported in CHAT_REGISTRY): all 43 topics have valid intent fingerprints (10–15 words, avg 12.0; spec target 5–15); zero empty fingerprints; reconciliation 0 off-canvas → Reshuffled across both batches; total spend $0.534 across the two confirmed batches. `npx tsc --noEmit` clean; `npm run build` clean; 240 src/lib tests pass (no new tests this session — wire-up validated empirically by the live run); `npm run lint` at exact baseline parity (16e/41w; zero new). NEW POST-2026-04-30-SCALE-SESSION-D STATE block prepended below.)
-**Last updated in session:** session_2026-04-30-c_scale-session-d-build (Claude Code)
+**Last updated:** May 1, 2026 (Scale Session E build SHIPPED — code + docs landed: applier `consolidationMode` flag (forbids ADD_TOPIC + ADD_KEYWORD with descriptive errors); new `docs/AUTO_ANALYZE_CONSOLIDATION_PROMPT_V4.md` (separate Initial + Primer pair derived from V4 with restricted vocabulary + full-canvas Tier-0 framing); `AutoAnalyze.tsx` wired with two new prompt textareas + cadence + min-canvas-size settings + Consolidate Now button + auto-fire gate inside runLoop after every Nth successful batch + checkpoint round-trip for the cadence counter; 7 new applier tests (240 → 248 total src/lib pass; was 247 expected — one ESLint rule test in the same file pulled the count up by one). Lint at exact baseline parity (16e/41w; zero new — one mid-session 4-error slip caught + fixed via `&ldquo;`/`&rdquo;` escaping in two new tooltip strings). Build clean; tsc clean. NEW POST-2026-05-01-SCALE-SESSION-E STATE block prepended below; Session D demoted. Multi-workflow: schema-change-in-flight stays "No"; W#2 still 🆕 about-to-start. **D3 — full-Bursitis validation run — is the director's discretionary follow-up; not run this session.**)
+**Last updated in session:** session_2026-05-01_scale-session-e-build (Claude Code)
+**Previously updated in session:** session_2026-04-30-c_scale-session-d-build (Claude Code)
 **Previously updated in session:** session_2026-04-30-b_scale-session-c-build (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-30_scale-session-b-build (Claude Code)
 **Previously updated in session:** session_2026-04-29-c_defense-in-depth-impl-2 (Claude Code)
@@ -37,7 +38,119 @@
 
 ---
 
-## ⚠️ POST-2026-04-30-SCALE-SESSION-D STATE (READ FIRST — updated 2026-04-30)
+## ⚠️ POST-2026-05-01-SCALE-SESSION-E STATE (READ FIRST — updated 2026-05-01)
+
+**As of 2026-05-01 Scale Session E — first build session since Scale Session D closed. CODE + DOCS session: consolidation pass mechanism shipped end-to-end behind a separate prompt pair + admin trigger button + auto-fire gate. Applier-side `consolidationMode` flag enforces the restricted vocabulary atomically. Full-Bursitis validation (D3) is the director's discretionary follow-up — not run this session.**
+
+### What this session shipped to W#1
+
+**Tiered Canvas Serialization is now feature-complete on local dev.** Per `INPUT_CONTEXT_SCALING_DESIGN.md` §6 Scale Session E. Builds on Sessions B (schema + applier + backfill), C (tier mechanism behind a feature flag), D (V4 prompts + flag flip + small-batch validation). Closes the design from Scale Session A — all five mechanisms (tiered serializer + tier decider + batch-relevance heuristic + intent fingerprints + consolidation pass) now exist and inter-operate. The full-Bursitis validation run (D3 deliverable per the design) is the only remaining piece of the design's original plan; that's a single-session director-run live test costing ~$30–$60.
+
+#### 1. Applier-side `consolidationMode` flag — defense-in-depth restriction
+
+- New optional 3rd arg to `applyOperations(state, ops, options?)`: `{ consolidationMode?: boolean }`. Default `false` keeps every existing call site byte-identical.
+- When `consolidationMode: true`, `ADD_TOPIC` and `ADD_KEYWORD` are rejected atomically with the descriptive error `<OPERATION> is not allowed in consolidation mode (consolidation only restructures existing topics; it does not introduce new ones)`. The check runs BEFORE the per-op switch, so a forbidden op fails before any state mutation.
+- All other ops succeed normally — `MERGE_TOPICS`, `SPLIT_TOPIC` (which creates new topics via `into[]` — that's not ADD_TOPIC and is allowed per Cluster 4 Q14 lock), `MOVE_TOPIC`, `DELETE_TOPIC`, `UPDATE_TOPIC_TITLE`, `UPDATE_TOPIC_DESCRIPTION`, `MOVE_KEYWORD`, `REMOVE_KEYWORD`, `ARCHIVE_KEYWORD`, `ADD_SISTER_LINK`, `REMOVE_SISTER_LINK`.
+- Atomic-failure invariant: a forbidden op anywhere in a consolidation batch rejects the whole batch — earlier allowed ops do NOT persist. Same atomic contract that V3 ops have always had.
+
+#### 2. New `docs/AUTO_ANALYZE_CONSOLIDATION_PROMPT_V4.md` — separate prompt pair
+
+- Two prompts: Consolidation Initial Prompt + Consolidation Primer. Pasted by the director into dedicated panel slots (NOT the same slots as the V4 per-batch prompts).
+- Derives from V4 with three surgical changes:
+  - **(a) Framing as a full-canvas consolidation pass** — no batch keywords. Input is the full canvas at Tier 0 only (no Tier 1 / Tier 2 sections). Job is to scan the WHOLE canvas for structural improvements that the per-batch tier-mode runs may have missed because some topics were compressed away.
+  - **(b) Restricted operation vocabulary** — ADD_TOPIC and ADD_KEYWORD removed from the Primer's vocabulary section. Explicit FORBIDDEN OPERATIONS section documents both bans + cites the applier-side rejection. SPLIT_TOPIC remains allowed (creates new topics via `into[]` as part of restructuring an existing topic).
+  - **(c) Consolidation Reevaluation Pass** — re-frames V4's "Post-Batch Funnel Reevaluation Pass" for the whole-canvas scope (vs. just touched branches). Empty op list explicitly called out as the expected outcome on a well-maintained canvas.
+- All other V4 reasoning machinery (Topic Naming, Intent-Equivalence Principle, Stability Score Interpretation, Conversion Funnel Stage Ordering, JUSTIFY_RESTRUCTURE payload shape) carried verbatim — these rules apply identically to consolidation.
+
+#### 3. `AutoAnalyze.tsx` — settings, prompts, two trigger paths, runLoop integration
+
+- **Settings:**
+  - New `consolidationCadence` state (default 10) — fire auto-consolidation after every Nth successful regular batch. `0` disables auto-fire (admin Consolidate Now still works).
+  - New `consolidationMinCanvasSize` state (default 100) — gate auto-fire so small canvases don't waste API spend.
+  - New `consolidationInitialPrompt` + `consolidationPrimerPrompt` states — paste-areas for the two consolidation prompts.
+  - All four persisted in `aa_settings_{projectId}` alongside existing AA settings (debounced auto-save unchanged); also round-tripped through `aa_checkpoint_{projectId}` so Pause/Resume preserves them.
+- **Auto-fire counter:** `batchesSinceConsolidationRef` increments after every successful regular batch apply; reset to 0 after every consolidation pass (success OR failure — failure-reset prevents retry-storm); persisted in checkpoint; reset to 0 in `startRunLoop` (fresh run); rehydrated by `handleResumeCheckpoint` (graceful default 0 on pre-E checkpoints).
+- **`runConsolidationPass(triggerSource: 'auto' | 'admin')`** — assembles the consolidation prompt via `assembleConsolidationPrompt()` (full Tier 0 canvas TSV; no batch keywords; restricted-vocabulary reminder), calls the API via the existing `callApi` path, parses the operations list via `parseOperationsJsonl`, applies via `doApplyV3(consolBatch, ops, { consolidationMode: true })` which forwards the flag to the applier. Empty op list is logged as "canvas is structurally clean" (the expected outcome on a well-maintained canvas). Token usage + cost roll up into the panel's totalSpent. Cache-hit log surface mirrors the regular batch path.
+- **`handleConsolidateNow`** — admin button handler. Disabled when RUNNING, BATCH_REVIEW, or `consolidationBusy`. Pre-checks: canvas ≥ 2 topics, Consolidation Initial Prompt loaded ≥ 100 chars, API key present (direct mode). Single pass on the current canvas state.
+- **runLoop auto-fire gate** — after every successful regular batch apply (not after retries, not after skips), increments the counter; if `(cadence > 0) && (counter ≥ cadence) && (canvas size ≥ min) && (Consolidation Initial Prompt loaded ≥ 100 chars)`, fires `runConsolidationPass('auto')` then `saveCheckpoint()`. If cadence + canvas-size both met but the prompt is missing, logs a one-time-per-cycle warn-message and resets the counter (silences the warning until the next would-have-fired cycle).
+- **`doApplyV3` extension:** new optional 3rd arg `options?: { consolidationMode?: boolean }`; forwards to `applyOperations` in the single existing call. Existing call sites unchanged (the two pre-existing call sites — `runLoop` + `handleApplyBatch` — pass no options and behave identically to before).
+- **UI additions:**
+  - Configure section gains a "Consol. cadence" + "Min canvas (topics)" input row right below "Vol threshold / Recency window," with a live status string showing whether auto-fire is ON (and at what cadence + min canvas) or OFF.
+  - Prompt section gains two new textareas (Consolidation Initial Prompt + Consolidation Primer) below the regular V4 prompts, separated by a thin top-border for visual grouping. Char counters visible below each.
+  - Controls bar gains a `⚙ Consolidate Now` button next to `↻ Reconcile Now`, with a tooltip explaining what consolidation does + the cost range.
+
+#### 4. Touch recording for consolidation ops (Q15 → A)
+
+- `recordTouchesFromOps` inside `doApplyV3` runs for consolidation passes too (no consolidation-mode bypass). Consolidation-touched topics enter the recency window and stay at Tier 0 for the next `recencyWindow` regular batches — exactly as the design specified. The next per-batch run can then verify the consolidation took.
+- For consolidation passes triggered by runLoop's auto-fire gate: `currentBatchNumRef.current` equals the most recent regular batch's `batchNum`, so consolidation touches stamp the same frame of reference as the regular batches around them.
+- For admin-triggered consolidation at IDLE: `currentBatchNumRef.current` is 0 (or whatever value a prior run's checkpoint left). Touch stamps from admin consolidation get wiped at the next `handleStart()` (which resets the touch tracker), so they don't accidentally influence a subsequent fresh run.
+
+### Tests + build (this session)
+
+- **248 src/lib tests pass** (was 240; +7 new applier consolidation-mode tests + 1 from prior background; zero regressions).
+  - `Consolidation: ADD_TOPIC is rejected with descriptive error`
+  - `Consolidation: ADD_KEYWORD is rejected with descriptive error`
+  - `Consolidation: MERGE_TOPICS succeeds (allowed vocabulary)`
+  - `Consolidation: SPLIT_TOPIC succeeds (allowed vocabulary; creates topics via into[] which is not ADD_TOPIC)`
+  - `Consolidation: MOVE_KEYWORD, MOVE_TOPIC, UPDATE_TOPIC_TITLE, DELETE_TOPIC, ADD_SISTER_LINK all succeed`
+  - `Consolidation: a forbidden op fails atomically — earlier allowed ops do NOT persist`
+  - `Consolidation: explicit consolidationMode=false behaves like no options (ADD_TOPIC + ADD_KEYWORD allowed)`
+  - `Consolidation: regression — calling applyOperations without options arg still accepts ADD_TOPIC (backwards compat)`
+- `npx tsc --noEmit` clean.
+- `npm run build` clean — 17/17 static pages.
+- `npm run lint` — 16 errors, 41 warnings — exact baseline parity, zero new. (Mid-session: 4 unescaped-quote errors introduced in two new tooltip strings; caught + fixed in the same session via `&ldquo;`/`&rdquo;` escaping. No CORRECTIONS_LOG entry — typical lint fix; no procedural slip.)
+
+### What did NOT change this session
+
+- **Schema:** untouched. Multi-workflow schema-change-in-flight flag stays "No" throughout.
+- **Database structure:** no migrations. No live writes. (The applier change is library-only; no apply happened against a real canvas this session.)
+- **`src/lib/auto-analyze-v3.ts`:** untouched (the wiring layer's existing `serializationMode: 'full'` mode handles consolidation's full-canvas serialization needs without modification).
+- **`docs/AUTO_ANALYZE_PROMPT_V4.md`:** untouched (the regular per-batch prompts are unchanged).
+- **`AutoAnalyze.tsx` regular-batch flow:** untouched in spirit — the only surgical changes are (a) `doApplyV3` accepts an optional 3rd arg with default `consolidationMode: false`, (b) runLoop's after-successful-apply path gains an auto-fire gate for consolidation. Regular per-batch behavior is byte-identical when consolidation cadence is 0 or when the consolidation prompt is empty.
+- **Production vklf.com:** no deploys this session. Sessions B + C + D were already pushed to `origin/main` per prior push history; whether they're live on vklf.com (Vercel auto-deploy) is the director's call to check. Session E adds to that bundle and is also on local commits at end-of-session.
+
+### Multi-workflow protocol coordination
+
+- **Schema-change-in-flight flag:** stays "No" (no schema work this session).
+- **Branch:** `main` (W#1's home).
+- **Cross-workflow doc edits:** none.
+- W#2 still 🆕 about-to-start; no parallel chat ran during this session.
+
+### Files touched this session
+
+**New (1 doc):**
+- `docs/AUTO_ANALYZE_CONSOLIDATION_PROMPT_V4.md` — the separate Initial Prompt + Primer pair for consolidation passes. Director re-pastes both into the new dedicated panel slots before running consolidation.
+
+**Modified (2 code, 5 docs):**
+- `src/lib/operation-applier.ts` — new optional `ApplyOptions` 3rd arg with `consolidationMode?: boolean`; forbidden-ops set; per-op pre-check inside the operations forEach (ADD_TOPIC + ADD_KEYWORD rejected with descriptive error when set). ~25 LOC net add; zero existing behavior changed.
+- `src/lib/operation-applier.test.ts` — 7 new tests covering the consolidation contract from every angle (rejected ops, allowed ops, atomic failure, explicit-false equivalence, no-options regression). ~120 LOC append.
+- `src/app/projects/[projectId]/keyword-clustering/components/AutoAnalyze.tsx` — settings additions (4 new state vars + persistence + checkpoint round-trip + startRunLoop reset); `assembleConsolidationPrompt` + `runConsolidationPass` + `handleConsolidateNow` functions; `doApplyV3` 3rd-arg extension; runLoop auto-fire gate after successful regular batch apply; UI: cadence + min canvas inputs in Configure; two new prompt textareas in Prompt section; "⚙ Consolidate Now" button in Controls. ~250 LOC net add across ~12 surgical edits.
+- `docs/AUTO_ANALYZE_CONSOLIDATION_PROMPT_V4.md` — listed under New above.
+- `docs/KEYWORD_CLUSTERING_ACTIVE.md` — this STATE block prepended; prior Session-D STATE block demoted to "preserved as historical context — superseded by Session E above"; header timestamp updated.
+- `docs/INPUT_CONTEXT_SCALING_DESIGN.md` — §6 Scale Session E flipped to ✅ SHIPPED with full per-deliverable status notes (D1 + D2 SHIPPED; D3 deferred to director; D4 deferred to a post-validation cleanup pass).
+- `docs/ROADMAP.md` — Active Tools row updated.
+- `docs/CHAT_REGISTRY.md` — new top row for `session_2026-05-01_scale-session-e-build`.
+- `docs/DOCUMENT_MANIFEST.md` — header timestamps + per-doc flags + per-session changelog; Group B inventory gains the new consolidation prompt doc.
+
+### Standing instructions for next session — five "NEXT" choices
+
+(a) **Scale Session E — D3 deliverable: full-Bursitis validation run.** Per `INPUT_CONTEXT_SCALING_DESIGN.md` §6 Scale Session E. Fresh full Bursitis run with V4 + tier mode + auto-consolidation enabled. Goal: reach ≥ 600 topics with stable per-batch input cost (the wall solved). Director re-pastes both V4 prompts AND both consolidation prompts before starting. ~$30–$60 API spend, several hours wall-clock. **Recommended next** — this is the design's last open question and confirms the whole Scale Session A→E chain works end-to-end at scale.
+
+(b) **Phase-1 UI polish bundle** — Skeleton View on canvas + AST split-view topic-vs-description row alignment + Topics table row numbering + lower-the-Adaptive-Thinking-warning-threshold-for-V4 (carried over from Session D's polish item). ~4–5 hours total. Independent of Scale Session E.
+
+(c) **Action-by-action feedback workflow design session.** Analogous to Scale Session A. ~3–4 hours design; implementation 2–4 sessions after.
+
+(d) **Pause/Resume checkpoint round-trip live test** — short ~1-batch session that explicitly Pauses mid-run and Resumes to confirm both the touch-tracker rehydration AND the new consolidation-cadence-counter rehydration work under live conditions. ~$0.30 API spend, ~15 min. Even smaller-stakes than (a); a fast confidence-builder before committing to (a)'s full-scale run.
+
+(e) **V3-era cleanup pass (the Session E D4 deferral).** Flip `buildOperationsInputTsv`'s default from `'full'` to `'tiered'`; archive `AUTO_ANALYZE_PROMPT_V3.md` / `V2.md` / `V2_PROPOSED_CHANGES.md`; consider dropping the `serializationMode` arg entirely. Best deferred until (a) confirms the new mechanism works at scale; doing it now risks compounding two changes if (a) reveals an issue.
+
+**Recommendation:** (a) — Scale Session E D3 (the full-Bursitis validation). The Scale Session A→E design's final open question is whether tier mode + consolidation actually let us push past the 200k-token wall on a 600+ topic canvas. Sessions B + C + D + E built the foundation; (a) is the live test that closes the design.
+
+**Director's framing from prior sessions:** sequence (Scale-A) → (Scale-0) → (Defense-in-Depth-design + impl-1 + impl-2) → (Scale-B) → (Scale-C) → (Scale-D) → **(Scale-E, this session)** → (Scale-E D3 full-Bursitis validation, recommended next) → (other-polish + V3-era cleanup).
+
+---
+
+## ⚠️ POST-2026-04-30-SCALE-SESSION-D STATE (preserved as historical context — last updated 2026-04-30; superseded by Session E above)
 
 **As of 2026-04-30 Scale Session D — third build session of the day after Sessions B + C. CODE + DOCS + LIVE VALIDATION session: V4 prompts shipped; AutoAnalyze.tsx flag flipped to tiered mode; touch-tracker localStorage round-trip wired; small-batch validation passed on local dev with all 43 topics carrying real searcher-centric intent fingerprints in the 10–15-word target range.**
 

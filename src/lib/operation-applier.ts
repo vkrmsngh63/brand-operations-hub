@@ -869,9 +869,31 @@ function runInvariants(s: Scratch, originalKeywordIds: Set<KeywordId>): void {
 // Entry point
 // ============================================================
 
+/**
+ * Optional second-arg for {@link applyOperations}.
+ *
+ * `consolidationMode` — Scale Session E, INPUT_CONTEXT_SCALING_DESIGN.md §4.1
+ * Cluster 4 Q14 lock. When `true`, ADD_TOPIC and ADD_KEYWORD are rejected
+ * with an explicit error. The consolidation pass restructures existing
+ * topics; it does not introduce new topics or new keywords. Defense in
+ * depth — the consolidation prompt also instructs the AI not to emit these,
+ * but the applier-side rejection means a stray emission fails atomically
+ * rather than silently changing the canvas in a way the consolidation
+ * contract forbids.
+ */
+export interface ApplyOptions {
+  consolidationMode?: boolean;
+}
+
+const CONSOLIDATION_FORBIDDEN_OPS = new Set<Operation['type']>([
+  'ADD_TOPIC',
+  'ADD_KEYWORD',
+]);
+
 export function applyOperations(
   state: CanvasState,
   operations: Operation[],
+  options?: ApplyOptions,
 ): ApplyResult {
   // Capture original keyword set BEFORE any mutation so the invariant
   // check has a baseline to compare against.
@@ -890,8 +912,17 @@ export function applyOperations(
     throw err;
   }
 
+  const consolidationMode = options?.consolidationMode === true;
+
   try {
     operations.forEach((op, i) => {
+      if (consolidationMode && CONSOLIDATION_FORBIDDEN_OPS.has(op.type)) {
+        fail(
+          i,
+          op.type,
+          `${op.type} is not allowed in consolidation mode (consolidation only restructures existing topics; it does not introduce new ones)`,
+        );
+      }
       switch (op.type) {
         case 'ADD_TOPIC': return applyAddTopic(scratch, op, i);
         case 'UPDATE_TOPIC_TITLE': return applyUpdateTopicTitle(scratch, op, i);

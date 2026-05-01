@@ -141,6 +141,16 @@ export default function AutoAnalyze({
   // Cluster 2 Q6 lock — recency window for the tier decider; persists per-project
   // via aa_settings_{projectId} alongside other settings. INPUT_CONTEXT_SCALING_DESIGN.md §2.2.
   const [recencyWindow, setRecencyWindow] = useState(DEFAULT_RECENCY_WINDOW);
+  // Scale Session E — consolidation pass settings. Per INPUT_CONTEXT_SCALING_DESIGN.md
+  // §4.1 (Cluster 4 Q13/Q14/Q15). Two paste-areas for the Consolidation Initial
+  // Prompt + Consolidation Primer, mirroring the regular V4 prompt slots.
+  // `consolidationCadence` = 0 disables auto-fire entirely; admin-triggered
+  // "Consolidate Now" still works regardless. Default cadence = 10 batches +
+  // gate to canvas size > 100 topics matches the design.
+  const [consolidationInitialPrompt, setConsolidationInitialPrompt] = useState('');
+  const [consolidationPrimerPrompt, setConsolidationPrimerPrompt] = useState('');
+  const [consolidationCadence, setConsolidationCadence] = useState(10);
+  const [consolidationMinCanvasSize, setConsolidationMinCanvasSize] = useState(100);
 
   /* ── Runtime state ─────────────────────────────────────────── */
   const [aaState, setAaState] = useState<AAState>('IDLE');
@@ -196,6 +206,17 @@ export default function AutoAnalyze({
   // 1-indexed current batch number for the tier decider's batchesSinceTouch math.
   // Driven by `batch.batchNum` at the top of each iteration of runLoop.
   const currentBatchNumRef = useRef<number>(0);
+
+  // Scale Session E — counter for the consolidation auto-fire gate. Increments
+  // after each successful regular batch apply; reset to 0 immediately after a
+  // consolidation pass (success OR failure — failure-reset prevents retry-storm).
+  // Persisted in aa_checkpoint_{projectId} so Pause/Resume preserves the
+  // consolidation cadence across the gap. INPUT_CONTEXT_SCALING_DESIGN.md §4.1
+  // (Cluster 4 Q13).
+  const batchesSinceConsolidationRef = useRef<number>(0);
+  // Busy flag for the admin-triggered "Consolidate Now" button — prevents
+  // double-click while a pass is in flight.
+  const [consolidationBusy, setConsolidationBusy] = useState(false);
 
   // Run-start pre-flight (DEFENSE_IN_DEPTH_AUDIT_DESIGN §6). When the user
   // clicks Start, runPreflight() executes P1..P10 sequentially; the first
@@ -260,6 +281,10 @@ export default function AutoAnalyze({
         if (s.initialPrompt !== undefined) setInitialPrompt(s.initialPrompt);
         if (s.primerPrompt !== undefined) setPrimerPrompt(s.primerPrompt);
         if (typeof s.recencyWindow === 'number' && s.recencyWindow > 0) setRecencyWindow(s.recencyWindow);
+        if (typeof s.consolidationInitialPrompt === 'string') setConsolidationInitialPrompt(s.consolidationInitialPrompt);
+        if (typeof s.consolidationPrimerPrompt === 'string') setConsolidationPrimerPrompt(s.consolidationPrimerPrompt);
+        if (typeof s.consolidationCadence === 'number' && s.consolidationCadence >= 0) setConsolidationCadence(s.consolidationCadence);
+        if (typeof s.consolidationMinCanvasSize === 'number' && s.consolidationMinCanvasSize >= 0) setConsolidationMinCanvasSize(s.consolidationMinCanvasSize);
       } catch (e) {
         console.warn('Failed to load AA settings', e);
       } finally {
@@ -282,6 +307,8 @@ export default function AutoAnalyze({
         apiMode, model, seedWords, volumeThreshold, batchSize,
         processingMode, thinkingMode, thinkingBudget, keywordScope,
         stallTimeout, reviewMode, initialPrompt, primerPrompt, recencyWindow,
+        consolidationInitialPrompt, consolidationPrimerPrompt,
+        consolidationCadence, consolidationMinCanvasSize,
       };
       authFetch('/api/user-preferences/' + encodeURIComponent(settingsDbKey), {
         method: 'PUT',
@@ -292,7 +319,9 @@ export default function AutoAnalyze({
     return () => clearTimeout(timer);
   }, [settingsLoaded, settingsDbKey, apiMode, model, seedWords, volumeThreshold, batchSize,
       processingMode, thinkingMode, thinkingBudget, keywordScope,
-      stallTimeout, reviewMode, initialPrompt, primerPrompt, recencyWindow]);
+      stallTimeout, reviewMode, initialPrompt, primerPrompt, recencyWindow,
+      consolidationInitialPrompt, consolidationPrimerPrompt,
+      consolidationCadence, consolidationMinCanvasSize]);
 
   const logRef = useRef<HTMLDivElement>(null);
 
@@ -375,7 +404,13 @@ export default function AutoAnalyze({
     try {
       const cp = {
         ts: Date.now(),
-        config: { apiMode, apiKey, model, seedWords, volumeThreshold, batchSize, processingMode, thinkingMode, thinkingBudget, keywordScope, stallTimeout, reviewMode, initialPrompt, primerPrompt, recencyWindow },
+        config: {
+          apiMode, apiKey, model, seedWords, volumeThreshold, batchSize,
+          processingMode, thinkingMode, thinkingBudget, keywordScope,
+          stallTimeout, reviewMode, initialPrompt, primerPrompt, recencyWindow,
+          consolidationInitialPrompt, consolidationPrimerPrompt,
+          consolidationCadence, consolidationMinCanvasSize,
+        },
         batches: batchesRef.current,
         currentIdx: currentIdxRef.current,
         totalSpent: totalSpentRef.current,
@@ -387,6 +422,10 @@ export default function AutoAnalyze({
         // Plain object form (Map isn't JSON-serializable directly).
         touchTracker: serializeTouchTracker(touchTrackerRef.current),
         currentBatchNum: currentBatchNumRef.current,
+        // Scale Session E — consolidation auto-fire counter survives Pause/Resume
+        // so the cadence isn't reset to 0 across the gap (which would delay the
+        // next consolidation pass by N batches).
+        batchesSinceConsolidation: batchesSinceConsolidationRef.current,
       };
       localStorage.setItem(cpKey, JSON.stringify(cp));
     } catch (e) { console.warn('Checkpoint save failed', e); }
@@ -426,6 +465,10 @@ export default function AutoAnalyze({
     setReviewMode(c.reviewMode); setInitialPrompt(c.initialPrompt);
     setPrimerPrompt(c.primerPrompt || '');
     if (typeof c.recencyWindow === 'number' && c.recencyWindow > 0) setRecencyWindow(c.recencyWindow);
+    if (typeof c.consolidationInitialPrompt === 'string') setConsolidationInitialPrompt(c.consolidationInitialPrompt);
+    if (typeof c.consolidationPrimerPrompt === 'string') setConsolidationPrimerPrompt(c.consolidationPrimerPrompt);
+    if (typeof c.consolidationCadence === 'number' && c.consolidationCadence >= 0) setConsolidationCadence(c.consolidationCadence);
+    if (typeof c.consolidationMinCanvasSize === 'number' && c.consolidationMinCanvasSize >= 0) setConsolidationMinCanvasSize(c.consolidationMinCanvasSize);
     // Scale Session D — rehydrate the touch tracker so the recency signal
     // continues across the Pause/Resume gap. Pre-D checkpoints have no
     // touchTracker field; deserializeTouchTracker treats null/undefined as
@@ -434,6 +477,13 @@ export default function AutoAnalyze({
     // a fresh run).
     touchTrackerRef.current = deserializeTouchTracker(cp.touchTracker);
     currentBatchNumRef.current = typeof cp.currentBatchNum === 'number' ? cp.currentBatchNum : 0;
+    // Scale Session E — rehydrate the consolidation auto-fire counter. Pre-E
+    // checkpoints have no field; default to 0 (consolidation will fire after
+    // the next N successful batches, same as a fresh run — slight delay vs. a
+    // checkpoint that had captured a non-zero counter, but no correctness issue).
+    batchesSinceConsolidationRef.current = typeof cp.batchesSinceConsolidation === 'number'
+      ? cp.batchesSinceConsolidation
+      : 0;
     const restoredBatches = cp.batches.map((b: BatchObj) =>
       b.status === 'in_progress' ? { ...b, status: 'queued' as const } : b
     );
@@ -856,6 +906,7 @@ export default function AutoAnalyze({
   async function doApplyV3(
     batch: BatchObj,
     ops: ReturnType<typeof parseOperationsJsonl>['operations'],
+    options?: { consolidationMode?: boolean },
   ) {
     // Shadow the closure-frozen props that are read inside this function
     // (`allKeywords` at the reconciliation pass + the unplaced-log; `pathways`
@@ -888,7 +939,7 @@ export default function AutoAnalyze({
     const originalSisterLinks = sisterLinksRef.current;
 
     const state = buildCanvasStateForApplier(originalNodes, originalSisterLinks, nextStableIdN);
-    const applyResult = applyOperations(state, ops);
+    const applyResult = applyOperations(state, ops, { consolidationMode: options?.consolidationMode === true });
     if (!applyResult.ok) {
       // Should not happen because validateResultV3 ran the same call and
       // passed; safety net only.
@@ -1103,6 +1154,202 @@ export default function AutoAnalyze({
     });
   }
 
+  /* ── Scale Session E — Consolidation pass assembler + runner ─
+     Per INPUT_CONTEXT_SCALING_DESIGN.md §4.1 + §6 Scale Session E.
+     Two trigger paths share `runConsolidationPass`:
+       (1) auto-fire: runLoop calls it after every Nth successful regular
+           batch when canvas size > min and cadence > 0;
+       (2) admin: handleConsolidateNow calls it from the Consolidate Now button.
+     The pass uses a separate prompt pair (Consolidation Initial + Primer)
+     pasted into dedicated panel slots, sends the full canvas at Tier 0
+     (no batch keywords), and applies the resulting ops with the applier's
+     consolidationMode flag (forbids ADD_TOPIC + ADD_KEYWORD; allows
+     everything else). Touches are recorded normally so consolidation-touched
+     topics enter the recency window for the next 5 (default) regular batches. */
+  function assembleConsolidationPrompt(): { systemText: string; userContent: string } {
+    let systemText = consolidationInitialPrompt;
+    systemText = systemText.replace(/\[PRIMARY_SEED_WORDS\]/g, seedWords);
+    systemText = systemText.replace(/\[VOLUME_THRESHOLD\]/g, String(volumeThreshold));
+    if (consolidationPrimerPrompt) {
+      systemText += '\n\n--- TOPICS LAYOUT TABLE PRIMER (CONSOLIDATION) ---\n\n' + consolidationPrimerPrompt;
+    }
+    // Consolidation always uses the full Tier 0 view of the canvas — that's
+    // the whole point of the pass per §4.1 (Reevaluation Pass coverage on
+    // topics that per-batch tier-mode runs only saw at Tier 1 / Tier 2).
+    const inputTsv = buildOperationsInputTsv(
+      nodesRef.current,
+      sisterLinksRef.current,
+      keywordsRef.current,
+      { serializationMode: 'full' },
+    );
+    let userContent = '';
+    userContent += 'CONSOLIDATION PASS — full canvas at Tier 0 (every topic at full detail).\n\n';
+    userContent += 'There are NO batch keywords for this pass. Your input is the canvas only.\n\n';
+    userContent += 'Here is the current Topics Layout Table (TSV input — read it; do not re-emit it):\n\n';
+    userContent += '=== TIER 0 ===\n' + inputTsv + '\n\n';
+    userContent += 'Primary seed word(s): ' + seedWords + '\n';
+    userContent += 'Volume threshold: ' + volumeThreshold + '\n\n';
+    userContent +=
+      'Scan the entire canvas for structural improvements per the Consolidation Reevaluation Pass section. ' +
+      'Emit operations restricted to the consolidation vocabulary: MERGE_TOPICS, SPLIT_TOPIC, MOVE_TOPIC, ' +
+      'DELETE_TOPIC, UPDATE_TOPIC_TITLE, UPDATE_TOPIC_DESCRIPTION, MOVE_KEYWORD, REMOVE_KEYWORD, ' +
+      'ARCHIVE_KEYWORD, ADD_SISTER_LINK, REMOVE_SISTER_LINK. ADD_TOPIC and ADD_KEYWORD are FORBIDDEN — ' +
+      'emitting either fails the entire batch atomically. An empty operation list is valid output if the ' +
+      'canvas is structurally clean.\n\n';
+    userContent += 'Emit your output as the operations block defined in the Primer.';
+    return { systemText, userContent };
+  }
+
+  /**
+   * Runs one consolidation pass against the current canvas.
+   *
+   * `triggerSource` is logged for traceability:
+   *   - 'auto' = fired by runLoop's cadence gate
+   *   - 'admin' = fired by the Consolidate Now button
+   *
+   * Returns true on success (operation list parsed + applied OR genuinely
+   * empty), false on any failure. The auto-fire counter is reset to 0 in
+   * either case (success-reset cycles cleanly; failure-reset prevents
+   * retry-storm if consolidation keeps failing for some reason).
+   *
+   * `currentBatchNumRef` is read inside doApplyV3 → recordTouchesFromOps to
+   * stamp the touch tracker. For admin-triggered consolidation at IDLE,
+   * `currentBatchNumRef.current` is 0 and the next handleStart() resets the
+   * tracker anyway, so admin-touch stamps don't influence subsequent runs.
+   */
+  async function runConsolidationPass(triggerSource: 'auto' | 'admin'): Promise<boolean> {
+    const consolBatch: BatchObj = {
+      // batchNum=currentBatchNumRef.current ties consolidation touches to the
+      // most recent regular batch's frame of reference (so the next batch
+      // sees consolidation-touched topics as 0-batches-ago — Tier 0 for the
+      // next `recencyWindow` batches). For admin-triggered runs at IDLE, this
+      // is 0, which is fine (touches are wiped at the next handleStart anyway).
+      batchNum: currentBatchNumRef.current,
+      keywordIds: [],
+      keywords: [],
+      status: 'in_progress',
+      attempts: 1,
+      stallAttempts: 0,
+      maxAttempts: 1,
+      maxStallAttempts: 3,
+      result: null,
+      error: null,
+      startedAt: Date.now(),
+      completedAt: null,
+      reevalReport: '',
+      kwTopicMap: null,
+      tokensUsed: { input: 0, output: 0 },
+      cost: 0,
+      newTopicCount: 0,
+    };
+    aaLog(
+      '═══ Consolidation pass (' + triggerSource + ', canvas=' + nodesRef.current.length + ' topics) ═══',
+      'info',
+    );
+    try {
+      const { systemText, userContent } = assembleConsolidationPrompt();
+      const estTokens = Math.ceil((systemText.length + userContent.length) / 4);
+      aaLog('Consolidation — sending ~' + estTokens.toLocaleString() + ' input tokens…', 'info');
+
+      const requestBody = buildRequestBody(systemText, userContent);
+      const apiResponse = await callApi(requestBody, consolBatch.batchNum);
+
+      const textContent = apiResponse.content
+        .filter((b) => b.type === 'text')
+        .map((b) => b.text || '')
+        .join('\n');
+      if (!textContent.trim()) throw new Error('Consolidation API returned empty text content');
+
+      const tokensUsed = {
+        input:
+          (apiResponse.usage.input_tokens || 0) +
+          (apiResponse.usage.cache_creation_input_tokens || 0) +
+          (apiResponse.usage.cache_read_input_tokens || 0),
+        output: apiResponse.usage.output_tokens || 0,
+      };
+      const consolCost = calcCost(tokensUsed);
+      setTotalSpent((prev) => prev + consolCost);
+      totalSpentRef.current += consolCost;
+      if (apiResponse.usage.cache_read_input_tokens > 0) {
+        aaLog('  Cache hit: ' + apiResponse.usage.cache_read_input_tokens + ' tokens', 'info');
+      }
+      aaLog(
+        '  Consolidation API call complete. Input: ' + tokensUsed.input.toLocaleString() +
+        ', Output: ' + tokensUsed.output.toLocaleString() + '. Cost: $' + consolCost.toFixed(3),
+        'info',
+      );
+
+      const parsed = parseOperationsJsonl(textContent);
+      if (parsed.errors.length > 0) {
+        aaLog(
+          '  ✗ Consolidation parse errors: ' + parsed.errors.slice(0, 3).join('; '),
+          'error',
+        );
+        return false;
+      }
+      if (parsed.operations.length === 0) {
+        aaLog(
+          '  ✓ Consolidation: no structural changes warranted (canvas is structurally clean).',
+          'ok',
+        );
+        return true;
+      }
+      // Apply with consolidationMode flag. Applier rejects ADD_TOPIC /
+      // ADD_KEYWORD atomically. recordTouchesFromOps inside doApplyV3 stamps
+      // the touched topics so the next regular batch sees them at Tier 0.
+      await doApplyV3(consolBatch, parsed.operations, { consolidationMode: true });
+      aaLog(
+        '  ✓ Consolidation applied (' + parsed.operations.length + ' operations).',
+        'ok',
+      );
+      return true;
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      aaLog('  ✗ Consolidation FAILED: ' + errMsg, 'error');
+      return false;
+    } finally {
+      // Reset cadence counter regardless of outcome — we don't want a failing
+      // consolidation pass to retry-storm on every subsequent batch.
+      batchesSinceConsolidationRef.current = 0;
+    }
+  }
+
+  /**
+   * Admin-triggered consolidation. Available when the panel is IDLE or
+   * PAUSED. Does basic readiness checks (canvas not empty, prompts present,
+   * API key present in direct mode) before kicking off the pass.
+   */
+  async function handleConsolidateNow() {
+    if (consolidationBusy) return;
+    if (aaState === 'RUNNING') {
+      alert('Consolidate Now: pause or cancel the running run first.');
+      return;
+    }
+    if (nodesRef.current.length < 2) {
+      alert('Consolidate Now: canvas needs at least 2 topics to consolidate.');
+      return;
+    }
+    if (!consolidationInitialPrompt || consolidationInitialPrompt.length < 100) {
+      alert('Consolidate Now: paste the Consolidation Initial Prompt first (in the AI Analysis Prompt section).');
+      setPromptExpanded(true);
+      return;
+    }
+    if (apiMode === 'direct' && !apiKey.trim()) {
+      alert('Consolidate Now: enter your Anthropic API key first.');
+      return;
+    }
+    setConsolidationBusy(true);
+    try {
+      // doApplyV3 (called inside runConsolidationPass when ops are non-empty)
+      // already calls onRefreshCanvas + onRefreshKeywords. The empty-ops
+      // branch returns true without applying, so no refresh is needed there
+      // either (canvas is unchanged).
+      await runConsolidationPass('admin');
+    } finally {
+      setConsolidationBusy(false);
+    }
+  }
+
   /* ── Main run loop ─────────────────────────────────────────── */
   /** @runloop-reachable */
   async function runLoop() {
@@ -1210,6 +1457,44 @@ export default function AutoAnalyze({
           setCurrentIdx(prev => prev + 1);
           currentIdxRef.current++;
           setBatches([...batchesRef.current]);
+
+          // Scale Session E — consolidation auto-fire gate.
+          // Increment the counter after every successful regular batch apply;
+          // when the counter hits the cadence AND the canvas is large enough
+          // AND the consolidation prompt is loaded AND we're not aborted, fire
+          // a consolidation pass before continuing to the next batch. The
+          // pass resets the counter to 0 inside its finally block.
+          // Cadence = 0 disables auto-fire entirely (admin Consolidate Now still works).
+          batchesSinceConsolidationRef.current += 1;
+          if (
+            !abortRef.current &&
+            consolidationCadence > 0 &&
+            batchesSinceConsolidationRef.current >= consolidationCadence &&
+            nodesRef.current.length >= consolidationMinCanvasSize &&
+            consolidationInitialPrompt && consolidationInitialPrompt.length >= 100
+          ) {
+            await runConsolidationPass('auto');
+            // Persist the post-consolidation state (counter reset + any canvas
+            // changes propagated through doApplyV3 → onRefreshCanvas).
+            saveCheckpoint();
+          } else if (
+            consolidationCadence > 0 &&
+            batchesSinceConsolidationRef.current >= consolidationCadence &&
+            nodesRef.current.length >= consolidationMinCanvasSize &&
+            (!consolidationInitialPrompt || consolidationInitialPrompt.length < 100)
+          ) {
+            // Cadence + canvas-size both met but the prompt is missing — log
+            // a one-time-per-cadence-cycle warning so the director knows why
+            // auto-fire didn't run, then reset to silence this until the next
+            // cycle would otherwise have triggered.
+            aaLog(
+              'Consolidation auto-fire skipped: cadence reached (' + consolidationCadence +
+              ' batches) and canvas large enough, but Consolidation Initial Prompt is empty. ' +
+              'Paste the prompt to enable auto-consolidation, or set cadence to 0 to disable.',
+              'warn',
+            );
+            batchesSinceConsolidationRef.current = 0;
+          }
           continue;
         }
 
@@ -1325,6 +1610,10 @@ export default function AutoAnalyze({
     // batch numbering that doesn't match.
     touchTrackerRef.current = createTouchTracker();
     currentBatchNumRef.current = 0;
+    // Scale Session E — fresh run starts the consolidation cadence counter
+    // at 0 so the first consolidation pass fires after `consolidationCadence`
+    // successful batches.
+    batchesSinceConsolidationRef.current = 0;
 
     aaLog('Auto-Analyze started. ' + queue.length + ' batches, ' + unsortedCount + ' keywords.', 'info');
     const scopeLabel =
@@ -1769,6 +2058,34 @@ export default function AutoAnalyze({
                 <span>Review each batch</span>
               </div>
             </div>
+            {/* Scale Session E — consolidation cadence + min canvas-size gates.
+                Cadence = 0 disables auto-fire. Min canvas size gates auto-fire
+                so small canvases don't waste API spend on consolidation passes. */}
+            <div className="aa-row">
+              <span className="aa-label">Consol. cadence<span className="aa-help">ⓘ<span className="aa-tip">Run a consolidation pass after every N successful batches. Consolidation scans the full canvas at Tier 0 for structural improvements (merges, splits, repositions). Set to 0 to disable auto-fire — admin Consolidate Now still works regardless. Default 10.</span></span></span>
+              <input
+                className="aa-input aa-input-sm"
+                type="number"
+                min="0"
+                value={consolidationCadence}
+                onChange={e => setConsolidationCadence(Math.max(0, parseInt(e.target.value) || 0))}
+                disabled={aaState !== 'IDLE'}
+              />
+              <span className="aa-label" style={{minWidth:'auto',marginLeft:'12px'}}>Min canvas (topics)<span className="aa-help">ⓘ<span className="aa-tip">Skip the consolidation auto-fire when the canvas is smaller than this — small canvases rarely benefit from consolidation. Default 100.</span></span></span>
+              <input
+                className="aa-input aa-input-sm"
+                type="number"
+                min="0"
+                value={consolidationMinCanvasSize}
+                onChange={e => setConsolidationMinCanvasSize(Math.max(0, parseInt(e.target.value) || 0))}
+                disabled={aaState !== 'IDLE'}
+              />
+              <span style={{ fontSize: '9px', color: '#64748b', marginLeft: '8px' }}>
+                {consolidationCadence === 0
+                  ? 'Auto-fire OFF'
+                  : 'Auto-fire every ' + consolidationCadence + ' batch' + (consolidationCadence === 1 ? '' : 'es') + ' when canvas ≥ ' + consolidationMinCanvasSize}
+              </span>
+            </div>
           </div>
 
           {/* ── Prompt section ── */}
@@ -1787,6 +2104,15 @@ export default function AutoAnalyze({
                 <div style={{ fontSize: '10px', color: '#94a3b8', marginBottom: '4px', marginTop: '8px' }}>Topics Layout Table Primer (optional): <span className="aa-help" style={{display:'inline-flex'}}>ⓘ<span className="aa-tip">Additional context about how the Topics Layout Table should be structured — funnel ordering rules, placement guidelines, and depth conventions. Appended to the system prompt.</span></span></div>
                 <textarea className="aa-prompt-textarea" value={primerPrompt} onChange={e => setPrimerPrompt(e.target.value)} placeholder="Optional primer prompt…" style={{ minHeight: '50px' }} />
                 <div className="aa-prompt-chars">{primerPrompt.length.toLocaleString()} chars</div>
+                {/* Scale Session E — separate slots for consolidation prompts. The
+                    consolidation pass uses these instead of the regular Initial
+                    Prompt + Primer above. Paste docs/AUTO_ANALYZE_CONSOLIDATION_PROMPT_V4.md. */}
+                <div style={{ fontSize: '10px', color: '#94a3b8', marginBottom: '4px', marginTop: '14px', borderTop: '1px solid #334155', paddingTop: '10px' }}>Consolidation Initial Prompt: <span className="aa-help" style={{display:'inline-flex'}}>ⓘ<span className="aa-tip">Used by both auto-fire-every-N-batches consolidation passes and the admin Consolidate Now button. Paste docs/AUTO_ANALYZE_CONSOLIDATION_PROMPT_V4.md &ldquo;Consolidation Initial Prompt&rdquo; here. Restricts vocabulary to MERGE_TOPICS, SPLIT_TOPIC, MOVE_TOPIC, etc. — ADD_TOPIC and ADD_KEYWORD are forbidden in consolidation mode.</span></span></div>
+                <textarea className="aa-prompt-textarea" value={consolidationInitialPrompt} onChange={e => setConsolidationInitialPrompt(e.target.value)} placeholder="Paste the Consolidation Initial Prompt here…" />
+                <div className="aa-prompt-chars">{consolidationInitialPrompt.length.toLocaleString()} chars</div>
+                <div style={{ fontSize: '10px', color: '#94a3b8', marginBottom: '4px', marginTop: '8px' }}>Consolidation Primer (Topics Layout Table — restricted vocabulary): <span className="aa-help" style={{display:'inline-flex'}}>ⓘ<span className="aa-tip">Paste docs/AUTO_ANALYZE_CONSOLIDATION_PROMPT_V4.md &ldquo;Topics Layout Table Primer V4 (Consolidation)&rdquo; here. Documents the full Tier 0 input format for consolidation passes and the restricted operation vocabulary.</span></span></div>
+                <textarea className="aa-prompt-textarea" value={consolidationPrimerPrompt} onChange={e => setConsolidationPrimerPrompt(e.target.value)} placeholder="Paste the Consolidation Primer here…" style={{ minHeight: '50px' }} />
+                <div className="aa-prompt-chars">{consolidationPrimerPrompt.length.toLocaleString()} chars</div>
               </div>
             )}
           </div>
@@ -1921,6 +2247,14 @@ export default function AutoAnalyze({
             title="Walk every keyword against the live canvas and fix any status drift. Safe to run any time the panel is not actively running."
           >
             {reconcileBusy ? '⏳ Reconciling…' : '↻ Reconcile Now'}
+          </button>
+          <button
+            className="aa-btn"
+            onClick={handleConsolidateNow}
+            disabled={consolidationBusy || aaState === 'RUNNING' || aaState === 'BATCH_REVIEW'}
+            title="Run a one-shot consolidation pass on the current canvas — scans every topic at full Tier 0 detail for structural improvements (merges, splits, repositions). Restricted vocabulary (no ADD_TOPIC, no ADD_KEYWORD). Costs ~$0.30–$2 per pass depending on canvas size. Requires Consolidation Initial Prompt to be pasted in the AI Analysis Prompt section."
+          >
+            {consolidationBusy ? '⏳ Consolidating…' : '⚙ Consolidate Now'}
           </button>
           <button
             className="aa-btn"
