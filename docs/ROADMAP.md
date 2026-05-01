@@ -1,8 +1,9 @@
 # ROADMAP
 ## Product Launch Operating System (PLOS) — Development Execution Plan
 
-**Last updated:** May 1, 2026 (Scale Session E build SHIPPED — code + docs landed: applier `consolidationMode` flag (forbids ADD_TOPIC + ADD_KEYWORD with descriptive errors); new `docs/AUTO_ANALYZE_CONSOLIDATION_PROMPT_V4.md` (separate Initial + Primer pair derived from V4 with restricted vocabulary + full-canvas Tier-0 framing); `AutoAnalyze.tsx` wired with two new prompt textareas + cadence + min-canvas-size settings + Consolidate Now button + auto-fire gate inside runLoop after every Nth successful batch + checkpoint round-trip for the cadence counter; 7 new applier tests (240 → 248 total src/lib pass; defense-in-depth — prompt forbids ADD_TOPIC/ADD_KEYWORD AND wiring sets the consolidationMode flag AND applier rejects atomically). Lint at exact baseline parity (16e/41w; zero new). Build clean; tsc clean. `INPUT_CONTEXT_SCALING_DESIGN.md` §6 Scale Session E flipped to ✅ SHIPPED (D1 + D2 SHIPPED; D3 full-Bursitis validation deferred to director's discretionary follow-up; D4 V3-era cleanup deferred until post-validation). Multi-workflow: schema-change-in-flight flag stays "No"; W#2 still 🆕 about-to-start.)
-**Last updated in session:** session_2026-05-01_scale-session-e-build (Claude Code)
+**Last updated:** May 1, 2026 (Scale Session E D3 partial validation — second session of the day. Live full-Bursitis run on production vklf.com against fresh "Bursitis Test" project (2,328 keywords). 16 batches completed; 84 topics; 44 sister links; reconciliation 100% clean; ~$7 spend. Mid-run patch landed (commit `2209f08` — `decideTier` dormant-stability fix; pause-patch-resume across browser refresh proven). Per-topic input growth ~220 tokens vs V3's ~317 (~30% reduction); wall projects ~800 topics vs V3's ~700; design's ≥600-topic target reachable but full wall solve NOT achieved. Recency-stickiness from cross-cutting ops identified as the next bottleneck — captured as TWO new ROADMAP items: (i) sister-link deferral to consolidation-only; (ii) Q5 → B touch-semantics refinement. Plus FOUR other items captured this session: bulk-delete `-` icon error bug; Delete All Selected feature on every keyword table; pre-flight summary should check consolidation prompts; Bursitis Test naming clarification. 252 src/lib tests pass (was 248; +4 dormant-stability truth-table tests); tsc clean; build clean; lint at exact baseline parity. Multi-workflow: schema-change-in-flight flag stays "No" throughout; W#2 still 🆕 about-to-start. **D3 status: PARTIAL VALIDATION** — patch + quality preservation confirmed; consolidation auto-fire wiring not exercised live (paused at 84 topics, below 100 threshold); recommended next session = consolidation auto-fire follow-up (~$3-5, ~30 min, resumes from preserved checkpoint).)
+**Last updated in session:** session_2026-05-01-b_scale-session-e-d3-validation (Claude Code)
+**Previously updated in session:** session_2026-05-01_scale-session-e-build (Claude Code)
 **Previously updated in session:** session_2026-04-30-c_scale-session-d-build (Claude Code)
 **Previously updated in session:** session_2026-04-30-b_scale-session-c-build (Claude Code)
 **Previously updated in session:** session_2026-04-30_scale-session-b-build (Claude Code)
@@ -49,7 +50,7 @@
 
 | Workflow | Status | Branch | Last Session | Next Session | Schema-change in flight? |
 |---|---|---|---|---|---|
-| W#1 Keyword Clustering | 🔄 Active dev — stabilization | `main` | 2026-05-01 scale-session-e-build (Scale Session E SHIPPED — code + docs: applier `consolidationMode` 3rd-arg flag (`{ consolidationMode?: boolean }`) rejects ADD_TOPIC + ADD_KEYWORD atomically with descriptive error when set; new `docs/AUTO_ANALYZE_CONSOLIDATION_PROMPT_V4.md` (separate Initial Prompt + Primer derived from V4 with restricted vocabulary minus ADD_TOPIC + ADD_KEYWORD, full-canvas Tier-0 framing, no-batch-keywords framing, Consolidation Reevaluation Pass scoped to whole canvas); `AutoAnalyze.tsx` wired with new `consolidationCadence` (default 10; 0 disables auto-fire), `consolidationMinCanvasSize` (default 100), `consolidationInitialPrompt` + `consolidationPrimerPrompt` settings persisted in `aa_settings_{projectId}` + checkpoint round-trip through `aa_checkpoint_{projectId}`; `assembleConsolidationPrompt` (uses `serializationMode: 'full'` so consolidation always sees full Tier 0); `runConsolidationPass(triggerSource)` (assembles prompt + callApi + parseOperationsJsonl + doApplyV3 with consolidationMode flag); `handleConsolidateNow` admin button handler with pre-check guards; `doApplyV3` extended with optional 3rd-arg `{ consolidationMode?: boolean }` forwarding to `applyOperations`; runLoop auto-fire gate after every successful regular batch apply that increments `batchesSinceConsolidationRef` and fires `runConsolidationPass('auto')` when (cadence > 0) && (counter ≥ cadence) && (canvas size ≥ min) && (Consolidation Initial Prompt loaded ≥ 100 chars); explicit one-time-per-cycle warn-log when cadence + canvas-size both met but prompt is missing (counter resets to silence the warning until the next would-have-fired cycle); cadence counter persisted in checkpoint; counter reset to 0 in `startRunLoop` (fresh run) and rehydrated by `handleResumeCheckpoint` (graceful default 0 on pre-E checkpoints); UI: "Consol. cadence" + "Min canvas (topics)" inputs in Configure section with live ON/OFF status string; two new "Consolidation Initial Prompt" + "Consolidation Primer" textareas in Prompt section (separated by thin top-border; char counters); "⚙ Consolidate Now" button next to Reconcile Now in Controls bar (disabled when RUNNING / BATCH_REVIEW / consolidationBusy). Defense in depth — prompt forbids ADD_TOPIC/ADD_KEYWORD; wiring passes consolidationMode flag; applier rejects atomically; three independent layers. Touch recording (Q15 → A) for consolidation ops works through existing `recordTouchesFromOps` inside `doApplyV3`; consolidation-touched topics enter recency window for next 5 (default) regular batches. 7 new applier tests cover the contract from every angle (rejected ops / allowed ops / atomic failure / explicit-false equivalence / no-options regression). 248 src/lib tests pass (was 240; +7 new + 1 from prior background; zero regressions); `npx tsc --noEmit` clean; `npm run build` clean; `npm run lint` at exact baseline parity (16e/41w; zero new — one mid-session 4-error slip via unescaped quotes in two new tooltips, caught + fixed via `&ldquo;` / `&rdquo;` escaping). **No deploys this session** — code + docs to commit; push at director's discretion. **D3 full-Bursitis validation run is the director's discretionary follow-up — not run this session.** Multi-workflow: schema-change-in-flight flag stays "No"; W#2 still 🆕 about-to-start.) | (a) **Scale Session E — D3 deliverable: full-Bursitis validation run** (per `INPUT_CONTEXT_SCALING_DESIGN.md` §6 Scale Session E — director re-pastes both V4 + both consolidation prompts; ~$30–$60; closes the design from Scale Session A by demonstrating the wall is solved at ≥600 topics) — OR (b) Phase-1 UI polish bundle (incl. lower adaptive-thinking warning threshold for V4 — carried over from Session D) / (c) Action-by-action feedback workflow design / (d) Pause/Resume checkpoint round-trip live test (~$0.30, ~15 min) — confidence-builder for both touch-tracker AND new consolidation-cadence-counter rehydration / (e) V3-era cleanup pass (the Session E D4 deferral — flip default `serializationMode` to `'tiered'`, archive V3/V2/V2-PROPOSED prompts; best deferred until (a) confirms scale) | No |
+| W#1 Keyword Clustering | 🔄 Active dev — stabilization | `main` | 2026-05-01-b scale-session-e-d3-validation (D3 partial validation — live run on vklf.com against fresh full-Bursitis "Bursitis Test" (2,328 kw); 16 batches / 84 topics / 44 sister links / reconciliation 100% clean / ~$7 spend; mid-run patch `2209f08` — `decideTier` dormant-stability fix realigns implementation with §2.3 design intent + tightens §2.4 Tier 2 AND-rule; pause-patch-resume across browser refresh proven; per-topic input growth ~220 tok vs V3's ~317 (~30% reduction); wall projects ~800 topics vs V3's ~700; recency-stickiness from cross-cutting ops identified as next bottleneck (sister-link deferral + Q5→B refinement captured to ROADMAP polish-items); four other items captured (bulk-delete bug + Delete All Selected feature + pre-flight check + Bursitis Test naming). 252 src/lib tests pass (was 248; +4 dormant-stability truth-table tests). Push deployed (`d541094..2209f08`); D3 status PARTIAL VALIDATION — patch + quality confirmed; consolidation auto-fire not yet exercised live.) | (a) **Consolidation auto-fire follow-up** — resume from D3 preserved checkpoint OR click ⚙ Consolidate Now on existing 84-topic canvas (~$3-5, ~15-30 min); closes the only Session E mechanism not exercised live. **Recommended next.** OR (b) Recency-stickiness fix — sister-link deferral to consolidation-only + Q5→B touch-semantics refinement (1-2 sessions design + impl; direct attack on the bottleneck) / (c) Resume D3 to wall (~$40-50, 8-12hr; needs multi-session pause/resume) / (d) Phase-1 UI polish bundle (incl. 6 new items captured this session) / (e) Action-by-action feedback workflow design / (f) V3-era cleanup pass (still deferred from Session E D4) | No |
 | W#2 Competition Scraping & Deep Analysis | 🆕 About to start | `workflow-2-competition-scraping` (created by W#2's first session) | (none yet) | Workflow Requirements Interview per HANDOFF_PROTOCOL Rule 18 | No |
 | W#3 Therapeutic Strategy | Not yet started | — | — | — | — |
 | W#4–14 | Not yet started | — | — | — | — |
@@ -833,6 +834,116 @@ In the AST table's split view, each keyword row has cells in the 'Topics' column
 Add a row-number column (1, 2, 3, …) as the leftmost column in the Topics table, so admin can reference "topic #47" in conversation / notes.
 
 **Implementation note:** Localized to Topics table rendering — pure UI, no schema. ~30–60 min of code work.
+
+---
+
+### NEW Phase-1 polish bug — `-` icon errors on multi-select keyword tables (raised 2026-05-01-b D3 validation session)
+
+**Bug:** During D3 prep, director multi-selected keywords in a keyword table and clicked the `-` icon to the right of one of the selected rows. The action errored. The exact error message + which table was the source need re-capture next session — director observed it in passing during run setup; fix work needs the precise error + the specific table component.
+
+**Likely candidates for the affected table:** `MTTable.tsx` (Master Table?) or `KASTable.tsx` (Keyword AI Summary?) — director didn't specify; both are in `src/app/projects/[projectId]/keyword-clustering/components/`. Cross-reference: Phase 1g-test surfaced + fixed an analogous bug on the `ASTTable.tsx` (the post-Auto-Analyze AST table's old `handleRemove` was wired to a hard-delete via `prisma.keyword.deleteMany`; replaced with soft-archive flowing through `KeywordWorkspace.tsx`'s `softArchiveKeywords` callback). See `KEYWORD_CLUSTERING_ACTIVE.md` lines 1766 + 1952 and `CORRECTIONS_LOG.md` line 584 for the AST fix.
+
+**First step next session:** reproduce the error; identify the table component; trace the `-` icon's onClick handler.
+
+---
+
+### NEW Phase-1 polish feature — "Delete All Selected" / "Archive All Selected" bulk-action button on every keyword table (raised 2026-05-01-b D3 validation session)
+
+**Feature ask:** Every keyword table in the Keyword Clustering tool — both the Manual UI and the AI UI — should have a bulk-action button that operates on the multi-selected rows.
+
+**Important architectural distinction (from the Phase 1g-test soft-archive design):**
+- **Manual UI tables:** "Delete All Selected" → hard-delete (the user is curating their own raw keyword list before analysis; keywords mistakenly added should be removable; no upstream consumer).
+- **AI UI tables (post-Auto-Analyze AST + similar):** "Archive All Selected" → soft-archive flowing through `KeywordWorkspace.tsx`'s `softArchiveKeywords` callback; restorable via the Removed Terms surface.
+
+**Defense-in-depth pattern (mirror of how Session E shipped consolidation restrictions):**
+- UI button visible only when ≥1 row selected
+- Confirm modal showing count of rows + irreversibility note (Manual) or restorability note (AI)
+- API endpoint validates user permissions + scope
+- Idempotent (re-clicking after success is a no-op)
+
+**Implementation effort:** ~3-5 hours (one consistent button across 5 tables: ASTTable, KASTable, MTTable, TIFTable, TVTTable; per-table archive-vs-delete decision per the rule above).
+
+---
+
+### NEW Architectural Design Item — Move sister-link operations from per-batch V4 prompt to consolidation-only (raised 2026-05-01-b D3 validation session; design pending; direct attack on recency-stickiness)
+
+**Problem identified during D3 partial validation run:** Cross-cutting operations in the regular per-batch V4 prompt — `ADD_SISTER_LINK`, `REMOVE_SISTER_LINK`, `MOVE_KEYWORD`, `MERGE_TOPICS`, `SPLIT_TOPIC` — touch many topics per batch (statistical analysis: ~70 topic-touches per batch on a 73-topic canvas at batch 13). The recency window of 5 catches every topic within any 5-batch window, force-pinning all of them to Tier 0 via `decideTier` line 986. Tier 1 demotion (the design's compression mechanism) only fires when a topic genuinely escapes recency — which the V4 prompt's restructuring nature rarely allows. **Net effect: tier mode delivers ~30% per-topic input reduction (D3 measurement) but cannot achieve the order-of-magnitude compression the design imagined.**
+
+**`ADD_SISTER_LINK` is the largest single contributor** — touches both endpoints, 4-9 sister links per batch typical → 8-18 endpoint-touches per batch from sister links alone. Sister links are also semantically a **full-canvas decision** (the whole point is "this topic is also peer to topics in OTHER branches") — at per-batch the model only sees the batch-relevance subtree at Tier 0, which artificially handicaps sister-link reasoning anyway.
+
+**Proposed fix:** Mirror Session E's consolidation-restriction pattern.
+
+1. **`docs/AUTO_ANALYZE_PROMPT_V4.md`** — remove `ADD_SISTER_LINK` + `REMOVE_SISTER_LINK` from the regular per-batch operation vocabulary; add a FORBIDDEN OPERATIONS section explicitly noting that sister-link decisions happen in the consolidation pass (which sees the full canvas).
+2. **`src/lib/operation-applier.ts`** — extend `ApplyOptions` with `regularBatchMode?: boolean` flag (default false); when true, reject `ADD_SISTER_LINK` + `REMOVE_SISTER_LINK` atomically with a descriptive error before any state mutation. Mirror the Session E `consolidationMode: true` pattern.
+3. **`AutoAnalyze.tsx` / `doApplyV3`** — pass `regularBatchMode: true` for regular per-batch ops; consolidation continues to allow sister-link ops (already in its vocabulary per `docs/AUTO_ANALYZE_CONSOLIDATION_PROMPT_V4.md`).
+4. **Tests** — applier tests covering sister-link rejection / allowed ops in regular batch / atomic failure invariant.
+
+**Quality + cost trade-off:**
+- (+) Sister-link decisions move to consolidation where the model sees the full canvas at Tier 0 → better-quality sister-link decisions.
+- (+) Per-batch ops drop ~4-9 sister-link ops → ~8-18 fewer topic-touches per batch → recency window starts letting topics out → more Tier 1 demotion → meaningful additional input reduction.
+- (−) Consolidation passes do more work → slightly higher per-pass cost; offset by the per-batch reduction.
+- (−) Mid-batch sister-link suggestions disappear; admin sees them only after the next consolidation. Not a quality regression; just a different cadence.
+
+**Implementation effort:** ~1 session design + impl (small surface; mirror of an already-shipped pattern; 4-6 new applier tests; field validation = next D3 attempt).
+
+**Cross-references:**
+- `INPUT_CONTEXT_SCALING_DESIGN.md` §6 Scale Session E "D3 partial validation outcome" + §7 (this is the captured next-step from the D3 finding).
+- `KEYWORD_CLUSTERING_ACTIVE.md` POST-2026-05-01-SCALE-SESSION-E-D3 STATE block, "Standing instructions" option (b).
+- Session E's consolidation-restriction pattern at `src/lib/operation-applier.ts:457` and `:656`; consolidation prompt restriction at `docs/AUTO_ANALYZE_CONSOLIDATION_PROMPT_V4.md`.
+
+---
+
+### NEW Architectural Design Item — Refine recency-touched semantics (Q5 → B revisit) (raised 2026-05-01-b D3 validation session; design pending; complement to sister-link deferral)
+
+**Problem:** The Cluster 2 Q5 → B touch rule shipped in Scale Session C says "every topic ref in every op body that resolves to a stableId is stamped." Conservative-by-design — minimizes the risk of stale Tier 1 topics. **In production it's too liberal.** Specifically:
+
+- `ADD_SISTER_LINK(topicA, topicB)` stamps both endpoints, but the sister link doesn't change either topic's structural identity — they're just becoming linked. Arguably should NOT stamp at all.
+- `MOVE_KEYWORD(kw, fromTopic, toTopic)` stamps both source + target. The target genuinely changed (gained a keyword); the source's structural identity is unchanged (lost a keyword, but the topic itself remains the same coherent unit). Arguably stamps target only.
+- `REMOVE_KEYWORD(kw, fromTopic)` stamps the source. Similar argument — the topic's structural identity is unchanged.
+- `MERGE_TOPICS(source, target)` stamps both. Target arguably changed substantially (absorbed source's keywords); source is being deleted (will never be tier-decided again). Stamp target only.
+- `UPDATE_TOPIC_TITLE` / `UPDATE_TOPIC_DESCRIPTION` / `ADD_TOPIC` / `SPLIT_TOPIC` — these genuinely change topic structural identity; stamping is correct.
+
+**Proposed fix:** Tighten `recordTouchesFromOps` (in `src/lib/auto-analyze-v3.ts`) per a new Q5 → B' (B-prime) rule:
+- Stamp ONLY topics whose structural identity meaningfully changed by the op
+- Cross-reference table: each op type → which referenced topics get stamped
+
+**Quality + cost trade-off:**
+- (+) Far fewer per-batch touches → recency window actually filters topics → more Tier 1 demotion → meaningful additional input reduction (compounds with the sister-link deferral above)
+- (+) Tier mode finally delivers the compression the design imagined
+- (−) Risk of stale Tier 1 topics if the new rule is too strict; mitigated by Q15 → A (consolidation-touched topics enter recency) + the consolidation pass providing recovery coverage.
+
+**Implementation effort:** ~0.5-1 session (small per-op-type table; existing tests need refresh; new tests covering the per-op-type stamp behavior).
+
+**Sequencing:** ship together with sister-link deferral (above) — both fixes address the same recency-stickiness root cause; field-validate together in a follow-up D3-style run.
+
+**Cross-references:** Same as the sister-link deferral item above.
+
+---
+
+### NEW Phase-1 polish — Pre-flight summary should check consolidation prompts (raised 2026-05-01-b D3 validation session)
+
+**Bug:** The Auto-Analyze panel's pre-flight summary (P1-P10 checks shipped in Defense-in-Depth Audit Implementation Session 2) lists the regular V4 prompts' character counts but does NOT list the new Consolidation Initial Prompt + Consolidation Primer character counts. Director caught the omission during D3 prep — workaround was simply to verify the consolidation textareas had content via direct visual inspection.
+
+**Fix:** Extend pre-flight check P-something to surface consolidation-prompt char counts when consolidation cadence > 0. Pseudocode:
+
+```
+if (consolidationCadence > 0) {
+  if (consolidationInitialPrompt.length < 100) → ⚠ warning
+  if (consolidationPrimerPrompt.length < 100)  → ⚠ warning
+  display: "Consolidation Initial Prompt: N chars"
+  display: "Consolidation Primer: M chars"
+}
+```
+
+**Implementation effort:** ~30 min — `src/lib/preflight.ts` + Auto-Analyze panel pre-flight UI section.
+
+---
+
+### NEW Naming clarification — "Bursitis Test" project name now refers to the new full-Bursitis project (raised 2026-05-01-b D3 validation session)
+
+**Note for future sessions:** Sessions B + D used a project called "Bursitis Test" containing 37 backfilled topics on local dev. That project was DELETED by the director at the start of session_2026-05-01-b before D3. A NEW project with the same name was created — this one has 2,328 keywords and is the production full-Bursitis project on vklf.com. Sessions referring to "Bursitis Test" after 2026-05-01-b should mean the new full project; the historical small one no longer exists.
+
+**Captured here so future sessions don't search for the small project and confuse themselves.** No code action needed.
 
 ---
 

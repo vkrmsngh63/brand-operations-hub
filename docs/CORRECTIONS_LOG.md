@@ -2,8 +2,9 @@
 ## Append-only record of mistakes made during chats and lessons learned
 
 **Started:** April 16, 2026
-**Last updated:** April 30, 2026 (Scale Session D build session — 1 new INFORMATIONAL entry: V4 first-batch adaptive-thinking runaway pattern. First attempt at batch 1 of the small-batch validation stalled in the thinking phase for ~10 minutes with no per-second visible log activity; cancelled and retried, second attempt completed cleanly in ~2 minutes. Existing in-panel hint covers this pattern only at canvas ≥50 topics; V4 is heavier than V3 (~2k chars more in the prompts) and asks for more reasoning per op (intent fingerprints add a generation step), so the pattern fires at smaller canvases. Pattern preservation, not a Claude mistake — captured so future sessions know to flip Thinking mode to `Enabled` with `Budget 12000+` if a V4 batch stalls, and proposed as a Phase-1 polish item to lower the panel hint's canvas-size threshold for V4.)
-**Last updated in session:** session_2026-04-30-c_scale-session-d-build (Claude Code)
+**Last updated:** May 1, 2026 (Scale Session E D3 partial validation session — TWO new entries: (1) HIGH-severity decideTier dormant-stability force-pin design-implementation mismatch surfaced mid-D3-run; mid-run patch landed (commit `2209f08`); pause-patch-resume across browser refresh proven; root cause = Claude trusted §2.3's "recency does demotion work" claim without verifying decider implementation in the drift check; prevention = extend Rule 24 / Rule 1 verify-before-act to include in-flight algorithmic claims at session start, not just ROADMAP captures. (2) INFORMATIONAL Supabase HTTP 500 errors on fetchCanvas during batch 17 retry storm; backend hiccup, not tier-mode-related; ~$0.78 wasted on 3 failed attempts of batch 17 before director paused; pattern preservation so future sessions recognize the failure mode and don't misdiagnose it as tier-mode broken.)
+**Last updated in session:** session_2026-05-01-b_scale-session-e-d3-validation (Claude Code)
+**Previously updated in session:** session_2026-04-30-c_scale-session-d-build (Claude Code)
 **Previously updated in session:** session_2026-04-30_scale-session-b-build (Claude Code)
 **Previously updated in session:** session_2026-04-28_canvas-blanking-and-closure-staleness-fix (Claude Code)
 **Previously updated in session:** session_2026-04-28_deeper-analysis-and-fix-design (Claude Code)
@@ -49,6 +50,101 @@
 ---
 
 ## Entries
+
+### 2026-05-01 — `decideTier` dormant-stability force-pin design-implementation mismatch — surfaced mid-D3-run (HIGH severity)
+
+**Session:** session_2026-05-01-b_scale-session-e-d3-validation (Claude Code)
+
+**Tool/Phase affected:** Workflow #1 Keyword Clustering / Auto-Analyze tier mode (`src/lib/auto-analyze-v3.ts` `decideTier` function)
+
+**Severity:** HIGH (no production damage — the run was paused mid-flight before the wall would have hit; one wasted partial run plus the spend already accumulated; the patch shipped cleanly and the run resumed under patched code; but the class-of-failure is "Claude operating on partial information at session start" which is what Rule 24 was designed to prevent — and the rule didn't fire here because Rule 24 is scoped to ROADMAP captures, not algorithmic claims)
+
+**What happened:** During D3's full-Bursitis validation run, batches 1-4 produced unexpectedly small Tier 1 / Tier 2 sections. Investigation revealed every newly-created topic was force-pinned to Tier 0 by `decideTier:987` — `if (stabilityScore < STABILITY_TIER_THRESHOLD) return 0`. Verified in code:
+
+1. **Schema** (`prisma/schema.prisma:119`): `stabilityScore Float @default(0.0)` — every newly-created topic starts at stability 0.0
+2. **Applier** (`operation-applier.ts:457` + `:656`): hardcodes `stabilityScore: 0.0` on `ADD_TOPIC` + `SPLIT_TOPIC` `into[]`
+3. **V4 prompt** (line 540): "New topics created in this batch are implicitly at 0.0 and the tool tracks them; you do not emit a stability_score field on any operation."
+4. **Tier decider** (`auto-analyze-v3.ts:987`): force-pinned every topic with stability < 7.0 to Tier 0 — including topics with the schema default 0.0 (i.e., literally every topic in the run)
+
+Net effect: tier mode compression dormant in practice; input growth tracked V3 exactly; design's "recency does demotion work while stability is dormant" intent (`INPUT_CONTEXT_SCALING_DESIGN.md` §2.3) was unrealized.
+
+**Mismatch:** `INPUT_CONTEXT_SCALING_DESIGN.md` §2.3 "Dormant in first ship" stated *"Until [stability] ships, the recency signal does all the demotion work"* — but the Session C implementation (line 987) force-pinned on stability before the recency-not-touched signal could let any topic fall to Tier 1. Design intent and Session C implementation diverged at the decider's third force-condition. **Both pieces of doc + code were in my context at session start (read during the mandatory start-of-session sequence), but I did not synthesize them.** Specifically: I read §2.3's "recency does the demotion work" claim and accepted it without verifying that the tier decider's actual code preserved that property.
+
+**Root cause:** Rule 24 (pre-capture search before adding any ROADMAP item or proposing new architectural concern) is scoped to ROADMAP captures. It does NOT require Claude to verify the implementation against the design's claims at session start when the session is *running* the design (vs. *capturing new architectural items*). I trusted §2.3's claim transitively — "the design says recency does demotion work, so when D3 runs, the system will behave that way." This is the same failure mode Rule 24 was created to prevent (operating on partial information without verification), just at a different moment in the workflow.
+
+This is also adjacent to Rule 1 (Verify Before You Write) and Rule 3 (Code is the ultimate source of truth) — both rules establish "verify before act" as a principle. Neither was specifically wired to fire at the start of a validation run that depends on a load-bearing algorithmic property.
+
+**How caught:** Director observed batch-1-through-4 input-token growth pattern matched V3 baseline rather than the expected reduction; flagged that "input is growing — is tier mode actually compressing?" Claude then read the decider implementation, identified the force-pin at line 987, traced the dormant-zero default through schema + applier + prompt, and surfaced the design-implementation mismatch.
+
+**Correction:** Two-line surgical patch in `src/lib/auto-analyze-v3.ts`:
+
+- Line 987: `if (stabilityScore < STABILITY_TIER_THRESHOLD) return 0;` → `if (stabilityScore > 0 && stabilityScore < STABILITY_TIER_THRESHOLD) return 0;`. Treats `stabilityScore === 0` as "unscored / dormant default — let recency decide" instead of "deliberately scored low." Forward-compatible with Scale Session F's stability scoring (the gate fires for genuinely scored low values 0.1-6.9).
+- Line 992: `if (deeplyStale) return 2;` → `if (deeplyStale && stabilityScore >= STABILITY_TIER_THRESHOLD) return 2;`. Makes the §2.4 Tier 2 AND-rule explicit at the Tier 2 decision point.
+
+Plus 4 new tests in `auto-analyze-v3.test.ts` covering the dormant-stability truth table. 252 src/lib tests pass; tsc clean; build clean; lint at exact baseline parity. Committed as `2209f08`; pushed to `origin/main`; Vercel auto-deployed. Run resumed from pre-pause checkpoint after director hard-refreshed browser — pause-resume across browser refresh + new code load proven to work.
+
+The patch ALSO surfaced a deeper design issue: **the dormant-zero convention is forward-incompatible with Scale Session F**. When stability scoring ships and starts populating values 0.0-10.0, a topic with the literal value 0.0 (deliberately scored at the bottom) will be indistinguishable from an unscored topic. Captured to `INPUT_CONTEXT_SCALING_DESIGN.md` §7 Open questions as "dormant-zero ambiguity" with the cleaner alternative (explicit `stabilityScored: Boolean` flag) noted for Session F to revisit.
+
+The patch did NOT fully solve the wall question — D3 measurement showed ~30% per-topic input reduction (vs design's hoped-for order-of-magnitude). Investigation during the run identified **recency-stickiness** as the deeper bottleneck: cross-cutting ops (sister links, moves, merges) touch many topics per batch, keeping all of them in the recency window of 5. Two follow-up design items captured to ROADMAP: sister-link op deferral to consolidation-only + Q5 → B touch-semantics refinement. **The mistake here is specifically the line 987 force-pin; the recency-stickiness is a separate finding (real but distinct) that the patch unblocked the discovery of.**
+
+**Prevention proposed (for future sessions; not a rule update yet — pending director discussion):**
+
+The right rule generalization is something like: *"When a session's purpose is to validate a load-bearing algorithmic property, verify the implementation against the design's claims about that property as part of the drift check — read the relevant function(s), not just the design doc that asserts the property."*
+
+Concretely for D3, the drift check should have included reading `decideTier` (`auto-analyze-v3.ts:982-994`) and verifying that the force-Tier-0 conditions matched §2.3's "recency does demotion work" claim. That verification would have caught the line 987 mismatch immediately.
+
+This is a generalization of Rule 24 from "before adding to forward plan" to "before validating an existing claim." A formal rule update should wait until either (a) the pattern recurs in a future session and we capture the second instance, or (b) the director endorses the generalization. For now, this entry serves as a precedent for future Claude sessions to find via grep.
+
+**Cross-references:**
+- `INPUT_CONTEXT_SCALING_DESIGN.md` §6 Scale Session E "D3 mid-run patch — dormant-stability fix" subsection (the canonical patch story)
+- `INPUT_CONTEXT_SCALING_DESIGN.md` §6 Scale Session E "D3 partial validation outcome" subsection (the broader run findings)
+- `INPUT_CONTEXT_SCALING_DESIGN.md` §7 Open questions "Dormant-zero ambiguity in `stabilityScore`" row
+- Commit `2209f08` (the patch)
+- `KEYWORD_CLUSTERING_ACTIVE.md` POST-2026-05-01-SCALE-SESSION-E-D3 STATE block (this session's full record)
+- `HANDOFF_PROTOCOL.md` Rule 24 (the closest-related rule; this entry argues for generalizing it)
+
+**Why "HIGH" not "Critical":** no production data lost; no cascading downstream impact; the patch shipped cleanly + the run resumed under patched code + the validation still produced useful data (the ~30% reduction measurement is real even with the partial fix). Class-of-failure (Claude operating on partial information about the system's algorithmic properties) is severe enough to warrant an entry future sessions will find on grep.
+
+**Cost impact:** ~$2-3 of the run's first 4 batches was effectively wasted (the run would have hit V3 baseline behavior; useful only for catching the bug). After the patch landed, the remaining 12 batches genuinely measured the patch's effect (~$3). Net "validation-related" cost: ~$3-4 of the ~$7 total spend was on real D3 measurement; the rest was retries / pause / discovery overhead.
+
+---
+
+### 2026-05-01 — Supabase HTTP 500 errors on fetchCanvas during batch 17 retry storm (INFORMATIONAL — backend hiccup, not a Claude mistake)
+
+**Session:** session_2026-05-01-b_scale-session-e-d3-validation (Claude Code)
+
+**Tool/Phase affected:** Workflow #1 Keyword Clustering / Auto-Analyze runtime / production vklf.com Supabase backend
+
+**Severity:** INFORMATIONAL (no production damage; one batch (batch 17) failed cleanly after 3 attempts; canvas state not corrupted; ~$0.78 wasted on the 3 failed attempts; director paused the run shortly after the third failure)
+
+**What happened:** During D3's full-Bursitis validation run, batches 15 and 17 hit `HTTP 500 — fetchCanvas failed` errors after the API call + canvas-rebuild completed successfully. Specifically:
+
+- **Batch 15:** completed apply at 5:13:24 PM → `fetchCanvas failed: nodes fetch HTTP 500 — retrying in 5s`. Retry (attempt 2) cleared on second try; total cost $0.521 across both attempts.
+- **Batch 17:** completed apply at 5:19:59 PM → `fetchCanvas failed: state fetch HTTP 500 — retrying in 5s`. Attempt 2 (5:21:46 PM): apply succeeded → `fetchCanvas failed: nodes fetch HTTP 500 — retrying in 15s`. Attempt 3 (5:22:08 PM): API call completed → `Validation failed: Missing 1 batch keywords (trochanteric bursitis stretching)`; batch 17 fully FAILED. Total cost across 3 attempts: $0.779.
+
+The error is in the post-apply `fetchCanvas` call from `useCanvas.ts` — the run-loop applies operations atomically, then re-fetches the canvas state to verify the rebuild. The fetch is hitting Supabase's REST API and getting HTTP 500. Two endpoints affected: `nodes` and `state`. Pattern: intermittent (some batches fine; some fail).
+
+**Root cause (likely):** Supabase backend hiccup. The endpoints are simple Prisma reads — no complex query logic, no migration in flight, no schema drift. Most likely: brief Supabase Postgres connection-pool exhaustion or an upstream Supabase infrastructure blip. Has happened before sporadically; the existing retry logic (`useCanvas.ts` retries with exponential backoff) was added precisely to absorb this kind of transient failure.
+
+**How caught:** Director observed the retry messages in the activity log and paused the run shortly after.
+
+**Correction:** None this session — director paused the run, ending the retry storm naturally. Pattern preservation, not a Claude mistake.
+
+**Prevention (existing, not new):** The `useCanvas.ts` retry logic already absorbs single-attempt failures; this session's pattern was 3 consecutive failures on batch 17 which suggests the backend hiccup was longer than the retry budget. If this recurs:
+
+1. Consider extending the retry budget for `fetchCanvas` calls (currently 3 attempts; 5 might be more appropriate during long-running batched workloads)
+2. Consider exponential-backoff with jitter on retry delays (currently fixed 5s / 15s; might be improved)
+3. Consider a circuit breaker that pauses the run-loop if HTTP 500 rate exceeds a threshold (e.g., 3 in last 5 batches)
+
+Not promoted to ROADMAP yet — single occurrence; pattern preservation is enough for now.
+
+**Cost impact:** ~$1.30 across batches 15 + 17 retries (would have been ~$0.50 if all succeeded first attempt). Minor compared to the run's ~$7 total.
+
+**Cross-references:**
+- `useCanvas.ts` (the retry logic that absorbs these failures)
+- Run activity log captured in `KEYWORD_CLUSTERING_ACTIVE.md` POST-2026-05-01-SCALE-SESSION-E-D3 STATE block
+
+---
 
 ### 2026-04-30 — V4 first-batch adaptive-thinking runaway on small canvas (INFORMATIONAL — pattern preservation, not a Claude mistake)
 

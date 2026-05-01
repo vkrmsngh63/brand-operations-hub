@@ -1,8 +1,9 @@
 # KEYWORD CLUSTERING — ACTIVE DOCUMENT
 ## Current state of the Keyword Clustering workflow tool (Group B, tool-specific)
 
-**Last updated:** May 1, 2026 (Scale Session E build SHIPPED — code + docs landed: applier `consolidationMode` flag (forbids ADD_TOPIC + ADD_KEYWORD with descriptive errors); new `docs/AUTO_ANALYZE_CONSOLIDATION_PROMPT_V4.md` (separate Initial + Primer pair derived from V4 with restricted vocabulary + full-canvas Tier-0 framing); `AutoAnalyze.tsx` wired with two new prompt textareas + cadence + min-canvas-size settings + Consolidate Now button + auto-fire gate inside runLoop after every Nth successful batch + checkpoint round-trip for the cadence counter; 7 new applier tests (240 → 248 total src/lib pass; was 247 expected — one ESLint rule test in the same file pulled the count up by one). Lint at exact baseline parity (16e/41w; zero new — one mid-session 4-error slip caught + fixed via `&ldquo;`/`&rdquo;` escaping in two new tooltip strings). Build clean; tsc clean. NEW POST-2026-05-01-SCALE-SESSION-E STATE block prepended below; Session D demoted. Multi-workflow: schema-change-in-flight stays "No"; W#2 still 🆕 about-to-start. **D3 — full-Bursitis validation run — is the director's discretionary follow-up; not run this session.**)
-**Last updated in session:** session_2026-05-01_scale-session-e-build (Claude Code)
+**Last updated:** May 1, 2026 (Scale Session E D3 partial validation — second session of the day. Live full-Bursitis run on production vklf.com against a fresh "Bursitis Test" project (2,328 keywords, empty canvas to start; the prior 37-topic project of the same name was deleted by director before this run). Mid-run patch landed: `decideTier` dormant-stability fix (`auto-analyze-v3.ts:987` + `:992`) realigns implementation with `INPUT_CONTEXT_SCALING_DESIGN.md` §2.3 / §2.4 design intent. Pause-patch-resume across browser refresh proven to work. Run paused at batch 17 / 84 topics; checkpoint preserved. Per-topic input growth ~220 tokens (vs V3's ~317; ~30% reduction); wall projects ~800 topics (vs V3's ~700); reconciliation 100% clean; quality preserved. Full wall solve NOT achieved — recency-stickiness from cross-cutting ops (sister links + moves + merges) identified as the deeper bottleneck. Two new ROADMAP infrastructure-TODO items captured to address: sister-link op deferral to consolidation-only + Q5 → B touch-semantics refinement. Plus four other items captured: bulk-delete - icon error bug; Delete All Selected feature on every keyword table; pre-flight should check consolidation prompts; Bursitis Test naming clarification. NEW POST-2026-05-01-SCALE-SESSION-E-D3 STATE block prepended below; Session E build state demoted to historical. Multi-workflow: schema-change-in-flight stays "No" throughout; W#2 still 🆕 about-to-start.)
+**Last updated in session:** session_2026-05-01-b_scale-session-e-d3-validation (Claude Code)
+**Previously updated in session:** session_2026-05-01_scale-session-e-build (Claude Code)
 **Previously updated in session:** session_2026-04-30-c_scale-session-d-build (Claude Code)
 **Previously updated in session:** session_2026-04-30-b_scale-session-c-build (Claude Code)
 **Previously updated in session (earlier):** session_2026-04-30_scale-session-b-build (Claude Code)
@@ -38,7 +39,132 @@
 
 ---
 
-## ⚠️ POST-2026-05-01-SCALE-SESSION-E STATE (READ FIRST — updated 2026-05-01)
+## ⚠️ POST-2026-05-01-SCALE-SESSION-E-D3 STATE (READ FIRST — updated 2026-05-01-b)
+
+**As of 2026-05-01-b Scale Session E D3 partial validation — second session of the day. LIVE RUN session on production vklf.com: Scale Session E's mechanism exercised at scale on a fresh full-Bursitis canvas (2,328 keywords, empty start). Mid-run patch landed when batches 1-4 surfaced a tier-decider design-implementation mismatch; resume-from-checkpoint across browser refresh + new code load proven to work. Run paused at 17 batches / 84 topics / ~$7 spend. The wall is NOT eliminated by Sessions B-E alone — it's pushed back ~15-20%. Recency-stickiness from cross-cutting ops is the next bottleneck to address.**
+
+### What this session shipped to W#1
+
+**Code (single commit `2209f08`, pushed to vklf.com):** `decideTier` dormant-stability fix.
+- `src/lib/auto-analyze-v3.ts:987` — `if (stabilityScore < 7.0) return 0;` → `if (stabilityScore > 0 && stabilityScore < 7.0) return 0;`. Treats schema default `stabilityScore: 0.0` as "unscored / dormant — let recency decide" instead of "deliberately scored low."
+- `src/lib/auto-analyze-v3.ts:992` — `if (deeplyStale) return 2;` → `if (deeplyStale && stabilityScore >= 7.0) return 2;`. Makes the §2.4 Tier 2 AND-rule explicit at decision point.
+- `src/lib/auto-analyze-v3.test.ts` — 4 new dormant-stability truth-table tests (252 src/lib total; was 248).
+- All checks green: tests + tsc + build + lint at exact baseline parity.
+- Forward-compatible with Scale Session F's stability scoring (gate fires for genuinely scored low values 0.1-6.9).
+
+**Docs:** `INPUT_CONTEXT_SCALING_DESIGN.md` §6 Scale Session E gains two new sub-blocks documenting the patch reasoning and the D3 outcome; §7 Open questions gains a row for the dormant-zero ambiguity (Session F to revisit).
+
+### Live run results — D3 partial validation
+
+**Final state at session pause** (production vklf.com, "Bursitis Test" project — see naming clarification at bottom of this section):
+
+| Metric | Value |
+|---|---|
+| Batches completed | 16 (batch 17 fully failed after 3 attempts on backend HTTP 500s) |
+| Canvas topics | 84 |
+| Sister links | 44 |
+| Archived keywords | 0 |
+| Reconciliation | 100% clean across all 16 batches (8 → AI-Sorted, 0 → Reshuffled, every batch) |
+| API spend | ~$7 |
+| Wall-clock | ~62 min (4:21 PM → 5:23 PM ET) |
+| Checkpoint state | preserved (cursor at batch 18, 4 of 8 keywords pending; touchTracker + cadence counter rehydratable) |
+
+**Per-topic input growth — the central D3 measurement:**
+
+| Source | Per-topic growth | Wall projection |
+|---|---|---|
+| Session 0 V3 baseline (batches 1-150) | ~317 tokens/topic | wall hit at ~700 topics |
+| **D3 V4 + dormant-stability patch** | **~220 tokens/topic** | **wall projects ~800 topics** |
+
+**Net result: ~30% reduction in per-topic input growth — meaningful but NOT order-of-magnitude.** Design's ≥600-topic target is comfortably reachable before the wall (improvement over V3 which hit at ~700). Wall is NOT eliminated.
+
+### Recency-stickiness — the bottleneck blocking full wall solve
+
+Surfaced during the run via direct observation. Cross-cutting operations touch many topics per batch:
+
+- `ADD_SISTER_LINK` touches both endpoints (batches 10-12 averaged ~7 new sister links per batch → ~14 endpoint-touches)
+- `MOVE_KEYWORD` touches source + target (~5-10 keyword moves per batch → ~10-20 touches)
+- `MERGE_TOPICS` touches both source + merged-into (~1-2 per batch → ~2-4 touches)
+- `SPLIT_TOPIC` less cross-cutting (mostly creates new topics)
+
+With 20-40 ops per batch on a 73-topic canvas (batch 13 measurement), aggregate ~70 topic-touches per batch — meaning **statistically every topic gets touched within any 5-batch window**. The recency-window-of-5 force-pin (line 986) catches everything before the patched line 987 stability gate even runs. **Tier 1 demotion happens only when a topic genuinely escapes recency — which the V4 prompt's restructuring nature rarely allows.**
+
+The Q5 → B touch rule was conservative-by-design (every topic ref in every op stamps); in production it's too liberal. Fix design captured to ROADMAP — see "Standing instructions for next session" below.
+
+### Mid-run patch sequence — what we proved
+
+Aside from the validation findings, this session was the FIRST live exercise of several mechanisms shipped earlier:
+
+1. **Pause/Resume across browser refresh + new code load.** Director clicked Pause (in-flight batch 4 attempt 2 finished, run paused at batch 6). Patch was edited + tested + committed + pushed to origin/main (commit `2209f08`); Vercel auto-deployed in ~2 min; director hard-refreshed browser; clicked Resume; runLoop picked up at batch 7 cleanly with the patched code in effect. Checkpoint preserved touchTracker + currentBatchNum + cadence counter + settings + cursor — everything rehydrated correctly. **This is now field-validated.**
+2. **Anthropic prompt cache ~88k-char V4 system text caching.** `Cache hit: 20578 tokens` consistent across all 11 post-cold-start batches; cost stayed ~$0.20-0.30 per batch despite canvas growth.
+3. **Reconciliation correctness under tier mode.** 100% clean (zero off-canvas → Reshuffled across 16 batches) — V4 prompts + intent fingerprints + tier mode preserve quality at production scale (caveat: tier mode wasn't actually compressing yet due to recency-stickiness, so this is "V4 prompts at production scale" more than "tier mode at production scale").
+4. **Atomic batch failure pattern.** Batch 17 failed cleanly after 3 attempts (HTTP 500 retry storm); batch 18 started normally afterward. The failed batch's 8 keywords stay in queue for re-attempt; no canvas state corruption.
+
+### Things we did NOT exercise live
+
+- **Consolidation auto-fire.** Would have triggered at canvas ≥ 100 topics + cadence counter ≥ 10. Run paused at canvas 84. **This is the highest-priority next-session task** — cheap (~$3-5, ~30 min) and tests the entire Session E shipped path.
+- **Admin-triggered Consolidate Now button.** Same path; can be tested by clicking the button manually.
+- **Touch-tracker recording from consolidation ops** (Q15 → A). Requires consolidation to have fired.
+- **Pre-flight summary's consolidation-prompt char-count check.** Director observed during pre-flight that the panel summary only listed the two regular V4 prompts, not the new consolidation ones — **captured as polish item to ROADMAP** (see below). Workaround: paste both consolidation prompts into the textareas before clicking Start; auto-fire reads their content at fire-time.
+
+### What did NOT change this session
+
+- **Schema:** untouched. Multi-workflow schema-change-in-flight flag stays "No" throughout.
+- **`src/lib/operation-applier.ts`:** untouched (Session E's `consolidationMode` flag still in place; still untested live).
+- **V4 prompts** (`docs/AUTO_ANALYZE_PROMPT_V4.md`, `docs/AUTO_ANALYZE_CONSOLIDATION_PROMPT_V4.md`): untouched.
+- **`AutoAnalyze.tsx`:** untouched.
+- **DB structure:** no migrations. The full-Bursitis project's canvas was modified by the live run (84 topics, 44 sister links, all with intent fingerprints generated by V4) — that's normal Auto-Analyze behavior.
+
+### Multi-workflow protocol coordination
+
+- **Schema-change-in-flight flag:** stays "No" throughout (no schema work this session).
+- **Branch:** `main` (W#1's home).
+- **Cross-workflow doc edits:** none.
+- W#2 still 🆕 about-to-start; no parallel chat ran during this session.
+- Two pushes deployed: commit `d541094` (Session E build, pushed at session start) + `2209f08` (D3 mid-run patch).
+
+### Files touched this session
+
+**Modified (3 — single end-of-session commit + the prior mid-session patch commit):**
+
+End-of-session doc batch (this commit):
+- `docs/KEYWORD_CLUSTERING_ACTIVE.md` — this STATE block prepended; prior Session-E STATE block demoted to historical; header timestamp updated.
+- `docs/INPUT_CONTEXT_SCALING_DESIGN.md` — §6 Scale Session E gains "D3 partial validation outcome" sub-block; §7 Open questions gains "dormant-zero ambiguity" row; header timestamp updated. (Earlier this session: same doc gained "D3 mid-run patch — dormant-stability fix" sub-block + §7 row.)
+- `docs/ROADMAP.md` — Active Tools row updated for W#1; new Phase-1 polish-item entries (6 total — see "Standing instructions" below); header timestamp.
+- `docs/CORRECTIONS_LOG.md` — TWO new entries prepended: HIGH-severity decideTier dormant-stability mismatch (cause + correction + prevention); INFORMATIONAL Supabase HTTP 500 on fetchCanvas during retry storm.
+- `docs/CHAT_REGISTRY.md` — new top row for `session_2026-05-01-b_scale-session-e-d3-validation`; header timestamp.
+- `docs/DOCUMENT_MANIFEST.md` — header timestamps + per-doc modified flags + this-session summary.
+
+Mid-session patch commit (`2209f08`, already pushed):
+- `src/lib/auto-analyze-v3.ts` — decideTier lines 987 + 992 changed (~7 LOC net add including new comments).
+- `src/lib/auto-analyze-v3.test.ts` — 4 new dormant-stability truth-table tests (~50 LOC append).
+- `docs/INPUT_CONTEXT_SCALING_DESIGN.md` — "D3 mid-run patch" sub-block + §7 dormant-zero ambiguity row.
+
+### Standing instructions for next session — six "NEXT" choices (recommendation: a)
+
+(a) **Consolidation auto-fire follow-up — resume from this session's checkpoint OR test on existing 84-topic canvas.** The Bursitis Test project's preserved checkpoint can be resumed; consolidation will auto-fire when canvas crosses 100 topics (likely batches 18-22). Alternative: click "⚙ Consolidate Now" button on the existing 84-topic canvas to test the admin-triggered path immediately. ~$3-5 API spend, ~15-30 min wall-clock. **Recommended next** — closes the only Session E mechanism that wasn't exercised live in this run, and the cost is small.
+
+(b) **Recency-stickiness fix — design + ship.** Two paired sub-tasks per the captures in ROADMAP infrastructure TODOs (5.x.iii + 5.x.iv): (1) move sister-link ops from per-batch V4 prompt to consolidation-only (vocabulary restriction + applier-side `regularBatchMode` flag + tests; mirror of how Session E restricted ADD_TOPIC + ADD_KEYWORD on consolidation); (2) refine recency-touched semantics (Q5 → B revisit — `ADD_SISTER_LINK` doesn't stamp; `MOVE_KEYWORD` stamps target only; etc.). Direct attack on the bottleneck identified in this run. ~1-2 sessions design + impl. Higher value than (a) for the wall question, but (a) is cheaper and orthogonal.
+
+(c) **Resume D3 to completion (or to wall).** Restart from checkpoint at batch 18; let it run to ~batch 130-150 (projected wall) or to natural completion. ~$40-50 spend, 8-12 hours wall-clock (definitely needs pause/resume across multiple sessions). Useful for empirical wall-position measurement; not strictly necessary given the projection from current data is reliable.
+
+(d) **Phase-1 UI polish bundle** — Skeleton View on canvas + AST split-view alignment + Topics table row numbers + lower-the-Adaptive-Thinking-warning-threshold-for-V4 + the 6 new polish items captured this session. ~4-6 hours total. Independent of architectural work.
+
+(e) **Action-by-action feedback workflow design session.** Analogous to Scale Session A. ~3-4 hours design; implementation 2-4 sessions after.
+
+(f) **V3-era cleanup pass** (still deferred from Session E D4). Flip `buildOperationsInputTsv`'s default from `'full'` to `'tiered'`; archive V2 / V2-PROPOSED / V3 prompt docs; consider dropping the `serializationMode` arg. Best deferred until D3 wall is fully closed.
+
+**Recommendation: (a) — consolidation follow-up.** Closes the one untested Session E path for cheap. After that, (b) is the path that meaningfully advances the wall question.
+
+**Director's framing through prior sessions:** (Scale-A) → (Scale-0) → (Defense-in-Depth ×3) → (Scale-B) → (Scale-C) → (Scale-D) → (Scale-E build) → **(Scale-E D3 partial validation, this session)** → (consolidation follow-up + recency-stickiness fix) → (V3-era cleanup).
+
+### Bursitis Test naming clarification
+
+The "Bursitis Test" project name now refers to a **fresh full-Bursitis (2,328-keyword) project** created by the director at the start of this session. This is NOT the same project Sessions B/D used, which had only 37 backfilled topics on local dev — that prior project was deleted by the director before this session began. Future sessions referring to "Bursitis Test" should mean the new full project; the historical small one no longer exists. Captured as ROADMAP infrastructure TODO so this naming overload is documented.
+
+---
+
+## ⚠️ POST-2026-05-01-SCALE-SESSION-E STATE (preserved as historical context — last updated 2026-05-01; superseded by D3 partial validation block above)
 
 **As of 2026-05-01 Scale Session E — first build session since Scale Session D closed. CODE + DOCS session: consolidation pass mechanism shipped end-to-end behind a separate prompt pair + admin trigger button + auto-fire gate. Applier-side `consolidationMode` flag enforces the restricted vocabulary atomically. Full-Bursitis validation (D3) is the director's discretionary follow-up — not run this session.**
 

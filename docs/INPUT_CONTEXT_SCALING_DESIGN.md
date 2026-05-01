@@ -3,8 +3,9 @@
 
 **Created:** April 27, 2026 (Scale Session A — design-only session producing this doc + locked decisions + multi-session plan; no code, no DB)
 **Created in session:** session_2026-04-27_input-context-scaling-design (Claude Code)
-**Last updated:** May 1, 2026 (Scale Session E build SHIPPED — code + docs landed: applier `consolidationMode` flag (forbids ADD_TOPIC + ADD_KEYWORD with descriptive errors); new `docs/AUTO_ANALYZE_CONSOLIDATION_PROMPT_V4.md` (separate Initial + Primer pair derived from V4 with restricted vocabulary); `AutoAnalyze.tsx` wired with two new prompt textareas, cadence + min-canvas-size settings, runConsolidationPass + handleConsolidateNow + runLoop auto-fire gate after every Nth successful batch, checkpoint round-trip for the cadence counter; 7 new applier tests (66 → 248 total src/lib pass). Full-Bursitis validation run (D3 deliverable) is the director's discretionary follow-up — separate session.)
-**Last updated in session:** session_2026-05-01_scale-session-e-build (Claude Code)
+**Last updated:** May 1, 2026 (Scale Session E D3 partial validation — the live full-Bursitis run on production vklf.com closed the design's central question with a partial answer. 16 batches completed; 84 topics produced; 44 sister links; reconciliation 100% clean; per-topic input growth ~220 tokens vs V3 baseline ~317 (~30% reduction); wall projects ~800 topics vs V3's ~700 (~15-20% improvement); recency-stickiness from cross-cutting ops identified as the bottleneck preventing full wall solve. Mid-run patch landed (commit `2209f08` — `decideTier` lines 987 + 992 — dormant-stability fix realigns implementation with §2.3 design intent + tightens Tier 2 AND-rule per §2.4); pause-patch-resume across browser refresh proven to work; 4 new tests pass (252 src/lib total). Two follow-up design items captured to ROADMAP for recency-stickiness fix: (1) move sister-link ops from per-batch V4 to consolidation-only; (2) refine recency-touched semantics (Q5 → B revisit). New §6 sub-block "D3 partial validation outcome" + new §7 row for dormant-zero ambiguity. D3 status: PARTIAL VALIDATION — patch + quality confirmed; consolidation auto-fire wiring not exercised live (paused at canvas 84 topics, below 100 threshold).)
+**Last updated in session:** session_2026-05-01-b_scale-session-e-d3-validation (Claude Code)
+**Previously updated in session:** session_2026-05-01_scale-session-e-build (Claude Code)
 **Previously updated in session:** session_2026-04-30-c_scale-session-d-build (Claude Code)
 **Previously updated in session:** session_2026-04-30-b_scale-session-c-build (Claude Code)
 **Previously updated in session:** session_2026-04-30_scale-session-b-build (Claude Code)
@@ -386,6 +387,50 @@ Design + locked decisions + multi-session plan. This doc is the deliverable.
 **Alternative considered + set aside.** Schema field `stabilityScored: Boolean @default(false)` to disambiguate "never scored" from "deliberately scored 0." Cleaner semantically — eliminates the dormant-zero convention's ambiguity once Session F ships — but violates the multi-workflow no-schema-change-in-flight discipline (`MULTI_WORKFLOW_PROTOCOL.md` §4) and would require a mid-run schema migration. Captured for Session F to revisit (see §7 Open questions).
 
 **Why "in-flight refinement, not new design":** the patch realigns the implementation with §2.3's already-stated dormant-stability intent. No new mechanism added. No semantic change for stability values ≥ 7.0 (high stability still allows Tier 1/2 demotion via the AND-rule path). No semantic change for positive low stability (genuine score 0.1–6.9 still forces Tier 0).
+
+#### D3 partial validation outcome (2026-05-01, session_2026-05-01-b)
+
+**Run summary.** D3 was launched on production vklf.com against a fresh full-Bursitis project ("Bursitis Test" — naming overload, see ROADMAP infrastructure TODO; this is the new 2,328-keyword project, NOT the prior 37-topic local-dev project of the same name). The run paused at batch 17 / 84 topics / ~$7 spend; checkpoint preserved for any future resume.
+
+**Final canvas state at session pause:**
+
+| Metric | Value |
+|---|---|
+| Batches completed | 16 (batch 17 failed after 3 attempts on backend HTTP 500s) |
+| Canvas topics | 84 |
+| Sister links | 44 |
+| Archived keywords | 0 |
+| Reconciliation | 100% clean across all 16 batches (8 → AI-Sorted, 0 → Reshuffled per batch) |
+| API spend (approx) | ~$7 ($6.20 visible + ~$0.80 from batches 4-6 during pause) |
+| Wall-clock | ~62 min total (4:21 PM → 5:23 PM) |
+
+**Per-topic input growth — the central D3 measurement:**
+
+| Source | Per-topic growth rate | Wall projection |
+|---|---|---|
+| Session 0 V3 baseline | ~317 tokens/topic | wall hit at ~700 topics |
+| **D3 V4 + dormant-stability patch (this run, batch 1-14)** | **~220 tokens/topic** | **wall projects ~800 topics** |
+
+**Net result: ~30% reduction in per-topic input growth — meaningful but not full solve.** The wall would still hit, just ~15-20% later in the run. The design's ≥600 topic target is comfortably reachable before the wall (improvement over V3, which hit at ~700), but the wall isn't eliminated.
+
+**Recency-stickiness — the bottleneck that prevents full compression:**
+
+Diagnosed during the run. Cross-cutting operations (`ADD_SISTER_LINK`, `MOVE_KEYWORD`, `MERGE_TOPICS`, `SPLIT_TOPIC`) touch many topics per batch — `ADD_SISTER_LINK` alone touches both endpoints. With 20-40 ops per batch and a 73-topic canvas (batch 13), statistical analysis shows ~70 topic-touches per batch, meaning every topic gets touched within any 5-batch window. The recency-window-of-5 force-pins all touched topics to Tier 0 via the line 986 check (recency > stability force-pin in the decider); the patched line 987 stability gate becomes irrelevant when recency catches everything first. **The dormant-stability patch was correct but insufficient on its own — the deeper bottleneck is recency-touched semantics being too liberal (Q5 → B was conservative-by-design but in practice over-stamps).**
+
+**Two follow-up design items captured to ROADMAP** to address recency-stickiness:
+
+1. **Move sister-link operations from per-batch V4 prompt to consolidation-only.** `ADD_SISTER_LINK` / `REMOVE_SISTER_LINK` are inherently full-canvas decisions; mirroring how Session E's consolidation prompt restricts ADD_TOPIC + ADD_KEYWORD, the regular V4 prompt should restrict sister-link ops. Defense in depth: prompt restriction + applier `regularBatchMode: { forbiddenOps: [...] }` flag + tests.
+2. **Refine recency-touched semantics (Q5 → B revisit).** `ADD_SISTER_LINK` arguably shouldn't stamp at all (link doesn't change topic structural identity); `MOVE_KEYWORD` arguably stamps target only (source's structural identity unchanged); other ops similarly tightened.
+
+**Other findings captured during the run:**
+
+- **Quality preservation confirmed** — V4 prompts + tier mode + intent fingerprints did NOT introduce reshuffles. Reconciliation 100% clean across all 16 batches even with cross-cutting ops aggressively restructuring the canvas.
+- **Pause/Resume across browser refresh + new code load proven to work.** This was the unproven step in the pause-patch-resume sequence; checkpoint round-trip survived a browser hard-refresh and the new patched bundle loaded cleanly.
+- **Backend HTTP 500 errors observed in batches 15 + 17.** `fetchCanvas` calls (state and nodes endpoints) failed intermittently, consuming retry budget. Captured as informational entry in `CORRECTIONS_LOG.md` — not tier-mode-related; Supabase backend hiccup pattern.
+- **Validation failure rate ~10-15%** — model occasionally fails to place all 8 batch keywords on first attempt; retry usually clears it. ~$0.25 wasted per failed validation. Same pattern as V3.
+- **Consolidation auto-fire mechanism NOT exercised** — would have triggered around batch 60-70 when canvas crossed 100 topics; we paused at batch 17 / 84 topics. Captured as next-session task: cheap (~$3-5, ~30 min) follow-up that resumes from the preserved checkpoint and either continues the run to ~100 topics OR clicks Consolidate Now manually on the existing 84-topic canvas.
+
+**D3 status:** PARTIAL VALIDATION — patch outcome confirmed (~30% reduction); quality preservation confirmed; consolidation wiring unverified live; recency-stickiness identified as the next bottleneck blocking full wall solve.
 
 ### Scale Session F — Stability-scoring algorithm (future; conditional on use)
 **Trigger:** Decision to activate the stability signal in the tier decider.
