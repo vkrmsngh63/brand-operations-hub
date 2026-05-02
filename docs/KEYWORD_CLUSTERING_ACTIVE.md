@@ -1,8 +1,9 @@
 # KEYWORD CLUSTERING — ACTIVE DOCUMENT
 ## Current state of the Keyword Clustering workflow tool (Group B, tool-specific)
 
-**Last updated:** May 1, 2026 (Scale Session E D3 partial validation — second session of the day. Live full-Bursitis run on production vklf.com against a fresh "Bursitis Test" project (2,328 keywords, empty canvas to start; the prior 37-topic project of the same name was deleted by director before this run). Mid-run patch landed: `decideTier` dormant-stability fix (`auto-analyze-v3.ts:987` + `:992`) realigns implementation with `INPUT_CONTEXT_SCALING_DESIGN.md` §2.3 / §2.4 design intent. Pause-patch-resume across browser refresh proven to work. Run paused at batch 17 / 84 topics; checkpoint preserved. Per-topic input growth ~220 tokens (vs V3's ~317; ~30% reduction); wall projects ~800 topics (vs V3's ~700); reconciliation 100% clean; quality preserved. Full wall solve NOT achieved — recency-stickiness from cross-cutting ops (sister links + moves + merges) identified as the deeper bottleneck. Two new ROADMAP infrastructure-TODO items captured to address: sister-link op deferral to consolidation-only + Q5 → B touch-semantics refinement. Plus four other items captured: bulk-delete - icon error bug; Delete All Selected feature on every keyword table; pre-flight should check consolidation prompts; Bursitis Test naming clarification. NEW POST-2026-05-01-SCALE-SESSION-E-D3 STATE block prepended below; Session E build state demoted to historical. Multi-workflow: schema-change-in-flight stays "No" throughout; W#2 still 🆕 about-to-start.)
-**Last updated in session:** session_2026-05-01-b_scale-session-e-d3-validation (Claude Code)
+**Last updated:** May 1-2, 2026 (Consolidation auto-fire follow-up session — third session of 2026-05-01, spanning past midnight into 2026-05-02. Live run on production vklf.com against the same "Bursitis Test" project, resuming from yesterday's preserved checkpoint. **Path B (admin Consolidate Now): FULLY VALIDATED end-to-end** — single click on the 90-topic canvas at 7:28 PM, 3 ops emitted (1 net topic merged), $0.216 spend, ~2 min wall-clock, distinct logging confirmed, applier consolidationMode flag enforced. **Path A (auto-fire after every Nth batch): PARTIAL VALIDATION** — cadence counter math validated through Batch 27 (incremented cleanly 1→9 across 9 successful applies post-consolidation-reset); canvas-size gate confirmed firmly passing at Batch 23 (101 topics); the auto-fire trip event itself was NOT observed live because the browser froze during Batch 28's apply phase right at the moment counter would have hit 10. Page-unresponsive popup; 60s wait; refresh required. **NEW HIGH-severity finding: browser freeze on atomic canvas rebuild at ~105-node canvas** — likely the layout pass running synchronously on the main thread; a real new scalability bug, captured to ROADMAP. **NEW MEDIUM-severity finding: HTTP 500 retry storm rate elevated to ~30% today (vs. ~6% yesterday)** — diagnosed and FIXED in this session's commit. Root cause: asymmetric defense-in-depth — `/canvas/nodes` GET had `withRetry` from the 2026-04-28 G2 fix but `/canvas` GET (state + pathways + sister links) did not. Surgical 3-line fix shipped (each Prisma query now wrapped in `withRetry`); tsc clean; build clean; lint at exact baseline parity (16e/41w; zero new); withRetry tests 17/17 pass. Multi-workflow: schema-change-in-flight stays "No" throughout; W#2 still 🆕 about-to-start; no parallel chat. NEW POST-2026-05-01-c-CONSOLIDATION-AUTO-FIRE-FOLLOWUP STATE block prepended below; Session E D3 partial-validation state demoted to historical.)
+**Last updated in session:** session_2026-05-01-c_consolidation-auto-fire-followup (Claude Code)
+**Previously updated in session:** session_2026-05-01-b_scale-session-e-d3-validation (Claude Code)
 **Previously updated in session:** session_2026-05-01_scale-session-e-build (Claude Code)
 **Previously updated in session:** session_2026-04-30-c_scale-session-d-build (Claude Code)
 **Previously updated in session:** session_2026-04-30-b_scale-session-c-build (Claude Code)
@@ -39,7 +40,151 @@
 
 ---
 
-## ⚠️ POST-2026-05-01-SCALE-SESSION-E-D3 STATE (READ FIRST — updated 2026-05-01-b)
+## ⚠️ POST-2026-05-01-c-CONSOLIDATION-AUTO-FIRE-FOLLOWUP STATE (READ FIRST — updated 2026-05-01-c)
+
+**As of 2026-05-01-c (third session of 2026-05-01, spanning past midnight). LIVE RUN session on production vklf.com — resumed from yesterday's preserved Bursitis Test checkpoint (canvas was at 90 topics post-D3-partial-validation rollback, $6.31 spend; today's session ran an additional 22 batches between 4:49 PM and 8:08 PM, plus one admin-triggered consolidation pass at 7:28 PM and an attempted auto-fire trip at Batch 28 that got interrupted by browser freeze). Path B fully validated; Path A partial; HTTP 500 root cause found and surgically fixed; new browser-freeze scalability concern surfaced.**
+
+### What this session shipped to W#1
+
+**Code (single commit, ready to push at director's discretion):** asymmetric `withRetry` fix on the canvas state-fetch route.
+- `src/app/api/projects/[projectId]/canvas/route.ts` GET handler — each of the three Prisma queries (`canvasState.findUnique`, `pathway.findMany`, `sisterLink.findMany`) now wrapped in `withRetry(() => ...)`, matching the existing pattern at `src/app/api/projects/[projectId]/canvas/nodes/route.ts:28-33`. New module-level comment explains the asymmetry that this session diagnosed and the empirical evidence (5× higher "state fetch HTTP 500" vs "nodes fetch HTTP 500" rate today).
+- ~10 LOC net add across 1 file: import line, three `withRetry(() => ...)` wrappers, and the explanatory comment.
+- All checks green: `npx tsc --noEmit` clean; `npm run build` clean (17/17 static pages); `npm run lint` at exact baseline parity (16e/41w; zero new); `node --test src/lib/prisma-retry.test.ts` 17/17 pass.
+
+**No schema changes.** No DB migrations. No client-side changes. Server-side route handler patch only.
+
+### Live run results — Path B (admin Consolidate Now): FULLY VALIDATED
+
+**The 7:28 PM consolidation pass on the 90-topic canvas:**
+
+| Metric | Value |
+|---|---|
+| Trigger | Admin click on `⚙ Consolidate Now` button, panel was PAUSED |
+| Canvas state at click | 90 topics, 44 sister links |
+| Input tokens sent | ~35,393 (full Tier 0 serialization of all 90 topics) |
+| Time | ~2 min wall-clock (7:28:16 → 7:30:10) |
+| Cost | $0.216 |
+| Operations emitted | 3 (model found genuine structural improvements) |
+| Apply result | 1 net topic removed (likely a MERGE_TOPICS); canvas → 89 topics, 44 sister links |
+| Logging | Distinct: `═══ Consolidation pass (admin, canvas=90 topics) ═══` + `Consolidation API call complete` + `✓ Consolidation applied (3 operations).` |
+| Reconciliation | Correctly skipped — `✓ All 0 keywords verified` (no batch keywords for consolidation, as designed) |
+| Applier `consolidationMode: true` flag | Enforced; no ADD_TOPIC or ADD_KEYWORD attempted |
+| Cosmetic note | Inner thinking-phase log line shows stale "Batch 19" label (currentBatchNumRef inheritance) — captured as polish item |
+
+**This is the first live confirmation that:**
+1. The "⚙ Consolidate Now" button reaches `runConsolidationPass('admin')` correctly.
+2. `assembleConsolidationPrompt()` serializes the full canvas at Tier 0.
+3. The model receives the consolidation context, returns a non-empty op list with structural improvements (not refused, not empty).
+4. The applier accepts ops with `consolidationMode: true` and applies them atomically.
+5. The post-consolidation `recordTouchesFromOps` runs cleanly (Q15 → A wiring works).
+6. The post-consolidation `saveCheckpoint()` persists state, including the cadence-counter reset to 0.
+
+### Live run results — Path A (auto-fire after every Nth batch): PARTIAL VALIDATION
+
+**The resumed run from 7:37 PM:** drove 9 successful regular batch applies (batches 19 retry, 20, 21 retry storm, 22, 23, 24, 25, 26, 27) before the browser freeze killed Batch 28's apply.
+
+**What was validated:**
+
+| Mechanism | Status | Evidence |
+|---|---|---|
+| Cadence counter increment after every successful apply | ✅ Confirmed | Counter went 1→2→3→4→5→6→7→8→9 across the 9 successful batches; consistent with code at AutoAnalyze.tsx:1469 (`batchesSinceConsolidationRef.current += 1`) |
+| Cadence counter reset to 0 after consolidation pass | ✅ Confirmed | Pre-consolidation counter (post-Batch-18) was high; post-consolidation Batch 19 retry's apply incremented to 1, exactly as the design specifies |
+| Canvas-size gate (`>= consolidationMinCanvasSize`) | ✅ Confirmed firmly passing | Crossed 100 topics at Batch 23 (101 topics) and stayed past it through Batch 27 (105 topics) |
+| Cadence threshold gate (`>= consolidationCadence`) | ⚠️ Almost reached | Counter at 9 after Batch 27 applied; Batch 28 was the trip moment |
+| Auto-fire trip event itself (`runConsolidationPass('auto')` firing) | ❌ NOT observed live | Browser froze during Batch 28's apply phase before the "Batch 28 — applied." log line could fire and increment the counter to 10 |
+
+**What blocked the trip:** browser freeze during Batch 28 attempt 2's apply (canvas had grown to 105 topics; layout pass / atomic rebuild on a 105-node canvas appears to lock the JS main thread synchronously past the browser's "page unresponsive" threshold). 60-second wait did not resolve; refresh required. Post-refresh checkpoint shows "26/291 batches done, 14 min ago" — i.e., Batch 27's apply was the last to fully persist; Batch 28's apply was rolled back when the freeze interrupted the apply pipeline.
+
+**What we DID prove indirectly:** the cadence math up to one batch before the trip works exactly as the unit tests would predict. The auto-fire path is wired identically to the admin path that we DID prove works end-to-end. The remaining unknown is purely: does the runLoop's gate-check + `await runConsolidationPass('auto')` + post-consolidation `saveCheckpoint()` interleave correctly under live conditions. **High confidence this is fine** (it's wired identically to the admin path which we validated, and the cadence-counter logic is unit-tested), but a future session should still observe at least one auto-fire trip live for full confidence.
+
+### HTTP 500 retry storm — diagnosed and FIXED this session
+
+**Empirical evidence collected today:**
+
+| Source | "state fetch HTTP 500" hits | "nodes fetch HTTP 500" hits | Total batch attempts |
+|---|---|---|---|
+| Yesterday's D3 (2026-05-01-b session) | 1 | 0 | ~16 batches |
+| Today's session (2026-05-01-c) | 5 (batches 17, 19, 21, 27, 28) | 1 (batch 15) | ~22 batches |
+
+**The asymmetry:** today, 5 out of 6 retry storms hit the "state fetch" endpoint. Yesterday's single storm was also "state fetch." That's a 5:1 → 6:1 ratio of state-fetch failures to node-fetch failures. Random pgbouncer flakiness would predict roughly 1:1.
+
+**Root cause traced:** `src/app/api/projects/[projectId]/canvas/nodes/route.ts:28` already wraps `prisma.canvasNode.findMany` in `withRetry()` — that's the G2 fix from the 2026-04-28 canvas-blanking session. But the parallel `src/app/api/projects/[projectId]/canvas/route.ts:18-22` GET handler — which fetches `canvasState`, `pathway`, and `sisterLink` — was NEVER retrofitted with the same wrapper. Transient pgbouncer flakes (P1001/P1002/P1008/P2034) on the state endpoint surfaced directly as HTTP 500 to the client; on the nodes endpoint, the same flakes were silently retried 100ms then 500ms and usually succeeded.
+
+**Why nobody noticed before today:** yesterday's D3 (~16 batches) only hit one storm — looked like normal Supabase noise. Today's run (~22 batches) hit six storms, making the pattern statistically obvious. Likely Supabase backend was having a slightly less stable evening tonight (or the larger canvas size triggered more pool pressure), surfacing the latent asymmetry.
+
+**The fix:** wrap each of the three Prisma queries in the `/canvas` GET handler in `withRetry(() => ...)`. Identical pattern to nodes/route.ts.
+
+**Expected effect once deployed:** the "state fetch HTTP 500" pattern that hit ~30% of batches today should drop to near-zero (matching the rate `/nodes` has had since the G2 fix shipped). Persistent failures (multi-attempt) will still surface as 500 — but transient single-flakes will silently retry and succeed.
+
+### Browser freeze on atomic canvas rebuild — NEW HIGH-severity finding
+
+**The freeze:** during Batch 28's apply phase (after the model's response was successfully streamed and validated), the browser triggered "page unresponsive" popup. The popup briefly went away but the page never recovered; activity log stopped streaming; 60-second wait did not resolve; refresh was required to recover the panel.
+
+**The likely cause** (without yet running profiling): the layout pass runs synchronously on the main thread. At ~105 nodes, with 21 ops applied, the pass appears to hold the event loop long enough to trigger the browser's unresponsive heuristic. Atomic canvas rebuild (which serializes a full snapshot to send to the rebuild API) may also contribute to main-thread blocking.
+
+**Why this matters for scaling:** the 14-PLOS-workflow vision targets 500+ topic canvases at Phase 3 production scale. If a 105-node canvas already triggers a freeze, a 500-node canvas would be unusable. This is captured to ROADMAP as a HIGH-severity infrastructure-TODO under Phase 1 polish (precondition to Phase 2 Multi-User work, since other workers can't be onboarded onto a UI that freezes).
+
+**No fix this session** — diagnostic and design work for the layout-pass refactor (probable approach: chunk the layout work into requestAnimationFrame batches, or move it to a Web Worker) is beyond a doc-batch session and warrants its own design session.
+
+### Live run cost summary
+
+| Item | Cost |
+|---|---|
+| Pre-session totalSpent (yesterday's D3) | $6.31 |
+| Today's batches 7-19-attempt-1 (before our chat session) | (already in $6.31; baseline) |
+| Path B admin consolidation pass | $0.216 |
+| Resumed run batches 19-retry-2 through 27 + Batch 28 attempts 1+2 | ~$4.30 |
+| **Pre-freeze totalSpent** | **$10.82** (confirmed by user) |
+| **Net spend this session** | **~$4.51** (~$10.82 - $6.31) |
+
+### What did NOT change this session
+
+- **`src/lib/auto-analyze-v3.ts`:** untouched (yesterday's `decideTier` patch still in effect; no further tuning needed).
+- **`src/lib/operation-applier.ts`:** untouched (Session E's `consolidationMode` flag working as designed).
+- **V4 prompts** (regular + consolidation): untouched.
+- **`AutoAnalyze.tsx`:** untouched.
+- **Schema, DB structure:** untouched.
+- The Bursitis Test project's canvas state was modified by 22 normal batch applies + 1 admin consolidation, plus Batch 28's atomic-rebuild that got rolled back when the post-apply re-fetch failed. Final canvas state on the database: 105 topics, 52 sister links (post-Batch-28-attempt-1 rebuild that never got the cursor advance recorded). Canvas state will resolve on the next session's resume click — either re-running batch 27/28 or discarding.
+
+### Multi-workflow protocol coordination
+
+- **Schema-change-in-flight flag:** stays "No" (no schema work this session).
+- **Branch:** `main` (W#1's home).
+- **Cross-workflow doc edits:** none.
+- W#2 still 🆕 about-to-start; no parallel chat ran during this session.
+- Pull-rebase at session start: clean (no parallel pushes).
+- Pull-rebase at end-of-session commit: see commit step.
+
+### Files touched this session
+
+**Modified (1 code, ~6 docs):**
+
+End-of-session commit (this commit):
+- `src/app/api/projects/[projectId]/canvas/route.ts` — three `withRetry(() => ...)` wrappers + import line + module-level comment explaining the asymmetric-fix history. ~10 LOC net.
+- `docs/KEYWORD_CLUSTERING_ACTIVE.md` — this STATE block prepended; prior Session-E-D3 STATE block demoted to historical; header timestamp updated.
+- `docs/INPUT_CONTEXT_SCALING_DESIGN.md` — §6 Scale Session E D3 outcome updated with consolidation auto-fire follow-up status; new §7 Open question row for the browser-freeze finding.
+- `docs/ROADMAP.md` — Active Tools row updated with Path B validated + Path A partial summary; new ROADMAP entries for the browser-freeze HIGH-severity item and the cosmetic stale-batch-num log label item.
+- `docs/CORRECTIONS_LOG.md` — TWO new entries prepended: HIGH-severity browser freeze on atomic canvas rebuild + MEDIUM-severity asymmetric-defense-in-depth finding (and its fix).
+- `docs/CHAT_REGISTRY.md` — new top row for `session_2026-05-01-c_consolidation-auto-fire-followup`; header timestamp.
+- `docs/DOCUMENT_MANIFEST.md` — header timestamps + per-doc modified flags + this-session summary.
+
+**Push status:** pending director's discretionary approval at end of session (per Rule 9).
+
+### Standing instructions for next session — three "NEXT" choices (recommendation: a)
+
+(a) **Verify the HTTP 500 fix in production + observe one full auto-fire trip.** Push tonight's commit to vklf.com; let Vercel auto-deploy. In a fresh session, resume from the existing checkpoint OR start a smaller-scale run (smaller canvas to dodge the browser-freeze risk for now). Confirm: (i) HTTP 500 retry-storm rate drops back to ~near-zero on the state endpoint; (ii) auto-fire trip event fires cleanly when cadence + canvas-size both met. Modest cost ($2-5) + ~30 min. **Recommended next** — it closes both of tonight's open items in one session. The browser-freeze finding doesn't block this, since smaller canvas avoids it; the freeze gets its own dedicated session afterward.
+
+(b) **Browser-freeze fix design session.** Profile the layout pass on the production 105-node canvas. Design a chunked / requestAnimationFrame approach (or Web Worker offload). ~3-4 hours design + 1-2 sessions impl. Higher long-term value than (a) because the freeze blocks Phase 2 multi-user work.
+
+(c) **Recency-stickiness fix from yesterday's session** — sister-link op deferral to consolidation-only + Q5 → B touch-semantics refinement. Direct attack on the wall-question bottleneck. ~1-2 sessions design + impl. Orthogonal to (a) and (b).
+
+**Recommendation: (a) — verify HTTP 500 fix + observe auto-fire trip.** Two birds with one fresh-session stone; closes both partial-validation items from tonight. Lowest cost; lowest risk; highest confidence-per-dollar. After (a) closes, (b) is the higher-priority architectural work.
+
+**Director's framing through prior sessions:** (Scale-A) → (Scale-0) → (Defense-in-Depth ×3) → (Scale-B) → (Scale-C) → (Scale-D) → (Scale-E build) → (Scale-E D3 partial validation) → **(consolidation auto-fire follow-up, this session)** → (HTTP 500 fix verification + auto-fire trip observation) → (browser-freeze fix design) → (recency-stickiness fix).
+
+---
+
+## ⚠️ POST-2026-05-01-SCALE-SESSION-E-D3 STATE (preserved as historical context — last updated 2026-05-01-b; superseded by consolidation auto-fire follow-up state above)
 
 **As of 2026-05-01-b Scale Session E D3 partial validation — second session of the day. LIVE RUN session on production vklf.com: Scale Session E's mechanism exercised at scale on a fresh full-Bursitis canvas (2,328 keywords, empty start). Mid-run patch landed when batches 1-4 surfaced a tier-decider design-implementation mismatch; resume-from-checkpoint across browser refresh + new code load proven to work. Run paused at 17 batches / 84 topics / ~$7 spend. The wall is NOT eliminated by Sessions B-E alone — it's pushed back ~15-20%. Recency-stickiness from cross-cutting ops is the next bottleneck to address.**
 

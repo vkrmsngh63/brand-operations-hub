@@ -2,8 +2,9 @@
 ## Append-only record of mistakes made during chats and lessons learned
 
 **Started:** April 16, 2026
-**Last updated:** May 1, 2026 (Scale Session E D3 partial validation session — TWO new entries: (1) HIGH-severity decideTier dormant-stability force-pin design-implementation mismatch surfaced mid-D3-run; mid-run patch landed (commit `2209f08`); pause-patch-resume across browser refresh proven; root cause = Claude trusted §2.3's "recency does demotion work" claim without verifying decider implementation in the drift check; prevention = extend Rule 24 / Rule 1 verify-before-act to include in-flight algorithmic claims at session start, not just ROADMAP captures. (2) INFORMATIONAL Supabase HTTP 500 errors on fetchCanvas during batch 17 retry storm; backend hiccup, not tier-mode-related; ~$0.78 wasted on 3 failed attempts of batch 17 before director paused; pattern preservation so future sessions recognize the failure mode and don't misdiagnose it as tier-mode broken.)
-**Last updated in session:** session_2026-05-01-b_scale-session-e-d3-validation (Claude Code)
+**Last updated:** May 1-2, 2026 (Consolidation auto-fire follow-up session — third of 2026-05-01, spanning past midnight. THREE new entries: (1) HIGH-severity browser freeze on atomic canvas rebuild at ~105-node canvas during Batch 28's apply phase, blocked Path A auto-fire trip event observation, refresh required to recover; new scalability concern surfaced — layout pass appears synchronous on main thread; captured to ROADMAP. (2) MEDIUM-severity asymmetric defense-in-depth: HTTP 500 retry storm at ~30% of today's batches (vs ~6% yesterday) traced to /canvas GET handler missing the withRetry wrapper that /canvas/nodes GET got from the 2026-04-28 G2 fix; pattern hidden until today's larger sample size made it statistically obvious; FIXED in this session's commit (3-line surgical wrap of canvasState.findUnique + pathway.findMany + sisterLink.findMany in withRetry). (3) PROCESS finding: claude's recommendation style was producing neutrally-presented option lists with implicit "pick the cheap one" framing instead of clear recommendations; director gave explicit feedback, captured to permanent memory file `feedback_recommendation_style.md` — always recommend the most thorough and reliable path, not the fastest/cheapest.)
+**Last updated in session:** session_2026-05-01-c_consolidation-auto-fire-followup (Claude Code)
+**Previously updated in session:** session_2026-05-01-b_scale-session-e-d3-validation (Claude Code)
 **Previously updated in session:** session_2026-04-30-c_scale-session-d-build (Claude Code)
 **Previously updated in session:** session_2026-04-30_scale-session-b-build (Claude Code)
 **Previously updated in session:** session_2026-04-28_canvas-blanking-and-closure-staleness-fix (Claude Code)
@@ -50,6 +51,90 @@
 ---
 
 ## Entries
+
+### 2026-05-01-c — Browser freeze on atomic canvas rebuild at ~105-node canvas — blocked auto-fire trip observation (HIGH severity, NEW SCALABILITY CONCERN)
+
+**Session:** session_2026-05-01-c_consolidation-auto-fire-followup (Claude Code)
+
+**Tool/Phase affected:** Workflow #1 Keyword Clustering / Auto-Analyze panel UI / canvas rendering pipeline
+
+**Severity:** HIGH (no production damage — checkpoint preserved, canvas state in DB intact, no data loss; but the freeze blocked completion of a planned validation pass and indicates a real scalability bug that will block Phase 2 multi-user work if unfixed)
+
+**What happened:** During Path A auto-fire validation tonight, the browser froze immediately after Batch 28 attempt 2 passed validation and entered the apply phase. Sequence: model returned response → "passed validation" log fired → "Applied X operations → 105 topics" log fired (likely from inside doApplyV3 BEFORE the post-apply re-fetch) → "page unresponsive" popup appeared → popup dismissed itself → activity log stopped streaming → 60-second wait did not recover → refresh required.
+
+Post-refresh state: checkpoint shows "26/291 batches done, 14 min ago" — meaning the last successful saveCheckpoint was at 8:04:06 PM after Batch 27's "applied." log; Batch 28's apply was rolled back when the freeze interrupted the apply pipeline. Pre-freeze totalSpent was $10.82 confirming Batch 28 attempt 2's API call DID complete and was charged (~$0.30) but its result never persisted.
+
+**Root cause (probable, pending profiling):** the layout pass for atomic canvas rebuild appears to run synchronously on the main JS thread. At 105 nodes with 21 ops applied, the layout calculation holds the event loop long enough to trigger Chrome's "page unresponsive" heuristic (typically 5+ seconds of unresponsive main thread). The atomic-rebuild API call subsequently sends a full canvas snapshot which may compound the main-thread pressure.
+
+This is asymptotically dangerous. PLOS targets 500+ topic canvases in Phase 3 (per `PLATFORM_REQUIREMENTS.md §1`). If 105 topics already triggers a freeze, 500 topics would be unusable. The freeze blocks Phase 2 multi-user work since other workers can't be onboarded onto a UI that freezes.
+
+**How caught:** Director observed page-unresponsive popup mid-Batch-28-apply during Path A auto-fire validation; reported to Claude; Claude diagnosed the symptom (apply-phase freeze, not API freeze, evidenced by Batch 28's API call completing and getting charged before the freeze).
+
+**Correction:** No fix this session — the diagnostic and design work for the layout-pass refactor is beyond a doc-batch session. Captured to ROADMAP as a HIGH-severity infrastructure-TODO under Phase 1 polish. Probable fix approaches to evaluate in a future design session: (a) chunk the layout work into requestAnimationFrame batches; (b) move layout to a Web Worker; (c) optimize the layout algorithm itself if it has O(n²) hotspots; (d) defer the atomic-rebuild snapshot to a background task. Future session should profile the layout pass first to confirm it's the actual bottleneck before designing the fix.
+
+**Prevention:** Capture as ROADMAP architectural-concern entry. Don't run further Path A auto-fire validation on canvases ≥ ~100 topics until the freeze fix ships — instead, validate auto-fire on smaller-canvas runs (cadence + min-canvas-size both lowered to e.g., 5 + 50) where the freeze risk is below the trigger threshold. This is a temporary mitigation; the real fix is the layout-pass refactor.
+
+---
+
+### 2026-05-01-c — Asymmetric defense-in-depth: /canvas GET missing withRetry wrapper that /canvas/nodes GET has — diagnosed and FIXED (MEDIUM severity)
+
+**Session:** session_2026-05-01-c_consolidation-auto-fire-followup (Claude Code)
+
+**Tool/Phase affected:** Workflow #1 Keyword Clustering / canvas state-fetch route handler (`src/app/api/projects/[projectId]/canvas/route.ts`)
+
+**Severity:** MEDIUM (cost overhead from unnecessary retries — ~$0.20-0.30 per affected batch, ~$1.50 today; and intermittent run-pause user-disruption when retries ultimately fail — though that didn't fire today)
+
+**What happened:** Today's session ran 22 batches against the Bursitis Test project. 6 batches (15, 17, 19, 21, 27, 28) hit "fetchCanvas failed: HTTP 500 — retrying" errors mid-run. Of those 6, 5 were "state fetch HTTP 500" and 1 was "nodes fetch HTTP 500." That's a 5:1 asymmetry. Random pgbouncer flakiness would predict roughly 1:1 — both endpoints are queried in parallel by `useCanvas.fetchCanvas` and hit the same Supabase backend.
+
+**Root cause:** The 2026-04-28 canvas-blanking session shipped the G2 fix (per `DEFENSE_IN_DEPTH_AUDIT_DESIGN.md §5.3`) which wraps the `/canvas/nodes` GET handler's Prisma query in `withRetry()` — handling transient pgbouncer flakes (P1001/P1002/P1008/P2034) by retrying 100ms then 500ms before surfacing as HTTP 500. This shipped at `src/app/api/projects/[projectId]/canvas/nodes/route.ts:28-33`.
+
+But the parallel `/canvas` GET handler — which fetches `canvasState` + `pathway` + `sisterLink` rows in three Prisma calls — was NEVER retrofitted with the same wrapper. So transient flakes on this endpoint surfaced directly as HTTP 500 to the client. The asymmetry was hidden by yesterday's smaller sample size (16 batches → 1 storm = looked like normal noise) and only became statistically obvious tonight.
+
+The 5:1 ratio is the empirical signal. State-fetch endpoint surfaces ~5× more 500s than nodes-fetch endpoint because nodes-fetch silently retries while state-fetch doesn't.
+
+**How caught:** Director asked Claude to "find a solution to the HTTP 500 retry storm" during end-of-session prep tonight. Claude grep'd the relevant code, traced the asymmetry, and diagnosed the missing wrapper.
+
+**Correction:** Surgical 3-line fix shipped this session. Each Prisma query in `src/app/api/projects/[projectId]/canvas/route.ts` GET handler now wrapped:
+
+```ts
+const [canvasState, pathways, sisterLinks] = await Promise.all([
+  withRetry(() => prisma.canvasState.findUnique({ where: { projectWorkflowId } })),
+  withRetry(() => prisma.pathway.findMany({ where: { projectWorkflowId } })),
+  withRetry(() => prisma.sisterLink.findMany({ where: { projectWorkflowId } })),
+]);
+```
+
+Plus an import line and a module-level comment documenting the asymmetric-fix history so future sessions don't have to re-derive the rationale. All checks green: tsc clean; build clean; lint at exact baseline parity (16e/41w; zero new); withRetry test suite 17/17 pass.
+
+**Prevention:** Once deployed, expected effect is "state fetch HTTP 500" rate drops back to near-zero on transient flakes (matching the rate `/nodes` has had since 2026-04-28). Persistent failures (multi-attempt) will still surface — but transient single-flakes will silently retry and succeed. Verification deferred to next session: re-run the Auto-Analyze on Bursitis Test post-deploy and confirm the storm rate drops.
+
+**Process learning:** when shipping a defense-in-depth fix to one endpoint of a paired set (where multiple endpoints hit the same backend in parallel), audit the sister endpoints in the same session for the same vulnerability. The G2 fix from 2026-04-28 was scoped narrowly to the endpoint that triggered the canvas-blanking bug, not the broader pattern. Adding "audit sister endpoints" as a step in the post-fix review would have caught this asymmetry then. Capturing as a process improvement for future defense-in-depth fixes.
+
+---
+
+### 2026-05-01-c — Recommendation style: presenting options neutrally with implicit "pick the cheap one" framing instead of clear most-thorough recommendation (PROCESS, MEDIUM severity)
+
+**Session:** session_2026-05-01-c_consolidation-auto-fire-followup (Claude Code)
+
+**Tool/Phase affected:** Claude's recommendation style across all decision-framing per HANDOFF_PROTOCOL.md Rule 14b / Rule 14f
+
+**Severity:** MEDIUM (no production damage — ongoing communication-style slip that costs the director time-to-decision; but a recurring pattern that needed mechanical correction)
+
+**What happened:** Mid-session, when presenting Path A auto-fire validation options (A1 lower-cadence shortcut at ~$1.20 / 10-15 min, A2 skip the live test entirely, A3 production-realistic full validation at ~$3-4 / 25-35 min), Claude flagged A1 as "Recommended" but the framing made the choice feel like "here are three options, pick whichever fits your mood" rather than a clear directive recommendation. Claude's reasoning emphasized the cost/time savings of A1 over the validation thoroughness of A3.
+
+Director called out the slip directly: *"Instead of always giving me multiple choices without any recommendations, you need to always make the recommendation that is the most thorough and reliable way to fix issues. Make a note of this for future sessions as well and the rest of this session and for the current options you provided."*
+
+**Root cause:** Claude's default recommendation framing was implicitly optimizing for speed/cost trade-offs (presenting cheaper options as "the recommendation" because they minimize friction). The director's actual standing preference is to invest in thorough validation — they're the budget-holder, they've already decided thoroughness is worth the cost, Claude doesn't need to protect them from spending. The pattern was: present options with cost/time differences highlighted, and recommend the cheapest "reasonable" option as if it were the best. That's wrong — the recommendation should always name the most thorough and reliable path, with reasoning focused on confidence/coverage/risk-reduction.
+
+**How caught:** Director caught it in real-time and gave explicit feedback.
+
+**Correction:** Created permanent memory file `/home/codespace/.claude/projects/-workspaces-brand-operations-hub/memory/feedback_recommendation_style.md` capturing the rule, the rationale, and the mechanical application. Also revised the in-session Path A recommendation to A3 (most thorough and reliable). Memory file is auto-loaded in every future session via `MEMORY.md` index entry.
+
+**Prevention:** The memory file's "How to apply" section gives the mechanical test: every multi-option question's recommendation must name the most thorough and reliable option with reasoning that focuses on confidence/coverage/risk-reduction — not on speed or cost savings. Cheaper alternatives can be mentioned as factors but explicitly framed as "leaves Z unvalidated" not "recommended." Lucidity caveats remain valid but don't override the thoroughness preference.
+
+This is also operationally adjacent to HANDOFF_PROTOCOL.md Rule 14 (expert-consultant persona) which states: *"Claude gives a clear recommendation with reasoning ('I recommend X because Y') rather than laying out options neutrally and asking the user to pick."* Rule 14 was already on the books; this entry strengthens it with the specific failure mode (optimizing for speed/cost) and the specific corrective rule (optimize for thoroughness/reliability).
+
+---
 
 ### 2026-05-01 — `decideTier` dormant-stability force-pin design-implementation mismatch — surfaced mid-D3-run (HIGH severity)
 
