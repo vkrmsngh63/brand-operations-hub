@@ -2,8 +2,9 @@
 ## Append-only record of mistakes made during chats and lessons learned
 
 **Started:** April 16, 2026
-**Last updated:** May 2, 2026-c (DevTools profiling pass — third session of 2026-05-02. ONE new entry: PROCESS-level — code-reading-based diagnosis empirically rejected by profiling. Across 31 measurements at canvas 55→108 topics, the predicted bottleneck did not materialize (`runLayoutPass` stayed at 1.0–3.2 ms with `passes=1` every batch vs predicted 100s-of-ms growing nonlinearly). Approaches A/B/C from `BROWSER_FREEZE_FIX_DESIGN.md §4` declared moot. Lesson: the design doc's "~90% confidence from code reading" framing should be treated as a deliberate caution to NOT skip empirical confirmation — and indeed §3's profiling protocol was followed before any implementation budget was spent. Total cost saved: 2-3 sessions of misdirected Approach A work. Total cost of rejection: one director session + ~$5 of API spend pushing canvas to 108 topics. The profile-before-implement protocol worked exactly as designed.)
-**Last updated in session:** session_2026-05-02-c_devtools-profiling-pass (Claude Code)
+**Last updated:** May 2, 2026-d (HTTP 500 retry regression investigation — fourth session of 2026-05-02. ONE new entry: INFORMATIONAL — morning-vs-afternoon retry-rate evidence reframe. Re-reading the morning's `2026-05-02` POST-state evidence vs afternoon's `2026-05-02-c` retry trajectory showed `df09611` did NOT regress — it correctly halved state-fetch failures; the underlying ~25% rate at scale was always there, masked in morning's session by small-sample (9 fetch opportunities) / small-canvas (≤43 topics). Reporting-precision lesson — NOT a mistake; the morning session's "VERIFIED" closure of the original 30%-storm-rate concern was technically premature given sample size, but the fix DID work as designed. Today's code fix addresses the partial-apply state recovery problem at the recovery layer.)
+**Last updated in session:** session_2026-05-02-d_http-500-retry-regression-investigation (Claude Code)
+**Previously updated in session:** session_2026-05-02-c_devtools-profiling-pass (Claude Code)
 **Previously updated:** May 2, 2026 (HTTP 500 fix verification + auto-fire trip observation session — first of 2026-05-02. TWO new entries: (1) PROCESS-level slip — recommendation-style placement: Claude omitted the `(recommended)` marker from picker labels at the start of session, despite the rule existing in `feedback_recommendation_style.md`; director caught + reinforced ("the recommendation should be one that is the most thorough and... make absolutely sure every next session understands this as well"); memory file strengthened with explicit "marker must live INSIDE picker label" requirement; HANDOFF_PROTOCOL.md Rule 14f content-#4 + CLAUDE_CODE_STARTER.md Rule 3 codified. (2) PROCESS-level slip recurrence — setup-confirmation re-asking: Claude asked the director to re-confirm consolidation prompts were pasted (because pre-flight didn't show their char counts) despite director having already affirmed "all set as requested" — this was a clean repeat of the same slip from `2026-05-01-c`; director caught + clarified ("you asked this same question in the last session as well even though I pasted all 4 prompts — the tool does not recognize that all 4 prompts were added; this issue needs to be fixed"); pre-flight runner extended this session with P11 + P12 checks closing the structural cause; HANDOFF_PROTOCOL.md Rule 14g (NEW) + CLAUDE_CODE_STARTER.md Rule 7 codified the trust-director-affirmation principle for any future analogous case. NO bug-related mistakes this session — the live run validated both objectives cleanly.)
 **Last updated in session:** session_2026-05-02_http-500-fix-verification-and-auto-fire-trip-observation (Claude Code)
 **Previously updated in session:** session_2026-05-01-c_consolidation-auto-fire-followup (Claude Code)
@@ -54,6 +55,47 @@
 ---
 
 ## Entries
+
+### 2026-05-02-d — Reframe of morning-vs-afternoon HTTP 500 retry-rate evidence (INFORMATIONAL, not a mistake; reporting-precision lesson on small-sample / small-canvas verification claims)
+
+**Session:** session_2026-05-02-d_http-500-retry-regression-investigation (Claude Code)
+
+**Tool/Phase affected:** ROADMAP.md "🚨 NEW HIGH-severity REGRESSION 2026-05-02-c — HTTP 500 fetchCanvas retry pattern" entry (now flipped to "🟡 CODE FIX SHIPPED 2026-05-02-d — pending live verification" with reframe note); KEYWORD_CLUSTERING_ACTIVE.md POST-2026-05-02 "VERIFIED" closure of the original 30%-storm-rate concern (now noted as technically premature given sample size).
+
+**Severity:** INFORMATIONAL — explicitly NOT a mistake-classified entry. The morning session's "verified" framing was reasonable from the data the session had at the time; today's re-read just strengthens the precision of the framing.
+
+**What the reframe says:** the 2026-05-02-c session called the observed retry pattern a "HIGH-severity regression of `df09611`'s asymmetric fix" because the morning's `2026-05-02` session had reported "Zero HTTP 500 retry storms across 6 batches + 2 consolidation passes + ~7 atomic canvas rebuilds" while the afternoon's profiling pass observed 8+ retries across 31 batches. Today's evidence re-read says that framing is partially right and partially wrong:
+
+- **Right:** the underlying retry rate at scale is ~23–27% — high enough to be a real correctness concern.
+- **Wrong:** `df09611` did NOT regress. The endpoint asymmetry SHIFTED:
+  - Yesterday (`2026-05-01-c`): state 5 hits, nodes 1 hit (state-heavy 5:1)
+  - Today (`2026-05-02-c`): state 2 hits, nodes 5 hits (nodes-heavy 1:2.5)
+  - State-fetch failures dropped from 5 → 2 in roughly comparable load — **exactly what the asymmetric-defense-in-depth design predicted.**
+  - Nodes-fetch failures grew from 1 → 5 because the atomic rebuild transaction holds pgbouncer connections proportionally longer at larger canvas sizes (per the `aa.rebuildHTTP` 2.8s → 4.6s linear scaling finding from 2026-05-02-c). Total observed rate stayed flat at ~25%.
+
+**Why the morning session's "VERIFIED clean" claim wasn't a regression that got reversed:** at a true rate of ~25%, P(0 hits in 9 trials) is ~7.5% — low but not anomalous. AND the rate is plausibly canvas-size-correlated (rebuild transaction time grows linearly with canvas; longer transactions = more pool pressure = more flakes), so morning's small-canvas (≤43 topics) likely had a lower base rate than afternoon's 55–108 topic regime. Either way, "0 storms across 9 small-canvas opportunities" was a legitimate observation but **could not statistically distinguish "rate dropped to ~0%" from "rate was always ~25% at scale and we got lucky / didn't reach the regime where it surfaces."**
+
+**Root cause of the reporting precision gap:** the morning session's verification methodology counted "retry storms" — multi-retry sequences before success — without counting single-retry-then-success cases. The afternoon's "retry pattern fired 8+ times" tally counted any retry event. These are different metrics; the morning's "0 storms" and the afternoon's "8+ retries" can both be true even on the same underlying rate, depending on what counts as a "storm." The framing in 2026-05-02-c's STATE block treated them as directly comparable, which produced the "regression" narrative.
+
+**Why this matters going forward:**
+- Future "VERIFIED clean" claims on stochastic phenomena should explicitly state the sample size, the sampled regime (canvas size, load profile), and the metric being counted. A claim of "0 retry storms across 6 batches at canvas ≤43" is meaningfully different from "0 retry events across 30 batches at canvas 100+."
+- A code fix can be working as designed AND still leave a ~25% underlying rate that needs separate attention. The 2026-05-02 closure of the original 30%-storm-rate concern was technically premature; the asymmetric fix in `df09611` halved state-fetch failures (which IS the win the fix promised), but the residual rate from the parallel nodes endpoint remained.
+- Today's code fix (`src/lib/post-rebuild-fetch-retry.ts`) addresses the residual at the **recovery layer** (eliminating the partial-apply state corruption mode) rather than the **rate layer**. Lowering the underlying rate would be a separate future concern (e.g., longer pgbouncer pool, more aggressive server-side retry timing).
+
+**No mistake to undo:** the morning session's framing was reasonable for the data it had. Today's re-read just clarifies the framing now that more data is in. ROADMAP entry's status flip and the new reframe note in the entry capture this for future sessions.
+
+**Prevention:**
+1. **When verifying a stochastic concern (retry rates, flake rates, sampling-derived properties), explicitly bound the claim to (sample size, regime, metric).** "Verified clean across 6 batches at canvas ≤43" is a precise claim. "Verified" alone is not.
+2. **When comparing across sessions, compare the same metric.** "Retry storms" (multi-retry sequences) and "retry events" (any retry) are different metrics; conflating them produces apparent regressions that don't exist.
+3. **A defense-in-depth fix can be working AND still leave residuals on parallel paths.** Audit sister endpoints / sister mechanisms before declaring a concern closed (this is the same lesson as `2026-05-01-c`'s asymmetric-fix entry, applied at the verification step rather than the design step).
+
+**Cross-references:**
+- `src/lib/post-rebuild-fetch-retry.ts` (today's code fix; full rationale in module-level header).
+- `ROADMAP.md` HIGH-severity HTTP 500 retry regression entry (status flipped to "🟡 CODE FIX SHIPPED" with reframe note).
+- `KEYWORD_CLUSTERING_ACTIVE.md` POST-2026-05-02-d STATE block (in-context narrative).
+- `BROWSER_FREEZE_FIX_DESIGN.md §9.5.1` (Hypothesis A; structurally defended by today's fix; freeze-causation question still pending live verification).
+
+---
 
 ### 2026-05-02-c — Code-reading-based diagnosis empirically rejected by DevTools profiling pass (PROCESS, no production impact; profile-before-implement protocol worked exactly as designed)
 

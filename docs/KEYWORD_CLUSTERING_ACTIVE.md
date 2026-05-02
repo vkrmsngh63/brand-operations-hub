@@ -1,8 +1,9 @@
 # KEYWORD CLUSTERING — ACTIVE DOCUMENT
 ## Current state of the Keyword Clustering workflow tool (Group B, tool-specific)
 
-**Last updated:** May 2, 2026-c (DevTools profiling pass session — third session of 2026-05-02, follow-up to early-afternoon's `2026-05-02-b_browser-freeze-fix-design`. **Director executed `BROWSER_FREEZE_FIX_DESIGN.md §3` profiling protocol on production Bursitis Test 2 project; pushed canvas through 108 topics across 31 apply batches; collected complete timing data via DevTools console snippet. Diagnosis from §1 of design doc EMPIRICALLY REJECTED. New §9 added to design doc capturing full data + revised hypotheses + recommended next-session direction.** Code-reading prediction said `runLayoutPass` would balloon to seconds at 105+ topics; empirical data shows it stayed at 1.0–3.2 ms across ENTIRE 55→108 topic range with `passes=1` every single batch. Approaches A/B/C from §4 declared moot — no fix in the design picker addresses a real bottleneck on this canvas. THREE findings captured: (1) diagnosis rejection (CORRECTIONS_LOG entry); (2) HTTP 500 retry pattern recurred 8+ times this session vs this morning's "VERIFIED clean across 6 batches" — HIGH-severity regression of `df09611`'s asymmetric fix, NEW ROADMAP entry; (3) `aa.rebuildHTTP` linear scaling 2.8 s → 4.6 s across canvas 55→107 — Phase 3 scaling cost, separate ROADMAP entry. Recommended next-session direction: investigate HTTP 500 retry regression + audit retry-after-partial-apply state path (Hypothesis A is the new leading suspect for last week's freeze). NO code changes this session — instrumentation from `db3d377` stays. NEW POST-2026-05-02-c STATE block prepended below; prior 2026-05-02-b STATE block demoted to historical. Multi-workflow: schema-change-in-flight stays "No"; W#2 still 🆕 about-to-start; no parallel chat.)
-**Last updated in session:** session_2026-05-02-c_devtools-profiling-pass (Claude Code)
+**Last updated:** May 2, 2026-d (HTTP 500 retry regression investigation session — fourth session of 2026-05-02, follow-up to `2026-05-02-c_devtools-profiling-pass`. **Director's option (a) from prior STATE block: investigate the HTTP 500 fetchCanvas retry regression. CODE FIX SHIPPED + 13 new unit tests; live verification on a Bursitis Test 2 resume run pending.** Re-read of morning's `2026-05-02` POST-state evidence vs afternoon's `2026-05-02-c` retry trajectory **reframed the "regression" framing**: morning's "0 storms across 6 batches" was a small-sample / small-canvas (≤43 topics) reading; afternoon's ~23% rate at canvas 55–108 is the underlying base rate that was always there at scale. `df09611` did NOT regress — it correctly halved state-fetch failures (5→2) but couldn't help nodes-fetch (already had its own withRetry from G2 fix); nodes-fetch failures grew with canvas size due to longer rebuild transactions holding pgbouncer connections. Source-code audit pinpointed the **structural concern**: when post-rebuild `fetchCanvas` fails, runLoop retries the whole batch with stale client state, producing visible (cyclic stableId references → applier rejects) AND silent (per-(projectWorkflowId, stableId) upsert collisions overwriting attempt-1 content) corruption modes. **Option A from this session's design picker — recommended + chosen:** new pure helper `src/lib/post-rebuild-fetch-retry.ts` (~150 lines incl. doc) wraps the post-rebuild refresh in a 3-attempt retry loop (waits 2s, 5s); throws annotated error (`_noRetry: true`, `_postRebuildFetchFailed: true`) on persistent failure; `AutoAnalyze.tsx` runLoop catch reads the flag, marks the batch complete (server-side it IS), advances cursor, saves checkpoint, pauses with explicit refresh-and-Resume guidance. 13 new unit tests; total src/lib pass count 260→273; tsc clean; build clean (17/17 routes); lint at exact baseline parity (16e/41w; zero new). **Live verification on Bursitis Test 2 resume run is the next-session task** (~$2-5, ~30 min, ≥30 batches needed for retry-rate confirmation). NEW POST-2026-05-02-d STATE block prepended below; prior 2026-05-02-c STATE block demoted to historical (still useful for the diagnosis-rejection narrative + the original retry-event list). Multi-workflow: schema-change-in-flight stays "No"; W#2 still 🆕 about-to-start; no parallel chat.)
+**Last updated in session:** session_2026-05-02-d_http-500-retry-regression-investigation (Claude Code)
+**Previously updated in session:** session_2026-05-02-c_devtools-profiling-pass (Claude Code)
 **Previously updated in session:** session_2026-05-02-b_browser-freeze-fix-design (Claude Code)
 **Previously updated in session:** session_2026-05-02_http-500-fix-verification-and-auto-fire-trip-observation (Claude Code)
 **Previously updated in session:** session_2026-05-01-c_consolidation-auto-fire-followup (Claude Code)
@@ -43,7 +44,103 @@
 
 ---
 
-## ⚠️ POST-2026-05-02-c-DEVTOOLS-PROFILING-PASS STATE (READ FIRST — updated 2026-05-02-c)
+## ⚠️ POST-2026-05-02-d-HTTP-500-RETRY-REGRESSION-INVESTIGATION STATE (READ FIRST — updated 2026-05-02-d)
+
+**As of 2026-05-02-d (fourth session of the day, follow-up to `session_2026-05-02-c_devtools-profiling-pass`). CODE-FIX session — implemented Option A from this session's design picker. Pure helper + helper-tests + AutoAnalyze.tsx wiring. No schema, no DB, no live run, no deploy yet. Live verification deferred to a follow-up session.**
+
+### What this session shipped to W#1
+
+**New code (single commit, ready to push):**
+
+- **`src/lib/post-rebuild-fetch-retry.ts` (NEW, ~150 lines incl. extensive header comment).** Pure helper `runRefreshWithRetry(refresh, options)` plus type guard `isPostRebuildFetchFailedError`. Mirrors the `prisma-retry.ts` pattern: sleep injection for tests, options.maxAttempts (default 3) + options.backoffsMs (default `[2000, 5000]`) + options.onAttemptFailed callback for activity-log surfacing. On persistent failure throws an annotated `Error` carrying `_noRetry: true` AND `_postRebuildFetchFailed: true` plus a self-explanatory user-facing message ("Canvas rebuild SUCCEEDED but UI refresh failed after 3 attempts. The batch IS applied on the server (canonical). Refresh the browser tab and click Resume…"). Module-level comment (~75 lines) captures the full partial-apply state recovery rationale: visible failure mode (cyclic stableId references caught by applier guards), silent failure mode (rebuild route's per-(projectWorkflowId, stableId) upsert collisions overwriting attempt-1 content with attempt-2 values — no guard catches this), and the resume story (browser refresh → fresh client state → batch advances cleanly to the next one).
+
+- **`src/lib/post-rebuild-fetch-retry.test.ts` (NEW, 13 tests).** Covers: type guard semantics (4 tests), happy path (1), single-flake recovery (1), two-flake recovery (1), 3-attempt-exhaust + correct error annotations + clear user-facing message (1), `onAttemptFailed` callback semantics — fires for retried attempts, NOT for the final failure (1), custom maxAttempts (1), custom backoffsMs (1), short-backoffs-array reuse (1), non-Error thrown values stringified safely (1). All 13 pass via `node --test --experimental-strip-types`.
+
+- **`src/app/projects/[projectId]/keyword-clustering/components/AutoAnalyze.tsx` (modified, two locations).** (1) Added import for `runRefreshWithRetry`. (2) Replaced the bare `await onRefreshCanvas(); await onRefreshKeywords();` (post-atomic-rebuild step at line ~1121) with a wrapped call that surfaces each retry attempt to the activity log as a warn-level line ("Post-rebuild canvas refresh failed (attempt N/3): …; retrying refresh in Xs…"). (3) Added a `_postRebuildFetchFailed` branch in the runLoop catch (before the standard retry/fail logic): marks `batch.status = 'complete'`, advances `currentIdx`, calls `saveCheckpoint()`, sets `API_ERROR` state, surfaces an explicit refresh-and-Resume guidance line, returns from runLoop. ~75 LOC net add total in this file (helper call site + new catch branch).
+
+**Docs (Group A + Group B):**
+- `docs/KEYWORD_CLUSTERING_ACTIVE.md` — this STATE block prepended; prior 2026-05-02-c STATE block demoted to historical; header timestamp.
+- `docs/ROADMAP.md` — Active Tools row updated; HIGH-severity HTTP 500 retry regression entry from `2026-05-02-c` flipped from "🚨 NEW HIGH-severity regression — Investigation pending" to "🟡 CODE FIX SHIPPED 2026-05-02-d — pending live verification" with cross-reference to the new helper module; reframe note added on the morning-vs-afternoon evidence interpretation.
+- `docs/CORRECTIONS_LOG.md` — new INFORMATIONAL entry on the morning-verification reframe (not a mistake — a reporting-precision lesson: "0 events across 9 small-canvas opportunities" doesn't statistically distinguish from "true rate ~25% at scale").
+- `docs/BROWSER_FREEZE_FIX_DESIGN.md` — small status note appended to §9.5.1 (Hypothesis A) crossing-referencing the new helper as the structural defense; Hypothesis A's freeze-causation question still needs live verification but the structural mechanism is now defended.
+- `docs/CHAT_REGISTRY.md` — new top row.
+- `docs/DOCUMENT_MANIFEST.md` — header timestamps + per-doc modified flags + this-session summary.
+
+### The reframe that came out of the evidence re-read
+
+Yesterday's afternoon STATE block called the 2026-05-02-c retry pattern a "HIGH-severity regression of `df09611`'s asymmetric fix." Today's evidence re-read says that framing is **partially right and partially wrong**:
+
+**Right:** the underlying retry rate at scale is ~23–27% — high enough to be a real correctness concern.
+
+**Wrong:** `df09611` did NOT regress. It did exactly what the asymmetric-fix design predicted: it halved state-fetch failures (yesterday's 5 hits → today's 2 hits, in roughly comparable load). What changed wasn't the fix — it was that nodes-fetch failures grew with canvas size (1 → 5), because the atomic rebuild transaction holds pgbouncer connections proportionally longer at larger canvas sizes (per the `aa.rebuildHTTP` linear scaling finding from 2026-05-02-c: 2.8s → 4.6s for 55 → 107 nodes). **Total observed rate stayed flat at ~25%.**
+
+**The morning-session "0 storms across 6 batches" claim wasn't a regression that got reversed.** It was a small-sample reading at small-canvas (≤43 topics — well below the regime where pgbouncer-pressure surfaces today's pattern). At a true rate of ~25%, P(0 hits in 9 trials) is ~7.5% — low but not anomalous, and conditional on small canvas the rate is plausibly lower than 25% anyway.
+
+**Operationally:** the 2026-05-02 "VERIFIED" closure of the original 30%-storm-rate concern was technically premature, but the fix DID work as designed. The remaining ~25% is the underlying base rate — a separate concern that today's code fix addresses **at the recovery layer**, not the rate layer. (A separate-future concern would be reducing the rate itself: more aggressive server-side retry timing, longer pgbouncer pool, etc. Not in scope today.)
+
+### What this session's fix does, in one paragraph
+
+The Auto-Analyze apply pipeline runs `applyOperations` in memory → POSTs `/canvas/rebuild` (atomic) → calls `await onRefreshCanvas() + onRefreshKeywords()` to resync UI. If that final refresh fails after the rebuild succeeded, the SERVER state is canonical post-apply but the CLIENT state is pre-apply (because `useCanvas.fetchCanvas` preserves prior state on failure — the 2026-04-28 hardening). Before today, the throw propagated to runLoop's outer catch and triggered a whole-batch retry — feeding the model stale client state and producing two failure modes:
+
+- **Visible:** model returns ops that conflict with attempt-1's already-applied state (cyclic stableId references caught by applier guards, as observed at Batch 15 attempt 2 in the 2026-05-02-c session).
+- **Silent:** rebuild route's `prisma.canvasNode.upsert` keys on `(projectWorkflowId, stableId)`. Attempt 2 may allocate the same `t-N` for a different topic (because client `nextStableIdN` is stale), and the server upsert silently overwrites attempt-1's title/description/content with attempt-2's. **No guard catches this.**
+
+After today: post-rebuild refresh retries on its own (waits 2s, 5s, max 3 attempts). On persistent failure, the batch is marked complete server-side (it IS), checkpoint saved, run paused with explicit "refresh the browser tab and click Resume; the run will continue at the next batch with fresh canvas state" guidance. **Both visible and silent failure modes structurally eliminated.**
+
+### Code-reading-derived testing of Hypothesis A
+
+The 2026-05-01-c freeze fired during Batch 28 attempt 2's apply. `BROWSER_FREEZE_FIX_DESIGN §9.5.1` named this the leading suspect for what actually caused the freeze (after the §1 layout-pass diagnosis was rejected 2026-05-02-c). Today's fix defends against the **structural mechanism** of Hypothesis A. Live verification — running Bursitis Test 2 to ≥105 topics with the fix deployed — is the next session's task. Three outcomes are possible:
+
+1. **Run reaches ≥105 topics cleanly without freeze** — Hypothesis A confirmed as the freeze cause; freeze concern closes.
+2. **Run reaches ≥105 topics, the post-rebuild refresh exhausts retries (rare), the run pauses cleanly with the new guidance message** — fix works as designed; freeze caused by something else (Hypothesis B or C).
+3. **Run freezes again at a similar topic count** — Hypothesis A ruled out; investigate Hypothesis B (uninstrumented React reconciliation + SVG paint) per the design doc's revised path forward.
+
+### Multi-workflow protocol coordination
+
+- **Schema-change-in-flight flag:** stays `No` (no schema work this session; no schema work needed for the post-rebuild-fetch-retry helper either).
+- **Branch:** `main` (W#1's home).
+- **Cross-workflow doc edits:** none.
+- W#2 still 🆕 about-to-start; no parallel chat ran during this session.
+- Pull-rebase at session start: clean (already up to date with `0d9803d` on origin/main).
+
+### Files touched this session
+
+**Modified (3 code, 6 docs):**
+
+End-of-session commit (this commit):
+- `src/lib/post-rebuild-fetch-retry.ts` — NEW pure helper. ~150 lines incl. header comment.
+- `src/lib/post-rebuild-fetch-retry.test.ts` — NEW. 13 tests.
+- `src/app/projects/[projectId]/keyword-clustering/components/AutoAnalyze.tsx` — import + post-rebuild refresh wrap (~25 LOC at apply-pipeline call site) + `_postRebuildFetchFailed` branch in runLoop catch (~25 LOC).
+- `docs/KEYWORD_CLUSTERING_ACTIVE.md` — this STATE block prepended; prior 2026-05-02-c STATE block demoted; header timestamp.
+- `docs/ROADMAP.md` — Active Tools row updated; HIGH-severity HTTP 500 retry regression entry status flipped to "🟡 CODE FIX SHIPPED 2026-05-02-d — pending live verification" with reframe note + cross-reference to helper module; header.
+- `docs/CORRECTIONS_LOG.md` — new INFORMATIONAL entry on morning-verification reframe; header.
+- `docs/BROWSER_FREEZE_FIX_DESIGN.md` — small status note appended to §9.5.1 (Hypothesis A) crossing-referencing the new helper.
+- `docs/CHAT_REGISTRY.md` — new top row.
+- `docs/DOCUMENT_MANIFEST.md` — header timestamps + per-doc flags + this-session summary.
+
+**Push status:** committed locally; **NOT pushed yet — pending director's discretionary approval at end-of-session per Rule 9.** Note: live-verification of the fix on production requires this commit to be deployed; push enables the next-session validation task.
+
+### Standing instructions for next session — three "NEXT" choices
+
+(a) **Live-verify the fix on a Bursitis Test 2 resume run — RECOMMENDED.** Push tonight's commit to vklf.com; let Vercel auto-deploy. Resume Bursitis Test 2's preserved checkpoint (canvas was at 108 topics post-2026-05-02-c profiling pass) OR start a fresh resume that drives canvas through ≥105 topics with at least 30+ batches' worth of activity. Confirm: (i) post-rebuild refresh-retry warn lines surface in the activity log when the refresh hiccups but recovers within retries (expected ~25% of large-canvas batches based on 2026-05-02-c rate); (ii) no whole-batch retries observed on those events; (iii) if the helper exhausts all 3 attempts (rare but possible), the new "applied server-side; refresh browser + Resume" pause path works correctly; (iv) freeze regime does NOT re-emerge at ≥105 topics — Hypothesis A confirmed; OR freeze re-emerges — Hypothesis A ruled out, investigate Hypothesis B in a follow-up. Cost: ~$2-5; ~30-60 min wall-clock. **Most thorough and reliable: it both validates today's code fix AND tests Hypothesis A as the freeze cause in one run.**
+
+(b) **Browser-freeze investigation Hypothesis B (React reconciliation + SVG paint instrumentation).** Extend `db3d377`'s instrumentation to cover `setNodes()` → React reconciliation → SVG paint. Re-record at canvas 100+ to see if React/paint dominates. Defer until (a) is resolved — if Hypothesis A is confirmed, Hypothesis B may not need investigation at all.
+
+(c) **Recency-stickiness fix** — sister-link op deferral to consolidation-only + Q5 → B touch-semantics refinement. Direct attack on the wall-question bottleneck. Orthogonal to (a) and (b); could be sequenced after (a) closes.
+
+(d) **GoTrueClient multi-instance fix** — small refactor (~15 LOC) consolidating three browser-side Supabase clients to a single singleton. Lower priority; small + clean if a quick-fix session is wanted.
+
+(e) Phase-1 UI polish bundle (6 items + cosmetic stale-batch-num log label).
+
+(f) Action-by-action feedback workflow design.
+
+**Recommendation: (a) — live-verify the fix.** This is the most thorough next step because it has THREE valuable outcomes: (i) confirms today's fix behaves as designed under real flakes; (ii) tests Hypothesis A as the leading suspect for last week's freeze; (iii) provides empirical evidence to justify the cross-doc reframe of "VERIFIED" status. After (a), the freeze-investigation tree branches based on outcome.
+
+**Director's framing through prior sessions:** (Scale-A) → (Scale-0) → (Defense-in-Depth ×3) → (Scale-B) → (Scale-C) → (Scale-D) → (Scale-E build) → (Scale-E D3 partial validation) → (consolidation auto-fire follow-up `2026-05-01-c`) → (HTTP 500 fix verification + auto-fire trip observation `2026-05-02`) → (browser-freeze fix design `2026-05-02-b`) → (DevTools profiling pass — diagnosis rejected `2026-05-02-c`) → **(HTTP 500 retry regression investigation — fix shipped, live verification pending, this session)** → (live verification of the fix — RECOMMENDED next).
+
+---
+
+## ⚠️ POST-2026-05-02-c-DEVTOOLS-PROFILING-PASS STATE (preserved as historical context — last updated 2026-05-02-c; SUPERSEDED by HTTP 500 retry regression investigation state above. The §1 diagnosis from `BROWSER_FREEZE_FIX_DESIGN.md` was rejected this session; the HTTP 500 retry concern this session raised has now been fix-shipped 2026-05-02-d.)
 
 **As of 2026-05-02-c (third session of the day, follow-up to early-afternoon's `2026-05-02-b_browser-freeze-fix-design`). PROFILING-PASS session — no code changes. Director executed `BROWSER_FREEZE_FIX_DESIGN.md §3` protocol on production Bursitis Test 2 project; pushed canvas through 108 topics; collected 31 batches' worth of timing measurements via DevTools console snippet. The diagnosis from §1 of the design doc was empirically REJECTED. New §9 added to design doc capturing data + revised hypotheses + recommended next-session direction. THREE findings captured (one in CORRECTIONS_LOG, two as new ROADMAP entries).**
 

@@ -24,6 +24,7 @@ import {
   type ForensicReconciliation,
 } from '@/lib/forensic-log';
 import { runPreflight, type PreflightCheckResult } from '@/lib/preflight';
+import { runRefreshWithRetry } from '@/lib/post-rebuild-fetch-retry';
 import './auto-analyze.css';
 
 /* ── Types ─────────────────────────────────────────────────── */
@@ -1116,10 +1117,44 @@ export default function AutoAnalyze({
 
     // Refresh UI. The hardened useCanvas contract throws on failure, so a
     // 5xx flake on /canvas/nodes (the 2026-04-28 canvas-blanking trigger)
-    // now propagates here and the runLoop's outer catch routes it to
-    // API_ERROR — instead of silently rolling forward with a blank canvas.
-    await onRefreshCanvas();
-    await onRefreshKeywords();
+    // now propagates here.
+    //
+    // Per src/lib/post-rebuild-fetch-retry.ts (and BROWSER_FREEZE_FIX_DESIGN
+    // §9.5.1 + the 2026-05-02-c HTTP 500 retry regression entry in
+    // ROADMAP.md): the atomic rebuild above succeeded, so the SERVER canvas
+    // state is canonical post-apply. If the follow-up refresh now fails,
+    // letting the throw propagate naively to runLoop's outer catch would
+    // trigger a WHOLE-batch retry, and attempt 2 would feed the model the
+    // STALE pre-apply client state (preserved by useCanvas's defensive
+    // contract). Ops returned for the stale snapshot can collide with
+    // attempt-1's already-applied state — visibly via cyclic stableId
+    // references (applier rejects), or silently via stableId-collision
+    // overwrites at the rebuild route's per-(projectWorkflowId, stableId)
+    // upsert (no guard catches this).
+    //
+    // The helper retries just the refresh up to 3 times (2s, 5s waits).
+    // On persistent failure it throws an error annotated with both
+    // _noRetry: true (so runLoop skips its standard 5s-then-retry path)
+    // and _postRebuildFetchFailed: true (so the runLoop catch below knows
+    // to mark the batch complete on the server, advance the cursor, save
+    // the checkpoint, and pause for a manual browser refresh + Resume).
+    await runRefreshWithRetry(
+      async () => {
+        await onRefreshCanvas();
+        await onRefreshKeywords();
+      },
+      {
+        onAttemptFailed: (attempt, max, nextBackoffMs, e) => {
+          const detail = e instanceof Error ? e.message : String(e);
+          aaLog(
+            '  ⚠ Post-rebuild canvas refresh failed (attempt ' + attempt +
+              '/' + max + '): ' + detail + '. Server state is canonical; ' +
+              'retrying refresh in ' + (nextBackoffMs / 1000) + 's…',
+            'warn',
+          );
+        },
+      },
+    );
 
     // Bug 1 secondary guard: track canvas size for the runLoop fail-fast
     // pre-flight. If the next batch sees nodesRef.current.length === 0
@@ -1531,7 +1566,11 @@ export default function AutoAnalyze({
 
       } catch (err: unknown) {
         if (abortRef.current) break;
-        const errObj = err as Error & { _isStall?: boolean; _noRetry?: boolean };
+        const errObj = err as Error & {
+          _isStall?: boolean;
+          _noRetry?: boolean;
+          _postRebuildFetchFailed?: boolean;
+        };
         const errMsg = errObj.message || String(err);
 
         // Forensic emit: batch error. Phase=post_api_call carries the
@@ -1543,6 +1582,33 @@ export default function AutoAnalyze({
           canvasKeywordCount: keywordsRef.current.length,
           errors: [errMsg],
         });
+
+        // Post-rebuild fetch failed despite the helper's retries: the
+        // atomic rebuild succeeded, so the SERVER state is canonical
+        // post-apply. Mark the batch complete (it IS done on the server),
+        // advance the cursor, save the checkpoint, and pause the run so
+        // the director can refresh the browser to resync UI before
+        // resuming. Resume picks up at the NEXT batch against fresh
+        // server state — eliminates the stale-client-retry corruption
+        // path described in src/lib/post-rebuild-fetch-retry.ts.
+        if (errObj._postRebuildFetchFailed) {
+          batch.status = 'complete';
+          batch.completedAt = Date.now();
+          aaLog(
+            'Batch ' + batch.batchNum + ' — applied server-side; UI refresh ' +
+              'failed. Refresh the browser tab and click Resume; the run will ' +
+              'continue at the next batch with fresh canvas state. ' +
+              'Detail: ' + errMsg,
+            'warn',
+          );
+          setCurrentIdx(prev => prev + 1);
+          currentIdxRef.current++;
+          saveCheckpoint();
+          setAaState('API_ERROR');
+          runningRef.current = false;
+          setBatches([...batchesRef.current]);
+          return;
+        }
 
         if (errObj._isStall) {
           batch.attempts--;
