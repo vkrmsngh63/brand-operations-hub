@@ -20,6 +20,8 @@ import {
   checkP8KeywordScope,
   checkP9TestApiCall,
   checkP10LocalStorage,
+  checkP11ConsolidationInitialPrompt,
+  checkP12ConsolidationPrimerPrompt,
   type PreflightContext,
 } from './preflight.ts';
 
@@ -61,6 +63,9 @@ function makeContext(over: Partial<PreflightContext> = {}): PreflightContext {
     seedWords: 'bursitis joint pain',
     initialPrompt: 'a'.repeat(200),
     primerPrompt: '',
+    consolidationInitialPrompt: 'a'.repeat(200),
+    consolidationPrimerPrompt: '',
+    consolidationCadence: 10,
     projectId: 'proj-test',
     nodes: [],
     keywords: [],
@@ -147,6 +152,75 @@ test('P4: very short non-empty primer (< 30 chars) → fail (catches half-paste)
 
 test('P4: substantial primer (≥ 30 chars) → pass', () => {
   const r = checkP4PrimerPrompt(makeContext({ primerPrompt: 'a'.repeat(500) }));
+  assert.equal(r.status, 'pass');
+});
+
+/* ── P11: Consolidation Initial Prompt ────────────────────────────── */
+
+test('P11: cadence=0 (auto-fire disabled) → pass even with empty consolidation prompt', () => {
+  const r = checkP11ConsolidationInitialPrompt(
+    makeContext({ consolidationCadence: 0, consolidationInitialPrompt: '' }),
+  );
+  assert.equal(r.status, 'pass');
+  assert.match(r.message, /auto-fire disabled/);
+});
+
+test('P11: cadence>0 + empty consolidation prompt → fail', () => {
+  const r = checkP11ConsolidationInitialPrompt(
+    makeContext({ consolidationCadence: 3, consolidationInitialPrompt: '' }),
+  );
+  assert.equal(r.status, 'fail');
+  assert.match(r.message, /need ≥100/);
+  assert.match(r.message, /Consolidation Cadence = 3/);
+});
+
+test('P11: cadence>0 + short consolidation prompt (< 100 chars) → fail', () => {
+  const r = checkP11ConsolidationInitialPrompt(
+    makeContext({ consolidationCadence: 5, consolidationInitialPrompt: 'too short' }),
+  );
+  assert.equal(r.status, 'fail');
+  assert.match(r.message, /9 chars/);
+});
+
+test('P11: cadence>0 + ≥100 char consolidation prompt → pass with cadence in message', () => {
+  const r = checkP11ConsolidationInitialPrompt(
+    makeContext({ consolidationCadence: 10, consolidationInitialPrompt: 'a'.repeat(150) }),
+  );
+  assert.equal(r.status, 'pass');
+  assert.match(r.message, /150 chars/);
+  assert.match(r.message, /cadence=10/);
+});
+
+/* ── P12: Consolidation Primer Prompt ─────────────────────────────── */
+
+test('P12: cadence=0 → pass even with empty primer', () => {
+  const r = checkP12ConsolidationPrimerPrompt(
+    makeContext({ consolidationCadence: 0, consolidationPrimerPrompt: '' }),
+  );
+  assert.equal(r.status, 'pass');
+  assert.match(r.message, /auto-fire disabled/);
+});
+
+test('P12: cadence>0 + empty primer → pass with "not used" (primer is optional)', () => {
+  const r = checkP12ConsolidationPrimerPrompt(
+    makeContext({ consolidationCadence: 3, consolidationPrimerPrompt: '' }),
+  );
+  assert.equal(r.status, 'pass');
+  assert.match(r.message, /not used/);
+});
+
+test('P12: cadence>0 + half-paste primer (< 30 chars) → fail (catches partial paste)', () => {
+  const r = checkP12ConsolidationPrimerPrompt(
+    makeContext({ consolidationCadence: 3, consolidationPrimerPrompt: 'just a few chars' }),
+  );
+  assert.equal(r.status, 'fail');
+  assert.match(r.message, /partial paste/);
+});
+
+test('P12: cadence>0 + substantial primer (≥ 30 chars) → pass', () => {
+  const r = checkP12ConsolidationPrimerPrompt(
+    makeContext({ consolidationCadence: 3, consolidationPrimerPrompt: 'a'.repeat(500) }),
+  );
   assert.equal(r.status, 'pass');
 });
 
@@ -404,7 +478,7 @@ test('P10: read returns wrong value → fail', () => {
 
 /* ── runPreflight: full chain ─────────────────────────────────────── */
 
-test('runPreflight: all checks pass → passed=true, 10 checks, firstFailIndex=-1', async () => {
+test('runPreflight: all checks pass → passed=true, 12 checks, firstFailIndex=-1', async () => {
   const localNodes = [{ stableId: 't-1' }];
   const localKws = [{ id: 'k-1' }, { id: 'k-2' }];
   const ctx = makeContext({
@@ -426,7 +500,7 @@ test('runPreflight: all checks pass → passed=true, 10 checks, firstFailIndex=-
   });
   const result = await runPreflight(ctx);
   assert.equal(result.passed, true);
-  assert.equal(result.checks.length, 10);
+  assert.equal(result.checks.length, 12);
   assert.equal(result.firstFailIndex, -1);
   for (const c of result.checks) {
     assert.equal(c.status, 'pass', `check ${c.id} should pass: ${c.message}`);
@@ -467,9 +541,10 @@ test('runPreflight: P9 fails → exposes the error message in checks', async () 
   });
   const result = await runPreflight(ctx);
   assert.equal(result.passed, false);
-  // P1..P8 should pass; P9 should fail.
-  assert.equal(result.checks.length, 9);
-  assert.equal(result.checks[8].id, 'P9');
-  assert.equal(result.checks[8].status, 'fail');
-  assert.match(result.checks[8].message, /model not found/);
+  // P1..P4, P11, P12, P5..P8 (10 in order) should pass; P9 should fail.
+  // (P11/P12 inserted after P4 per 2026-05-02 directive — see runner sequence.)
+  assert.equal(result.checks.length, 11);
+  assert.equal(result.checks[10].id, 'P9');
+  assert.equal(result.checks[10].status, 'fail');
+  assert.match(result.checks[10].message, /model not found/);
 });

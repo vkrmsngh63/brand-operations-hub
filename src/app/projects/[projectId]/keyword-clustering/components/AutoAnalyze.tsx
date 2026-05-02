@@ -1653,7 +1653,7 @@ export default function AutoAnalyze({
       setPreflightRunning(true);
       setPreflightFailed(false);
       setPreflightChecks([]);
-      aaLog('Running pre-flight checks (10 checks, ~2 seconds)…', 'info');
+      aaLog('Running pre-flight checks (12 checks, ~2 seconds)…', 'info');
       try {
         const result = await runPreflight({
           apiMode,
@@ -1662,6 +1662,9 @@ export default function AutoAnalyze({
           seedWords,
           initialPrompt,
           primerPrompt,
+          consolidationInitialPrompt,
+          consolidationPrimerPrompt,
+          consolidationCadence,
           projectId,
           nodes: nodesRef.current.map((n) => ({ stableId: n.stableId, pathwayId: n.pathwayId ?? null })),
           keywords: keywordsRef.current.map((k) => ({ id: k.id })),

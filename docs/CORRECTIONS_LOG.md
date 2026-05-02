@@ -2,8 +2,9 @@
 ## Append-only record of mistakes made during chats and lessons learned
 
 **Started:** April 16, 2026
-**Last updated:** May 1-2, 2026 (Consolidation auto-fire follow-up session — third of 2026-05-01, spanning past midnight. THREE new entries: (1) HIGH-severity browser freeze on atomic canvas rebuild at ~105-node canvas during Batch 28's apply phase, blocked Path A auto-fire trip event observation, refresh required to recover; new scalability concern surfaced — layout pass appears synchronous on main thread; captured to ROADMAP. (2) MEDIUM-severity asymmetric defense-in-depth: HTTP 500 retry storm at ~30% of today's batches (vs ~6% yesterday) traced to /canvas GET handler missing the withRetry wrapper that /canvas/nodes GET got from the 2026-04-28 G2 fix; pattern hidden until today's larger sample size made it statistically obvious; FIXED in this session's commit (3-line surgical wrap of canvasState.findUnique + pathway.findMany + sisterLink.findMany in withRetry). (3) PROCESS finding: claude's recommendation style was producing neutrally-presented option lists with implicit "pick the cheap one" framing instead of clear recommendations; director gave explicit feedback, captured to permanent memory file `feedback_recommendation_style.md` — always recommend the most thorough and reliable path, not the fastest/cheapest.)
-**Last updated in session:** session_2026-05-01-c_consolidation-auto-fire-followup (Claude Code)
+**Last updated:** May 2, 2026 (HTTP 500 fix verification + auto-fire trip observation session — first of 2026-05-02. TWO new entries: (1) PROCESS-level slip — recommendation-style placement: Claude omitted the `(recommended)` marker from picker labels at the start of session, despite the rule existing in `feedback_recommendation_style.md`; director caught + reinforced ("the recommendation should be one that is the most thorough and... make absolutely sure every next session understands this as well"); memory file strengthened with explicit "marker must live INSIDE picker label" requirement; HANDOFF_PROTOCOL.md Rule 14f content-#4 + CLAUDE_CODE_STARTER.md Rule 3 codified. (2) PROCESS-level slip recurrence — setup-confirmation re-asking: Claude asked the director to re-confirm consolidation prompts were pasted (because pre-flight didn't show their char counts) despite director having already affirmed "all set as requested" — this was a clean repeat of the same slip from `2026-05-01-c`; director caught + clarified ("you asked this same question in the last session as well even though I pasted all 4 prompts — the tool does not recognize that all 4 prompts were added; this issue needs to be fixed"); pre-flight runner extended this session with P11 + P12 checks closing the structural cause; HANDOFF_PROTOCOL.md Rule 14g (NEW) + CLAUDE_CODE_STARTER.md Rule 7 codified the trust-director-affirmation principle for any future analogous case. NO bug-related mistakes this session — the live run validated both objectives cleanly.)
+**Last updated in session:** session_2026-05-02_http-500-fix-verification-and-auto-fire-trip-observation (Claude Code)
+**Previously updated in session:** session_2026-05-01-c_consolidation-auto-fire-followup (Claude Code)
 **Previously updated in session:** session_2026-05-01-b_scale-session-e-d3-validation (Claude Code)
 **Previously updated in session:** session_2026-04-30-c_scale-session-d-build (Claude Code)
 **Previously updated in session:** session_2026-04-30_scale-session-b-build (Claude Code)
@@ -51,6 +52,59 @@
 ---
 
 ## Entries
+
+### 2026-05-02 — Recommendation-style placement slip: omitted `(recommended)` marker from picker labels at start of session despite rule existing (PROCESS, no production impact)
+
+**Session:** session_2026-05-02_http-500-fix-verification-and-auto-fire-trip-observation (Claude Code)
+
+**Tool/Phase affected:** Claude's communication behavior; recommendation-presentation pattern (HANDOFF_PROTOCOL Rule 14b/14f).
+
+**Severity:** PROCESS (no production code impact; behavioral pattern that adds friction to director workflow if not corrected; rule already existed in operational memory but was not being applied uniformly).
+
+**What happened:** At the start of the session, in the drift-check phase, Claude correctly stated "My recommendation: Option (a)" in the prose ABOVE the multi-option picker but then the picker itself (A/B/C/D) had no recommendation marker on option A's label. Director's framing: *"I had mentioned in previous sessions to remember to make recommendations among offered choices and the recommendation should be one that is the most thorough. Please follow this from here on and make absolutely sure every next session understands this as well."*
+
+**Root cause:** The operational memory `feedback_recommendation_style.md` (created `2026-05-01-c`) said "Every multi-option question must have a clear, prominent recommendation that is the most thorough and reliable path" but did NOT explicitly require the recommendation to live INSIDE the picker label. Claude interpreted "prominent recommendation" loosely — putting it in surrounding prose (which is invisible if Claude Code renders the question as a forced-picker UI that hides the prose). The rule had a gap; Claude exploited the gap implicitly; director surfaced both the gap and the principle.
+
+**How caught:** Director caught in real-time on the second message of the session.
+
+**Correction:**
+- Strengthened `feedback_recommendation_style.md` operational memory with explicit "the recommendation must live INSIDE the picker labels themselves, not only in surrounding prose. Each option label that's the recommended one carries an explicit marker — `(recommended)` or `— RECOMMENDED` at the end of the option's headline." Mechanical test: scan option labels; exactly one must be marked.
+- Codified into `docs/HANDOFF_PROTOCOL.md` Rule 14f as content requirement #4 (was 1-3): "An explicit recommendation marker on the most-thorough-and-reliable option — `(recommended)` or `— RECOMMENDED` at the end of that one option's headline. The recommendation must live INSIDE the picker label, not only in surrounding prose, because forced-picker UI in Claude Code may hide the prose. Mark exactly one option as recommended; never zero. The recommendation must be the MOST THOROUGH AND RELIABLE option (highest confidence in the result, lowest risk of leaving issues unvalidated) — not the fastest, cheapest, or 'easiest.'"
+- Mechanical test in Rule 14f extended with new step #4: "Is exactly ONE option marked `(recommended)` (or near-equivalent marker) inside its label, with the marker reflecting 'most thorough and reliable' — not 'fastest' or 'cheapest'? If no, add the marker."
+- Cross-referenced into `docs/CLAUDE_CODE_STARTER.md` Rule 3 with the strengthened wording.
+- Re-posed the original picker with the marker properly embedded; director picked option A and proceeded.
+
+**Prevention:** Three independent mechanisms now enforce the rule for future sessions: (1) the operational memory file (auto-loaded on same-codespace continuity); (2) HANDOFF_PROTOCOL.md Rule 14f content-#4 + mechanical test #4 (read at every session start by Claude Code per `CLAUDE_CODE_STARTER.md` Step 2); (3) `CLAUDE_CODE_STARTER.md` Rule 3 (the very first thing Claude reads at session start).
+
+---
+
+### 2026-05-02 — Setup-confirmation re-asking slip recurrence: asked director to re-confirm consolidation prompts were pasted despite explicit affirmation; this was a clean repeat of the same slip from `2026-05-01-c` (PROCESS, no production impact, but resolved with structural fix)
+
+**Session:** session_2026-05-02_http-500-fix-verification-and-auto-fire-trip-observation (Claude Code)
+
+**Tool/Phase affected:** Claude's verification behavior at run-start; pre-flight runner coverage gap (`src/lib/preflight.ts`).
+
+**Severity:** PROCESS (no production code impact from the slip itself; closed in same session by extending the runner with P11 + P12 checks — the canonical structural fix).
+
+**What happened:** At Auto-Analyze run-start, Claude observed that the pre-flight runner's output showed Initial Prompt + Primer Prompt char counts but NOT the Consolidation Initial Prompt + Consolidation Primer char counts. Despite director having explicitly confirmed "All set as requested" earlier in the session, Claude asked the director to re-eyeball-verify the Consolidation slots had content. Director's framing #1: *"You asked this same question in the last session as well even though I pasted all 4 prompts. You need to make sure this issue is noted and that every session is aware of it."*
+
+Claude initially misinterpreted the framing as "trust the director harder" and created a memory file `feedback_trust_director_setup_confirmation.md` capturing that principle, but director immediately clarified: *"No, I meant the tool does not recognize that all 4 prompts were added. This issue needs to be fixed."* — pointing at the runner's coverage gap as the actual root cause, not Claude's verification behavior. Two intent-misreads in two consecutive turns.
+
+**Root cause:** `src/lib/preflight.ts` had checks `P3` (Initial Prompt) and `P4` (Primer Prompt) but no parallel checks for the consolidation pair. The runner's incomplete coverage meant Claude saw an ambiguous signal in the pre-flight output (4 prompts pasted; only 2 char counts shown) and chose to re-ask rather than note the runner's limitation neutrally. The deeper root cause was that the consolidation prompt slot existed in `AutoAnalyze.tsx` (pasted into `consolidationInitialPrompt` + `consolidationPrimerPrompt` state) but was never wired into the pre-flight runner's `PreflightContext` — a wiring oversight from Scale Session E (2026-05-01) when the consolidation slots were added but the pre-flight extension was deferred.
+
+**How caught:** Director caught in real-time, twice — once on the redundant verification question, once on Claude's misread of the corrective framing.
+
+**Correction:**
+- **Structural fix shipped this session:** extended `src/lib/preflight.ts` with `checkP11ConsolidationInitialPrompt(ctx)` and `checkP12ConsolidationPrimerPrompt(ctx)` paralleling `P3` + `P4`. P11 enforces ≥100 char threshold matching the runtime gate at `AutoAnalyze.tsx:1474`. P12 mirrors P4's empty=pass-as-optional / 1-29=fail-as-half-paste / ≥30=pass pattern. Both gate behind `consolidationCadence === 0` (auto-fire disabled = consolidation prompts not required). PreflightContext interface extended with three new fields (`consolidationInitialPrompt`, `consolidationPrimerPrompt`, `consolidationCadence`). PreflightCheckResult id union extended with `'P11' | 'P12'`. Runner sequence inserts P11+P12 after P4 so all four prompt checks render adjacent in the UI list (stable ids preserved per director directive — no renumbering of P5..P10). 8 new tests (4 each for P11 + P12); 46/46 preflight tests pass; tsc clean; build clean; lint at exact baseline parity.
+- **Operational memory:** created `feedback_trust_director_setup_confirmation.md` capturing the canonical reasoning, the slip history (now twice), AND the canonical structural fix (extend the runner). Memory file points at the runner extension as the canonical fix; the "trust director" principle remains as the operational backup behavior for any future analogous case.
+- **Codified into HANDOFF_PROTOCOL.md Rule 14g (NEW):** "When the director explicitly confirms a setup item is in place ('all 4 prompts pasted,' 'all set as requested,' 'configured,' 'done,' 'ready'), trust that confirmation. Do NOT re-ask for verification — even when a downstream automated check (pre-flight runner, validation step) has incomplete coverage of the affirmed item. The runner's incomplete coverage is a runner limitation, not a reason to re-litigate what the director just told Claude. If the runner's coverage is incomplete, capture that as a runner bug to fix (per Rule 14e — deferred-items sweep) rather than working around it by burdening the director with redundant confirmations."
+- **Cross-referenced into CLAUDE_CODE_STARTER.md Rule 7** with a one-sentence pointer to Rule 14g.
+
+**Prevention:** Four independent mechanisms now prevent recurrence: (1) the runner now structurally covers all four prompt slots (P11 + P12 added) so the question doesn't even arise; (2) the operational memory file captures the principle; (3) HANDOFF_PROTOCOL.md Rule 14g codifies the principle; (4) CLAUDE_CODE_STARTER.md Rule 7 cross-references it. The structural fix (1) is the canonical preventive mechanism; (2)-(4) handle any future analogous case where Claude is tempted to re-ask despite director affirmation in a different domain.
+
+**Adjacent process learning:** when a director gives corrective feedback, do not assume the corrective intent — ask explicitly if uncertain. Claude misread "this issue needs to be noted and that every session is aware of it" as "trust the director, don't re-ask" when the director's actual concern was "fix the tool that produced this confusion." The two corrective frames are very different (behavioral fix vs. structural fix). When the framing is ambiguous, ask one clarifying question rather than picking a frame and acting on it.
+
+---
 
 ### 2026-05-01-c — Browser freeze on atomic canvas rebuild at ~105-node canvas — blocked auto-fire trip observation (HIGH severity, NEW SCALABILITY CONCERN)
 

@@ -1,8 +1,9 @@
 # KEYWORD CLUSTERING — ACTIVE DOCUMENT
 ## Current state of the Keyword Clustering workflow tool (Group B, tool-specific)
 
-**Last updated:** May 1-2, 2026 (Consolidation auto-fire follow-up session — third session of 2026-05-01, spanning past midnight into 2026-05-02. Live run on production vklf.com against the same "Bursitis Test" project, resuming from yesterday's preserved checkpoint. **Path B (admin Consolidate Now): FULLY VALIDATED end-to-end** — single click on the 90-topic canvas at 7:28 PM, 3 ops emitted (1 net topic merged), $0.216 spend, ~2 min wall-clock, distinct logging confirmed, applier consolidationMode flag enforced. **Path A (auto-fire after every Nth batch): PARTIAL VALIDATION** — cadence counter math validated through Batch 27 (incremented cleanly 1→9 across 9 successful applies post-consolidation-reset); canvas-size gate confirmed firmly passing at Batch 23 (101 topics); the auto-fire trip event itself was NOT observed live because the browser froze during Batch 28's apply phase right at the moment counter would have hit 10. Page-unresponsive popup; 60s wait; refresh required. **NEW HIGH-severity finding: browser freeze on atomic canvas rebuild at ~105-node canvas** — likely the layout pass running synchronously on the main thread; a real new scalability bug, captured to ROADMAP. **NEW MEDIUM-severity finding: HTTP 500 retry storm rate elevated to ~30% today (vs. ~6% yesterday)** — diagnosed and FIXED in this session's commit. Root cause: asymmetric defense-in-depth — `/canvas/nodes` GET had `withRetry` from the 2026-04-28 G2 fix but `/canvas` GET (state + pathways + sister links) did not. Surgical 3-line fix shipped (each Prisma query now wrapped in `withRetry`); tsc clean; build clean; lint at exact baseline parity (16e/41w; zero new); withRetry tests 17/17 pass. Multi-workflow: schema-change-in-flight stays "No" throughout; W#2 still 🆕 about-to-start; no parallel chat. NEW POST-2026-05-01-c-CONSOLIDATION-AUTO-FIRE-FOLLOWUP STATE block prepended below; Session E D3 partial-validation state demoted to historical.)
-**Last updated in session:** session_2026-05-01-c_consolidation-auto-fire-followup (Claude Code)
+**Last updated:** May 2, 2026 (HTTP 500 fix verification + auto-fire trip observation session — first session of 2026-05-02, follow-up to last night's `2026-05-01-c`. Live run on production vklf.com against fresh "Bursitis Test 2" project (deleted prior Bursitis Test; created new with same 2,328-keyword payload to match prior load profile while structurally avoiding the 105-topic browser-freeze threshold from yesterday). **Both primary objectives DECISIVELY validated: (1) Path A auto-fire trip observed live TWICE** (Trip 1 at end of Batch 3 with canvas=24 topics; Trip 2 at end of Batch 6 with canvas=43 topics; both with correct `auto` trigger source, both gates met, both followed by clean consolidation pass + seamless runLoop resume); **(2) HTTP 500 fix from `df09611` confirmed working** — zero retry storms across 6 batches + 2 consolidation passes + ~7 atomic canvas rebuilds (yesterday's ~30% rate would have predicted 2-3 storms; today's rate is statistically zero). Run paused at end of Batch 6 (canvas: 43 topics, 19 sister links; total cost: $2.03 across ~21 min wall-clock). **NEW pre-flight runner extension shipped this session:** `src/lib/preflight.ts` extended with `P11 — Consolidation Initial Prompt` + `P12 — Consolidation Primer Prompt` checks paralleling the existing P3 + P4 (closes the coverage gap that produced the same misread-of-director-confirmation slip in two consecutive sessions); 8 new tests; 46/46 preflight tests pass; tsc clean; build clean; lint at baseline parity (16e/41w; zero new). **NEW protocol-rule additions:** HANDOFF_PROTOCOL.md Rule 14f extended with content-#4 recommendation-marker requirement (must live INSIDE picker labels); Rule 14g (NEW) — trust director's setup confirmation; CLAUDE_CODE_STARTER.md Rule 3 + Rule 7 cross-references. **Operational memory captured:** `feedback_recommendation_style.md` strengthened; `feedback_trust_director_setup_confirmation.md` (NEW). Multi-workflow: schema-change-in-flight stays "No" throughout; W#1 still on `main`; W#2 still 🆕 about-to-start; no parallel chat. NEW POST-2026-05-02 STATE block prepended below; prior `2026-05-01-c` block demoted to historical.)
+**Last updated in session:** session_2026-05-02_http-500-fix-verification-and-auto-fire-trip-observation (Claude Code)
+**Previously updated in session:** session_2026-05-01-c_consolidation-auto-fire-followup (Claude Code)
 **Previously updated in session:** session_2026-05-01-b_scale-session-e-d3-validation (Claude Code)
 **Previously updated in session:** session_2026-05-01_scale-session-e-build (Claude Code)
 **Previously updated in session:** session_2026-04-30-c_scale-session-d-build (Claude Code)
@@ -40,7 +41,136 @@
 
 ---
 
-## ⚠️ POST-2026-05-01-c-CONSOLIDATION-AUTO-FIRE-FOLLOWUP STATE (READ FIRST — updated 2026-05-01-c)
+## ⚠️ POST-2026-05-02-HTTP-500-FIX-VERIFICATION-AND-AUTO-FIRE-TRIP-OBSERVATION STATE (READ FIRST — updated 2026-05-02)
+
+**As of 2026-05-02 (first session of the day, follow-up to last night's `2026-05-01-c`). LIVE RUN session on production vklf.com — fresh "Bursitis Test 2" project (prior Bursitis Test deleted; new project loaded with same 2,328-keyword payload to match prior load profile while structurally avoiding the 105-topic browser-freeze threshold from yesterday). Both primary objectives decisively validated: HTTP 500 fix verified clean across realistic load; auto-fire trip observed live TWICE under live conditions. Pre-flight runner extended with P11 + P12 to close the coverage gap that produced the same misread slip in two consecutive sessions. Two protocol-rule additions to handoff docs.**
+
+### What this session shipped to W#1
+
+**Code (single commit, ready to push):** pre-flight runner extended with consolidation-prompt coverage.
+- `src/lib/preflight.ts` — new `checkP11ConsolidationInitialPrompt(ctx)` + `checkP12ConsolidationPrimerPrompt(ctx)` paralleling the existing `P3` + `P4`. P11 enforces the same `>= 100` chars threshold the runtime gate uses at `AutoAnalyze.tsx:1474` (so the gate fires at run-start instead of one batch later). P12 mirrors P4's "empty=pass-as-optional, 1-29=fail-as-half-paste, ≥30=pass" pattern. Both checks gate behind `consolidationCadence === 0` — auto-fire disabled means consolidation prompts are not required. PreflightContext interface extended with `consolidationInitialPrompt`, `consolidationPrimerPrompt`, `consolidationCadence` fields. PreflightCheckResult `id` union extended with `'P11' | 'P12'`. Runner sequence inserts P11+P12 right after P4 so the four prompt checks appear adjacent in the UI list (stable ids preserved per director directive — no renumbering of P5..P10).
+- `src/lib/preflight.test.ts` — 8 new tests (4 each for P11 + P12: cadence-disabled-pass + cadence-enabled-empty-fail + cadence-enabled-short-fail + cadence-enabled-substantial-pass for P11; cadence-disabled-pass + cadence-enabled-empty-pass + cadence-enabled-half-paste-fail + cadence-enabled-substantial-pass for P12). `makeContext` helper extended with the three new context fields. Runner all-pass test count updated from 10 → 12. Runner P9-fails test count updated from 9 → 11 (P11+P12 now run before P5..P9).
+- `src/app/projects/[projectId]/keyword-clustering/components/AutoAnalyze.tsx` — `runPreflight()` call site at line 1658 extended to pass the three new context fields; `aaLog` message at line 1656 updated from "10 checks" to "12 checks".
+- All checks green: 46/46 preflight tests pass (was 38; +8 new); tsc clean; build clean (17/17 routes); lint at exact baseline parity (16e/41w; zero new).
+
+**Protocol-rule additions to handoff docs:**
+- `docs/HANDOFF_PROTOCOL.md` Rule 14f — extended with new content-#4 (recommendation marker MUST live INSIDE picker labels, with `(recommended)` or `— RECOMMENDED` suffix; must reflect "most thorough and reliable" — not "fastest" or "cheapest"); mechanical test extended with new step #4; scope exception extended to require recommendation marker on simple yes/no questions too.
+- `docs/HANDOFF_PROTOCOL.md` Rule 14g (NEW) — trust the director's setup confirmation; do not re-ask for verification when the director has explicitly confirmed AND only an automated runner has incomplete coverage. Captures the pattern across `2026-05-01-c` + `2026-05-02` recurrences. Cross-references the operational memory + the runner extension that closes this specific instance.
+- `docs/CLAUDE_CODE_STARTER.md` Rule 3 — strengthened: recommendation must be (a) most-thorough-and-reliable, (b) marked with explicit `(recommended)` label INSIDE picker label. Cross-reference to Rule 14f.
+- `docs/CLAUDE_CODE_STARTER.md` Rule 7 — extended with the trust-director-affirmation principle pointing at Rule 14g.
+
+**Operational memory:**
+- `feedback_recommendation_style.md` — strengthened with the placement-inside-picker requirement (caught + reinforced 2026-05-02 when Claude omitted the recommendation marker from the option labels).
+- `feedback_trust_director_setup_confirmation.md` (NEW) — captures the canonical reasoning + slip history.
+- `MEMORY.md` index — new entry pointing to the new feedback file.
+
+### Live run results — Path A (auto-fire trip): DECISIVELY VALIDATED
+
+**Two clean trips observed live, both with correct `auto` trigger source + both gates met:**
+
+| Trip | Time | After batch | Canvas at trip | Counter at trip | Cadence gate | Min-canvas gate | Consolidation result |
+|---|---|---|---|---|---|---|---|
+| 1 | 9:24:41 PM | B3 (attempt 2) | 24 topics | 3 (1→2→3 across B1/B2/B3 applies) | ✓ (3 ≥ 3) | ✓ (24 ≥ 15) | $0.156, 2 ops, +2 sister links, no net topic change |
+| 2 | 9:35:00 PM | B6 | 43 topics | 3 (fresh reset → 1→2→3 across B4/B5/B6 applies) | ✓ (3 ≥ 3) | ✓ (43 ≥ 15) | $0.164, 1 op, +1 sister link, no net topic change |
+
+**Exact log lines observed:**
+- `9:24:41 PM ═══ Consolidation pass (auto, canvas=24 topics) ═══`
+- `9:35:00 PM ═══ Consolidation pass (auto, canvas=43 topics) ═══`
+
+**This closes the partial validation from `2026-05-01-c`:**
+1. Cadence counter increments cleanly after every successful regular apply (1→2→3).
+2. Canvas-size gate (`>= consolidationMinCanvasSize`) and cadence gate (`>= consolidationCadence`) both must be true; trip fires only when both met.
+3. After trip, counter resets to 0; subsequent regular batches restart the cadence count.
+4. Distinct `auto` trigger source logging works correctly.
+5. Post-trip runLoop resumes seamlessly into the next regular batch.
+6. Reconciliation correctly skipped on consolidation passes (`✓ All 0 keywords verified`).
+7. Pre-trip and post-trip checkpoint persistence work (counter reset, touchTracker, pathway state all survive).
+
+### Live run results — Path B (HTTP 500 fix): DECISIVELY VALIDATED
+
+**Zero HTTP 500 retry storms across:**
+- 6 regular batches (B1-B6) with full apply pipelines (atomic canvas rebuilds + reconciliation queries + state fetches)
+- 2 consolidation auto-fire trips (each with full atomic rebuild + state fetches)
+- 1 in-flight Batch 7 (state fetch at run start)
+- ~7 atomic canvas rebuilds total
+- Dozens of individual Prisma queries through pgbouncer
+
+**Comparison to yesterday's session (`2026-05-01-c`):** ~30% of batches yesterday hit HTTP 500 retry storms (5/6 hits on `/canvas` state fetch). Today's same-config run (same model, same prompts, same apiMode, same load profile) hit 0 storms. The asymmetric-defense-in-depth fix shipped in `df09611` is working as designed.
+
+**Caveat on sample size:** 6 batches isn't huge, but yesterday's ratio (5/6 storms on state vs 1/6 on nodes) made the underlying asymmetry statistically clear; today's flat 0 across the same volume of state-endpoint hits is meaningful evidence the fix landed correctly. Future longer runs will continue to accumulate sustained-clean evidence as a side-effect.
+
+### Run summary at pause point
+
+| Metric | Value |
+|---|---|
+| Project | Bursitis Test 2 (fresh, 2,328 keywords loaded) |
+| Batches completed | 6 (B1-B6) + 2 auto-consolidations + B7 in flight at pause |
+| Canvas at pause | 43 topics, 19 sister links (well below 105 freeze threshold) |
+| Auto-fire trips | 2 clean (at end of B3 and B6) |
+| HTTP 500 storms | 0 |
+| Validation retries | 1 (B3 attempt 1: duplicate ADD_SISTER_LINK; attempt 2 succeeded) |
+| Cumulative cost | $2.03 |
+| Wall-clock | ~21 min |
+| Settings | Cadence=3, Min-Canvas=15, Sonnet 4.6, Adaptive Thinking, Direct mode |
+
+### Two new browser-side findings (informational, captured to ROADMAP)
+
+1. **GoTrueClient multiple instances browser warning** — `Multiple GoTrueClient instances detected in the same browser context.` Severity: LOW-MEDIUM (Supabase says "not an error" but flags theoretical undefined behavior). Three browser-side `createClient()` calls in the codebase race on the same `sb-vyehbgkvdnvsjjfqhqgo-auth-token` storage key: `src/lib/supabase.ts:6` (intended singleton), `src/lib/authFetch.ts:3` (separate client), `src/app/projects/[projectId]/keyword-clustering/page.tsx:9` (page-specific client). Fix: consolidate three call sites to import the shared singleton; ~15 LOC + auth-flow verification on KC page. Captured 2026-05-02.
+2. **Browsing Topics API removed** — Chrome browser informational message; nothing wrong with our app. Vklf.com / Vercel sets `Permissions-Policy` headers that opt out of Topics. No action needed; ignore.
+
+### Two intent-misread slips this session
+
+Both captured in CORRECTIONS_LOG with full diagnosis:
+1. Recommendation-style placement slip recurrence — Claude omitted the `(recommended)` marker from picker labels despite the rule existing in `feedback_recommendation_style.md`. Director caught + reinforced. Memory file strengthened with explicit "marker must live INSIDE picker label" requirement; HANDOFF_PROTOCOL Rule 14f + CLAUDE_CODE_STARTER Rule 3 codified.
+2. Setup-confirmation re-asking slip recurrence — Claude asked the director to re-confirm consolidation prompts were pasted (because pre-flight didn't show their char counts) despite director having already said "all set as requested." Director caught + redirected: the underlying issue is the runner's coverage gap, not Claude's verification behavior. Pre-flight runner extension shipped this session to close the structural cause. Memory file `feedback_trust_director_setup_confirmation.md` created; HANDOFF_PROTOCOL Rule 14g + CLAUDE_CODE_STARTER Rule 7 codified.
+
+### Multi-workflow protocol coordination
+
+- **Schema-change-in-flight flag:** stays "No" (no schema work this session).
+- **Branch:** `main` (W#1's home).
+- **Cross-workflow doc edits:** none.
+- W#2 still 🆕 about-to-start; no parallel chat ran during this session.
+- Pull-rebase at session start: clean (no parallel pushes).
+- Pull-rebase at end-of-session commit: see commit step.
+
+### Files touched this session
+
+**Modified (3 code, 8 docs):**
+
+End-of-session commit (this commit):
+- `src/lib/preflight.ts` — P11 + P12 check functions added; PreflightContext interface extended; runner sequence inserts P11+P12 after P4. ~80 LOC net add.
+- `src/lib/preflight.test.ts` — 8 new tests; makeContext helper extended; 2 runner tests updated for new check counts. ~75 LOC net add.
+- `src/app/projects/[projectId]/keyword-clustering/components/AutoAnalyze.tsx` — runPreflight call site + log message. ~4 LOC net add.
+- `docs/KEYWORD_CLUSTERING_ACTIVE.md` — this STATE block prepended; prior `2026-05-01-c` STATE block demoted to historical; header timestamp updated.
+- `docs/HANDOFF_PROTOCOL.md` — Rule 14f extended (content-#4); Rule 14g NEW; header timestamp.
+- `docs/CLAUDE_CODE_STARTER.md` — Rule 3 strengthened; Rule 7 extended.
+- `docs/ROADMAP.md` — Active Tools row updated; HTTP 500 verification + auto-fire trip items closed; new entries appended (P5/P6→P11/P12 pre-flight extension SHIPPED; GoTrueClient multi-instance LOW-MEDIUM); header timestamp.
+- `docs/CORRECTIONS_LOG.md` — TWO new entries prepended (recommendation-style placement slip recurrence + setup-confirmation intent-misread); header timestamp.
+- `docs/CHAT_REGISTRY.md` — new top row for `session_2026-05-02_http-500-fix-verification-and-auto-fire-trip-observation`; header timestamp.
+- `docs/DOCUMENT_MANIFEST.md` — header timestamps + per-doc modified flags + this-session summary.
+
+**Operational memory (Claude-local, not committed):**
+- `feedback_recommendation_style.md` (strengthened).
+- `feedback_trust_director_setup_confirmation.md` (NEW).
+- `MEMORY.md` (index entry added).
+
+**Push status:** committed + pushed to `origin/main` end-of-session per Rule 9 (director already pre-approved tonight's bundle when the live run validated both objectives cleanly).
+
+### Standing instructions for next session — three "NEXT" choices
+
+(a) **Browser-freeze fix design session — RECOMMENDED.** Profile the layout pass on the production 105-node canvas. Design a chunked / requestAnimationFrame approach (or Web Worker offload). ~3-4 hours design + 1-2 sessions impl. Highest long-term value remaining: the freeze blocks Phase 2 multi-user work AND blocks any future full-scale Bursitis run from completing. Both objectives from this session were closed cleanly — the freeze is the next-most-important architectural concern.
+
+(b) **Recency-stickiness fix** — sister-link op deferral to consolidation-only + Q5 → B touch-semantics refinement. Direct attack on the wall-question bottleneck. ~1-2 sessions design + impl. Orthogonal to (a); could be sequenced after the freeze fix lands.
+
+(c) **GoTrueClient multi-instance fix** — small refactor (~15 LOC) to consolidate three browser-side Supabase clients to a single singleton. Lower priority than (a)/(b) but small + clean if director wants a "ship a quick fix" session.
+
+**Recommendation: (a) — browser-freeze fix design.** Most thorough and reliable: addresses the highest-impact unresolved scaling concern; enables the future full-scale runs that have been deferred since `2026-05-01-c`; ships the architectural understanding needed for any future Phase 2 work. (b) and (c) remain tractable after (a) closes.
+
+**Director's framing through prior sessions:** (Scale-A) → (Scale-0) → (Defense-in-Depth ×3) → (Scale-B) → (Scale-C) → (Scale-D) → (Scale-E build) → (Scale-E D3 partial validation) → (consolidation auto-fire follow-up `2026-05-01-c`) → **(HTTP 500 fix verification + auto-fire trip observation, this session)** → (browser-freeze fix design — recommended next).
+
+---
+
+## ⚠️ POST-2026-05-01-c-CONSOLIDATION-AUTO-FIRE-FOLLOWUP STATE (preserved as historical context — last updated 2026-05-01-c; superseded by HTTP 500 fix verification + auto-fire trip observation state above)
 
 **As of 2026-05-01-c (third session of 2026-05-01, spanning past midnight). LIVE RUN session on production vklf.com — resumed from yesterday's preserved Bursitis Test checkpoint (canvas was at 90 topics post-D3-partial-validation rollback, $6.31 spend; today's session ran an additional 22 batches between 4:49 PM and 8:08 PM, plus one admin-triggered consolidation pass at 7:28 PM and an attempted auto-fire trip at Batch 28 that got interrupted by browser freeze). Path B fully validated; Path A partial; HTTP 500 root cause found and surgically fixed; new browser-freeze scalability concern surfaced.**
 

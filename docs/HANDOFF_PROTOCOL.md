@@ -185,6 +185,7 @@ When Claude presents a multi-option question (A/B/C, 1/2/3, etc.), each option M
 1. **A plain-language description** of what the option actually does — not just a label ("Option A — just delete it" is a label; "Option A — delete the file from your repo; nothing else is touched; you'll lose that file and can't recover it through git because it was never committed" is an adequate description).
 2. **The user-visible consequence** of picking that option, including reversibility ("this is reversible — you can undo it by doing X" vs. "this is one-way").
 3. **Enough context** that a non-programmer can evaluate the option without needing to ask a clarifying question — OR an explicit acknowledgment that there's a subtlety they might want to ask about first.
+4. **An explicit recommendation marker** on the most-thorough-and-reliable option — `(recommended)` or `— RECOMMENDED` at the end of that one option's headline. The recommendation must live INSIDE the picker label, not only in surrounding prose, because forced-picker UI in Claude Code may hide the prose. Mark exactly one option as recommended; never zero. The recommendation must be the MOST THOROUGH AND RELIABLE option (highest confidence in the result, lowest risk of leaving issues unvalidated) — **not** the fastest, cheapest, or "easiest." Director's standing preference, captured 2026-05-01-c + reinforced 2026-05-02; full reasoning in the operational memory file `feedback_recommendation_style.md`.
 
 AND every multi-option question MUST include an explicit escape-hatch option as the LAST option in the list, worded as:
 
@@ -202,12 +203,27 @@ This covers the case where Claude's message renders as plain text (not an intera
 1. For each option, ask: "can a non-programmer evaluate this without further questions?" If no, add context.
 2. Is the "I have a question first that I need clarified" escape-hatch option present as the final option? If no, add it.
 3. Is the free-text invitation present at the close? If no, add it.
+4. Is exactly ONE option marked `(recommended)` (or near-equivalent marker) **inside its label**, with the marker reflecting "most thorough and reliable" — not "fastest" or "cheapest"? If no, add the marker. Never zero recommendations; never two.
 
-If any of the three fails, rewrite before sending.
+If any of the four fails, rewrite before sending.
 
-**Scope exception:** simple yes/no/not-sure questions don't need elaborate per-option framing, but they STILL must include both the escape-hatch option and the free-text invitation. "Yes / No / I have a question first / Not sure" is the right shape for a simple binary — never just "yes / no."
+**Scope exception:** simple yes/no/not-sure questions don't need elaborate per-option framing, but they STILL must include both the escape-hatch option, the free-text invitation, AND the recommendation marker on the most-thorough option. "Yes (recommended) / No / I have a question first / Not sure" is the right shape for a simple binary — never just "yes / no" and never without the recommendation marker.
 
 **Why this rule exists:** Without the escape-hatch-option, a forced-picker UI in Claude Code physically blocks the user from typing questions mid-decision. Without per-option context, the user can't evaluate what they're picking. Without the free-text invitation, a user viewing the message as plain text may still feel locked into a letter answer. Rule 14f addresses all three failure modes.
+
+### Rule 14g — Trust the director's setup confirmation (NEW 2026-05-02)
+
+When the director explicitly confirms a setup item is in place ("all 4 prompts pasted," "all set as requested," "configured," "done," "ready"), trust that confirmation. Do NOT re-ask for verification — even when a downstream automated check (pre-flight runner, validation step) has incomplete coverage of the affirmed item.
+
+**The runner's incomplete coverage is a runner limitation, not a reason to re-litigate what the director just told Claude.** If the runner's coverage is incomplete, capture that as a runner bug to fix (per Rule 14e — deferred-items sweep) rather than working around it by burdening the director with redundant confirmations.
+
+**Why this rule exists:** Claude slipped on this in `session_2026-05-01-c` and again in `session_2026-05-02_http-500-fix-verification-and-auto-fire-trip-observation` — both times the trigger was identical: the Auto-Analyze pre-flight runner validates only the regular Initial + Primer prompts, not the Consolidation pair; Claude saw the absence of consolidation char-counts in the pre-flight output and re-asked the director to confirm despite the director having explicitly said all 4 were pasted moments earlier. Director's framing 2026-05-02: *"You asked this same question in the last session as well even though I pasted all 4 prompts. You need to make sure this issue is noted and that every session is aware of it."*
+
+**Subsequent clarification:** the director's actual concern in 2026-05-02 was that the **runner has a coverage gap that should be fixed**, not that Claude should "trust harder." The canonical fix is to extend `src/lib/preflight.ts` so the runner does cover the consolidation prompts — that work shipped 2026-05-02 (P11 + P12 checks added). This rule remains as the operational principle for any future analogous case where Claude is tempted to re-ask despite director affirmation: trust the affirmation; capture the underlying coverage gap; fix the gap rather than working around it.
+
+**Mechanical test before re-asking the director to confirm something:** if the director has explicitly confirmed it earlier in the same session AND the only reason Claude is tempted to re-ask is incomplete coverage of an automated runner / log / dashboard, do NOT re-ask. Instead, note the runner's limitation neutrally as informational ("the pre-flight runner only validates X; Y is covered at runtime via Z") and capture the gap as a deferred bug. Re-asking is doubt; doubting confirmed setup is a Rule 14 violation.
+
+**Operational memory cross-reference:** `feedback_trust_director_setup_confirmation.md` (Claude's local memory file at `/home/codespace/.claude/projects/-workspaces-brand-operations-hub/memory/`) captures the canonical reasoning + the slip history. The memory file persists across sessions on the same codespace; this rule and the cross-reference in `CLAUDE_CODE_STARTER.md` Rule 7 area together cover fresh-codespace continuity.
 
 ### Rule 14e — Capture what you defer (end-of-chat sweep)
 Whenever Claude flags an issue during a chat and sets it aside ("not now," "out of scope," "future work," "we'll deal with that later"), the same sentence must state where it will be documented. Valid destinations:

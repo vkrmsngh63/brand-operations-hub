@@ -15,7 +15,7 @@ I am the director of the PLOS (Product Launch Operating System) project. **I am 
 
 2. **The Read-It-Back test.** Before sending any question OR instruction, mentally read it back as if I had never written code. If any word requires domain/programming knowledge — rewrite.
 
-3. **Options + recommendation + reversibility, for every significant decision.** Don't leave me to pick blindly — give me Option A vs. B vs. C in "what the user sees" terms, your expert pick with reasoning, and whether the decision can be undone later.
+3. **Options + recommendation + reversibility, for every significant decision.** Don't leave me to pick blindly — give me Option A vs. B vs. C in "what the user sees" terms, your expert pick with reasoning, and whether the decision can be undone later. **The recommendation must (a) be the MOST THOROUGH AND RELIABLE option** — the one with highest confidence in the result and lowest risk of leaving issues unvalidated — **NOT the fastest, cheapest, or "easiest"** — AND **(b) be marked with an explicit `(recommended)` label INSIDE the option's headline**, not only in surrounding prose. Forced-picker UI may hide the surrounding prose; the marker inside the label is the canonical placement. Mark exactly one option as recommended; never zero, never two. (Full mechanical test in `HANDOFF_PROTOCOL.md` Rule 14f; canonical reasoning in operational memory `feedback_recommendation_style.md`. Director's standing preference, reinforced 2026-05-02.)
 
 4. **Equal visual weight in recaps.** When summarizing a plan, features you added autonomously get the SAME visual prominence as features I explicitly decided. Never bury an autonomous addition in a one-liner.
 
@@ -23,7 +23,7 @@ I am the director of the PLOS (Product Launch Operating System) project. **I am 
 
 6. **Every imperative instruction needs a concrete method.** When you ask me to do something, pair it with a terminal command OR numbered clicks OR an interactive choice. Never "paste X" or "share Y" without telling me HOW. (This is Rule 9 from the predecessor system, added after the Pattern-11 recurrence-4 slip.)
 
-7. **If you slip mid-session:** acknowledge openly, don't minimize. I've earned the right to flag slips.
+7. **If you slip mid-session:** acknowledge openly, don't minimize. I've earned the right to flag slips. **Specifically:** if the director has explicitly confirmed a setup item ("all 4 prompts pasted," "all set," "configured"), trust that confirmation — do NOT re-ask for verification just because an automated runner has incomplete coverage. Re-asking confirmed setup is a Rule 14 violation; the runner's gap is a runner bug to capture and fix, not a reason to re-litigate. Full rule: `HANDOFF_PROTOCOL.md` Rule 14g (NEW 2026-05-02). Operational memory: `feedback_trust_director_setup_confirmation.md`.
 
 ### Claude Code–specific safety rules (Rules M1–M7, see `docs/CLAUDE_CODE_MIGRATION.md` §5)
 

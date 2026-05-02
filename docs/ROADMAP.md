@@ -1,8 +1,9 @@
 # ROADMAP
 ## Product Launch Operating System (PLOS) — Development Execution Plan
 
-**Last updated:** May 1-2, 2026 (Consolidation auto-fire follow-up session — third of 2026-05-01, spanning past midnight. Live run on Bursitis Test project, resuming from yesterday's preserved checkpoint. **Path B (admin Consolidate Now): FULLY VALIDATED end-to-end** — 90-topic canvas, 3 ops, $0.216, ~2 min, distinct logging confirmed. **Path A (auto-fire after every Nth batch): PARTIAL** — cadence counter math validated through Batch 27 (counter 1→9 across 9 successful applies); auto-fire trip event itself NOT observed live because browser froze during Batch 28's apply phase. **TWO new architectural concerns captured + ONE shipped fix:** (1) NEW HIGH-severity browser-freeze on atomic canvas rebuild at ~105-node canvas — captured to ROADMAP infrastructure-TODO; (2) MEDIUM-severity asymmetric defense-in-depth on /canvas GET vs /canvas/nodes GET (5:1 HTTP 500 ratio today traced to missing withRetry on the state endpoint) — DIAGNOSED AND FIXED this session in `src/app/api/projects/[projectId]/canvas/route.ts`; (3) PROCESS feedback on recommendation-style (always recommend most thorough and reliable, not fastest/cheapest) captured to permanent memory file. Net spend tonight: ~$4.51 ($6.31 → $10.82 + 0). All checks green: tsc clean; build clean; lint at exact baseline parity (16e/41w); withRetry tests 17/17. Multi-workflow: schema-change-in-flight flag stays "No"; W#2 still 🆕 about-to-start.)
-**Last updated in session:** session_2026-05-01-c_consolidation-auto-fire-followup (Claude Code)
+**Last updated:** May 2, 2026 (HTTP 500 fix verification + auto-fire trip observation session — first session of 2026-05-02. Live run on production vklf.com against fresh "Bursitis Test 2" project (2,328-keyword payload, empty start canvas; prior Bursitis Test deleted to avoid the 105-topic browser-freeze threshold from yesterday). Both primary objectives DECISIVELY validated in a single 21-min run: **Path A auto-fire trip observed live TWICE** (Trip 1 at end of B3 with canvas=24; Trip 2 at end of B6 with canvas=43; both with correct `auto` trigger source and both gates met) — closes the partial-validation from `2026-05-01-c`; **HTTP 500 fix from `df09611` confirmed working** — zero retry storms across 6 batches + 2 consolidation passes + ~7 atomic rebuilds (yesterday's ~30% rate would have predicted 2-3 storms). Run paused at end of B6 (canvas: 43 topics, 19 sister links; total cost: $2.03). NEW pre-flight runner extension shipped: `src/lib/preflight.ts` extended with `P11 — Consolidation Initial Prompt` + `P12 — Consolidation Primer Prompt` checks paralleling the existing P3 + P4 (closes the coverage gap that produced the same misread-of-director-confirmation slip in two consecutive sessions); 8 new tests, 46/46 preflight tests pass, tsc clean, build clean, lint at exact baseline parity (16e/41w; zero new). NEW protocol-rule additions to handoff docs: HANDOFF_PROTOCOL.md Rule 14f content-#4 (recommendation marker MUST live INSIDE picker labels); Rule 14g NEW (trust director's setup confirmation); CLAUDE_CODE_STARTER.md Rule 3 + Rule 7 cross-references. Operational memory: `feedback_recommendation_style.md` strengthened; `feedback_trust_director_setup_confirmation.md` NEW. Multi-workflow: schema-change-in-flight flag stays "No"; W#2 still 🆕 about-to-start.)
+**Last updated in session:** session_2026-05-02_http-500-fix-verification-and-auto-fire-trip-observation (Claude Code)
+**Previously updated in session:** session_2026-05-01-c_consolidation-auto-fire-followup (Claude Code)
 **Previously updated in session:** session_2026-05-01-b_scale-session-e-d3-validation (Claude Code)
 **Previously updated in session:** session_2026-05-01_scale-session-e-build (Claude Code)
 **Previously updated in session:** session_2026-04-30-c_scale-session-d-build (Claude Code)
@@ -51,7 +52,7 @@
 
 | Workflow | Status | Branch | Last Session | Next Session | Schema-change in flight? |
 |---|---|---|---|---|---|
-| W#1 Keyword Clustering | 🔄 Active dev — stabilization | `main` | 2026-05-01-c consolidation-auto-fire-followup (live run on Bursitis Test, 22 batches today + 1 admin consolidation; **Path B FULLY VALIDATED** — 90-topic canvas / 3 ops / $0.216 / ~2 min / distinct logging / `consolidationMode: true` enforced; **Path A PARTIAL** — cadence counter math validated through Batch 27 (counter 1→9 cleanly across 9 applies post-consolidation-reset), canvas-size gate confirmed at Batch 23 (101 topics), but auto-fire trip event itself NOT observed live because browser froze during Batch 28's apply phase at ~105-node canvas; refresh required, checkpoint preserved at "26/291 done"; pre-freeze totalSpent $10.82, net session spend ~$4.51. **NEW HIGH-severity scaling concern captured: browser freeze on atomic canvas rebuild** — likely synchronous layout pass on main thread; PLOS targets 500+ topic canvases at Phase 3 so this blocks Phase 2 multi-user work if unfixed. **MEDIUM-severity HTTP 500 storm asymmetry diagnosed and FIXED this session** — `/canvas` GET handler missing `withRetry` wrappers that `/canvas/nodes` GET got from 2026-04-28 G2 fix (5:1 state-fetch vs nodes-fetch ratio today made the asymmetry statistically obvious); 3-line surgical patch shipped in `src/app/api/projects/[projectId]/canvas/route.ts` wrapping `canvasState.findUnique` + `pathway.findMany` + `sisterLink.findMany` in `withRetry()`; tsc clean; build clean; lint at baseline parity; withRetry tests 17/17 pass. Commit pending push at director's discretion.) | (a) **Verify HTTP 500 fix in production + observe one full auto-fire trip live** — push tonight's commit, confirm "state fetch HTTP 500" rate drops to near-zero on a fresh Auto-Analyze run, observe at least one auto-fire trip on a smaller canvas (e.g., cadence=5, min-canvas=50) to dodge the freeze risk. ~$2-5, ~30 min. **Recommended next.** OR (b) Browser-freeze fix design session (profile layout pass; design chunked / requestAnimationFrame / Web Worker approach; 3-4 hr design + 1-2 sessions impl) / (c) Recency-stickiness fix — sister-link deferral to consolidation-only + Q5→B touch-semantics refinement (1-2 sessions; direct attack on the wall-question bottleneck) / (d) Resume D3 to wall (~$40-50; needs multi-session pause/resume — but blocked by browser-freeze risk on large canvas) / (e) Phase-1 UI polish bundle (6 items from prior session + cosmetic stale-batch-num log label from this session) / (f) Action-by-action feedback workflow design / (g) V3-era cleanup pass (deferred from Session E D4) | No |
+| W#1 Keyword Clustering | 🔄 Active dev — stabilization | `main` | 2026-05-02 http-500-fix-verification-and-auto-fire-trip-observation (live run on fresh "Bursitis Test 2" project, 2,328 keywords loaded, empty start canvas; settings: cadence=3, min-canvas=15, Sonnet 4.6, Adaptive Thinking, Direct mode. **Path A auto-fire trip observed live TWICE** — Trip 1 at end of B3 (canvas=24, 9:24:41 PM), Trip 2 at end of B6 (canvas=43, 9:35:00 PM); both with correct `auto` trigger source, both gates met, both followed by clean consolidation pass + seamless runLoop resume; closes partial-validation from `2026-05-01-c`. **HTTP 500 fix from `df09611` confirmed working** — zero retry storms across 6 batches + 2 consolidation passes + ~7 atomic rebuilds (yesterday's ~30% rate would have predicted 2-3 storms). Run paused at end of B6 (43 topics, 19 sister links, $2.03 total, ~21 min wall-clock). **NEW pre-flight runner extension shipped:** `src/lib/preflight.ts` extended with P11 + P12 checks for the consolidation-prompt slot pair (closes coverage gap surfaced as repeated misread-of-director-confirmation across `2026-05-01-c` and this session); 8 new tests; 46/46 preflight pass; tsc clean; build clean; lint baseline parity. **NEW protocol-rule additions:** HANDOFF_PROTOCOL.md Rule 14f content-#4 (recommendation marker INSIDE picker labels); Rule 14g NEW (trust director's setup confirmation); CLAUDE_CODE_STARTER.md Rule 3 + Rule 7 cross-references. Commit pushed end-of-session.) | (a) **Browser-freeze fix design session — RECOMMENDED.** Profile the layout pass on a populated 105-node canvas; design chunked / requestAnimationFrame / Web Worker approach; ~3-4 hr design + 1-2 sessions impl. Highest-impact unresolved scaling concern — blocks Phase 2 multi-user work AND blocks any future full-scale Bursitis run from completing. OR (b) Recency-stickiness fix — sister-link deferral to consolidation-only + Q5→B touch-semantics refinement (1-2 sessions; orthogonal; direct attack on the wall-question bottleneck) / (c) GoTrueClient multi-instance fix — small refactor (~15 LOC) consolidating three browser-side Supabase clients to a single singleton; LOW-MEDIUM severity / (d) Resume full-scale D3 to wall (~$40-50; needs multi-session pause/resume — STILL blocked by browser-freeze risk on large canvas; depends on (a) shipping first) / (e) Phase-1 UI polish bundle (6 items from prior session + cosmetic stale-batch-num log label from `2026-05-01-c`) / (f) Action-by-action feedback workflow design / (g) V3-era cleanup pass (deferred from Session E D4) | No |
 | W#2 Competition Scraping & Deep Analysis | 🆕 About to start | `workflow-2-competition-scraping` (created by W#2's first session) | (none yet) | Workflow Requirements Interview per HANDOFF_PROTOCOL Rule 18 | No |
 | W#3 Therapeutic Strategy | Not yet started | — | — | — | — |
 | W#4–14 | Not yet started | — | — | — | — |
@@ -921,22 +922,20 @@ Add a row-number column (1, 2, 3, …) as the leftmost column in the Topics tabl
 
 ---
 
-### NEW Phase-1 polish — Pre-flight summary should check consolidation prompts (raised 2026-05-01-b D3 validation session)
+### ✅ SHIPPED 2026-05-02 — Pre-flight runner extended with P11 + P12 (Consolidation Initial + Primer prompts) — closes 2026-05-01-b polish item AND 2026-05-02 director directive
 
-**Bug:** The Auto-Analyze panel's pre-flight summary (P1-P10 checks shipped in Defense-in-Depth Audit Implementation Session 2) lists the regular V4 prompts' character counts but does NOT list the new Consolidation Initial Prompt + Consolidation Primer character counts. Director caught the omission during D3 prep — workaround was simply to verify the consolidation textareas had content via direct visual inspection.
+**Status:** ✅ SHIPPED 2026-05-02 in `session_2026-05-02_http-500-fix-verification-and-auto-fire-trip-observation`. Originally captured 2026-05-01-b as a Phase-1 polish item; promoted to a director directive 2026-05-02 after the same misread-of-confirmation slip occurred for the second consecutive session ("you asked this same question in the last session as well even though I pasted all 4 prompts — this issue needs to be fixed").
 
-**Fix:** Extend pre-flight check P-something to surface consolidation-prompt char counts when consolidation cadence > 0. Pseudocode:
+**What shipped:**
+- `src/lib/preflight.ts` — new `checkP11ConsolidationInitialPrompt(ctx)` paralleling P3 (≥100 chars threshold matching the runtime gate at `AutoAnalyze.tsx:1474`) + new `checkP12ConsolidationPrimerPrompt(ctx)` paralleling P4 (empty=pass-as-optional, 1-29=fail-as-half-paste, ≥30=pass). Both gate behind `consolidationCadence === 0` — auto-fire disabled means consolidation prompts are not required.
+- `PreflightContext` interface extended with `consolidationInitialPrompt`, `consolidationPrimerPrompt`, `consolidationCadence` fields.
+- `PreflightCheckResult.id` union extended with `'P11' | 'P12'`. Existing P5..P10 stable ids preserved (per director directive — no renumbering; P11+P12 inserted at sequence index after P4 so all four prompt checks render adjacent in the UI list).
+- `src/lib/preflight.test.ts` — 8 new tests; `makeContext` helper extended with the three new fields; runner all-pass test count updated 10→12; runner P9-fails test count updated 9→11.
+- `src/app/projects/[projectId]/keyword-clustering/components/AutoAnalyze.tsx` — `runPreflight()` call site at line 1658 extended; `aaLog` message updated from "10 checks" to "12 checks".
 
-```
-if (consolidationCadence > 0) {
-  if (consolidationInitialPrompt.length < 100) → ⚠ warning
-  if (consolidationPrimerPrompt.length < 100)  → ⚠ warning
-  display: "Consolidation Initial Prompt: N chars"
-  display: "Consolidation Primer: M chars"
-}
-```
+**All checks green at ship:** 46/46 preflight tests pass (was 38; +8 new); tsc clean; build clean (17/17 routes); lint at exact baseline parity (16e/41w; zero new).
 
-**Implementation effort:** ~30 min — `src/lib/preflight.ts` + Auto-Analyze panel pre-flight UI section.
+**Why this matters beyond polish:** the absence of P11 + P12 was the structural root cause of Claude asking the director to re-confirm "are the consolidation prompts pasted?" in two consecutive sessions despite explicit director affirmations. Pre-flight runner now covers all four prompt slots up-front; the runtime check at `AutoAnalyze.tsx:1474` remains as a defense-in-depth backstop. This issue will not recur.
 
 ---
 
@@ -972,9 +971,9 @@ if (consolidationCadence > 0) {
 
 ---
 
-### ✅ SHIPPED 2026-05-01-c — Asymmetric defense-in-depth fix on /canvas GET handler (HTTP 500 retry storm rate elevated to ~30%; ROOT-CAUSED + FIXED in single session)
+### ✅ SHIPPED 2026-05-01-c + VERIFIED 2026-05-02 — Asymmetric defense-in-depth fix on /canvas GET handler (HTTP 500 retry storm rate elevated to ~30%; ROOT-CAUSED + FIXED + LIVE-VERIFIED across two sessions)
 
-**Status:** ✅ FIXED in `src/app/api/projects/[projectId]/canvas/route.ts` this session. Pending push at director's discretion. Once deployed, expected effect: "state fetch HTTP 500" rate drops back to near-zero on transient pgbouncer flakes (matching the rate `/canvas/nodes` has had since 2026-04-28). Verification deferred to next session — re-run Auto-Analyze on Bursitis Test post-deploy and confirm storm rate drops.
+**Status:** ✅ FIXED in `df09611` (2026-05-01-c session) AND ✅ VERIFIED LIVE on production vklf.com (2026-05-02 session). Live verification: zero HTTP 500 retry storms across 6 batches + 2 consolidation passes + ~7 atomic canvas rebuilds on a fresh Bursitis Test 2 run with the same configuration that produced ~30% storm rate yesterday. Statistically would have predicted 2-3 storms across this volume; actual was 0. Fix confirmed working as designed.
 
 **The asymmetry:** the 2026-04-28 G2 fix shipped `withRetry()` wrappers on `/canvas/nodes` GET (`prisma.canvasNode.findMany`) but NEVER retrofitted the parallel `/canvas` GET handler — which fetches `canvasState`, `pathway`, and `sisterLink` in three Prisma calls. Transient pgbouncer flakes (P1001/P1002/P1008/P2034) on the state endpoint surfaced directly as HTTP 500 to the client; on the nodes endpoint, the same flakes were silently retried 100ms then 500ms and usually succeeded. The 5:1 ratio of "state fetch HTTP 500" to "nodes fetch HTTP 500" hits today made the asymmetry statistically obvious.
 
@@ -984,7 +983,44 @@ if (consolidationCadence > 0) {
 
 **Process learning captured:** when shipping a defense-in-depth fix to one endpoint of a paired set (where multiple endpoints hit the same backend in parallel), audit the sister endpoints in the same session. The G2 fix from 2026-04-28 was scoped narrowly to the endpoint that triggered the canvas-blanking bug, not the broader pattern. Adding "audit sister endpoints" as a post-fix review step would have caught this asymmetry then.
 
-**See also:** `CORRECTIONS_LOG.md` 2026-05-01-c entry for the diagnostic narrative. `KEYWORD_CLUSTERING_ACTIVE.md` POST-2026-05-01-c STATE block for the in-context discussion.
+**See also:** `CORRECTIONS_LOG.md` 2026-05-01-c entry for the diagnostic narrative. `KEYWORD_CLUSTERING_ACTIVE.md` POST-2026-05-01-c STATE block for the in-context discussion. `KEYWORD_CLUSTERING_ACTIVE.md` POST-2026-05-02 STATE block for the live verification.
+
+---
+
+### ✅ VALIDATED 2026-05-02 — Path A auto-fire trip mechanism observed live (closes partial validation from `2026-05-01-c`)
+
+**Status:** ✅ VALIDATED. The Path A auto-fire trip mechanism — `runConsolidationPass('auto')` triggered automatically when `batchesSinceConsolidationRef >= consolidationCadence` AND `nodes.length >= consolidationMinCanvasSize` — was observed live TWICE in `session_2026-05-02_http-500-fix-verification-and-auto-fire-trip-observation` on production vklf.com.
+
+**Trip 1 (9:24:41 PM at end of B3 attempt 2):** counter 3, canvas 24, both gates met. Exact log line: `═══ Consolidation pass (auto, canvas=24 topics) ═══`. Consolidation followed: $0.156, 2 ops, +2 sister links, no net topic change, reconciliation correctly skipped (`✓ All 0 keywords verified`), seamless runLoop resume into B4.
+
+**Trip 2 (9:35:00 PM at end of B6):** counter 3 (fresh reset post-Trip-1), canvas 43, both gates met. Exact log line: `═══ Consolidation pass (auto, canvas=43 topics) ═══`. Consolidation followed: $0.164, 1 op, +1 sister link, no net topic change, seamless runLoop resume into B7.
+
+**What this closes from `2026-05-01-c`:** the partial validation noted in the `2026-05-01-c` STATE block — "the auto-fire trip event itself was NOT observed live because the browser froze during Batch 28's apply phase right at the moment counter would have hit 10" — is now decisively closed. Trip 1 + Trip 2 demonstrate (1) cadence counter increments cleanly after every successful regular apply; (2) canvas-size gate and cadence gate both must be true; trip fires only when both met; (3) after trip, counter resets to 0; subsequent regular batches restart the cadence count; (4) distinct `auto` trigger source logging works correctly; (5) post-trip runLoop resumes seamlessly; (6) reconciliation correctly skipped on consolidation passes; (7) checkpoint persistence works across trips.
+
+**See also:** `KEYWORD_CLUSTERING_ACTIVE.md` POST-2026-05-02 STATE block for the in-context narrative including run summary metrics.
+
+---
+
+### NEW LOW-MEDIUM — Multiple GoTrueClient instances browser warning (raised 2026-05-02 during Bursitis Test 2 setup)
+
+**Status:** new infrastructure-TODO. Severity: LOW-MEDIUM (Supabase explicitly says "not an error" but flags theoretical undefined behavior under concurrent use). NOT today's scope; captured for a future small-fix session.
+
+**The warning:** `GoTrueClient@sb-vyehbgkvdnvsjjfqhqgo-auth-token:1 (2.101.1) ... Multiple GoTrueClient instances detected in the same browser context. It is not an error, but this should be avoided as it may produce undefined behavior when used concurrently under the same storage key.` (Director observed in DevTools console during 2026-05-02 setup; verified via grep there's no prior treatment in ROADMAP / CORRECTIONS_LOG / PLATFORM_ARCHITECTURE.)
+
+**Root cause:** the codebase has THREE separate browser-side Supabase clients, each calling `createClient()` independently:
+- `src/lib/supabase.ts:6` — exports `supabase` (the intended browser-side singleton).
+- `src/lib/authFetch.ts:3` — separate browser client just for authFetch.
+- `src/app/projects/[projectId]/keyword-clustering/page.tsx:9` — yet another browser client for the KC page.
+
+All three race on the same `sb-vyehbgkvdnvsjjfqhqgo-auth-token` storage key. Supabase emits the warning on every page load that includes the KC route + the layout that mounts the other two.
+
+**Fix:** consolidate to import the singleton from `src/lib/supabase.ts` everywhere; delete the inline `createClient(...)` calls in `authFetch.ts` and `page.tsx`. Verify auth flow still works on the KC page (sign-in, signed-in detection, sign-out). ~15 LOC delta + manual smoke-test verification.
+
+**Why LOW-MEDIUM, not LOW:** Supabase's wording acknowledges "may produce undefined behavior when used concurrently under the same storage key." In the year-plus the codebase has run, no auth-token race has surfaced empirically — but the underlying multiple-client issue is a real code smell, and it's been noisily emitting console warnings on every page load (low-grade DevTools noise that adds friction to debugging unrelated issues).
+
+**Effect on the 2026-05-02 HTTP 500 verification test:** zero. The test's HTTP 500 storms are pgbouncer-flake-driven on the Prisma layer, not auth-driven. The Supabase advisory is orthogonal and does NOT confound the test results. It's been emitting since long before 2026-05-02.
+
+**See also:** `KEYWORD_CLUSTERING_ACTIVE.md` POST-2026-05-02 STATE block for the discovery narrative.
 
 ---
 

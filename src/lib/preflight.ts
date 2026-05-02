@@ -40,7 +40,7 @@ export type PreflightStatus = 'pending' | 'pass' | 'fail';
 
 export interface PreflightCheckResult {
   /** Stable identifier — use to render UI rows by id. */
-  id: 'P1' | 'P2' | 'P3' | 'P4' | 'P5' | 'P6' | 'P7' | 'P8' | 'P9' | 'P10';
+  id: 'P1' | 'P2' | 'P3' | 'P4' | 'P5' | 'P6' | 'P7' | 'P8' | 'P9' | 'P10' | 'P11' | 'P12';
   /** Short label shown in the UI panel ("API key", "Canvas refs match server"). */
   label: string;
   status: PreflightStatus;
@@ -65,6 +65,16 @@ export interface PreflightContext {
   seedWords: string;
   initialPrompt: string;
   primerPrompt: string;
+  /**
+   * Consolidation prompts + cadence — added 2026-05-02 to close the
+   * pre-flight coverage gap surfaced during the HTTP 500 fix verification
+   * session. P11 + P12 below validate these. If consolidationCadence === 0
+   * (auto-fire disabled) the prompts are not required and P11/P12 pass
+   * with an "auto-fire disabled" message.
+   */
+  consolidationInitialPrompt: string;
+  consolidationPrimerPrompt: string;
+  consolidationCadence: number;
   projectId: string;
   // ── Live state snapshots (taken at handleStart from *Ref.current) ─────
   nodes: Array<{ stableId: string; pathwayId?: string | null }>;
@@ -154,6 +164,80 @@ export function checkP4PrimerPrompt(ctx: PreflightContext): PreflightCheckResult
     };
   }
   return { id: 'P4', label: 'Primer Prompt', status: 'pass', message: trimmed.length.toLocaleString() + ' chars' };
+}
+
+export function checkP11ConsolidationInitialPrompt(ctx: PreflightContext): PreflightCheckResult {
+  // When auto-fire is disabled (cadence === 0), the consolidation prompts
+  // are not required — admin "Consolidate Now" still works regardless,
+  // and the runtime gate at AutoAnalyze.tsx blocks the admin path with
+  // a separate alert if needed. So pre-flight passes here.
+  if (ctx.consolidationCadence === 0) {
+    return {
+      id: 'P11',
+      label: 'Consolidation Initial Prompt',
+      status: 'pass',
+      message: 'auto-fire disabled (cadence=0)',
+    };
+  }
+  // With auto-fire enabled, the runtime checks length >= 100 at trip time
+  // (AutoAnalyze.tsx:1474). Match that threshold here so the gate is
+  // enforced at run-start instead of one batch later.
+  const len = (ctx.consolidationInitialPrompt || '').length;
+  if (len < 100) {
+    return {
+      id: 'P11',
+      label: 'Consolidation Initial Prompt',
+      status: 'fail',
+      message:
+        'Consolidation Initial Prompt is ' +
+        len +
+        ' chars (need ≥100). With Consolidation Cadence = ' +
+        ctx.consolidationCadence +
+        ' (>0), auto-fire is enabled and the consolidation slot must be filled. Paste the prompt or set Consolidation Cadence to 0 to disable auto-fire.',
+    };
+  }
+  return {
+    id: 'P11',
+    label: 'Consolidation Initial Prompt',
+    status: 'pass',
+    message: len.toLocaleString() + ' chars (auto-fire cadence=' + ctx.consolidationCadence + ')',
+  };
+}
+
+export function checkP12ConsolidationPrimerPrompt(ctx: PreflightContext): PreflightCheckResult {
+  // Same auto-fire gate as P11 — disabled means not required.
+  if (ctx.consolidationCadence === 0) {
+    return {
+      id: 'P12',
+      label: 'Consolidation Primer Prompt',
+      status: 'pass',
+      message: 'auto-fire disabled (cadence=0)',
+    };
+  }
+  // Auto-fire enabled → mirror P4's logic: empty is allowed (primer is
+  // optional), but a partial-paste (1-29 chars) is a fail catching the
+  // common half-paste mistake.
+  const trimmed = (ctx.consolidationPrimerPrompt || '').trim();
+  if (trimmed.length === 0) {
+    return { id: 'P12', label: 'Consolidation Primer Prompt', status: 'pass', message: 'not used (optional)' };
+  }
+  if (trimmed.length < 30) {
+    return {
+      id: 'P12',
+      label: 'Consolidation Primer Prompt',
+      status: 'fail',
+      message:
+        'Consolidation Primer Prompt is only ' +
+        trimmed.length +
+        ' chars — looks like a partial paste. Either fill it in fully or clear it (it is optional).',
+    };
+  }
+  return {
+    id: 'P12',
+    label: 'Consolidation Primer Prompt',
+    status: 'pass',
+    message: trimmed.length.toLocaleString() + ' chars',
+  };
 }
 
 export async function checkP5NodesRefMatchesServer(ctx: PreflightContext): Promise<PreflightCheckResult> {
@@ -459,6 +543,11 @@ export async function runPreflight(ctx: PreflightContext): Promise<PreflightResu
     () => checkP2SeedWords(ctx),
     () => checkP3InitialPrompt(ctx),
     () => checkP4PrimerPrompt(ctx),
+    // P11 + P12 inserted here (NOT renumbered — stable ids preserved per
+    // 2026-05-02 director directive) so the four prompt slots' checks
+    // appear adjacent in the UI list.
+    () => checkP11ConsolidationInitialPrompt(ctx),
+    () => checkP12ConsolidationPrimerPrompt(ctx),
     () => checkP5NodesRefMatchesServer(ctx),
     () => checkP6KeywordsRefMatchesServer(ctx),
     () => checkP7PathwayConsistency(ctx),
