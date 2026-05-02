@@ -993,8 +993,21 @@ export default function AutoAnalyze({
       linkedKwIds: (n.linkedKwIds as string[]) || [],
       userMinH: (n.userMinH as number | null) ?? null,
     }));
+
+    // Profiling marks (added 2026-05-02-b for browser-freeze diagnosis;
+    // see docs/BROWSER_FREEZE_FIX_DESIGN.md). Visible in DevTools Performance
+    // > Timings track AND queryable via performance.getEntriesByType('measure').
+    // Cost is sub-millisecond per mark; safe to leave in production.
+    performance.mark('aa.calcHeights-start');
     for (const ln of layoutNodes) ln.h = calcNodeHeight(ln);
+    performance.mark('aa.calcHeights-end');
+    performance.measure('aa.calcHeights', 'aa.calcHeights-start', 'aa.calcHeights-end');
+
+    performance.mark('aa.runLayoutPass-start');
     runLayoutPass(layoutNodes, [...pathways, ...payload.pathways]);
+    performance.mark('aa.runLayoutPass-end');
+    performance.measure('aa.runLayoutPass', 'aa.runLayoutPass-start', 'aa.runLayoutPass-end');
+
     const byId = new Map<string, LayoutNode>();
     for (const ln of layoutNodes) byId.set(ln.id, ln);
     for (const rn of payload.nodes) {
@@ -1005,16 +1018,34 @@ export default function AutoAnalyze({
       rn.h = ln.h;
       rn.baseY = ln.baseY ?? ln.y;
     }
-    aaLog('  Layout pass complete (' + payload.nodes.length + ' nodes positioned)', 'info');
+    // Surface the two timings to the activity log as well, so the director
+    // sees concrete numbers without opening DevTools each batch.
+    const calcHeightsEntries = performance.getEntriesByName('aa.calcHeights', 'measure');
+    const layoutPassEntries = performance.getEntriesByName('aa.runLayoutPass', 'measure');
+    const calcHeightsMs = calcHeightsEntries.length ? calcHeightsEntries[calcHeightsEntries.length - 1].duration : 0;
+    const layoutPassMs = layoutPassEntries.length ? layoutPassEntries[layoutPassEntries.length - 1].duration : 0;
+    aaLog(
+      '  Layout pass complete (' + payload.nodes.length + ' nodes positioned; ' +
+      'heights=' + Math.round(calcHeightsMs) + 'ms, layout=' + Math.round(layoutPassMs) + 'ms)',
+      'info',
+    );
 
     // Atomic rebuild.
     aaLog('  Applying to canvas (atomic rebuild)…', 'info');
     try {
+      performance.mark('aa.stringify-start');
+      const rebuildBody = JSON.stringify(payload);
+      performance.mark('aa.stringify-end');
+      performance.measure('aa.stringify', 'aa.stringify-start', 'aa.stringify-end');
+
+      performance.mark('aa.rebuildHTTP-start');
       const res = await authFetch('/api/projects/' + projectId + '/canvas/rebuild', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: rebuildBody,
       });
+      performance.mark('aa.rebuildHTTP-end');
+      performance.measure('aa.rebuildHTTP', 'aa.rebuildHTTP-start', 'aa.rebuildHTTP-end');
       if (!res.ok) {
         const errText = await res.text();
         throw new Error('Canvas rebuild failed: ' + errText);

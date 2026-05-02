@@ -189,6 +189,22 @@ function buildChildMap(nodes: LayoutNode[]): Map<string, LayoutNode[]> {
 // Holistic 4-step push-down pass. Called after every Auto-Analyze
 // batch apply (Q1 answer) plus every structural change in the
 // CanvasPanel (parent-child link form, etc.). Mutates nodes in place.
+//
+// Profiling marks (added 2026-05-02-b for browser-freeze diagnosis;
+// see docs/BROWSER_FREEZE_FIX_DESIGN.md). Per-step measures are visible
+// in DevTools Performance > Timings track AND queryable via
+// `performance.getEntriesByName('layout.stepN', 'measure')`. Sub-millisecond
+// overhead per mark; safe to leave in production. Guard for non-browser
+// environments (tests, SSR) where `performance` may be absent.
+const _hasPerf = typeof performance !== 'undefined' && typeof performance.mark === 'function';
+function _mark(name: string): void {
+  if (_hasPerf) performance.mark(name);
+}
+function _measure(name: string, start: string, end: string): void {
+  if (_hasPerf) {
+    try { performance.measure(name, start, end); } catch { /* mark missing — ignore */ }
+  }
+}
 export function runLayoutPass(
   nodes: LayoutNode[],
   pathways: { id: string }[],
@@ -197,13 +213,17 @@ export function runLayoutPass(
   const childMap = buildChildMap(nodes);
 
   // Step 1: Reset root nodes (no parent) to baseY.
+  _mark('layout.step1-start');
   for (const n of nodes) {
     if (n.baseY == null) n.baseY = n.y;
     if (n.parentId === null) n.y = n.baseY;
   }
+  _mark('layout.step1-end');
+  _measure('layout.step1-resetRoots', 'layout.step1-start', 'layout.step1-end');
 
   // Step 2: Tree-walk from roots; position each connected child
   // type-aware (linear vs nested).
+  _mark('layout.step2-start');
   const positioned = new Set<string>();
 
   function layoutChildren(parent: LayoutNode): void {
@@ -263,10 +283,15 @@ export function runLayoutPass(
       layoutChildren(root);
     }
   }
+  _mark('layout.step2-end');
+  _measure('layout.step2-treeWalk', 'layout.step2-start', 'layout.step2-end');
 
   // Step 3: Resolve overlap between separate trees / floating nodes.
   // Up to 60 passes; bail early when a sweep makes no moves.
+  _mark('layout.step3-start');
+  let step3PassesUsed = 0;
   for (let pass = 0; pass < 60; pass++) {
+    step3PassesUsed = pass + 1;
     let moved = false;
     const sorted = nodes
       .filter(n => !ancestorCollapsed(nodes, n.id, collapsed))
@@ -290,9 +315,20 @@ export function runLayoutPass(
     }
     if (!moved) break;
   }
+  _mark('layout.step3-end');
+  _measure('layout.step3-overlapResolve', 'layout.step3-start', 'layout.step3-end');
+  // Stash pass count on the latest measure entry for diagnostics.
+  if (_hasPerf) {
+    const entries = performance.getEntriesByName('layout.step3-overlapResolve', 'measure');
+    const last = entries[entries.length - 1] as PerformanceMeasure & { detail?: unknown } | undefined;
+    if (last) (last as unknown as { _passes?: number })._passes = step3PassesUsed;
+  }
 
   // Step 4: Separate overlapping pathway borders horizontally.
+  _mark('layout.step4-start');
   separatePathways(nodes, pathways, collapsed);
+  _mark('layout.step4-end');
+  _measure('layout.step4-separatePathways', 'layout.step4-start', 'layout.step4-end');
 }
 
 // ── 3. autoLayoutChild ───────────────────────────────────────────

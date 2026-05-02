@@ -1,8 +1,9 @@
 # KEYWORD CLUSTERING — ACTIVE DOCUMENT
 ## Current state of the Keyword Clustering workflow tool (Group B, tool-specific)
 
-**Last updated:** May 2, 2026 (HTTP 500 fix verification + auto-fire trip observation session — first session of 2026-05-02, follow-up to last night's `2026-05-01-c`. Live run on production vklf.com against fresh "Bursitis Test 2" project (deleted prior Bursitis Test; created new with same 2,328-keyword payload to match prior load profile while structurally avoiding the 105-topic browser-freeze threshold from yesterday). **Both primary objectives DECISIVELY validated: (1) Path A auto-fire trip observed live TWICE** (Trip 1 at end of Batch 3 with canvas=24 topics; Trip 2 at end of Batch 6 with canvas=43 topics; both with correct `auto` trigger source, both gates met, both followed by clean consolidation pass + seamless runLoop resume); **(2) HTTP 500 fix from `df09611` confirmed working** — zero retry storms across 6 batches + 2 consolidation passes + ~7 atomic canvas rebuilds (yesterday's ~30% rate would have predicted 2-3 storms; today's rate is statistically zero). Run paused at end of Batch 6 (canvas: 43 topics, 19 sister links; total cost: $2.03 across ~21 min wall-clock). **NEW pre-flight runner extension shipped this session:** `src/lib/preflight.ts` extended with `P11 — Consolidation Initial Prompt` + `P12 — Consolidation Primer Prompt` checks paralleling the existing P3 + P4 (closes the coverage gap that produced the same misread-of-director-confirmation slip in two consecutive sessions); 8 new tests; 46/46 preflight tests pass; tsc clean; build clean; lint at baseline parity (16e/41w; zero new). **NEW protocol-rule additions:** HANDOFF_PROTOCOL.md Rule 14f extended with content-#4 recommendation-marker requirement (must live INSIDE picker labels); Rule 14g (NEW) — trust director's setup confirmation; CLAUDE_CODE_STARTER.md Rule 3 + Rule 7 cross-references. **Operational memory captured:** `feedback_recommendation_style.md` strengthened; `feedback_trust_director_setup_confirmation.md` (NEW). Multi-workflow: schema-change-in-flight stays "No" throughout; W#1 still on `main`; W#2 still 🆕 about-to-start; no parallel chat. NEW POST-2026-05-02 STATE block prepended below; prior `2026-05-01-c` block demoted to historical.)
-**Last updated in session:** session_2026-05-02_http-500-fix-verification-and-auto-fire-trip-observation (Claude Code)
+**Last updated:** May 2, 2026 (Browser-freeze fix design session — second session of 2026-05-02, follow-up to this morning's `2026-05-02_http-500-fix-verification-and-auto-fire-trip-observation`. **Design-only session producing `docs/BROWSER_FREEZE_FIX_DESIGN.md` (NEW Group B doc, 555 lines) + small profiling instrumentation shipped to deploy.** Code-reading-based diagnosis of the apply pipeline pinpoints `runLayoutPass` Sub-step 3 (60-pass overlap resolution loop with O(n) `nodes.find()` calls inside `ancestorCollapsed`) as the dominant bottleneck at 105-node canvas. Empirical evidence corroborates: the "Layout pass complete" log line never fired in the 2026-05-01-c freeze, pinning the freeze block to `calcNodeHeight × n` + `runLayoutPass` between AutoAnalyze.tsx lines 996-1027. Profiling instrumentation added: 4 named `performance.measure()` blocks in `AutoAnalyze.tsx` (`aa.calcHeights`, `aa.runLayoutPass`, `aa.stringify`, `aa.rebuildHTTP`) + 4 sub-step measures inside `canvas-layout.ts` runLayoutPass (`layout.step1` through `layout.step4`); zero behavior change; sub-millisecond cost; safe to leave in production. Activity log "Layout pass complete" line extended to surface `heights=Xms, layout=Yms` per batch so director sees concrete numbers without DevTools. Three fix approaches designed (A=algorithmic / B=requestAnimationFrame chunking / C=Web Worker offload); recommendation = **A — Algorithmic fix** (most thorough and reliable per `feedback_recommendation_style.md` + Rule 14f). DevTools profiling protocol written for Bursitis Test 2 + handed to director for next-session execution. Implementation deferred pending profiling confirmation. All checks green: 260/260 src/lib tests pass; tsc clean; build clean (17/17 routes); lint at exact baseline parity (16e/41w; zero new). Multi-workflow: schema-change-in-flight stays "No"; W#2 still 🆕 about-to-start; no parallel chat. NEW POST-2026-05-02-b STATE block prepended below; prior `2026-05-02` HTTP-500 verification STATE block demoted to historical.)
+**Last updated in session:** session_2026-05-02-b_browser-freeze-fix-design (Claude Code)
+**Previously updated in session:** session_2026-05-02_http-500-fix-verification-and-auto-fire-trip-observation (Claude Code)
 **Previously updated in session:** session_2026-05-01-c_consolidation-auto-fire-followup (Claude Code)
 **Previously updated in session:** session_2026-05-01-b_scale-session-e-d3-validation (Claude Code)
 **Previously updated in session:** session_2026-05-01_scale-session-e-build (Claude Code)
@@ -41,7 +42,91 @@
 
 ---
 
-## ⚠️ POST-2026-05-02-HTTP-500-FIX-VERIFICATION-AND-AUTO-FIRE-TRIP-OBSERVATION STATE (READ FIRST — updated 2026-05-02)
+## ⚠️ POST-2026-05-02-b-BROWSER-FREEZE-FIX-DESIGN STATE (READ FIRST — updated 2026-05-02-b)
+
+**As of 2026-05-02-b (second session of the day, follow-up to this morning's HTTP-500 fix verification + auto-fire trip observation work). DESIGN-ONLY session producing the new Group B doc `docs/BROWSER_FREEZE_FIX_DESIGN.md` + small profiling instrumentation. Code-reading-based diagnosis pinpoints the bottleneck; empirical confirmation via DevTools profiling on Bursitis Test 2 is the next session's task. Implementation deferred pending profiling.**
+
+### What this session shipped to W#1
+
+**Code (single commit, ready to push at director's discretion):** profiling instrumentation across two files. Zero behavior change; sub-millisecond cost per mark; safe to leave in production indefinitely.
+
+- `src/app/projects/[projectId]/keyword-clustering/components/AutoAnalyze.tsx` (lines 997-1048) — four named `performance.measure()` blocks bracketing the four suspect operations in the apply phase: `aa.calcHeights`, `aa.runLayoutPass`, `aa.stringify`, `aa.rebuildHTTP`. The "Layout pass complete" activity-log line extended to surface `heights=Xms, layout=Yms` per batch directly in the panel — gives the director concrete numbers without opening DevTools. ~30 LOC net add (mostly perf marks + the activity-log extension).
+
+- `src/lib/canvas-layout.ts` (inside `runLayoutPass`) — four sub-step measures `layout.step1-resetRoots` through `layout.step4-separatePathways` so the DevTools recording can show WHICH of the four sub-steps dominates. Step 3 (60-pass overlap loop) also stashes its actual pass count on the measure entry as a `_passes` field for diagnostic purposes. Helper functions `_mark` + `_measure` are guarded by `typeof performance !== 'undefined'` for SSR / non-browser safety. ~25 LOC net add.
+
+**Docs (Group B, NEW):**
+- `docs/BROWSER_FREEZE_FIX_DESIGN.md` — 555-line design doc structured around 8 sections + Resume Prompt:
+  - §0 Status, scope, multi-workflow protocol coordination
+  - §1 Diagnosis — apply pipeline trace (steps 1-9) + why `runLayoutPass` Sub-steps 2 + 3 dominate (with concrete code references and complexity analysis); empirical evidence the freeze is in steps 3-4 of the pipeline
+  - §2 What is NOT the bottleneck (and why) — atomic rebuild API, Prisma transaction, G1 guard, etc.
+  - §3 Profiling protocol — director-facing Chrome DevTools recording instructions (~5-15 min protocol; copy-paste-ready clicks)
+  - §4 Fix-approach picker — Approach A (algorithmic; **recommended**) / Approach B (requestAnimationFrame chunking) / Approach C (Web Worker offload), with explicit recommendation per Rule 14f
+  - §5 Implementation plan sketch (per pick, contingent on director's choice after profiling)
+  - §6 Profiling instrumentation reference (what was added this session, where, how to query)
+  - §7 Open questions + deferred items (per Rule 14e)
+  - §8 Resume Prompt (canonical re-entry — `Read docs/CLAUDE_CODE_STARTER.md...` template per Rule 22)
+
+### Diagnosis summary (full detail in BROWSER_FREEZE_FIX_DESIGN.md §1)
+
+The 2026-05-01-c freeze fired during Batch 28's apply phase on a 105-topic canvas. Code reading identifies the dominant bottleneck as `runLayoutPass` (specifically Sub-step 3, the 60-pass overlap resolution loop at `src/lib/canvas-layout.ts:269-292`) with `subtreeBottom` and `ancestorCollapsed` calling `nodes.find()` (O(n) linear scan) inside their hot loops, producing worst-case O(60 × n² × depth) execution that lands in Chrome's "page unresponsive" 5+ second threshold at n=105. Secondary contributor: `calcNodeHeight × n` (canvas `measureText` per node × wrapped lines) at ~500-3,000ms. Confidence ~90% from the math; remaining ~10% will be settled by the DevTools recording on Bursitis Test 2.
+
+**What's NOT the bottleneck** (ruled out via code reading): the atomic rebuild API call (server-side, async, doesn't block main thread), the Prisma transaction inside the rebuild route, the G1 payload-sanity guard, `materializeRebuildPayload` (Map-lookup-based; ~5-20ms), `recordTouchesFromOps`. Some of these consume noticeable wall-clock time but don't synchronously block the browser's main thread.
+
+### Fix-approach picker — director picks AFTER profiling (full detail in §4)
+
+- **(A) Algorithmic fix — RECOMMENDED.** Replace `nodes.find()` calls with `Map<id, node>` lookups; replace recursive `subtreeBottom` with memoized post-order DFS; replace 60-pass O(n²) overlap loop with sweep-and-prune O(n log n); precompute "any-ancestor-collapsed" as a Set; memoize `calcNodeHeight` per content hash. Expected outcome: layout pass at 105 nodes drops from 5,000-10,000+ ms to ~50-200ms; at 500 nodes drops from "wholly unusable" to ~500-1,000ms. **Fixes root cause; scales to Phase 3.** Implementation budget: 2-3 sessions (refactor + tests + live validation).
+
+- (B) requestAnimationFrame chunking. Yield the layout pass between sub-steps via `await new Promise(r => requestAnimationFrame(r))`. UI stays responsive; total CPU time unchanged. Stop-gap rather than fix. Defers but doesn't prevent Approach A. Implementation budget: 1-2 sessions.
+
+- (C) Web Worker offload. Move `runLayoutPass` to a Web Worker. UI 100% responsive but compute time same. Heavier infrastructure cost; revisit only if Approach A's improved layout still doesn't meet Phase 3 bar at 500+ nodes. Implementation budget: 3-5 sessions.
+
+**Why A over B over C:** per `feedback_recommendation_style.md` (most thorough and reliable, NOT fastest) + `HANDOFF_PROTOCOL.md` Rule 14f. (A) makes the wait disappear; (B) makes the wait responsive but still 5+ seconds; (C) hides the wait but still 5+ seconds. (A) is the only one that scales to 500-topic canvases without further refactoring.
+
+### Profiling protocol — director's next-session task (full detail in §3)
+
+5-15 minute Chrome DevTools recording on Bursitis Test 2 (currently 43 topics; resume past 80 for the recording-relevant size). Director runs the protocol; reports the four (or eight) timing measurements in milliseconds; Claude in next session validates the diagnosis and triggers the implementation plan per the chosen fix approach.
+
+**Required precondition:** this session's commit must be pushed to `origin/main` AND Vercel must redeploy before §3 of the design doc works (the instrumentation lives in the deployed code). Push approval pending director confirmation at end-of-session.
+
+### Multi-workflow protocol coordination
+
+- **Schema-change-in-flight flag:** stays `No` (no schema work this session; none planned for any of the three fix approaches either).
+- **Branch:** `main` (W#1's home).
+- **Cross-workflow doc edits:** none — `BROWSER_FREEZE_FIX_DESIGN.md` is a new Group B doc owned exclusively by W#1.
+- W#2 still 🆕 about-to-start; no parallel chat ran during this session.
+- Pull-rebase at session start: clean (no parallel pushes since this morning).
+- Pull-rebase at end-of-session commit: see commit step.
+
+### Files touched this session
+
+**Modified (2 code, 5 docs):**
+
+End-of-session commit (this commit):
+- `src/app/projects/[projectId]/keyword-clustering/components/AutoAnalyze.tsx` — profiling marks + activity-log extension. ~30 LOC net add.
+- `src/lib/canvas-layout.ts` — sub-step profiling marks inside `runLayoutPass`. ~25 LOC net add.
+- `docs/BROWSER_FREEZE_FIX_DESIGN.md` — NEW Group B doc, 555 lines.
+- `docs/KEYWORD_CLUSTERING_ACTIVE.md` — this STATE block prepended; prior 2026-05-02 STATE block demoted to historical; header timestamp updated.
+- `docs/ROADMAP.md` — Active Tools row updated; HIGH-severity browser-freeze entry from `2026-05-01-c` flipped from open to "🔄 Design complete — implementation pending profiling confirmation"; profiling-instrumentation polish entry added; header timestamp.
+- `docs/CHAT_REGISTRY.md` — new top row for `session_2026-05-02-b_browser-freeze-fix-design`; thirty-second Claude Code session; header timestamp.
+- `docs/DOCUMENT_MANIFEST.md` — header timestamps + per-doc modified flags + this-session summary; new Group B doc registered.
+
+**Push status:** committed locally; **NOT pushed yet — pending director's discretionary approval at end-of-session per Rule 9.** Note: §3 of `BROWSER_FREEZE_FIX_DESIGN.md` (the DevTools profiling protocol) requires the instrumentation to be deployed to vklf.com before the director can use it. Push enables the next-session profiling task.
+
+### Standing instructions for next session — three "NEXT" choices
+
+(a) **Run the DevTools profiling protocol on Bursitis Test 2 — RECOMMENDED.** Director executes `BROWSER_FREEZE_FIX_DESIGN.md` §3 (5-15 min Chrome DevTools recording on a Bursitis Test 2 canvas at ~80+ topics). Reports the four (or eight) timing measurements + observations. Claude validates the diagnosis and triggers the implementation plan per §5.1 (if Approach A is picked) or §5.2/§5.3 (if B or C). **Cheapest + highest-confidence path to confirming the diagnosis before committing implementation budget.** Budget: ~30 min director-time; ~30-60 min Claude-time in the validation session afterward. Closes the design with empirical evidence.
+
+(b) **Skip profiling; commit directly to Approach A and start implementing.** Defensible because the code analysis is strong (~90% confidence from the math); saves ~30 minutes today. Costs the verification step that catches any unexpected hotspot (e.g., if `calcNodeHeight × n` turns out to dominate over `runLayoutPass`, the implementation order changes). **Not recommended** given director's standing preference for "most thorough and reliable."
+
+(c) **Defer the freeze work; pick another option from the (a)/(b)/(c) menu in the prior STATE block** — recency-stickiness fix (option (b) historically) or GoTrueClient consolidation (option (c) historically). The freeze stays the highest-priority item per the diagnosis but the design is captured; resuming is a Resume Prompt away.
+
+**Recommendation: (a) — run the DevTools profiling protocol.** Most thorough and reliable: confirms the diagnosis empirically, gives concrete millisecond numbers that pin the implementation priority order, and the protocol is fast (~30 min director-time including the runup). After (a), Approach A's Session 1 implementation can proceed with full confidence.
+
+**Director's framing through prior sessions:** (Scale-A) → (Scale-0) → (Defense-in-Depth ×3) → (Scale-B) → (Scale-C) → (Scale-D) → (Scale-E build) → (Scale-E D3 partial validation) → (consolidation auto-fire follow-up `2026-05-01-c`) → (HTTP 500 fix verification + auto-fire trip observation `2026-05-02`) → **(browser-freeze fix design, this session)** → (DevTools profiling pass — RECOMMENDED next).
+
+---
+
+## ⚠️ POST-2026-05-02-HTTP-500-FIX-VERIFICATION-AND-AUTO-FIRE-TRIP-OBSERVATION STATE (preserved as historical context — last updated 2026-05-02; superseded by browser-freeze fix design state above)
 
 **As of 2026-05-02 (first session of the day, follow-up to last night's `2026-05-01-c`). LIVE RUN session on production vklf.com — fresh "Bursitis Test 2" project (prior Bursitis Test deleted; new project loaded with same 2,328-keyword payload to match prior load profile while structurally avoiding the 105-topic browser-freeze threshold from yesterday). Both primary objectives decisively validated: HTTP 500 fix verified clean across realistic load; auto-fire trip observed live TWICE under live conditions. Pre-flight runner extended with P11 + P12 to close the coverage gap that produced the same misread slip in two consecutive sessions. Two protocol-rule additions to handoff docs.**
 
