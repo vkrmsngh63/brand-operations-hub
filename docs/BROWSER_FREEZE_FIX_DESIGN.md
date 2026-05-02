@@ -3,9 +3,16 @@
 
 **Created:** May 2, 2026 (`session_2026-05-02-b_browser-freeze-fix-design` — design-only session producing this doc + small profiling instrumentation; Bursitis Test 2 profiling pass deferred to director's discretionary follow-up)
 **Created in session:** session_2026-05-02-b_browser-freeze-fix-design (Claude Code)
+**Last updated:** May 2, 2026-c (`session_2026-05-02-c_devtools-profiling-pass` — director ran §3 protocol on Bursitis Test 2; pushed canvas through 108 topics; **§9 added below — diagnosis from §1 EMPIRICALLY REJECTED**)
+**Last updated in session:** session_2026-05-02-c_devtools-profiling-pass (Claude Code)
+**Previously updated in session:** session_2026-05-02-b_browser-freeze-fix-design (Claude Code)
 **Group:** B (tool-specific to Keyword Clustering's Auto-Analyze panel + canvas rendering pipeline; loaded when browser-freeze, layout-pass, atomic-rebuild, or canvas-scalability work is in scope)
 
-**Purpose:** This is the canonical reference doc for the browser-freeze concern that surfaced during `session_2026-05-01-c` when a 105-topic canvas locked the JS main thread mid-apply, triggered Chrome's "page unresponsive" popup, and required a refresh that rolled back Batch 28's apply. It captures the code-reading-based diagnosis, a director-facing DevTools profiling protocol to confirm the bottleneck empirically, the fix-approach picker with a recommendation, and a per-pick implementation sketch.
+> ## ⚠️ SUPERSEDED 2026-05-02-c — read §9 FIRST
+>
+> The diagnosis in §1 (that `runLayoutPass` Sub-step 3's overlap loop is the freeze bottleneck at 105+ topics) was **empirically rejected** by the DevTools profiling pass on 2026-05-02-c. Across 31 batches covering canvas sizes 55→108 topics, `runLayoutPass` stayed at 1.0–3.2 ms with `passes=1` every single batch. The freeze regime described in §1 simply does not exist on this canvas. **Approaches A / B / C in §4 do NOT address a real bottleneck and should NOT be implemented.** The remainder of this doc (§1–§8) is preserved as historical record of the code-reading-based diagnosis; **§9 below is the canonical current state**, including the data, the rejection, the new hypotheses for what actually caused last week's 105-topic freeze, and the revised path forward.
+
+**Purpose:** This is the canonical reference doc for the browser-freeze concern that surfaced during `session_2026-05-01-c` when a 105-topic canvas locked the JS main thread mid-apply, triggered Chrome's "page unresponsive" popup, and required a refresh that rolled back Batch 28's apply. It captures the code-reading-based diagnosis (§1, **rejected** — see §9), a director-facing DevTools profiling protocol (§3, **executed** 2026-05-02-c), the fix-approach picker (§4, **moot** — see §9), per-pick implementation sketches (§5, **moot**), and the empirical findings + revised path forward (§9, **canonical**).
 
 **Background — why this design exists:**
 
@@ -25,12 +32,12 @@ The 2026-05-01-c live run on the original Bursitis Test project drove the canvas
 
 | Item | Status |
 |---|---|
-| Code-reading diagnosis of the apply pipeline (this doc §1) | ✅ COMPLETE (2026-05-02-b) |
-| Profiling instrumentation in `AutoAnalyze.tsx` + `canvas-layout.ts` | ✅ SHIPPED (2026-05-02-b — see §6) |
+| Code-reading diagnosis of the apply pipeline (this doc §1) | ✅ COMPLETE (2026-05-02-b) — **EMPIRICALLY REJECTED 2026-05-02-c, see §9** |
+| Profiling instrumentation in `AutoAnalyze.tsx` + `canvas-layout.ts` | ✅ SHIPPED (2026-05-02-b — see §6); deployed in `db3d377` |
 | DevTools profiling protocol (this doc §3) | ✅ COMPLETE (2026-05-02-b) |
-| Director runs profiling on Bursitis Test 2 + reports timings | ❌ NOT YET (next session) |
-| Fix-approach decision (A/B/C in §4) | ❌ NOT YET — director picks AFTER profiling confirms diagnosis |
-| Implementation per the chosen approach | ❌ NOT YET — separate session(s) |
+| Director runs profiling on Bursitis Test 2 + reports timings | ✅ COMPLETE (2026-05-02-c — 31 batches across canvas 55→108 topics) |
+| Fix-approach decision (A/B/C in §4) | ⛔ MOOT — diagnosis rejected; no fix approach in §4 addresses a real bottleneck |
+| Implementation per the chosen approach | ⛔ NOT APPLICABLE — see §9 for revised path forward |
 
 ### 0.2 What this design covers
 
@@ -490,12 +497,138 @@ check ROADMAP.md "Current Active Tools" table to confirm no W#2 schema work is i
 
 Per Rule 22 (Graduated-Tool Re-Entry style for design-doc continuation), additionally
 load these Group B docs:
-  - docs/BROWSER_FREEZE_FIX_DESIGN.md (this doc — full read)
+  - docs/BROWSER_FREEZE_FIX_DESIGN.md (this doc — full read; READ §9 FIRST per supersession notice at top)
   - docs/KEYWORD_CLUSTERING_ACTIVE.md (top STATE block + relevant historical blocks)
   - docs/INPUT_CONTEXT_SCALING_DESIGN.md (only if cross-referencing scaling work)
 
 Start by running the mandatory start-of-session sequence.
 ```
+
+---
+
+## 9. Empirical findings 2026-05-02-c — diagnosis REJECTED, revised path forward
+
+**Session:** `session_2026-05-02-c_devtools-profiling-pass` (Claude Code)
+**Method:** director executed §3 protocol on Bursitis Test 2 production project; pushed canvas through 108 topics across 31 apply batches (regular + consolidation); queried `performance.getEntriesByType('measure')` from DevTools console after each pause; pasted full measurement set back to Claude for analysis.
+**Pre-conditions confirmed:** instrumentation from `db3d377` was live on vklf.com (the new "Layout pass complete" log line showed `heights=Xms, layout=Yms` per batch from Batch 9 onward, confirming the deploy); pre-flight runner P11+P12 checks all green at run-start.
+
+### 9.1 Full data — runLayoutPass and overlap loop passes by canvas size
+
+Across all 31 batches measured (Batch 9 through Batch 29 attempt 2, including 4 consolidation passes that applied changes):
+
+| Canvas size (topics) | runLayoutPass (ms) — observations | passes — observations |
+|---|---|---|
+| 55 | 2.3 | 1 |
+| 59 | 0.8 | 1 |
+| 61 | 1.4 | 1 |
+| 65 | 3.2 | 1 |
+| 71 | 1.1, 1.7 (consol) | 1, 1 |
+| 76 | 1.1 | 1 |
+| 78 | 1.3, 1.6 | 1, 1 |
+| 81 | 1.0, 1.1 (consol) | 1, 1 |
+| 82 | 1.4 | 1 |
+| 87 | 1.0, 1.8 | 1, 1 |
+| 93 | 2.8, 2.2, 2.1 (consol) | 1, 1, 1 |
+| 94 | 2.7 | 1 |
+| 95 | 2.0, 1.0, 1.0 | 1, 1, 1 |
+| 97 | 1.4, 1.4 | 1, 1 |
+| 99 | 1.3 | 1 |
+| 100 | 2.2 | 1 |
+| 101 | 3.0 | 1 |
+| 103 | 2.3, 2.5, 2.0 (consol) | 1, 1, 1 |
+| **107** | **2.7** | **1** |
+| **108** | **3.0** | **1** |
+
+**Maximum runLayoutPass across the entire 55–108 topic range: 3.2 ms.** Maximum at canvas ≥100 topics: 3.0 ms. **`passes` was 1 in every single batch** — Sub-step 3's overlap-resolution loop early-exited after its first pass every time, meaning there were no overlaps to resolve and no work for the loop to do.
+
+The diagnosis in §1 predicted runLayoutPass would balloon to hundreds of milliseconds and `passes` would jump to 5–15 at canvas sizes approaching 105 topics. The empirical data shows the opposite: runLayoutPass stays in the 1–3 ms range across the entire measured range, with no inflection at or above the 105-topic threshold from `2026-05-01-c`'s freeze.
+
+### 9.2 Other measurements — heights, stringify, rebuildHTTP
+
+| Step | Range across 55–108 topics | Notes |
+|---|---|---|
+| `aa.calcHeights` | 14.6 – 69.5 ms (median ~35 ms) | Mild growth with canvas; nowhere near freeze territory |
+| `aa.stringify` | 0.4 – 5.1 ms (5.1 ms only on first batch — cold path; otherwise <2 ms) | Negligible |
+| `aa.rebuildHTTP` | **2,805 ms (canvas 55) → 4,645 ms (canvas 107)** — monotonic linear growth | Server-side; does NOT block main thread; **separate Phase 3 scaling concern** (see Finding 3) |
+
+Total in-browser apply work (heights + layout + stringify) at canvas 108: ~57 ms. That is **two orders of magnitude below** the threshold needed to trigger Chrome's "page unresponsive" popup (~5,000 ms of synchronous main-thread work).
+
+### 9.3 Diagnosis — REJECTED
+
+The diagnosis from §1 said: at canvas 105+, the layout pass would take 5,000–10,000+ ms because Sub-step 3's overlap-resolution loop would do many passes through an O(n²) double-loop with O(n × depth) inner cost. The math reasoning was: if overlaps cascade, the loop would iterate 5–15 times; with `ancestorCollapsed` doing array-find inside, each iteration would be slow; total = freeze regime.
+
+**The empirical data rejects every link in that chain:**
+
+1. **Overlaps don't cascade on this canvas.** The tree-walk in Sub-step 2 places nodes cleanly enough that no overlaps exist at apply time. Sub-step 3's first pass finds nothing to do, and the `if (!moved) break` exits.
+2. **Even if overlaps existed, the loop would still be cheap at n=108.** Sub-step 3 is currently 0.6 ms even at 108 nodes; an actual O(n²) inner loop at n=108 is ~12,000 simple ops, ~1 ms.
+3. **`ancestorCollapsed` and `subtreeBottom` are not measured in isolation, but their cost is bounded by the sub-step times. Step 2 is 0.3–1.4 ms; Step 4 is 0.0–0.4 ms.** Both are well within a single millisecond of overhead even with the array-find calls.
+
+**Confidence in rejection: very high.** The data is consistent across 31 measurements at canvas sizes from 55 to 108. The only way the §1 diagnosis could be partially right is if the original Bursitis Test (deleted 2026-05-01-b) had a fundamentally different canvas shape that triggered cascading overlaps — but that project no longer exists, and Bursitis Test 2's 2,328-keyword payload is the same one that produced last week's freeze, just on a fresh canvas.
+
+### 9.4 Approaches A / B / C from §4 — moot
+
+- **Approach A (algorithmic)** — would refactor the overlap loop from O(60 × n²) to O(n log n) sweep-and-prune. **The current loop at canvas 108 already runs in <1 ms with 1 pass**; replacing it with a faster algorithm would still run in <1 ms with 0 passes. Zero functional improvement. Implementation would have been ~2–3 sessions of wasted work. The profiling protocol just saved that budget.
+- **Approach B (rAF chunking)** — would yield the layout pass between sub-steps. **There's nothing to chunk** — the entire pipeline finishes in 60 ms total. rAF yielding adds latency without removing work; on a non-freeze workload it makes things worse.
+- **Approach C (Web Worker offload)** — would move runLayoutPass to a Web Worker. **runLayoutPass at 3 ms doesn't need offloading**; the round-trip postMessage cost would dominate.
+
+None of the three approaches address a real bottleneck on this canvas. **Do not implement any of them based on the §1–§8 design.**
+
+### 9.5 What ACTUALLY caused the 2026-05-01-c freeze — three remaining hypotheses
+
+The freeze last week is now an unexplained one-off in the data we have. Three hypotheses, in order of current likelihood:
+
+#### 9.5.1 Hypothesis A (LEADING) — HTTP 500 retry storm + cascade
+
+**Current likelihood: HIGH.** The 2026-05-01-c freeze fired during Batch 28 attempt 2's apply phase. The "attempt 2" framing is the tell — Batch 28 attempt 1 had already failed and retried. Today's profiling session observed the HTTP 500 fetchCanvas retry pattern fire **8+ times across 31 batches** (Batches 15, 18, 19, 22, 23, 29 + Consol@82's failure + a Batch 19 cascade) — a ~25%+ recurrence rate that contradicts the morning's `2026-05-02` "VERIFIED clean across 6 batches" claim.
+
+The retry path doesn't roll back the prior attempt's canvas state on the server, so each retry starts from a partially-modified canvas. If the model returns ops on retry that conflict with the prior attempt's apply (e.g., trying to add a topic that already exists, or creating a parent-chain cycle), the applier rejects, the run retries again, and so on. Batch 28's freeze last week was attempt 2 of an apply cycle — fully consistent with this pattern.
+
+**Today's evidence:** Batch 15 attempt 2 today returned ops that created a parent-chain cycle on `t-1`; applier rejected; attempt 3 succeeded. Same shape as last week's freeze trigger, but today the applier guard caught it cleanly without freezing. Last week, something about the cycle-or-cascade may have hit a different code path that DID freeze.
+
+**What this would mean for the fix:** investigate the retry path under partial-apply state. Add invariant checks that detect when a retry's canvas state is internally inconsistent and fail loudly rather than producing pathological apply behavior. Cross-reference with `df09611`'s asymmetric defense-in-depth fix (which addressed the `/canvas` GET endpoint's HTTP 500 surface but did NOT address the retry-after-partial-apply scenario).
+
+#### 9.5.2 Hypothesis B — uninstrumented code paths (React reconciliation, SVG paint)
+
+**Current likelihood: MEDIUM.** The instrumentation shipped in `db3d377` covers four named operations (`aa.calcHeights`, `aa.runLayoutPass`, `aa.stringify`, `aa.rebuildHTTP`) plus four sub-step measures inside runLayoutPass. It does NOT cover:
+
+- `applyOperations` (in-memory state transform)
+- `materializeRebuildPayload` (pure function; ruled out via code reading but not measured)
+- React reconciliation after `setNodes()` (the `setNodes(layoutNodes)` call in `AutoAnalyze.tsx` triggers a React re-render that walks the component tree and reconciles all 100+ SVG node children + their connector lines)
+- SVG paint (browser-level painting of the reconciled tree)
+
+SVG paint at scale is a known browser perf hotspot — 100+ nodes with complex paths, gradients, drop shadows, and text labels can take seconds to paint on slower hardware. We have no measurement of this.
+
+**What this would mean for the fix:** extend instrumentation to wrap `setNodes()` calls + the React lifecycle that follows + the browser's paint cycle. Then re-record at canvas 100+ to see if React/paint dominates.
+
+#### 9.5.3 Hypothesis C — one-time edge case
+
+**Current likelihood: LOW-MEDIUM.** Server hiccup, OS-level event (garbage collection in another tab, virtual memory pressure, browser update kicking in), or network event coinciding with the apply phase. Not reproducible by definition.
+
+**What this would mean for the fix:** nothing. If C is the cause, no fix is needed; just operational awareness that one-off freezes can happen and the recovery path (refresh, lose ~$0.30 of in-flight batch cost, canvas state preserved server-side) should be documented and made smooth.
+
+### 9.6 Revised path forward — recommended next-session direction
+
+Given that (a) the diagnosis is rejected, (b) Hypothesis A (HTTP 500 retry storm) is the leading suspect AND has independently surfaced as a regression (8+ retries this session vs morning's "verified zero"), and (c) Hypothesis B requires more code instrumentation:
+
+**Recommended sequence:**
+
+1. **Investigate the HTTP 500 retry regression as a separate ROADMAP item.** The morning session claimed the fix from `df09611` was verified clean; today it fired 8+ times. Either the verification was lucky (small sample), or something has changed since (Vercel function restart? Postgres connection pool eviction? unrelated infrastructure event?). This is a HIGH-severity regression independent of the freeze concern. **Capture as a new ROADMAP entry.**
+
+2. **Audit the retry path for partial-apply state recovery.** The retry-after-failed-fetch sequence does not currently roll back the prior attempt's canvas mutations on the server. Consequence: retry attempts run against an inconsistent canvas state. If this is what triggered the 105-topic freeze last week, fixing it both addresses Hypothesis A AND prevents future freezes of the same shape. **Likely ~1-2 sessions; design + implement in the standard atomic-rebuild pattern.**
+
+3. **Defer Hypothesis B (extending instrumentation) until the retry path is understood.** If the retry-fix shipped in step 2 prevents the freeze regime from re-emerging, we don't need to chase Hypothesis B. If it doesn't, add the React/paint instrumentation in a follow-up.
+
+4. **`aa.rebuildHTTP` linear scaling (Finding 3) — capture as separate Phase 3 ROADMAP item.** 2.8 s → 4.6 s across 55→107 nodes projects to ~10–15 s per atomic-rebuild call at 500 topics. Not a freeze, but a real Phase 3 cost. Investigation later.
+
+### 9.7 Methodology note (preserved for future profiling sessions)
+
+The profile-before-implement protocol in §3 worked exactly as designed — a code-reading-based diagnosis that came with explicit "~90% confidence; profiling will confirm" framing was empirically tested on production data and rejected, BEFORE any implementation budget was spent on the wrong fix. Total cost of this rejection: one session's worth of director time + ~$5 of API spend pushing the canvas to 108 topics. Total cost saved: 2–3 sessions of designing/building/validating Approach A.
+
+This is exactly what `feedback_recommendation_style.md` (most thorough and reliable) is supposed to optimize for. The §1 "90% confidence" framing should be treated as a deliberate caution — an explicit ask to NOT skip profiling. Future code-reading-based diagnoses should preserve the same humility.
+
+### 9.8 What stays in the codebase
+
+The profiling instrumentation from `db3d377` (4 named measures in `AutoAnalyze.tsx` + 4 sub-step measures in `canvas-layout.ts` + the `heights=Xms, layout=Yms` log line extension) is **kept in production**. Sub-millisecond cost; safe; and useful for any future investigation of the apply pipeline. The console-query snippet (this doc §6.3) remains the canonical way to dump timings from a running session.
 
 ---
 

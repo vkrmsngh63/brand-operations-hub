@@ -1,8 +1,9 @@
 # KEYWORD CLUSTERING — ACTIVE DOCUMENT
 ## Current state of the Keyword Clustering workflow tool (Group B, tool-specific)
 
-**Last updated:** May 2, 2026 (Browser-freeze fix design session — second session of 2026-05-02, follow-up to this morning's `2026-05-02_http-500-fix-verification-and-auto-fire-trip-observation`. **Design-only session producing `docs/BROWSER_FREEZE_FIX_DESIGN.md` (NEW Group B doc, 555 lines) + small profiling instrumentation shipped to deploy.** Code-reading-based diagnosis of the apply pipeline pinpoints `runLayoutPass` Sub-step 3 (60-pass overlap resolution loop with O(n) `nodes.find()` calls inside `ancestorCollapsed`) as the dominant bottleneck at 105-node canvas. Empirical evidence corroborates: the "Layout pass complete" log line never fired in the 2026-05-01-c freeze, pinning the freeze block to `calcNodeHeight × n` + `runLayoutPass` between AutoAnalyze.tsx lines 996-1027. Profiling instrumentation added: 4 named `performance.measure()` blocks in `AutoAnalyze.tsx` (`aa.calcHeights`, `aa.runLayoutPass`, `aa.stringify`, `aa.rebuildHTTP`) + 4 sub-step measures inside `canvas-layout.ts` runLayoutPass (`layout.step1` through `layout.step4`); zero behavior change; sub-millisecond cost; safe to leave in production. Activity log "Layout pass complete" line extended to surface `heights=Xms, layout=Yms` per batch so director sees concrete numbers without DevTools. Three fix approaches designed (A=algorithmic / B=requestAnimationFrame chunking / C=Web Worker offload); recommendation = **A — Algorithmic fix** (most thorough and reliable per `feedback_recommendation_style.md` + Rule 14f). DevTools profiling protocol written for Bursitis Test 2 + handed to director for next-session execution. Implementation deferred pending profiling confirmation. All checks green: 260/260 src/lib tests pass; tsc clean; build clean (17/17 routes); lint at exact baseline parity (16e/41w; zero new). Multi-workflow: schema-change-in-flight stays "No"; W#2 still 🆕 about-to-start; no parallel chat. NEW POST-2026-05-02-b STATE block prepended below; prior `2026-05-02` HTTP-500 verification STATE block demoted to historical.)
-**Last updated in session:** session_2026-05-02-b_browser-freeze-fix-design (Claude Code)
+**Last updated:** May 2, 2026-c (DevTools profiling pass session — third session of 2026-05-02, follow-up to early-afternoon's `2026-05-02-b_browser-freeze-fix-design`. **Director executed `BROWSER_FREEZE_FIX_DESIGN.md §3` profiling protocol on production Bursitis Test 2 project; pushed canvas through 108 topics across 31 apply batches; collected complete timing data via DevTools console snippet. Diagnosis from §1 of design doc EMPIRICALLY REJECTED. New §9 added to design doc capturing full data + revised hypotheses + recommended next-session direction.** Code-reading prediction said `runLayoutPass` would balloon to seconds at 105+ topics; empirical data shows it stayed at 1.0–3.2 ms across ENTIRE 55→108 topic range with `passes=1` every single batch. Approaches A/B/C from §4 declared moot — no fix in the design picker addresses a real bottleneck on this canvas. THREE findings captured: (1) diagnosis rejection (CORRECTIONS_LOG entry); (2) HTTP 500 retry pattern recurred 8+ times this session vs this morning's "VERIFIED clean across 6 batches" — HIGH-severity regression of `df09611`'s asymmetric fix, NEW ROADMAP entry; (3) `aa.rebuildHTTP` linear scaling 2.8 s → 4.6 s across canvas 55→107 — Phase 3 scaling cost, separate ROADMAP entry. Recommended next-session direction: investigate HTTP 500 retry regression + audit retry-after-partial-apply state path (Hypothesis A is the new leading suspect for last week's freeze). NO code changes this session — instrumentation from `db3d377` stays. NEW POST-2026-05-02-c STATE block prepended below; prior 2026-05-02-b STATE block demoted to historical. Multi-workflow: schema-change-in-flight stays "No"; W#2 still 🆕 about-to-start; no parallel chat.)
+**Last updated in session:** session_2026-05-02-c_devtools-profiling-pass (Claude Code)
+**Previously updated in session:** session_2026-05-02-b_browser-freeze-fix-design (Claude Code)
 **Previously updated in session:** session_2026-05-02_http-500-fix-verification-and-auto-fire-trip-observation (Claude Code)
 **Previously updated in session:** session_2026-05-01-c_consolidation-auto-fire-followup (Claude Code)
 **Previously updated in session:** session_2026-05-01-b_scale-session-e-d3-validation (Claude Code)
@@ -42,7 +43,83 @@
 
 ---
 
-## ⚠️ POST-2026-05-02-b-BROWSER-FREEZE-FIX-DESIGN STATE (READ FIRST — updated 2026-05-02-b)
+## ⚠️ POST-2026-05-02-c-DEVTOOLS-PROFILING-PASS STATE (READ FIRST — updated 2026-05-02-c)
+
+**As of 2026-05-02-c (third session of the day, follow-up to early-afternoon's `2026-05-02-b_browser-freeze-fix-design`). PROFILING-PASS session — no code changes. Director executed `BROWSER_FREEZE_FIX_DESIGN.md §3` protocol on production Bursitis Test 2 project; pushed canvas through 108 topics; collected 31 batches' worth of timing measurements via DevTools console snippet. The diagnosis from §1 of the design doc was empirically REJECTED. New §9 added to design doc capturing data + revised hypotheses + recommended next-session direction. THREE findings captured (one in CORRECTIONS_LOG, two as new ROADMAP entries).**
+
+### What this session shipped to W#1
+
+**Code:** none. Profiling-pass-only session.
+
+**Docs (Group B):**
+- `docs/BROWSER_FREEZE_FIX_DESIGN.md` — header now declares "SUPERSEDED 2026-05-02-c — read §9 first" supersession notice; §0.1 status table updated; new §9 added (~280 lines covering full data table, diagnosis rejection analysis, three remaining hypotheses for the actual freeze cause, revised path forward, methodology note, what stays in codebase).
+
+**Docs (Group A):**
+- `docs/ROADMAP.md` — HIGH-severity browser-freeze entry flipped from "🔄 DESIGN COMPLETE — implementation pending profiling" to "⛔ DIAGNOSIS REJECTED — investigation continues per BROWSER_FREEZE_FIX_DESIGN §9"; Active Tools row updated; **TWO new entries added**: (1) HIGH-severity HTTP 500 fetchCanvas retry pattern regression — `df09611`'s fix verified clean across 6 batches in morning session BUT fired 8+ times across 31 batches today; ~25%+ recurrence rate inconsistent with morning's "VERIFIED clean"; (2) MEDIUM-severity Phase 3 scaling concern — `aa.rebuildHTTP` server-side time grows monotonically linearly with canvas size: 2,805 ms (canvas 55) → 4,645 ms (canvas 107); projects to ~10–15 s per atomic-rebuild call at 500 topics.
+- `docs/CORRECTIONS_LOG.md` — new PROCESS-level entry: code-reading-based diagnosis empirically rejected by profiling. Lesson: "90% confidence from static analysis" framing is a deliberate caution to NOT skip profiling; profile-before-implement protocol worked exactly as designed (saved 2-3 sessions of misdirected implementation budget).
+- `docs/CHAT_REGISTRY.md` — new top row for `session_2026-05-02-c_devtools-profiling-pass`; thirty-third Claude Code session.
+- `docs/DOCUMENT_MANIFEST.md` — header timestamps + per-doc modified flags + this-session summary; minor doc-drift correction (the prior-session "NOT pushed yet" note in line 106 was contradicted by `git status` showing `db3d377` was on origin/main; corrected this session).
+
+### Diagnosis rejection summary — full detail in `BROWSER_FREEZE_FIX_DESIGN.md §9`
+
+**The §1 diagnosis predicted:** at canvas 105+ topics, `runLayoutPass` Sub-step 3's overlap-resolution loop would fire 5–15 passes through O(n × depth) inner work, ballooning to 5,000–10,000+ ms and triggering Chrome's "page unresponsive" popup. Confidence stated as ~90% from code reading; profiling explicitly called out as the empirical-confirmation step.
+
+**What the data showed across 31 batches at canvas 55→108 topics:**
+
+| Measurement | Predicted (at canvas ≥100) | Observed (entire 55–108 range) |
+|---|---|---|
+| `aa.runLayoutPass` (total) | 100s of ms growing nonlinearly | **0.8–3.2 ms; max 3.0 ms at canvas 108** |
+| `layout.step3-overlapResolve` passes | 5–15 worst case | **passes=1 EVERY SINGLE BATCH** |
+| `aa.calcHeights` | 500–3,000 ms | 14.6–69.5 ms |
+| Total in-browser work (heights+layout+stringify) | 5,000+ ms (freeze regime) | **~57 ms at canvas 108** |
+
+**Verdict:** the bottleneck described in §1 does not exist on this canvas. Sub-step 3's overlap loop early-exits in 1 pass every time because the tree-walk in Sub-step 2 places nodes cleanly enough that no overlaps occur. **All three approaches in §4 (A=algorithmic / B=rAF chunking / C=Web Worker) are moot** — they would optimize a step that already runs in milliseconds. Approach A would have wasted 2–3 sessions of implementation budget on a fix that produces zero functional improvement.
+
+**Confidence in rejection: very high.** 31 measurements, no inflection at any size including ABOVE last week's 105-topic freeze threshold, single-pass behavior consistent across regular batches + 4 consolidation passes + retry attempts.
+
+### Three remaining hypotheses for what ACTUALLY caused last week's freeze (full detail §9.5)
+
+1. **HTTP 500 retry storm + cascade** (LEADING — current likelihood HIGH). Last week's freeze fired during Batch 28 attempt 2's apply phase; the "attempt 2" framing matters because the retry path doesn't roll back the prior attempt's canvas mutations on the server, leaving retries to operate against partially-modified state. Today's session observed the retry pattern fire 8+ times across 31 batches, including a Batch 15 attempt 2 that returned ops creating a parent-chain cycle on `t-1` (caught cleanly by applier guard today; could have hit a different code path last week that did freeze). **Cross-references new ROADMAP entry on the retry regression.**
+2. **Uninstrumented code paths — React reconciliation or SVG paint** (MEDIUM). The instrumentation covers four named operations + four sub-steps inside runLayoutPass, but does NOT cover `setNodes()` → React reconciliation → SVG paint. SVG paint of 100+ nodes-with-connector-lines at scale is a known browser perf hotspot that can take seconds. Would require new instrumentation in a future session if Hypothesis A's investigation rules itself out.
+3. **One-time edge case** (LOW-MEDIUM). Server hiccup, OS event, network glitch coinciding with apply. Not reproducible by definition; if true, no fix needed beyond operational awareness.
+
+### Multi-workflow protocol coordination
+
+- **Schema-change-in-flight flag:** stays `No` (no schema work this session; none expected for retry-regression investigation either).
+- **Branch:** `main` (W#1's home).
+- **Cross-workflow doc edits:** none.
+- W#2 still 🆕 about-to-start; no parallel chat ran during this session.
+- Pull-rebase at session start: clean (already up to date with `db3d377` on origin/main).
+
+### Files touched this session
+
+**Modified (5 docs, 0 code):**
+
+End-of-session commit (this commit):
+- `docs/BROWSER_FREEZE_FIX_DESIGN.md` — supersession notice at top; §0.1 status table updates; new §9 (~280 lines).
+- `docs/KEYWORD_CLUSTERING_ACTIVE.md` — this STATE block prepended; prior 2026-05-02-b STATE block demoted; header timestamp.
+- `docs/ROADMAP.md` — HIGH-severity browser-freeze entry flipped to ⛔ DIAGNOSIS REJECTED; Active Tools row updated; TWO new entries (HTTP 500 retry regression + rebuildHTTP linear scaling); header timestamp.
+- `docs/CORRECTIONS_LOG.md` — new PROCESS-level entry on diagnosis rejection; header timestamp.
+- `docs/CHAT_REGISTRY.md` — new top row; header timestamp.
+- `docs/DOCUMENT_MANIFEST.md` — header timestamps + per-doc flags + this-session summary; minor prior-session push-status doc-drift corrected.
+
+**Push status:** committed locally; **NOT pushed yet — pending director's discretionary approval at end-of-session per Rule 9.**
+
+### Standing instructions for next session — three "NEXT" choices
+
+(a) **Investigate the HTTP 500 retry regression — RECOMMENDED.** The `df09611` fix was reportedly verified clean in this morning's session (zero retries across 6 batches) but fired 8+ times across 31 batches today (~25%+ recurrence rate). Either the morning verification was sample-luck, OR something has changed since (Vercel function restart? Postgres connection pool eviction? unrelated infrastructure event?). This is the leading suspect for last week's 105-topic freeze (Hypothesis A in `BROWSER_FREEZE_FIX_DESIGN §9.5.1`). Plan: read the morning-session evidence + today's full retry trajectory; audit the retry-after-failed-fetch path for partial-apply state recovery (the current path doesn't roll back the prior attempt's canvas mutations on the server); design + implement a fix in the standard atomic-rebuild pattern. Likely 1-2 sessions. **Most thorough and reliable: it both addresses an independent HIGH-severity regression AND tests Hypothesis A as the root cause of last week's freeze.**
+
+(b) **Extend instrumentation to cover React reconciliation + SVG paint, then re-record.** Tests Hypothesis B (uninstrumented code paths). Smaller-scope investigation but only addresses one of the three hypotheses; deferred until (a) is resolved.
+
+(c) **Defer freeze investigation; pick another option from the prior STATE block menu** — recency-stickiness fix, GoTrueClient consolidation, Phase-1 polish bundle, etc. The freeze concern stays open but design state is captured.
+
+**Recommendation: (a) — investigate HTTP 500 retry regression.** This is the most thorough next step because it has TWO valuable outcomes: (1) addresses an independently HIGH-severity regression that should not stay in the codebase, AND (2) directly tests the leading hypothesis for last week's freeze. After (a), if the freeze regime doesn't re-emerge, the freeze investigation can close.
+
+**Director's framing through prior sessions:** (Scale-A) → (Scale-0) → (Defense-in-Depth ×3) → (Scale-B) → (Scale-C) → (Scale-D) → (Scale-E build) → (Scale-E D3 partial validation) → (consolidation auto-fire follow-up `2026-05-01-c`) → (HTTP 500 fix verification + auto-fire trip observation `2026-05-02`) → (browser-freeze fix design `2026-05-02-b`) → **(DevTools profiling pass — diagnosis rejected, this session)** → (HTTP 500 retry regression investigation — RECOMMENDED next).
+
+---
+
+## ⚠️ POST-2026-05-02-b-BROWSER-FREEZE-FIX-DESIGN STATE (preserved as historical context — last updated 2026-05-02-b; SUPERSEDED by DevTools profiling pass state above. Diagnosis from this session was empirically REJECTED 2026-05-02-c.)
 
 **As of 2026-05-02-b (second session of the day, follow-up to this morning's HTTP-500 fix verification + auto-fire trip observation work). DESIGN-ONLY session producing the new Group B doc `docs/BROWSER_FREEZE_FIX_DESIGN.md` + small profiling instrumentation. Code-reading-based diagnosis pinpoints the bottleneck; empirical confirmation via DevTools profiling on Bursitis Test 2 is the next session's task. Implementation deferred pending profiling.**
 

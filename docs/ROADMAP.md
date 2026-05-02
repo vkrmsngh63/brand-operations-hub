@@ -1,8 +1,9 @@
 # ROADMAP
 ## Product Launch Operating System (PLOS) — Development Execution Plan
 
-**Last updated:** May 2, 2026 (Browser-freeze fix design session — second session of 2026-05-02. DESIGN-ONLY session producing the new Group B doc `docs/BROWSER_FREEZE_FIX_DESIGN.md` (555 lines, 8 sections + Resume Prompt) + small profiling instrumentation shipped to `AutoAnalyze.tsx` + `canvas-layout.ts` (4 named `performance.measure()` blocks each; sub-millisecond cost; safe to leave in production). Code-reading-based diagnosis pinpoints `runLayoutPass` Sub-step 3 (60-pass overlap resolution loop with O(n) `nodes.find()` calls inside `ancestorCollapsed`) as the dominant bottleneck at 105-node canvas; empirical evidence corroborates ("Layout pass complete" log never fired in the 2026-05-01-c freeze, pinning the freeze block to `calcNodeHeight × n` + `runLayoutPass`). Three fix approaches designed (A=algorithmic / B=requestAnimationFrame chunking / C=Web Worker offload); recommendation = Approach A (most thorough and reliable per `feedback_recommendation_style.md` + Rule 14f). DevTools profiling protocol written for Bursitis Test 2 + handed to director for next-session execution. Implementation deferred pending profiling. The HIGH-severity browser-freeze ROADMAP entry from `2026-05-01-c` flips from open to "🔄 Design complete — implementation pending profiling confirmation." All checks green: 260/260 src/lib tests pass; tsc clean; build clean (17/17 routes); lint at exact baseline parity (16e/41w; zero new). Multi-workflow: schema-change-in-flight stays "No"; W#2 still 🆕 about-to-start; no parallel chat.)
-**Last updated in session:** session_2026-05-02-b_browser-freeze-fix-design (Claude Code)
+**Last updated:** May 2, 2026-c (DevTools profiling pass — third session of 2026-05-02. PROFILING-ONLY session, no code changes. Director executed `BROWSER_FREEZE_FIX_DESIGN.md §3` protocol on production Bursitis Test 2; pushed canvas through 108 topics; collected 31 batches' worth of timing measurements via DevTools console snippet. **The §1 diagnosis (runLayoutPass overlap loop) was empirically REJECTED.** runLayoutPass stayed at 1.0–3.2 ms across the entire 55→108 topic range with `passes=1` every single batch. New §9 added to design doc capturing data + revised hypotheses + recommended next-session direction. THREE findings captured: (1) diagnosis rejection (CORRECTIONS_LOG entry); (2) HTTP 500 retry pattern recurred 8+ times this session vs this morning's "VERIFIED clean across 6 batches" — HIGH-severity regression of `df09611`, NEW ROADMAP entry below; (3) `aa.rebuildHTTP` linear scaling 2.8 s → 4.6 s across canvas 55→107 topics — Phase 3 cost, separate ROADMAP entry below. Recommended next-session direction: investigate HTTP 500 retry regression + audit retry-after-partial-apply state path (Hypothesis A from `BROWSER_FREEZE_FIX_DESIGN §9.5.1` is the new leading suspect for last week's freeze). Active Tools row updated; HIGH-severity browser-freeze entry flipped from "🔄 DESIGN COMPLETE" to "⛔ DIAGNOSIS REJECTED — investigation continues per design doc §9." Multi-workflow: schema-change-in-flight stays "No"; W#2 still 🆕 about-to-start; no parallel chat.)
+**Last updated in session:** session_2026-05-02-c_devtools-profiling-pass (Claude Code)
+**Previously updated in session:** session_2026-05-02-b_browser-freeze-fix-design (Claude Code)
 **Previously updated in session:** session_2026-05-02_http-500-fix-verification-and-auto-fire-trip-observation (Claude Code)
 **Previously updated in session:** session_2026-05-01-c_consolidation-auto-fire-followup (Claude Code)
 **Previously updated in session:** session_2026-05-01-b_scale-session-e-d3-validation (Claude Code)
@@ -53,7 +54,7 @@
 
 | Workflow | Status | Branch | Last Session | Next Session | Schema-change in flight? |
 |---|---|---|---|---|---|
-| W#1 Keyword Clustering | 🔄 Active dev — stabilization | `main` | 2026-05-02-b browser-freeze-fix-design (DESIGN-ONLY session producing `docs/BROWSER_FREEZE_FIX_DESIGN.md` — NEW Group B design doc, 555 lines, 8 sections + Resume Prompt — that captures the apply-pipeline diagnosis, the DevTools profiling protocol for the director, and the 3-approach fix picker with Approach A recommended. Code-reading-based diagnosis: `runLayoutPass` Sub-step 3 (60-pass overlap resolution loop at `src/lib/canvas-layout.ts:269-292` with O(n) `nodes.find()` inside `ancestorCollapsed`) is the dominant bottleneck at 105-node canvas. Confidence ~90% from the math + the empirical "Layout pass complete" log absence in 2026-05-01-c. Profiling instrumentation shipped: 4 named `performance.measure()` blocks in `AutoAnalyze.tsx:997-1048` (`aa.calcHeights`, `aa.runLayoutPass`, `aa.stringify`, `aa.rebuildHTTP`) + 4 sub-step measures inside `runLayoutPass` (`layout.step1` through `layout.step4`); zero behavior change; sub-millisecond cost. Activity-log "Layout pass complete" line extended to surface `heights=Xms, layout=Yms` per batch. 260/260 src/lib tests pass; tsc + build clean; lint baseline parity. Implementation deferred pending profiling. Commit local — push pending director's discretionary approval per Rule 9.) | (a) **DevTools profiling protocol on Bursitis Test 2 — RECOMMENDED.** Director runs `BROWSER_FREEZE_FIX_DESIGN.md` §3 (~5-15 min DevTools recording on Bursitis Test 2 at ~80+ topics); reports timing measurements; Claude validates diagnosis + triggers implementation per §5.1 (Approach A) or §5.2/§5.3 (B/C). Closes the design with empirical evidence. Requires this session's commit pushed first. OR (b) Skip profiling; commit directly to Approach A and start implementing (defensible from code analysis but loses verification step) / (c) Recency-stickiness fix — sister-link deferral to consolidation-only + Q5→B touch-semantics refinement (orthogonal; direct attack on the wall-question bottleneck) / (d) GoTrueClient multi-instance fix — small refactor (~15 LOC) consolidating three browser-side Supabase clients to a single singleton; LOW-MEDIUM severity / (e) Resume full-scale D3 to wall (~$40-50; needs multi-session pause/resume — STILL blocked by browser-freeze risk on large canvas; depends on browser-freeze fix shipping first) / (f) Phase-1 UI polish bundle (6 items from prior sessions + cosmetic stale-batch-num log label) / (g) Action-by-action feedback workflow design / (h) V3-era cleanup pass (deferred from Session E D4) | No |
+| W#1 Keyword Clustering | 🔄 Active dev — stabilization | `main` | 2026-05-02-c devtools-profiling-pass (PROFILING-ONLY session, no code changes — director executed `BROWSER_FREEZE_FIX_DESIGN.md §3` protocol on production Bursitis Test 2 project; pushed canvas through 108 topics across 31 apply batches; collected complete timing data via DevTools console snippet. **§1 diagnosis EMPIRICALLY REJECTED.** Across the entire 55→108 topic range, `runLayoutPass` stayed at 1.0–3.2 ms with `passes=1` every single batch — Sub-step 3's overlap loop early-exits in 1 pass every time because the tree-walk in Sub-step 2 places nodes cleanly enough that no overlaps occur. Approaches A/B/C from §4 declared moot. New §9 added to design doc (~280 lines) with full data table + revised hypotheses + recommended next-session direction. THREE findings: (1) diagnosis rejection — CORRECTIONS_LOG PROCESS entry; (2) HTTP 500 retry pattern fired 8+ times this session vs morning's "VERIFIED clean" — HIGH-severity regression, NEW ROADMAP entry below; (3) `aa.rebuildHTTP` 2.8s→4.6s linear scaling — Phase 3 concern, NEW ROADMAP entry below. The HIGH-severity browser-freeze entry from `2026-05-01-c` flips from "🔄 DESIGN COMPLETE" to "⛔ DIAGNOSIS REJECTED — investigation continues per design doc §9." Commit local — push pending director's discretionary approval per Rule 9.) | (a) **HTTP 500 retry regression investigation — RECOMMENDED.** `df09611` was reportedly verified clean in this morning's session (zero retries across 6 batches) but fired 8+ times across 31 batches today. Either morning verification was sample-luck OR something has changed since. Leading suspect for last week's 105-topic freeze (Hypothesis A in `BROWSER_FREEZE_FIX_DESIGN §9.5.1`). Plan: read morning-session evidence + today's full retry trajectory; audit retry-after-failed-fetch path for partial-apply state recovery (current path doesn't roll back prior attempt's canvas mutations on the server); design + implement fix in standard atomic-rebuild pattern. ~1-2 sessions. **Most thorough — addresses an independent HIGH-severity regression AND tests Hypothesis A as freeze root cause.** OR (b) Extend instrumentation to cover React reconciliation + SVG paint, then re-record — tests Hypothesis B (uninstrumented code paths); deferred until (a) resolves / (c) Recency-stickiness fix — sister-link deferral to consolidation-only + Q5→B touch-semantics refinement (orthogonal; direct attack on the wall-question bottleneck) / (d) GoTrueClient multi-instance fix — small refactor (~15 LOC) consolidating three browser-side Supabase clients to a single singleton; LOW-MEDIUM severity / (e) Resume full-scale D3 to wall (~$40-50; needs multi-session pause/resume; freeze concern reduced now but retry-cascade risk remains until (a) ships) / (f) Phase-1 UI polish bundle (6 items from prior sessions + cosmetic stale-batch-num log label) / (g) Action-by-action feedback workflow design / (h) V3-era cleanup pass (deferred from Session E D4) | No |
 | W#2 Competition Scraping & Deep Analysis | 🆕 About to start | `workflow-2-competition-scraping` (created by W#2's first session) | (none yet) | Workflow Requirements Interview per HANDOFF_PROTOCOL Rule 18 | No |
 | W#3 Therapeutic Strategy | Not yet started | — | — | — | — |
 | W#4–14 | Not yet started | — | — | — | — |
@@ -948,9 +949,18 @@ Add a row-number column (1, 2, 3, …) as the leftmost column in the Topics tabl
 
 ---
 
-### 🔄 HIGH-severity Scalability Concern — Browser freeze on atomic canvas rebuild at ~105-node canvas (raised 2026-05-01-c; DESIGN COMPLETE 2026-05-02-b — implementation pending profiling confirmation)
+### ⛔ HIGH-severity Scalability Concern — Browser freeze on atomic canvas rebuild at ~105-node canvas (raised 2026-05-01-c; DESIGN COMPLETE 2026-05-02-b; **DIAGNOSIS REJECTED 2026-05-02-c** — investigation continues)
 
-**Status:** ✅ DESIGN COMPLETE 2026-05-02-b — captured in new Group B doc `docs/BROWSER_FREEZE_FIX_DESIGN.md` (555 lines, 8 sections + Resume Prompt). Code-reading diagnosis pinpoints `runLayoutPass` Sub-step 3 (60-pass overlap resolution loop at `src/lib/canvas-layout.ts:269-292`) as the dominant bottleneck; profiling instrumentation shipped to confirm empirically. Three fix approaches designed with recommendation = Approach A (algorithmic — O(60 × n²) → O(n log n) via Map lookups + sweep-and-prune + memoization). 🔄 IMPLEMENTATION PENDING — director runs DevTools profiling protocol from `BROWSER_FREEZE_FIX_DESIGN.md` §3 next session; implementation per §5.1 (Approach A) follows. **Continues to block Phase 2 multi-user work** until shipped, but design is now actionable rather than open-ended.
+**Status:** ⛔ DIAGNOSIS REJECTED 2026-05-02-c. Director executed `BROWSER_FREEZE_FIX_DESIGN.md §3` profiling protocol on production Bursitis Test 2 project; pushed canvas through 108 topics across 31 apply batches; collected complete timing data via DevTools console snippet. **The §1 diagnosis (`runLayoutPass` Sub-step 3 overlap loop being the dominant bottleneck) was empirically rejected.** Across the entire 55→108 topic range, `runLayoutPass` stayed at 1.0–3.2 ms with `passes=1` every single batch — including AT and ABOVE the 105-topic threshold from last week's freeze. **Approaches A/B/C from §4 of the design doc are moot — they would optimize a step that already runs in milliseconds.** Full data + revised hypotheses + recommended next direction in `BROWSER_FREEZE_FIX_DESIGN.md §9`.
+
+**Three remaining hypotheses for what actually caused the 2026-05-01-c freeze (see `BROWSER_FREEZE_FIX_DESIGN.md §9.5`):**
+- **Hypothesis A (LEADING — current likelihood HIGH):** HTTP 500 retry storm + cascade. Last week's freeze fired during Batch 28 attempt 2's apply phase; the retry path doesn't roll back the prior attempt's canvas mutations on the server. Today's session observed the retry pattern fire 8+ times across 31 batches. **Cross-references new ROADMAP entry on the retry regression below.**
+- **Hypothesis B (MEDIUM):** Uninstrumented code paths — React reconciliation after `setNodes()` and SVG paint of 100+ nodes-with-connector-lines. SVG paint at scale is a known browser perf hotspot.
+- **Hypothesis C (LOW-MEDIUM):** One-time edge case — server hiccup, OS event, network glitch. Not reproducible.
+
+**Recommended next-session direction:** investigate the HTTP 500 retry regression entry below (Hypothesis A test). If that ships and freezes don't re-emerge, this entry can close. If they do, extend instrumentation per Hypothesis B in a follow-up.
+
+**Continues to be a watch-item for Phase 2 multi-user work** until last week's freeze cause is conclusively identified, but the empirical data significantly reduces the "freeze regime exists at 105+ on this canvas" concern that originally triggered the design.
 
 **The symptom:** during the live Path A auto-fire validation tonight, the browser triggered "page unresponsive" popup immediately after Batch 28 attempt 2 entered its apply phase. Sequence: model returned response → `passed validation` log → `Applied 21 operations → 105 topics` log (from inside doApplyV3, before post-apply re-fetch) → page-unresponsive popup → popup self-dismissed → activity log stopped → 60-second wait did not recover → refresh required to recover panel state.
 
@@ -985,6 +995,96 @@ Add a row-number column (1, 2, 3, …) as the leftmost column in the Topics tabl
 **Process learning captured:** when shipping a defense-in-depth fix to one endpoint of a paired set (where multiple endpoints hit the same backend in parallel), audit the sister endpoints in the same session. The G2 fix from 2026-04-28 was scoped narrowly to the endpoint that triggered the canvas-blanking bug, not the broader pattern. Adding "audit sister endpoints" as a post-fix review step would have caught this asymmetry then.
 
 **See also:** `CORRECTIONS_LOG.md` 2026-05-01-c entry for the diagnostic narrative. `KEYWORD_CLUSTERING_ACTIVE.md` POST-2026-05-01-c STATE block for the in-context discussion. `KEYWORD_CLUSTERING_ACTIVE.md` POST-2026-05-02 STATE block for the live verification.
+
+**⚠️ REGRESSION OBSERVED 2026-05-02-c — see new entry directly below.** The "VERIFIED LIVE" claim from morning's `2026-05-02` session is now in question; today's profiling-pass session observed the same retry pattern fire 8+ times across 31 batches.
+
+---
+
+### 🚨 NEW HIGH-severity REGRESSION 2026-05-02-c — HTTP 500 fetchCanvas retry pattern recurring at ~25%+ rate (contradicts morning's "VERIFIED clean" claim; LEADING SUSPECT for last week's 105-topic freeze)
+
+**Status:** 🚨 NEW HIGH-severity regression captured 2026-05-02-c. Investigation pending. **Cross-references the diagnosis-rejected browser-freeze entry above** (Hypothesis A in `BROWSER_FREEZE_FIX_DESIGN §9.5.1` — leading current suspect for what actually caused the 2026-05-01-c freeze).
+
+**The observation:** during today's DevTools profiling pass on Bursitis Test 2 (production vklf.com), the HTTP 500 fetchCanvas retry pattern fired 8+ times across 31 batches:
+- Batch 15 attempt 1 (canvas 78): `Batch 15 error: fetchCanvas failed: nodes fetch HTTP 500 — retrying in 5s…`
+- Consolidation @ canvas 82: `✗ Consolidation FAILED: fetchCanvas failed: nodes fetch HTTP 500`
+- Batch 18 attempt 1 (canvas 87): `Batch 18 error: fetchCanvas failed: nodes fetch HTTP 500 — retrying in 5s…`
+- Batch 19 attempt 1 (canvas 93): `Batch 19 error: fetchCanvas failed: state fetch HTTP 500 — retrying in 5s…`
+- Batch 22 attempt 1 (canvas 95): `Batch 22 error: fetchCanvas failed: nodes fetch HTTP 500 — retrying in 5s…`
+- Batch 23 attempt 1 (canvas 97): `Batch 23 error: fetchCanvas failed: state fetch HTTP 500 — retrying in 5s…`
+- Batch 29 attempt 1 (canvas 108): `Batch 29 error: fetchCanvas failed: nodes fetch HTTP 500 — retrying in 5s…`
+- Plus a Batch 15 attempt 2 cycle that surfaced as parent-chain cycle on `t-1` (different failure mode — applier-rejection — but in the same retry-cascade family)
+
+That's ~25%+ recurrence rate across the session. Inconsistent with morning's `2026-05-02_http-500-fix-verification-and-auto-fire-trip-observation` claim of "zero HTTP 500 retry storms across 6 batches + 2 consolidation passes + ~7 atomic canvas rebuilds."
+
+**Why this is HIGH-severity:**
+
+1. **Reverses a "VERIFIED" status.** The morning session declared the `df09611` fix verified clean and closed the original 30%-storm-rate concern. Today's data contradicts that closure. Either the morning verification was sample-luck (6 batches is small) OR something has changed since (Vercel function restart? Postgres connection pool eviction? unrelated infrastructure event?). Either way, the fix's effectiveness is now in question and the closure was premature.
+
+2. **Leading suspect for last week's 105-topic freeze.** Last week's freeze fired during Batch 28 attempt 2's apply phase. The "attempt 2" framing matters because the retry path doesn't roll back the prior attempt's canvas mutations on the server. If the model returns ops on retry that conflict with the prior attempt's apply (e.g., trying to add a topic that already exists, or creating a parent-chain cycle as Batch 15 attempt 2 today produced), pathological state can accumulate. Today's Batch 15 attempt 2 cycle was caught cleanly by the applier guard; last week, something about the cycle-or-cascade may have hit a different code path that DID freeze. **Investigating this path both addresses an independent regression AND tests the freeze hypothesis directly.**
+
+3. **Wastes API budget.** Each retry attempts the same batch again; ~$0.30/attempt × 8+ retries this session = ~$2.40 wasted on retries. At Phase 3 scale (500 projects/week × 50 workers), wasted spend would compound significantly.
+
+**Working hypotheses for the regression:**
+
+- **(a)** The morning verification was statistically lucky — 6 batches is a small sample and the underlying retry rate could plausibly be 20-30% with the morning session happening to hit a clean stretch.
+- **(b)** Something has changed since morning — Vercel cold-start population, Postgres connection pool reset, infrastructure-level event that didn't show up as a deploy. Worth checking Vercel + Supabase dashboards.
+- **(c)** The `df09611` fix only addressed ONE retry path (the `/canvas` GET handler's three Prisma calls) but missed another — perhaps the retry-after-failed-fetch path itself has a partial-apply state recovery gap.
+- **(d)** The retry rate has always been ~25% but morning's session counted "successful retries" (which complete and look clean) as "no retry storms," undercounting the actual rate. Worth re-reading the morning session's verification methodology.
+
+**Investigation plan (recommended next session):**
+
+1. Read morning-session evidence (`KEYWORD_CLUSTERING_ACTIVE.md` POST-2026-05-02 STATE block) + today's full retry trajectory. Compute actual retry rates for both sessions. If morning's was actually ~5-10% (and today's ~25%), the regression is real; if morning's was ~20%+ but undercounted in narrative, the closure was reporting-error (NOT regression).
+2. Audit retry-after-failed-fetch path for partial-apply state recovery. Specifically: when `fetchCanvas` fails AFTER `Canvas rebuilt` succeeded, the canvas state on the server IS correct, but the run's in-memory state thinks the rebuild failed. Resume / retry then re-runs the same batch which may produce conflicting ops on subsequent attempts. This pattern was observable at Batch 15 today (attempt 1 rebuilt successfully → fetch failed → attempt 2 returned cyclic ops → applier rejected → attempt 3 succeeded with different ops).
+3. Design + implement fix in standard atomic-rebuild + invariant-check pattern. Likely add: post-rebuild fetch-success-check that verifies the prior apply's ops landed; if rebuild succeeded but fetch failed, reload state from server before declaring batch failed; if fetch genuinely cannot succeed after retries, fail loudly with a clear error rather than triggering a fresh API call.
+4. Test against a Bursitis Test 2 resume run with sufficient batches to validate retry rate (~30+ batches minimum).
+
+**Estimated cost:** 1-2 sessions. Most thorough next direction because outcomes are valuable independent of whether Hypothesis A is the actual freeze cause.
+
+**See also:** `BROWSER_FREEZE_FIX_DESIGN.md §9.5.1` (Hypothesis A detail). `KEYWORD_CLUSTERING_ACTIVE.md` POST-2026-05-02-c STATE block for in-context narrative. The 2026-05-02 entry above (now flagged with regression note).
+
+---
+
+### NEW MEDIUM-severity Phase 3 scaling concern — `aa.rebuildHTTP` server-side time grows linearly with canvas (raised 2026-05-02-c profiling pass; ~10–15 s projected at 500 topics)
+
+**Status:** new architectural-concern entry captured 2026-05-02-c. NOT a freeze; NOT today's scope; captured for Phase 3 deep-dive (alongside `INPUT_CONTEXT_SCALING_DESIGN.md` and other Phase 3 scaling work).
+
+**The observation:** during the 2026-05-02-c DevTools profiling pass, `aa.rebuildHTTP` (the server-side atomic-rebuild call time, measured from "Applying to canvas" log line through "Canvas rebuilt") grew monotonically linearly with canvas size:
+
+| Canvas size (topics) | rebuildHTTP (ms) |
+|---|---|
+| 55 | 2,805 |
+| 71 | 3,019 |
+| 78 | 3,263 |
+| 87 | 3,538 |
+| 95 | 3,879 |
+| 100 | 4,000 (estimated) |
+| 103 | 4,030 |
+| **107** | **4,645** |
+
+That's ~1.5× growth across 2× canvas-size growth (linear-ish). Projecting to canvas 500 topics: ~10,000–15,000 ms per atomic-rebuild call.
+
+**Why this is MEDIUM, not HIGH:**
+
+- **NOT a freeze.** rebuildHTTP is server-side network + Prisma transaction time. The browser's main thread is NOT blocked during this — UI stays fully responsive while waiting on `await fetch(...)`.
+- **Not user-visible.** The activity log line "Applying to canvas (atomic rebuild)…" updates BEFORE the HTTP call; the user sees activity. The wait is just pipeline latency, not freeze.
+- **But still a real cost at Phase 3 scale.** 500 topics × ~10-15 s per batch × N batches per project × M projects per week → wall-clock cost adds up. At Phase 3's 500 projects/week × 50 workers, this stacks with other server-side costs. The pgbouncer + Prisma transaction layer is the same backend that surfaces HTTP 500 retries (Finding 1), so they share root infrastructure.
+
+**Probable cause:** the atomic-rebuild route serializes the full canvas state, runs three Prisma upserts (canvasNode + canvasState + sisterLink), and returns the rebuild summary. As canvas grows, all three Prisma operations grow proportionally — the canvasNode upsert in particular re-writes every node's position from the new layout. At 500 topics, that's 500 row updates plus 500+ sisterLink updates plus state metadata.
+
+**Possible fixes (not designed yet — Phase 3 deep-dive):**
+
+- (a) **Differential updates** — only re-write nodes whose position or content actually changed since the last rebuild. Most batches modify ~10-20 ops; the other 80–490 nodes don't need re-writing.
+- (b) **Background atomic rebuilds** — accept the latency; let the browser continue to next batch while the rebuild completes asynchronously; reconcile if conflicts arise.
+- (c) **Server-side execution architecture (per `PLATFORM_REQUIREMENTS.md §3` and the existing 🚨 server-side-execution Phase 2 plan)** — when AI jobs move server-side, the atomic-rebuild round-trip becomes intra-process rather than browser↔server, eliminating most of the latency.
+
+**Cross-references with other Phase 3 work:**
+
+- `INPUT_CONTEXT_SCALING_DESIGN.md` — addresses INPUT-side scaling (token cost). This entry addresses OUTPUT-side scaling (atomic-rebuild latency). Parallel concerns.
+- 🚨 Server-side execution Phase 2 plan (line 318) — option (c) above falls out of that work for free.
+
+**Recommended timing:** defer until Phase 2 server-side-execution architecture is being designed. At that point, evaluate options (a) + (b) as bridge mitigations for any remaining browser-side period.
+
+**See also:** `BROWSER_FREEZE_FIX_DESIGN.md §9.2` (full data table). `KEYWORD_CLUSTERING_ACTIVE.md` POST-2026-05-02-c STATE block.
 
 ---
 

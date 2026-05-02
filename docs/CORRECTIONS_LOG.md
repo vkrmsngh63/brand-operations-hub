@@ -2,7 +2,9 @@
 ## Append-only record of mistakes made during chats and lessons learned
 
 **Started:** April 16, 2026
-**Last updated:** May 2, 2026 (HTTP 500 fix verification + auto-fire trip observation session — first of 2026-05-02. TWO new entries: (1) PROCESS-level slip — recommendation-style placement: Claude omitted the `(recommended)` marker from picker labels at the start of session, despite the rule existing in `feedback_recommendation_style.md`; director caught + reinforced ("the recommendation should be one that is the most thorough and... make absolutely sure every next session understands this as well"); memory file strengthened with explicit "marker must live INSIDE picker label" requirement; HANDOFF_PROTOCOL.md Rule 14f content-#4 + CLAUDE_CODE_STARTER.md Rule 3 codified. (2) PROCESS-level slip recurrence — setup-confirmation re-asking: Claude asked the director to re-confirm consolidation prompts were pasted (because pre-flight didn't show their char counts) despite director having already affirmed "all set as requested" — this was a clean repeat of the same slip from `2026-05-01-c`; director caught + clarified ("you asked this same question in the last session as well even though I pasted all 4 prompts — the tool does not recognize that all 4 prompts were added; this issue needs to be fixed"); pre-flight runner extended this session with P11 + P12 checks closing the structural cause; HANDOFF_PROTOCOL.md Rule 14g (NEW) + CLAUDE_CODE_STARTER.md Rule 7 codified the trust-director-affirmation principle for any future analogous case. NO bug-related mistakes this session — the live run validated both objectives cleanly.)
+**Last updated:** May 2, 2026-c (DevTools profiling pass — third session of 2026-05-02. ONE new entry: PROCESS-level — code-reading-based diagnosis empirically rejected by profiling. Across 31 measurements at canvas 55→108 topics, the predicted bottleneck did not materialize (`runLayoutPass` stayed at 1.0–3.2 ms with `passes=1` every batch vs predicted 100s-of-ms growing nonlinearly). Approaches A/B/C from `BROWSER_FREEZE_FIX_DESIGN.md §4` declared moot. Lesson: the design doc's "~90% confidence from code reading" framing should be treated as a deliberate caution to NOT skip empirical confirmation — and indeed §3's profiling protocol was followed before any implementation budget was spent. Total cost saved: 2-3 sessions of misdirected Approach A work. Total cost of rejection: one director session + ~$5 of API spend pushing canvas to 108 topics. The profile-before-implement protocol worked exactly as designed.)
+**Last updated in session:** session_2026-05-02-c_devtools-profiling-pass (Claude Code)
+**Previously updated:** May 2, 2026 (HTTP 500 fix verification + auto-fire trip observation session — first of 2026-05-02. TWO new entries: (1) PROCESS-level slip — recommendation-style placement: Claude omitted the `(recommended)` marker from picker labels at the start of session, despite the rule existing in `feedback_recommendation_style.md`; director caught + reinforced ("the recommendation should be one that is the most thorough and... make absolutely sure every next session understands this as well"); memory file strengthened with explicit "marker must live INSIDE picker label" requirement; HANDOFF_PROTOCOL.md Rule 14f content-#4 + CLAUDE_CODE_STARTER.md Rule 3 codified. (2) PROCESS-level slip recurrence — setup-confirmation re-asking: Claude asked the director to re-confirm consolidation prompts were pasted (because pre-flight didn't show their char counts) despite director having already affirmed "all set as requested" — this was a clean repeat of the same slip from `2026-05-01-c`; director caught + clarified ("you asked this same question in the last session as well even though I pasted all 4 prompts — the tool does not recognize that all 4 prompts were added; this issue needs to be fixed"); pre-flight runner extended this session with P11 + P12 checks closing the structural cause; HANDOFF_PROTOCOL.md Rule 14g (NEW) + CLAUDE_CODE_STARTER.md Rule 7 codified the trust-director-affirmation principle for any future analogous case. NO bug-related mistakes this session — the live run validated both objectives cleanly.)
 **Last updated in session:** session_2026-05-02_http-500-fix-verification-and-auto-fire-trip-observation (Claude Code)
 **Previously updated in session:** session_2026-05-01-c_consolidation-auto-fire-followup (Claude Code)
 **Previously updated in session:** session_2026-05-01-b_scale-session-e-d3-validation (Claude Code)
@@ -52,6 +54,51 @@
 ---
 
 ## Entries
+
+### 2026-05-02-c — Code-reading-based diagnosis empirically rejected by DevTools profiling pass (PROCESS, no production impact; profile-before-implement protocol worked exactly as designed)
+
+**Session:** session_2026-05-02-c_devtools-profiling-pass (Claude Code)
+
+**Tool/Phase affected:** `BROWSER_FREEZE_FIX_DESIGN.md` design (Group B doc); the design's §1 diagnosis pinpointing `runLayoutPass` Sub-step 3 as the dominant bottleneck at 105+ topics; the design's §4 fix-approach picker (A/B/C); the design's §5 implementation plans; W#1 Keyword Clustering's planned next-session direction.
+
+**Severity:** PROCESS (no production code impact; no implementation budget spent on the wrong fix; profile-before-implement protocol explicitly built into the design doc as §3 was followed before §5 implementation began; lesson is methodological — about how to handle "high confidence from static analysis" framing).
+
+**What happened:** In `session_2026-05-02-b_browser-freeze-fix-design`, Claude designed a 555-line Group B doc (`BROWSER_FREEZE_FIX_DESIGN.md`) capturing a code-reading-based diagnosis of the 2026-05-01-c browser freeze. The diagnosis pinpointed `runLayoutPass` Sub-step 3 (60-pass overlap-resolution loop at `src/lib/canvas-layout.ts:269-292`) as the dominant bottleneck via O(60 × n²) complexity with O(n × depth) inner cost from `ancestorCollapsed`'s `nodes.find()` calls. Confidence stated as ~90% from the math, with profiling explicitly called out as the empirical-confirmation step. Three fix approaches were designed in detail (A=algorithmic / B=requestAnimationFrame chunking / C=Web Worker offload) with Approach A recommended per Rule 14f.
+
+In today's session (`2026-05-02-c`), the director executed the §3 protocol on production Bursitis Test 2; pushed canvas through 108 topics across 31 apply batches; collected complete timing data via DevTools console snippet. **The diagnosis was empirically rejected.** runLayoutPass stayed at 1.0–3.2 ms across the entire 55→108 topic range, with `passes=1` every single batch — including AT and ABOVE the 105-topic threshold from last week's freeze. Sub-step 3's overlap loop early-exited in 1 pass every time because Sub-step 2's tree-walk placed nodes cleanly enough that no overlaps existed. None of Approaches A/B/C address a real bottleneck on this canvas.
+
+**Root cause of the diagnosis being wrong:** the code-reading-based prediction assumed cascading overlaps would force Sub-step 3's loop to do many passes. In practice, the tree-walk in Sub-step 2 places nodes in a way that prevents overlaps from forming on this canvas's shape, so Sub-step 3 is effectively a no-op. The prediction's conditional nature ("IF overlaps cascade, THEN loop is expensive") was correct logically but the antecedent ("overlaps cascade") was not empirically grounded. Code reading cannot tell you whether overlaps cascade in practice — only profiling can.
+
+A secondary contributing factor: the empirical evidence cited in `BROWSER_FREEZE_FIX_DESIGN.md §1.4` (the "Layout pass complete" log absence in 2026-05-01-c) was misinterpreted. The log absence pinned the freeze block to "calcNodeHeight × n + runLayoutPass" between AutoAnalyze.tsx lines 996-1027, BUT that line range also includes the `setNodes(layoutNodes)` call at line ~1018 which triggers React reconciliation + SVG paint — code paths that the instrumentation does NOT cover. The §1.4 reasoning treated "freeze in this range" as evidence for "freeze in runLayoutPass specifically," which conflated two distinct claims.
+
+**How caught:** the profile-before-implement protocol explicitly built into the design doc as §3 caught the diagnosis cleanly. Director ran the protocol; data came back; data didn't match prediction; Claude analyzed and acknowledged the rejection in the same session. No prior implementation work to undo.
+
+**Correction:**
+- New §9 added to `BROWSER_FREEZE_FIX_DESIGN.md` (~280 lines) capturing: full data table (31 batches), diagnosis-rejection analysis, three remaining hypotheses for what actually caused last week's freeze (Hypothesis A = HTTP 500 retry storm + cascade — leading; Hypothesis B = uninstrumented React reconciliation / SVG paint; Hypothesis C = one-time edge case), revised path forward (recommended next-session = HTTP 500 retry regression investigation), methodology note, instrumentation status (kept in production).
+- Supersession notice added at top of `BROWSER_FREEZE_FIX_DESIGN.md` directing readers to §9 first.
+- §0.1 status table updated: profiling pass marked complete; fix-approach decision marked moot.
+- HIGH-severity browser-freeze entry in `ROADMAP.md` flipped from "🔄 DESIGN COMPLETE — implementation pending profiling" to "⛔ DIAGNOSIS REJECTED — investigation continues per design doc §9."
+- Two NEW ROADMAP entries added: HTTP 500 retry regression (HIGH, leading freeze suspect, separate independent regression of `df09611`'s "VERIFIED" status); rebuildHTTP linear scaling (MEDIUM, Phase 3 concern).
+
+**Prevention:** the protocol that caught this is the prevention. Going forward:
+
+1. **Code-reading-based diagnoses framed as "~90% confidence from static analysis" should preserve the same humility.** The framing is a deliberate caution to NOT skip empirical confirmation. Future Claude sessions should treat such confidence statements as "this is what code reading predicts, AND this is the explicit ask to profile before implementing." The profile-before-implement protocol explicitly built into a design doc as §3 (or equivalent) is the right pattern; preserve it.
+
+2. **When code reading predicts a complexity blow-up CONDITIONAL on a runtime condition (e.g., "IF overlaps cascade, THEN..."), treat the antecedent as a data-collection target, not as an established fact.** Today's antecedent — "overlaps cascade at scale on this canvas" — was assumed in the §1 reasoning but was empirically false on Bursitis Test 2.
+
+3. **When citing empirical evidence (like a log-line absence or stack trace) as supporting a code-reading-based diagnosis, audit which alternative explanations the evidence is also consistent with.** Today's "Layout pass complete log absence" pinned the freeze to a code range that covers BOTH the instrumented layout pass AND the unmeasured React reconciliation + SVG paint. The §1.4 reasoning treated it as evidence for the former alone; it was equally evidence for the latter.
+
+4. **Cost-saved framing matters.** This session's "rejection" saved 2–3 sessions of misdirected implementation budget. Future sessions should NOT view profiling as a cost-on-top of design work — it's a cheap insurance policy whose expected value is highest exactly when the design feels confident.
+
+**Methodology lesson captured for future sessions:** "If you're 90% confident from code reading that you've found the bottleneck, the right next move is profiling, not implementation. Today's session demonstrated profiling at 90% confidence saved 2-3 sessions; profiling at 99% confidence would still be cheap insurance. The threshold for 'profile first' is approximately always."
+
+**Cross-references:**
+- `BROWSER_FREEZE_FIX_DESIGN.md §9` (full empirical findings + revised path forward).
+- `KEYWORD_CLUSTERING_ACTIVE.md` POST-2026-05-02-c STATE block (in-context narrative).
+- `ROADMAP.md` HIGH-severity browser-freeze entry (status flipped).
+- `ROADMAP.md` NEW HTTP 500 retry regression entry (Hypothesis A from §9.5.1).
+
+---
 
 ### 2026-05-02 — Recommendation-style placement slip: omitted `(recommended)` marker from picker labels at start of session despite rule existing (PROCESS, no production impact)
 
