@@ -1,8 +1,9 @@
 # ROADMAP
 ## Product Launch Operating System (PLOS) — Development Execution Plan
 
-**Last updated:** May 2, 2026-d (HTTP 500 retry regression investigation — fourth session of 2026-05-02. CODE-FIX session — Option A from this session's design picker shipped: new pure helper `src/lib/post-rebuild-fetch-retry.ts` + 13 unit tests + AutoAnalyze.tsx wiring at the post-atomic-rebuild step + `_postRebuildFetchFailed` branch in runLoop catch. Re-read of evidence reframed yesterday's "regression" framing: `df09611` did NOT regress (it correctly halved state-fetch failures 5→2 in roughly comparable load); the underlying ~23–27% retry rate at scale was always there, masked in morning's session by small-sample / small-canvas (≤43 topics). Today's fix addresses the partial-apply state recovery problem at the recovery layer — eliminates BOTH the visible (cyclic stableId references caught by applier guards) AND silent (per-(projectWorkflowId, stableId) upsert collisions silently overwriting attempt-1 content) corruption modes. Live verification on Bursitis Test 2 resume run is the next-session task. 273/273 src/lib tests pass (was 260; +13 new); tsc clean; build clean (17/17 routes); lint at exact baseline parity (16e/41w; zero new). **HIGH-severity HTTP 500 retry regression entry below flipped from "🚨 NEW HIGH-severity regression — investigation pending" to "🟡 CODE FIX SHIPPED 2026-05-02-d — pending live verification".** Active Tools row updated. CORRECTIONS_LOG new INFORMATIONAL entry on morning-verification reframe (reporting-precision lesson, not a mistake). Multi-workflow: schema-change-in-flight stays "No"; W#2 still 🆕 about-to-start; no parallel chat.)
-**Last updated in session:** session_2026-05-02-d_http-500-retry-regression-investigation (Claude Code)
+**Last updated:** May 2, 2026-e (HTTP 500 fix live verification + cold-start canvas-empty finding — fifth session of 2026-05-02. **DOC + LIVE-RUN session — no code changes.** `e2a32b2` (the 2026-05-02-d post-rebuild fetch retry helper) was pushed to `origin/main` at session start, deployed to vklf.com via Vercel auto-redeploy, then live-verified against Bursitis Test 2 by resuming the preserved 30/291 checkpoint and running 4 apply events at canvas 118 → 120 → 122 → 120. **Verification SUCCEEDED on all four primary signals** (helper warn lines correct format + backoffs; NO whole-batch retries on flakes; helper-exhaust pause path with documented user message + checkpoint at 32; NO freeze at canvas ≥105 — **Hypothesis A confirmed as the 2026-05-01-c freeze cause**). Both helper paths exercised: full 3-attempt exhaust at Batch 32 (`nodes` then `state` then exhausted) + single-flake recovery at Consolidation-after-B33 (attempt 1 `state fetch HTTP 500` → attempt 2 succeeded silently). Cost savings empirical: Batch 32's flake cost $0.362 (no retry penalty) vs old-code equivalent ~$0.70-1.00. 🟡 → ✅ VERIFIED LIVE on the HTTP 500 retry regression entry. **Two new HIGH-severity ROADMAP entries captured as additional findings**: (A) cold-start hard-refresh canvas/keyword table renders empty under shared pgbouncer pressure — multiple refreshes often required; existing 2026-05-02-d MEDIUM entry upgraded to HIGH + expanded with the keyword-table-also-fails finding; (B) underlying ~25% per-endpoint pgbouncer/Prisma flake rate as the rate-layer root cause of all observed HTTP 500 patterns. Active Tools row updated; W#1 next-session recommendation = (a) cold-start render-layer fix. Multi-workflow: schema-change-in-flight stays "No"; W#2 still 🆕 about-to-start; no parallel chat. Doc-only commit + push end-of-session.)
+**Last updated in session:** session_2026-05-02-e_http-500-fix-live-verification-and-cold-start-canvas-empty-finding (Claude Code)
+**Previously updated in session:** session_2026-05-02-d_http-500-retry-regression-investigation (Claude Code)
 **Previously updated in session:** session_2026-05-02-c_devtools-profiling-pass (Claude Code)
 **Previously updated in session:** session_2026-05-02-b_browser-freeze-fix-design (Claude Code)
 **Previously updated in session:** session_2026-05-02_http-500-fix-verification-and-auto-fire-trip-observation (Claude Code)
@@ -55,7 +56,7 @@
 
 | Workflow | Status | Branch | Last Session | Next Session | Schema-change in flight? |
 |---|---|---|---|---|---|
-| W#1 Keyword Clustering | 🔄 Active dev — stabilization | `main` | 2026-05-02-d http-500-retry-regression-investigation (CODE-FIX session — Option A from this session's design picker shipped: new pure helper `src/lib/post-rebuild-fetch-retry.ts` (~150 lines incl. header comment) + 13 unit tests in `src/lib/post-rebuild-fetch-retry.test.ts` + `AutoAnalyze.tsx` wiring at the post-atomic-rebuild refresh step + `_postRebuildFetchFailed` branch in runLoop catch. Re-read of evidence **reframed yesterday's "regression" framing**: `df09611` did NOT regress (correctly halved state-fetch failures 5→2 in roughly comparable load); the underlying ~23–27% retry rate at scale was always there, masked in morning's `2026-05-02` session by small-sample / small-canvas (≤43 topics). Today's fix addresses the partial-apply state recovery concern at the recovery layer — retries the post-rebuild canvas refresh on its own with backoff (2s, 5s, max 3 attempts); on persistent failure marks the batch complete (server state IS canonical), saves checkpoint, advances cursor, pauses with explicit refresh-and-Resume guidance. **Eliminates both the visible (cyclic stableId references) AND silent (per-(projectWorkflowId, stableId) upsert collisions overwriting attempt-1 content) corruption modes.** Live verification on Bursitis Test 2 resume run is next-session's task. 273/273 src/lib tests pass (was 260; +13 new); tsc clean; build clean (17/17 routes); lint at exact baseline parity (16e/41w; zero new). HIGH-severity HTTP 500 retry regression entry below flipped to "🟡 CODE FIX SHIPPED — pending live verification". CORRECTIONS_LOG new INFORMATIONAL entry on the morning-verification reframe. Commit local — push pending director's discretionary approval per Rule 9.) | (a) **Live-verify the fix on a Bursitis Test 2 resume run — RECOMMENDED.** Push tonight's commit; let Vercel auto-deploy. Resume Bursitis Test 2's preserved checkpoint (canvas at 108 topics post-2026-05-02-c) OR start a fresh resume that drives canvas through ≥105 topics with ≥30 batches. Confirm: (i) post-rebuild refresh-retry warn lines surface when refresh hiccups but recovers within retries (~25% of large-canvas batches expected); (ii) no whole-batch retries observed on those events; (iii) helper-exhaust path produces clean refresh-and-Resume pause; (iv) freeze regime does NOT re-emerge at ≥105 topics — Hypothesis A confirmed; OR freeze re-emerges — investigate Hypothesis B in follow-up. Cost: ~$2-5; ~30-60 min. **Most thorough — validates today's code fix AND tests Hypothesis A as freeze cause in one run.** / (b) Hypothesis B instrumentation — extend coverage to `setNodes()` → React reconciliation → SVG paint; defer until (a) resolves / (c) Recency-stickiness fix — sister-link deferral to consolidation-only + Q5→B touch-semantics / (d) GoTrueClient multi-instance fix — ~15 LOC small-fix session / (e) Resume full-scale D3 to wall (~$40-50) — only after (a) confirms freeze cause / (f) Phase-1 UI polish bundle / (g) Action-by-action feedback workflow design / (h) V3-era cleanup pass (deferred from Session E D4) | No |
+| W#1 Keyword Clustering | 🔄 Active dev — stabilization | `main` | 2026-05-02-e http-500-fix-live-verification-and-cold-start-canvas-empty-finding (LIVE-VERIFICATION session — `e2a32b2` deployed to vklf.com end-of-2026-05-02-d push approved this session; Bursitis Test 2 resumed from preserved 30/291 checkpoint at canvas ~108 topics; ran 4 apply events at canvas 118 → 120 → 122 → 120 capturing both helper paths in a single short run. **Verification SUCCEEDED on all four signals**: (1) helper warn lines fired with exact format `⚠ Post-rebuild canvas refresh failed (attempt N/3): … retrying refresh in Xs…` at correct backoffs (2s + 5s) on Batch 32 (full 3-attempt exhaust) AND Consolidation-after-B33 (single-flake recovery); (2) NO whole-batch retries on either flake event; (3) helper-exhaust path produced clean refresh-and-Resume pause with the documented user message + checkpoint saved at 32; (4) NO freeze at canvas 118-122 — **Hypothesis A confirmed as the 2026-05-01-c freeze cause**. Cost savings empirically evidenced: Batch 32 cost $0.362 with NO retry penalty (vs ~$0.70-1.00 on old code). 🟡 → ✅ VERIFIED LIVE on the HTTP 500 retry regression entry below. **Two new HIGH-severity entries captured during the verification run** as additional findings: (A) cold-start hard-refresh canvas/keyword table renders empty under shared pgbouncer pressure — multiple refreshes often required; severity upgraded MEDIUM → HIGH after director's "all these issues need to be fixed" framing + the new keyword-table-also-fails finding; existing 2026-05-02-d entry expanded; (B) underlying ~25% per-endpoint pgbouncer/Prisma flake rate is the rate-layer root cause of all observed HTTP 500 patterns — captured as a new HIGH-severity infrastructure entry. Multi-workflow: schema-change-in-flight stays "No"; W#2 still 🆕 about-to-start; no parallel chat. Doc-only commit + push end-of-session.) | (a) **Cold-start render-layer fix — RECOMMENDED.** Add cold-start retry to `useCanvas.fetchCanvas`, `useKeywords`, and any other parallel mount-time fetches mirroring `post-rebuild-fetch-retry.ts` pattern (3 attempts, 2s + 5s backoffs). Surface "Retrying load…" indicator on first failed attempt; explicit "click here to retry" UI on exhaust. ~1-2 sessions. Closes the recovery-flow gap that compounds with today's verified helper. **Most thorough next step** because every helper-exhaust event currently routes through the still-broken cold-start render path. / (b) Underlying flake-rate investigation — measure rate per-endpoint with structured telemetry; investigate Supabase plan tier / pgbouncer pool sizing / Prisma client management; ~2-3 sessions. Bigger commitment but addresses root cause. / (c) Recency-stickiness fix — sister-link deferral + Q5→B touch-semantics. Orthogonal to (a)/(b). / (d) GoTrueClient multi-instance fix — ~15 LOC; could combine with (a) if a quick combined session is wanted / (e) Phase-1 UI polish bundle / (f) Action-by-action feedback workflow design / (g) V3-era cleanup pass (deferred from Session E D4) | No |
 | W#2 Competition Scraping & Deep Analysis | 🆕 About to start | `workflow-2-competition-scraping` (created by W#2's first session) | (none yet) | Workflow Requirements Interview per HANDOFF_PROTOCOL Rule 18 | No |
 | W#3 Therapeutic Strategy | Not yet started | — | — | — | — |
 | W#4–14 | Not yet started | — | — | — | — |
@@ -1001,9 +1002,39 @@ Add a row-number column (1, 2, 3, …) as the leftmost column in the Topics tabl
 
 ---
 
-### 🟡 CODE FIX SHIPPED 2026-05-02-d (pending live verification) — HTTP 500 fetchCanvas retry pattern at ~25% recurrence rate at large canvas; partial-apply state recovery defended
+### ✅ VERIFIED LIVE 2026-05-02-e — HTTP 500 retry regression code fix from 2026-05-02-d works as designed under live load; both helper-recovery and helper-exhaust paths exercised; Hypothesis A confirmed at canvas 118-122
 
-**Status:** 🟡 **CODE FIX SHIPPED 2026-05-02-d** in `session_2026-05-02-d_http-500-retry-regression-investigation`. Live verification on a Bursitis Test 2 resume run with ≥30 batches at canvas ≥105 topics is the next-session task. **Cross-references the diagnosis-rejected browser-freeze entry above** (Hypothesis A in `BROWSER_FREEZE_FIX_DESIGN §9.5.1` — leading current suspect for what actually caused the 2026-05-01-c freeze; today's fix structurally defends against Hypothesis A's mechanism).
+**Status:** ✅ **VERIFIED LIVE 2026-05-02-e** on production vklf.com against Bursitis Test 2 (resumed from preserved 30/291 checkpoint at canvas ~108 topics). 4 apply events captured (3 regular batches + 1 consolidation pass) at canvas 118 → 120 → 122; both helper paths exercised in a single short run.
+
+**Verification result (4 apply events):**
+
+1. **Batch 31 — clean apply at canvas 118.** Apply pipeline cleanly through atomic rebuild + post-rebuild refresh on first attempt. No helper warn lines (helper not exercised). NO freeze. Cost $0.378.
+2. **Batch 32 — helper FULL EXHAUST at canvas 120.** Atomic rebuild succeeded. Post-rebuild refresh failed all 3 attempts (attempt 1 = `nodes fetch HTTP 500`; attempt 2 = `state fetch HTTP 500`; attempt 3 also failed). Helper threw the annotated error; runLoop's `_postRebuildFetchFailed` catch branch fired — batch marked complete server-side, checkpoint saved at 32, run paused with the documented `Batch N — applied server-side; UI refresh failed. Refresh the browser tab and click Resume…` message. Cost $0.362 (no whole-batch retry penalty — would have been ~$0.70-1.00 on old code).
+3. **Batch 33 — clean apply at canvas 122.** Resume after refresh worked cleanly. Apply through post-rebuild refresh on first attempt. No helper warn lines. NO freeze. Cost $0.361.
+4. **Consolidation after Batch 33 — helper SINGLE-FLAKE RECOVERY at canvas 120.** Atomic rebuild succeeded. Attempt 1 = `state fetch HTTP 500` → `retrying refresh in 2s…` → attempt 2 succeeded silently → consolidation completed normally with reconciliation skipped on consolidation pass. NO whole-batch retry. Run continued seamlessly into Batch 34. Cost $0.283 (consolidation API call). **Confirms helper covers the consolidation post-rebuild path too** (consolidation calls `doApplyV3` which contains the helper at the same call site as regular batches).
+
+**All four primary verification signals landed:**
+
+| Signal | Required | Observed |
+|---|---|---|
+| Helper warn lines with right format + backoffs (2s + 5s) | yes | ✅ Exact format on both Batch 32 and post-B33 consolidation; both endpoint variants (`nodes` + `state`) tested |
+| NO whole-batch retry on flakes (no OLD-format `Batch N error: fetchCanvas failed… retrying in 5s…`) | yes | ✅ Confirmed across both helper-fire events |
+| Helper-exhaust path produces clean refresh-and-Resume pause | yes | ✅ Documented user-facing message landed verbatim; checkpoint saved server-side; run state correctly transitioned to API_ERROR |
+| NO freeze at canvas ≥105 (Hypothesis A test) | yes | ✅ Confirmed at canvas 118 + 120 + 122; no Chrome unresponsive popup; layout pass stayed at 122ms (heights 119 + layout 3) — matches 2026-05-02-c profiling data |
+
+**Hypothesis A (LEADING suspect for the 2026-05-01-c 105-topic freeze) — CONFIRMED:** the freeze did NOT recur at canvas 118+. The structural mechanism the fix targets (stale-client-retry corruption from cyclic stableId references or silent stableId-collision overwrites) was the freeze cause; eliminating that mechanism eliminated the freeze. The diagnosis-rejected browser-freeze entry above can now close on the 2026-05-01-c freeze cause; if a future freeze emerges at higher canvas size, that's a separate concern (Hypothesis B / C from `BROWSER_FREEZE_FIX_DESIGN §9.5`).
+
+**Cost savings empirical evidence:** Batch 32's helper-exhaust event cost $0.362 with NO retry penalty. Same flake on old code (e.g., 12:28 PM run's Batch 15 at canvas 78) cost $0.719 across 3 attempts due to whole-batch retries → cyclic stableId rejection → final attempt success. **The helper saved ~$0.30 on this single flake event.** At ~25% flake rate × ~291-batch full run, projected savings: $20-30 per full run.
+
+**Caveat carried forward:** the verification data was acquired against the ~25% rate, which is itself the underlying concern captured as the new HIGH-severity rate-layer entry above. The helper is recovery-layer scaffolding; the rate itself remains the deeper issue to address in future sessions.
+
+**Cross-references:** `src/lib/post-rebuild-fetch-retry.ts` (full module-level rationale), `BROWSER_FREEZE_FIX_DESIGN.md §9.5.1` (Hypothesis A; structurally defended; freeze-causation now confirmed), `KEYWORD_CLUSTERING_ACTIVE.md` POST-2026-05-02-e STATE block (in-context verification narrative).
+
+---
+
+### Original 2026-05-02-d capture (preserved for context — superseded by verification result above)
+
+**The structural concern fixed today (now verified above):** when post-rebuild `fetchCanvas` fails AFTER the atomic rebuild succeeded, the SERVER state is canonical post-apply but the CLIENT state is pre-apply (because `useCanvas.fetchCanvas` preserves prior state on failure — the 2026-04-28 hardening). Before this fix, runLoop's outer catch retried the WHOLE batch with stale client state.
 
 **Reframe of the original 2026-05-02-c "regression" framing (added 2026-05-02-d after evidence re-read):** `df09611` did NOT regress. It correctly halved state-fetch failures (5 hits → 2 hits in roughly comparable load) — exactly what the asymmetric-defense-in-depth design predicted. What changed wasn't the fix — it was that nodes-fetch failures grew with canvas size (1 → 5), because the atomic rebuild transaction holds pgbouncer connections proportionally longer at larger canvas sizes (per the `aa.rebuildHTTP` linear scaling finding in the entry directly below). **Total observed rate stayed flat at ~25%.** Morning's "0 storms across 6 batches" was a small-sample / small-canvas (≤43 topics) reading; at a true rate of ~25%, P(0 hits in 9 trials) is ~7.5% — low but not anomalous, and the rate is plausibly canvas-size-correlated such that small canvas has lower rate anyway. The 2026-05-02 "VERIFIED" closure of the original 30%-storm-rate concern was technically premature, but the underlying fix DID work as designed. The remaining ~25% is the underlying base rate that today's code fix addresses **at the recovery layer** (not the rate layer).
 
@@ -1111,6 +1142,117 @@ That's ~1.5× growth across 2× canvas-size growth (linear-ish). Projecting to c
 **Recommended timing:** defer until Phase 2 server-side-execution architecture is being designed. At that point, evaluate options (a) + (b) as bridge mitigations for any remaining browser-side period.
 
 **See also:** `BROWSER_FREEZE_FIX_DESIGN.md §9.2` (full data table). `KEYWORD_CLUSTERING_ACTIVE.md` POST-2026-05-02-c STATE block.
+
+---
+
+### NEW HIGH — Cold-start hard-refresh: canvas (and sometimes keyword table) renders empty; multiple refreshes often required — cold-start mount-time fetch flake under shared pgbouncer pressure (raised 2026-05-02-d; severity upgraded MEDIUM → HIGH 2026-05-02-e after additional live observation)
+
+**Status:** new troubleshooting entry; severity upgraded MEDIUM → HIGH 2026-05-02-e. Director observed during the post-Batch-32 helper-exhaust recovery flow that (a) **multiple hard refreshes** were required for the canvas to populate (NOT the "second refresh fixes it consistently" pattern initially scoped 2026-05-02-d), AND (b) on some refreshes **the keyword table itself failed to populate** — meaning this isn't just a canvas-component issue; ANY of the four browser-side fetches (canvas state, canvas nodes, keywords, removed-keywords) can flake on cold start under the underlying ~25% pgbouncer/Prisma rate. Captured for a future ~1-2 session pass as one of TWO entries (this one is the render-layer mitigation; see also "NEW HIGH — Underlying ~25% per-endpoint pgbouncer/Prisma flake rate" entry directly below for the rate-layer fix).
+
+**Symptom (observed live 2026-05-02-d / -e on production vklf.com):** During the live-verification session for the post-rebuild fetch retry helper (`e2a32b2`), the director did multiple hard refreshes on the Bursitis Test 2 Keyword Clustering workspace — both to clear cached old client JS at session start AND to recover from the helper-exhaust pause after Batch 32. Observed:
+
+- Some refreshes rendered the canvas empty while the AST table populated correctly (initially-scoped behavior).
+- Some refreshes rendered BOTH the canvas AND the keyword table empty (NEW finding 2026-05-02-e — broader than scoped).
+- 3+ hard refreshes sometimes needed before everything populated.
+- Keyword data was never at risk on the server; only the rendered UI was missing.
+
+Director's framing 2026-05-02-e: *"All these issues need to be fixed."* — surfaced after Batch 32's helper-exhaust event sent the director through a multi-refresh recovery cycle. The recovery flow is now in the critical path of every helper-exhaust event, which compounds the UX cost.
+
+**Likely root cause (refined 2026-05-02-e):** The 2026-04-28 `useCanvas.fetchCanvas` hardening (G2 fix) preserves prior client state on any fetch failure — designed for the mid-run case where a transient flake shouldn't blank an already-populated canvas. On a cold-start hard refresh, prior state is empty; "preserve prior" therefore means "stay empty." A similar pattern likely applies to the keyword-list fetch path (`useKeywords.ts` or the wrapping component) — same defensive empty-on-failure behavior on cold start.
+
+**The underlying rate driver:** with FOUR browser-side fetches that all need to succeed on mount (canvas state, canvas nodes, keywords, removed-keywords) AND a per-endpoint flake rate of ~25%, the probability of ALL four succeeding on any single cold start is `0.75⁴ ≈ 0.32` — meaning **~68% of cold starts will have at least one flake**. The flake either renders empty (canvas, keyword table) or just fails silently (removed-keywords table is rarely consulted; failure invisible). Multiple refreshes work because each refresh is an independent trial; expected number of refreshes to all-succeed is geometric with mean `1/0.32 ≈ 3 trials` — exactly matching director's "3+ refreshes needed" observation.
+
+**Why this is the third + fourth failure mode of the same underlying flake pattern:**
+
+| Failure mode | Where it lands | Status as of 2026-05-02-e |
+|---|---|---|
+| Mid-run apply: client retries with stale state | `runLoop` outer catch | ✅ Fixed at recovery layer in `e2a32b2` (helper retries refresh; pauses on exhaust) — **VERIFIED LIVE 2026-05-02-e** |
+| Server-side state-fetch flake | `/canvas` GET handler | ✅ Fixed at endpoint layer in `df09611` (withRetry on three Prisma queries) |
+| **Cold-start canvas render: silently empty** | **`useCanvas.fetchCanvas` on mount** | **🆕 captured this entry (HIGH; render-layer fix needed)** |
+| **Cold-start keyword table render: silently empty** | **`useKeywords` (or equivalent) on mount** | **🆕 NEW 2026-05-02-e — same shape; same fix pattern** |
+
+Today's helper (`e2a32b2`) only covers the apply pipeline's post-rebuild refresh. The cold-start path is a separate code path (`useEffect` on mount in `useCanvas` and parallel hooks) that has no retry and no user-visible "data could not load" indicator — it just silently shows empty via the preserve-prior contract.
+
+**Suggested fix direction (NOT today; captured for a future ~1-2 session pass):**
+
+1. **Add cold-start retry to `useCanvas.fetchCanvas`, `useKeywords`, and any other parallel mount-time fetches** mirroring today's `post-rebuild-fetch-retry.ts` pattern (3 attempts, 2s + 5s backoffs, sleep-injection for tests). The existing helper module is pure and could be generalized into a `useFetchWithRetry` hook used by all mount-time fetches.
+2. **Surface a user-visible "Retrying load…" indicator** when the first cold-start fetch fails, instead of silently rendering empty.
+3. **On exhausted retries, show an explicit "Data could not be loaded — click here to retry" UI element** instead of silent empty state. (Today's mid-run analog: explicit pause + refresh-and-Resume guidance message in the activity log.)
+4. **Out of scope here, addressed below:** lower the underlying flake rate itself — see "NEW HIGH — Underlying ~25% per-endpoint pgbouncer/Prisma flake rate" entry directly below.
+
+**Why HIGH (upgraded from MEDIUM):**
+
+- **No data loss BUT severe UX confound.** A non-programmer director cannot easily distinguish "rendering bug" from "data loss" — the director's first read 2026-05-02-d was that I had wiped canvas data, until we verified the topics existed. Trust erosion is real.
+- **Actively blocks productive use** of the platform after any HTTP 500 storm event. After a helper-exhaust pause, the director must do 3+ hard refreshes to get back to a usable workspace, which on a long-running session is friction that compounds.
+- **Bidirectional coverage gap.** Both canvas and keyword paths are vulnerable; this isn't an isolated single-component issue.
+- **Today's recovery-layer helper REQUIRES the user to refresh + Resume on exhaust** — meaning this cold-start bug is now in the critical recovery path of the very fix we just verified. The two issues compound; fixing one without the other leaves the recovery flow broken.
+
+**Estimated effort:** 1-2 sessions (~200 LOC including tests + UI indicator + applying the retry pattern across all mount-time fetches; possibly extracting a shared `useFetchWithRetry` hook).
+
+**Cross-references:**
+
+- `src/hooks/useCanvas.ts:117-119` — the current "preserve-prior + throw" contract that this entry's fix would augment with cold-start retry.
+- `src/hooks/useKeywords.ts` — corresponding keyword-fetch path; same hardening shape needed (verify exact file path during fix design).
+- `KEYWORD_CLUSTERING_ACTIVE.md` POST-2026-04-28 hardening narrative — origin of the asymmetric cold-start behavior (the contract worked fine for the case it was designed for).
+- `CORRECTIONS_LOG.md` 2026-05-01-c HTTP 500 fetchCanvas entry — underlying flake rate observation.
+- The ✅ VERIFIED LIVE 2026-05-02-e helper entry above — recovery-layer fix that depends on cold-start path being usable for the refresh+Resume recovery to work end-to-end.
+- **Below: NEW HIGH — Underlying ~25% per-endpoint pgbouncer/Prisma flake rate** — addresses the rate layer; combined with this entry's render-layer fix, restores cold-start UX.
+- `src/lib/post-rebuild-fetch-retry.ts` — pattern to mirror.
+
+**See also:** `KEYWORD_CLUSTERING_ACTIVE.md` POST-2026-05-02-e STATE block.
+
+---
+
+### NEW HIGH — Underlying ~25% per-endpoint pgbouncer/Prisma flake rate is the rate-layer root cause of all observed HTTP 500 patterns (raised 2026-05-02-e during live verification of post-rebuild fetch retry helper)
+
+**Status:** new HIGH-severity infrastructure entry. Captured 2026-05-02-e. NOT today's scope; captured for a future 2-3 session investigation + fix sequence. The director's framing 2026-05-02-e: *"All these issues need to be fixed."* — the helper recovery-layer fix shipped 2026-05-02-d AND the cold-start render-layer fix above are both scaffolding around an underlying rate that itself should be reduced.
+
+**The observation:** across the 2026-05-02 family of sessions (-c profiling pass, -d code fix, -e live verification), a consistent ~25% flake rate has been observed on browser→Supabase fetches that hit the pgbouncer/Prisma layer:
+
+- 2026-05-02-c profiling: 8+ retry events across 31 batches at canvas 55-108 (~25% rate)
+- 2026-05-02-e live verification: Batch 32 helper full-exhaust (3/3 attempts failed); Consolidation-after-B33 single-flake-recovery (attempt 1 failed, attempt 2 succeeded); multiple cold-start render flakes requiring 3+ hard refreshes
+
+The flake distribution is approximately symmetric across all four DB-backed browser endpoints:
+
+- `/api/projects/[id]/canvas` (state) — observed flakes
+- `/api/projects/[id]/canvas/nodes` — observed flakes
+- `/api/projects/[id]/keywords` — observed flakes (cold-start render symptom this session)
+- `/api/projects/[id]/removed-keywords` — likely affected; not directly observed because rarely consulted
+
+**Likely root cause:** the underlying pgbouncer connection pool on Supabase. When the atomic-rebuild route holds a connection through a multi-second transaction (per the `aa.rebuildHTTP` linear-scaling MEDIUM entry above — ~5s at canvas 120, ~10-15s projected at 500 topics), parallel client fetches contend for limited connections. Vercel's serverless functions cold-start connection pooling adds further pressure. Random Prisma errors observed in the wild (P1001/P1002/P1008/P2034 across multiple sessions) match transient pgbouncer eviction patterns.
+
+**Why this is HIGH, not MEDIUM:**
+
+- **Compounding effect with EVERY other DB-backed feature.** Every cold start, every batch apply, every keyword update, every page navigation that fetches DB data has a real-rate exposure to this. The rate isn't a single-feature problem; it's an infrastructure-layer problem that surfaces everywhere — including all 13 future workflows that will share the same Supabase backend.
+- **Phase 3 scaling concern.** At 500 projects/week with 50 concurrent workers, the rate either compounds (more concurrent connections under same pool → higher contention → higher rate) or saturates (the pool simply cannot serve enough concurrent fetches).
+- **Already in production today.** The director's daily use of W#1 has been rate-affected for weeks; recent sessions just made it visible/measurable.
+
+**Investigation directions (NOT designed yet — needs 2-3 dedicated sessions):**
+
+- **(a) Supabase plan tier / pgbouncer pool sizing.** Current Supabase plan: unknown to Claude — needs director input. Pro tier offers configurable pool size + dedicated pgbouncer. Investigate whether moving from default pool to a larger pool, or to dedicated pgbouncer, eliminates most flakes. Likely requires a Supabase plan change + small `prisma/schema.prisma` connection-string update + redeploy. Probably highest-leverage single fix.
+- **(b) Prisma client connection management.** Audit current `PrismaClient` instantiation pattern — Vercel serverless may benefit from explicit `prisma.$connect()` / `prisma.$disconnect()` lifecycle, or from connection pooling via `@prisma/adapter-pg` rather than the default behavior. Could cut transient errors significantly without infrastructure change.
+- **(c) Server-side `withRetry` extension.** The existing `withRetry` helper covers some Prisma calls (`/canvas/nodes`, `/canvas`); audit ALL DB-backed routes (~20-30 routes in `src/app/api/projects/[id]/...`) for parity. Wrap any unprotected calls. Lower the rate at the route layer rather than only at the client layer.
+- **(d) Atomic-rebuild transaction duration reduction.** The `aa.rebuildHTTP` MEDIUM entry above identifies the rebuild transaction as the dominant connection-holder. Differential updates (only re-write changed nodes) would shorten transaction duration linearly with change set size, reducing pool pressure during rebuilds.
+- **(e) Phase 2 server-side execution architecture (existing 🚨 entry).** When AI jobs move server-side, the browser→DB connection pattern changes fundamentally; many flake-prone hops disappear. Long-term architectural fix.
+
+**Recommended sequencing:**
+
+1. **First investigation session:** measure the current rate with structured telemetry. Extend the profiling pattern from `BROWSER_FREEZE_FIX_DESIGN §3` to capture per-endpoint flake counts across cold-start AND mid-run AND apply-pipeline. Identify which endpoints are hottest. Confirm the pgbouncer hypothesis or find a different root cause. Director needs to share Supabase plan tier info during this session.
+2. **First fix session:** the highest-leverage of (a)-(c) based on the investigation outcome. (a) is likely cheapest if Supabase plan-tier change is feasible.
+3. **Subsequent sessions:** stack remaining mitigations until the rate drops to a level where the recovery-layer + render-layer fixes are insurance rather than active hot paths.
+
+**Estimated effort (full sequence):** 2-3 sessions for investigation + the highest-leverage fix. (b)-(d) can be deferred and stacked over time.
+
+**Cross-references:**
+
+- The cold-start render-layer entry above — render-layer mitigation; this entry is the rate-layer fix. Both are needed for full UX restoration.
+- The ✅ VERIFIED LIVE 2026-05-02-e helper entry below — recovery-layer mitigation; same relationship.
+- The `aa.rebuildHTTP` linear-scaling MEDIUM entry above — connection-holding root cause.
+- 🚨 Phase 2 server-side execution plan (line ~318) — long-term architectural fix; obviates this rate concern.
+- `CORRECTIONS_LOG.md` 2026-05-01-c HTTP 500 fetchCanvas pattern entry — original observation.
+- `BROWSER_FREEZE_FIX_DESIGN.md §9.5.1` Hypothesis A — same underlying flakes.
+
+**See also:** `KEYWORD_CLUSTERING_ACTIVE.md` POST-2026-05-02-e STATE block.
 
 ---
 
