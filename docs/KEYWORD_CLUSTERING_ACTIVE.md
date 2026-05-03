@@ -1,8 +1,9 @@
 # KEYWORD CLUSTERING — ACTIVE DOCUMENT
 ## Current state of the Keyword Clustering workflow tool (Group B, tool-specific)
 
-**Last updated:** May 3, 2026 (cold-start render-layer fix session — option (a) from the 2026-05-02-e standing instructions. **CODE-FIX session — no schema, no DB, no live run, no deploy yet.** New pure helper `src/lib/cold-start-fetch-retry.ts` (~115 lines) + 11 unit tests in `src/lib/cold-start-fetch-retry.test.ts` mirroring `post-rebuild-fetch-retry.ts` pattern. `KeywordWorkspace.tsx` rewired: three mount-time fetches (canvas, keywords, removed-keywords) all run through the retry helper now; centralized `coldStartRetry` state (3 states: idle / retrying / exhausted) drives a new banner above the topbar — yellow "Retrying load… (X)" while any fetch is mid-retry, red "Could not load X — Click here to retry" with a button per exhausted fetch on exhaust. `CanvasPanel.tsx` slimmed: mount-time `fetchCanvas()` moved up to KeywordWorkspace so all three fetches share one retry-state + banner. ROADMAP "NEW HIGH — Cold-start hard-refresh" entry flipped from open HIGH to "🟡 CODE FIX SHIPPED 2026-05-03 — pending live verification". 284/284 src/lib tests pass (was 273; +11 new); tsc clean; build clean (17/17 routes); lint at exact baseline parity (16e/41w; zero new — including a mid-session 3-error trip on the React purity rule, captured to CORRECTIONS_LOG as informational). Multi-workflow: schema-change-in-flight stays "No"; W#2 still 🆕 about-to-start; no parallel chat. Commit local; push pending Rule 9 approval.)
-**Last updated in session:** session_2026-05-03_cold-start-render-layer-fix (Claude Code)
+**Last updated:** May 3, 2026-b (cold-start fix live verification — PARTIAL session — option (a) from the prior STATE block's standing instructions. **DOC + LIVE-RUN session — no code changes.** Director hard-refreshed the Bursitis Test 2 workspace 5-10 times on production vklf.com (Vercel auto-redeploy of `52db8e3` from prior session was already live). Result: ALL refreshes populated normally with NO banner observed (canvas + keyword tables loaded happy-path on every attempt). Interpretation: across ~5-10 cold starts, the underlying database flake rate did not produce a single retry event, so neither the yellow "Retrying load…" auto-recovery banner nor the red "Could not load X — Click here to retry" banner fired live. **Director chose Option B: accept partial verification — happy path confirmed live + banner UI confirmed only by unit tests + code review** (alternative was Option A: induce a flake via DevTools network throttling to exercise the banner code paths in a controlled way). **Banner UI live verification deferred** to whatever natural flake event happens next during D3 retry or another Auto-Analyze run on Bursitis Test 2. ROADMAP "🟡 CODE FIX SHIPPED 2026-05-03" entry expanded with today's partial-verification note + remains 🟡 (not ✅) until natural banner-UI confirmation lands. W#1 PRODUCTION-READINESS GATE prerequisite #1 status moves from "🟡 pending live verification" to "🟡 PARTIAL — live happy-path confirmed; banner UI deferred". Multi-workflow: schema-change-in-flight stays "No"; W#2 still 🆕 about-to-start; no parallel chat. Pull-rebase clean at session start. Commit local + doc-only; push pending Rule 9 approval — doc-only push has zero user-visible impact on vklf.com.)
+**Last updated in session:** session_2026-05-03-b_cold-start-fix-live-verification-partial (Claude Code)
+**Previously updated in session:** session_2026-05-03_cold-start-render-layer-fix (Claude Code)
 **Previously updated:** May 2, 2026-e (HTTP 500 fix live verification + cold-start canvas-empty finding session — fifth session of 2026-05-02, follow-up to `2026-05-02-d_http-500-retry-regression-investigation`. **DOC + LIVE-RUN session — no code changes.** `e2a32b2` pushed to vklf.com at session start; live-verified on Bursitis Test 2 against the preserved 30/291 checkpoint. Verification SUCCEEDED on all 4 primary signals; both helper paths exercised in 4 apply events at canvas 118-122. Hypothesis A CONFIRMED. Two new HIGH-severity ROADMAP entries captured: (A) cold-start hard-refresh canvas/keyword table empty under shared pgbouncer pressure (existing 2026-05-02-d MEDIUM entry upgraded to HIGH + expanded with keyword-table finding); (B) underlying ~25% per-endpoint pgbouncer/Prisma flake rate as rate-layer root cause. Director's framing 2026-05-02-e: "All these issues need to be fixed." Multi-workflow: schema-change-in-flight stays "No"; W#2 still 🆕 about-to-start; no parallel chat. Doc-only commit + push.)
 **Previously updated in session:** session_2026-05-02-e_http-500-fix-live-verification-and-cold-start-canvas-empty-finding (Claude Code)
 **Previously updated:** May 2, 2026-d (HTTP 500 retry regression investigation session — fourth session of 2026-05-02, follow-up to `2026-05-02-c_devtools-profiling-pass`. CODE-FIX session — pure helper `src/lib/post-rebuild-fetch-retry.ts` + 13 unit tests + AutoAnalyze.tsx wiring at the post-atomic-rebuild step + `_postRebuildFetchFailed` branch in runLoop catch. Re-read of evidence reframed the "regression" framing: `df09611` did NOT regress; underlying ~25% retry rate at scale was always there. Live verification deferred to follow-up — VERIFIED LIVE in 2026-05-02-e session above.)
@@ -47,9 +48,84 @@
 
 ---
 
-## ⚠️ POST-2026-05-03-COLD-START-RENDER-LAYER-FIX STATE (READ FIRST — updated 2026-05-03)
+## ⚠️ POST-2026-05-03-B-COLD-START-FIX-LIVE-VERIFICATION-PARTIAL STATE (READ FIRST — updated 2026-05-03-b)
 
-**As of 2026-05-03 (thirty-sixth Claude Code session, follow-up to `session_2026-05-02-e`). CODE-FIX session — option (a) from the prior STATE block's standing instructions. New pure helper + 11 unit tests + KeywordWorkspace rewiring + CanvasPanel slim-down. No schema, no DB, no live run, no deploy yet. Live verification deferred to a follow-up.**
+**As of 2026-05-03-b (thirty-seventh Claude Code session, follow-up to `session_2026-05-03_cold-start-render-layer-fix`). DOC + LIVE-RUN session — no code changes. Live verification of yesterday's cold-start render-layer fix on production vklf.com against Bursitis Test 2. Outcome: PARTIAL — happy path confirmed across 5-10 hard refreshes (workspace populated normally every time, no banners observed); banner UI live confirmation deferred to next natural flake event because no flake fired during the test window.**
+
+### What this session did
+
+1. Confirmed `52db8e3` (the cold-start render-layer fix) was live on production vklf.com from end-of-prior-session push + Vercel auto-redeploy. Last commit before today's session: `1255e0f` (the doc-only ROADMAP capture of the W#1 PRODUCTION-READINESS GATE entry).
+2. Director hard-refreshed the Bursitis Test 2 Keyword Clustering workspace 5-10 times.
+3. Result on every refresh: workspace populated normally — canvas showed topics, keyword table showed keywords, **NO banner appeared** (neither the yellow "Retrying load…" auto-recovery banner nor the red "Could not load X — Click here to retry" exhaust banner fired across any of the refreshes).
+4. Claude framed three options: (A) induce a failure via DevTools network throttling to exercise the banner code paths in a controlled way (most thorough), (B) accept partial verification — happy path live + banner UI confirmed only by unit tests + code review, (C) try again later with 20-30 refreshes when DB load varies.
+5. **Director chose Option B.**
+
+### What this means in plain language
+
+- The fix code is live on production. The new helper module + KeywordWorkspace banner wiring + CanvasPanel slim-down all shipped without breaking the happy-path mount: workspace still loads cleanly, no regression.
+- Across the test window (5-10 hard refreshes), none of the four behind-the-scenes data loads on cold start (canvas state, canvas nodes, keywords, removed-keywords) failed. So the new retry helper had no failures to recover from, and neither banner had a reason to appear.
+- The 2026-05-02-e finding of "~25% per-endpoint flake rate" was measured during an active Auto-Analyze run with concurrent atomic-rebuild transactions putting load on pgbouncer. Pure cold-start without active work appears to have a quieter flake profile — director's session today did not encounter a single flake.
+- Banner UI (yellow auto-retry + red click-to-retry) remains UNCONFIRMED LIVE. The unit tests cover the helper logic; the wiring + banner render were confirmed only by code review, not end-to-end against production data.
+
+### Verification scoreboard
+
+| Signal | Required for full pass | Observed |
+|---|---|---|
+| Happy-path mount works (no regression) | yes | ✅ confirmed across 5-10 hard refreshes |
+| Yellow "Retrying load…" banner fires on first failure | yes | ❌ not observed (no failure occurred to trigger it) |
+| Red "Could not load X — Click here to retry" banner fires on exhaust | yes | ❌ not observed (no failure occurred to trigger it) |
+| Click-to-retry button on red banner works | yes | ❌ not observed (no red banner appeared to test) |
+
+**Result: PARTIAL pass. Happy path confirmed; banner UI deferred to natural-flake event.**
+
+### Effect on ROADMAP entries + W#1 PRODUCTION-READINESS GATE
+
+- The "🟡 CODE FIX SHIPPED 2026-05-03 — Cold-start hard-refresh" entry stays at 🟡 (not ✅). Note appended: "Live happy-path confirmed 2026-05-03-b across 5-10 hard refreshes; banner UI live confirmation deferred to next natural flake event during D3 retry or another Auto-Analyze run on Bursitis Test 2."
+- W#1 PRODUCTION-READINESS GATE — D3 RETRY: prerequisite #1 status moves from "🟡 pending live verification" to "🟡 PARTIAL — live happy-path confirmed; banner UI deferred to natural flake event." Effectively prerequisite #1 is now folded into the D3 run itself rather than requiring a dedicated session — if a banner fires during D3 and behaves correctly, prerequisite #1 closes; if a banner-UI bug surfaces, it's caught + fixed mid-D3.
+
+### Multi-workflow protocol coordination
+
+- **Schema-change-in-flight flag:** stays `No` (no schema work this session).
+- **Branch:** `main` (W#1's home).
+- **Cross-workflow doc edits:** none.
+- W#2 still 🆕 about-to-start; no parallel chat ran during this session.
+- Pull-rebase at session start: clean (already up to date with `1255e0f` on origin/main).
+
+### Files touched this session
+
+**Code:** none.
+
+**Docs (Group A + Group B):**
+- `docs/KEYWORD_CLUSTERING_ACTIVE.md` (this STATE block prepended; prior 2026-05-03 STATE block demoted to historical; header)
+- `docs/ROADMAP.md` (Active Tools row updated for 2026-05-03-b; cold-start render-layer entry expanded with partial-verification note; W#1 PRODUCTION-READINESS GATE prerequisite #1 status updated; header)
+- `docs/CHAT_REGISTRY.md` (new top row for `session_2026-05-03-b_cold-start-fix-live-verification-partial`; thirty-seventh Claude Code session; header)
+- `docs/DOCUMENT_MANIFEST.md` (timestamps + per-doc flags + this-session summary)
+
+**Push status:** doc-only commit local; push pending director's Rule 9 approval at end-of-session. Doc-only push has zero user-visible impact on vklf.com (no code change).
+
+### Standing instructions for next session
+
+The W#1 PRODUCTION-READINESS GATE — D3 RETRY entry on ROADMAP remains the milestone target. With prerequisite #1 effectively folded into the D3 run itself (banner-UI confirmation will happen there), the next-session ordering is:
+
+(a) **Recency-stickiness fix — prerequisite #2 of the W#1 PRODUCTION-READINESS GATE — RECOMMENDED.** Sister-link op deferral to consolidation-only + Q5→B touch-semantics refinement. Identified at 2026-05-01-b D3 partial validation as the *next bottleneck* blocking full-run completion. ~1 session. Most thorough next step because it's the next gating prerequisite of D3 retry per the gate entry, and D3 retry is the named milestone toward W#1 production-readiness.
+
+(b) **Underlying flake-rate investigation — prerequisite #3 of the W#1 PRODUCTION-READINESS GATE.** Measure rate per-endpoint with structured telemetry; investigate Supabase plan tier / pgbouncer pool sizing / Prisma client management / server-side withRetry parity. ~2-3 sessions. Bigger commitment but addresses root cause. Director needs to share Supabase plan tier info during this session. Could come before or after (a); the gate entry orders it after (a) but the dependency between them is loose.
+
+(c) GoTrueClient multi-instance fix — small refactor (~15 LOC).
+
+(d) Phase-1 UI polish bundle (6+ items).
+
+(e) Action-by-action feedback workflow design.
+
+(f) V3-era cleanup pass (deferred from Session E D4).
+
+**Recommendation: (a) — recency-stickiness fix.** Reason: with cold-start verification effectively folded into D3 retry, recency-stickiness is the next named prerequisite. Skipping it means D3 retry will hit the same bottleneck identified at 2026-05-01-b. Per the standing preference for the most-thorough-and-reliable path, fix the known bottleneck before attempting D3 again.
+
+**Director's framing through prior sessions:** (Scale-A) → (Scale-0) → (Defense-in-Depth ×3) → (Scale-B) → (Scale-C) → (Scale-D) → (Scale-E build) → (Scale-E D3 partial validation) → (consolidation auto-fire follow-up `2026-05-01-c`) → (HTTP 500 fix verification + auto-fire trip observation `2026-05-02`) → (browser-freeze fix design `2026-05-02-b`) → (DevTools profiling pass — diagnosis rejected `2026-05-02-c`) → (HTTP 500 retry regression investigation — fix shipped `2026-05-02-d`) → (HTTP 500 fix live verification + cold-start canvas-empty finding `2026-05-02-e`) → (cold-start render-layer fix `2026-05-03`) → **(cold-start fix live verification — partial, this session `2026-05-03-b`)** → (recency-stickiness fix — RECOMMENDED next).
+
+---
+
+## ⚠️ POST-2026-05-03-COLD-START-RENDER-LAYER-FIX STATE (preserved as historical context — last updated 2026-05-03; SUPERSEDED by the cold-start fix live verification — partial state above. Code shipped + pushed to vklf.com end-of-session 2026-05-03; happy-path live verification confirmed 2026-05-03-b; banner UI live verification deferred to natural flake event.)
 
 ### What this session shipped to W#1
 
