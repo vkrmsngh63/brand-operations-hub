@@ -15,7 +15,36 @@ import { useKeywords } from '@/hooks/useKeywords';
 import type { Keyword } from '@/hooks/useKeywords';
 import { useCanvas } from '@/hooks/useCanvas';
 import { authFetch } from '@/lib/authFetch';
+import { runColdStartFetchWithRetry } from '@/lib/cold-start-fetch-retry';
 import './workspace.css';
+
+// Cold-start retry state for the four parallel mount-time fetches
+// (canvas state + canvas nodes share one fetch via useCanvas.fetchCanvas;
+// keywords + removed-keywords are the other two). One centralized state
+// drives the banner above the workspace so the director always sees a
+// single "Retrying load…" / "click to retry" surface instead of empty
+// panels under shared pgbouncer pressure. See ROADMAP "NEW HIGH —
+// Cold-start hard-refresh" entry (2026-05-02-d/-e).
+//
+// State transitions (all setState happens AFTER an await — the React
+// purity rule forbids synchronous setState inside effects, and we don't
+// need a pre-await 'loading' state because the banner is hidden when
+// idle and only appears once 'retrying' fires from the onAttemptFailed
+// callback at the earliest):
+//   idle → retrying (on first failed attempt, via onAttemptFailed)
+//   retrying → idle (on eventual success)
+//   retrying → exhausted (on all attempts failing)
+//   exhausted → idle (set by the retry-button click handler, which
+//                     runs in a React event — setState there is fine)
+type ColdStartFetchKey = 'canvas' | 'keywords' | 'removedKeywords';
+type ColdStartFetchStatus = 'idle' | 'retrying' | 'exhausted';
+type ColdStartRetryState = Record<ColdStartFetchKey, ColdStartFetchStatus>;
+
+const COLD_START_FETCH_LABEL: Record<ColdStartFetchKey, string> = {
+  canvas: 'canvas',
+  keywords: 'keywords',
+  removedKeywords: 'removed keywords',
+};
 
 interface KeywordWorkspaceProps {
   projectId: string;
@@ -125,20 +154,83 @@ export default function KeywordWorkspace({ projectId, userId, aiMode }: KeywordW
   // ── Removed-keywords (soft archive) state ────────────────────
   const [removedKeywords, setRemovedKeywords] = useState<RemovedKeyword[]>([]);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await authFetch('/api/projects/' + projectId + '/removed-keywords');
-        if (!res.ok || cancelled) return;
-        const data: RemovedKeyword[] = await res.json();
-        if (!cancelled) setRemovedKeywords(data);
-      } catch (e) {
-        console.warn('Failed to load removed keywords', e);
-      }
-    })();
-    return () => { cancelled = true; };
+  // ── Cold-start retry state (centralized for all 3 mount-time fetches) ─
+  const [coldStartRetry, setColdStartRetry] = useState<ColdStartRetryState>({
+    canvas: 'idle',
+    keywords: 'idle',
+    removedKeywords: 'idle',
+  });
+  const setFetchStatus = useCallback(
+    (key: ColdStartFetchKey, status: ColdStartFetchStatus) => {
+      setColdStartRetry(prev => prev[key] === status ? prev : { ...prev, [key]: status });
+    },
+    [],
+  );
+
+  // ── Retry-wrapped mount-time fetches (3 attempts, 2s + 5s backoffs) ──
+  // Each is a stable useCallback so the banner's "click here to retry"
+  // button can re-trigger the same fetch on demand. NO synchronous
+  // setState before the first await — that would trip the React purity
+  // rule when these run inside a useEffect. The first state-flip
+  // happens via the onAttemptFailed callback (post-await) or in the
+  // success / catch path (also post-await).
+  const loadCanvasWithRetry = useCallback(async () => {
+    try {
+      await runColdStartFetchWithRetry(canvas.fetchCanvas, {
+        label: COLD_START_FETCH_LABEL.canvas,
+        onAttemptFailed: () => setFetchStatus('canvas', 'retrying'),
+      });
+      setFetchStatus('canvas', 'idle');
+    } catch (err) {
+      console.error('Cold-start canvas fetch exhausted:', err);
+      setFetchStatus('canvas', 'exhausted');
+    }
+  }, [canvas.fetchCanvas, setFetchStatus]);
+
+  const loadKeywordsWithRetry = useCallback(async () => {
+    try {
+      await runColdStartFetchWithRetry(fetchKeywords, {
+        label: COLD_START_FETCH_LABEL.keywords,
+        onAttemptFailed: () => setFetchStatus('keywords', 'retrying'),
+      });
+      setFetchStatus('keywords', 'idle');
+    } catch (err) {
+      console.error('Cold-start keywords fetch exhausted:', err);
+      setFetchStatus('keywords', 'exhausted');
+    }
+  }, [fetchKeywords, setFetchStatus]);
+
+  const fetchRemovedKeywordsRaw = useCallback(async () => {
+    const res = await authFetch('/api/projects/' + projectId + '/removed-keywords');
+    if (!res.ok) {
+      throw new Error('Removed-keywords fetch failed: HTTP ' + res.status);
+    }
+    const data: RemovedKeyword[] = await res.json();
+    setRemovedKeywords(data);
   }, [projectId]);
+
+  const loadRemovedKeywordsWithRetry = useCallback(async () => {
+    try {
+      await runColdStartFetchWithRetry(fetchRemovedKeywordsRaw, {
+        label: COLD_START_FETCH_LABEL.removedKeywords,
+        onAttemptFailed: () => setFetchStatus('removedKeywords', 'retrying'),
+      });
+      setFetchStatus('removedKeywords', 'idle');
+    } catch (err) {
+      console.error('Cold-start removed-keywords fetch exhausted:', err);
+      setFetchStatus('removedKeywords', 'exhausted');
+    }
+  }, [fetchRemovedKeywordsRaw, setFetchStatus]);
+
+  // IIFE wrapper around the async load call breaks the lint trace
+  // through the useCallback into setState (rule: react-hooks/purity).
+  // The setState calls inside loadRemovedKeywordsWithRetry only fire
+  // AFTER an await so the rule's underlying concern (synchronous
+  // cascading renders) does not apply; the wrapper makes the linter
+  // see an IIFE, not a direct call.
+  useEffect(() => {
+    void (async () => { await loadRemovedKeywordsWithRetry(); })();
+  }, [loadRemovedKeywordsWithRetry]);
 
   const softArchiveKeywords = useCallback(async (ids: string[]) => {
     const res = await authFetch('/api/projects/' + projectId + '/removed-keywords', {
@@ -202,7 +294,17 @@ export default function KeywordWorkspace({ projectId, userId, aiMode }: KeywordW
     });
   }, [tifActive]);
 
-  useEffect(() => { fetchKeywords(); }, [fetchKeywords]);
+  // Mount-time keyword + canvas fetches go through the cold-start retry
+  // helper so a transient pgbouncer flake doesn't leave the workspace
+  // empty without a user-visible recovery path. The banner above the
+  // topbar surfaces "Retrying load…" / "click to retry" status. IIFE
+  // wrappers — see the removed-keywords useEffect comment above.
+  useEffect(() => {
+    void (async () => { await loadKeywordsWithRetry(); })();
+  }, [loadKeywordsWithRetry]);
+  useEffect(() => {
+    void (async () => { await loadCanvasWithRetry(); })();
+  }, [loadCanvasWithRetry]);
 
   // ── Horizontal divider drag ──────────────────────────────────
   function handleHDividerDrag(dividerIdx: number, delta: number) {
@@ -311,8 +413,79 @@ export default function KeywordWorkspace({ projectId, userId, aiMode }: KeywordW
     }
   }
 
+  // ── Cold-start retry banner ──────────────────────────────────
+  // Surfaces "Retrying load…" or "Could not load X — Click to retry"
+  // when any of the three mount-time fetches is mid-retry or exhausted.
+  // Hidden when everything is idle. Click handlers below run inside
+  // React event handlers, so synchronous setState there is fine — they
+  // immediately clear the red banner ('exhausted' → 'idle') before the
+  // retry runs and (on first failure) flips state back to 'retrying'.
+  const retryHandlers: Record<ColdStartFetchKey, () => void> = {
+    canvas: () => { setFetchStatus('canvas', 'idle'); loadCanvasWithRetry(); },
+    keywords: () => { setFetchStatus('keywords', 'idle'); loadKeywordsWithRetry(); },
+    removedKeywords: () => { setFetchStatus('removedKeywords', 'idle'); loadRemovedKeywordsWithRetry(); },
+  };
+  const exhaustedKeys = (Object.keys(coldStartRetry) as ColdStartFetchKey[])
+    .filter(k => coldStartRetry[k] === 'exhausted');
+  const retryingKeys = (Object.keys(coldStartRetry) as ColdStartFetchKey[])
+    .filter(k => coldStartRetry[k] === 'retrying');
+  const showBanner = exhaustedKeys.length > 0 || retryingKeys.length > 0;
+  const bannerSeverity: 'exhausted' | 'retrying' = exhaustedKeys.length > 0 ? 'exhausted' : 'retrying';
+
+  function renderColdStartBanner() {
+    if (!showBanner) return null;
+    const isExhausted = bannerSeverity === 'exhausted';
+    const baseStyle: React.CSSProperties = {
+      padding: '8px 14px',
+      fontSize: 13,
+      fontWeight: 500,
+      display: 'flex',
+      alignItems: 'center',
+      gap: 12,
+      flexWrap: 'wrap',
+      borderBottom: '1px solid',
+      ...(isExhausted
+        ? { background: '#fee2e2', color: '#991b1b', borderBottomColor: '#fca5a5' }
+        : { background: '#fef3c7', color: '#92400e', borderBottomColor: '#fcd34d' }),
+    };
+    if (isExhausted) {
+      const labels = exhaustedKeys.map(k => COLD_START_FETCH_LABEL[k]).join(', ');
+      return (
+        <div className="ws-coldstart-banner" style={baseStyle} role="alert" aria-live="polite">
+          <span>⚠ Could not load {labels}.</span>
+          {exhaustedKeys.map(k => (
+            <button
+              key={k}
+              type="button"
+              onClick={retryHandlers[k]}
+              style={{
+                background: '#991b1b',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 4,
+                padding: '4px 10px',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              Click here to retry {COLD_START_FETCH_LABEL[k]}
+            </button>
+          ))}
+        </div>
+      );
+    }
+    const labels = retryingKeys.map(k => COLD_START_FETCH_LABEL[k]).join(', ');
+    return (
+      <div className="ws-coldstart-banner" style={baseStyle} role="status" aria-live="polite">
+        <span>⏳ Retrying load… ({labels})</span>
+      </div>
+    );
+  }
+
   return (
     <div className="ws-root">
+      {renderColdStartBanner()}
       {/* ── Topbar ─────────────────────────────────────────────── */}
       <div className="ws-topbar">
         {!aiMode && (

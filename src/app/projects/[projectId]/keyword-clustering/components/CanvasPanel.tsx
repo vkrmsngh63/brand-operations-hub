@@ -32,7 +32,7 @@ interface CanvasPanelProps {
 
 export default function CanvasPanel({ projectId, allKeywords = [], canvas }: CanvasPanelProps) {
   const {
-    nodes, canvasState, pathways, sisterLinks, fetchCanvas,
+    nodes, canvasState, pathways, sisterLinks,
     addNode, updateNodes, deleteNode, updateCanvasState,
   } = canvas;
 
@@ -94,13 +94,10 @@ export default function CanvasPanel({ projectId, allKeywords = [], canvas }: Can
     toastTimer.current = setTimeout(() => setToast(''), 3000);
   }
 
-  // fetchCanvas now throws on failure (see useCanvas.ts error contract).
-  // At mount time the failure isn't actionable from here — the canvas hook's
-  // `error` state is what surfaces "canvas unavailable" to the UI; we just
-  // need to keep the unhandled rejection out of the browser console.
-  useEffect(() => {
-    fetchCanvas().catch(err => console.error('fetchCanvas error (mount):', err));
-  }, [fetchCanvas]);
+  // Cold-start mount-time fetch lives in `KeywordWorkspace` now (centralized
+  // with the keywords + removed-keywords fetches behind one cold-start retry
+  // banner — see `src/lib/cold-start-fetch-retry.ts`). CanvasPanel only
+  // consumes `nodes` / `canvasState` from the canvas hook prop.
 
   useEffect(() => {
     if (canvasState) {

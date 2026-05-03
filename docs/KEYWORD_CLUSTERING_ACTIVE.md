@@ -1,8 +1,10 @@
 # KEYWORD CLUSTERING — ACTIVE DOCUMENT
 ## Current state of the Keyword Clustering workflow tool (Group B, tool-specific)
 
-**Last updated:** May 2, 2026-e (HTTP 500 fix live verification + cold-start canvas-empty finding session — fifth session of 2026-05-02, follow-up to `2026-05-02-d_http-500-retry-regression-investigation`. **DOC + LIVE-RUN session — no code changes.** `e2a32b2` pushed to vklf.com at session start; live-verified on Bursitis Test 2 against the preserved 30/291 checkpoint. Verification SUCCEEDED on all 4 primary signals; both helper paths exercised in 4 apply events at canvas 118-122. Hypothesis A CONFIRMED. Two new HIGH-severity ROADMAP entries captured: (A) cold-start hard-refresh canvas/keyword table empty under shared pgbouncer pressure (existing 2026-05-02-d MEDIUM entry upgraded to HIGH + expanded with keyword-table finding); (B) underlying ~25% per-endpoint pgbouncer/Prisma flake rate as rate-layer root cause. Director's framing 2026-05-02-e: "All these issues need to be fixed." Multi-workflow: schema-change-in-flight stays "No"; W#2 still 🆕 about-to-start; no parallel chat. Doc-only commit + push.)
-**Last updated in session:** session_2026-05-02-e_http-500-fix-live-verification-and-cold-start-canvas-empty-finding (Claude Code)
+**Last updated:** May 3, 2026 (cold-start render-layer fix session — option (a) from the 2026-05-02-e standing instructions. **CODE-FIX session — no schema, no DB, no live run, no deploy yet.** New pure helper `src/lib/cold-start-fetch-retry.ts` (~115 lines) + 11 unit tests in `src/lib/cold-start-fetch-retry.test.ts` mirroring `post-rebuild-fetch-retry.ts` pattern. `KeywordWorkspace.tsx` rewired: three mount-time fetches (canvas, keywords, removed-keywords) all run through the retry helper now; centralized `coldStartRetry` state (3 states: idle / retrying / exhausted) drives a new banner above the topbar — yellow "Retrying load… (X)" while any fetch is mid-retry, red "Could not load X — Click here to retry" with a button per exhausted fetch on exhaust. `CanvasPanel.tsx` slimmed: mount-time `fetchCanvas()` moved up to KeywordWorkspace so all three fetches share one retry-state + banner. ROADMAP "NEW HIGH — Cold-start hard-refresh" entry flipped from open HIGH to "🟡 CODE FIX SHIPPED 2026-05-03 — pending live verification". 284/284 src/lib tests pass (was 273; +11 new); tsc clean; build clean (17/17 routes); lint at exact baseline parity (16e/41w; zero new — including a mid-session 3-error trip on the React purity rule, captured to CORRECTIONS_LOG as informational). Multi-workflow: schema-change-in-flight stays "No"; W#2 still 🆕 about-to-start; no parallel chat. Commit local; push pending Rule 9 approval.)
+**Last updated in session:** session_2026-05-03_cold-start-render-layer-fix (Claude Code)
+**Previously updated:** May 2, 2026-e (HTTP 500 fix live verification + cold-start canvas-empty finding session — fifth session of 2026-05-02, follow-up to `2026-05-02-d_http-500-retry-regression-investigation`. **DOC + LIVE-RUN session — no code changes.** `e2a32b2` pushed to vklf.com at session start; live-verified on Bursitis Test 2 against the preserved 30/291 checkpoint. Verification SUCCEEDED on all 4 primary signals; both helper paths exercised in 4 apply events at canvas 118-122. Hypothesis A CONFIRMED. Two new HIGH-severity ROADMAP entries captured: (A) cold-start hard-refresh canvas/keyword table empty under shared pgbouncer pressure (existing 2026-05-02-d MEDIUM entry upgraded to HIGH + expanded with keyword-table finding); (B) underlying ~25% per-endpoint pgbouncer/Prisma flake rate as rate-layer root cause. Director's framing 2026-05-02-e: "All these issues need to be fixed." Multi-workflow: schema-change-in-flight stays "No"; W#2 still 🆕 about-to-start; no parallel chat. Doc-only commit + push.)
+**Previously updated in session:** session_2026-05-02-e_http-500-fix-live-verification-and-cold-start-canvas-empty-finding (Claude Code)
 **Previously updated:** May 2, 2026-d (HTTP 500 retry regression investigation session — fourth session of 2026-05-02, follow-up to `2026-05-02-c_devtools-profiling-pass`. CODE-FIX session — pure helper `src/lib/post-rebuild-fetch-retry.ts` + 13 unit tests + AutoAnalyze.tsx wiring at the post-atomic-rebuild step + `_postRebuildFetchFailed` branch in runLoop catch. Re-read of evidence reframed the "regression" framing: `df09611` did NOT regress; underlying ~25% retry rate at scale was always there. Live verification deferred to follow-up — VERIFIED LIVE in 2026-05-02-e session above.)
 **Previously updated in session:** session_2026-05-02-c_devtools-profiling-pass (Claude Code)
 **Previously updated in session:** session_2026-05-02-b_browser-freeze-fix-design (Claude Code)
@@ -45,7 +47,105 @@
 
 ---
 
-## ⚠️ POST-2026-05-02-e-HTTP-500-FIX-LIVE-VERIFICATION-AND-COLD-START-CANVAS-EMPTY-FINDING STATE (READ FIRST — updated 2026-05-02-e)
+## ⚠️ POST-2026-05-03-COLD-START-RENDER-LAYER-FIX STATE (READ FIRST — updated 2026-05-03)
+
+**As of 2026-05-03 (thirty-sixth Claude Code session, follow-up to `session_2026-05-02-e`). CODE-FIX session — option (a) from the prior STATE block's standing instructions. New pure helper + 11 unit tests + KeywordWorkspace rewiring + CanvasPanel slim-down. No schema, no DB, no live run, no deploy yet. Live verification deferred to a follow-up.**
+
+### What this session shipped to W#1
+
+**New code (single commit, ready for Rule 9 push approval):**
+
+- **`src/lib/cold-start-fetch-retry.ts` (NEW, ~115 lines incl. extensive header comment).** Pure helper `runColdStartFetchWithRetry(fetch, options)` with 3 attempts, [2000ms, 5000ms] backoffs, sleep injection for tests, `onAttemptFailed` callback for surfacing "Retrying load…" status, optional `label` field embedded in the thrown error message ("Could not load `<label>` after 3 attempts. Click here to retry."). NO partial-apply annotations — deliberate semantic separation from sibling `post-rebuild-fetch-retry.ts` (post-rebuild has canonical-on-server / refresh-and-Resume story; cold-start has none — UI just needs to retry + render the click-to-retry button on exhaust). Module-level header comment covers the rationale + the underlying probability math (4 fetches × ~25% per-endpoint flake → ~68% of cold starts have at least one flake) + the cross-references back to the 2026-04-28 G2 hardening that motivated this fix.
+
+- **`src/lib/cold-start-fetch-retry.test.ts` (NEW, 11 tests).** Covers: happy path (1), single-flake recovery (1), two-flake recovery (1), 3-attempt exhaust + label-bearing message + no annotations (1), no-label fallback to "data" (1), `onAttemptFailed` callback semantics — fires for retried attempts NOT for the final failure (1), custom maxAttempts (1), custom backoffsMs (1), short-backoffs-array reuse (1), non-Error thrown values stringified safely with label (1), label-irrelevant-on-success-path (1). All 11 pass via `node --test --experimental-strip-types`.
+
+- **`src/app/projects/[projectId]/keyword-clustering/components/KeywordWorkspace.tsx` (modified, ~190 LOC net add).** New centralized `coldStartRetry` state of shape `{ canvas: 'idle' | 'retrying' | 'exhausted', keywords: ..., removedKeywords: ... }`. Three new useCallbacks (`loadCanvasWithRetry`, `loadKeywordsWithRetry`, `loadRemovedKeywordsWithRetry`) each wrap the underlying fetch in `runColdStartFetchWithRetry` with the matching label + `onAttemptFailed` callback that flips status to 'retrying'. A new `fetchRemovedKeywordsRaw` callback now extracts the previously-inline removed-keywords fetch into a stable callback (so the retry helper + the click-to-retry button can re-trigger it). Three mount-time `useEffect`s wrap the load calls in IIFEs (per CORRECTIONS_LOG 2026-05-03 entry on the React purity rule's same-file useCallback tracing). New `renderColdStartBanner()` helper rendered above the topbar — hidden when all three fetches idle, yellow "Retrying load…" banner while any is mid-retry, red "Could not load X — Click here to retry" with one button per exhausted fetch once any exhausts. Click handlers run in React events so synchronous setState there is fine — they immediately clear the red banner ('exhausted' → 'idle') before the retry runs.
+
+- **`src/app/projects/[projectId]/keyword-clustering/components/CanvasPanel.tsx` (modified, ~10 LOC net delete).** Mount-time `fetchCanvas()` useEffect removed (the canvas fetch now lives in `KeywordWorkspace` so all three fetches share the centralized retry-state + banner). `fetchCanvas` removed from the destructured `canvas` props. Comment in the file explains the move.
+
+**Docs (Group A + Group B):**
+- `docs/KEYWORD_CLUSTERING_ACTIVE.md` — this STATE block prepended; prior 2026-05-02-e STATE block demoted to historical; header timestamp.
+- `docs/ROADMAP.md` — Active Tools row updated; "NEW HIGH — Cold-start hard-refresh" entry flipped from open HIGH to "🟡 CODE FIX SHIPPED 2026-05-03 — pending live verification" with cross-reference to the new helper module + the file paths touched; header timestamp.
+- `docs/CHAT_REGISTRY.md` — new top row.
+- `docs/CORRECTIONS_LOG.md` — new INFORMATIONAL entry on the React `react-hooks/purity` rule's same-file useCallback tracing (caught mid-session as a 3-error lint regression; fixed with IIFE wrapper).
+- `docs/DOCUMENT_MANIFEST.md` — header timestamps + per-doc modified flags + this-session summary.
+
+### Verification scoreboard (build + tests + lint)
+
+| Check | Result | Note |
+|---|---|---|
+| `node --test src/lib/*.test.ts` | ✅ 284/284 pass | Was 273; +11 new from cold-start helper |
+| `npx tsc --noEmit` | ✅ clean | |
+| `npm run build` | ✅ clean | 17/17 routes; compiled in 13.0s |
+| `npm run lint` | ✅ 16e/41w (baseline parity) | Mid-session trip to 19e captured to CORRECTIONS_LOG; resolved before commit |
+
+### How the fix behaves in plain language
+
+When the director hard-refreshes the Keyword Clustering page, three behind-the-scenes data loads happen in parallel:
+
+1. **Canvas** (topics + viewport) via `useCanvas.fetchCanvas` — itself a `Promise.all` of `/canvas/nodes` GET + `/canvas` GET, so two endpoints under one fetch.
+2. **Keywords** via `useKeywords.fetchKeywords` (`/keywords` GET).
+3. **Removed-keywords** via inline `authFetch` (`/removed-keywords` GET).
+
+Total = 4 endpoints. At ~25% per-endpoint flake rate, ~68% of cold starts had at least one flake under the prior code. Today's fix:
+
+- **First failure on any of the three fetches** → automatic retry after 2 seconds. Banner appears: yellow "⏳ Retrying load… (canvas)" or similar, listing whichever fetches are mid-retry.
+- **Second failure** → retry again after 5 seconds.
+- **Third failure (exhausted)** → red banner replaces the yellow one: "⚠ Could not load canvas. [Click here to retry canvas]" — one button per exhausted fetch.
+- **Click the retry button** → that single fetch retries with a fresh 3-attempt cycle. Other fetches are unaffected.
+- **All three idle** → banner hidden entirely; workspace looks normal.
+
+The director NEVER sees a silently-empty workspace anymore — every cold-start failure mode is now surfaced + recoverable without a full hard-refresh.
+
+### Multi-workflow protocol coordination
+
+- **Schema-change-in-flight flag:** stays `No` (no schema work this session).
+- **Branch:** `main` (W#1's home).
+- **Cross-workflow doc edits:** none.
+- W#2 still 🆕 about-to-start; no parallel chat ran during this session.
+- Pull-rebase at session start: clean (already up to date with `3827bc3` on origin/main).
+- Pull-rebase before commit: standard end-of-session step.
+
+### Files touched this session
+
+**Code:**
+- `src/lib/cold-start-fetch-retry.ts` (NEW)
+- `src/lib/cold-start-fetch-retry.test.ts` (NEW)
+- `src/app/projects/[projectId]/keyword-clustering/components/KeywordWorkspace.tsx` (modified)
+- `src/app/projects/[projectId]/keyword-clustering/components/CanvasPanel.tsx` (modified)
+
+**Docs (Group A + Group B):**
+- `docs/KEYWORD_CLUSTERING_ACTIVE.md` (this STATE block prepended; 2026-05-02-e demoted; header)
+- `docs/ROADMAP.md` (Active Tools row + cold-start render-layer entry flipped to 🟡 CODE FIX SHIPPED 2026-05-03; header)
+- `docs/CHAT_REGISTRY.md` (new top row)
+- `docs/CORRECTIONS_LOG.md` (INFORMATIONAL entry on React purity rule)
+- `docs/DOCUMENT_MANIFEST.md` (timestamps + per-doc flags + this-session summary)
+
+**Push status:** commit local; push pending director's Rule 9 approval at end-of-session.
+
+### Standing instructions for next session
+
+(a) **Live-verify the cold-start render-layer fix on production vklf.com — RECOMMENDED.** After push approval + Vercel auto-redeploy, hard-refresh the Bursitis Test 2 workspace 5-10 times. Expected: most refreshes populate normally with no banner; some refreshes show the yellow "Retrying load…" banner briefly then populate; rare refreshes show the red "Could not load X — Click here to retry" banner — clicking the retry button should populate the missing data without a full hard refresh. ~10-20 min wall-clock; no AI cost; no DB writes. Most thorough next step because the verification empirically confirms the fix works against the underlying ~25% pgbouncer flake rate. **Closes the recovery-flow gap that compounds with the 2026-05-02-e helper.**
+
+(b) **Underlying flake-rate investigation** (the standing entry from 2026-05-02-e). Measure rate per-endpoint with structured telemetry; investigate Supabase plan tier / pgbouncer pool sizing / Prisma client management / server-side withRetry parity. ~2-3 sessions. Bigger commitment but addresses root cause. Director needs to share Supabase plan tier info during this session.
+
+(c) Recency-stickiness fix — sister-link op deferral to consolidation-only + Q5→B touch-semantics refinement. Orthogonal to (a)/(b).
+
+(d) GoTrueClient multi-instance fix — small refactor (~15 LOC).
+
+(e) Phase-1 UI polish bundle (6+ items).
+
+(f) Action-by-action feedback workflow design.
+
+(g) V3-era cleanup pass (deferred from Session E D4).
+
+**Recommendation: (a) — live-verify the cold-start fix.** Same pattern as the 2026-05-02-d → 2026-05-02-e sequence: code shipped, verify live before stacking the next concern. The fix is small enough (~190 LOC + 115 LOC helper + 11 tests) that a 10-20 minute live test is the most thorough way to close it; deferring would mean accumulating two unverified fixes (post-rebuild verified 2026-05-02-e + cold-start unverified) which compounds risk.
+
+**Director's framing through prior sessions:** (Scale-A) → (Scale-0) → (Defense-in-Depth ×3) → (Scale-B) → (Scale-C) → (Scale-D) → (Scale-E build) → (Scale-E D3 partial validation) → (consolidation auto-fire follow-up `2026-05-01-c`) → (HTTP 500 fix verification + auto-fire trip observation `2026-05-02`) → (browser-freeze fix design `2026-05-02-b`) → (DevTools profiling pass — diagnosis rejected `2026-05-02-c`) → (HTTP 500 retry regression investigation — fix shipped `2026-05-02-d`) → (HTTP 500 fix live verification + cold-start canvas-empty finding `2026-05-02-e`) → **(cold-start render-layer fix, this session)** → (live verification of the cold-start fix — RECOMMENDED next).
+
+---
+
+## ⚠️ POST-2026-05-02-e-HTTP-500-FIX-LIVE-VERIFICATION-AND-COLD-START-CANVAS-EMPTY-FINDING STATE (preserved as historical context — last updated 2026-05-02-e; SUPERSEDED by the cold-start render-layer fix state above. Both helper paths VERIFIED LIVE; cold-start render-layer entry CODE FIX SHIPPED 2026-05-03 above, pending its own live verification.)
 
 **As of 2026-05-02-e (fifth session of the day, follow-up to `session_2026-05-02-d_http-500-retry-regression-investigation`). DOC + LIVE-RUN session — no code changes. Approved push of `e2a32b2` to vklf.com at session start; live-verified the post-rebuild fetch retry helper on Bursitis Test 2 against the preserved 30/291 checkpoint. Verification SUCCEEDED on all four primary signals; both helper paths exercised in 4 apply events. Two new HIGH-severity ROADMAP findings captured during the run. End-of-session doc-only commit + push.**
 
