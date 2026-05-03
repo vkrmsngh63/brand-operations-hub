@@ -86,7 +86,7 @@ From ROADMAP.md "Investigation Findings 2026-05-04" sub-section (the 2026-05-04 
 
 > *"withRetry parity audit: only 2 of ~50 endpoint-method combinations have G2 coverage (~4%); auth + activity-tracking helpers in `lib/auth.ts` + `lib/workflow-status.ts` make Prisma calls on EVERY authenticated request and are themselves unwrapped — silent multiplier behind even the protected routes."*
 
-After today's two commits, the bare-singleton Prisma client in `src/lib/db.ts` is unchanged (option (b) on ROADMAP — a future session's work) and the Supabase plan-tier question is still open (option (a) — director input pending). But option (c) (withRetry parity) is now first-pass complete for the silent helpers + apply-pipeline writes.
+After today's two commits, the bare-singleton Prisma client in `src/lib/db.ts` is unchanged (option (b) on ROADMAP — a future session's work) and the Supabase plan-tier question is partially resolved (**director confirmed 2026-05-04-b end-of-session: NOT currently on Supabase Pro**; Claude recommended upgrade to Pro; director's upgrade timing TBD — until upgrade lands, option (a) cannot tune pool sizing because the configurable-pool knob isn't available on non-Pro tiers). But option (c) (withRetry parity) is now first-pass complete for the silent helpers + apply-pipeline writes.
 
 ### Idempotency note
 
@@ -111,7 +111,7 @@ What the next D3 attempt should look like with these wraps live: per-batch wall-
 
 ### What this session deliberately did NOT do
 
-- **No Supabase plan-tier change (option (a)).** Director hasn't shared current plan tier yet; conversation deferred to a future session.
+- **No Supabase plan-tier change (option (a)).** **Director confirmed 2026-05-04-b end-of-session: NOT currently on Supabase Pro** (specific tier not further specified). Claude recommended upgrade to Pro at end-of-session ($25/month, addresses configurable-pool-size + dedicated-pgbouncer knobs that the rate-fix work needs to make option (a) feasible; reversible). Director's upgrade timing is the director's action item; deferred to a future session whenever upgrade is in place.
 - **No Prisma client lifecycle change (option (b)).** Speculative without measurement; bare singleton remains as-is in `src/lib/db.ts`.
 - **No atomic-rebuild differentialization (option (d)).** Biggest leverage on the apply-pipeline specifically, but biggest effort + correctness implications. Defer until `[FLAKE]` data shows whether rebuild-specific flakes are pool-pressure-driven or baseline-rate.
 - **No new helper-level unit tests.** The withRetry helper is already proven (`prisma-retry.test.ts`); wraps are mechanical applications. If future sessions want defense-in-depth tests for each wrap point, they can be added then.
@@ -167,7 +167,7 @@ The W#1 PRODUCTION-READINESS GATE — D3 RETRY entry on ROADMAP remains the mile
 
 (c) **Wrap remaining unwrapped routes** — `/projects` GET (N+1), `/project-workflows/*` GETs, `/admin-notes/*`, `/user-preferences/*`. Lower priority than the apply-pipeline cluster but completes the option (c) coverage. ~30-50 LOC; ~5-7 route files.
 
-(d) **Open second rate-fix track** — option (b) Prisma client lifecycle (`@prisma/adapter-pg` audit + `connection_limit=1` for serverless) OR option (a) Supabase plan-tier change (needs director input on current plan). Both are candidates for stacking on top of today's withRetry-parity fix.
+(d) **Open second rate-fix track** — option (b) Prisma client lifecycle (`@prisma/adapter-pg` audit + `connection_limit=1` for serverless) OR option (a) Supabase plan-tier change (**director confirmed 2026-05-04-b: NOT currently on Pro**; upgrade to Pro is the director's action item; once upgrade lands, the option (a) follow-on session tunes the configurable-pool knobs). Both are candidates for stacking on top of today's withRetry-parity fix.
 
 (e) **GoTrueClient multi-instance fix** — small refactor (~15 LOC).
 (f) **Phase-1 UI polish bundle** (6+ items).
