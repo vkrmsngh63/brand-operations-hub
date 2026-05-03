@@ -1,7 +1,9 @@
 # KEYWORD CLUSTERING — ACTIVE DOCUMENT
 ## Current state of the Keyword Clustering workflow tool (Group B, tool-specific)
 
-**Last updated:** May 4, 2026 (Underlying flake-rate investigation — first investigation session of prerequisite #3 of the W#1 PRODUCTION-READINESS GATE — D3 RETRY entry. **CODE + DOCS session — no schema, no DB, no live run, no deploy yet.** Measurement-instrumentation pass producing structured per-endpoint flake telemetry across all 19 DB-backed API routes. New pure helper `src/lib/flake-counter.ts` (~140 lines incl. extensive header comment) with `recordFlake(endpoint, error, ctx)` emitting a single grep-able `[FLAKE]` log line per caught error (endpoint + Prisma code + retried flag + optional canvas size + optional projectWorkflowId + truncated message); 28 new unit tests in `src/lib/flake-counter.test.ts` covering extractPrismaCode + isTransientCode + formatFlakeLine (every ctx combo + multiline-collapse + 200-char-truncate + null/undefined/string-error edge cases) + recordFlake side-effect. All 19 DB-backed API routes wired: 38 catch blocks ↔ 38 `recordFlake(...)` call sites (exact 1-to-1 coverage); each call additive — `recordFlake` runs BEFORE the existing `console.error('<X> error:', error)` so the pre-existing diagnostic dump is preserved. The two routes that already use `withRetry` (`/canvas` GET + `/canvas/nodes` GET) record with `retried: true` so analysis can separate "wrapped-and-still-failed" from "raw flake". `/canvas/rebuild` POST captures the `body.nodes.length` payload size as `canvasSize` to test the "transaction-duration scales with payload → pgbouncer pressure" hypothesis. 327/327 src/lib tests pass (was 299; +28 new); tsc clean; build clean (25 routes); lint at baseline-or-better parity (16e/40w; zero new errors; net -1 warning vs baseline 41w). Investigation findings: Supabase plan tier confirmed as the **transaction pooler at port 6543** with `?pgbouncer=true` (DATABASE_URL); migrations use direct port 5432 (DIRECT_URL) — **pgbouncer hypothesis correctly grounded** because every runtime DB call goes through the pooler. withRetry parity audit: only 2 of ~50 endpoint-method combinations have G2 coverage (~4%); the auth + activity-tracking helpers (`lib/auth.ts` + `lib/workflow-status.ts`) make Prisma calls on EVERY authenticated request and are themselves unwrapped — silent multiplier behind even the protected routes. Multi-workflow: schema-change-in-flight stays "No"; W#2 still 🆕 about-to-start; no parallel chat. Pull-rebase clean at session start. Commit local; push pending Rule 9 approval. Prior session's `9175ab5` (recency-stickiness fix) still local + unpushed — director's discretionary push timing.)
+**Last updated:** May 4, 2026-b (Rate-fix first pass — second session of 2026-05-04 (after the underlying-flake-rate instrumentation session). **CODE + DOCS session — no schema, no DB, no live run, but DEPLOY happened (3 commits pushed to origin/main: prior session's flake-counter instrumentation `58fe5e6`, plus today's two rate-fix commits `c34ddc9` + `1e42394`, plus the older recency-stickiness fix `9175ab5` that had been local-only).** Implements option (c) "withRetry parity extension" from ROADMAP "🟡 INSTRUMENTATION SHIPPED 2026-05-04 — Underlying ~25% per-endpoint pgbouncer/Prisma flake rate" entry, scoped per the prior session's audit findings. Director chose Option B at start-of-session fork (push prior session's work + propose fix today grounded only on inspection findings, vs. the recommended-but-deferred Option A "wait for live data"). Two-commit fix landed: Commit 1 wraps the silent auth + activity helpers (`lib/auth.ts` + `lib/workflow-status.ts`) — universal silent multiplier finding from the prior session; Commit 2 wraps the apply-pipeline writes — the cluster most likely to flake during a long Auto-Analyze run. Combined effect: effective withRetry coverage of authenticated apply-pipeline paths goes from ~4% (2 of ~50 endpoint-method combos) to ~80%+. 327/327 src/lib tests pass (no new tests; existing prisma-retry.test.ts covers withRetry's behavior + flake-counter.test.ts covers the telemetry layer; helper + route wraps are mechanical applications of the helper). tsc clean; build clean (25 routes); lint at exact baseline parity (16e/40w; zero new errors). Multi-workflow: schema-change-in-flight stays "No"; W#2 still 🆕 about-to-start; no parallel chat. Pull-rebase clean at session start. W#1 PRODUCTION-READINESS GATE prerequisite #3 status updated from 🟡 INSTRUMENTATION SHIPPED to 🟡 FIRST RATE-FIX SHIPPED 2026-05-04-b — pending live verification at next D3 attempt; ~25% flake-rate hypothesis directly testable via the now-live `[FLAKE]` telemetry on vklf.com.)
+**Last updated in session:** session_2026-05-04-b_rate-fix-first-pass (Claude Code)
+**Previously updated:** May 4, 2026 (Underlying flake-rate investigation — first investigation session of prerequisite #3 of the W#1 PRODUCTION-READINESS GATE — D3 RETRY entry. **CODE + DOCS session — no schema, no DB, no live run, no deploy yet.** Measurement-instrumentation pass producing structured per-endpoint flake telemetry across all 19 DB-backed API routes. New pure helper `src/lib/flake-counter.ts` (~140 lines incl. extensive header comment) with `recordFlake(endpoint, error, ctx)` emitting a single grep-able `[FLAKE]` log line per caught error (endpoint + Prisma code + retried flag + optional canvas size + optional projectWorkflowId + truncated message); 28 new unit tests in `src/lib/flake-counter.test.ts` covering extractPrismaCode + isTransientCode + formatFlakeLine (every ctx combo + multiline-collapse + 200-char-truncate + null/undefined/string-error edge cases) + recordFlake side-effect. All 19 DB-backed API routes wired: 38 catch blocks ↔ 38 `recordFlake(...)` call sites (exact 1-to-1 coverage); each call additive — `recordFlake` runs BEFORE the existing `console.error('<X> error:', error)` so the pre-existing diagnostic dump is preserved. The two routes that already use `withRetry` (`/canvas` GET + `/canvas/nodes` GET) record with `retried: true` so analysis can separate "wrapped-and-still-failed" from "raw flake". `/canvas/rebuild` POST captures the `body.nodes.length` payload size as `canvasSize` to test the "transaction-duration scales with payload → pgbouncer pressure" hypothesis. 327/327 src/lib tests pass (was 299; +28 new); tsc clean; build clean (25 routes); lint at baseline-or-better parity (16e/40w; zero new errors; net -1 warning vs baseline 41w). Investigation findings: Supabase plan tier confirmed as the **transaction pooler at port 6543** with `?pgbouncer=true` (DATABASE_URL); migrations use direct port 5432 (DIRECT_URL) — **pgbouncer hypothesis correctly grounded** because every runtime DB call goes through the pooler. withRetry parity audit: only 2 of ~50 endpoint-method combinations have G2 coverage (~4%); the auth + activity-tracking helpers (`lib/auth.ts` + `lib/workflow-status.ts`) make Prisma calls on EVERY authenticated request and are themselves unwrapped — silent multiplier behind even the protected routes. Multi-workflow: schema-change-in-flight stays "No"; W#2 still 🆕 about-to-start; no parallel chat. Pull-rebase clean at session start. Commit local; push pending Rule 9 approval. Prior session's `9175ab5` (recency-stickiness fix) still local + unpushed — director's discretionary push timing.)
 **Last updated in session:** session_2026-05-04_underlying-flake-rate-investigation (Claude Code)
 **Previously updated:** May 3, 2026-c (Recency-stickiness fix — option (a) from the prior STATE block's standing instructions. **CODE-FIX session — no schema, no DB, no live run, no deploy yet.** Two-part fix per `INPUT_CONTEXT_SCALING_DESIGN.md` §6 D3 partial validation outcome. (1) Sister-link op deferral to consolidation-only: V4 prompt drops `ADD_SISTER_LINK` + `REMOVE_SISTER_LINK` from per-batch operation vocabulary; applier gains `regularBatchMode: true` flag (mirrors existing `consolidationMode: true` pattern) that rejects those two ops atomically when set; AutoAnalyze.tsx wires `regularBatchMode: true` at the three regular-batch apply call sites (`validateResultV3` preview, runLoop happy-path apply, `handleApplyBatch` BATCH_REVIEW apply). Defense in depth — prompt restriction + applier rejection + tests. (2) Q5→B touch-semantics refinement (`recordTouchesFromOps`): stamps only topics whose own structural identity changed. ADD_TOPIC drops parent stamp; MOVE_TOPIC drops newParent stamp; MERGE_TOPICS drops source stamp; SPLIT_TOPIC drops source stamp; DELETE_TOPIC drops deleted-id stamp; MOVE_KEYWORD drops source stamp; ADD_SISTER_LINK / REMOVE_SISTER_LINK drop both endpoint stamps. 299/299 src/lib tests pass (was 284; +15 new — 7 applier `regularBatchMode` tests + 8 touch-tracker structural-identity tests including the rewritten "keyword + sister-link ops stamp endpoint topics" test now renamed for the new semantics); tsc clean; build clean (25 routes); lint at exact baseline parity (16e/41w; zero new). Multi-workflow: schema-change-in-flight stays "No"; W#2 still 🆕 about-to-start; no parallel chat. Pull-rebase clean at session start. Commit local; push pending director's discretionary Rule 9 approval. Director MUST re-paste the updated V4 Initial Prompt + Primer into the Auto-Analyze UI before the next D3 attempt — applier-side rejection alone would cause first-batch failure if the prompt still tells the model to emit sister-link ops.)
 **Previously updated in session:** session_2026-05-03-c_recency-stickiness-fix (Claude Code)
@@ -52,7 +54,133 @@
 
 ---
 
-## ⚠️ POST-2026-05-04-UNDERLYING-FLAKE-RATE-INVESTIGATION STATE (READ FIRST — updated 2026-05-04)
+## ⚠️ POST-2026-05-04-B-RATE-FIX-FIRST-PASS STATE (READ FIRST — updated 2026-05-04-b)
+
+**As of 2026-05-04-b (fortieth Claude Code session, second session of 2026-05-04, follow-up to `session_2026-05-04_underlying-flake-rate-investigation`). CODE + DOCS session WITH DEPLOY — 3 commits pushed to origin/main + Vercel auto-redeploy. Implements option (c) "withRetry parity extension" from ROADMAP "🟡 INSTRUMENTATION SHIPPED 2026-05-04" entry. Director chose Option B at the start-of-session fork (push prior session's instrumentation work + ship a rate-fix today grounded only on inspection findings, NOT Option A "wait for live data"). Two-commit fix landed; all checks green; `[FLAKE]` data-collection clock now ticking on vklf.com.**
+
+### What this session shipped to W#1 (and platform-wide)
+
+**Three commits now LIVE on vklf.com (all pushed end-of-session per Rule 9 approval):**
+
+1. **`58fe5e6` — Underlying flake-rate investigation — instrumentation pass.** This is the prior session's (2026-05-04) work that had been local-only. Director's Rule 9 approval at start-of-session unblocked the push. Adds `src/lib/flake-counter.ts` + 28 unit tests + `recordFlake(...)` calls in 38 catch blocks across 19 DB-backed API routes. Purely additive on success path; only error-path catch blocks emit one extra `[FLAKE]` log line per existing `console.error`.
+
+2. **`c34ddc9` — Rate-fix Commit 1: wrap silent auth + activity helpers in withRetry.** Targets the silent-multiplier finding from the prior session's audit. `src/lib/auth.ts` — `verifyProjectAuth`'s `prisma.project.findUnique` + `verifyProjectWorkflowAuth`'s `prisma.projectWorkflow.upsert` wrapped in `withRetry()`. `src/lib/workflow-status.ts` — `markWorkflowActive`'s findUnique + create + both update paths wrapped; `ensureProjectWorkflow`'s upsert wrapped. ~30 LOC across 2 files. These helpers fire on EVERY authenticated request, so this single change lifts effective retry coverage across all 19 DB-backed routes — including all 13 future workflows that will share the same auth/activity surface.
+
+3. **`1e42394` — Rate-fix Commit 2: wrap apply-pipeline writes in withRetry.** Targets the cluster most likely to flake during a long Auto-Analyze run. ~9 route files; each Prisma call wrapped:
+   - `POST /canvas/rebuild` — `canvasNode.count` (G1 guard) + `$transaction(ops)` (the multi-second connection-holder).
+   - `PATCH /canvas` — `canvasState.upsert`.
+   - `POST/PATCH/DELETE /canvas/nodes` — three handlers, each wraps its Prisma call (transaction or deleteMany).
+   - `POST/DELETE /canvas/sister-links`, `POST/DELETE /canvas/pathways` — creates wrapped (with idempotency note re: rare retry-after-partial-commit duplicates; accepted tradeoff).
+   - `POST /keywords` (bulk + single paths), `PATCH /keywords` (bulk transaction), `DELETE /keywords` (deleteMany).
+   - `PATCH/DELETE /keywords/[keywordId]`.
+   - `POST /removed-keywords` (findMany + atomic copy-then-delete transaction), `POST /removed-keywords/[id]/restore` (multi-step then atomic re-create-then-delete transaction).
+   - All `recordFlake` call sites in these routes now record `retried: true` so analysis can separate "wrapped-and-still-failed" from "raw flake".
+
+   Routes deliberately NOT wrapped this commit: `/projects` GETs (page-render N+1), `/project-workflows/*` GETs, `/admin-notes/*`, `/user-preferences/*`, `/keywords` GET + `/removed-keywords` GET (already defended at the client layer by 2026-05-03 cold-start retry helper).
+
+4. (Plus the older `9175ab5` recency-stickiness fix from 2026-05-03-c that had been local-only — pushed in the same `git push` operation; counts as the recency-stickiness fix's deploy event.)
+
+### Investigation finding being addressed
+
+From ROADMAP.md "Investigation Findings 2026-05-04" sub-section (the 2026-05-04 session):
+
+> *"withRetry parity audit: only 2 of ~50 endpoint-method combinations have G2 coverage (~4%); auth + activity-tracking helpers in `lib/auth.ts` + `lib/workflow-status.ts` make Prisma calls on EVERY authenticated request and are themselves unwrapped — silent multiplier behind even the protected routes."*
+
+After today's two commits, the bare-singleton Prisma client in `src/lib/db.ts` is unchanged (option (b) on ROADMAP — a future session's work) and the Supabase plan-tier question is still open (option (a) — director input pending). But option (c) (withRetry parity) is now first-pass complete for the silent helpers + apply-pipeline writes.
+
+### Idempotency note
+
+Several `create` calls (sisterLink, pathway, single-keyword, bulk-keyword createMany, removedKeyword) have no unique constraint protecting against duplicate-on-retry. P1001/P2034 cases are safe (DB never committed). P1002/P1008 cases COULD theoretically duplicate if the original commit succeeded but the response timed out. Accepted tradeoff: rare visible duplicates are far cheaper than the current 500 alternative; admin can delete duplicates in seconds. If field data shows this is a problem, future sessions can add unique constraints or idempotency keys. Deferred-item flag — captured in the post-session review per Rule 14e (location: this STATE block; pickup if `[FLAKE]` data shows recurring duplicate-creation events).
+
+### Verification scoreboard (build + tests + lint)
+
+| Check | Result | Note |
+|---|---|---|
+| `node --test src/lib/*.test.ts` | ✅ 327/327 pass | Same as 2026-05-04 baseline; no new tests this session — `prisma-retry.test.ts` covers `withRetry` behavior + `flake-counter.test.ts` covers telemetry; route + helper wraps are mechanical applications of the helper. |
+| `npx tsc --noEmit` | ✅ clean | |
+| `npm run build` | ✅ clean | 25 routes |
+| `npm run lint` | ✅ 16e/40w (exact baseline parity) | Zero new errors; zero new warnings vs 2026-05-04 baseline. |
+
+### How the fix behaves in plain language
+
+When an authenticated request hits the platform's database and the database has a transient hiccup (the kind that today produces an HTTP 500), the request now silently waits 100ms and tries again, then waits 500ms and tries a third time, and only after three failures does it surface as an HTTP 500. The hiccup type the retry catches is the "transient connection-pool" kind that the prior sessions identified as the dominant flake source (Prisma error codes P1001/P1002/P1008/P2034). Real errors (auth failures, business-rule violations, record-not-found) still fail fast with no retry — so the user gets the right error message immediately when something is genuinely wrong.
+
+What changed this session that's different from prior client-layer retry helpers (cold-start retry from 2026-05-03; post-rebuild fetch retry from 2026-05-02-d): those work on the BROWSER side, retrying after the server has already returned a 500. Today's change works on the SERVER side, suppressing the transient blip BEFORE a 500 is ever returned. The two layers compose — together they should knock the visible 500 rate WAY down for everything except persistent (non-transient) database problems.
+
+What the next D3 attempt should look like with these wraps live: per-batch wall-clock time stays the same on the success path (no extra latency on healthy requests), but mid-run flakes that previously paused the run (forcing the post-rebuild retry helper to recover or pause + checkpoint) should be much rarer — and when they DO happen, the `[FLAKE]` log line on Vercel will say `retried=true` instead of `retried=false`. That's the empirical signal the rate-fix is doing what we hoped.
+
+### What this session deliberately did NOT do
+
+- **No Supabase plan-tier change (option (a)).** Director hasn't shared current plan tier yet; conversation deferred to a future session.
+- **No Prisma client lifecycle change (option (b)).** Speculative without measurement; bare singleton remains as-is in `src/lib/db.ts`.
+- **No atomic-rebuild differentialization (option (d)).** Biggest leverage on the apply-pipeline specifically, but biggest effort + correctness implications. Defer until `[FLAKE]` data shows whether rebuild-specific flakes are pool-pressure-driven or baseline-rate.
+- **No new helper-level unit tests.** The withRetry helper is already proven (`prisma-retry.test.ts`); wraps are mechanical applications. If future sessions want defense-in-depth tests for each wrap point, they can be added then.
+- **No live verification of the wrap behavior.** Today's evidence is structural (tsc + build + lint + existing tests); the empirical signal will come from live `[FLAKE]` data on vklf.com over the next 1-3 days OR the next D3 attempt.
+
+### Multi-workflow protocol coordination
+
+- **Schema-change-in-flight flag:** stays `No` (no schema work this session).
+- **Branch:** `main` (W#1's home).
+- **Cross-workflow doc edits:** the silent-helper wrap touches `lib/auth.ts` + `lib/workflow-status.ts` which are shared platform helpers — every future workflow will benefit. Surfaced explicitly in this STATE block + in `PLATFORM_ARCHITECTURE.md §10` as a platform-wide observability/reliability addition (combined with 2026-05-04's flake-counter telemetry).
+- W#2 still 🆕 about-to-start; no parallel chat ran during this session.
+- Pull-rebase at session start: clean (already up to date with `33ba13a` on origin/main; local was 1 commit ahead with `9175ab5`, then today's session added `58fe5e6` + `c34ddc9` + `1e42394` and pushed all four together).
+- Pull-rebase before final push: clean.
+
+### Files touched this session
+
+**Code (Commit 1 — silent helpers):**
+- `src/lib/auth.ts` (modified — withRetry wraps + comments)
+- `src/lib/workflow-status.ts` (modified — withRetry wraps + comments)
+
+**Code (Commit 2 — apply-pipeline writes):**
+- `src/app/api/projects/[projectId]/canvas/route.ts`
+- `src/app/api/projects/[projectId]/canvas/nodes/route.ts`
+- `src/app/api/projects/[projectId]/canvas/rebuild/route.ts`
+- `src/app/api/projects/[projectId]/canvas/sister-links/route.ts`
+- `src/app/api/projects/[projectId]/canvas/pathways/route.ts`
+- `src/app/api/projects/[projectId]/keywords/route.ts`
+- `src/app/api/projects/[projectId]/keywords/[keywordId]/route.ts`
+- `src/app/api/projects/[projectId]/removed-keywords/route.ts`
+- `src/app/api/projects/[projectId]/removed-keywords/[removedId]/restore/route.ts`
+
+**Docs (Group A + Group B):**
+- `docs/KEYWORD_CLUSTERING_ACTIVE.md` (this STATE block prepended; prior 2026-05-04 STATE block demoted to historical; header timestamps)
+- `docs/ROADMAP.md` (Active Tools row updated for 2026-05-04-b; W#1 PRODUCTION-READINESS GATE prerequisite #3 status updated from 🟡 INSTRUMENTATION SHIPPED to 🟡 FIRST RATE-FIX SHIPPED 2026-05-04-b — pending live verification at next D3 attempt; "🟡 INSTRUMENTATION SHIPPED 2026-05-04" flake-rate entry gains "First rate-fix shipped 2026-05-04-b" sub-section; recommended sequencing item 2 marked partially DONE; header)
+- `docs/CHAT_REGISTRY.md` (new top row)
+- `docs/PLATFORM_ARCHITECTURE.md` (§10 "Known technical debt" — server-side withRetry parity entry updated from "open gap" to "first-pass closed; remaining ~20% routes flagged for follow-up")
+- `docs/DOCUMENT_MANIFEST.md` (header timestamps + per-doc modified flags + this-session summary)
+
+**Push status:** ALL 4 commits pushed to origin/main end-of-session per Rule 9 approval. Vercel auto-redeploy triggered ~minutes after push; live on vklf.com.
+
+### Standing instructions for next session
+
+The W#1 PRODUCTION-READINESS GATE — D3 RETRY entry on ROADMAP remains the milestone target. After today, prerequisite status is:
+- **#1 cold-start render-layer fix:** 🟡 PARTIAL (banner UI live verification deferred to natural flake event during D3).
+- **#2 recency-stickiness fix:** 🟡 CODE FIX SHIPPED 2026-05-03-c, NOW LIVE on vklf.com via today's push — pending live verification at next D3 attempt. Director MUST re-paste updated V4 Initial Prompt + Primer into the Auto-Analyze UI before next D3.
+- **#3 underlying flake-rate fix:** 🟡 FIRST RATE-FIX SHIPPED 2026-05-04-b — option (c) withRetry parity extension first-pass complete. Pending live verification at next D3 attempt OR via natural data window of `[FLAKE]` lines accumulating from normal director use.
+
+**Next-session ordering:**
+
+(a) **D3 retry attempt — RECOMMENDED.** All three prerequisites now have shipped code on vklf.com. The D3 run itself becomes the live verification for: (i) banner UI on cold-start fix when a natural flake fires; (ii) recency-stickiness fix's per-batch input-cost trajectory across the run; (iii) the flake-rate fix's `[FLAKE]` retried=true vs retried=false ratios. Director re-pastes V4 prompts before run start. Estimated cost: $30-50 + 3-5 hr wall-clock per ROADMAP estimate. **Most thorough next step** — closes the W#1 PRODUCTION-READINESS GATE in a single run if all three prerequisites verify; even on partial verification, generates the natural-flake data window for the rate-fix's grading and the banner UI's confirmation.
+
+(b) **Wait 1-3 days, then analyze accumulated `[FLAKE]` data.** Patient evidence-grounded path. Director uses the platform normally for a few days; the rate-fix's effectiveness becomes empirically measurable from `retried=true` line counts on Vercel before committing to D3. Trade-off: delays D3 by a few days; the recency-stickiness + cold-start fixes also wait for their verification.
+
+(c) **Wrap remaining unwrapped routes** — `/projects` GET (N+1), `/project-workflows/*` GETs, `/admin-notes/*`, `/user-preferences/*`. Lower priority than the apply-pipeline cluster but completes the option (c) coverage. ~30-50 LOC; ~5-7 route files.
+
+(d) **Open second rate-fix track** — option (b) Prisma client lifecycle (`@prisma/adapter-pg` audit + `connection_limit=1` for serverless) OR option (a) Supabase plan-tier change (needs director input on current plan). Both are candidates for stacking on top of today's withRetry-parity fix.
+
+(e) **GoTrueClient multi-instance fix** — small refactor (~15 LOC).
+(f) **Phase-1 UI polish bundle** (6+ items).
+(g) **V3-era cleanup pass** (deferred from Session E D4).
+(h) **Action-by-action feedback workflow + Prompt Refining button — EXPLICITLY LAST** per director's 2026-05-03-b directive. ~5-7 sessions.
+
+**Recommendation: (a) D3 retry attempt.** Reason: with all three W#1 PRODUCTION-READINESS GATE prerequisites now shipped to vklf.com, the next bottleneck is empirical verification — and the most thorough verification path is to run D3 itself. The natural-flake data window for the rate-fix grading is a side effect of the run; we don't need to wait separately. Per the standing preference for the most-thorough-and-reliable path (`feedback_recommendation_style.md`), close the gate with a real run rather than measuring proxies.
+
+**Director's framing through prior sessions:** (Scale-A) → (Scale-0) → (Defense-in-Depth ×3) → (Scale-B) → (Scale-C) → (Scale-D) → (Scale-E build) → (Scale-E D3 partial validation) → (consolidation auto-fire follow-up `2026-05-01-c`) → (HTTP 500 fix verification + auto-fire trip observation `2026-05-02`) → (browser-freeze fix design `2026-05-02-b`) → (DevTools profiling pass — diagnosis rejected `2026-05-02-c`) → (HTTP 500 retry regression investigation — fix shipped `2026-05-02-d`) → (HTTP 500 fix live verification + cold-start canvas-empty finding `2026-05-02-e`) → (cold-start render-layer fix `2026-05-03`) → (cold-start fix live verification — partial `2026-05-03-b`) → (recency-stickiness fix `2026-05-03-c`) → (underlying flake-rate investigation — instrumentation `2026-05-04`) → **(rate-fix first pass — withRetry parity for silent helpers + apply-pipeline writes — DEPLOY, this session `2026-05-04-b`)** → (D3 retry attempt — RECOMMENDED next).
+
+---
+
+## ⚠️ POST-2026-05-04-UNDERLYING-FLAKE-RATE-INVESTIGATION STATE (preserved as historical context — last updated 2026-05-04; SUPERSEDED by the rate-fix-first-pass state above. Instrumentation code remains shipped + LIVE on vklf.com as of 2026-05-04-b push; the instrumentation's findings + standing instructions for the rate-fix have been actioned.)
 
 **As of 2026-05-04 (thirty-ninth Claude Code session, follow-up to `session_2026-05-03-c_recency-stickiness-fix`). CODE + DOCS session — no schema, no DB, no live run, no deploy yet. Implements the FIRST investigation session of prerequisite #3 of the W#1 PRODUCTION-READINESS GATE — D3 RETRY entry on ROADMAP. Measurement-instrumentation pass landed; rate-fix design + implementation deferred to next session(s) once real telemetry data has been collected from the director's normal use of the platform. All checks green; commit local pending director's Rule 9 push approval.**
 
