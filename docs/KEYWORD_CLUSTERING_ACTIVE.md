@@ -115,9 +115,9 @@ The W#1 PRODUCTION-READINESS GATE — D3 RETRY entry on ROADMAP remains the mile
 
 (d) Phase-1 UI polish bundle (6+ items).
 
-(e) Action-by-action feedback workflow design.
+(e) V3-era cleanup pass (deferred from Session E D4).
 
-(f) V3-era cleanup pass (deferred from Session E D4).
+(f) **Action-by-action feedback workflow + Prompt Refining button — EXPLICITLY LAST per director's 2026-05-03-b directive.** This item now includes the Prompt Refining button (consolidated from the 2026-04-20 "Feedback-summarization-to-prompt-improvements button" entry per Rule 24 consolidation 2026-05-03-b). Director's verbatim 2026-05-03-b directive: *"I want this to be the last item we work on when everything else is fixed and this item should involve not only me providing the individual feedback on where the algorithm went wrong but to incorporating a 'Prompt Refining' button within the tool that takes the individual feedbacks and suggests prompt modifications and additions that would address those issues while keeping the context needed intact and without affecting the other instructions that are leading to correct results."* Two non-negotiable constraints on the Prompt Refining button: (1) preservation — don't gut the prompt's existing context; (2) surgical isolation — don't disrupt working instructions, only modify parts that drove bad decisions. Effort: ~5–7 sessions total (1 design + 4–6 build). See ROADMAP "Action-by-action feedback + second-pass refinement workflow + Prompt Refining button" entry for full scope.
 
 **Recommendation: (a) — recency-stickiness fix.** Reason: with cold-start verification effectively folded into D3 retry, recency-stickiness is the next named prerequisite. Skipping it means D3 retry will hit the same bottleneck identified at 2026-05-01-b. Per the standing preference for the most-thorough-and-reliable path, fix the known bottleneck before attempting D3 again.
 
