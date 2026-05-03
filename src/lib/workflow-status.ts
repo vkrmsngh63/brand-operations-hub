@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db';
+import { withRetry } from '@/lib/prisma-retry';
 
 // ── Workflow status management ─────────────────────────────────
 // Central place for ProjectWorkflow status transitions and activity timestamps.
@@ -34,13 +35,19 @@ export async function markWorkflowActive(
   const now = new Date();
 
   // Fetch current row (if it exists) to decide whether this is a
-  // first-time activation or just a lastActivityAt refresh.
-  const existing = await prisma.projectWorkflow.findUnique({
-    where: {
-      projectId_workflow: { projectId, workflow },
-    },
-    select: { id: true, status: true, firstActivityAt: true },
-  });
+  // first-time activation or just a lastActivityAt refresh. Wrapped in
+  // withRetry per the 2026-05-05 silent-helper rate-fix — markWorkflowActive
+  // runs on every meaningful authenticated mutation (keyword create, canvas
+  // edit, etc.), so a transient flake here turns a successful user action
+  // into a 500 even on routes that wrap their own body in withRetry.
+  const existing = await withRetry(() =>
+    prisma.projectWorkflow.findUnique({
+      where: {
+        projectId_workflow: { projectId, workflow },
+      },
+      select: { id: true, status: true, firstActivityAt: true },
+    })
+  );
 
   if (!existing) {
     // No row yet — create one, jumping straight to "active" since this call
@@ -48,16 +55,18 @@ export async function markWorkflowActive(
     // auto-creates rows but sets status="inactive" on GETs; this path
     // handles the rare case where a mutation hits without going through
     // the auth helper's upsert first.)
-    const created = await prisma.projectWorkflow.create({
-      data: {
-        projectId,
-        workflow,
-        status: 'active',
-        firstActivityAt: now,
-        lastActivityAt: now,
-      },
-      select: { id: true, status: true },
-    });
+    const created = await withRetry(() =>
+      prisma.projectWorkflow.create({
+        data: {
+          projectId,
+          workflow,
+          status: 'active',
+          firstActivityAt: now,
+          lastActivityAt: now,
+        },
+        select: { id: true, status: true },
+      })
+    );
     return {
       ok: true,
       projectWorkflowId: created.id,
@@ -68,15 +77,17 @@ export async function markWorkflowActive(
   // Row exists — decide what to update.
   if (existing.status === 'inactive') {
     // First meaningful activity — transition to active, set both timestamps.
-    const updated = await prisma.projectWorkflow.update({
-      where: { id: existing.id },
-      data: {
-        status: 'active',
-        firstActivityAt: existing.firstActivityAt ?? now,
-        lastActivityAt: now,
-      },
-      select: { id: true, status: true },
-    });
+    const updated = await withRetry(() =>
+      prisma.projectWorkflow.update({
+        where: { id: existing.id },
+        data: {
+          status: 'active',
+          firstActivityAt: existing.firstActivityAt ?? now,
+          lastActivityAt: now,
+        },
+        select: { id: true, status: true },
+      })
+    );
     return {
       ok: true,
       projectWorkflowId: updated.id,
@@ -86,11 +97,13 @@ export async function markWorkflowActive(
 
   // Already active or completed — just refresh lastActivityAt.
   // Completed workflows keep their status; touching them doesn't un-complete them.
-  const updated = await prisma.projectWorkflow.update({
-    where: { id: existing.id },
-    data: { lastActivityAt: now },
-    select: { id: true, status: true },
-  });
+  const updated = await withRetry(() =>
+    prisma.projectWorkflow.update({
+      where: { id: existing.id },
+      data: { lastActivityAt: now },
+      select: { id: true, status: true },
+    })
+  );
   return {
     ok: true,
     projectWorkflowId: updated.id,
@@ -108,17 +121,21 @@ export async function ensureProjectWorkflow(
   projectId: string,
   workflow: string
 ): Promise<{ id: string; status: string }> {
-  const row = await prisma.projectWorkflow.upsert({
-    where: {
-      projectId_workflow: { projectId, workflow },
-    },
-    update: {},
-    create: {
-      projectId,
-      workflow,
-      status: 'inactive',
-    },
-    select: { id: true, status: true },
-  });
+  // Wrapped in withRetry per the 2026-05-05 silent-helper rate-fix — same
+  // reasoning as markWorkflowActive above.
+  const row = await withRetry(() =>
+    prisma.projectWorkflow.upsert({
+      where: {
+        projectId_workflow: { projectId, workflow },
+      },
+      update: {},
+      create: {
+        projectId,
+        workflow,
+        status: 'inactive',
+      },
+      select: { id: true, status: true },
+    })
+  );
   return row;
 }

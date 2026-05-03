@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase-server';
 import { prisma } from '@/lib/db';
+import { withRetry } from '@/lib/prisma-retry';
 
 // ── Result types ───────────────────────────────────────────────
 interface AuthSuccess {
@@ -92,11 +93,16 @@ export async function verifyProjectAuth(
   if (auth.error) {
     return { userId: null, projectId: null, error: auth.error };
   }
-  // Check that this user owns this project
-  const project = await prisma.project.findUnique({
-    where: { id: projectId },
-    select: { userId: true },
-  });
+  // Check that this user owns this project. Wrapped in withRetry per the
+  // 2026-05-05 silent-helper rate-fix — `verifyProjectAuth` runs on every
+  // authenticated request, so a transient pgbouncer flake here surfaces as
+  // a 500 even on routes that wrap their own body in withRetry.
+  const project = await withRetry(() =>
+    prisma.project.findUnique({
+      where: { id: projectId },
+      select: { userId: true },
+    })
+  );
   if (!project) {
     return {
       userId: null,
@@ -150,23 +156,28 @@ export async function verifyProjectWorkflowAuth(
   // requests on the same (projectId, workflow) pair don't race to create
   // duplicates — the unique constraint on (projectId, workflow) guarantees
   // only one row exists, and upsert handles both the "first time" and
-  // "already exists" cases atomically.
+  // "already exists" cases atomically. Wrapped in withRetry per the
+  // 2026-05-05 silent-helper rate-fix — same reasoning as the findUnique
+  // in verifyProjectAuth above; this upsert runs on every authenticated
+  // workflow-data request.
   try {
-    const projectWorkflow = await prisma.projectWorkflow.upsert({
-      where: {
-        projectId_workflow: {
+    const projectWorkflow = await withRetry(() =>
+      prisma.projectWorkflow.upsert({
+        where: {
+          projectId_workflow: {
+            projectId,
+            workflow,
+          },
+        },
+        update: {}, // No fields changed on read — status transitions are explicit
+        create: {
           projectId,
           workflow,
+          status: 'inactive',
         },
-      },
-      update: {}, // No fields changed on read — status transitions are explicit
-      create: {
-        projectId,
-        workflow,
-        status: 'inactive',
-      },
-      select: { id: true },
-    });
+        select: { id: true },
+      })
+    );
 
     return {
       userId: projectAuth.userId,
