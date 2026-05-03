@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth';
 import { getSupabaseAdmin } from '@/lib/supabase-server';
+import { recordFlake } from '@/lib/flake-counter';
 
 async function verifyNoteOwnership(userId: string, noteId: string) {
   const note = await prisma.adminNote.findUnique({
@@ -33,6 +34,7 @@ export async function GET(
 
     return NextResponse.json(note);
   } catch (error) {
+    recordFlake('GET /api/admin-notes/[noteId]', error);
     console.error('GET /api/admin-notes/[noteId] error:', error);
     return NextResponse.json({ error: 'Failed to fetch note' }, { status: 500 });
   }
@@ -67,6 +69,7 @@ export async function PATCH(
 
     return NextResponse.json(note);
   } catch (error) {
+    recordFlake('PATCH /api/admin-notes/[noteId]', error);
     console.error('PATCH /api/admin-notes/[noteId] error:', error);
     return NextResponse.json({ error: 'Failed to update note' }, { status: 500 });
   }
@@ -105,6 +108,7 @@ export async function DELETE(
 
     return NextResponse.json({ deleted: true });
   } catch (error) {
+    recordFlake('DELETE /api/admin-notes/[noteId]', error);
     console.error('DELETE /api/admin-notes/[noteId] error:', error);
     return NextResponse.json({ error: 'Failed to delete note' }, { status: 500 });
   }

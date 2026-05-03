@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth';
+import { recordFlake } from '@/lib/flake-counter';
 
 // POST /api/admin-notes/reorder
 // Body: { noteIds: string[] }  // ordered array of note IDs; their new sortOrder = array index
@@ -39,6 +40,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ reordered: noteIds.length });
   } catch (error) {
+    recordFlake('POST /api/admin-notes/reorder', error);
     console.error('POST /api/admin-notes/reorder error:', error);
     return NextResponse.json({ error: 'Failed to reorder notes' }, { status: 500 });
   }

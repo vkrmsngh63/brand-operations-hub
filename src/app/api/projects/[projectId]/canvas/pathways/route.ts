@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { verifyProjectWorkflowAuth } from '@/lib/auth';
 import { markWorkflowActive } from '@/lib/workflow-status';
+import { recordFlake } from '@/lib/flake-counter';
 
 const WORKFLOW = 'keyword-clustering';
 
@@ -24,6 +25,9 @@ export async function POST(
     await markWorkflowActive(projectId, WORKFLOW);
     return NextResponse.json(pathway, { status: 201 });
   } catch (error) {
+    recordFlake('POST /api/projects/[projectId]/canvas/pathways', error, {
+      projectWorkflowId,
+    });
     console.error('POST pathway error:', error);
     return NextResponse.json(
       { error: 'Failed to create pathway' },
@@ -52,6 +56,9 @@ export async function DELETE(
     await markWorkflowActive(projectId, WORKFLOW);
     return NextResponse.json({ success: true });
   } catch (error) {
+    recordFlake('DELETE /api/projects/[projectId]/canvas/pathways', error, {
+      projectWorkflowId,
+    });
     console.error('DELETE pathway error:', error);
     return NextResponse.json(
       { error: 'Failed to delete pathway' },

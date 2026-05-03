@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { verifyProjectWorkflowAuth } from '@/lib/auth';
 import { withRetry } from '@/lib/prisma-retry';
+import { recordFlake } from '@/lib/flake-counter';
 
 const WORKFLOW = 'keyword-clustering';
 
@@ -41,6 +42,10 @@ export async function GET(
 
     return NextResponse.json({ canvasState: healedCanvasState, pathways, sisterLinks });
   } catch (error) {
+    recordFlake('GET /api/projects/[projectId]/canvas', error, {
+      retried: true,
+      projectWorkflowId,
+    });
     console.error('GET canvas error:', error);
     return NextResponse.json(
       { error: 'Failed to fetch canvas' },
@@ -83,6 +88,9 @@ export async function PATCH(
     });
     return NextResponse.json(canvasState);
   } catch (error) {
+    recordFlake('PATCH /api/projects/[projectId]/canvas', error, {
+      projectWorkflowId,
+    });
     console.error('PATCH canvas error:', error);
     return NextResponse.json(
       { error: 'Failed to update canvas state' },

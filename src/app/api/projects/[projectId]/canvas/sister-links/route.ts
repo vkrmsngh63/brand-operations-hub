@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { verifyProjectWorkflowAuth } from '@/lib/auth';
 import { markWorkflowActive } from '@/lib/workflow-status';
+import { recordFlake } from '@/lib/flake-counter';
 
 const WORKFLOW = 'keyword-clustering';
 
@@ -33,6 +34,9 @@ export async function POST(
     await markWorkflowActive(projectId, WORKFLOW);
     return NextResponse.json(link, { status: 201 });
   } catch (error) {
+    recordFlake('POST /api/projects/[projectId]/canvas/sister-links', error, {
+      projectWorkflowId,
+    });
     console.error('POST sister link error:', error);
     return NextResponse.json(
       { error: 'Failed to create sister link' },
@@ -62,6 +66,9 @@ export async function DELETE(
     await markWorkflowActive(projectId, WORKFLOW);
     return NextResponse.json({ success: true });
   } catch (error) {
+    recordFlake('DELETE /api/projects/[projectId]/canvas/sister-links', error, {
+      projectWorkflowId,
+    });
     console.error('DELETE sister link error:', error);
     return NextResponse.json(
       { error: 'Failed to delete sister link' },

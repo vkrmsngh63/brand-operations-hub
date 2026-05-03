@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth';
+import { recordFlake } from '@/lib/flake-counter';
 
 // GET /api/user-preferences/[key] - returns { value } or { value: null }
 export async function GET(
@@ -17,6 +18,7 @@ export async function GET(
     });
     return NextResponse.json({ value: pref?.value ?? null });
   } catch (error) {
+    recordFlake('GET /api/user-preferences/[key]', error);
     console.error('GET /api/user-preferences/[key] error:', error);
     return NextResponse.json({ error: 'Failed to fetch preference' }, { status: 500 });
   }
@@ -44,6 +46,7 @@ export async function PUT(
 
     return NextResponse.json({ value: pref.value });
   } catch (error) {
+    recordFlake('PUT /api/user-preferences/[key]', error);
     console.error('PUT /api/user-preferences/[key] error:', error);
     return NextResponse.json({ error: 'Failed to save preference' }, { status: 500 });
   }

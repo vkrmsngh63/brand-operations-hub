@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { verifyProjectAuth } from '@/lib/auth';
+import { recordFlake } from '@/lib/flake-counter';
 
 // GET /api/project-workflows/[projectId]
 // Returns all ProjectWorkflow rows that exist for this Project.
@@ -39,6 +40,7 @@ export async function GET(
 
     return NextResponse.json(workflows);
   } catch (error) {
+    recordFlake('GET /api/project-workflows/[projectId]', error);
     console.error('GET /api/project-workflows/[projectId] error:', error);
     return NextResponse.json(
       { error: 'Failed to fetch workflow statuses' },

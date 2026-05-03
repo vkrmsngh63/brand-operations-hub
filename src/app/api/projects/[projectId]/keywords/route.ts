@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { verifyProjectWorkflowAuth } from '@/lib/auth';
 import { markWorkflowActive } from '@/lib/workflow-status';
+import { recordFlake } from '@/lib/flake-counter';
 
 const WORKFLOW = 'keyword-clustering';
 
@@ -23,6 +24,9 @@ export async function GET(
     });
     return NextResponse.json(keywords);
   } catch (error) {
+    recordFlake('GET /api/projects/[projectId]/keywords', error, {
+      projectWorkflowId: auth.projectWorkflowId,
+    });
     console.error('GET keywords error:', error);
     return NextResponse.json(
       { error: 'Failed to fetch keywords' },
@@ -87,6 +91,9 @@ export async function POST(
     await markWorkflowActive(projectId, WORKFLOW);
     return NextResponse.json(keyword, { status: 201 });
   } catch (error) {
+    recordFlake('POST /api/projects/[projectId]/keywords', error, {
+      projectWorkflowId,
+    });
     console.error('POST keywords error:', error);
     return NextResponse.json(
       { error: 'Failed to create keyword(s)' },
@@ -151,6 +158,9 @@ export async function PATCH(
 
     return NextResponse.json({ updated: results.length });
   } catch (error) {
+    recordFlake('PATCH /api/projects/[projectId]/keywords', error, {
+      projectWorkflowId,
+    });
     console.error('PATCH keywords bulk error:', error);
     return NextResponse.json(
       { error: 'Failed to bulk update keywords' },
@@ -187,6 +197,9 @@ export async function DELETE(
     await markWorkflowActive(projectId, WORKFLOW);
     return NextResponse.json({ deleted: result.count });
   } catch (error) {
+    recordFlake('DELETE /api/projects/[projectId]/keywords', error, {
+      projectWorkflowId,
+    });
     console.error('DELETE keywords error:', error);
     return NextResponse.json(
       { error: 'Failed to delete keywords' },

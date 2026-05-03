@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth';
 import { getSupabaseAdmin } from '@/lib/supabase-server';
+import { recordFlake } from '@/lib/flake-counter';
 
 const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB per file
 
@@ -95,6 +96,7 @@ export async function POST(
 
     return NextResponse.json({ uploaded: results, errors }, { status: 201 });
   } catch (error) {
+    recordFlake('POST /api/admin-notes/[noteId]/attachments', error);
     console.error('POST attachments error:', error);
     return NextResponse.json({ error: 'Failed to upload attachments' }, { status: 500 });
   }

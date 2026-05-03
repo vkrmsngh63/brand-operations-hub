@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { verifyProjectWorkflowAuth } from '@/lib/auth';
 import { markWorkflowActive } from '@/lib/workflow-status';
 import { withRetry } from '@/lib/prisma-retry';
+import { recordFlake } from '@/lib/flake-counter';
 
 const WORKFLOW = 'keyword-clustering';
 
@@ -33,6 +34,10 @@ export async function GET(
     );
     return NextResponse.json(nodes);
   } catch (error) {
+    recordFlake('GET /api/projects/[projectId]/canvas/nodes', error, {
+      retried: true,
+      projectWorkflowId,
+    });
     console.error('GET canvas nodes error:', error);
     return NextResponse.json(
       { error: 'Failed to fetch nodes' },
@@ -99,6 +104,9 @@ export async function POST(
     await markWorkflowActive(projectId, WORKFLOW);
     return NextResponse.json(node, { status: 201 });
   } catch (error) {
+    recordFlake('POST /api/projects/[projectId]/canvas/nodes', error, {
+      projectWorkflowId,
+    });
     console.error('POST canvas node error:', error);
     return NextResponse.json(
       { error: 'Failed to create node' },
@@ -200,6 +208,9 @@ export async function PATCH(
 
     return NextResponse.json(results);
   } catch (error) {
+    recordFlake('PATCH /api/projects/[projectId]/canvas/nodes', error, {
+      projectWorkflowId: _projectWorkflowId,
+    });
     console.error('PATCH canvas nodes error:', error);
     return NextResponse.json(
       { error: 'Failed to update nodes' },
@@ -238,6 +249,9 @@ export async function DELETE(
     await markWorkflowActive(projectId, WORKFLOW);
     return NextResponse.json({ success: true, deleted: ids });
   } catch (error) {
+    recordFlake('DELETE /api/projects/[projectId]/canvas/nodes', error, {
+      projectWorkflowId,
+    });
     console.error('DELETE canvas nodes error:', error);
     return NextResponse.json(
       { error: 'Failed to delete nodes' },

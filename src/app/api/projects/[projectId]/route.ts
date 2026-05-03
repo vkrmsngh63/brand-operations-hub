@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { verifyProjectAuth } from '@/lib/auth';
+import { recordFlake } from '@/lib/flake-counter';
 
 // GET /api/projects/[projectId] — fetch one Project's details.
 // Returns Project fields + its workspaces (status badges) only.
@@ -41,6 +42,7 @@ export async function GET(
 
     return NextResponse.json(project);
   } catch (error) {
+    recordFlake('GET /api/projects/[projectId]', error);
     console.error('GET /api/projects/[projectId] error:', error);
     return NextResponse.json(
       { error: 'Failed to fetch project' },
@@ -78,6 +80,7 @@ export async function PATCH(
 
     return NextResponse.json(project);
   } catch (error) {
+    recordFlake('PATCH /api/projects/[projectId]', error);
     console.error('PATCH /api/projects/[projectId] error:', error);
     return NextResponse.json(
       { error: 'Failed to update project' },
@@ -102,6 +105,7 @@ export async function DELETE(
     await prisma.project.delete({ where: { id: projectId } });
     return NextResponse.json({ success: true });
   } catch (error) {
+    recordFlake('DELETE /api/projects/[projectId]', error);
     console.error('DELETE /api/projects/[projectId] error:', error);
     return NextResponse.json(
       { error: 'Failed to delete project' },

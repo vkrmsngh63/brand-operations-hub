@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { verifyProjectAuth } from '@/lib/auth';
 import { ensureProjectWorkflow } from '@/lib/workflow-status';
+import { recordFlake } from '@/lib/flake-counter';
 
 // GET /api/project-workflows/[projectId]/[workflow]
 // Returns the current state of a single workspace.
@@ -39,6 +40,7 @@ export async function GET(
 
     return NextResponse.json(full);
   } catch (error) {
+    recordFlake('GET /api/project-workflows/[projectId]/[workflow]', error);
     console.error(
       'GET /api/project-workflows/[projectId]/[workflow] error:',
       error
@@ -114,6 +116,7 @@ export async function PATCH(
 
     return NextResponse.json(updated);
   } catch (error) {
+    recordFlake('PATCH /api/project-workflows/[projectId]/[workflow]', error);
     console.error(
       'PATCH /api/project-workflows/[projectId]/[workflow] error:',
       error

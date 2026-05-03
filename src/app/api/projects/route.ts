@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth';
+import { recordFlake } from '@/lib/flake-counter';
 
 // GET /api/projects — list all Projects for the authenticated user.
 // Sort order: most recently worked-on first.
@@ -91,6 +92,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(shaped);
   } catch (error) {
+    recordFlake('GET /api/projects', error);
     console.error('GET /api/projects error:', error);
     return NextResponse.json(
       { error: 'Failed to fetch projects' },
@@ -141,6 +143,7 @@ export async function POST(req: NextRequest) {
       { status: 201 }
     );
   } catch (error) {
+    recordFlake('POST /api/projects', error);
     console.error('POST /api/projects error:', error);
     return NextResponse.json(
       { error: 'Failed to create project' },

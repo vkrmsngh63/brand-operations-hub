@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { verifyProjectWorkflowAuth } from '@/lib/auth';
 import { markWorkflowActive } from '@/lib/workflow-status';
+import { recordFlake } from '@/lib/flake-counter';
 
 const WORKFLOW = 'keyword-clustering';
 
@@ -65,6 +66,11 @@ export async function POST(
     await markWorkflowActive(projectId, WORKFLOW);
     return NextResponse.json({ restored }, { status: 201 });
   } catch (error) {
+    recordFlake(
+      'POST /api/projects/[projectId]/removed-keywords/[removedId]/restore',
+      error,
+      { projectWorkflowId },
+    );
     console.error('POST removed-keywords/restore error:', error);
     return NextResponse.json(
       { error: 'Failed to restore keyword' },

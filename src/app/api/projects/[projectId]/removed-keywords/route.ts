@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { verifyProjectWorkflowAuth } from '@/lib/auth';
 import { markWorkflowActive } from '@/lib/workflow-status';
+import { recordFlake } from '@/lib/flake-counter';
 
 const WORKFLOW = 'keyword-clustering';
 
@@ -22,6 +23,9 @@ export async function GET(
     });
     return NextResponse.json(removed);
   } catch (error) {
+    recordFlake('GET /api/projects/[projectId]/removed-keywords', error, {
+      projectWorkflowId: auth.projectWorkflowId,
+    });
     console.error('GET removed-keywords error:', error);
     return NextResponse.json(
       { error: 'Failed to fetch removed keywords' },
@@ -94,6 +98,9 @@ export async function POST(
     await markWorkflowActive(projectId, WORKFLOW);
     return NextResponse.json({ archived: created.length, removed: created }, { status: 201 });
   } catch (error) {
+    recordFlake('POST /api/projects/[projectId]/removed-keywords', error, {
+      projectWorkflowId,
+    });
     console.error('POST removed-keywords error:', error);
     return NextResponse.json(
       { error: 'Failed to archive keywords' },

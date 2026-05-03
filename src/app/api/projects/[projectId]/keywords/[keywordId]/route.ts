@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { verifyProjectWorkflowAuth } from '@/lib/auth';
 import { markWorkflowActive } from '@/lib/workflow-status';
+import { recordFlake } from '@/lib/flake-counter';
 
 const WORKFLOW = 'keyword-clustering';
 
@@ -43,6 +44,9 @@ export async function PATCH(
     await markWorkflowActive(projectId, WORKFLOW);
     return NextResponse.json(keyword);
   } catch (error) {
+    recordFlake('PATCH /api/projects/[projectId]/keywords/[keywordId]', error, {
+      projectWorkflowId,
+    });
     console.error('PATCH keyword error:', error);
     return NextResponse.json(
       { error: 'Failed to update keyword' },
@@ -73,6 +77,9 @@ export async function DELETE(
     await markWorkflowActive(projectId, WORKFLOW);
     return NextResponse.json({ success: true });
   } catch (error) {
+    recordFlake('DELETE /api/projects/[projectId]/keywords/[keywordId]', error, {
+      projectWorkflowId,
+    });
     console.error('DELETE keyword error:', error);
     return NextResponse.json(
       { error: 'Failed to delete keyword' },

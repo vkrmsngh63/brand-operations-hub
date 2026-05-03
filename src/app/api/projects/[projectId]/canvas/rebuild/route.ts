@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { verifyProjectWorkflowAuth } from '@/lib/auth';
 import { markWorkflowActive } from '@/lib/workflow-status';
 import { evaluateRebuildPayload } from '@/lib/canvas-rebuild-guard';
+import { recordFlake } from '@/lib/flake-counter';
 
 const WORKFLOW = 'keyword-clustering';
 
@@ -27,8 +28,16 @@ export async function POST(
   if (auth.error) return auth.error;
   const { projectWorkflowId } = auth;
 
+  // Captured for flake telemetry (Task: underlying flake-rate investigation).
+  // The atomic rebuild's transaction duration scales with payload size; the
+  // pgbouncer pressure analysis needs to correlate flake rate with this.
+  let payloadNodeCount: number | undefined;
+
   try {
     const body = await req.json();
+    if (Array.isArray(body.nodes)) {
+      payloadNodeCount = body.nodes.length;
+    }
 
     // ── G1 payload-sanity guard (per DEFENSE_IN_DEPTH_AUDIT_DESIGN §5.2) ──
     // Reject the canvas-blanking bug signature: a body.nodes payload that
@@ -262,6 +271,10 @@ export async function POST(
 
     return NextResponse.json({ success: true, operations: ops.length });
   } catch (error) {
+    recordFlake('POST /api/projects/[projectId]/canvas/rebuild', error, {
+      projectWorkflowId,
+      ...(payloadNodeCount !== undefined && { canvasSize: payloadNodeCount }),
+    });
     console.error('POST canvas rebuild error:', error);
     const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json(

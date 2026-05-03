@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth';
 import { getSupabaseAdmin } from '@/lib/supabase-server';
+import { recordFlake } from '@/lib/flake-counter';
 
 // DELETE /api/admin-notes/[noteId]/attachments/[attachmentId]
 export async function DELETE(
@@ -50,6 +51,10 @@ export async function DELETE(
 
     return NextResponse.json({ deleted: true });
   } catch (error) {
+    recordFlake(
+      'DELETE /api/admin-notes/[noteId]/attachments/[attachmentId]',
+      error,
+    );
     console.error('DELETE attachment error:', error);
     return NextResponse.json({ error: 'Failed to delete attachment' }, { status: 500 });
   }

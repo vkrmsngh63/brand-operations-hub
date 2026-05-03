@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth';
+import { recordFlake } from '@/lib/flake-counter';
 
 // GET /api/admin-notes?system=think-tank|pms|dashboard|plos
 export async function GET(req: NextRequest) {
@@ -25,6 +26,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(notes);
   } catch (error) {
+    recordFlake('GET /api/admin-notes', error);
     console.error('GET /api/admin-notes error:', error);
     return NextResponse.json({ error: 'Failed to fetch notes' }, { status: 500 });
   }
@@ -60,6 +62,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(note, { status: 201 });
   } catch (error) {
+    recordFlake('POST /api/admin-notes', error);
     console.error('POST /api/admin-notes error:', error);
     return NextResponse.json({ error: 'Failed to create note' }, { status: 500 });
   }
