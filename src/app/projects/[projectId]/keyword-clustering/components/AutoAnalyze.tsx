@@ -865,7 +865,14 @@ export default function AutoAnalyze({
       }
     }
     const state = buildCanvasStateForApplier(canvasStateRes, sisterLinksNow, counter);
-    const applyResult = applyOperations(state, parsed.operations);
+    // validateResultV3 is only called from the regular per-batch runLoop path,
+    // so the preview must mirror that path's regularBatchMode flag — otherwise
+    // a stray ADD_SISTER_LINK / REMOVE_SISTER_LINK would pass validation and
+    // then fail at apply time, which is exactly the asymmetric defense gap
+    // defense-in-depth is meant to prevent. Consolidation passes call
+    // applyOperations through doApplyV3 directly without going through this
+    // function, so they are unaffected.
+    const applyResult = applyOperations(state, parsed.operations, { regularBatchMode: true });
     if (!applyResult.ok) {
       const msgs = applyResult.errors.map(e => `op #${e.opIndex} ${e.opType}: ${e.message}`);
       errors.push(...msgs);
@@ -907,7 +914,7 @@ export default function AutoAnalyze({
   async function doApplyV3(
     batch: BatchObj,
     ops: ReturnType<typeof parseOperationsJsonl>['operations'],
-    options?: { consolidationMode?: boolean },
+    options?: { consolidationMode?: boolean; regularBatchMode?: boolean },
   ) {
     // Shadow the closure-frozen props that are read inside this function
     // (`allKeywords` at the reconciliation pass + the unplaced-log; `pathways`
@@ -940,7 +947,10 @@ export default function AutoAnalyze({
     const originalSisterLinks = sisterLinksRef.current;
 
     const state = buildCanvasStateForApplier(originalNodes, originalSisterLinks, nextStableIdN);
-    const applyResult = applyOperations(state, ops, { consolidationMode: options?.consolidationMode === true });
+    const applyResult = applyOperations(state, ops, {
+      consolidationMode: options?.consolidationMode === true,
+      regularBatchMode: options?.regularBatchMode === true,
+    });
     if (!applyResult.ok) {
       // Should not happen because validateResultV3 ran the same call and
       // passed; safety net only.
@@ -1515,7 +1525,13 @@ export default function AutoAnalyze({
           setBatches([...batchesRef.current]);
           return;
         } else {
-          await doApplyV3(batch, v3Validation.ops);
+          // Regular per-batch apply — recency-stickiness fix:
+          // INPUT_CONTEXT_SCALING_DESIGN.md §6 D3 partial validation outcome.
+          // The applier rejects ADD_SISTER_LINK / REMOVE_SISTER_LINK in this
+          // mode (sister links are full-canvas decisions handled by the
+          // consolidation pass). Defense in depth — the V4 prompt also drops
+          // these ops from the per-batch operation vocabulary.
+          await doApplyV3(batch, v3Validation.ops, { regularBatchMode: true });
           batch.status = 'complete';
           batch.completedAt = Date.now();
           aaLog('Batch ' + batch.batchNum + ' — applied.', 'ok');
@@ -1838,7 +1854,9 @@ export default function AutoAnalyze({
       aaLog('Batch ' + batch.batchNum + ' — cannot apply: no parsed operations', 'error');
       return;
     }
-    await doApplyV3(batch, batch._v3Ops);
+    // Same regularBatchMode flag as the runLoop apply path above —
+    // this is also a per-batch apply (just gated by manual review).
+    await doApplyV3(batch, batch._v3Ops, { regularBatchMode: true });
     batch._v3Ops = undefined;
     batch.status = 'complete';
     batch.completedAt = Date.now();

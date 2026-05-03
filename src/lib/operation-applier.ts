@@ -880,14 +880,37 @@ function runInvariants(s: Scratch, originalKeywordIds: Set<KeywordId>): void {
  * but the applier-side rejection means a stray emission fails atomically
  * rather than silently changing the canvas in a way the consolidation
  * contract forbids.
+ *
+ * `regularBatchMode` — Recency-stickiness fix, INPUT_CONTEXT_SCALING_DESIGN.md
+ * §6 Scale Session E D3 partial validation outcome (sister-link op deferral
+ * to consolidation-only). When `true`, ADD_SISTER_LINK and REMOVE_SISTER_LINK
+ * are rejected with an explicit error. Sister links are inherently
+ * full-canvas decisions; emitting them in 8-keyword regular batches inflated
+ * per-batch touch counts and force-pinned every endpoint to Tier 0 for the
+ * recency window, defeating tiered serialization's compression goal. They now
+ * live exclusively in the consolidation pass. Defense in depth — the regular
+ * V4 prompt's operation vocabulary drops these two ops, and the applier-side
+ * rejection means a stray emission fails atomically rather than silently
+ * over-touching topics in a way that compounds across batches.
+ *
+ * `consolidationMode` and `regularBatchMode` are mutually exclusive. Setting
+ * both `true` is a programming error and is rejected immediately. Setting
+ * neither is allowed for callers that don't need either restriction (the
+ * preview/validation call site, tests, and any non-AutoAnalyze caller).
  */
 export interface ApplyOptions {
   consolidationMode?: boolean;
+  regularBatchMode?: boolean;
 }
 
 const CONSOLIDATION_FORBIDDEN_OPS = new Set<Operation['type']>([
   'ADD_TOPIC',
   'ADD_KEYWORD',
+]);
+
+const REGULAR_BATCH_FORBIDDEN_OPS = new Set<Operation['type']>([
+  'ADD_SISTER_LINK',
+  'REMOVE_SISTER_LINK',
 ]);
 
 export function applyOperations(
@@ -913,6 +936,18 @@ export function applyOperations(
   }
 
   const consolidationMode = options?.consolidationMode === true;
+  const regularBatchMode = options?.regularBatchMode === true;
+
+  if (consolidationMode && regularBatchMode) {
+    return {
+      ok: false,
+      errors: [{
+        opIndex: -1,
+        opType: 'INVARIANT',
+        message: 'consolidationMode and regularBatchMode are mutually exclusive — set at most one',
+      }],
+    };
+  }
 
   try {
     operations.forEach((op, i) => {
@@ -921,6 +956,13 @@ export function applyOperations(
           i,
           op.type,
           `${op.type} is not allowed in consolidation mode (consolidation only restructures existing topics; it does not introduce new ones)`,
+        );
+      }
+      if (regularBatchMode && REGULAR_BATCH_FORBIDDEN_OPS.has(op.type)) {
+        fail(
+          i,
+          op.type,
+          `${op.type} is not allowed in regular batch mode (sister links are full-canvas decisions; emit them in the consolidation pass instead)`,
         );
       }
       switch (op.type) {

@@ -1373,3 +1373,116 @@ test('Consolidation: regression — calling applyOperations without options arg 
     ]),
   );
 });
+
+// ============================================================
+// Regular-batch mode (recency-stickiness fix —
+// INPUT_CONTEXT_SCALING_DESIGN.md §6 D3 partial validation outcome:
+// ADD_SISTER_LINK + REMOVE_SISTER_LINK forbidden; everything else allowed)
+// ============================================================
+
+test('Regular batch: ADD_SISTER_LINK is rejected with descriptive error', () => {
+  const state = stateWith([node('t-1'), node('t-2')], 100);
+  expectErr(
+    applyOperations(
+      state,
+      [{ type: 'ADD_SISTER_LINK', topicA: 't-1', topicB: 't-2' }],
+      { regularBatchMode: true },
+    ),
+    'ADD_SISTER_LINK is not allowed in regular batch mode',
+  );
+});
+
+test('Regular batch: REMOVE_SISTER_LINK is rejected with descriptive error', () => {
+  const state = stateWith([node('t-1'), node('t-2')], 100);
+  // Pre-load a sister link so REMOVE_SISTER_LINK isn't rejected for a different reason.
+  state.sisterLinks.push({ topicAStableId: 't-1', topicBStableId: 't-2' });
+  expectErr(
+    applyOperations(
+      state,
+      [{ type: 'REMOVE_SISTER_LINK', topicA: 't-1', topicB: 't-2' }],
+      { regularBatchMode: true },
+    ),
+    'REMOVE_SISTER_LINK is not allowed in regular batch mode',
+  );
+});
+
+test('Regular batch: ADD_TOPIC, ADD_KEYWORD, MOVE_KEYWORD, MERGE_TOPICS, SPLIT_TOPIC, MOVE_TOPIC, UPDATE_TOPIC_TITLE, DELETE_TOPIC, ARCHIVE_KEYWORD all succeed', () => {
+  const state = stateWith(
+    [
+      node('t-1'),
+      node('t-2', { parentStableId: 't-1', relationship: 'linear', keywordPlacements: { 'kw-a': 'primary' } }),
+      node('t-3', { parentStableId: 't-1', relationship: 'linear', keywordPlacements: { 'kw-b': 'primary', 'kw-c': 'primary' } }),
+      node('t-4', { parentStableId: 't-1', relationship: 'linear' }),
+    ],
+    100,
+  );
+  const r = expectOk(
+    applyOperations(
+      state,
+      [
+        { type: 'ADD_TOPIC', id: '$new1', title: 'New', description: '', parent: 't-1', relationship: 'linear', intentFingerprint: 'fresh searcher segment seeking new help' },
+        { type: 'ADD_KEYWORD', topic: '$new1', keywordId: 'kw-d', placement: 'primary' },
+        { type: 'MOVE_KEYWORD', keywordId: 'kw-a', from: 't-2', to: 't-3', placement: 'primary' },
+        { type: 'UPDATE_TOPIC_TITLE', id: 't-2', to: 'Renamed' },
+        { type: 'MOVE_TOPIC', id: 't-3', newParent: null, newRelationship: 'linear', reason: 'promote to root' },
+        { type: 'DELETE_TOPIC', id: 't-4', reason: 'empty', reassignKeywordsTo: 'ARCHIVE' },
+      ],
+      { regularBatchMode: true },
+    ),
+  );
+  // t-1, t-2 (renamed), t-3 (promoted), $new1 = 4 topics; t-4 deleted.
+  assert.equal(r.newState.nodes.length, 4);
+});
+
+test('Regular batch: a forbidden sister-link op fails atomically — earlier allowed ops do NOT persist', () => {
+  const state = stateWith(
+    [
+      node('t-1', { title: 'Original' }),
+      node('t-2'),
+    ],
+    100,
+  );
+  const result = applyOperations(
+    state,
+    [
+      // Allowed — would succeed alone
+      { type: 'UPDATE_TOPIC_TITLE', id: 't-1', to: 'New title' },
+      // Forbidden — should reject the whole batch
+      { type: 'ADD_SISTER_LINK', topicA: 't-1', topicB: 't-2' },
+    ],
+    { regularBatchMode: true },
+  );
+  expectErr(result, 'ADD_SISTER_LINK is not allowed in regular batch mode');
+  // State is never mutated on a failed apply.
+  assert.equal(state.nodes[0].title, 'Original');
+});
+
+test('Regular batch: explicit regularBatchMode=false behaves like no options (sister-link ops allowed)', () => {
+  const state = stateWith([node('t-1'), node('t-2')], 100);
+  expectOk(
+    applyOperations(
+      state,
+      [{ type: 'ADD_SISTER_LINK', topicA: 't-1', topicB: 't-2' }],
+      { regularBatchMode: false },
+    ),
+  );
+});
+
+test('Regular batch: regression — calling applyOperations without options arg still accepts ADD_SISTER_LINK (backwards compat)', () => {
+  const state = stateWith([node('t-1'), node('t-2')], 100);
+  expectOk(
+    applyOperations(state, [
+      { type: 'ADD_SISTER_LINK', topicA: 't-1', topicB: 't-2' },
+    ]),
+  );
+});
+
+test('Mode interaction: setting both consolidationMode and regularBatchMode true is rejected as a programming error', () => {
+  const state = stateWith([node('t-1')], 100);
+  const result = applyOperations(
+    state,
+    [{ type: 'UPDATE_TOPIC_TITLE', id: 't-1', to: 'New' }],
+    { consolidationMode: true, regularBatchMode: true },
+  );
+  expectErr(result, 'consolidationMode and regularBatchMode are mutually exclusive');
+});

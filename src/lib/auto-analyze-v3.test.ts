@@ -959,23 +959,181 @@ test('TouchTracker: ADD_TOPIC alias resolved through aliasResolutions', () => {
   assert.equal(t.get('$new1'), undefined);
 });
 
-test('TouchTracker: keyword + sister-link ops stamp endpoint topics', () => {
+test('TouchTracker: ADD_KEYWORD stamps the topic; MOVE_KEYWORD stamps target only; sister-link ops stamp neither (structural-identity rule)', () => {
   const t = createTouchTracker();
   recordTouchesFromOps(
     t,
     [
       { type: 'ADD_KEYWORD', topic: 't-1', keywordId: 'k1', placement: 'primary' },
+      // MOVE_KEYWORD: target's structure changes (gains a link); source's
+      // structure is unchanged (just lost a link). Per the recency-stickiness
+      // fix, only target stamps.
       { type: 'MOVE_KEYWORD', from: 't-2', to: 't-3', keywordId: 'k1', placement: 'primary' },
+      // ADD_SISTER_LINK / REMOVE_SISTER_LINK do not change either endpoint's
+      // structural identity — neither stamps. (In regular batches the
+      // applier rejects these ops; this test exercises the
+      // consolidation-pass code path where they're allowed.)
       { type: 'ADD_SISTER_LINK', topicA: 't-4', topicB: 't-5' },
+      { type: 'REMOVE_SISTER_LINK', topicA: 't-6', topicB: 't-7' },
     ],
     9,
     {},
   );
-  assert.equal(t.get('t-1'), 9);
-  assert.equal(t.get('t-2'), 9);
-  assert.equal(t.get('t-3'), 9);
-  assert.equal(t.get('t-4'), 9);
-  assert.equal(t.get('t-5'), 9);
+  assert.equal(t.get('t-1'), 9);          // ADD_KEYWORD topic stamped
+  assert.equal(t.get('t-2'), undefined);  // MOVE_KEYWORD source NOT stamped
+  assert.equal(t.get('t-3'), 9);          // MOVE_KEYWORD target stamped
+  assert.equal(t.get('t-4'), undefined);  // ADD_SISTER_LINK endpoint NOT stamped
+  assert.equal(t.get('t-5'), undefined);  // ADD_SISTER_LINK endpoint NOT stamped
+  assert.equal(t.get('t-6'), undefined);  // REMOVE_SISTER_LINK endpoint NOT stamped
+  assert.equal(t.get('t-7'), undefined);  // REMOVE_SISTER_LINK endpoint NOT stamped
+});
+
+test('TouchTracker: ADD_TOPIC stamps new topic only; parent NOT stamped (parent structure unchanged)', () => {
+  const t = createTouchTracker();
+  recordTouchesFromOps(
+    t,
+    [
+      {
+        type: 'ADD_TOPIC',
+        id: '$new1',
+        title: 'Child',
+        description: '',
+        parent: 't-10',
+        relationship: 'linear',
+      },
+    ],
+    4,
+    { $new1: 't-50' },
+  );
+  assert.equal(t.get('t-50'), 4);          // new topic stamped
+  assert.equal(t.get('t-10'), undefined);  // parent NOT stamped
+});
+
+test('TouchTracker: MOVE_TOPIC stamps the moved topic only; new parent NOT stamped', () => {
+  const t = createTouchTracker();
+  recordTouchesFromOps(
+    t,
+    [
+      {
+        type: 'MOVE_TOPIC',
+        id: 't-3',
+        newParent: 't-10',
+        newRelationship: 'nested',
+        reason: 'reparent',
+      },
+    ],
+    6,
+    {},
+  );
+  assert.equal(t.get('t-3'), 6);           // moved topic stamped
+  assert.equal(t.get('t-10'), undefined);  // new parent NOT stamped
+});
+
+test('TouchTracker: MERGE_TOPICS stamps target only; source ceases to exist and is not stamped', () => {
+  const t = createTouchTracker();
+  recordTouchesFromOps(
+    t,
+    [
+      {
+        type: 'MERGE_TOPICS',
+        sourceId: 't-1',
+        targetId: 't-2',
+        mergedTitle: 'Merged',
+        mergedDescription: 'Combined',
+        reason: 'duplicate intent',
+      },
+    ],
+    8,
+    {},
+  );
+  assert.equal(t.get('t-2'), 8);          // target stamped
+  assert.equal(t.get('t-1'), undefined);  // source NOT stamped (ceases to exist)
+});
+
+test('TouchTracker: SPLIT_TOPIC stamps new into[] children only; source NOT stamped', () => {
+  const t = createTouchTracker();
+  recordTouchesFromOps(
+    t,
+    [
+      {
+        type: 'SPLIT_TOPIC',
+        sourceId: 't-1',
+        into: [
+          { id: '$one', title: 'A', description: '', keywordIds: ['k1'] },
+          { id: '$two', title: 'B', description: '', keywordIds: ['k2'] },
+        ],
+        reason: 'distinct intents',
+      },
+    ],
+    11,
+    { $one: 't-20', $two: 't-21' },
+  );
+  assert.equal(t.get('t-20'), 11);        // into[0] stamped
+  assert.equal(t.get('t-21'), 11);        // into[1] stamped
+  assert.equal(t.get('t-1'), undefined);  // source NOT stamped (ceases to exist)
+});
+
+test('TouchTracker: DELETE_TOPIC with reassign target stamps target only; deleted id NOT stamped', () => {
+  const t = createTouchTracker();
+  recordTouchesFromOps(
+    t,
+    [
+      {
+        type: 'DELETE_TOPIC',
+        id: 't-1',
+        reason: 'redundant',
+        reassignKeywordsTo: 't-2',
+      },
+    ],
+    5,
+    {},
+  );
+  assert.equal(t.get('t-2'), 5);          // reassign target stamped
+  assert.equal(t.get('t-1'), undefined);  // deleted topic NOT stamped (ceases to exist)
+});
+
+test('TouchTracker: DELETE_TOPIC with reassign=ARCHIVE stamps nothing (no surviving topic affected)', () => {
+  const t = createTouchTracker();
+  recordTouchesFromOps(
+    t,
+    [
+      {
+        type: 'DELETE_TOPIC',
+        id: 't-1',
+        reason: 'archive',
+        reassignKeywordsTo: 'ARCHIVE',
+      },
+    ],
+    5,
+    {},
+  );
+  assert.equal(t.size, 0);
+});
+
+test('TouchTracker: REMOVE_KEYWORD stamps from-topic only', () => {
+  const t = createTouchTracker();
+  recordTouchesFromOps(
+    t,
+    [
+      { type: 'REMOVE_KEYWORD', from: 't-7', keywordId: 'k1' },
+    ],
+    2,
+    {},
+  );
+  assert.equal(t.get('t-7'), 2);
+});
+
+test('TouchTracker: ARCHIVE_KEYWORD stamps no topic (global)', () => {
+  const t = createTouchTracker();
+  recordTouchesFromOps(
+    t,
+    [
+      { type: 'ARCHIVE_KEYWORD', keywordId: 'k1', reason: 'irrelevant' },
+    ],
+    2,
+    {},
+  );
+  assert.equal(t.size, 0);
 });
 
 test('batchesSinceTouch: null for never-touched, arithmetic for touched', () => {

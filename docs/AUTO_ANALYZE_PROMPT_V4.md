@@ -2,6 +2,8 @@
 
 **Created:** 2026-04-30 (Scale Session D build session — V4 derives from V3 with three surgical additions: (a) tiered TSV input format documented in the Primer's INPUT TABLE COLUMNS / HOW TO READ THE TABLE sections (=== TIER 0 / 1 / 2 === sections; column shapes per tier; parent_id navigation when ancestors are at compressed tiers); (b) `intent_fingerprint` field added to ADD_TOPIC / UPDATE_TOPIC_TITLE / SPLIT_TOPIC into[] / MERGE_TOPICS (as `merged_intent_fingerprint`) as required, optional on UPDATE_TOPIC_DESCRIPTION; (c) Reevaluation Pass trigger 3a expanded to explicitly mention cross-canvas intent-equivalence detection via fingerprints, including topics shown only at Tier 1. All other V3 reasoning machinery (Step 0–7 placement process, layered placement strategy, intent-equivalence binding rule, topic-naming guidelines, conversion funnel ordering, stability-score friction) verbatim from V3. Director must re-paste this V4 into the Auto-Analyze UI before the next run.)
 **Created in session:** session_2026-04-30-c_scale-session-d-build (Claude Code)
+**Updated:** 2026-05-03-c (Recency-stickiness fix — INPUT_CONTEXT_SCALING_DESIGN.md §6 D3 partial validation outcome. ADD_SISTER_LINK and REMOVE_SISTER_LINK are removed from the regular per-batch operation vocabulary; they live exclusively in the consolidation pass. Sister links are inherently full-canvas decisions; emitting them in 8-keyword batches inflated per-batch touch counts and force-pinned every endpoint to Tier 0 for the recency window, defeating tiered serialization's compression goal. Defense in depth: prompt restriction here + applier-side rejection in `regularBatchMode` (`src/lib/operation-applier.ts` REGULAR_BATCH_FORBIDDEN_OPS). Director must re-paste this updated V4 into the Auto-Analyze UI before the next run. The Consolidation V4 prompt at `docs/AUTO_ANALYZE_CONSOLIDATION_PROMPT_V4.md` continues to allow ADD_SISTER_LINK / REMOVE_SISTER_LINK and is unchanged.)
+**Updated in session:** session_2026-05-03-c_recency-stickiness-fix (Claude Code)
 
 **Purpose:** The two text prompts used by the Keyword Clustering tool's Auto-Analyze feature. V4 extends V3 with the input-side context-scaling mechanism described in `docs/INPUT_CONTEXT_SCALING_DESIGN.md` — the canvas TSV the model receives may now arrive in up to three labelled sections (Tier 0 / Tier 1 / Tier 2) instead of one big 9-column table. Topics that are off-batch, settled, and not recently touched get compressed into shorter rows; topics in the batch's relevant subtree, recently touched, or low-stability stay at full detail. Every topic is on the canvas regardless of which tier it appears in.
 
@@ -114,8 +116,9 @@ At the current stage of our workflow, we have a batch of selected search terms f
    - Are new topics needed (because no existing topic captures the keyword's core intent or a meaningful facet)?
    - Are existing topics' titles or descriptions wrong, given what these new keywords reveal?
    - Should existing topics be merged, split, moved, or deleted (with re-assignment of their keywords)?
-   - Are sister-link relationships between topics changing?
    - Are any keywords irrelevant to the niche and should be archived?
+
+   Note: sister-link relationships between topics (sideways non-hierarchical connections) are NOT changed in this per-batch flow. Sister links are full-canvas decisions and are handled by the periodic Consolidation Pass, which sees the entire canvas at full detail and runs on its own cadence. Do not emit ADD_SISTER_LINK or REMOVE_SISTER_LINK in this batch — the applier rejects them.
 
 3. Run the Post-Batch Funnel Reevaluation Pass (defined further below) to scan for structural improvements warranted by what this batch revealed.
 
@@ -319,7 +322,7 @@ Topic roles (clarified for the layered placement model):
 
 - Narrative-bridging topics: empty of primary keywords (may have zero or more secondary placements). They exist to connect topics in the hierarchy and provide chapter structure for the narrative flow. Examples: "Who does bursitis affect?" (organizes demographic dimensions); "Bursitis symptoms" (organizes symptom dimensions); "Treatment options" (organizes treatment-context dimensions); "How does bursitis affect different people differently?" (a higher-level unifying parent organizing multiple dimension-organizing topics). These must still have searcher-centric titles and topic descriptions.
 
-- Cross-cutting topics: capture a dimension theme across multiple branches of the funnel. Connected to peer dimension topics or compound-intent topics via ADD_SISTER_LINK operations when relevant.
+- Cross-cutting topics: capture a dimension theme across multiple branches of the funnel. They may be connected to peer dimension topics or compound-intent topics via sister links — but those links are emitted in the periodic Consolidation Pass (not in this per-batch flow). In this batch, simply place keywords at the right cross-cutting topic; the link structure is the consolidation pass's responsibility.
 
 The hierarchy as a whole should read like a well-structured table of contents for the searcher's journey — chapters (root and high-level organizational topics) → sections (mid-level dimension and bridge topics) → specific intent pages (compound primary topics with their keyword sets).
 
@@ -350,7 +353,7 @@ Score interpretation:
 
 RATIONALE: High-score topics represent admin's accumulated prior approvals. Modifying them without justification wastes admin's prior decisions and causes downstream churn. A friction gradient — higher bar for higher-score items — balances the need to improve the tree with the need to respect established structure.
 
-JUSTIFY_RESTRUCTURE applies to: UPDATE_TOPIC_TITLE, MOVE_TOPIC, MERGE_TOPICS (when EITHER source or target is at threshold), SPLIT_TOPIC, DELETE_TOPIC. It does NOT apply to UPDATE_TOPIC_DESCRIPTION (descriptive-only edits are safe even on stable topics) or to the additive keyword-placement operations (ADD_KEYWORD, MOVE_KEYWORD, REMOVE_KEYWORD, ARCHIVE_KEYWORD, ADD_SISTER_LINK, REMOVE_SISTER_LINK).
+JUSTIFY_RESTRUCTURE applies to: UPDATE_TOPIC_TITLE, MOVE_TOPIC, MERGE_TOPICS (when EITHER source or target is at threshold), SPLIT_TOPIC, DELETE_TOPIC. It does NOT apply to UPDATE_TOPIC_DESCRIPTION (descriptive-only edits are safe even on stable topics) or to the additive keyword-placement operations (ADD_KEYWORD, MOVE_KEYWORD, REMOVE_KEYWORD, ARCHIVE_KEYWORD).
 
 Adding keywords or descriptive detail to a high-score topic does NOT require JUSTIFY_RESTRUCTURE. Only structural changes do.
 
@@ -695,7 +698,7 @@ Constraints:
   - The source topic MUST have NO child topics. If it has children, MOVE_TOPIC them to a new parent FIRST (earlier in this batch's operation list).
   - Every keyword currently at the source must be assigned to exactly one of the new topics (via keyword_ids on each "into" entry). Every UUID listed must currently be at the source. No keyword may appear in more than one "into" entry.
   - Each new topic inherits the source's parent and relationship (the applier handles this — you don't specify them per "into" entry).
-  - Sister links pointing to or from the source topic are DROPPED (not transferred to the new topics — there is no canonical mapping for which new topic inherits each link). If you want the new topics to be sister-linked to peers from the source's old links, emit ADD_SISTER_LINK operations explicitly later in the same batch.
+  - Sister links pointing to or from the source topic are DROPPED (not transferred to the new topics — there is no canonical mapping for which new topic inherits each link). The next Consolidation Pass will rebuild any warranted sister links across the post-split topics.
 
 DELETE_TOPIC — Remove a topic.
 Fields:
@@ -744,20 +747,13 @@ Fields:
   - reason: plain-English explanation of why the keyword is irrelevant (non-empty; e.g., "homograph: 'bursa' references the Turkish city, not bursitis")
 
 
-SISTER-LINK OPERATIONS
+SISTER-LINK OPERATIONS — DEFERRED TO CONSOLIDATION PASS
 
-ADD_SISTER_LINK — Create a sideways link between two topics.
-Fields:
-  - op: "ADD_SISTER_LINK"
-  - topic_a: Stable ID or alias
-  - topic_b: Stable ID or alias (must differ from topic_a)
-Constraint: the link must not already exist (in either direction — sister links are bidirectional and the applier deduplicates on canonicalized order).
+`ADD_SISTER_LINK` and `REMOVE_SISTER_LINK` are NOT part of the per-batch operation vocabulary. Sister links are sideways non-hierarchical connections that span the entire canvas; they are full-canvas decisions and belong in the periodic Consolidation Pass (which sees every topic at full detail). Emitting either operation in this batch will cause the applier to reject the entire batch atomically with the error message: *"<OP> is not allowed in regular batch mode (sister links are full-canvas decisions; emit them in the consolidation pass instead)."*
 
-REMOVE_SISTER_LINK — Remove an existing sister link.
-Fields:
-  - op: "REMOVE_SISTER_LINK"
-  - topic_a: Stable ID or alias
-  - topic_b: Stable ID or alias
+You will still SEE sister links in the input — the Sister Nodes column on Tier 0 rows lists them, and the consolidation pass between batches may add or remove them. Treat them as established context: silence is preservation. Just don't emit ops to change them.
+
+If during your Reevaluation Pass you notice a sister-link relationship that obviously should exist or should be removed, NOTE the observation in your reasoning but DO NOT emit a sister-link operation. The next Consolidation Pass is the place where those decisions are made.
 
 
 CROSS-CUTTING RULES
@@ -770,11 +766,11 @@ NEW-TOPIC ALIASES ($new1, $new2, ...). When you create a new topic via ADD_TOPIC
 
 KEYWORDS BY UUID, NOT TEXT. Every operation that references a keyword uses the keyword's UUID (from the input's Keywords column, the part before the "|"). Whitespace, smart quotes, case, and unicode in keyword text create silent text-matching failures; UUIDs do not.
 
-REASONS ON STRUCTURAL OPERATIONS. MOVE_TOPIC, MERGE_TOPICS, SPLIT_TOPIC, DELETE_TOPIC, and ARCHIVE_KEYWORD all require a non-empty plain-English reason field. The reason is the audit-log entry — admin reviews these during human-in-loop review. ADD_TOPIC, UPDATE_TOPIC_TITLE, UPDATE_TOPIC_DESCRIPTION, ADD_KEYWORD, MOVE_KEYWORD, REMOVE_KEYWORD, ADD_SISTER_LINK, REMOVE_SISTER_LINK do NOT require a reason (they are additive or descriptive only).
+REASONS ON STRUCTURAL OPERATIONS. MOVE_TOPIC, MERGE_TOPICS, SPLIT_TOPIC, DELETE_TOPIC, and ARCHIVE_KEYWORD all require a non-empty plain-English reason field. The reason is the audit-log entry — admin reviews these during human-in-loop review. ADD_TOPIC, UPDATE_TOPIC_TITLE, UPDATE_TOPIC_DESCRIPTION, ADD_KEYWORD, MOVE_KEYWORD, REMOVE_KEYWORD do NOT require a reason (they are additive or descriptive only).
 
 INTENT FINGERPRINT — REQUIRED on ADD_TOPIC, UPDATE_TOPIC_TITLE, MERGE_TOPICS (as `merged_intent_fingerprint`), and on each SPLIT_TOPIC `into[]` entry. OPTIONAL on UPDATE_TOPIC_DESCRIPTION (omit unless the description rewrite has shifted compound intent). Format: short canonical phrase, 5–15 words, in searcher-centric language, capturing the topic's compound intent — audience + situation + goal. Same voice as a good searcher-centric title; basically a one-line expansion of the title. Example: *"Older bursitis sufferers seeking gentle, low-cost home relief."* The fingerprint is the load-bearing field for cross-canvas intent-equivalence detection when the topic later gets compressed to Tier 1 — see the Initial Prompt's Reevaluation Pass section. Do NOT emit fingerprints on operations where they're not listed (ADD_KEYWORD, MOVE_KEYWORD, etc. — fingerprints belong to topics, not keyword placements).
 
-JUSTIFY_RESTRUCTURE — required when an operation targets a topic with stability_score >= 7.0. Applies to: UPDATE_TOPIC_TITLE, MOVE_TOPIC, MERGE_TOPICS (when EITHER source or target is at threshold), SPLIT_TOPIC, DELETE_TOPIC. Does NOT apply to: UPDATE_TOPIC_DESCRIPTION, ADD_TOPIC (new topics start at 0.0), ADD_KEYWORD, MOVE_KEYWORD, REMOVE_KEYWORD, ARCHIVE_KEYWORD, ADD_SISTER_LINK, REMOVE_SISTER_LINK.
+JUSTIFY_RESTRUCTURE — required when an operation targets a topic with stability_score >= 7.0. Applies to: UPDATE_TOPIC_TITLE, MOVE_TOPIC, MERGE_TOPICS (when EITHER source or target is at threshold), SPLIT_TOPIC, DELETE_TOPIC. Does NOT apply to: UPDATE_TOPIC_DESCRIPTION, ADD_TOPIC (new topics start at 0.0), ADD_KEYWORD, MOVE_KEYWORD, REMOVE_KEYWORD, ARCHIVE_KEYWORD.
 
 When the gate fires, the operation includes a "justify_restructure" object with these six fields:
 
@@ -802,23 +798,21 @@ GENERAL CONSTRAINTS
 
 4. DELETE_TOPIC and SPLIT_TOPIC require the source topic to have NO child topics. If the topic has children, MOVE_TOPIC them to a new parent FIRST (earlier in your operation list).
 
-5. MERGE_TOPICS automatically re-parents source's children under target and rewrites source's sister links to target. Do NOT emit separate MOVE_TOPIC or sister-link operations for these.
+5. MERGE_TOPICS automatically re-parents source's children under target and rewrites source's sister links to target. Do NOT emit separate MOVE_TOPIC operations for the children.
 
-6. Sister links are bidirectional and stored once (not twice). Emit ADD_SISTER_LINK once for any new sister relationship (in either field-order; the applier canonicalizes).
+6. Empty topics are valid. Topics with no assigned keywords serve as narrative-bridging or organizational nodes. They must still have searcher-centric titles and topic descriptions.
 
-7. Empty topics are valid. Topics with no assigned keywords serve as narrative-bridging or organizational nodes. They must still have searcher-centric titles and topic descriptions.
+7. Complete upstream chains are required. Every topic must have a chain of parent topics back to a root (a topic with parent = null). If you place a keyword under a deeply nested new topic, every intermediate topic in the chain must also exist (either already on the canvas or created in this batch via ADD_TOPIC).
 
-8. Complete upstream chains are required. Every topic must have a chain of parent topics back to a root (a topic with parent = null). If you place a keyword under a deeply nested new topic, every intermediate topic in the chain must also exist (either already on the canvas or created in this batch via ADD_TOPIC).
+8. Topic titles must use searcher-centric language — phrased as the condition sufferer would naturally think, ask, or respond to. See the Initial Prompt's Topic Naming guidelines.
 
-9. Topic titles must use searcher-centric language — phrased as the condition sufferer would naturally think, ask, or respond to. See the Initial Prompt's Topic Naming guidelines.
+9. Stable IDs are emitted verbatim. If you reference t-42, type "t-42" exactly — no extra whitespace, no quotation, no aliases.
 
-10. Stable IDs are emitted verbatim. If you reference t-42, type "t-42" exactly — no extra whitespace, no quotation, no aliases.
+10. Stability scores are read-only metadata. Do not emit operations that change a stability score directly; the tool computes scores from your operations and admin's review actions. New topics created in this batch implicitly start at 0.0.
 
-11. Stability scores are read-only metadata. Do not emit operations that change a stability score directly; the tool computes scores from your operations and admin's review actions. New topics created in this batch implicitly start at 0.0.
+11. Conversion Path is read-only. The applier preserves a topic's Conversion Path. If you believe a topic genuinely belongs in a different funnel, note it in your operation's reason field for admin review; do not silently change it.
 
-12. Conversion Path is read-only. The applier preserves a topic's Conversion Path. If you believe a topic genuinely belongs in a different funnel, note it in your operation's reason field for admin review; do not silently change it.
-
-13. Parent-cycles are forbidden. MOVE_TOPIC's new_parent cannot be a descendant of the moved topic. Walk the new parent's parent chain mentally before emitting; if it reaches the moved topic, the move is illegal.
+12. Parent-cycles are forbidden. MOVE_TOPIC's new_parent cannot be a descendant of the moved topic. Walk the new parent's parent chain mentally before emitting; if it reaches the moved topic, the move is illegal.
 
 
 OUTPUT RECAP

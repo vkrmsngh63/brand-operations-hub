@@ -1,7 +1,9 @@
 # KEYWORD CLUSTERING — ACTIVE DOCUMENT
 ## Current state of the Keyword Clustering workflow tool (Group B, tool-specific)
 
-**Last updated:** May 3, 2026-b (cold-start fix live verification — PARTIAL session — option (a) from the prior STATE block's standing instructions. **DOC + LIVE-RUN session — no code changes.** Director hard-refreshed the Bursitis Test 2 workspace 5-10 times on production vklf.com (Vercel auto-redeploy of `52db8e3` from prior session was already live). Result: ALL refreshes populated normally with NO banner observed (canvas + keyword tables loaded happy-path on every attempt). Interpretation: across ~5-10 cold starts, the underlying database flake rate did not produce a single retry event, so neither the yellow "Retrying load…" auto-recovery banner nor the red "Could not load X — Click here to retry" banner fired live. **Director chose Option B: accept partial verification — happy path confirmed live + banner UI confirmed only by unit tests + code review** (alternative was Option A: induce a flake via DevTools network throttling to exercise the banner code paths in a controlled way). **Banner UI live verification deferred** to whatever natural flake event happens next during D3 retry or another Auto-Analyze run on Bursitis Test 2. ROADMAP "🟡 CODE FIX SHIPPED 2026-05-03" entry expanded with today's partial-verification note + remains 🟡 (not ✅) until natural banner-UI confirmation lands. W#1 PRODUCTION-READINESS GATE prerequisite #1 status moves from "🟡 pending live verification" to "🟡 PARTIAL — live happy-path confirmed; banner UI deferred". Multi-workflow: schema-change-in-flight stays "No"; W#2 still 🆕 about-to-start; no parallel chat. Pull-rebase clean at session start. Commit local + doc-only; push pending Rule 9 approval — doc-only push has zero user-visible impact on vklf.com.)
+**Last updated:** May 3, 2026-c (Recency-stickiness fix — option (a) from the prior STATE block's standing instructions. **CODE-FIX session — no schema, no DB, no live run, no deploy yet.** Two-part fix per `INPUT_CONTEXT_SCALING_DESIGN.md` §6 D3 partial validation outcome. (1) Sister-link op deferral to consolidation-only: V4 prompt drops `ADD_SISTER_LINK` + `REMOVE_SISTER_LINK` from per-batch operation vocabulary; applier gains `regularBatchMode: true` flag (mirrors existing `consolidationMode: true` pattern) that rejects those two ops atomically when set; AutoAnalyze.tsx wires `regularBatchMode: true` at the three regular-batch apply call sites (`validateResultV3` preview, runLoop happy-path apply, `handleApplyBatch` BATCH_REVIEW apply). Defense in depth — prompt restriction + applier rejection + tests. (2) Q5→B touch-semantics refinement (`recordTouchesFromOps`): stamps only topics whose own structural identity changed. ADD_TOPIC drops parent stamp; MOVE_TOPIC drops newParent stamp; MERGE_TOPICS drops source stamp; SPLIT_TOPIC drops source stamp; DELETE_TOPIC drops deleted-id stamp; MOVE_KEYWORD drops source stamp; ADD_SISTER_LINK / REMOVE_SISTER_LINK drop both endpoint stamps. 299/299 src/lib tests pass (was 284; +15 new — 7 applier `regularBatchMode` tests + 8 touch-tracker structural-identity tests including the rewritten "keyword + sister-link ops stamp endpoint topics" test now renamed for the new semantics); tsc clean; build clean (25 routes); lint at exact baseline parity (16e/41w; zero new). Multi-workflow: schema-change-in-flight stays "No"; W#2 still 🆕 about-to-start; no parallel chat. Pull-rebase clean at session start. Commit local; push pending director's discretionary Rule 9 approval. Director MUST re-paste the updated V4 Initial Prompt + Primer into the Auto-Analyze UI before the next D3 attempt — applier-side rejection alone would cause first-batch failure if the prompt still tells the model to emit sister-link ops.)
+**Last updated in session:** session_2026-05-03-c_recency-stickiness-fix (Claude Code)
+**Previously updated:** May 3, 2026-b (cold-start fix live verification — PARTIAL session — option (a) from the prior STATE block's standing instructions. **DOC + LIVE-RUN session — no code changes.** Director hard-refreshed the Bursitis Test 2 workspace 5-10 times on production vklf.com (Vercel auto-redeploy of `52db8e3` from prior session was already live). Result: ALL refreshes populated normally with NO banner observed (canvas + keyword tables loaded happy-path on every attempt). Interpretation: across ~5-10 cold starts, the underlying database flake rate did not produce a single retry event, so neither the yellow "Retrying load…" auto-recovery banner nor the red "Could not load X — Click here to retry" banner fired live. **Director chose Option B: accept partial verification — happy path confirmed live + banner UI confirmed only by unit tests + code review** (alternative was Option A: induce a flake via DevTools network throttling to exercise the banner code paths in a controlled way). **Banner UI live verification deferred** to whatever natural flake event happens next during D3 retry or another Auto-Analyze run on Bursitis Test 2. ROADMAP "🟡 CODE FIX SHIPPED 2026-05-03" entry expanded with today's partial-verification note + remains 🟡 (not ✅) until natural banner-UI confirmation lands. W#1 PRODUCTION-READINESS GATE prerequisite #1 status moves from "🟡 pending live verification" to "🟡 PARTIAL — live happy-path confirmed; banner UI deferred". Multi-workflow: schema-change-in-flight stays "No"; W#2 still 🆕 about-to-start; no parallel chat. Pull-rebase clean at session start. Commit local + doc-only; push pending Rule 9 approval — doc-only push has zero user-visible impact on vklf.com.)
 **Last updated in session:** session_2026-05-03-b_cold-start-fix-live-verification-partial (Claude Code)
 **Previously updated in session:** session_2026-05-03_cold-start-render-layer-fix (Claude Code)
 **Previously updated:** May 2, 2026-e (HTTP 500 fix live verification + cold-start canvas-empty finding session — fifth session of 2026-05-02, follow-up to `2026-05-02-d_http-500-retry-regression-investigation`. **DOC + LIVE-RUN session — no code changes.** `e2a32b2` pushed to vklf.com at session start; live-verified on Bursitis Test 2 against the preserved 30/291 checkpoint. Verification SUCCEEDED on all 4 primary signals; both helper paths exercised in 4 apply events at canvas 118-122. Hypothesis A CONFIRMED. Two new HIGH-severity ROADMAP entries captured: (A) cold-start hard-refresh canvas/keyword table empty under shared pgbouncer pressure (existing 2026-05-02-d MEDIUM entry upgraded to HIGH + expanded with keyword-table finding); (B) underlying ~25% per-endpoint pgbouncer/Prisma flake rate as rate-layer root cause. Director's framing 2026-05-02-e: "All these issues need to be fixed." Multi-workflow: schema-change-in-flight stays "No"; W#2 still 🆕 about-to-start; no parallel chat. Doc-only commit + push.)
@@ -48,7 +50,118 @@
 
 ---
 
-## ⚠️ POST-2026-05-03-B-COLD-START-FIX-LIVE-VERIFICATION-PARTIAL STATE (READ FIRST — updated 2026-05-03-b)
+## ⚠️ POST-2026-05-03-C-RECENCY-STICKINESS-FIX STATE (READ FIRST — updated 2026-05-03-c)
+
+**As of 2026-05-03-c (thirty-eighth Claude Code session, follow-up to `session_2026-05-03-b_cold-start-fix-live-verification-partial`). CODE-FIX session — no schema, no DB, no live run, no deploy yet. Implements option (a) from the prior STATE block: prerequisite #2 of the W#1 PRODUCTION-READINESS GATE — D3 RETRY entry on ROADMAP. Two-part fix landed; all checks green; commit local pending director's Rule 9 push approval.**
+
+### What this session shipped to W#1
+
+**New code (single commit, ready for Rule 9 push approval):**
+
+- **`src/lib/operation-applier.ts` (modified, ~30 LOC net add).** New `regularBatchMode?: boolean` field on `ApplyOptions`, parallel to the existing `consolidationMode?: boolean`. New `REGULAR_BATCH_FORBIDDEN_OPS = new Set(['ADD_SISTER_LINK', 'REMOVE_SISTER_LINK'])` constant. New mutual-exclusivity check: setting both flags `true` returns `ok: false` with an `INVARIANT` error before any op runs. New per-op rejection at the same checkpoint as the existing consolidation-mode check: when `regularBatchMode === true`, sister-link ops fail atomically with the descriptive error *"`<OP>` is not allowed in regular batch mode (sister links are full-canvas decisions; emit them in the consolidation pass instead)."* Header doc-comment on `ApplyOptions` extended with the recency-stickiness-fix rationale + cross-references to `INPUT_CONTEXT_SCALING_DESIGN.md` §6.
+
+- **`src/lib/operation-applier.test.ts` (modified, ~110 LOC net add — 7 new tests).** New "Regular-batch mode" test block at the end of the file mirroring the structure of the existing "Consolidation mode" block: ADD_SISTER_LINK rejected; REMOVE_SISTER_LINK rejected; allowed-vocabulary ops (ADD_TOPIC + ADD_KEYWORD + MOVE_KEYWORD + MERGE_TOPICS + SPLIT_TOPIC + MOVE_TOPIC + UPDATE_TOPIC_TITLE + DELETE_TOPIC + ARCHIVE_KEYWORD) all succeed under `regularBatchMode: true`; atomic-failure invariant (forbidden op late in batch rolls back earlier allowed ops); explicit `regularBatchMode: false` behaves like no options; backwards-compat regression (no-options call still accepts ADD_SISTER_LINK); mode-interaction (both flags true → mutual-exclusivity error).
+
+- **`src/lib/auto-analyze-v3.ts` (modified, ~30 LOC net change).** `recordTouchesFromOps` Q5→B refined per the structural-identity rule (only topics whose own structural identity changed in this batch get stamped). Per-op changes documented in the function's expanded header doc-comment. Behaviorally:
+  - `ADD_TOPIC` → stamps the new topic only (was: stamped new topic + parent)
+  - `MOVE_TOPIC` → stamps the moved topic only (was: stamped topic + newParent)
+  - `MERGE_TOPICS` → stamps target only (was: stamped both source + target)
+  - `SPLIT_TOPIC` → stamps the new into[] children only (was: stamped source + into[] children)
+  - `DELETE_TOPIC` → stamps the reassign target only when not ARCHIVE (was: stamped deleted id + reassign target)
+  - `MOVE_KEYWORD` → stamps target only (was: stamped both source + target)
+  - `ADD_SISTER_LINK` / `REMOVE_SISTER_LINK` → stamps neither endpoint (was: stamped both); also: in regular batches the applier now rejects these ops, so the branch only fires from consolidation passes
+  - `UPDATE_TOPIC_TITLE` / `UPDATE_TOPIC_DESCRIPTION` / `ADD_KEYWORD` / `REMOVE_KEYWORD` / `ARCHIVE_KEYWORD` → unchanged (single ref or no topic ref)
+
+- **`src/lib/auto-analyze-v3.test.ts` (modified, ~140 LOC net add — 8 new tests; 1 existing test rewritten in place for the new semantics).** Old "TouchTracker: keyword + sister-link ops stamp endpoint topics" test renamed and rewritten to verify the new structural-identity rule. Seven brand-new tests, one per refined op type: ADD_TOPIC parent-not-stamped; MOVE_TOPIC newParent-not-stamped; MERGE_TOPICS source-not-stamped; SPLIT_TOPIC source-not-stamped; DELETE_TOPIC deleted-id-not-stamped (with reassign target); DELETE_TOPIC ARCHIVE stamps nothing; REMOVE_KEYWORD stamps from-topic; ARCHIVE_KEYWORD stamps no topic. The pre-existing UPDATE_TOPIC_TITLE single-stamp test and ADD_TOPIC alias-resolution test stay green by definition (single-ref ops are unaffected; alias resolution is unchanged).
+
+- **`src/app/projects/[projectId]/keyword-clustering/components/AutoAnalyze.tsx` (modified, ~25 LOC net change).** `doApplyV3` options type extended from `{ consolidationMode?: boolean }` to `{ consolidationMode?: boolean; regularBatchMode?: boolean }`. Inside `doApplyV3`, the `applyOperations` call now forwards both flags. Three call-site updates:
+  1. `validateResultV3` (line ~868) preview `applyOperations` call now passes `{ regularBatchMode: true }` so the dry-run mirrors the real apply's defense (prevents the asymmetric-defense gap that would let a stray sister-link op pass validation and fail at apply time).
+  2. `runLoop` happy-path apply (line ~1518) now passes `{ regularBatchMode: true }`.
+  3. `handleApplyBatch` BATCH_REVIEW apply (line ~1841) now passes `{ regularBatchMode: true }`.
+
+  The existing consolidation-pass call site (line ~1369) continues to pass `{ consolidationMode: true }` unchanged — sister-link ops remain allowed in consolidation passes per `INPUT_CONTEXT_SCALING_DESIGN.md` §4.1.
+
+- **`docs/AUTO_ANALYZE_PROMPT_V4.md` (modified, ~25 LOC net change).** Header gains an `**Updated:** 2026-05-03-c` block summarizing the recency-stickiness fix + the defense-in-depth pairing with the applier flag + the director-must-re-paste reminder. The Step-2 keyword-decision list drops *"Are sister-link relationships between topics changing?"* and gains an explicit deferral note. Cross-cutting topic description (Step 3a) updated to say sister links are emitted in the Consolidation Pass, not per-batch. JUSTIFY_RESTRUCTURE list (both occurrences) drops sister-link entries. SPLIT_TOPIC's "if you want sister links to peers, emit ADD_SISTER_LINK later in the same batch" guidance updated to redirect to the next Consolidation Pass. Old SISTER-LINK OPERATIONS section (with the two op definitions) replaced by a SISTER-LINK OPERATIONS — DEFERRED TO CONSOLIDATION PASS section that explains the deferral, names the applier error message verbatim, and instructs the model to note observations in reasoning but not emit ops. REASONS list drops sister-link entries. Cross-cutting rule #6 (sister-link bidirectionality) removed; rules #7-#13 renumbered to #6-#12. The Consolidation V4 prompt at `docs/AUTO_ANALYZE_CONSOLIDATION_PROMPT_V4.md` is UNCHANGED — sister-link ops continue to live there.
+
+**Docs (Group A + Group B):**
+- `docs/KEYWORD_CLUSTERING_ACTIVE.md` — this STATE block prepended; prior 2026-05-03-b STATE block demoted to historical; header timestamp.
+- `docs/ROADMAP.md` — Active Tools row updated for 2026-05-03-c; W#1 PRODUCTION-READINESS GATE prerequisite #2 status updated from ❌ NOT STARTED to 🟡 CODE FIX SHIPPED 2026-05-03-c — pending live verification at next D3 attempt; header timestamp.
+- `docs/CHAT_REGISTRY.md` — new top row.
+- `docs/DOCUMENT_MANIFEST.md` — header timestamps + per-doc modified flags + this-session summary.
+- `docs/INPUT_CONTEXT_SCALING_DESIGN.md` — §6 D3 partial validation outcome's two follow-up ROADMAP items annotated as SHIPPED 2026-05-03-c with cross-reference back here; §7 Open questions row added for "operational verification of the recency-stickiness fix during D3 retry"; header timestamp.
+
+### Verification scoreboard (build + tests + lint)
+
+| Check | Result | Note |
+|---|---|---|
+| `node --test src/lib/*.test.ts` | ✅ 299/299 pass | Was 284; +15 new (7 applier `regularBatchMode` + 8 touch-tracker structural-identity) |
+| `npx tsc --noEmit` | ✅ clean | One mid-session error caught + fixed: SisterLink test fixture used the wrong field names (`{a, b}` vs the actual `{topicAStableId, topicBStableId}`) — fixed in place |
+| `npm run build` | ✅ clean | 25 routes |
+| `npm run lint` | ✅ 16e/41w (baseline parity) | Zero new |
+
+### How the fix behaves in plain language
+
+The Auto-Analyze tool sends the model a list of every topic on the canvas in every batch. To keep that list from growing past the model's input limit, each topic is sent in one of three "tiers" of detail (full / summary / skeleton). Earlier sessions built that tiering machinery and proved it cuts per-topic input by about 30% on a real run — but the same run also showed a bottleneck: too many topics kept getting "touched" by cross-cutting operations in each batch (sister-link adds, keyword moves, topic merges), which forced them into the full-detail tier for the next several batches. The compression machinery couldn't actually compress.
+
+Today's two-part fix loosens that bottleneck:
+
+**Part 1 — Sister links move from per-batch to consolidation-only.** Sister links connect two topics sideways across the funnel; they're a big-picture, full-canvas decision. They were a poor fit for the per-batch flow (which sees only 8 keywords at a time) and were generating a large fraction of the touches. The regular per-batch prompt now explicitly tells the model not to emit sister-link operations, and the tool's applier rejects them outright if the model tries. Sister links continue to live in the periodic Consolidation Pass, which sees the entire canvas at full detail.
+
+**Part 2 — Touches are stamped more tightly.** Today, when the model runs an operation that involves two topics (like moving a keyword from topic A to topic B), the tool used to stamp BOTH topics as "touched" — meaning both topics stayed in full-detail tier for the next several batches. After today, only the topic whose own structure actually changed gets stamped. For a keyword move, that's the destination only (the source topic just lost a link; its structure is unchanged). For a topic merge, that's the surviving topic only (the source ceases to exist anyway). For a sister-link operation, that's neither endpoint (the link doesn't change either topic's structural identity). Across all op types, the rule is the same: stamp only the topic whose own structural identity changed.
+
+Combined effect: per-batch touch counts should drop significantly. With fewer topics force-pinned to full-detail tier, the compression machinery can actually compress, and the per-batch input cost should grow more slowly with canvas size — which is what the next D3 attempt is testing.
+
+### Multi-workflow protocol coordination
+
+- **Schema-change-in-flight flag:** stays `No` (no schema work this session).
+- **Branch:** `main` (W#1's home).
+- **Cross-workflow doc edits:** none.
+- W#2 still 🆕 about-to-start; no parallel chat ran during this session.
+- Pull-rebase at session start: clean (already up to date with `33ba13a` on origin/main).
+- Pull-rebase before commit: standard end-of-session step.
+
+### Files touched this session
+
+**Code:**
+- `src/lib/operation-applier.ts` (modified)
+- `src/lib/operation-applier.test.ts` (modified — +7 tests)
+- `src/lib/auto-analyze-v3.ts` (modified)
+- `src/lib/auto-analyze-v3.test.ts` (modified — +8 tests; 1 existing test rewritten)
+- `src/app/projects/[projectId]/keyword-clustering/components/AutoAnalyze.tsx` (modified)
+
+**Docs (Group A + Group B):**
+- `docs/AUTO_ANALYZE_PROMPT_V4.md` (sister-link ops removed from per-batch vocabulary; deferral notice; rule renumbering; header)
+- `docs/KEYWORD_CLUSTERING_ACTIVE.md` (this STATE block prepended; 2026-05-03-b demoted; header)
+- `docs/ROADMAP.md` (Active Tools row + W#1 PRODUCTION-READINESS GATE prerequisite #2 status; header)
+- `docs/INPUT_CONTEXT_SCALING_DESIGN.md` (§6 follow-up items annotated SHIPPED + §7 Open questions row; header)
+- `docs/CHAT_REGISTRY.md` (new top row)
+- `docs/DOCUMENT_MANIFEST.md` (timestamps + per-doc flags + this-session summary)
+
+**Push status:** commit local; push pending director's Rule 9 approval at end-of-session.
+
+### Standing instructions for next session
+
+The W#1 PRODUCTION-READINESS GATE — D3 RETRY entry on ROADMAP remains the milestone target. Prerequisite #1 (cold-start fix) is 🟡 PARTIAL — happy-path live; banner UI folded into D3 run. Prerequisite #2 (this session's recency-stickiness fix) is 🟡 CODE FIX SHIPPED — pending live verification at next D3 attempt. Next-session ordering:
+
+(a) **Underlying flake-rate investigation — prerequisite #3 of the W#1 PRODUCTION-READINESS GATE — RECOMMENDED.** Measure rate per-endpoint with structured telemetry; investigate Supabase plan tier / pgbouncer pool sizing / Prisma client management / server-side `withRetry` parity. ~2-3 sessions. Bigger commitment than the prior two prerequisites but addresses root cause. Director needs to share Supabase plan tier info during this session. **Most thorough next step** because this is the last named prerequisite of D3 retry; closing it lets D3 attempt with all three prerequisites verified rather than running D3 with the flake rate still as a known headwind.
+
+(b) **D3 attempt now (skipping prerequisite #3).** ~$30-50 + ~3-5 hours wall-clock; recency-stickiness fix gets its live verification AND cold-start banner UI gets its natural-flake confirmation in the same run, but the underlying ~25% pgbouncer flake rate remains as a known headwind that adds ~$20-30 in retry overhead and elevates the risk of mid-run blanking events. Faster path; less thorough.
+
+(c) GoTrueClient multi-instance fix — small refactor (~15 LOC).
+
+(d) Phase-1 UI polish bundle (6+ items).
+
+(e) V3-era cleanup pass (deferred from Session E D4).
+
+(f) **Action-by-action feedback workflow + Prompt Refining button — EXPLICITLY LAST per director's 2026-05-03-b directive.** This item now includes the Prompt Refining button (consolidated from the 2026-04-20 entry per Rule 24 consolidation 2026-05-03-b). See ROADMAP "Action-by-action feedback + second-pass refinement workflow + Prompt Refining button" entry for full scope. ~5-7 sessions total (1 design + 4-6 build).
+
+**Recommendation: (a) — underlying flake-rate investigation.** Reason: with the recency-stickiness fix shipped, prerequisite #3 is the last named gate prerequisite. Per the standing preference for the most-thorough-and-reliable path, close all three prerequisites before attempting D3 rather than attempting D3 with one prerequisite still open as a known headwind. Director's direction in 2026-05-02-e: *"All these issues need to be fixed."*
+
+**Director's framing through prior sessions:** (Scale-A) → (Scale-0) → (Defense-in-Depth ×3) → (Scale-B) → (Scale-C) → (Scale-D) → (Scale-E build) → (Scale-E D3 partial validation) → (consolidation auto-fire follow-up `2026-05-01-c`) → (HTTP 500 fix verification + auto-fire trip observation `2026-05-02`) → (browser-freeze fix design `2026-05-02-b`) → (DevTools profiling pass — diagnosis rejected `2026-05-02-c`) → (HTTP 500 retry regression investigation — fix shipped `2026-05-02-d`) → (HTTP 500 fix live verification + cold-start canvas-empty finding `2026-05-02-e`) → (cold-start render-layer fix `2026-05-03`) → (cold-start fix live verification — partial `2026-05-03-b`) → **(recency-stickiness fix, this session `2026-05-03-c`)** → (underlying flake-rate investigation — RECOMMENDED next).
+
+---
+
+## ⚠️ POST-2026-05-03-B-COLD-START-FIX-LIVE-VERIFICATION-PARTIAL STATE (preserved as historical context — last updated 2026-05-03-b; SUPERSEDED by the recency-stickiness fix state above. Cold-start fix happy-path remains confirmed live; banner UI still deferred to natural flake event during D3 retry.)
 
 **As of 2026-05-03-b (thirty-seventh Claude Code session, follow-up to `session_2026-05-03_cold-start-render-layer-fix`). DOC + LIVE-RUN session — no code changes. Live verification of yesterday's cold-start render-layer fix on production vklf.com against Bursitis Test 2. Outcome: PARTIAL — happy path confirmed across 5-10 hard refreshes (workspace populated normally every time, no banners observed); banner UI live confirmation deferred to next natural flake event because no flake fired during the test window.**
 

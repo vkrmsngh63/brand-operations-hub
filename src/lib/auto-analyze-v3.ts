@@ -1018,20 +1018,38 @@ export function createTouchTracker(): TouchTracker {
 }
 
 /**
- * Stamp `currentBatchNum` on every topic referenced by the supplied operations.
- * Walks aliases ($newN) through the `aliasResolutions` map produced by the
- * applier; bare stableIds (t-N) pass through unchanged. Refs that don't
- * resolve (e.g., aliases for ops that the applier rejected) are silently
- * skipped — a missing resolution means the op didn't apply.
+ * Stamp `currentBatchNum` on every topic whose STRUCTURAL IDENTITY changed in
+ * this batch. Walks aliases ($newN) through the `aliasResolutions` map
+ * produced by the applier; bare stableIds (t-N) pass through unchanged. Refs
+ * that don't resolve (e.g., aliases for ops that the applier rejected) are
+ * silently skipped — a missing resolution means the op didn't apply.
  *
- * Per Cluster 2 Q5 lock the rule is "any operation that references the topic
- * touches it." Applied conservatively here: every ref in every op body that
- * resolves to a stableId is stamped, including reassign targets on
- * DELETE_TOPIC and parent refs on ADD_TOPIC / MOVE_TOPIC. Touches against
- * topics that ceased to exist this batch (e.g., MERGE source, SPLIT source,
- * DELETE id) are harmless — those stableIds simply never appear in the
- * post-apply canvas, so the tracker entry stays as garbage but never matches
- * a node. Q5 → C: no propagation to ancestors.
+ * INPUT_CONTEXT_SCALING_DESIGN.md §6 D3 partial validation outcome — Q5 → B
+ * touch-semantics refinement (recency-stickiness fix). The original Q5 → B
+ * rule "any topic referenced by an operation is touched" inflated per-batch
+ * touch counts and force-pinned every endpoint to Tier 0, defeating tiered
+ * compression. The refined rule stamps only topics whose own structural
+ * identity changed:
+ *
+ *   - ADD_TOPIC          → new topic only (parent's structure unchanged)
+ *   - UPDATE_TOPIC_*     → the topic
+ *   - MOVE_TOPIC         → the topic only (parent's structure unchanged)
+ *   - MERGE_TOPICS       → target only (source ceases to exist)
+ *   - SPLIT_TOPIC        → new into[] children only (source ceases to exist)
+ *   - DELETE_TOPIC       → reassign target only when not ARCHIVE
+ *                          (deleted topic ceases to exist)
+ *   - ADD_KEYWORD        → topic
+ *   - MOVE_KEYWORD       → target only (source's structure unchanged;
+ *                          it just lost a keyword link)
+ *   - REMOVE_KEYWORD     → from
+ *   - ARCHIVE_KEYWORD    → no topic ref (global)
+ *   - ADD_SISTER_LINK    → neither endpoint (link doesn't change either
+ *                          topic's structural identity); also: in regular
+ *                          batches the applier now rejects these ops, so
+ *                          this branch only fires from consolidation passes
+ *   - REMOVE_SISTER_LINK → neither endpoint (same rationale)
+ *
+ * Q5 → C remains: no propagation to ancestors.
  */
 export function recordTouchesFromOps(
   tracker: TouchTracker,
@@ -1052,7 +1070,6 @@ export function recordTouchesFromOps(
     switch (op.type) {
       case 'ADD_TOPIC':
         stamp(resolve(op.id));
-        stamp(resolve(op.parent));
         break;
       case 'UPDATE_TOPIC_TITLE':
       case 'UPDATE_TOPIC_DESCRIPTION':
@@ -1060,18 +1077,14 @@ export function recordTouchesFromOps(
         break;
       case 'MOVE_TOPIC':
         stamp(resolve(op.id));
-        stamp(resolve(op.newParent));
         break;
       case 'MERGE_TOPICS':
-        stamp(resolve(op.sourceId));
         stamp(resolve(op.targetId));
         break;
       case 'SPLIT_TOPIC':
-        stamp(resolve(op.sourceId));
         for (const e of op.into) stamp(resolve(e.id));
         break;
       case 'DELETE_TOPIC':
-        stamp(resolve(op.id));
         if (op.reassignKeywordsTo !== 'ARCHIVE') {
           stamp(resolve(op.reassignKeywordsTo));
         }
@@ -1080,7 +1093,6 @@ export function recordTouchesFromOps(
         stamp(resolve(op.topic));
         break;
       case 'MOVE_KEYWORD':
-        stamp(resolve(op.from));
         stamp(resolve(op.to));
         break;
       case 'REMOVE_KEYWORD':
@@ -1091,8 +1103,10 @@ export function recordTouchesFromOps(
         break;
       case 'ADD_SISTER_LINK':
       case 'REMOVE_SISTER_LINK':
-        stamp(resolve(op.topicA));
-        stamp(resolve(op.topicB));
+        // Sister-link ops do not change either endpoint's structural
+        // identity. In regular batches the applier rejects these (see
+        // operation-applier.ts REGULAR_BATCH_FORBIDDEN_OPS); in
+        // consolidation passes they're allowed but still don't stamp.
         break;
     }
   }
