@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { verifyProjectWorkflowAuth } from '@/lib/auth';
 import { markWorkflowActive } from '@/lib/workflow-status';
 import { recordFlake } from '@/lib/flake-counter';
+import { withRetry } from '@/lib/prisma-retry';
 
 const WORKFLOW = 'keyword-clustering';
 
@@ -27,14 +28,22 @@ export async function POST(
       );
     }
 
-    const link = await prisma.sisterLink.create({
-      data: { projectWorkflowId, nodeA: body.nodeA, nodeB: body.nodeB },
-    });
+    // Wrapped in withRetry per the 2026-05-05 apply-pipeline rate-fix.
+    // Note: sisterLink has no unique constraint on (nodeA, nodeB), so a
+    // rare retry-after-partial-commit on P1002/P1008 could theoretically
+    // create a duplicate. Accepted tradeoff — the cost of a rare visible
+    // duplicate (user can delete) is much lower than the cost of a 500.
+    const link = await withRetry(() =>
+      prisma.sisterLink.create({
+        data: { projectWorkflowId, nodeA: body.nodeA, nodeB: body.nodeB },
+      })
+    );
 
     await markWorkflowActive(projectId, WORKFLOW);
     return NextResponse.json(link, { status: 201 });
   } catch (error) {
     recordFlake('POST /api/projects/[projectId]/canvas/sister-links', error, {
+      retried: true,
       projectWorkflowId,
     });
     console.error('POST sister link error:', error);
@@ -59,14 +68,19 @@ export async function DELETE(
 
   try {
     const body = await req.json();
-    await prisma.sisterLink.deleteMany({
-      where: { id: body.id, projectWorkflowId },
-    });
+    // Wrapped in withRetry per the 2026-05-05 apply-pipeline rate-fix.
+    // deleteMany is idempotent under retry.
+    await withRetry(() =>
+      prisma.sisterLink.deleteMany({
+        where: { id: body.id, projectWorkflowId },
+      })
+    );
 
     await markWorkflowActive(projectId, WORKFLOW);
     return NextResponse.json({ success: true });
   } catch (error) {
     recordFlake('DELETE /api/projects/[projectId]/canvas/sister-links', error, {
+      retried: true,
       projectWorkflowId,
     });
     console.error('DELETE sister link error:', error);

@@ -70,25 +70,28 @@ export async function PATCH(
 
   try {
     const body = await req.json();
-    const canvasState = await prisma.canvasState.upsert({
-      where: { projectWorkflowId },
-      update: {
-        ...(body.viewX !== undefined && { viewX: body.viewX }),
-        ...(body.viewY !== undefined && { viewY: body.viewY }),
-        ...(body.zoom !== undefined && { zoom: body.zoom }),
-        ...(body.nextStableIdN !== undefined && { nextStableIdN: body.nextStableIdN }),
-      },
-      create: {
-        projectWorkflowId,
-        viewX: body.viewX ?? 0,
-        viewY: body.viewY ?? 0,
-        zoom: body.zoom ?? 1,
-        nextStableIdN: body.nextStableIdN ?? 1,
-      },
-    });
+    const canvasState = await withRetry(() =>
+      prisma.canvasState.upsert({
+        where: { projectWorkflowId },
+        update: {
+          ...(body.viewX !== undefined && { viewX: body.viewX }),
+          ...(body.viewY !== undefined && { viewY: body.viewY }),
+          ...(body.zoom !== undefined && { zoom: body.zoom }),
+          ...(body.nextStableIdN !== undefined && { nextStableIdN: body.nextStableIdN }),
+        },
+        create: {
+          projectWorkflowId,
+          viewX: body.viewX ?? 0,
+          viewY: body.viewY ?? 0,
+          zoom: body.zoom ?? 1,
+          nextStableIdN: body.nextStableIdN ?? 1,
+        },
+      })
+    );
     return NextResponse.json(canvasState);
   } catch (error) {
     recordFlake('PATCH /api/projects/[projectId]/canvas', error, {
+      retried: true,
       projectWorkflowId,
     });
     console.error('PATCH canvas error:', error);

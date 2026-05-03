@@ -63,48 +63,55 @@ export async function POST(
   try {
     const body = await req.json();
 
-    const node = await prisma.$transaction(async tx => {
-      const state = await tx.canvasState.upsert({
-        where: { projectWorkflowId },
-        update: { nextStableIdN: { increment: 1 } },
-        create: { projectWorkflowId, nextStableIdN: 2 },
-      });
-      // After increment, nextStableIdN is the value to use for the NEXT node;
-      // this node takes nextStableIdN - 1.
-      const stableN = state.nextStableIdN - 1;
-      return tx.canvasNode.create({
-        data: {
-          stableId: `t-${stableN}`,
-          projectWorkflowId,
-          title: body.title || '',
-          description: body.description || '',
-          x: body.x ?? 0,
-          y: body.y ?? 0,
-          w: body.w ?? 220,
-          h: body.h ?? 120,
-          pathwayId: body.pathwayId ?? null,
-          parentId: body.parentId ?? null,
-          relationshipType: body.relationshipType || '',
-          linkedKwIds: body.linkedKwIds ?? [],
-          kwPlacements: body.kwPlacements ?? {},
-          altTitles: body.altTitles ?? [],
-          sortOrder: body.sortOrder ?? 0,
-          // Scale Session B: non-AI flows ship "" placeholder; the AI later
-          // refreshes via UPDATE_TOPIC_TITLE once V4 prompts emit fingerprints.
-          // G3 (PATCH guard, this same route) blocks empty-string PATCH
-          // updates so a degenerate fingerprint can never be written by an
-          // AI flow.
-          intentFingerprint: typeof body.intentFingerprint === 'string'
-            ? body.intentFingerprint
-            : '',
-        },
-      });
-    });
+    // Wrapped in withRetry per the 2026-05-05 apply-pipeline rate-fix.
+    // The transaction is atomic — a transient flake during commit rolls
+    // back entirely; retry re-runs the whole transaction. The stableId
+    // counter increment + node create stay paired correctly under retry.
+    const node = await withRetry(() =>
+      prisma.$transaction(async tx => {
+        const state = await tx.canvasState.upsert({
+          where: { projectWorkflowId },
+          update: { nextStableIdN: { increment: 1 } },
+          create: { projectWorkflowId, nextStableIdN: 2 },
+        });
+        // After increment, nextStableIdN is the value to use for the NEXT node;
+        // this node takes nextStableIdN - 1.
+        const stableN = state.nextStableIdN - 1;
+        return tx.canvasNode.create({
+          data: {
+            stableId: `t-${stableN}`,
+            projectWorkflowId,
+            title: body.title || '',
+            description: body.description || '',
+            x: body.x ?? 0,
+            y: body.y ?? 0,
+            w: body.w ?? 220,
+            h: body.h ?? 120,
+            pathwayId: body.pathwayId ?? null,
+            parentId: body.parentId ?? null,
+            relationshipType: body.relationshipType || '',
+            linkedKwIds: body.linkedKwIds ?? [],
+            kwPlacements: body.kwPlacements ?? {},
+            altTitles: body.altTitles ?? [],
+            sortOrder: body.sortOrder ?? 0,
+            // Scale Session B: non-AI flows ship "" placeholder; the AI later
+            // refreshes via UPDATE_TOPIC_TITLE once V4 prompts emit fingerprints.
+            // G3 (PATCH guard, this same route) blocks empty-string PATCH
+            // updates so a degenerate fingerprint can never be written by an
+            // AI flow.
+            intentFingerprint: typeof body.intentFingerprint === 'string'
+              ? body.intentFingerprint
+              : '',
+          },
+        });
+      })
+    );
 
     await markWorkflowActive(projectId, WORKFLOW);
     return NextResponse.json(node, { status: 201 });
   } catch (error) {
     recordFlake('POST /api/projects/[projectId]/canvas/nodes', error, {
+      retried: true,
       projectWorkflowId,
     });
     console.error('POST canvas node error:', error);
@@ -203,12 +210,17 @@ export async function PATCH(
       })
     );
 
-    const results = await prisma.$transaction(ops);
+    // Wrapped in withRetry per the 2026-05-05 apply-pipeline rate-fix.
+    // The transaction is atomic; the .update calls inside are idempotent
+    // under retry (same data → same result; row-not-found errors are
+    // P2025 which is non-transient and won't trigger a retry).
+    const results = await withRetry(() => prisma.$transaction(ops));
     await markWorkflowActive(projectId, WORKFLOW);
 
     return NextResponse.json(results);
   } catch (error) {
     recordFlake('PATCH /api/projects/[projectId]/canvas/nodes', error, {
+      retried: true,
       projectWorkflowId: _projectWorkflowId,
     });
     console.error('PATCH canvas nodes error:', error);
@@ -242,14 +254,20 @@ export async function DELETE(
       );
     }
 
-    await prisma.canvasNode.deleteMany({
-      where: { id: { in: ids }, projectWorkflowId },
-    });
+    // Wrapped in withRetry per the 2026-05-05 apply-pipeline rate-fix.
+    // deleteMany is idempotent — repeating it after partial commit either
+    // finishes the delete or finds nothing to delete (count=0).
+    await withRetry(() =>
+      prisma.canvasNode.deleteMany({
+        where: { id: { in: ids }, projectWorkflowId },
+      })
+    );
 
     await markWorkflowActive(projectId, WORKFLOW);
     return NextResponse.json({ success: true, deleted: ids });
   } catch (error) {
     recordFlake('DELETE /api/projects/[projectId]/canvas/nodes', error, {
+      retried: true,
       projectWorkflowId,
     });
     console.error('DELETE canvas nodes error:', error);

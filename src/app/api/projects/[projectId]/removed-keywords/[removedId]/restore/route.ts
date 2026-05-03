@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { verifyProjectWorkflowAuth } from '@/lib/auth';
 import { markWorkflowActive } from '@/lib/workflow-status';
 import { recordFlake } from '@/lib/flake-counter';
+import { withRetry } from '@/lib/prisma-retry';
 
 const WORKFLOW = 'keyword-clustering';
 
@@ -22,17 +23,22 @@ export async function POST(
   const { projectWorkflowId } = auth;
 
   try {
-    const removed = await prisma.removedKeyword.findFirst({
-      where: { id: removedId, projectWorkflowId },
-    });
+    // Wrapped in withRetry per the 2026-05-05 apply-pipeline rate-fix.
+    const removed = await withRetry(() =>
+      prisma.removedKeyword.findFirst({
+        where: { id: removedId, projectWorkflowId },
+      })
+    );
     if (!removed) {
       return NextResponse.json({ error: 'Removed keyword not found' }, { status: 404 });
     }
 
-    const collision = await prisma.keyword.findFirst({
-      where: { projectWorkflowId, keyword: removed.keyword },
-      select: { id: true },
-    });
+    const collision = await withRetry(() =>
+      prisma.keyword.findFirst({
+        where: { projectWorkflowId, keyword: removed.keyword },
+        select: { id: true },
+      })
+    );
     if (collision) {
       return NextResponse.json(
         { error: 'A keyword with this text already exists in the workspace' },
@@ -40,28 +46,35 @@ export async function POST(
       );
     }
 
-    const maxSort = await prisma.keyword.aggregate({
-      where: { projectWorkflowId },
-      _max: { sortOrder: true },
-    });
+    const maxSort = await withRetry(() =>
+      prisma.keyword.aggregate({
+        where: { projectWorkflowId },
+        _max: { sortOrder: true },
+      })
+    );
     const nextSort = (maxSort._max.sortOrder ?? -1) + 1;
 
-    const restored = await prisma.$transaction(async tx => {
-      const created = await tx.keyword.create({
-        data: {
-          projectWorkflowId,
-          keyword: removed.keyword,
-          volume: removed.volume,
-          sortingStatus: removed.sortingStatus,
-          tags: removed.tags,
-          topic: '',
-          canvasLoc: {},
-          sortOrder: nextSort,
-        },
-      });
-      await tx.removedKeyword.delete({ where: { id: removed.id } });
-      return created;
-    });
+    // Atomic transaction; the create/delete pair is idempotent under retry
+    // (the create reuses no unique field beyond Keyword's own id; the delete
+    // is by removedId which is stable).
+    const restored = await withRetry(() =>
+      prisma.$transaction(async tx => {
+        const created = await tx.keyword.create({
+          data: {
+            projectWorkflowId,
+            keyword: removed.keyword,
+            volume: removed.volume,
+            sortingStatus: removed.sortingStatus,
+            tags: removed.tags,
+            topic: '',
+            canvasLoc: {},
+            sortOrder: nextSort,
+          },
+        });
+        await tx.removedKeyword.delete({ where: { id: removed.id } });
+        return created;
+      })
+    );
 
     await markWorkflowActive(projectId, WORKFLOW);
     return NextResponse.json({ restored }, { status: 201 });
@@ -69,7 +82,7 @@ export async function POST(
     recordFlake(
       'POST /api/projects/[projectId]/removed-keywords/[removedId]/restore',
       error,
-      { projectWorkflowId },
+      { retried: true, projectWorkflowId },
     );
     console.error('POST removed-keywords/restore error:', error);
     return NextResponse.json(

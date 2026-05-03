@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { verifyProjectWorkflowAuth } from '@/lib/auth';
 import { markWorkflowActive } from '@/lib/workflow-status';
 import { recordFlake } from '@/lib/flake-counter';
+import { withRetry } from '@/lib/prisma-retry';
 
 const WORKFLOW = 'keyword-clustering';
 
@@ -50,12 +51,17 @@ export async function POST(
   try {
     const body = await req.json();
 
-    // Bulk import path
+    // Wrapped in withRetry per the 2026-05-05 apply-pipeline rate-fix.
+    // Bulk import: createMany has no unique constraint on (workflowId,
+    // keyword), so a rare retry-after-partial-commit could duplicate the
+    // import. Same accepted tradeoff as sisterLink/pathway creates.
     if (Array.isArray(body.keywords)) {
-      const maxSort = await prisma.keyword.aggregate({
-        where: { projectWorkflowId },
-        _max: { sortOrder: true },
-      });
+      const maxSort = await withRetry(() =>
+        prisma.keyword.aggregate({
+          where: { projectWorkflowId },
+          _max: { sortOrder: true },
+        })
+      );
       let nextSort = (maxSort._max.sortOrder ?? -1) + 1;
 
       const data = body.keywords.map(
@@ -67,31 +73,38 @@ export async function POST(
         })
       );
 
-      const result = await prisma.keyword.createMany({ data });
+      const result = await withRetry(() =>
+        prisma.keyword.createMany({ data })
+      );
       await markWorkflowActive(projectId, WORKFLOW);
       return NextResponse.json({ created: result.count }, { status: 201 });
     }
 
     // Single-keyword path
-    const maxSort = await prisma.keyword.aggregate({
-      where: { projectWorkflowId },
-      _max: { sortOrder: true },
-    });
+    const maxSort = await withRetry(() =>
+      prisma.keyword.aggregate({
+        where: { projectWorkflowId },
+        _max: { sortOrder: true },
+      })
+    );
     const nextSort = (maxSort._max.sortOrder ?? -1) + 1;
 
-    const keyword = await prisma.keyword.create({
-      data: {
-        projectWorkflowId,
-        keyword: (body.keyword || '').trim(),
-        volume: parseInt(String(body.volume ?? '0')) || 0,
-        sortOrder: nextSort,
-      },
-    });
+    const keyword = await withRetry(() =>
+      prisma.keyword.create({
+        data: {
+          projectWorkflowId,
+          keyword: (body.keyword || '').trim(),
+          volume: parseInt(String(body.volume ?? '0')) || 0,
+          sortOrder: nextSort,
+        },
+      })
+    );
 
     await markWorkflowActive(projectId, WORKFLOW);
     return NextResponse.json(keyword, { status: 201 });
   } catch (error) {
     recordFlake('POST /api/projects/[projectId]/keywords', error, {
+      retried: true,
       projectWorkflowId,
     });
     console.error('POST keywords error:', error);
@@ -153,12 +166,15 @@ export async function PATCH(
       });
     });
 
-    const results = await prisma.$transaction(ops);
+    // Wrapped in withRetry per the 2026-05-05 apply-pipeline rate-fix.
+    // Atomic transaction; .update calls inside are idempotent under retry.
+    const results = await withRetry(() => prisma.$transaction(ops));
     await markWorkflowActive(projectId, WORKFLOW);
 
     return NextResponse.json({ updated: results.length });
   } catch (error) {
     recordFlake('PATCH /api/projects/[projectId]/keywords', error, {
+      retried: true,
       projectWorkflowId,
     });
     console.error('PATCH keywords bulk error:', error);
@@ -190,14 +206,18 @@ export async function DELETE(
       );
     }
 
-    const result = await prisma.keyword.deleteMany({
-      where: { projectWorkflowId, id: { in: body.ids } },
-    });
+    // Wrapped in withRetry per the 2026-05-05 apply-pipeline rate-fix.
+    const result = await withRetry(() =>
+      prisma.keyword.deleteMany({
+        where: { projectWorkflowId, id: { in: body.ids } },
+      })
+    );
 
     await markWorkflowActive(projectId, WORKFLOW);
     return NextResponse.json({ deleted: result.count });
   } catch (error) {
     recordFlake('DELETE /api/projects/[projectId]/keywords', error, {
+      retried: true,
       projectWorkflowId,
     });
     console.error('DELETE keywords error:', error);

@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { verifyProjectWorkflowAuth } from '@/lib/auth';
 import { markWorkflowActive } from '@/lib/workflow-status';
 import { recordFlake } from '@/lib/flake-counter';
+import { withRetry } from '@/lib/prisma-retry';
 
 const WORKFLOW = 'keyword-clustering';
 
@@ -18,14 +19,21 @@ export async function POST(
   const { projectWorkflowId } = auth;
 
   try {
-    const pathway = await prisma.pathway.create({
-      data: { projectWorkflowId },
-    });
+    // Wrapped in withRetry per the 2026-05-05 apply-pipeline rate-fix.
+    // Pathway has no unique constraint, so rare retry-after-partial-commit
+    // could create a duplicate empty pathway — accepted tradeoff (admin can
+    // delete; far cheaper than the 500 alternative).
+    const pathway = await withRetry(() =>
+      prisma.pathway.create({
+        data: { projectWorkflowId },
+      })
+    );
 
     await markWorkflowActive(projectId, WORKFLOW);
     return NextResponse.json(pathway, { status: 201 });
   } catch (error) {
     recordFlake('POST /api/projects/[projectId]/canvas/pathways', error, {
+      retried: true,
       projectWorkflowId,
     });
     console.error('POST pathway error:', error);
@@ -49,14 +57,18 @@ export async function DELETE(
 
   try {
     const body = await req.json();
-    await prisma.pathway.deleteMany({
-      where: { id: body.id, projectWorkflowId },
-    });
+    // Wrapped in withRetry per the 2026-05-05 apply-pipeline rate-fix.
+    await withRetry(() =>
+      prisma.pathway.deleteMany({
+        where: { id: body.id, projectWorkflowId },
+      })
+    );
 
     await markWorkflowActive(projectId, WORKFLOW);
     return NextResponse.json({ success: true });
   } catch (error) {
     recordFlake('DELETE /api/projects/[projectId]/canvas/pathways', error, {
+      retried: true,
       projectWorkflowId,
     });
     console.error('DELETE pathway error:', error);

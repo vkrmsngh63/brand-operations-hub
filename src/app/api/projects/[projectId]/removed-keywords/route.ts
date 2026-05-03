@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { verifyProjectWorkflowAuth } from '@/lib/auth';
 import { markWorkflowActive } from '@/lib/workflow-status';
 import { recordFlake } from '@/lib/flake-counter';
+import { withRetry } from '@/lib/prisma-retry';
 
 const WORKFLOW = 'keyword-clustering';
 
@@ -64,9 +65,12 @@ export async function POST(
     }
     const aiReasoning: string | null = body.aiReasoning ?? null;
 
-    const sourceKeywords = await prisma.keyword.findMany({
-      where: { projectWorkflowId, id: { in: ids } },
-    });
+    // Wrapped in withRetry per the 2026-05-05 apply-pipeline rate-fix.
+    const sourceKeywords = await withRetry(() =>
+      prisma.keyword.findMany({
+        where: { projectWorkflowId, id: { in: ids } },
+      })
+    );
     if (sourceKeywords.length === 0) {
       return NextResponse.json({ archived: 0, removed: [] });
     }
@@ -85,20 +89,29 @@ export async function POST(
       aiReasoning,
     }));
 
-    const created = await prisma.$transaction(async tx => {
-      const rows = await Promise.all(
-        createInputs.map(input => tx.removedKeyword.create({ data: input }))
-      );
-      await tx.keyword.deleteMany({
-        where: { projectWorkflowId, id: { in: sourceKeywords.map(k => k.id) } },
-      });
-      return rows;
-    });
+    // Atomic transaction: copy-then-delete is idempotent under retry IF the
+    // first attempt rolled back (transient flake). RemovedKeyword has no
+    // unique-constraint on (projectWorkflowId, originalKeywordId), so a rare
+    // retry-after-partial-commit could theoretically duplicate the
+    // RemovedKeyword rows — accepted tradeoff (admin can delete duplicate
+    // RemovedKeyword rows; far cheaper than the 500 alternative).
+    const created = await withRetry(() =>
+      prisma.$transaction(async tx => {
+        const rows = await Promise.all(
+          createInputs.map(input => tx.removedKeyword.create({ data: input }))
+        );
+        await tx.keyword.deleteMany({
+          where: { projectWorkflowId, id: { in: sourceKeywords.map(k => k.id) } },
+        });
+        return rows;
+      })
+    );
 
     await markWorkflowActive(projectId, WORKFLOW);
     return NextResponse.json({ archived: created.length, removed: created }, { status: 201 });
   } catch (error) {
     recordFlake('POST /api/projects/[projectId]/removed-keywords', error, {
+      retried: true,
       projectWorkflowId,
     });
     console.error('POST removed-keywords error:', error);

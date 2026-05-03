@@ -4,6 +4,7 @@ import { verifyProjectWorkflowAuth } from '@/lib/auth';
 import { markWorkflowActive } from '@/lib/workflow-status';
 import { evaluateRebuildPayload } from '@/lib/canvas-rebuild-guard';
 import { recordFlake } from '@/lib/flake-counter';
+import { withRetry } from '@/lib/prisma-retry';
 
 const WORKFLOW = 'keyword-clustering';
 
@@ -44,9 +45,11 @@ export async function POST(
     // would shrink the canvas by >50% with no explicit deleteNodeIds. The
     // threshold + reason live in `src/lib/canvas-rebuild-guard.ts`.
     if (Array.isArray(body.nodes)) {
-      const currentNodeCount = await prisma.canvasNode.count({
-        where: { projectWorkflowId },
-      });
+      const currentNodeCount = await withRetry(() =>
+        prisma.canvasNode.count({
+          where: { projectWorkflowId },
+        })
+      );
       const decision = evaluateRebuildPayload({
         newNodeCount: body.nodes.length,
         currentNodeCount,
@@ -264,8 +267,18 @@ export async function POST(
       );
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await prisma.$transaction(ops as any);
+    // The atomic rebuild transaction is the multi-second connection-holder
+    // (~5s at canvas 120 per the aa.rebuildHTTP MEDIUM ROADMAP entry). Wrapped
+    // in withRetry per the 2026-05-05 apply-pipeline rate-fix — a transient
+    // pgbouncer flake during transaction commit produces P1001/P1002/P2034.
+    // The transaction is atomic by definition: a failed commit rolls back
+    // entirely, so retry re-runs the whole transaction with no partial-state
+    // risk. All ops in the transaction (upserts, deleteMany, sisterLink.create
+    // bracketed by deletes-then-creates) are idempotent under retry.
+    await withRetry(() =>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      prisma.$transaction(ops as any)
+    );
 
     await markWorkflowActive(projectId, WORKFLOW);
 
