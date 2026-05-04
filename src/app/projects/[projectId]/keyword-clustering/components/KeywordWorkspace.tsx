@@ -624,7 +624,6 @@ export default function KeywordWorkspace({ projectId, userId, aiMode }: KeywordW
         onUpdateNodes={canvas.updateNodes}
         onAddNode={canvas.addNode}
         onDeleteNode={canvas.deleteNode}
-        onBatchUpdateKeywords={(updates) => updates.forEach(u => updateKeyword(u.id, u))}
         projectId={projectId}
         onRefreshCanvas={canvas.fetchCanvas}
         onRefreshKeywords={fetchKeywords}

@@ -111,7 +111,6 @@ interface AutoAnalyzeProps {
   onUpdateNodes: (updates: Partial<CanvasNode>[]) => Promise<void>;
   onAddNode: (data: Partial<CanvasNode>) => Promise<CanvasNode | null>;
   onDeleteNode: (id: string) => Promise<void> | void;
-  onBatchUpdateKeywords: (updates: { id: string; [key: string]: unknown }[]) => void;
   projectId: string;
   onRefreshCanvas: () => Promise<void>;
   onRefreshKeywords: () => Promise<void>;
@@ -120,7 +119,7 @@ interface AutoAnalyzeProps {
 /* ── Component ─────────────────────────────────────────────── */
 export default function AutoAnalyze({
   open, onClose, allKeywords, nodes, pathways, sisterLinks,
-  onUpdateNodes, onAddNode, onDeleteNode, onBatchUpdateKeywords, projectId, onRefreshCanvas, onRefreshKeywords,
+  onUpdateNodes, onAddNode, onDeleteNode, projectId, onRefreshCanvas, onRefreshKeywords,
 }: AutoAnalyzeProps) {
 
   /* ── Config state ──────────────────────────────────────────── */
@@ -1041,11 +1040,91 @@ export default function AutoAnalyze({
       'info',
     );
 
-    // Atomic rebuild.
+    // ── Pre-compute keyword updates + archive intents BEFORE the rebuild ─
+    // POST so they can ride along in the same atomic transaction (per
+    // KEYWORD_CLUSTERING_ACTIVE.md POST-2026-05-04-D STATE block item (a)
+    // approach (iii) — director-approved 2026-05-05). This replaces what
+    // used to be (post-rebuild):
+    //   1. Sequential `for await` loop hitting POST /removed-keywords once
+    //      per archived keyword.
+    //   2. Fire-and-forget `onBatchUpdateKeywords(kwTopicUpdates)` that
+    //      forEach-fanned out into ~N parallel PATCH /keywords/[id] calls
+    //      (the burst that exhausted Supabase max_connections=60 at Nano).
+    //   3. A second fire-and-forget for the reconciliation `onBatchUpdate
+    //      Keywords(reconcile.updates)` after the post-rebuild refresh.
+    // All three are now folded into the single /canvas/rebuild $transaction.
+
+    const titleByStableId = new Map<string, string>();
+    const descByStableId = new Map<string, string>();
+    for (const n of applyResult.newState.nodes) {
+      titleByStableId.set(n.stableId, n.title);
+      descByStableId.set(n.stableId, n.description);
+    }
+    const placementsByKeyword = new Map<string, Array<{ stableId: string; placement: string }>>();
+    for (const n of applyResult.newState.nodes) {
+      for (const [kwId, placement] of Object.entries(n.keywordPlacements)) {
+        if (!placementsByKeyword.has(kwId)) placementsByKeyword.set(kwId, []);
+        placementsByKeyword.get(kwId)!.push({ stableId: n.stableId, placement });
+      }
+    }
+
+    // Compute reconciliation updates pre-rebuild — they're derivable from
+    // applyResult alone (placedSet + archivedSet are known from the applier
+    // output, no server round trip needed). The post-rebuild refresh below
+    // will then see the reconciled status without a second fan-out.
+    const placedSet = new Set(placementsByKeyword.keys());
+    const archivedSet = new Set(applyResult.archivedKeywords.map(a => a.keywordId));
+    const reconcile = computeReconciliationUpdates(allKeywords, placedSet, archivedSet);
+
+    // Merge placement-driven updates and reconciliation-driven updates by
+    // keyword id. A single id can need BOTH a topic+canvasLoc refresh
+    // (because it's still placed) AND a sortingStatus flip (because the
+    // status drifted) — merge field-by-field so the server runs ONE
+    // updateMany per id instead of two.
+    const mergedKeywordUpdates = new Map<string, { id: string; [key: string]: unknown }>();
+    for (const [kwId, placements] of placementsByKeyword) {
+      const topics = placements.map(p => titleByStableId.get(p.stableId) ?? '').filter(Boolean);
+      const canvasLoc: Record<string, string> = {};
+      for (const p of placements) {
+        const t = titleByStableId.get(p.stableId);
+        const d = descByStableId.get(p.stableId) ?? '';
+        if (t) canvasLoc[t] = d;
+      }
+      mergedKeywordUpdates.set(kwId, {
+        id: kwId,
+        topic: topics.join(' | '),
+        canvasLoc,
+      });
+    }
+    for (const r of reconcile.updates) {
+      const existing = mergedKeywordUpdates.get(r.id);
+      if (existing) {
+        existing.sortingStatus = r.sortingStatus;
+      } else {
+        mergedKeywordUpdates.set(r.id, { id: r.id, sortingStatus: r.sortingStatus });
+      }
+    }
+    const keywordUpdates = Array.from(mergedKeywordUpdates.values());
+
+    const archiveKeywords = applyResult.archivedKeywords.map(a => ({
+      keywordId: a.keywordId,
+      reason: a.reason || '(no reason given)',
+    }));
+
+    // Augment the rebuild payload with the folded fan-out + archive payloads.
+    // Server treats both fields as optional; Auto-Analyze always sends them
+    // (possibly as empty arrays) so the contract is consistent.
+    const augmentedPayload = {
+      ...payload,
+      keywordUpdates,
+      archiveKeywords,
+    };
+
+    // Atomic rebuild + keyword updates + archives — all one transaction.
     aaLog('  Applying to canvas (atomic rebuild)…', 'info');
     try {
       performance.mark('aa.stringify-start');
-      const rebuildBody = JSON.stringify(payload);
+      const rebuildBody = JSON.stringify(augmentedPayload);
       performance.mark('aa.stringify-end');
       performance.measure('aa.stringify', 'aa.stringify-start', 'aa.stringify-end');
 
@@ -1064,7 +1143,9 @@ export default function AutoAnalyze({
       aaLog(
         '  ✓ Canvas rebuilt (' + payload.nodes.length + ' nodes, ' +
         payload.deleteNodeIds.length + ' removed, ' +
-        payload.sisterLinks.length + ' new sister links)',
+        payload.sisterLinks.length + ' new sister links, ' +
+        keywordUpdates.length + ' keyword updates, ' +
+        archiveKeywords.length + ' archived)',
         'ok',
       );
     } catch (e) {
@@ -1072,58 +1153,21 @@ export default function AutoAnalyze({
       throw e;
     }
 
-    // Archive keyword POSTs (one per intent — preserves individual reasoning).
+    // Per-archive log lines (preserved for director visibility — same shape
+    // as the prior per-archive POST loop, just emitted after the atomic
+    // commit instead of after each individual POST).
     for (const a of applyResult.archivedKeywords) {
-      try {
-        const res = await authFetch('/api/projects/' + projectId + '/removed-keywords', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            keywordIds: [a.keywordId],
-            removedSource: 'auto-ai-detected-irrelevant',
-            aiReasoning: a.reason || null,
-          }),
-        });
-        if (res.ok) {
-          aaLog('  ↻ Archived keyword ' + a.keywordId + (a.reason ? ' — ' + a.reason : ''), 'info');
-        } else {
-          aaLog('  ⚠ Archive failed for ' + a.keywordId + ' (status ' + res.status + ')', 'warn');
-        }
-      } catch (e) {
-        aaLog('  ⚠ Archive error for ' + a.keywordId + ': ' + (e instanceof Error ? e.message : ''), 'warn');
-      }
+      aaLog('  ↻ Archived keyword ' + a.keywordId + (a.reason ? ' — ' + a.reason : ''), 'info');
     }
 
-    // Update keyword.topic + keyword.canvasLoc to mirror the new placements.
-    const titleByStableId = new Map<string, string>();
-    const descByStableId = new Map<string, string>();
-    for (const n of applyResult.newState.nodes) {
-      titleByStableId.set(n.stableId, n.title);
-      descByStableId.set(n.stableId, n.description);
+    // Reconciliation log line (same shape as before; no second fan-out).
+    if (reconcile.updates.length > 0) {
+      aaLog(
+        '  ↻ Reconciliation: ' + reconcile.flippedToAiSorted + ' on-canvas → AI-Sorted, ' +
+        reconcile.flippedToReshuffled + ' off-canvas → Reshuffled',
+        reconcile.flippedToReshuffled > 0 ? 'warn' : 'ok',
+      );
     }
-    const placementsByKeyword = new Map<string, Array<{ stableId: string; placement: string }>>();
-    for (const n of applyResult.newState.nodes) {
-      for (const [kwId, placement] of Object.entries(n.keywordPlacements)) {
-        if (!placementsByKeyword.has(kwId)) placementsByKeyword.set(kwId, []);
-        placementsByKeyword.get(kwId)!.push({ stableId: n.stableId, placement });
-      }
-    }
-    const kwTopicUpdates: { id: string; [key: string]: unknown }[] = [];
-    for (const [kwId, placements] of placementsByKeyword) {
-      const topics = placements.map(p => titleByStableId.get(p.stableId) ?? '').filter(Boolean);
-      const canvasLoc: Record<string, string> = {};
-      for (const p of placements) {
-        const t = titleByStableId.get(p.stableId);
-        const d = descByStableId.get(p.stableId) ?? '';
-        if (t) canvasLoc[t] = d;
-      }
-      kwTopicUpdates.push({
-        id: kwId,
-        topic: topics.join(' | '),
-        canvasLoc,
-      });
-    }
-    if (kwTopicUpdates.length > 0) onBatchUpdateKeywords(kwTopicUpdates);
 
     // Refresh UI. The hardened useCanvas contract throws on failure, so a
     // 5xx flake on /canvas/nodes (the 2026-04-28 canvas-blanking trigger)
@@ -1173,29 +1217,11 @@ export default function AutoAnalyze({
     // event can corrupt a run again.
     lastSeenNodesCountRef.current = applyResult.newState.nodes.length;
 
-    // P3-F7 status reconciliation: heal any keyword whose status drifted from
-    // its canvas presence (on-canvas but Unsorted/Reshuffled → AI-Sorted;
-    // off-canvas but AI-Sorted → Reshuffled). Pure logic in
-    // src/lib/reconciliation.ts; this call site passes the fresh keyword
-    // list (the function-scoped `allKeywords` shadow above resolves to
-    // `keywordsRef.current`). The 2026-04-28 closure-staleness bug at
-    // line 830 was a `for (const kw of allKeywords)` reading the
-    // closure-frozen prop instead of the ref; the shadow + helper
-    // extraction together make that class of regression structurally
-    // impossible inside this function.
-    const placedSet = new Set(placementsByKeyword.keys());
-    const archivedSet = new Set(applyResult.archivedKeywords.map(a => a.keywordId));
-    const reconcile = computeReconciliationUpdates(allKeywords, placedSet, archivedSet);
-    if (reconcile.updates.length > 0) {
-      onBatchUpdateKeywords(
-        reconcile.updates as unknown as { id: string; [key: string]: unknown }[],
-      );
-      aaLog(
-        '  ↻ Reconciliation: ' + reconcile.flippedToAiSorted + ' on-canvas → AI-Sorted, ' +
-        reconcile.flippedToReshuffled + ' off-canvas → Reshuffled',
-        reconcile.flippedToReshuffled > 0 ? 'warn' : 'ok',
-      );
-    }
+    // (P3-F7 status reconciliation moved up — now folded into the same
+    // /canvas/rebuild $transaction as the placement updates per the
+    // 2026-05-05 atomic-batch fold-in. `placedSet` + `archivedSet` +
+    // `reconcile` are computed pre-rebuild and used both to build the
+    // payload AND to mark verified batch keywords below.)
 
     // Mark batch keywords as ✓.
     const verified = batch.keywordIds.filter(id => placedSet.has(id) || archivedSet.has(id));

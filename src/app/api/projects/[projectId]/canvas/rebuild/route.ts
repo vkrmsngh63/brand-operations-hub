@@ -19,7 +19,20 @@ const WORKFLOW = 'keyword-clustering';
 //   deleteNodeIds?: string[],
 //   deletePathwayIds?: string[],
 //   deleteSisterLinkIds?: string[],
+//   // 2026-05-05 parallel-PATCH-burst reduction (atomic-batch fold-in):
+//   keywordUpdates?: [{ id, topic?, canvasLoc?, sortingStatus?, ... }],
+//   archiveKeywords?: [{ keywordId, reason }],
 // }
+//
+// `keywordUpdates` and `archiveKeywords` fold what was previously a 55-60+
+// parallel PATCH /keywords/[id] burst (per-batch fan-out from
+// AutoAnalyze.tsx) plus a sequential POST /removed-keywords loop into the
+// SAME $transaction as the canvas rebuild. Eliminates the burst that was
+// exhausting Supabase Postgres max_connections=60 at Nano compute, and
+// eliminates the P2025 race between archive deletes and parallel PATCHes
+// (both now commit or roll back together). Per
+// KEYWORD_CLUSTERING_ACTIVE.md POST-2026-05-04-D STATE block item (a)
+// approach (iii); director-approved 2026-05-05.
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ projectId: string }> }
@@ -27,7 +40,7 @@ export async function POST(
   const { projectId } = await params;
   const auth = await verifyProjectWorkflowAuth(req, projectId, WORKFLOW);
   if (auth.error) return auth.error;
-  const { projectWorkflowId } = auth;
+  const { projectWorkflowId, userId } = auth;
 
   // Captured for flake telemetry (Task: underlying flake-rate investigation).
   // The atomic rebuild's transaction duration scales with payload size; the
@@ -267,6 +280,133 @@ export async function POST(
       );
     }
 
+    // ── Atomic-batch fold-in (2026-05-05 parallel-PATCH-burst reduction) ──
+    // Pre-fetch source keyword rows for archive intents BEFORE the transaction
+    // so we can build the create-then-delete ops alongside the canvas ops in
+    // the existing array-form $transaction. The findMany is a single read
+    // outside the transaction; any in-flight writer between this read and
+    // the transaction's commit is a non-issue in practice (Auto-Analyze runs
+    // pause manual UI editing, and the AI-archive payload doesn't depend on
+    // the keyword's current row data — it only needs id+projectWorkflowId
+    // for the deleteMany scope).
+    let archiveValidationError: string | null = null;
+    let archiveSourceCount = 0;
+    if (Array.isArray(body.archiveKeywords) && body.archiveKeywords.length > 0) {
+      // Up-front shape validation — fail before any commit attempt.
+      for (const a of body.archiveKeywords) {
+        if (!a || typeof a.keywordId !== 'string' || a.keywordId.length === 0) {
+          archiveValidationError = 'archiveKeywords[].keywordId must be a non-empty string';
+          break;
+        }
+        if (typeof a.reason !== 'string' || a.reason.trim().length === 0) {
+          archiveValidationError = 'archiveKeywords[].reason must be a non-empty string';
+          break;
+        }
+      }
+      if (archiveValidationError) {
+        return NextResponse.json({ error: archiveValidationError }, { status: 400 });
+      }
+
+      const archiveIds: string[] = body.archiveKeywords.map(
+        (a: { keywordId: string }) => a.keywordId,
+      );
+      const reasonByKeywordId = new Map<string, string>();
+      for (const a of body.archiveKeywords) {
+        reasonByKeywordId.set(a.keywordId, a.reason);
+      }
+
+      const sourceKeywords = await withRetry(() =>
+        prisma.keyword.findMany({
+          where: { projectWorkflowId, id: { in: archiveIds } },
+        })
+      );
+      archiveSourceCount = sourceKeywords.length;
+
+      // RemovedKeyword copies — one per source keyword that actually exists.
+      // Mirrors the existing /removed-keywords POST createInputs shape.
+      // Keywords that no longer exist (e.g., already archived in a prior
+      // batch) are silently skipped — same behavior as the standalone route.
+      for (const src of sourceKeywords) {
+        ops.push(
+          prisma.removedKeyword.create({
+            data: {
+              projectWorkflowId,
+              originalKeywordId: src.id,
+              keyword: src.keyword,
+              volume: src.volume,
+              sortingStatus: src.sortingStatus,
+              tags: src.tags,
+              topic: src.topic,
+              canvasLoc: src.canvasLoc as object,
+              removedBy: userId,
+              removedSource: 'auto-ai-detected-irrelevant',
+              aiReasoning: reasonByKeywordId.get(src.id) ?? null,
+            },
+          })
+        );
+      }
+
+      // Single deleteMany scoped to all archive ids — Postgres handles the
+      // empty-overlap case safely if some ids didn't exist.
+      ops.push(
+        prisma.keyword.deleteMany({
+          where: { projectWorkflowId, id: { in: archiveIds } },
+        })
+      );
+    }
+
+    // ── Keyword updates (folded fan-out replacement) ──────────
+    // Replaces the prior fire-and-forget per-keyword PATCH burst from
+    // AutoAnalyze.tsx. Same fields the prior PATCH /keywords/[id] endpoint
+    // accepted; the composite where clause (id + projectWorkflowId) still
+    // protects against cross-workspace updates.
+    //
+    // Uses `updateMany` rather than `update` deliberately: if the client
+    // sends an update for an id that no longer exists (rare race — keyword
+    // archived in a prior batch but still referenced by stale client state),
+    // updateMany silently no-ops (count=0) instead of throwing P2025 and
+    // rolling back the entire transaction. This preserves the
+    // batch-continues-despite-stale-id tolerance the prior fire-and-forget
+    // PATCHes had, without losing atomicity for the rest of the rebuild.
+    let keywordUpdateCount = 0;
+    if (Array.isArray(body.keywordUpdates) && body.keywordUpdates.length > 0) {
+      // Up-front shape validation — every entry must have a string id.
+      for (const ku of body.keywordUpdates) {
+        if (!ku || typeof ku.id !== 'string' || ku.id.length === 0) {
+          return NextResponse.json(
+            { error: 'keywordUpdates[].id must be a non-empty string' },
+            { status: 400 }
+          );
+        }
+      }
+      for (const ku of body.keywordUpdates) {
+        ops.push(
+          prisma.keyword.updateMany({
+            where: { id: ku.id as string, projectWorkflowId },
+            data: {
+              ...(ku.keyword !== undefined && { keyword: ku.keyword as string }),
+              ...(ku.volume !== undefined && { volume: ku.volume as number }),
+              ...(ku.sortingStatus !== undefined && {
+                sortingStatus: ku.sortingStatus as string,
+              }),
+              ...(ku.tags !== undefined && { tags: ku.tags as string }),
+              ...(ku.topic !== undefined && { topic: ku.topic as string }),
+              ...(ku.sortOrder !== undefined && {
+                sortOrder: ku.sortOrder as number,
+              }),
+              ...(ku.canvasLoc !== undefined && {
+                canvasLoc: ku.canvasLoc as object,
+              }),
+              ...(ku.topicApproved !== undefined && {
+                topicApproved: ku.topicApproved as object,
+              }),
+            },
+          })
+        );
+      }
+      keywordUpdateCount = body.keywordUpdates.length;
+    }
+
     // The atomic rebuild transaction is the multi-second connection-holder
     // (~5s at canvas 120 per the aa.rebuildHTTP MEDIUM ROADMAP entry). Wrapped
     // in withRetry per the 2026-05-05 apply-pipeline rate-fix — a transient
@@ -274,15 +414,35 @@ export async function POST(
     // The transaction is atomic by definition: a failed commit rolls back
     // entirely, so retry re-runs the whole transaction with no partial-state
     // risk. All ops in the transaction (upserts, deleteMany, sisterLink.create
-    // bracketed by deletes-then-creates) are idempotent under retry.
+    // bracketed by deletes-then-creates, removedKeyword.create + keyword
+    // .deleteMany for archives, keyword.update for placements) are idempotent
+    // under retry.
+    //
+    // Explicit { timeout: 30000, maxWait: 5000 } per the 2026-05-05
+    // atomic-batch fold-in. Default Prisma $transaction timeout is 5s; the
+    // canvas rebuild alone runs ~5s at canvas 120, and the fold-in adds
+    // ~hundreds of keyword.update ops + a handful of archive ops on top.
+    // 30s gives Phase 1 headroom; Phase 3 scaling (canvas 700+) will need
+    // a different model — captured for future work, not blocking today.
     await withRetry(() =>
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      prisma.$transaction(ops as any)
+      prisma.$transaction(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ops as any,
+        {
+          timeout: 30000,
+          maxWait: 5000,
+        }
+      )
     );
 
     await markWorkflowActive(projectId, WORKFLOW);
 
-    return NextResponse.json({ success: true, operations: ops.length });
+    return NextResponse.json({
+      success: true,
+      operations: ops.length,
+      keywordUpdates: keywordUpdateCount,
+      archived: archiveSourceCount,
+    });
   } catch (error) {
     recordFlake('POST /api/projects/[projectId]/canvas/rebuild', error, {
       projectWorkflowId,
