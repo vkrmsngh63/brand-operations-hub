@@ -3,7 +3,9 @@
 
 **Created:** April 17, 2026
 **Created in chat:** https://claude.ai/chat/cc15409c-5000-4f4f-a5ce-a42784b5a94f
-**Last updated:** April 17, 2026
+**Last updated:** May 4, 2026 (W#2 Workflow Requirements Interview Platform-Truths Audit per HANDOFF_PROTOCOL Rule 19 — director-approved batch of 7 additions: §1.4 per-workflow throughput-bottleneck recognition; §2.2.1 workflow-internal sub-scopes (W#2 platform sub-scope); §6 example updated for W#2 "always ready" + new §6.6 cross-workflow data permissions per-(producing-workflow, data-item, consuming-workflow) granularity; §8.4 Project-scoped shared vocabularies; §10.1 non-web-app clients (Chrome extension as first non-web client); §10.2 image-storage scale projections; §12.6 scaffold extension-points (always-visible deliverables, custom React content components, external-client companion pattern). All additive; no existing requirements removed or weakened. Modified on `workflow-2-competition-scraping` feature branch per MULTI_WORKFLOW_PROTOCOL Rule 3 — only W#2-relevant edits, no other workflow's owned sections touched.)
+**Last updated in session:** session_2026-05-04_w2-workflow-requirements-interview (Claude Code)
+**Previously updated:** April 17, 2026
 
 **Purpose:** This document captures the **platform-level truths** that apply across all 14+ workflow tools — scale targets, user model, concurrency, review cycles, audit policy, infrastructure, and phasing. Every feature and workflow built on PLOS must be evaluated against these requirements.
 
@@ -40,6 +42,16 @@
 
 Features where Phase 3/4 scale is not yet addressed should still be built, but must explicitly flag the scale gap as technical debt in `ROADMAP.md` and `PLATFORM_ARCHITECTURE.md §10`.
 
+**Per-workflow throughput-bottleneck recognition (NEW 2026-05-04 — surfaced by W#2 design interview):**
+
+The platform-wide Phase-3 target of 500 Projects/week assumes all 14 workflows can keep pace. Workflows that are LABOR-INTENSIVE PER PROJECT may bottleneck the pipeline below the platform target.
+
+**Currently identified bottlenecks:**
+
+- **W#2 Competition Scraping & Deep Analysis** — at director's expected throughput (~10 workers × 1 project/worker/day = ~70/week), W#2 is roughly 7× lower than the 500/week platform target. To match the platform target, W#2 would need ~70 workers, OR per-Project work would need to compress 7×, OR the platform-wide target accepts that some Projects skip W#2. Director-acknowledged tradeoff at the W#2 design interview; revisit at Phase 3 ramp time.
+
+**Future workflows:** at each workflow's design interview, surface throughput-per-Project + worker-count-per-Project explicitly; if the resulting throughput-per-week is below the platform target, log here.
+
 ---
 
 ## 2. User model
@@ -71,6 +83,18 @@ This is THREE assignment rows:
 - (sarah, keyword-clustering, 508)
 
 If Sarah is also assigned Keyword Analysis on Projects {901, 1003}, that's two more rows. If another worker Mike does Competition Scraping on the same Projects as Sarah, those are separate rows for Mike.
+
+### 2.2.1 Workflow-internal sub-scopes (NEW 2026-05-04 — surfaced by W#2 design interview)
+
+Some workflows partition their work along a sub-dimension that requires the assignment to expand beyond `(user × workflow × project)`. Workflows that need this declare it at design time.
+
+**Current sub-scopes:**
+
+- **W#2 Competition Scraping & Deep Analysis — sub-scope = `platform`.** Per-`(user × workflow × project × platform)` where `platform ∈ {Amazon, Ebay, Etsy, Walmart, GoogleShopping, GoogleAds, IndependentWebsites}`. Exactly one worker per `(project, platform)` — never two workers on the same platform within the same project. Enforced at the assignment table level.
+
+**Implication:** the Phase-2 Assignment table needs an OPTIONAL `subScope` column (string, default null). Workflows that use a sub-scope populate it; workflows without one leave it null. Index: composite `(workflow, projectId, subScope)` for fast "is this slot taken" lookups.
+
+**Future workflows:** at each workflow's design interview (Rule 18), Q8 Concurrency now asks "Does this workflow need a sub-scope dimension beyond `(user × workflow × project)`?" If yes, it's declared here.
 
 ### 2.3 Assignment mechanics (per admin's workflow)
 - Admin assigns manually — no auto-assignment in initial design
@@ -210,7 +234,7 @@ A workflow is "ready to be worked on" when its **declared data dependencies** ar
 
 **Readiness is declarative per workflow, not computed by a central resolver.** Each workflow tool declares its own readiness rules at design time. Examples:
 - Keyword Clustering: "always ready" (entry-point-like; user can upload keywords directly)
-- Competition Scraping (hypothetical): "ready when Keyword Clustering for this Project has produced a non-empty topic hierarchy"
+- **Competition Scraping & Deep Analysis (W#2): "always ready" — confirmed at W#2 design interview 2026-05-04. NO upstream dependency on W#1 or any other workflow. (Earlier draft of this doc speculated W#2 might depend on W#1's topic hierarchy; that speculation was rejected by the director at interview time.)**
 - Content Development (hypothetical): "ready when both Competition Scraping and Therapeutic Strategy have produced their deliverables"
 
 ### 6.2 Not an entry gate
@@ -226,6 +250,23 @@ Since Phase 1 is admin-solo and Keyword Clustering is "always ready," readiness 
 
 ### 6.5 Design implication
 Every new workflow's design interview must answer the question: **"What data must exist before this workflow can start?"** — and the answer becomes a declarative rule in the workflow's design doc.
+
+### 6.6 Cross-workflow data permissions (NEW 2026-05-04 — surfaced by W#2 design interview)
+
+Some workflows produce data that downstream workflows need to READ (the standard case, captured in `DATA_CATALOG.md` §7 Cross-Tool Data Flow Map). Some workflows' data may also be EDITABLE by specific downstream workflows — this is the more complex case.
+
+**Granularity required:** per-(producing-workflow, data-item, consuming-workflow). Examples (provisional, from W#2 design interview):
+
+- W#2 produces "Competition Categories" vocabulary — W#5 (Conversion Funnel) may ADD to this vocabulary; W#9 (Clinical Evidence) is read-only.
+- W#2 produces "Captured text rows" — some downstream workflow may FLAG specific rows as "use verbatim"; others are read-only. Specifics finalized per-downstream design interview.
+
+**Implementation guidance:**
+
+- Per-workflow design interview (Rule 18) Q5 Outputs answer must declare provisional read/write expectations.
+- Per-downstream workflow design interview must declare which upstream data items it intends to write to.
+- Database schema implements via per-table Row-Level Security policies in Supabase OR per-row `editable_by_workflows` array column. Implementation choice deferred to first downstream-edit case.
+
+**Why not just "per-workflow" (workflow can edit all of upstream's data or none)?** Too coarse — most downstream workflows want SOME edit permissions (e.g., adding to a vocabulary) without needing ALL edit permissions (e.g., deleting captured images). The granular model lets us ship the minimum surface.
 
 ---
 
@@ -275,6 +316,27 @@ In the data model:
 ### 8.3 Design implication
 If any code starts relying on workflow parent-child relationships beyond display, that's a signal the model is drifting wrong. Workflows communicate with each other through **data dependencies** (§6), not through hierarchy.
 
+### 8.4 Project-scoped shared vocabularies (NEW 2026-05-04 — surfaced by W#2 design interview)
+
+Some workflows produce vocabularies (controlled lists of categories, names, labels) that other workflows on the same Project also need to READ and potentially WRITE TO.
+
+**Examples from W#2:**
+- Competition Categories (e.g., "device", "topical", "supplement")
+- Brand Names
+- Product Names
+- Content Categories (e.g., "Amazon Title", "Amazon Bullet Point")
+- Image Categories
+
+**Pattern:** vocabulary tables are scoped to `(Project × vocabulary-type)`, NOT to the producing workflow. Any workflow on the same Project can READ + ADD entries. The producing workflow doesn't "own" the vocabulary — it just bootstraps it.
+
+**Implementation guidance:**
+
+- Single shared `Vocabulary` table OR per-vocabulary-type tables — implementation decision at first-build time
+- Each row tracks: `projectId`, `vocabularyType`, `value`, `createdByWorkflow`, `createdByUserId`, `createdAt`
+- Soft-delete with a `deletedAt` column (vocabulary entries reference into other tables, so hard-delete causes referential integrity headaches)
+
+**Future workflows:** at each design interview, Q5 Outputs answer must explicitly call out any vocabularies the workflow produces or expects to extend.
+
 ---
 
 ## 9. Compliance
@@ -311,10 +373,38 @@ Current architecture (Supabase Postgres, public `admin-notes` storage bucket, Ve
 - **Realtime:** Not yet enabled; planned for Phase 2 (Supabase Realtime is the default choice)
 - **AI:** Anthropic API direct or via Vercel
 
+**Non-web-app clients (NEW 2026-05-04 — surfaced by W#2 design interview):**
+
+Until W#2, every PLOS interaction happened inside the Next.js web app at vklf.com. W#2 introduces a Chrome browser extension as a co-equal client — running in the user's browser outside vklf.com and talking to PLOS over the network.
+
+**Implications platform-wide:**
+
+- **Authentication** — PLOS now needs to support non-web-app clients. Likely pattern: long-lived API tokens issued from a PLOS settings page, OR OAuth 2.0 device flow. Decision deferred to W#2 stack-and-architecture session; once chosen, the pattern applies to all future non-web clients.
+- **API surface** — APIs designed for the extension must be CORS-friendly, idempotent, and explicit about authentication context. Cannot rely on cookie-based session auth.
+- **Distribution** — extension files (.zip / unpacked / Chrome Web Store) hosted somewhere; PLOS surface for download + install instructions per workflow.
+
+**Future workflows:** any workflow that needs user actions outside the browser-tab-on-vklf.com (browser extension, mobile app, desktop tool) follows the same patterns established here.
+
 ### 10.2 Phase 3 (50 worker) stack expectations
 - Likely still Vercel + Supabase with a higher Supabase tier
 - Real-time infrastructure (Supabase Realtime or third-party like Liveblocks) selected and deployed
 - Workflow-deliverable storage (videos, design files, etc.) likely needs a dedicated bucket strategy — possibly private + signed URLs (already on the tech-debt list)
+
+**Image-storage scale projections (NEW 2026-05-04 — surfaced by W#2 design interview):**
+
+W#2 Competition Scraping captures ~300 images per Project (mix of regular product shots ~200 KB + A+ content region-screenshots ~1-2 MB; ~500 KB average). Aggregate projections:
+
+- Phase 3 (~70 Projects/wk × 300 images × ~500 KB) ≈ ~500 GB/year of image storage
+- Phase 4 (~140 Projects/wk × 300 images × ~500 KB) ≈ ~1 TB/year of image storage
+
+**Implication for Supabase Storage strategy:**
+
+- Dedicated bucket per workflow that stores significant binary assets (W#2 = `competition-scraping`; future workflows TBD)
+- Private buckets with signed-URL access (no public access)
+- Lifecycle policies for archival evaluated at Phase 3 ramp time
+- CDN configuration evaluated at Phase 3 ramp time
+
+Existing `admin-notes` public bucket is unaffected.
 
 ### 10.3 Phase 4 (500+ worker / 5,000 Projects/week) stack considerations
 At the Phase 4 timeline, evaluate:
@@ -412,6 +502,18 @@ Keyword Clustering is retrofitted into the scaffold later (low priority — it w
 
 ### 12.5 Design implication
 When workflow #2 is started, the **first substantive work is designing the scaffold**, not designing workflow #2's specifics. The scaffold work benefits all subsequent workflows, so it's worth doing right.
+
+### 12.6 Scaffold extension-points discovered during workflow interviews (NEW 2026-05-04 — surfaced by W#2 design interview)
+
+The scaffold's design (per §12.4 — built before W#2 build begins) must accommodate the following extensibility patterns surfaced by W#2:
+
+1. **Always-visible deliverables.** A workflow may have downloadable artifacts (extension files, templates, README PDFs) that are present regardless of Project state. Distinct from per-Project produced outputs. The deliverables area in the scaffold must support both modes.
+
+2. **Custom React content components.** A workflow may plug in a fully custom content component (not just standard forms) into the workflow-specific content area. W#2 will be the first to use this (multi-table viewer with platform/URL/category navigation). The scaffold must define a clean plug-in interface — likely a React prop accepting a component, with the scaffold passing standard context (workflow status, project context, auth context).
+
+3. **External-client companion pattern.** A workflow may ship a downloadable companion artifact (browser extension, mobile app, desktop tool) that talks to PLOS via API rather than running inside a browser-tab on vklf.com. W#2 is the first; future workflows may follow. The scaffold must surface this as a recognized pattern + provide a standard "download companion" UI block.
+
+**Future workflows:** at each design interview, Q14 Scaffold Fit answer should reference these extension-points and declare which (if any) the workflow will use.
 
 ---
 

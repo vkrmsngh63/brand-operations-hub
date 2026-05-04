@@ -1,7 +1,9 @@
 # DATA CATALOG
 ## Master index of all data captured across the PLOS platform, with Human Reference Language
 
-**Last updated:** April 30, 2026 (Scale Session B — `CanvasNode` gains a third Pivot-era data item: `intentFingerprint` (Human Reference Language: "the topic's one-line searcher intent" / "the canonical phrase that captures who is searching and what they want"; format 5–15 words searcher-centric; NOT NULL after 3-step migration completed this session; live-backfilled across 37 Bursitis Test rows by `scripts/backfill-intent-fingerprints.ts`). Section 5.2 amended (FIELDS list extended); new section §5.2a added with full data-item record (format / validation / G3 guard / cross-reference). Foundation for Tiered Canvas Serialization (Sessions C/D/E pending).)
+**Last updated:** May 4, 2026 (W#2 Workflow Requirements Interview — provisional W#2 entries added to §6.1 (7 sub-sections covering competitor URL records, sizes/options, captured text, captured images, platform-shared vocabularies, highlight terms, worker assignments with platform sub-scope) + §7.2.2 W#2 row in Cross-Tool Data Flow Map filled in with reciprocal output declarations per Rule 18 + W#1-as-W#2-input speculation rejected. All entries provisional pending W#2 Tool Graduation; finalized HRL authored per Doc Architecture §5 at graduation time. Modified on `workflow-2-competition-scraping` feature branch per MULTI_WORKFLOW_PROTOCOL Rule 3 — only W#2-relevant additions, no W#1 sections touched.)
+**Last updated in session:** session_2026-05-04_w2-workflow-requirements-interview (Claude Code)
+**Previously updated:** April 30, 2026 (Scale Session B — `CanvasNode` gains a third Pivot-era data item: `intentFingerprint` (Human Reference Language: "the topic's one-line searcher intent" / "the canonical phrase that captures who is searching and what they want"; format 5–15 words searcher-centric; NOT NULL after 3-step migration completed this session; live-backfilled across 37 Bursitis Test rows by `scripts/backfill-intent-fingerprints.ts`). Section 5.2 amended (FIELDS list extended); new section §5.2a added with full data-item record (format / validation / G3 guard / cross-reference). Foundation for Tiered Canvas Serialization (Sessions C/D/E pending).)
 **Previously updated:** April 25, 2026 (Pivot Session B — `CanvasNode` gained `stableId` + `stabilityScore`; both backfilled across 104 Bursitis rows.)
 **Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-B (Claude Code)
 **Previously updated in session:** session_2026-04-25_phase1g-test-followup-part3-session3b (Claude Code)
@@ -277,7 +279,122 @@ These data items are required for Phase 2 (multi-user infrastructure) per `PLATF
 
 Entries will be added during each workflow's Tool Graduation Ritual:
 
-- 6.1 Competition Scraping & Deep Analysis
+### 6.1 Competition Scraping & Deep Analysis (W#2) — provisional, captured at Workflow Requirements Interview 2026-05-04
+
+**Status:** 🔄 Design phase. Schema not yet built. Entries below are PROVISIONAL — finalized Human Reference Language will be authored at W#2 Tool Graduation per Doc Architecture §5. Specific R/W flags for each downstream workflow are TBD per consumer's design interview.
+
+**Source-of-truth doc:** `docs/COMPETITION_SCRAPING_DESIGN.md` §A (frozen 2026-05-04 at end of Workflow Requirements Interview).
+
+**Cross-references:** `PLATFORM_REQUIREMENTS.md §2.2.1` (4-way assignment with platform sub-scope), `§6.6` (cross-workflow data permissions per-(workflow, data-item) granular), `§8.4` (platform-shared vocabularies), `§10.1` (non-web-app client / Chrome extension), `§10.2` (image-storage projections), `§12.6` (scaffold extension-points).
+
+#### 6.1.1 Competitor URL record (provisional)
+- **HUMAN REF (PROVISIONAL):** "the competitor list" / "captured competitor URLs" / "the competition table"
+- **CAPTURED IN:** Chrome extension Module 1 (Competition Identification) → write-through to PLOS via API; viewable + editable in PLOS at `/projects/[projectId]/competition-scraping`
+- **TECHNICAL NAME:** `competitor_url` table (NOT YET BUILT — schema-design pending Stack-and-Architecture session)
+- **FIELDS (provisional):**
+  - `id` — UUID, primary key (client-generated for idempotency)
+  - `projectId` — FK to Project
+  - `platform` — Enum: `"amazon" | "ebay" | "etsy" | "walmart" | "google_shopping" | "google_ads" | "independent_website"`
+  - `url` — String, the competitor URL (editable)
+  - `competitionCategory` — String, FK to vocabulary (e.g., "device", "topical product", "supplement")
+  - `productName` — String, FK to vocabulary
+  - `brandName` — String, FK to vocabulary
+  - `resultsPageRank` — Integer, nullable
+  - `productStarRating` — Float, nullable (Amazon/Ebay/Walmart only)
+  - `sellerStarRating` — Float, nullable (Etsy only)
+  - `productReviewsCount` — Integer, nullable
+  - `sellerReviewsCount` — Integer, nullable
+  - `customFields` — JSON, nullable (for "Add new product-associated category" custom fields like "Country of Manufacturing")
+  - `createdByUserId`, `createdAt`, `updatedAt` — provenance + timestamps
+  - **Constraint:** unique on `(projectId, platform, url)` — prevents duplicate captures
+- **SHARED WITH (provisional):** W#3, W#5, W#6, W#9, W#11
+- **R/W DOWNSTREAM:** TBD per each consumer's design interview — director's directive 2026-05-04 was "shared as per workflow" with default-to-editable rather than default-to-read-only
+
+#### 6.1.2 Competitor product Size/Option (provisional)
+- **HUMAN REF (PROVISIONAL):** "the size" / "the option" / "size/option"
+- **CAPTURED IN:** Same as 6.1.1; sub-record under a competitor URL
+- **TECHNICAL NAME:** `competitor_product_size_option` table (NOT YET BUILT)
+- **FIELDS (provisional):**
+  - `id` — UUID, primary key
+  - `competitorUrlId` — FK to competitor_url
+  - `label` — String (e.g., "Large", "12oz", "Pack of 6")
+  - `price` — Decimal
+  - `shippingCost` — Decimal, nullable
+  - `customFields` — JSON, nullable (for "Add new product-Size/Option-associated category" like "Customizations for extra-large bottles")
+  - timestamps
+- **CONSTRAINT:** Multiple sizes per competitor URL allowed
+- **SHARED WITH (provisional):** Same as 6.1.1
+
+#### 6.1.3 Captured text row (provisional)
+- **HUMAN REF (PROVISIONAL):** "the captured text" / "scraped text" / "the text rows"
+- **CAPTURED IN:** Chrome extension Module 2 (Competition Data Scraping) — text highlight + add-text gesture OR paste-into-extension; viewable + editable in PLOS
+- **TECHNICAL NAME:** `captured_text` table (NOT YET BUILT)
+- **FIELDS (provisional):**
+  - `id` — UUID, primary key
+  - `competitorUrlId` — FK to competitor_url
+  - `contentCategory` — String, FK to vocabulary (e.g., "Amazon Title", "Amazon Bullet Point")
+  - `text` — String (long; the captured text)
+  - `tags` — String[] (arbitrary text tags)
+  - `displayOrder` — Integer (user-reorderable)
+  - timestamps + provenance
+- **VOLUME EXPECTATION:** ~5,000 rows per Project (per A.3 estimate)
+- **SHARED WITH (provisional):** W#3, W#5, W#6, W#9, W#10
+- **R/W DOWNSTREAM:** TBD
+
+#### 6.1.4 Captured image record (provisional)
+- **HUMAN REF (PROVISIONAL):** "the captured images" / "scraped images" / "the image library"
+- **CAPTURED IN:** Chrome extension Module 2 — right-click save (regular image) OR region-screenshot mode (A+ content modules); viewable in PLOS as thumbnails, expandable
+- **TECHNICAL NAME:** `captured_image` table (NOT YET BUILT) + Supabase Storage bucket `competition-scraping`
+- **FIELDS (provisional):**
+  - `id` — UUID, primary key
+  - `competitorUrlId` — FK to competitor_url
+  - `imageCategory` — String, FK to vocabulary (e.g., "Product Listing Image", "Amazon A+ Content Module")
+  - `imageType` — Enum: `"regular" | "region_screenshot"`
+  - `storageUrl` — String (Supabase Storage signed URL or path)
+  - `composition` — String, nullable (manual now; future AI auto-fill via vision model)
+  - `embeddedText` — String, nullable (for A+ content; manual now; future AI auto-fill via OCR)
+  - `tags` — String[]
+  - `displayOrder` — Integer
+  - `widthPx`, `heightPx`, `sizeBytes` — Integer (for storage analytics)
+  - timestamps + provenance
+- **VOLUME EXPECTATION:** ~300 images per Project (per A.3); ~500 KB average → ~500 GB/yr Phase 3, ~1 TB/yr Phase 4
+- **SHARED WITH (provisional):** W#4, W#6, W#7
+- **R/W DOWNSTREAM:** TBD
+
+#### 6.1.5 Project-scoped vocabularies (NOT W#2-owned — platform-shared per §8.4)
+- **HUMAN REF (PROVISIONAL):** "the categories" / "the brand list" / "the product list" / "the content categories"
+- **CAPTURED IN:** First created in W#2 Module 1 (Competition Categories, Product Names, Brand Names, Size/Option labels) and Module 2 (Content Categories, Image Categories); also extensible by other workflows on the same Project per `PLATFORM_REQUIREMENTS.md §8.4`
+- **TECHNICAL NAME:** `vocabulary` table (NOT YET BUILT — single shared table OR per-vocabulary-type tables; choice deferred to first-build session)
+- **FIELDS (provisional):**
+  - `id` — UUID, primary key
+  - `projectId` — FK to Project (vocabularies are Project-scoped, NOT workflow-scoped)
+  - `vocabularyType` — String, e.g., `"competition_category" | "product_name" | "brand_name" | "size_option" | "content_category" | "image_category"`
+  - `value` — String (the actual term)
+  - `createdByWorkflow` — String (which workflow first added it)
+  - `createdByUserId` — FK to User
+  - `deletedAt` — Timestamp, nullable (soft-delete; vocabulary entries reference into other tables, so hard-delete causes referential issues)
+  - timestamps
+- **CONSTRAINT:** Unique on `(projectId, vocabularyType, value)` — case-insensitive
+- **SHARED WITH:** ANY workflow on the same Project (READ + ADD)
+- **R/W DOWNSTREAM:** READ-WRITE (any workflow on the same Project can ADD entries; only the original creator or admin can soft-delete)
+
+#### 6.1.6 Highlight Terms with colors (extension-local OR per-Project, TBD)
+- **HUMAN REF (PROVISIONAL):** "the highlight terms" / "the highlight colors"
+- **CAPTURED IN:** Chrome extension Module 1 setup
+- **TECHNICAL NAME:** TBD — could be `chrome.storage.local` only (per-extension-install) OR `highlight_term` table (per-Project, syncable across worker installs)
+- **DECISION DEFERRED:** to Stack-and-Architecture session. If admin/workers want highlight terms to follow them across devices, server-stored. If purely a per-session convenience, local-only.
+- **FIELDS (provisional, if server-stored):**
+  - `id`, `projectId`, `userId`, `term`, `color` (hex), `createdAt`
+- **SHARED WITH:** Self-only (this user's extension); not shared cross-workflow
+
+#### 6.1.7 Worker assignment with platform sub-scope (Phase 2+)
+- **HUMAN REF (PROVISIONAL):** "the assignment" / "Sarah is assigned to Amazon for Project X"
+- **CAPTURED IN:** Phase-2 admin assignment UI in PLOS
+- **TECHNICAL NAME:** `Assignment` table (Phase-2 platform-wide; W#2 populates `subScope` column with platform name per `PLATFORM_REQUIREMENTS.md §2.2.1`)
+- **FIELDS (provisional, when Assignment table is built in Phase 2):**
+  - `id`, `userId`, `workflow`, `projectId`, `subScope` (String, nullable; W#2 uses platform name), `status` (per Phase-2 review-cycle states OR W#2's simplified `assigned | in-progress | completed`), timestamps
+- **CONSTRAINT:** Unique on `(workflow, projectId, subScope)` — enforces "one worker per (Project, platform)" for W#2
+
 - 6.2 Therapeutic Strategy & Product Family Design
 - 6.3 Brand Identity & IP
 - 6.4 Conversion Funnel & Narrative Architecture
@@ -344,10 +461,25 @@ The Map is an always-loaded index that points OUT to per-tool Data Contracts for
 
 #### 7.2.2 Workflow #2 — Competition Scraping & Deep Analysis
 
-**Status:** ❌ NOT STARTED. Workflow Requirements Interview pending.
+**Status:** 🔄 Design phase. Workflow Requirements Interview COMPLETED 2026-05-04 (session_2026-05-04_w2-workflow-requirements-interview). Schema not yet built; data items below are provisional pending W#2 Tool Graduation. Source-of-truth: `docs/COMPETITION_SCRAPING_DESIGN.md` §A.
 
-**Produces:** TBD at design interview.
-**Reads (anticipated):** W#1 topic hierarchy. Specifics at design interview.
+**Produces (provisional list per Rule 18 reciprocal output declarations; specific R/W flags per consumer at consumer's design interview):**
+
+| Output | What it is | Anticipated downstream consumers |
+|---|---|---|
+| Competitor URL list | Structured competitor product/listing records (per Project, per platform) with category, brand, product, sizes, price, ratings, custom fields per `DATA_CATALOG.md §6.1.1`-`6.1.2` | W#3 Therapeutic Strategy, W#5 Conversion Funnel, W#6 Content Development, W#9 Clinical Evidence, W#11 Post-Launch Optimization |
+| Captured text corpus | All text snippets captured from competitor pages (titles, bullets, descriptions, reviews) tagged by content category + tags per `DATA_CATALOG.md §6.1.3` | W#3, W#5, W#6, W#9, W#10 (Reviews) |
+| Captured image library | All saved images (regular + region-screenshot A+ modules) with Composition + Text fields per `DATA_CATALOG.md §6.1.4`. Volume: ~300/Project; storage: ~500GB/yr Phase 3 | W#4 Brand Identity (visual references), W#6 Content Development (image inspiration), W#7 Multi-Media Assets (style references) |
+| Project-scoped vocabularies | Competition Categories, Product Names, Brand Names, Size/Option labels, Content Categories, Image Categories per `DATA_CATALOG.md §6.1.5`. **Platform-shared per `PLATFORM_REQUIREMENTS.md §8.4` — NOT W#2-owned.** Any workflow on the same Project can READ + ADD entries. | Any downstream workflow on the same Project |
+| Per-platform discovery metadata | Which discovery channel (Amazon search, Google Shopping, Google Ads, Google organic) found each URL — preserves "how did we find this competitor" provenance | W#11 Post-Launch Optimization, W#13 Exit Strategy |
+
+**Director's directive 2026-05-04:** "Design the system in a way that allows us to use things easily in the downstream workflows." Translation: data model is FLEXIBLE; no assumptions baked in about specific downstream consumers.
+
+**Reads:**
+- `Project.name`, `Project.description` (READ-ONLY, all workflows)
+- **Nothing from W#1 or any other workflow.** Director rejected W#1 topic hierarchy as input at interview time. W#2 is fully self-contained input-wise.
+
+**Edit permissions on W#2 outputs (Q5.b at interview):** per-(producing-workflow, data-item, consuming-workflow) granular per `PLATFORM_REQUIREMENTS.md §6.6` (NEW 2026-05-04). Default direction is editable rather than read-only; specifics decided per-downstream design interview. Vocabularies (output #4) are READ + ADD by any workflow on the same Project per §8.4.
 
 #### 7.2.3-7.2.14 Remaining workflows
 
