@@ -346,7 +346,7 @@ This separation exists because platform-level misunderstandings are very expensi
 
 ### The Workflow Requirements Interview (mandatory for every new workflow)
 
-Before any workflow tool (workflows 2–N) begins build, Claude conducts a **Workflow Requirements Interview** with the user — a structured multi-cluster conversation covering purpose, users, throughput, inputs, outputs, readiness rules, UX shape, concurrency, review applicability, audit needs, reset rules, data persistence, quality bar, and scaffold fit. The interview is documented in `HANDOFF_PROTOCOL.md` Rule 18 and produces a `<WORKFLOW_NAME>_DESIGN.md` doc that guides the build.
+Before any workflow tool (workflows 2–N) begins build, Claude conducts a **Workflow Requirements Interview** with the user — a structured multi-cluster conversation covering purpose, users, throughput, inputs, outputs, readiness rules, UX shape, concurrency, review applicability, audit needs, reset rules, data persistence, quality bar, and components-library fit (which shared components from `docs/WORKFLOW_COMPONENTS_LIBRARY_DESIGN.md` the workflow imports + which custom React content component it authors for its own UI). The interview is documented in `HANDOFF_PROTOCOL.md` Rule 18 and produces a `<WORKFLOW_NAME>_DESIGN.md` doc that guides the build.
 
 This is how discover-as-you-build stays safe at workflow scope: the interview catches the big reveals up front; the remaining discovery happens in the small, safe space of "adding a field as a need emerges mid-build."
 

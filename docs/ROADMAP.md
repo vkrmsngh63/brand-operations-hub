@@ -1892,12 +1892,12 @@ Reconciliation pass after every successful apply reported `0 off-canvas → Resh
 #### Workflow 2 — Competition Scraping & Deep Analysis (🔍)
 **Status:** ❌ NOT STARTED
 
-**Prerequisite:** Phase 1α — Shared Workflow-Tool Scaffold must be designed and built BEFORE this workflow begins. Per `PLATFORM_REQUIREMENTS.md §12` and `HANDOFF_PROTOCOL.md` Rule 20.
+**Prerequisite:** Phase 1α — Shared Workflow Components Library Phase-1 build must ship BEFORE this workflow's PLOS-side build begins. Per `PLATFORM_REQUIREMENTS.md §12` (REWRITTEN 2026-05-04 — scaffold-shell concept retired in favor of components-library architecture) and `HANDOFF_PROTOCOL.md` Rule 20 (REFRAMED 2026-05-04). Library design captured in `docs/WORKFLOW_COMPONENTS_LIBRARY_DESIGN.md`.
 
-**Next step:** Workflow Requirements Interview (per HANDOFF_PROTOCOL Rule 18), producing `COMPETITION_SCRAPING_DESIGN.md`. The interview will cover: purpose, users, throughput, inputs (from Keyword Clustering), outputs, readiness rules, UX shape, concurrency, review cycle, audit, reset, data persistence, quality bar, scaffold fit.
+**Next step:** Workflow Requirements Interview (per HANDOFF_PROTOCOL Rule 18), producing `COMPETITION_SCRAPING_DESIGN.md`. The interview will cover: purpose, users, throughput, inputs (from Keyword Clustering), outputs, readiness rules, UX shape, concurrency, review cycle, audit, reset, data persistence, quality bar, components-library fit (which shared components the workflow imports + which custom React content component it authors).
 
 #### Workflow 3 — Therapeutic Strategy & Product Family Design (🧬)
-**Status:** ❌ NOT STARTED. Prereq: scaffold + Workflow 2 Data Contract.
+**Status:** ❌ NOT STARTED. Prereq: Shared Workflow Components Library Phase-1 build (per `PLATFORM_REQUIREMENTS.md §12`, REWRITTEN 2026-05-04) + Workflow 2 Data Contract.
 
 **Forward-directive captured 2026-04-27 (per `HANDOFF_PROTOCOL.md` Rule 21):** when this workflow displays topics + keywords (which it will, since therapeutic strategy depends on the W#1 keyword-clustered conversion funnel as input), it must use the platform-wide **search-volume display + bold-by-threshold convention** established for W#1's canvas. Spec: each topic displayed shows two volume totals (primary keywords total in primary color + secondary keywords total in secondary color); each keyword shows its volume in parentheses to the right; keywords with volume ≥ Auto-Analyze threshold are bold, below are not bold. See the W#1 ROADMAP entry "NEW Phase-1 polish item — Search-volume display on canvas topic boxes + cross-tool display convention (raised 2026-04-27)" for the full spec. This directive must be surfaced as the FIRST item of the W#3 Workflow Requirements Interview when it happens.
 
@@ -1905,7 +1905,7 @@ Reconciliation pass after every successful apply reported `0 off-canvas → Resh
 **Status:** ❌ NOT STARTED.
 
 #### Workflow 5 — Conversion Funnel & Narrative Architecture (🎯)
-**Status:** ❌ NOT STARTED. Prereq: scaffold + W#1, W#2, W#3, W#4 Data Contracts.
+**Status:** ❌ NOT STARTED. Prereq: Shared Workflow Components Library Phase-1 build (per `PLATFORM_REQUIREMENTS.md §12`, REWRITTEN 2026-05-04) + W#1, W#2, W#3, W#4 Data Contracts.
 
 **NARRATIVE-DRIVEN COMPREHENSIVENESS — director directive captured 2026-04-26:**
 
@@ -1919,7 +1919,7 @@ Topic creation in PLOS has TWO layers:
 
 **Reminder mechanism (per `HANDOFF_PROTOCOL.md` Rule 21):** when the Workflow #5 design session begins, this directive must be explicitly surfaced to the director at the start of the session. The Workflow Requirements Interview for W#5 must treat narrative-driven comprehensiveness as a first-class design requirement, not an afterthought. Forward-pointer to this entry is in `DATA_CATALOG.md` §6.4 to ensure the W#5 design session loads it.
 
-**Build prerequisites:** Shared Workflow-Tool Scaffold (Phase 1α), W#1 Data Contract, plus dependencies on W#2, W#3, W#4 Data Contracts (which produce the competitive landscape, product-strategy, and brand-identity data the funnel must accommodate). Full Workflow Requirements Interview happens at W#5 design time.
+**Build prerequisites:** Shared Workflow Components Library Phase-1 build (per `PLATFORM_REQUIREMENTS.md §12`, REWRITTEN 2026-05-04 — scaffold-shell concept retired in favor of components-library architecture), W#1 Data Contract, plus dependencies on W#2, W#3, W#4 Data Contracts (which produce the competitive landscape, product-strategy, and brand-identity data the funnel must accommodate). Full Workflow Requirements Interview happens at W#5 design time.
 
 **Forward-directive captured 2026-04-27 (per `HANDOFF_PROTOCOL.md` Rule 21):** when this workflow displays topics + keywords (which it will, since the conversion funnel is built directly on top of W#1's topic hierarchy + augmented per the narrative-driven directive above), it must use the platform-wide **search-volume display + bold-by-threshold convention** established for W#1's canvas. Spec: each topic displayed shows two volume totals (primary keywords total in primary color + secondary keywords total in secondary color); each keyword shows its volume in parentheses to the right; keywords with volume ≥ Auto-Analyze threshold are bold, below are not bold. See the W#1 ROADMAP entry "NEW Phase-1 polish item — Search-volume display on canvas topic boxes + cross-tool display convention (raised 2026-04-27)" for the full spec. This directive must be surfaced as the SECOND item of the W#5 Workflow Requirements Interview (the first is the narrative-driven-comprehensiveness directive captured 2026-04-26 above).
 
@@ -1953,12 +1953,16 @@ Topic creation in PLOS has TWO layers:
 #### Standalone — Business Operations (⚙️)
 **Status:** ❌ NOT STARTED. Not part of the 14-workflow sequence — runs continuously alongside launched products.
 
-### Phase 1α — Shared Workflow-Tool Scaffold
-**Status:** 📋 DESIGNED ONLY — no build work
+### Phase 1α — Shared Workflow Components Library
+**Status:** 📋 DESIGNED 2026-05-04 — Phase-1 build pending (RECOMMENDED NEXT platform-wide priority)
 
-**Prereq to Workflow 2.** Build a reusable shell that provides: standard page wrapper (auth + status + project context), standard topbar, status indicator, deliverables area, workflow-specific content area (pluggable), worker-facing status controls (Phase 2), admin review controls (Phase 2), audit-event emission helper (Phase 2).
+**Reframed 2026-05-04** in `session_2026-05-04_workflow-tool-scaffold-design`. The earlier "Shared Workflow-Tool Scaffold" required-shell concept was retired after director directives surfaced that most workflows have entirely unique UIs (per project memory `project_future_workflows_custom_ui.md`) and that the scaffold-shell framing was over-prescribing. Reframed to a bottom-up library of shared React components and hooks that each workflow imports and composes freely. There is no required shell. There is no waiver concept.
 
-Per `PLATFORM_REQUIREMENTS.md §12.4` — scaffold is built once, then each subsequent workflow plugs in.
+**Prereq to Workflow 2 PLOS-side build.** Phase-1 build session ships these components: `useWorkflowContext()` hook (auth + project + role + workflow-status load — replaces the ~40 lines of boilerplate per workflow); `<WorkflowTopbar>` (workflow title + back-to-Project breadcrumb + admin-only reset button); `<StatusBadge>` (5-state indicator — Phase 1 transitions among first 3, Phase 2 turns on the last 2); `<DeliverablesArea>` (with optional Resources sub-section per `PLATFORM_REQUIREMENTS.md §12.6` pattern #1 + optional Project deliverables sub-section); `<CompanionDownload>` (per §12.6 pattern #3 — minimal `{label, url, description}` schema); `<ResetWorkflowButton>` + `<ResetConfirmDialog>` (admin-only with type-the-project-name confirmation); `<NotReadyBanner>` (for upstream-readiness rules per §6); `<WorkerCompletionButton>` (Phase 1 always button-driven completion per design Decision 3B; Phase 2 review-cycle path wired but dormant in Phase 1).
+
+Phase 2 components — `<AdminReviewControls>` (review cycle accept/revise + notes) + `useEmitAuditEvent()` (Phase-2-only audit-trail emission, opt-in per workflow; signature provisional until first concrete workflow declares audit needs) — are built in a separate Phase 2 build session when Phase 2 turn-on is scheduled.
+
+Full design captured in `docs/WORKFLOW_COMPONENTS_LIBRARY_DESIGN.md`. Each workflow declaratively decides which components it imports + authors its own custom React content component for the workflow-specific UI inside the chrome. W#1 (Keyword Clustering) is NOT retrofitted into the library — it can adopt components piecemeal when convenient (e.g., `<ResetConfirmDialog>` once W#1 reset is built per the §7.5 roadmap gap), but doesn't have to.
 
 ### Phase 1 polish items — ongoing
 
@@ -2042,7 +2046,7 @@ Details in `PLATFORM_REQUIREMENTS.md §2, §3, §4, §5` and `PLATFORM_ARCHITECT
 - No audit-trail infrastructure yet
 - No role column on User records
 - No real-time collaboration infrastructure
-- No Shared Workflow-Tool Scaffold yet (also counts as Phase 1α blocker)
+- No Shared Workflow Components Library built yet (also counts as Phase 1α blocker; designed 2026-05-04 in `docs/WORKFLOW_COMPONENTS_LIBRARY_DESIGN.md`; Phase-1 build is the recommended-next platform-wide priority)
 - No workflow-readiness resolver yet
 - No "reset workflow data" feature in any workflow yet
 - No workflow deliverable storage strategy yet

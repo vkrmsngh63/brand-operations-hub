@@ -3849,7 +3849,7 @@ As of 2026-04-17 (chat `cc15409c-...`), the platform architectural reveal establ
 
 2. **Review cycle integration** — workers click "I'm done — please review"; admin reviews, leaves notes, can mark Acceptable or Revision-Requested. Tool must display review state and revision notes inline. Currently not supported.
 
-3. **Audit trail (Phase 2, opt-in)** — whether Keyword Clustering emits audit events is TBD at Phase 2 design. Strong candidate for audit given high edit volume and 10–20 concurrent editors. Emission helper built in Phase 2 scaffold; events declared in a future design update.
+3. **Audit trail (Phase 2, opt-in)** — whether Keyword Clustering emits audit events is TBD at Phase 2 design. Strong candidate for audit given high edit volume and 10–20 concurrent editors. Emission helper is the `useEmitAuditEvent()` hook in the Shared Workflow Components Library (per `docs/WORKFLOW_COMPONENTS_LIBRARY_DESIGN.md` §3.10; built in the Phase 2 components-library build session — separate from the Phase-1 build); helper signature is PROVISIONAL until first concrete workflow declares audit needs; events declared in a future design update.
 
 4. **Reset Workflow Data** — admin-only destructive action to wipe all KC data for a specific Project (per `PLATFORM_REQUIREMENTS.md §7`). Must clear: Keywords, CanvasNodes, Pathways, SisterLinks, CanvasState, AA checkpoint localStorage. Not yet implemented — on Phase 1-gap roadmap (Must-have).
 
@@ -4218,7 +4218,7 @@ Nice-to-haves:
 - Atomic rebuild uses transactional diff-based update
 
 ### Phase 2 scale gap
-- Current query patterns have not been verified against Phase 3 scale (~500 concurrent Projects, ~50 users). Testing planned during Phase 1α scaffold design.
+- Current query patterns have not been verified against Phase 3 scale (~500 concurrent Projects, ~50 users). Testing planned during the Phase 1α Shared Workflow Components Library Phase-1 build session (per `docs/WORKFLOW_COMPONENTS_LIBRARY_DESIGN.md` §9 build plan; reframed 2026-05-04 from the earlier "scaffold design" framing — same testing scope, new doc reference).
 
 ---
 
