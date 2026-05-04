@@ -279,13 +279,16 @@ These data items are required for Phase 2 (multi-user infrastructure) per `PLATF
 
 Entries will be added during each workflow's Tool Graduation Ritual:
 
-### 6.1 Competition Scraping & Deep Analysis (W#2) — provisional, captured at Workflow Requirements Interview 2026-05-04
+### 6.1 Competition Scraping & Deep Analysis (W#2) — provisional, captured at Workflow Requirements Interview 2026-05-04 + refined at Stack-and-Architecture 2026-05-04
 
-**Status:** 🔄 Design phase. Schema not yet built. Entries below are PROVISIONAL — finalized Human Reference Language will be authored at W#2 Tool Graduation per Doc Architecture §5. Specific R/W flags for each downstream workflow are TBD per consumer's design interview.
+**Status:** 🔄 Design phase — stack decisions FROZEN; schema design FROZEN; **schema not yet built (next implementation session lands `prisma db push`).** Entries below remain PROVISIONAL on Human Reference Language — finalized HRL will be authored at W#2 Tool Graduation per Doc Architecture §5. Specific R/W flags for each downstream workflow are TBD per consumer's design interview. **Field names + table shapes below are now AUTHORITATIVE** per the schema spec in `COMPETITION_SCRAPING_STACK_DECISIONS.md §9` (FROZEN 2026-05-04).
 
-**Source-of-truth doc:** `docs/COMPETITION_SCRAPING_DESIGN.md` §A (frozen 2026-05-04 at end of Workflow Requirements Interview).
+**Source-of-truth docs (in order):**
+1. `docs/COMPETITION_SCRAPING_STACK_DECISIONS.md` §9 — schema spec (FROZEN 2026-05-04).
+2. `docs/COMPETITION_SCRAPING_DESIGN.md` §A (frozen 2026-05-04) — Workflow Requirements Interview answers + UX shape.
+3. `docs/COMPETITION_SCRAPING_DESIGN.md` §B (append-only) — in-flight refinements.
 
-**Cross-references:** `PLATFORM_REQUIREMENTS.md §2.2.1` (4-way assignment with platform sub-scope), `§6.6` (cross-workflow data permissions per-(workflow, data-item) granular), `§8.4` (platform-shared vocabularies), `§10.1` (non-web-app client / Chrome extension), `§10.2` (image-storage projections), `§12.6` (scaffold extension-points).
+**Cross-references:** `PLATFORM_REQUIREMENTS.md §2.2.1` (4-way assignment with platform sub-scope), `§6.6` (cross-workflow data permissions per-(workflow, data-item) granular), `§8.4` (platform-shared vocabularies), `§10.1` (non-web-app client / Chrome extension; auth resolved 2026-05-04 to direct `signInWithPassword`), `§10.1.1` (NEW 2026-05-04 — non-web-app client sync-reliability requirements promoted from W#2 design), `§10.2` (image-storage projections), `§12.6` (scaffold extension-points).
 
 #### 6.1.1 Competitor URL record (provisional)
 - **HUMAN REF (PROVISIONAL):** "the competitor list" / "captured competitor URLs" / "the competition table"

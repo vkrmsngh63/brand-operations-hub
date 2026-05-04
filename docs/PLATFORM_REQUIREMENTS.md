@@ -379,11 +379,43 @@ Until W#2, every PLOS interaction happened inside the Next.js web app at vklf.co
 
 **Implications platform-wide:**
 
-- **Authentication** — PLOS now needs to support non-web-app clients. Likely pattern: long-lived API tokens issued from a PLOS settings page, OR OAuth 2.0 device flow. Decision deferred to W#2 stack-and-architecture session; once chosen, the pattern applies to all future non-web clients.
+- **Authentication (DECIDED 2026-05-04 W#2 Stack-and-Architecture session):** **direct email + password sign-in** via Supabase Auth's `signInWithPassword` (the same library and JWT flow as the web app). Extension stores JWT + refresh token in `chrome.storage.local`; sends `Authorization: Bearer <JWT>` on every PLOS API call; refresh token auto-renews access token. Same auth boundary as the web app — the existing `verifyAuth` server-side accepts the JWT identically. Long-lived API tokens (PAT-style) and OAuth 2.0 device flow were considered and rejected for the human-driven UI use case; both remain available as ADDITIVE patterns later if a future non-web client needs them (e.g., headless automation). See `COMPETITION_SCRAPING_STACK_DECISIONS.md §2`. **This is now the default non-web-app-client auth pattern across PLOS** — future workflows that need a non-web client inherit this choice unless their interview specifically argues otherwise.
 - **API surface** — APIs designed for the extension must be CORS-friendly, idempotent, and explicit about authentication context. Cannot rely on cookie-based session auth.
 - **Distribution** — extension files (.zip / unpacked / Chrome Web Store) hosted somewhere; PLOS surface for download + install instructions per workflow.
 
 **Future workflows:** any workflow that needs user actions outside the browser-tab-on-vklf.com (browser extension, mobile app, desktop tool) follows the same patterns established here.
+
+### 10.1.1 Non-web-app client sync-reliability requirements (NEW 2026-05-04 — surfaced by W#2 Stack-and-Architecture session)
+
+**Trigger:** director's add-on requirement during W#2 Cluster 4 Q8 review: *"plan for contingencies and have redundancies so that if any data gets missed being synced, this error is quickly caught and fixed."* The pattern is broader than W#2 alone — every non-web-app client with offline tolerance has the same failure modes. Promoted to platform-wide requirement so future non-web clients (mobile app, desktop tool, additional browser extensions) inherit the same safety net by default.
+
+**Applicability:** any non-web-app client that captures data offline-tolerantly OR persists user actions to PLOS asynchronously. Web-app clients (Next.js pages on vklf.com) inherit transactional consistency from their same-origin same-process server calls and do NOT require this safety net.
+
+**Required components for any qualifying non-web client:**
+
+1. **Write-ahead log (WAL).** Before every write attempt to PLOS, the client logs intent locally with a client-generated UUID (the idempotency key). Entry includes: clientId, intent shape (CREATE | UPDATE | DELETE), target endpoint, request body, attempt count, last attempt timestamp, status (`pending` | `confirmed` | `failed`). On client reload, the WAL is walked and any `pending` entries older than 5 seconds are re-replayed. Set to `confirmed` when the server response includes the same clientId echo. Set to `failed` after 5 attempts.
+
+2. **Failed-write queue.** Failed writes (network error, 5xx, timeout) auto-queue. Background flush every 30 seconds while online; immediate flush on `navigator.onLine` false → true transition.
+
+3. **Tab/app-close guard.** Modal blocks app close while the queue is non-empty. Modal text describes consequence ("you have N unsaved items — close anyway?"), defaults to Cancel, requires explicit click to override.
+
+4. **Always-visible sync indicator.** Persistent UI element shows queue state at a glance: green dot ("Synced just now"), yellow dot ("Syncing N items…"), or red dot ("Sync failed — N items unsaved"). Click to expand a full sync-status panel with per-item retry + diagnostic export.
+
+5. **Idempotency-key echo (server-side).** Every write response includes the clientId echo in the body. Client matches the echoed clientId against its WAL entry to confirm. Idempotency-after-partial-commit case (server wrote but response timed out): next retry returns the existing row + same clientId; client treats as confirmed.
+
+6. **Periodic reconciliation.** Every 5 minutes, the client calls a server `reconcile` endpoint with relevant scope (e.g., `?platform=...` for W#2). Server responds with a state hash (counts + last-modified timestamp). Client compares against local cache; full re-fetch + reconcile if divergent. Logs divergences to a rolling local buffer for diagnostics.
+
+7. **Worker-completion verification (Phase 2+).** When a worker explicitly marks work complete, the worker UI displays the **server-reported** counts — NOT the client's local view. Catches divergences at the moment of completion, not days later.
+
+8. **Server-side per-write logging.** Every write logs `clientId` + `(projectId, scope)` + outcome. Admin can grep logs to trace any reported "I captured X but it's not there" claim. Audit log (Phase 3 — per `§5`) extends with structured forensics.
+
+9. **Daily server-side janitor.** In addition to per-workflow orphan cleanup (e.g., orphaned image files): a daily count-consistency check that compares the client's most-recent-claimed-counts (sent in heartbeat pings) against server's actual counts. Logs warnings + flags scope-pairs for manual investigation if the client's claimed count exceeds the server's actual count.
+
+10. **User-visible failure mode.** Client never silently swallows a write failure. After retry exhaustion, the WAL entry transitions to `failed` and the UI shows a banner with the count of unsynced items + a "Copy diagnostic JSON to clipboard" / "Email diagnostic" action so admin can manually reconstruct in worst case. Failed entries are NOT auto-deleted — they persist until the user explicitly clicks "Mark recovered" or "Discard."
+
+**First implementation:** W#2 Chrome extension (per `COMPETITION_SCRAPING_STACK_DECISIONS.md §8.3`). Future non-web clients inherit; their design interviews capture any client-specific deviations.
+
+**Reversibility:** very high. Each component is additive — a non-web client can ship without one of them and add it later, accepting reduced safety in the interim. Going the other direction (no safety net at first, retrofit later) is much harder once data loss has happened.
 
 ### 10.2 Phase 3 (50 worker) stack expectations
 - Likely still Vercel + Supabase with a higher Supabase tier
