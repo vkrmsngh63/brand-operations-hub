@@ -330,12 +330,16 @@ If yes → `PLATFORM_REQUIREMENTS.md` is updated in the SAME chat, before workfl
 - Concurrency model changes that affect multiple workflows
 - New compliance requirements
 
-### Rule 20 — Shared Workflow-Tool Scaffold is the default; special cases require justification
-Per `PLATFORM_REQUIREMENTS.md §12`, a Shared Workflow-Tool Scaffold (standard topbar, status display, deliverables area, review controls, reset button, audit emission helper) is the default architecture for workflows 2–N.
+### Rule 20 — Use the Shared Workflow Components Library; compose freely
+**Reframed 2026-05-04** in `session_2026-05-04_workflow-tool-scaffold-design` after the scaffold-to-components-library architectural pivot (per `PLATFORM_REQUIREMENTS.md §12` rewrite + project memory `project_scaffold_pivot_to_components_library.md`). The earlier "scaffold is the default; special cases require justification" framing was retired — there is no scaffold shell to be a default; there's a library of components to import.
 
-When building a new workflow, Claude proposes **"this workflow plugs into the scaffold as follows: [details]"** rather than re-architecting from scratch. If the user or the workflow's nature requires a special-case architecture (like Keyword Clustering's dual-state canvas), Claude flags that explicitly, describes what scaffold features are being waived and why, and confirms with the user before proceeding.
+Per the rewritten `PLATFORM_REQUIREMENTS.md §12`, PLOS provides a Shared Workflow Components Library (`<StatusBadge>`, `<WorkflowTopbar>`, `<ResetConfirmDialog>`, `<DeliverablesArea>`, `<CompanionDownload>`, `<NotReadyBanner>`, `<WorkerCompletionButton>`, `<AdminReviewControls>`, `useWorkflowContext()`, `useEmitAuditEvent()` — initial set; additive). Workflows import the components they need and compose their own page layout. The library does not impose a layout. There is no "scaffold-default" to deviate from, so there is no waiver concept either.
 
-Building the scaffold itself is a prerequisite to building workflow #2 and is tracked as a first-class roadmap item.
+When building a new workflow, Claude proposes **"this workflow imports these shared components from the library, composes them like so, and the custom content area is its own React component that does X"** — the workflow's design interview Q14 captures this. If the workflow surfaces a chrome concern that no existing component addresses, the workflow may propose adding a new component to the library (additive change; no rewrite of existing workflows).
+
+Workflows do NOT plug into a shell. Workflows do NOT inherit a layout. Workflows DO inherit shared-chrome behavior consistency by importing the shared components (e.g., the same status badge across all workflows; the same reset confirmation dialog).
+
+The detailed design of each component lives in `docs/WORKFLOW_COMPONENTS_LIBRARY_DESIGN.md`. The first batch of components (those needed to unblock W#2's PLOS-side build) is the first build session's scope; Phase 2 components are built when Phase 2 turn-on is scheduled.
 
 ### Rule 21 — Pre-interview directive scan (NEW 2026-04-26)
 
