@@ -1,7 +1,9 @@
 # KEYWORD CLUSTERING — ACTIVE DOCUMENT
 ## Current state of the Keyword Clustering workflow tool (Group B, tool-specific)
 
-**Last updated:** May 4, 2026-d (Pool-tune small-batch test — INSUFFICIENT — fourth session of 2026-05-04, follow-up to `session_2026-05-04-c_d3-retry-partial-pool-exhaustion-finding`. **DOC + LIVE-RUN session — no code changes** but a CONCLUSIVE EMPIRICAL FINDING. Director executed item (a) of the prior STATE block's standing instructions: pool-tune-only investigation on Pro tier. Three-step plan ran: (i) Pro tier confirmed active; (ii) Database → Configuration → Settings revealed compute size is **"Nano"** (smallest available — Pro plan ≠ bigger compute; the upgrade unlocked the configurable knob but not the underlying compute), pool size at default **15** (Postgres `max_connections` fixed at **60** for Nano), bumped to **40** (chosen to comfortably cover estimated 22-burst at 67% of max with 13-point buffer below Supabase's 80% warning threshold); (iii) small-batch test on Bursitis Test 2 ran batch 2: model + canvas-rebuild side clean ($0.320, 19 operations, 124 nodes, 2 archived keywords), but **post-rebuild UI refresh failed exact same way as 2026-05-04-c** with 3 consecutive HTTP 500s on /canvas + /canvas/nodes. Vercel logs showed **same FATAL: Max client connections reached** in expanded view. **CRITICAL FINDING from log expansion:** the actual parallel-PATCH burst is **55-60+ calls per batch, not the 22 estimated from 2026-05-04-c**. Counted ~40 successful PATCH 200s + ~18 PATCH 500s firing within a 3-second window during tonight's batch 2. Prior 22 estimate was based on a Vercel view showing only failures (collapsed/filtered); tonight's expanded view shows the full burst. **Implication: pool tune at Nano compute is structurally insufficient.** Pool size 40 absorbed ~40 of the burst; ~18+ still hit FATAL. Pool size 48 (max safe under 80% warning) still ~10 short. Pool size 60 (100% of max_connections) is at Supabase's instability line. **Per standing instructions, this triggers the pivot to the parallel-PATCH-burst reduction code-fix (ROADMAP item d).** The wall cannot be cleared by config at this compute tier; code-side reduction is structurally required. **Bonus finding:** one PATCH (keyword 78c696c5) returned a *different* error — **P2025 "No record was found for an update"** — likely a race condition where the canvas-rebuild $transaction archived a keyword while a parallel PATCH was still in-flight against it. Captured as separate ROADMAP item; eliminated for free by code-fix approach (iii) atomic-batch-into-rebuild-transaction. **Methodology improvement adopted this session: Rule 14e-extension — real-time deferred-items registry via TaskCreate** (proposed mid-session after director flagged that small things falling through cracks across long roadmap could be catastrophic; codified into HANDOFF_PROTOCOL.md as new Rule 26). Rule 14e slip captured + corrected via TaskCreate registry pattern. **Recurring pre-flight visibility slip captured** — Claude has repeatedly told director the Resume button surfaces P1-P12 check results visibly when in fact it does not; ROADMAP feature item (make pre-flight visible) + CORRECTIONS_LOG entry both captured. **Canvas-size visibility deferral** — director observed the workspace top-bar doesn't show canvas node count; UI polish item captured. **Auto-fire toggle absence** — toggle was visible in 2026-05-04-c overlay; not visible tonight; investigation deferred. W#1 PRODUCTION-READINESS GATE prerequisite #5 status reframed: pool-tune-only INSUFFICIENT; code-fix path is now PRIMARY. Multi-workflow: schema-change-in-flight stays "No"; W#2 still 🆕; no parallel chat. Pull-rebase clean. Doc-only commit; push pending Rule 9 approval.)
+**Last updated:** May 5, 2026 (Atomic-batch fold-in SHIPPED + EMPIRICALLY VERIFIED across 50 regular batches + 5 consolidation passes on production vklf.com. **CODE + LIVE-RUN session WITH DEPLOY** — commit `0caa200` pushed at session start, then live-tested for ~90 minutes via D3 retry on Bursitis Test 2 from the preserved 30/257 checkpoint at canvas 124. The parallel-PATCH-burst that exhausted Supabase max_connections=60 in 2026-05-04-c/d is structurally GONE. **W#1 PRODUCTION-READINESS GATE prerequisite #5b ✅ DONE.** Director chose approach (iii) atomic-batch-into-rebuild-transaction at start of session after my code review surfaced four concrete details that sharpened the framing (notably: bulk PATCH /keywords endpoint already exists; the actual burst includes ALL canvas keywords not just the 8 batch keywords; KeywordWorkspace.tsx:627's forEach is the fan-out source; Prisma's default $transaction timeout is 5s and rebuild alone already runs ~5s at canvas 120 — the fold-in needs explicit timeout extension). Implementation: (a) `/canvas/rebuild` route accepts two new optional body fields `keywordUpdates` + `archiveKeywords`, pre-fetches archive source rows via one findMany outside the transaction, appends `removedKeyword.create` + `keyword.deleteMany` + `keyword.updateMany` ops to the existing array `$transaction`, wraps the whole transaction in `{ timeout: 30000, maxWait: 5000 }`. Uses `updateMany` not `update` deliberately — silently no-ops on missing-id (rare race) instead of rolling back the whole rebuild. (b) `AutoAnalyze.tsx doApplyV3` now computes `kwTopicUpdates` + `reconcile.updates` + `archiveKeywords` BEFORE the rebuild POST, merges placement and reconciliation updates by id, augments the rebuild payload with all three. Removed: the sequential archive POST loop AND both fire-and-forget `onBatchUpdateKeywords` calls (the actual burst sources). `runRefreshWithRetry` post-rebuild helper unchanged. (c) `KeywordWorkspace.tsx` drops the now-unused `onBatchUpdateKeywords` prop pass-through. Consolidation pass and manual batch retry inherit the fix for free (both call `doApplyV3`). 327/327 src/lib tests pass; tsc clean; build clean (25 routes); lint at exact baseline parity (16e/40w; zero new). **Live verification stats:** 50 regular batches + 5 consolidations (after batches 12, 22, 32, 42, 52); canvas grew 124 → 194 topics; ~24,000+ keyword updates flowed through the fold-in across the 50 batches (every one bypassed the old burst-PATCH path); 135+ keywords archived (mostly celebrity+bursa Turkish-city homographs — high-quality model picks); per-batch wall-clock 12-23s rebuild HTTP (comfortably within 30s timeout); zero `FATAL: Max client connections reached` errors; zero post-rebuild refresh failures; 3 of 50 batches needed validation retry (~6%, normal); per-batch cost trajectory $0.32 → $0.45 (mild growth as canvas grew, recency-stickiness fix keeping input growth in check); total spent ~$22.91. **P2025 race condition** (the bonus 2026-05-04-d finding) eliminated for free — archive deletes and keyword updates can no longer be in flight at the same time. **Plan↔code drift surfaced mid-D3:** consolidation prompt at `docs/AUTO_ANALYZE_CONSOLIDATION_PROMPT_V4.md` lines ~190-195 still allows ADD_SISTER_LINK + REMOVE_SISTER_LINK in the consolidation vocabulary; applier `consolidationMode` only rejects ADD_TOPIC + ADD_KEYWORD. Director's standing plan: sister links should NOT be in any Auto-Analyze pass — they belong in a separate second-pass functionality run after first-pass Auto-Analyze is correct. The 2026-05-03-c recency-stickiness fix correctly deferred sister-link ops out of regular batches (regularBatchMode flag) but did NOT extend the deferral to consolidation. Drift count this session: **+3 sister links** from consolidation #1 only; consolidations #2, #3, #4, #5 emitted ZERO sister-link ops (model didn't reliably emit them every pass). Cleanup deferred to next session — small follow-up: drop both ops from consolidation prompt vocabulary + tighten consolidationMode in applier to reject them as defense-in-depth (mirroring regularBatchMode pattern). ~10-20 LOC. Run paused at batch 52 (canvas 194) per the agreed 50-batch verification target; checkpoint preserved for next-session resume of the remaining ~205 batches. Director's $50 Anthropic top-up has ~$27 remaining; another top-up needed before completing D3. Multi-workflow: schema-change-in-flight stays "No"; W#2 still 🆕; no parallel chat. Pull-rebase clean.)
+**Last updated in session:** session_2026-05-05_atomic-batch-fold-in-shipped-and-verified (Claude Code)
+**Previously updated:** May 4, 2026-d (Pool-tune small-batch test — INSUFFICIENT — fourth session of 2026-05-04, follow-up to `session_2026-05-04-c_d3-retry-partial-pool-exhaustion-finding`. **DOC + LIVE-RUN session — no code changes** but a CONCLUSIVE EMPIRICAL FINDING. Director executed item (a) of the prior STATE block's standing instructions: pool-tune-only investigation on Pro tier. Three-step plan ran: (i) Pro tier confirmed active; (ii) Database → Configuration → Settings revealed compute size is **"Nano"** (smallest available — Pro plan ≠ bigger compute; the upgrade unlocked the configurable knob but not the underlying compute), pool size at default **15** (Postgres `max_connections` fixed at **60** for Nano), bumped to **40** (chosen to comfortably cover estimated 22-burst at 67% of max with 13-point buffer below Supabase's 80% warning threshold); (iii) small-batch test on Bursitis Test 2 ran batch 2: model + canvas-rebuild side clean ($0.320, 19 operations, 124 nodes, 2 archived keywords), but **post-rebuild UI refresh failed exact same way as 2026-05-04-c** with 3 consecutive HTTP 500s on /canvas + /canvas/nodes. Vercel logs showed **same FATAL: Max client connections reached** in expanded view. **CRITICAL FINDING from log expansion:** the actual parallel-PATCH burst is **55-60+ calls per batch, not the 22 estimated from 2026-05-04-c**. Counted ~40 successful PATCH 200s + ~18 PATCH 500s firing within a 3-second window during tonight's batch 2. Prior 22 estimate was based on a Vercel view showing only failures (collapsed/filtered); tonight's expanded view shows the full burst. **Implication: pool tune at Nano compute is structurally insufficient.** Pool size 40 absorbed ~40 of the burst; ~18+ still hit FATAL. Pool size 48 (max safe under 80% warning) still ~10 short. Pool size 60 (100% of max_connections) is at Supabase's instability line. **Per standing instructions, this triggers the pivot to the parallel-PATCH-burst reduction code-fix (ROADMAP item d).** The wall cannot be cleared by config at this compute tier; code-side reduction is structurally required. **Bonus finding:** one PATCH (keyword 78c696c5) returned a *different* error — **P2025 "No record was found for an update"** — likely a race condition where the canvas-rebuild $transaction archived a keyword while a parallel PATCH was still in-flight against it. Captured as separate ROADMAP item; eliminated for free by code-fix approach (iii) atomic-batch-into-rebuild-transaction. **Methodology improvement adopted this session: Rule 14e-extension — real-time deferred-items registry via TaskCreate** (proposed mid-session after director flagged that small things falling through cracks across long roadmap could be catastrophic; codified into HANDOFF_PROTOCOL.md as new Rule 26). Rule 14e slip captured + corrected via TaskCreate registry pattern. **Recurring pre-flight visibility slip captured** — Claude has repeatedly told director the Resume button surfaces P1-P12 check results visibly when in fact it does not; ROADMAP feature item (make pre-flight visible) + CORRECTIONS_LOG entry both captured. **Canvas-size visibility deferral** — director observed the workspace top-bar doesn't show canvas node count; UI polish item captured. **Auto-fire toggle absence** — toggle was visible in 2026-05-04-c overlay; not visible tonight; investigation deferred. W#1 PRODUCTION-READINESS GATE prerequisite #5 status reframed: pool-tune-only INSUFFICIENT; code-fix path is now PRIMARY. Multi-workflow: schema-change-in-flight stays "No"; W#2 still 🆕; no parallel chat. Pull-rebase clean. Doc-only commit; push pending Rule 9 approval.)
 **Last updated in session:** session_2026-05-04-d_pool-tune-small-batch-test-insufficient (Claude Code)
 **Previously updated:** May 4, 2026-c (D3 retry attempt — partial; pool-exhaustion finding ON PRO TIER — third session of 2026-05-04, follow-up to `session_2026-05-04-b_rate-fix-first-pass`. **DOC + LIVE-RUN session — no code changes** but a SIGNIFICANT FINDING surfaced live on production vklf.com. **CORRECTION post-original-commit:** director clarified at end-of-session that the Supabase Pro upgrade had ALREADY happened at end of 2026-05-04-b session. Pool exhaustion fired ON Pro tier, not Free. D3 retry launched; batch 1 ran cleanly model + apply-pipeline side ($0.312, 15 ops, canvas 124 nodes); post-rebuild UI refresh exhausted on FATAL: Max client connections reached. Director chose Path B: pause D3 here. Next-session task pivoted from "D3 retry after Pro upgrade" to "pool-exhaustion investigation on Pro tier" — that investigation completed 2026-05-04-d with INSUFFICIENT result above.)
 **Previously updated in session:** session_2026-05-04-c_d3-retry-partial-pool-exhaustion-finding (Claude Code)
@@ -58,7 +60,170 @@
 
 ---
 
-## ⚠️ POST-2026-05-04-D-POOL-TUNE-SMALL-BATCH-TEST-INSUFFICIENT STATE (READ FIRST — updated 2026-05-04-d)
+## ⚠️ POST-2026-05-05-ATOMIC-BATCH-FOLD-IN-SHIPPED-AND-VERIFIED STATE (READ FIRST — updated 2026-05-05)
+
+**As of 2026-05-05 (forty-third Claude Code session, follow-up to `session_2026-05-04-d_pool-tune-small-batch-test-insufficient`). CODE + LIVE-RUN session WITH DEPLOY — commit `0caa200` pushed at session start (~10:14 AM director local time), Vercel auto-redeployed, then live-tested for ~90 minutes via D3 retry on Bursitis Test 2 from the preserved 30/257 checkpoint at canvas 124.** Empirical proof across 50 regular batches + 5 consolidation passes that the parallel-PATCH-burst that exhausted Supabase max_connections=60 in the prior two sessions is structurally GONE. **W#1 PRODUCTION-READINESS GATE prerequisite #5b ✅ DONE.**
+
+### What this session shipped to W#1
+
+**One commit now LIVE on vklf.com (pushed end-of-session-start per Rule 9 approval):**
+
+`0caa200` — **Atomic-batch fold-in.** Three files changed (267 insertions / 82 deletions):
+
+1. **Server: `src/app/api/projects/[projectId]/canvas/rebuild/route.ts`** — accepts two new optional body fields:
+   - `keywordUpdates: [{id, topic?, canvasLoc?, sortingStatus?, ...}, ...]` — replaces the prior fire-and-forget per-keyword PATCH burst from AutoAnalyze.tsx.
+   - `archiveKeywords: [{keywordId, reason}, ...]` — replaces the sequential POST `/removed-keywords` loop.
+   - Up-front shape validation on both — bad payload returns HTTP 400 before any commit attempt.
+   - Pre-fetches source keyword rows for archives via one `findMany` outside the transaction (so the existing array-form `$transaction` stays intact).
+   - Appends `removedKeyword.create` per source row + one `keyword.deleteMany` (archives) + `keyword.updateMany` per id (placement updates) to the same `ops` array as canvas operations.
+   - Wraps the `$transaction` with explicit `{ timeout: 30000, maxWait: 5000 }`. Default Prisma timeout is 5s; the rebuild alone runs ~5s at canvas 120, and the fold-in adds hundreds of `keyword.updateMany` ops on top. 30s gives Phase 1 headroom; Phase 3 scaling will need a different model (captured for future work — see Standing instructions item d below).
+   - **Why `updateMany` not `update`:** if a client sends an id that no longer exists (rare race — keyword archived in a prior batch but still referenced by stale client state), `updateMany` silently no-ops (count=0) instead of throwing P2025 and rolling back the entire rebuild. Preserves the batch-continues-despite-stale-id tolerance the prior fire-and-forget PATCHes had, without losing atomicity for the rest of the rebuild.
+
+2. **Client: `src/app/projects/[projectId]/keyword-clustering/components/AutoAnalyze.tsx`** — `doApplyV3` now computes `kwTopicUpdates`, `reconcile.updates`, and `archiveKeywords` BEFORE the rebuild POST; merges placement updates and reconciliation updates by id (a keyword that's both placed and needs a status flip becomes one update entry); augments the rebuild payload with all three; one HTTP call replaces what used to be 1 rebuild + N sequential archive POSTs + ~hundreds of fire-and-forget per-id PATCHes + reconciliation fan-out. Removed: the sequential archive POST loop AND both fire-and-forget `onBatchUpdateKeywords` call sites (the actual burst sources). Per-archive log lines preserved; reconciliation summary preserved; "all N keywords verified" preserved; forensic emit unchanged. `runRefreshWithRetry` post-rebuild fetch retry helper from 2026-05-02-d unchanged. `onBatchUpdateKeywords` prop dropped from AutoAnalyze (no longer used).
+
+3. **Parent: `src/app/projects/[projectId]/keyword-clustering/components/KeywordWorkspace.tsx`** — removed the now-unused `onBatchUpdateKeywords={(updates) => updates.forEach(u => updateKeyword(u.id, u))}` prop pass-through. **This `forEach` was the actual fan-out source** — every batch fired N parallel `PATCH /keywords/[id]` requests in fire-and-forget mode, and at canvas 124 with ~500 keywords this manifested as the 55-60+ burst-cap'd by browser HTTP/1.1 + Vercel concurrency. Manual table-edit code paths (`onUpdateKeyword={updateKeyword}` at lines 348/367/381) are unaffected — those use per-id PATCH for one-keyword edits, which is correct.
+
+**Consolidation pass and manual batch retry inherit the fix for free** because both call the same `doApplyV3`. Verified live (see consolidation #1-5 results below).
+
+### Verification scoreboard (build + tests + lint)
+
+| Check | Result | Note |
+|---|---|---|
+| `npx tsc --noEmit` | ✅ clean | |
+| `npm run build` | ✅ clean | 25 routes; same as 2026-05-04-b baseline |
+| `node --test src/lib/*.test.ts` | ✅ 327/327 pass | No new tests this session — underlying primitives (applier, reconciliation, materializeRebuildPayload, withRetry) covered by existing tests; the new code is mechanical orchestration |
+| `npm run lint` | ✅ 16e/40w | Exact baseline parity (zero new errors; zero new warnings) |
+
+### Live D3 retry — empirical evidence
+
+Resumed from the 2/257 checkpoint at 10:18:30 AM. Ran cleanly through batch 52 + consolidation #5 by 12:06:30 PM (~108 minutes wall-clock including a ~6-minute pause for Anthropic API credit top-up between batches 9 and 10).
+
+**Per-batch summary (50 regular batches + 5 consolidations):**
+
+- **Total spent: ~$22.91** ($21.93 across 50 regular batches + $1.98 across 5 consolidations; 3 batches needed validation retry — batches 20, 31, 51 — at total retry-cost penalty ~$1.13)
+- **Per-batch cost trajectory:** $0.32 → $0.45 (mild growth as canvas grew 124 → 194; recency-stickiness fix keeping input-token growth contained: 68k → 103k input tokens across the 50 batches)
+- **Apply HTTP wall-clock per batch:** 12-23s for the rebuild call (comfortably within the 30s `$transaction` timeout we set)
+- **Validation-retry rate:** 3 of 50 (~6%) — within normal range
+- **Pool exhaustion errors:** 0 — the `FATAL: Max client connections reached` failure mode is structurally gone
+- **Post-rebuild refresh failures:** 0 — the `runRefreshWithRetry` helper from 2026-05-02-d never had to fire its retry path
+- **Canvas growth:** 124 → 194 topics (+70 across 50 batches; growth slowed in the back half because most recent batches were noise being archived — celebrity+bursa Turkish-city homographs — rather than real bursitis search-intent producing new topics)
+- **Sister links:** 79 → 82 (+3 from consolidation #1 only; #2-#5 emitted 0 — see drift section below)
+- **Total keyword updates folded into rebuild transactions:** ~24,000+ across 50 batches (every single one bypassed the old burst-PATCH path)
+- **Total keywords archived:** ~135+ (almost all celebrity+bursa Turkish-city homographs — high-quality model pattern recognition; see "Quality observations" below)
+
+**Per-consolidation evidence (5 passes — verifies the OTHER major code path through doApplyV3):**
+
+| # | Fired after batch | Canvas | Operations applied | New sister links | Cost | Apply HTTP |
+|---|---|---|---|---|---|---|
+| 1 | 12 | 150 | 3 | **+3** | $0.329 | 13s |
+| 2 | 22 | 163 | 1 | 0 | $0.392 | 18s |
+| 3 | 32 | 177 | 1 | 0 | $0.410 | 21s |
+| 4 | 42 | 184 | 0 (clean canvas) | 0 | $0.416 | (no rebuild — empty op list) |
+| 5 | 52 | 194 | 1 | 0 | $0.436 | 19s |
+
+The Canvas rebuilt log line for each consolidation shows the new `Z keyword updates, W archived` fields populated — proving the fold-in works through the consolidation code path the same as through regular batches.
+
+### Quality observations (model behavior)
+
+The model demonstrated **excellent pattern-recognition quality** across the 50 batches:
+
+- **Celebrity+bursa homograph cluster:** the model correctly identified that searches like "tyra banks bursa," "elon musk bursa," "michael phelps bursa," etc. are almost universally about Bursa, Turkey (the city) or Borsa Istanbul (the financial exchange) — NOT bursitis the medical condition. ~110+ such archives across the run, with explicit reasoning citing "the consistent celebrity+bursa pattern across this batch."
+- **Meta-pattern recognition within a single batch:** batch 22 archived 5 different celebrities in one pass after the model spotted the cluster pattern. Batch 26 included a Turkish-language anchor keyword ("bursa baraj doluluk oranı" — Turkish for "Bursa dam filling rate") that the model used as evidence for archiving the rest of the celebrity+bursa keywords as Turkish-city searches.
+- **Conservative archiving when ambiguous:** batches 26 + 29 explicitly noted that some athletes (Aaron Rodgers, Hugh Jackman, LeBron James, Michael Phelps) COULD theoretically have had bursitis injuries, but archived them anyway because "the consistent pattern across six different celebrities all at exactly 150 volume with bare 'bursa' (not 'bursitis')" indicated a Turkish-city content cluster rather than individual health-condition searches. Insufficient signal for niche placement — defensible call.
+- **Healthcare-professional vs. consumer intent split:** batch 32 archived a CPT-code lookup ("arthrocentesis aspir&/inj major jt/bursa w/o us") on the basis that it's a healthcare-professional procedure-code search, not a consumer bursitis sufferer's intent. Outside the consumer-facing conversion funnel scope.
+
+### Plan↔code drift surfaced mid-D3 — sister-link ops still allowed in consolidation
+
+Director surfaced this mid-run (after consolidation #1 emitted 3 sister-link ops): the plan was for sister links to NOT be in any Auto-Analyze pass — they should be a separate second-pass functionality run after first-pass Auto-Analyze is correctly producing topics. The 2026-05-03-c recency-stickiness fix correctly deferred ADD_SISTER_LINK + REMOVE_SISTER_LINK out of regular batches (`regularBatchMode` flag in applier rejects them) but did NOT extend the deferral to consolidation.
+
+**Current shipped state of the drift:**
+- `docs/AUTO_ANALYZE_CONSOLIDATION_PROMPT_V4.md` lines ~190-195 explicitly list ADD_SISTER_LINK + REMOVE_SISTER_LINK in the consolidation vocabulary.
+- `src/lib/operation-applier.ts` `consolidationMode` only rejects ADD_TOPIC + ADD_KEYWORD; sister-link ops pass through.
+
+**Drift magnitude this session: +3 sister links from consolidation #1 only.** Consolidations #2 through #5 emitted ZERO sister-link ops (model didn't reliably emit them every pass — defensive against worse drift in future consolidations). The canvas's existing 79 sister links from prior sessions + the +3 this session are all valid data per the plan state at the time they were created; the future second-pass feature can manage them.
+
+**Cleanup deferred to next session** (Task #12 in TaskList):
+- Drop ADD_SISTER_LINK + REMOVE_SISTER_LINK from `docs/AUTO_ANALYZE_CONSOLIDATION_PROMPT_V4.md`'s consolidation vocabulary listing.
+- Tighten `consolidationMode` in `src/lib/operation-applier.ts` to reject ADD_SISTER_LINK + REMOVE_SISTER_LINK (defense in depth — mirrors the `regularBatchMode` pattern).
+- Add applier tests for the new rejection rule.
+- ~10-20 LOC across 2 files.
+
+### W#1 PRODUCTION-READINESS GATE — status after this session
+
+- **#1 cold-start render-layer fix:** 🟡 PARTIAL — happy-path confirmed live 2026-05-03-b; banner UI confirmation deferred to natural flake event during a future Auto-Analyze run.
+- **#2 recency-stickiness fix:** ✅ VERIFIED LIVE — across 50 batches this session, per-batch input-token growth was mild (68k → 103k, +52% across canvas 124 → 194), confirming the fix's design intent. Sister-link op deferral from regular batches verified — zero sister-link ops emitted in any of the 50 regular batches.
+- **#3 underlying flake-rate fix (withRetry parity):** ✅ VERIFIED LIVE — 50 batches with zero P1001/P1002/P1008/P2034 surfaces (the wraps either suppressed transient flakes silently or there were none).
+- **#4 Supabase Pro upgrade:** ✅ DONE 2026-05-04-b.
+- **#5 pool-exhaustion mitigation (pool tune):** 🟡 in place as secondary buffer (pool size 40 still active) — but no longer the primary mechanism after #5b.
+- **#5b parallel-PATCH-burst reduction code-fix:** ✅ DONE 2026-05-05 — VERIFIED LIVE across 50 batches + 5 consolidations.
+
+**Gate completion estimate:** 1 more substantive session to address the sister-link consolidation drift cleanup (~10-20 LOC, low risk) + run the remaining ~205 batches of D3 to fully complete the Bursitis Test 2 deliverable. Then the gate closes; W#1 graduates per Tool Graduation Ritual.
+
+### Standing instructions for next session
+
+**(a) Sister-link consolidation drift cleanup — RECOMMENDED FIRST.** Small, low-risk follow-up to align the consolidation code path with the director's stated plan. Drop ADD_SISTER_LINK + REMOVE_SISTER_LINK from consolidation prompt vocabulary; tighten `consolidationMode` in applier to reject them; add tests. ~10-20 LOC. Director must re-paste the updated Consolidation Initial Prompt before the next D3 resume (applier rejection alone would cause first-consolidation failure if prompt still tells model to emit those ops). 1 session.
+
+**(b) Resume D3 retry from batch 53 onward.** Checkpoint preserved at canvas 194 / 50 of 257 batches done. Need ~205 more batches at ~$0.45 average ≈ ~$92 in Anthropic credits. Director's $50 top-up from this session has ~$27 remaining — needs another ~$70 top-up before resuming. Estimated wall-clock for the back half: ~7-10 hours. Recommend splitting across 2-3 sessions to preserve fresh-Claude judgment.
+
+**(c) `[FLAKE]` visibility investigation** — telemetry from 2026-05-04 should log `[FLAKE]` lines for every catch-block error; director's prior Vercel pastes showed full stack traces but NO `[FLAKE]` lines visible. Same gap captured 2026-05-04-c + 2026-05-04-d. Independent of D3; standalone session.
+
+**(d) Phase-3 scaling reconsideration for the atomic-batch fold-in** (Task #9 DEFERRED). At canvas 700+ topics with ~3,500 keywords per batch × 50 concurrent workers, the single-transaction connection-hold model becomes its own ceiling. Captured for future architectural work; not blocking today.
+
+**(e) Backend integration tests for the canvas/rebuild fold-in code paths** (Task #10 DEFERRED). Repo currently has no Prisma route-level test harness; existing tests cover underlying primitives. Pickup when test harness is set up OR after live verification across full D3 proves no remaining edge cases.
+
+**(f) Pre-flight visibility on Resume** — Phase-1 UI polish item. Carried over from 2026-05-04-d.
+
+**(g) Canvas-size in workspace top-bar** — Phase-1 UI polish item. Carried over.
+
+**(h) Auto-fire toggle absence investigation** — Carried over from 2026-05-04-d.
+
+**(i) Wrap remaining unwrapped routes** (`/projects` GET N+1, etc.) — ~30-50 LOC. Carried over.
+
+**(j) GoTrueClient multi-instance fix** — ~15 LOC. Carried over.
+
+**(k) Phase-1 UI polish bundle** (6+ items). Carried over.
+
+**(l) V3-era cleanup pass** (deferred from Session E D4). Carried over.
+
+**(m) Action-by-action feedback workflow + Prompt Refining button — EXPLICITLY LAST** per director's 2026-05-03-b directive. ~5-7 sessions.
+
+**Recommendation: next session = (a) sister-link consolidation drift cleanup**, then if time permits launch (b) D3 resume after director tops up Anthropic credits. Director's standing preference for most-thorough-and-reliable favors fixing the drift before running 205 more batches against the still-misaligned prompt.
+
+### Multi-workflow protocol coordination
+
+- Schema-change-in-flight: stays `No`. Branch: `main`. W#2 still 🆕; no parallel chat. Pull-rebase clean at session start AND before push.
+- **Cross-workflow surfacing:** the parallel-PATCH-burst reduction is a platform-wide reliability win — every future workflow that does AI-driven keyword/topic updates inherits the same atomic-fold-in pattern as a reference architecture. The 30s `$transaction` timeout precedent applies broadly. Captured in `PLATFORM_ARCHITECTURE.md §10` (connection-pool exhaustion entry marked addressed for W#1 / Phase 1 scale; Phase 3 scale concern flagged for follow-up).
+
+### Files touched this session
+
+**Code (1 commit `0caa200`, pushed):**
+- `src/app/api/projects/[projectId]/canvas/rebuild/route.ts` (+170 / -12 lines)
+- `src/app/projects/[projectId]/keyword-clustering/components/AutoAnalyze.tsx` (+106 / -72 lines)
+- `src/app/projects/[projectId]/keyword-clustering/components/KeywordWorkspace.tsx` (-1 line)
+
+**Backups created (not committed; local only per Rule 5):**
+- `src/app/api/projects/[projectId]/canvas/rebuild/route.ts.bak`
+- `src/app/projects/[projectId]/keyword-clustering/components/AutoAnalyze.tsx.bak2` (because `.bak` already existed from a prior session)
+
+**Docs (Group A + Group B):**
+- `docs/KEYWORD_CLUSTERING_ACTIVE.md` (this STATE block prepended; prior 2026-05-04-d STATE block demoted to historical; header timestamps)
+- `docs/ROADMAP.md` (Active Tools row updated; W#1 PRODUCTION-READINESS GATE prerequisite #5b ✅ DONE; new entry for sister-link consolidation drift cleanup; standing instructions list refreshed; HIGH-severity Pool-exhaustion entry marked addressed for Phase 1; header)
+- `docs/PLATFORM_ARCHITECTURE.md` §10 (connection-pool exhaustion entry marked addressed; Phase-3 scaling concern flagged for follow-up; header timestamp)
+- `docs/CHAT_REGISTRY.md` (new top row + header timestamp)
+- `docs/CORRECTIONS_LOG.md` (new entry — sister-link plan↔code drift)
+- `docs/DOCUMENT_MANIFEST.md` (header + per-doc flags + this-session summary)
+
+**Push status:** code commit `0caa200` pushed at session start (pre-D3 verification, per director's Rule 9 approval). Doc-only commit pending end-of-session approval.
+
+### Director's offline action item (between this session and the next)
+
+**Top up Anthropic API credits** before the next D3 resume session. ~$27 remains from the $50 top-up this session; ~$70 more needed for the ~205 remaining batches at ~$0.45 each. Steps unchanged from this session: console.anthropic.com → Settings → Billing → Add credits.
+
+**Director's framing through prior sessions:** (Scale-A) → (Scale-0) → (Defense-in-Depth ×3) → (Scale-B) → (Scale-C) → (Scale-D) → (Scale-E build) → (Scale-E D3 partial validation) → (consolidation auto-fire follow-up `2026-05-01-c`) → (HTTP 500 fix verification + auto-fire trip observation `2026-05-02`) → (browser-freeze fix design `2026-05-02-b`) → (DevTools profiling pass — diagnosis rejected `2026-05-02-c`) → (HTTP 500 retry regression investigation — fix shipped `2026-05-02-d`) → (HTTP 500 fix live verification + cold-start canvas-empty finding `2026-05-02-e`) → (cold-start render-layer fix `2026-05-03`) → (cold-start fix live verification — partial `2026-05-03-b`) → (recency-stickiness fix `2026-05-03-c`) → (underlying flake-rate investigation — instrumentation `2026-05-04`) → (rate-fix first pass — withRetry parity for silent helpers + apply-pipeline writes — DEPLOY `2026-05-04-b`) → (D3 retry attempt — partial; pool exhaustion finding ON Pro tier `2026-05-04-c`) → (pool-tune small-batch test — INSUFFICIENT — code-fix path required `2026-05-04-d`) → **(atomic-batch fold-in shipped + verified across 50 batches + 5 consolidations on production vklf.com — W#1 PRODUCTION-READINESS GATE prerequisite #5b ✅ DONE; this session `2026-05-05`)** → (sister-link consolidation drift cleanup + D3 resume — RECOMMENDED next).
+
+---
+
+## ⚠️ POST-2026-05-04-D-POOL-TUNE-SMALL-BATCH-TEST-INSUFFICIENT STATE (preserved as historical context — last updated 2026-05-04-d; SUPERSEDED by the atomic-batch fold-in shipped state above. The 2026-05-04-d standing instruction item (a) "ship parallel-PATCH-burst reduction code-fix per ROADMAP item (d), approach (iii) recommended" was executed 2026-05-05 with verified-live result — the wall is structurally cleared.)
 
 **As of 2026-05-04-d (forty-second Claude Code session, fourth session of 2026-05-04, follow-up to `session_2026-05-04-c_d3-retry-partial-pool-exhaustion-finding`). DOC + LIVE-RUN session — no code changes — but a CONCLUSIVE EMPIRICAL FINDING.** The pool-tune-only investigation per item (a) of the prior STATE block's standing instructions ran tonight on production vklf.com. **Pool tune from default 15 → 40 was INSUFFICIENT to clear the wall.** Same `FATAL: Max client connections reached` failure pattern recurred at canvas 124 → 124 (batch 2 of Bursitis Test 2). The 2026-05-04-c estimate of "~22 parallel PATCHes" was wrong by a factor of ~2.5×: the actual burst is **55-60+ parallel PATCH calls per batch**, revealed in tonight's expanded Vercel log view. Pool tune at Nano compute tier is structurally insufficient.
 
