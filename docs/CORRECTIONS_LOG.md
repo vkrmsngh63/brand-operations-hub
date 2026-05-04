@@ -57,6 +57,24 @@
 
 ## Entries
 
+### 2026-05-04-c — Stale-doc trust slip: Claude built the entire 2026-05-04-c STATE block + ROADMAP entries + handoff on the assumption that Supabase Pro upgrade was still pending, when in fact director had already upgraded at end of 2026-05-04-b (PROCESS LESSON — should have asked director at session start to confirm status of recent director-action items rather than trusting stale doc claims)
+
+**Session:** session_2026-05-04-c_d3-retry-partial-pool-exhaustion-finding (Claude Code)
+**Tool/Phase affected:** Workflow #1 Keyword Clustering — W#1 PRODUCTION-READINESS GATE prerequisite #4 framing
+**Severity:** Informational (operational-process lesson; caught + corrected within the same session via a follow-up commit)
+
+**What happened:** The 2026-05-04-b STATE block recorded "director confirmed 2026-05-04-b end-of-session: NOT currently on Pro." Claude trusted this claim at 2026-05-04-c start without re-asking. When tonight's pool-exhaustion event fired and director chose Path B (pause D3 + prioritize Pro upgrade), Claude built the entire end-of-session doc batch — KEYWORD_CLUSTERING_ACTIVE STATE block, ROADMAP prerequisite #4 + HIGH-severity entry, PLATFORM_ARCHITECTURE §10 entry, CHAT_REGISTRY row, handoff message — on the framing "director needs to upgrade to Pro between sessions; D3 retry follows after." Commit `ad8d68f` pushed to origin/main with this framing. Director then clarified at end-of-session: "I had upgraded Supabase to Pro already in the last session's end." All the framing was wrong — Pro was already in place; tonight's failure was on Pro, not Free; the next-session task is pool-config tuning + possible code-fix, not the Pro upgrade.
+
+**Root cause analysis:** Two-level error. Level 1 (the original 2026-05-04-b doc claim): the 2026-05-04-b STATE block captured director-confirmation that director was NOT on Pro at end of that session — a snapshot-in-time fact that became stale when director upgraded later that same evening (post-session-end). The doc didn't update to reflect the upgrade. Level 2 (this session's slip): Claude trusted the stale doc claim instead of asking director at session start "did you complete the Pro upgrade between sessions?". The "trust the docs" pattern is the right default for stable platform facts (architecture, schema, settled decisions), but it's the WRONG default for recent-director-action items in a known-pending state — those should be re-confirmed at the start of any session that depends on them. Cursor on this kind of fact: the STATE block flagged "director's upgrade timing TBD" — that "TBD" should have triggered a re-ask at session start.
+
+**Why this is INFORMATIONAL not a hard mistake:** caught + corrected within the same session via a follow-up commit. Both commits land on origin/main; no production code is affected; the handoff message hadn't been finalized when director clarified. Net cost: ~15-20 min of doc rework + a slightly more complex post-correction documentation trail.
+
+**Process update:** at the start of any session where a prior session's STATE block records a "TBD" or "pending director-action" item that's gate-blocking for today's task, Claude MUST explicitly re-ask the director at session start: "doc X says <action item> was pending at end of <prior session>; can you confirm current status before we start?" Specifically applies to: offline upgrades (Supabase Pro, Vercel plan, etc.), credential rotations, account changes, payment-related changes — anything the director would have done in an external system between sessions. Adding to the start-of-session sequence as a soft check during the drift-check step.
+
+**Cross-references:** `KEYWORD_CLUSTERING_ACTIVE.md` POST-2026-05-04-C STATE block "🚨 CRITICAL CORRECTION post-original-commit" paragraph; `ROADMAP.md` W#1 PRODUCTION-READINESS GATE prerequisite #4 (DONE) + #5 (NEW investigation) + HIGH-severity Pool exhaustion entry "Fix layers REVISED post-correction"; `PLATFORM_ARCHITECTURE.md §10` Pool exhaustion entry's "REVISED post-correction" paragraph; commit `ad8d68f` (original framing) + this session's correction commit (TBD hash).
+
+---
+
 ### 2026-05-04-c — Rate-fix scope at the time of design (2026-05-04-b) didn't anticipate pool exhaustion as a separate failure mode (INFORMATIONAL, NOT a mistake; process lesson on "fix without measurement first" trade-offs)
 **Session:** session_2026-05-04-c_d3-retry-partial-pool-exhaustion-finding (Claude Code)
 **Tool/Phase affected:** Workflow #1 Keyword Clustering — W#1 PRODUCTION-READINESS GATE prerequisite #3 (underlying flake-rate fix)
