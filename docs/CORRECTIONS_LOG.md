@@ -57,6 +57,23 @@
 
 ## Entries
 
+### 2026-05-04-c — Rate-fix scope at the time of design (2026-05-04-b) didn't anticipate pool exhaustion as a separate failure mode (INFORMATIONAL, NOT a mistake; process lesson on "fix without measurement first" trade-offs)
+**Session:** session_2026-05-04-c_d3-retry-partial-pool-exhaustion-finding (Claude Code)
+**Tool/Phase affected:** Workflow #1 Keyword Clustering — W#1 PRODUCTION-READINESS GATE prerequisite #3 (underlying flake-rate fix)
+**Severity:** Informational
+
+**What happened:** The 2026-05-04 underlying-flake-rate investigation session audited the codebase for `withRetry` parity and identified ~4% coverage of endpoint-method combinations (only 2 of ~50). The 2026-05-04-b rate-fix shipped option (c) "withRetry parity extension" — wrapping silent auth helpers (`lib/auth.ts`, `lib/workflow-status.ts`) + apply-pipeline writes. Director chose Option B at 2026-05-04-b's start-of-session fork: ship the rate-fix grounded only on inspection findings rather than waiting for live `[FLAKE]` data (Option A would have waited 1-3 days for natural data accumulation). The 2026-05-04-c D3 retry's batch 1 surfaced `FATAL: Max client connections reached` errors — a SEPARATE failure mode that the rate-fix doesn't address. The withRetry helper retries transient codes (P1001/P1002/P1008/P2034). Pool exhaustion has NO Prisma code; just the FATAL message embedded in `error.message`. Retrying it makes pool pressure worse (each retry adds connection pressure). The rate-fix is structurally bounded to transient flakes.
+
+**Root cause analysis:** "Fix without measurement first" works when the failure mode is well-understood from inspection. It missed pool exhaustion specifically because pool exhaustion looks identical to transient flakes from inspection alone — both surface as HTTP 500 to the client; both involve the database connection layer; both happen sporadically. **Only LIVE TELEMETRY distinguishes them:** transient flakes carry a Prisma error code; pool exhaustion carries no code, just the FATAL message. The 2026-05-04 instrumentation pass actually anticipated this distinction — `[FLAKE]` lines log the Prisma code so transient-vs-other can be distinguished from log volume. Had Option A been chosen 2026-05-04-b (wait for data first), the rate-fix would likely have been scoped differently from the start — possibly bundled with a Pro upgrade discussion, possibly not shipped at all if the data showed transient flakes were a minority of the failure population.
+
+**Why this is INFORMATIONAL not a mistake:** Director's Option B choice 2026-05-04-b was made deliberately with the trade-off explicit ("ship sooner; risk discovering scope issues later vs. wait for data; ship more accurately"). The 2026-05-04-c discovery validates the trade-off — it surfaced a scope boundary that data-first would have surfaced earlier and possibly cheaper. Neither path was wrong; they trade speed for precision in different ways.
+
+**Process update for future fix sessions:** for any future fix that bundles "ship without measurement first," explicitly enumerate (a) the failure modes the fix targets AND (b) the failure modes it would NOT cover; (c) add a deferred "after-fix verification" item that grades the bound on the fix's scope from live data. The `[FLAKE]` visibility investigation captured as 2026-05-04-c next-session item (b) is exactly this kind of follow-up — it answers "is the telemetry actually capturing the data we'd need to grade the rate-fix's effectiveness empirically?". No code change from this lesson; it's a process refinement applied to future fix sessions.
+
+**Cross-references:** `KEYWORD_CLUSTERING_ACTIVE.md` POST-2026-05-04-C STATE block (full session narrative); `ROADMAP.md` HIGH-severity "Pool exhaustion under apply-pipeline burst" entry (the discovered failure mode) + W#1 PRODUCTION-READINESS GATE prerequisite #3 (rate-fix; reframed) + #4 (NEW Supabase Pro upgrade); `PLATFORM_ARCHITECTURE.md §10` "🚨 Connection pool exhaustion" entry.
+
+---
+
 ### 2026-05-03 — React `react-hooks/purity` rule traces through same-file `useCallback` to flag setState inside the called function (INFORMATIONAL, not a mistake; reporting-precision lesson on the rule's tracing scope)
 **Session:** session_2026-05-03_cold-start-render-layer-fix (Claude Code)
 **Tool/Phase affected:** Workflow #1 Keyword Clustering — KeywordWorkspace cold-start retry wiring
