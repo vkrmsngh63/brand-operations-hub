@@ -380,15 +380,35 @@ A graduated tool's Active doc has been split into Archive + Data Contract (per �
 
 **Canonical Resume Prompt template (filled per-tool at graduation time, stored in `<TOOL>_DATA_CONTRACT.md` §Resume Prompt):**
 
+The director runs Step 1 in their terminal BEFORE launching Claude Code, then pastes Step 3 as the first message. This format matches the canonical "How to start a session for any workflow" procedure in `MULTI_WORKFLOW_PROTOCOL.md` §11.
+
+**Step 1 — In a Codespaces terminal, switch to `main` and pull the latest** (graduated tools live on `main` since they're production-ready; if the tool happens to live on a different branch at the time of revisit, replace `main` accordingly):
+
+```
+cd /workspaces/brand-operations-hub && git fetch origin && git checkout main && git pull --rebase origin main
+```
+
+**Step 2 — Launch Claude Code:**
+
+```
+claude
+```
+
+**Step 3 — As your first message, paste this** (edit the bracketed reason for your specific revisit):
+
 ```
 Read docs/CLAUDE_CODE_STARTER.md and follow every rule in it.
-Today's task: return to Workflow #<N> (<tool name>) — <your specific
-reason / what you want to do>. This is a graduated-tool re-entry
-session, NOT a transition session.
+Today's task: return to Workflow #<N> (<tool name>) — [your specific
+reason / what you want to do]. This is a graduated-tool re-entry
+session, NOT a transition session. Verify branch state with
+`git branch --show-current` before any doc reads — if you're not on
+the expected branch (typically `main` for graduated tools), STOP and
+surface to director.
 
 Per HANDOFF_PROTOCOL.md Rule 22 (Graduated-Tool Re-Entry Protocol):
 
-1. Run the mandatory start-of-session sequence (Group A docs).
+1. Run the mandatory start-of-session sequence (Group A docs +
+   branch verification per CLAUDE_CODE_STARTER.md Step 2).
 2. Additionally load these Group B docs:
    - docs/<TOOL>_DATA_CONTRACT.md
    - docs/<TOOL>_DESIGN.md
@@ -472,9 +492,11 @@ If prior treatment is NOT found, Claude must surface the search performed: *"I c
 
 **Why this rule exists:** Logged in `CORRECTIONS_LOG.md` 2026-04-27 entry. Claude proposed a ROADMAP item for the input-side context-scaling concern, framing it as "the system was not explicitly designed to handle it" — when in fact `PIVOT_DESIGN.md` lines 205 + 246 explicitly acknowledged the trade-off, and `ROADMAP.md` line 162 documented that V2's Mode A→B (deleted in Pivot E) had been credited with "avoiding the projected 200k context wall." Claude had read both pieces of content earlier in the same session but failed to synthesize them when writing the new ROADMAP entry. Director caught the mistake, requested the instruction-set update, and approved Rule 24.
 
-### Rule 25 — Multi-workflow coordination (NEW 2026-04-29)
+### Rule 25 — Multi-workflow coordination (NEW 2026-04-29; REFRAMED 2026-05-04)
 
-When PLOS has more than one workflow under active development simultaneously, parallel Claude Code chats must coordinate to avoid overwriting each other's work. The full methodology lives in `MULTI_WORKFLOW_PROTOCOL.md` (Group A doc); this rule is its operational summary.
+When PLOS has more than one workflow under active development at the same time (i.e., multiple feature branches in flight), sessions across those workflows must coordinate to avoid overwriting each other's work — even when the sessions run sequentially rather than in parallel. The full methodology lives in `MULTI_WORKFLOW_PROTOCOL.md` (Group A doc); this rule is its operational summary.
+
+**Reframed 2026-05-04.** The original framing assumed PARALLEL Claude Code chats (one for W#1, one for W#2 simultaneously). The director's actual operational reality is SEQUENTIAL — single Codespace, one workflow at a time. Branch state persists across sessions because it's the same Codespace. The state-coordination scaffolding (active-tools table, schema-change-in-flight flag, doc-section ownership, branch discipline, branch-check-at-session-start) is still useful for tracking state across sequential sessions over long stretches of time. See `project_sequential_workflow_operation.md` and `MULTI_WORKFLOW_PROTOCOL.md` §1 (reframed 2026-05-04) + §11 (NEW 2026-05-04 — canonical "How to start a session for any workflow").
 
 **At session start (in addition to the standard mandatory start-of-session sequence):**
 
@@ -683,18 +705,28 @@ Step-by-step, concrete. Example:
 
 ### 🚪 NEXT-SESSION INSTRUCTIONS — what you do when you come back
 
-Step-by-step, concrete. Example:
+Step-by-step, concrete. **The branch-checkout in Step 1 is non-negotiable** — your terminal will still be on whatever branch this session ended on, and that may not match the next session's required branch. The full "how to start a session for any workflow" procedure lives in `docs/MULTI_WORKFLOW_PROTOCOL.md` §11; the example below follows that procedure.
+
+Example (substitute the right branch + task):
 
 1. Open a new Codespaces terminal — OR reopen the one you left running.
-2. Type this exact command and press Enter:
+
+2. Type this exact command and press Enter (this switches to the right branch and pulls the latest — substitute `<branch>` with the branch the next session needs per the MULTI_WORKFLOW_PROTOCOL §11 table; for W#1 or platform work it's `main`; for W#2 it's `workflow-2-competition-scraping`; etc.):
    ```
-   cd /workspaces/brand-operations-hub && claude
+   cd /workspaces/brand-operations-hub && git fetch origin && git checkout <branch> && git pull --rebase origin <branch>
    ```
-3. Claude Code will start. As your very first message, paste this exactly (edit only the task description in brackets if you want a different task — but "[EXACT NEXT TASK]" is the default from this handoff):
+
+3. Then launch Claude Code:
    ```
-   Read docs/CLAUDE_CODE_STARTER.md and follow every rule in it. Today's task: [EXACT NEXT TASK]. Start by running the mandatory start-of-session sequence.
+   claude
    ```
-4. Press Enter. Claude will read the starter, read all handoff docs, check git state, produce a drift check, and wait for your go-ahead before doing any work.
+
+4. Claude Code will start. As your very first message, paste this exactly (edit only the bracketed task description if you want a different task — but "[EXACT NEXT TASK]" is the default from this handoff):
+   ```
+   Read docs/CLAUDE_CODE_STARTER.md and follow every rule in it. Today's task: [EXACT NEXT TASK]. Verify branch state with `git branch --show-current` before any doc reads — if you're not on the expected branch ([branch name from Step 2]), STOP and surface to director. Start by running the mandatory start-of-session sequence.
+   ```
+
+5. Press Enter. Claude will read the starter, run the branch verification, read all handoff docs, check git state, produce a drift check, and wait for your go-ahead before doing any work.
 
 ### Anything you need to do offline between sessions
 [Only include if applicable — e.g., "Find the V2 prompt file on your laptop," "Check Vercel env vars." Otherwise say "Nothing — you're all set."]
