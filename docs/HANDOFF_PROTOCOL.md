@@ -1,8 +1,10 @@
 # HANDOFF PROTOCOL
 ## The rules Claude must follow at the start, during, and end of EVERY chat
 
-**Last updated:** April 27, 2026 (V3 small-batch test + context-scaling concern session — new Rule 24 added: Pre-capture search before adding any ROADMAP item or proposing new architectural concern. Drafted in response to a HIGH-severity mistake captured in `CORRECTIONS_LOG.md` 2026-04-27 entry — Claude proposed a context-scaling ROADMAP item without first searching existing docs for prior treatment, producing a misframed entry that would have misrepresented the system's design history. Rule 24 is the operational scaffolding for verify-before-write specifically at ROADMAP-capture moments.)
-**Last updated in session:** session_2026-04-27_v3-prompt-small-batch-test-and-context-scaling-concern (Claude Code)
+**Last updated:** May 4, 2026-d (Pool-tune small-batch test — INSUFFICIENT session — NEW Rule 26 added: Real-time deferred-items registry via TaskCreate, the formal Rule 14e-extension. Drafted mid-session after director flagged that small things falling through cracks across the long roadmap could be catastrophic. The Rule 14e end-of-session sweep was relying on Claude's memory; Rule 26 makes the deferred-items registry externally observable + persistent + forced-into-existence via TaskCreate. Director-approved at session mid-point.)
+**Last updated in session:** session_2026-05-04-d_pool-tune-small-batch-test-insufficient (Claude Code)
+**Previously updated:** April 27, 2026 (V3 small-batch test + context-scaling concern session — new Rule 24 added: Pre-capture search before adding any ROADMAP item or proposing new architectural concern. Drafted in response to a HIGH-severity mistake captured in `CORRECTIONS_LOG.md` 2026-04-27 entry — Claude proposed a context-scaling ROADMAP item without first searching existing docs for prior treatment, producing a misframed entry that would have misrepresented the system's design history. Rule 24 is the operational scaffolding for verify-before-write specifically at ROADMAP-capture moments.)
+**Previously updated in session:** session_2026-04-27_v3-prompt-small-batch-test-and-context-scaling-concern (Claude Code)
 **Previously updated in session:** session_2026-04-26_workflow-transition-architecture-and-v3-prompt-refinement (Claude Code)
 **Previously updated (claude.ai era):** https://claude.ai/chat/fc8025bf-551a-4b3c-8483-ec6d8ed9e33c
 
@@ -491,6 +493,36 @@ When PLOS has more than one workflow under active development simultaneously, pa
 **When this rule retires:** if PLOS ever returns to single-workflow-at-a-time mode, this rule + `MULTI_WORKFLOW_PROTOCOL.md` get retired together. Until then, every session in a multi-workflow setup follows this rule.
 
 **Why this rule exists:** drafted 2026-04-29 in `session_2026-04-28_canvas-blanking-and-closure-staleness-fix` after W#1's stabilization grew to ~9-13 more sessions and the director chose to start W#2 in parallel rather than wait. The shared-doc + shared-schema + shared-Codespace risks needed a structured coordination protocol; without it, the two parallel chats would race on `ROADMAP.md` / `prisma/schema.prisma` / the dev server. See `MULTI_WORKFLOW_PROTOCOL.md` §1.
+
+### Rule 26 — Real-time deferred-items registry via TaskCreate (NEW 2026-05-04-d) — formal Rule 14e-extension
+
+Whenever Claude defers an item per Rule 14e (sets it aside as "not now," "out of scope," "future work," "we'll deal with that later"), in addition to stating the destination doc + section in the same sentence per Rule 14e, Claude **MUST** register the item using the `TaskCreate` tool with a `DEFERRED:` prefix in the subject. The end-of-session sweep then reviews the `TaskList` — **not memory** — as the canonical source of deferred items. Each `DEFERRED:` task is closed via `TaskUpdate → completed` only after the corresponding doc entry is actually written. Any `DEFERRED:` task still open at end-of-session is an automatic `CORRECTIONS_LOG.md` entry as a process failure (root cause + fix).
+
+**Mechanical sequence at every defer moment:**
+
+1. Claude flags the item and states the destination doc + section in the SAME sentence (Rule 14e).
+2. Claude immediately calls `TaskCreate` with:
+   - `subject`: `DEFERRED: <one-line description>` — the `DEFERRED:` prefix is mandatory and grep-able.
+   - `description`: longer-form context — what the item is, why deferred now, destination doc + section, any preconditions for revisiting, cross-references.
+3. Work continues.
+
+**Mechanical sequence at end-of-session sweep:**
+
+1. Claude calls `TaskList` to get the canonical list of deferred items.
+2. For each `DEFERRED:` task: confirm the corresponding doc entry has been written this session. If yes, `TaskUpdate → completed`. If no, write the entry now, then complete.
+3. After the sweep, `TaskList` shows zero open `DEFERRED:` tasks. If any remain open, they become a `CORRECTIONS_LOG` entry — Claude got something captured in the registry but failed to migrate it to a permanent doc.
+
+**Why this rule exists:** `session_2026-05-04-d_pool-tune-small-batch-test-insufficient` surfaced a Rule 14e slip (Claude said "I'll capture in the deferred sweep" without naming the destination — Rule 14e requires destination in the same sentence). Director's reaction: *"Please make sure the missing auto-fire toggle issue is noted but also make sure our working methodology always avoids such things from falling through the cracks. We have a lot of sessions and our overall roadmap is long. Even small things being dropped like this can prove catastrophic. There should be a method to ensure nothing necessary gets ignored."*
+
+The existing Rule 14e end-of-session sweep relied on Claude's memory of what was deferred during the session — a brittle dependency, especially across long sessions or when many small items accumulate. Rule 26 makes the registry **externally observable** (director can run `TaskList` any time), **persistent** (registered items don't depend on Claude's memory), **forced into existence** (the act of TaskCreate IS the capture; skipping it is a visible omission), and **closed only after migration** (the task can't be marked `completed` until the doc entry is written; end-of-session leftover is a hard signal of failure).
+
+**Cost is ~10 seconds per defer.** Trivial vs. the catastrophic-drift cost of a missed item that future sessions inherit and act on (or fail to act on) months later.
+
+**Operational scope:** Rule 26 applies whenever Rule 14e applies — any time Claude flags-and-defers during a session. The two rules compose: Rule 14e governs the destination-naming discipline; Rule 26 governs the persistence-and-tracking mechanism.
+
+**Relationship to TaskCreate's general use:** TaskCreate is also valuable for tracking in-flight work within a session (e.g., "Run small-batch test on vklf.com" was Task #4 this session, completed when the test finished). Rule 26 is about a specific subset — deferred items going to permanent docs — and is enforced via the `DEFERRED:` prefix. Other TaskCreate uses are encouraged but not Rule-26-mandated.
+
+**Cross-references:** `CLAUDE_CODE_STARTER.md` Session Management section (Rule 26 cross-reference); operational memory file `feedback_deferred_items_registry.md` (Claude-side standing operational behavior). `CORRECTIONS_LOG.md` 2026-05-04-d entry on the Rule 14e slip that triggered codification of Rule 26.
 
 ---
 

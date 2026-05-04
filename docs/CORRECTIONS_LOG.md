@@ -2,7 +2,9 @@
 ## Append-only record of mistakes made during chats and lessons learned
 
 **Started:** April 16, 2026
-**Last updated:** May 3, 2026 (cold-start render-layer fix session — ONE new entry: INFORMATIONAL — React `react-hooks/purity` rule traces through same-file `useCallback` boundaries to flag synchronous setState inside the called function when invoked from a `useEffect`, even when the setState fires after an `await`. Caught mid-session as a 3-error lint regression on `KeywordWorkspace.tsx`; fixed by (a) dropping the synchronous pre-await `setFetchStatus(..., 'loading')` calls (the banner doesn't need that state — only 'retrying' and 'exhausted' which both fire post-await) AND (b) wrapping the useEffect call in an IIFE so the linter's same-file useCallback tracing terminates at the IIFE rather than reaching the post-await setState. Reporting-precision lesson — NOT a mistake; the rule's tracing scope wasn't apparent until the lint output showed it. Operational lesson: any future useEffect that calls a same-file useCallback containing setState should pre-emptively wrap the call in an IIFE. Lint went baseline 16e/41w → 19e/41w → back to 16e/41w after both fixes.)
+**Last updated:** May 4, 2026-d (Pool-tune small-batch test — INSUFFICIENT session — TWO new entries: (1) MEDIUM-severity Rule 14e mid-session slip — Claude said "I'll capture this as a sanity-check item in the deferred sweep too" without naming the destination doc + section in the same sentence, violating Rule 14e even as worded today. Caught + corrected via TaskCreate registry pattern + triggered codification of HANDOFF_PROTOCOL.md Rule 26 (NEW) — real-time deferred-items registry. (2) MEDIUM-severity recurring slip — Claude has repeatedly told the director the Auto-Analyze Resume button surfaces P1-P12 pre-flight check results visibly to the director when in fact it does NOT. Caught + corrected mid-session by director's explicit correction; new ROADMAP polish item to surface the pre-flight; operational lesson: default to "tell me what you see" before describing UI flow when there's any prior history of UI-flow uncertainty.)
+**Last updated in session:** session_2026-05-04-d_pool-tune-small-batch-test-insufficient (Claude Code)
+**Previously updated:** May 3, 2026 (cold-start render-layer fix session — ONE new entry: INFORMATIONAL — React `react-hooks/purity` rule traces through same-file `useCallback` boundaries to flag synchronous setState inside the called function when invoked from a `useEffect`, even when the setState fires after an `await`. Caught mid-session as a 3-error lint regression on `KeywordWorkspace.tsx`; fixed by (a) dropping the synchronous pre-await `setFetchStatus(..., 'loading')` calls (the banner doesn't need that state — only 'retrying' and 'exhausted' which both fire post-await) AND (b) wrapping the useEffect call in an IIFE so the linter's same-file useCallback tracing terminates at the IIFE rather than reaching the post-await setState. Reporting-precision lesson — NOT a mistake; the rule's tracing scope wasn't apparent until the lint output showed it. Operational lesson: any future useEffect that calls a same-file useCallback containing setState should pre-emptively wrap the call in an IIFE. Lint went baseline 16e/41w → 19e/41w → back to 16e/41w after both fixes.)
 **Previously updated:** May 2, 2026-d (HTTP 500 retry regression investigation — fourth session of 2026-05-02. ONE new entry: INFORMATIONAL — morning-vs-afternoon retry-rate evidence reframe. Re-reading the morning's `2026-05-02` POST-state evidence vs afternoon's `2026-05-02-c` retry trajectory showed `df09611` did NOT regress — it correctly halved state-fetch failures; the underlying ~25% rate at scale was always there, masked in morning's session by small-sample (9 fetch opportunities) / small-canvas (≤43 topics). Reporting-precision lesson — NOT a mistake; the morning session's "VERIFIED" closure of the original 30%-storm-rate concern was technically premature given sample size, but the fix DID work as designed. Today's code fix addresses the partial-apply state recovery problem at the recovery layer.)
 **Last updated in session:** session_2026-05-02-d_http-500-retry-regression-investigation (Claude Code)
 **Previously updated in session:** session_2026-05-02-c_devtools-profiling-pass (Claude Code)
@@ -56,6 +58,46 @@
 ---
 
 ## Entries
+
+### 2026-05-04-d — Rule 14e mid-session slip: deferred an item without naming destination in the same sentence ("I'll capture this in the deferred sweep too" — Rule 14e violation)
+
+**Session:** session_2026-05-04-d_pool-tune-small-batch-test-insufficient (Claude Code)
+**Tool/Phase affected:** HANDOFF_PROTOCOL — operational discipline; affects all sessions
+**Severity:** Medium (caught + corrected within the same session; triggered the codification of HANDOFF_PROTOCOL.md Rule 26 NEW)
+
+**What happened:** Mid-session 2026-05-04-d, after director reported the auto-fire toggle was missing from the Auto-Analyze overlay (they had observed this in prior sessions too), Claude responded with: *"That said: the toggle being missing from the overlay is unusual — it WAS visible in 2026-05-04-c. Could be it's now hidden behind a sub-tab or expandable section, or the UI changed between sessions. **I'll capture this as a sanity-check item in the deferred sweep too** — not blocking tonight, but worth confirming in a future session."* That last sentence violated Rule 14e — the rule requires naming the destination doc + section in the same sentence as the defer ("Never leave a deferred issue unanchored" + "the same sentence must state where it will be documented"). "I'll capture in the deferred sweep" is an example of the unanchored phrasing the rule was written to prohibit.
+
+**Root cause analysis:** Claude was speaking from a vague "we'll handle it later" framing rather than from Rule 14e's destination-naming discipline. Two contributing factors: (1) the destination decision sometimes feels naturally end-of-session — i.e., "I'll figure out which doc this goes in once I see the full set of items deferred this session" — but Rule 14e was written specifically because that "figure out later" mindset is the failure mode. (2) End-of-session sweeps relied on Claude's memory of what was deferred during the session, a brittle dependency.
+
+**How caught:** Director caught it directly: *"Please make sure the missing auto-fire toggle issue is noted but also make sure our working methodology always avoids such things from falling through the cracks. We have a lot of sessions and our overall roadmap is long. Even small things being dropped like this can prove catastrophic. There should be a method to ensure nothing necessary gets ignored."*
+
+**Correction (immediate):** Claude acknowledged the slip per Rule 10, captured both the auto-fire toggle absence + the canvas-size visibility + (later in the session) the pre-flight visibility issue with explicit destination naming and via TaskCreate. Methodology improvement proposed mid-session (see Prevention).
+
+**Prevention (codified):** **HANDOFF_PROTOCOL.md Rule 26 NEW (2026-05-04-d)** — Real-time deferred-items registry via TaskCreate. Whenever Claude defers an item per Rule 14e, in addition to stating destination in the same sentence, Claude MUST register the item via `TaskCreate` with `DEFERRED:` prefix in the subject. End-of-session sweep then reviews `TaskList` (not memory) as the canonical source. Each task closed via `TaskUpdate → completed` only after the doc entry is written. Open `DEFERRED:` tasks at end-of-session = automatic CORRECTIONS_LOG entry. Director-approved at session mid-point. Plus operational memory: `feedback_deferred_items_registry.md`. Plus cross-references in `CLAUDE_CODE_STARTER.md` Session Management section.
+
+**Cross-references:** `HANDOFF_PROTOCOL.md` Rule 26 (NEW); `CLAUDE_CODE_STARTER.md` Rule 15 area (cross-reference); `feedback_deferred_items_registry.md` (memory); `KEYWORD_CLUSTERING_ACTIVE.md` POST-2026-05-04-D STATE block "Methodology improvements" section.
+
+---
+
+### 2026-05-04-d — Recurring slip: Claude has repeatedly told director the Resume button surfaces P1-P12 pre-flight check results visibly when in fact it does NOT
+
+**Session:** session_2026-05-04-d_pool-tune-small-batch-test-insufficient (Claude Code)
+**Tool/Phase affected:** Workflow #1 Keyword Clustering — Auto-Analyze overlay UX descriptions
+**Severity:** Medium (recurring across multiple sessions per director's flag; not user-data-affecting; burns director time + erodes trust in Claude's UI-step descriptions)
+
+**What happened:** During the small-batch test setup 2026-05-04-d, Claude told the director: *"Phase 1 — Pre-flight check (10-30 seconds, no cost): The overlay should display 12 pre-flight checks running (P1 through P12). Each should show ✓ or ✗ next to it."* Director responded that the Resume button does NOT show pre-flight check results visibly, AND noted Claude has made the same wrong claim in previous sessions too: *"Clicking Resume does not show any pre flight data. I said this in previous sessions as well. You need to make a note of this and if you want Resume to show preflight data then you should add it to the roadmap as a todo item."*
+
+**Root cause analysis:** Claude was speaking from inferred state-block-summary phrasing ("pre-flight passed all 12 checks" — written in `KEYWORD_CLUSTERING_ACTIVE.md` 2026-05-04-c STATE block + similar in prior sessions) rather than from verified UI behavior. The state-block phrasing was a post-hoc summary — meaning "pre-flight ran somewhere and passed" — but Claude conflated "ran somewhere" with "displayed visibly to the director at click time." This is a Rule 14a violation (Read-It-Back test) — Claude should have asked the director "what do you see when you click Resume?" instead of describing what the user should see based on docs alone.
+
+**How caught:** Director caught it directly + flagged that the same wrong claim has happened in previous sessions.
+
+**Correction (immediate):** Claude acknowledged the slip per Rule 10. Captured (a) ROADMAP feature item — make pre-flight visible on Resume click (NEW MEDIUM 2026-05-04-d entry); (b) this CORRECTIONS_LOG entry as the recurring slip pattern. Adjusted "what to watch for" guidance for the rest of the session — defaulted to "tell me what you see" rather than "this is what should happen."
+
+**Prevention (codified):** Operational principle: **Claude must default to "tell me what you see" before describing what the user should see when there's any prior history of UI-flow uncertainty, especially for tools where Claude has no direct UI access.** Once the ROADMAP feature item ships (Resume surfaces pre-flight visibly), this slip becomes self-correcting — Claude can describe the actual UI flow because it'll match doc claims. Until then, Claude must catch the urge to describe pre-flight visibility and ask instead.
+
+**Cross-references:** `ROADMAP.md` "NEW MEDIUM (2026-05-04-d) — Pre-flight check results not visible to director on Resume click" entry; `KEYWORD_CLUSTERING_ACTIVE.md` POST-2026-05-04-D STATE block standing instruction (d).
+
+---
 
 ### 2026-05-04-c — Stale-doc trust slip: Claude built the entire 2026-05-04-c STATE block + ROADMAP entries + handoff on the assumption that Supabase Pro upgrade was still pending, when in fact director had already upgraded at end of 2026-05-04-b (PROCESS LESSON — should have asked director at session start to confirm status of recent director-action items rather than trusting stale doc claims)
 

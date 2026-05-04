@@ -43,7 +43,7 @@ I am the director of the PLOS (Product Launch Operating System) project. **I am 
 
 14. **Session identifier format:** `session_YYYY-MM-DD_short-topic-slug`. Capture at start, use in end-of-session doc updates. Multiple sessions same day: append `-a`, `-b`.
 
-15. **End-of-session doc update** is mandatory. Run the checklist in `docs/HANDOFF_PROTOCOL.md` §4 Step 1. Update whatever changed, commit to git, and produce a personalized handoff summary.
+15. **End-of-session doc update** is mandatory. Run the checklist in `docs/HANDOFF_PROTOCOL.md` §4 Step 1. Update whatever changed, commit to git, and produce a personalized handoff summary. **Per `HANDOFF_PROTOCOL.md` Rule 26 (NEW 2026-05-04-d), the end-of-session deferred-items sweep is driven by `TaskList` — Claude calls `TaskList`, reviews every `DEFERRED:`-prefixed task, migrates each one's content to its destination doc, then closes the task via `TaskUpdate → completed`. Any `DEFERRED:` task still open at end-of-session is an automatic CORRECTIONS_LOG entry. Mid-session, every defer creates a `TaskCreate` immediately — same sentence as the destination-naming per Rule 14e.**
 
     **MANDATORY content of that handoff summary — no exceptions, applies to every session:**
 
