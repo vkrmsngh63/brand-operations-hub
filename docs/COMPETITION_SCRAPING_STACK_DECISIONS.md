@@ -15,7 +15,7 @@
 - `HANDOFF_PROTOCOL.md` Rule 25 + `MULTI_WORKFLOW_PROTOCOL.md` — Multi-workflow coordination (W#2 lives on `workflow-2-competition-scraping` branch; schema-change-in-flight flag set "Yes" 2026-05-04 covering this session + the next implementation session)
 - `PLATFORM_REQUIREMENTS.md` §10.1 — Non-web-app clients pattern (W#2 is the first; auth + API + distribution patterns established here apply to all future non-web clients)
 - `PLATFORM_REQUIREMENTS.md` §10.4 — Coding portability requirement (storage helper wrapper)
-- `PLATFORM_REQUIREMENTS.md` §12.6 — Three scaffold extension-points discovered via W#2 design
+- `PLATFORM_REQUIREMENTS.md` §12.6 — Three shared component patterns surfaced by W#2 design (reframed 2026-05-05 from "scaffold extension-points" per the components-library architectural pivot — see `WORKFLOW_COMPONENTS_LIBRARY_DESIGN.md`)
 
 **Doc purpose:** captures the FROZEN architectural decisions for W#2's two halves (Chrome extension + PLOS web section). Subsequent build sessions read this doc rather than re-deriving choices. Treated as the authoritative pre-implementation spec — like §A in the design doc, this doc's §1–§13 are FROZEN at end-of-session 2026-05-04. Any in-flight refinements during build go into the design doc's §B (not this doc), keeping this doc stable as a long-lived reference.
 
@@ -626,14 +626,14 @@ model AuditEvent {
 
 | Route | Purpose | Phase |
 |---|---|---|
-| `/projects/[projectId]/competition-scraping` | Main view — multi-table viewer (platforms → URLs → captured rows) + always-visible deliverables block (Detailed User Guide + Download Extension button per §13) + admin reset button (admin-gated). Lives inside the Shared Workflow-Tool Scaffold per `COMPETITION_SCRAPING_DESIGN.md §A.14` with W#2's custom React content component plugged in via `PLATFORM_REQUIREMENTS.md §12.6` extension-point #2 (custom React content components). | Phase 1 |
+| `/projects/[projectId]/competition-scraping` | Main view — multi-table viewer (platforms → URLs → captured rows) + always-visible deliverables block (Detailed User Guide + Download Extension button per §13) + admin reset button (admin-gated). Composes Shared Workflow Components Library imports per `COMPETITION_SCRAPING_DESIGN.md §A.14` (`<WorkflowTopbar>`, `<StatusBadge>`, `<DeliverablesArea>` with Resources sub-section, `<CompanionDownload>`, `<ResetWorkflowButton>` + `<ResetConfirmDialog>`, `<WorkerCompletionButton>` Phase 1 path) alongside W#2's own custom React content component for the multi-table viewer; per `PLATFORM_REQUIREMENTS.md §12.6` shared component pattern #2, the content area is the workflow's own concern, not imposed by the library. | Phase 1 |
 | `/projects/[projectId]/competition-scraping/url/[urlId]` | Per-URL detail view — full-size image viewer, all captured text + images for that URL, edit affordances. **Deep-linkable** (admin can paste a URL into Slack/email and it lands directly on the right URL detail page). | Phase 1 |
 | `/projects/[projectId]/competition-scraping/admin/assignments` | Admin-only — assign workers per (Project × platform) per the §A.2 4-way model. Hidden in Phase 1 (admin-solo). | Phase 2 |
 
 **Cross-cutting items (autonomous Claude decisions per Rule 15):**
 - All three routes wrapped by the standard PLOS auth + project-context wiring (matches the W#1 pattern at `/projects/[projectId]/keyword-clustering`).
-- The main view's custom React component is the FIRST exercise of `PLATFORM_REQUIREMENTS.md §12.6` extension-point #2. The Shared Workflow-Tool Scaffold's design must accommodate this — that's a separate session, called out in `COMPETITION_SCRAPING_DESIGN.md §A.18` next-session list.
-- Admin reset button uses the standard scaffold reset pattern (per `PLATFORM_REQUIREMENTS.md §7`) — guarded by "type the project name to confirm — this will permanently delete all W#2 data for Project X."
+- The main view's custom React component is the FIRST exercise of `PLATFORM_REQUIREMENTS.md §12.6` shared component pattern #2 (content area is the workflow's own concern, not imposed by the library). The Shared Workflow Components Library Phase-1 build is a separate session — called out in `COMPETITION_SCRAPING_DESIGN.md §A.18` next-session list and at `WORKFLOW_COMPONENTS_LIBRARY_DESIGN.md §A` for the full library design.
+- Admin reset button uses the library's `<ResetWorkflowButton>` + `<ResetConfirmDialog>` components (per `WORKFLOW_COMPONENTS_LIBRARY_DESIGN.md §3.6`) wired to W#2's own `resetWorkflowData(projectId)` function — guarded by "type the project name to confirm — this will permanently delete all W#2 data for Project X." (per `PLATFORM_REQUIREMENTS.md §7`).
 
 **Reversibility:** route addresses become sticky once the extension caller is in production (renaming requires extension update). For the PLOS web routes, less sticky since the user can be sent the new address. Plan for stability anyway.
 

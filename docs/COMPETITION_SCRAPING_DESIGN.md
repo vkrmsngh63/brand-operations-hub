@@ -376,50 +376,56 @@ Combined with Q9 ("captured = done, no review cycle"), the design implication is
 
 ---
 
-### A.14 Scaffold fit (Q14) — director deferred to Claude's recommendation; approved as drafted
+### A.14 Components library fit (Q14) — director deferred to Claude's recommendation; approved as drafted (reframed 2026-05-05 from "Scaffold fit" to "Components library fit" per the components-library architectural pivot landed on `main` 2026-05-04 in `session_2026-05-04_workflow-tool-scaffold-design` — see `docs/WORKFLOW_COMPONENTS_LIBRARY_DESIGN.md` for the full library spec)
 
-**Recommendation:** **PLOS-side W#2 view PARTIALLY plugs into the Shared Workflow-Tool Scaffold. The Chrome extension is WHOLLY outside the scaffold.**
+**Recommendation:** **PLOS-side W#2 view IMPORTS specific components from the Shared Workflow Components Library and authors its own custom React content component for the multi-table viewer. The Chrome extension is WHOLLY outside the library** (different deployment model — Chrome Manifest V3 codebase per `COMPETITION_SCRAPING_STACK_DECISIONS.md §1`, not a PLOS Next.js page).
 
 #### PLOS-side W#2 view (`/projects/[projectId]/competition-scraping`)
 
-| Scaffold capability | W#2 fit | Notes |
+The page composes its layout by importing the library components below + the workflow's own custom multi-table viewer for the content area. Per `PLATFORM_REQUIREMENTS.md §12` (REWRITTEN 2026-05-04 — components-library architecture replaces the earlier scaffold-shell concept), there is no required shell; the workflow page authors its own composition.
+
+| Library component | W#2 use | Notes |
 |---|---|---|
-| Standard page shell (auth + status + project context) | ✅ fits | Same wiring as W#1 |
-| Standard topbar (title, back-nav, admin reset button) | ✅ fits | "Competition Scraping & Deep Analysis" + admin reset = the PLOS-side data-wipe per Q11 |
-| Standard status indicator (inactive / active / completed) | ✅ fits | Standard 3-state model |
-| Standard deliverables area | **✅ fits + new requirement** | The extension files download + install instructions live here. **NEW:** scaffold needs to support "always-visible deliverables" (the extension files are present for every Project regardless of capture state — they're not produced per-Project, they're downloadable templates). See `PLATFORM_REQUIREMENTS.md §12.6`. |
-| Standard structured-content area | **PARTIAL — scaffold needs flexibility** | Scaffold §12.2 specs this as "forms/text/notes," but W#2's content area is a **custom multi-table viewer** (Platforms → URLs → text/images) with sort/filter/expand-image. **NEW:** scaffold needs to allow workflows to plug in **custom React components**. See `PLATFORM_REQUIREMENTS.md §12.6`. W#2 will be the FIRST workflow to use this extensibility. |
-| Standard worker-facing status controls (Phase 2) | ✅ fits | "I'm done with [platform] for this Project" button plugs into the scaffold's worker-status pattern; since W#2 has no review cycle, it flips straight to `completed` instead of `submitted-for-review` |
-| Standard admin-facing review controls (Phase 2) | ✅ fits | Admin sees per-(Project × platform) completion status |
-| Standard audit-event emission helper (Phase 3) | ✅ fits | Per Q10, audit emission turns on in Phase 3 |
+| `useWorkflowContext()` hook | ✅ imports | Auth + Project + role + workflow-status load (per `WORKFLOW_COMPONENTS_LIBRARY_DESIGN.md §3.1`); replaces ~40 lines of boilerplate |
+| `<WorkflowTopbar>` | ✅ imports | Workflow title "Competition Scraping & Deep Analysis" + back-to-Project breadcrumb + admin-only reset button (admin reset = the PLOS-side data-wipe per Q11) |
+| `<StatusBadge>` | ✅ imports | Standard 3-state Phase 1 (inactive / active / completed); 5-state including review states wired but dormant in Phase 1 (W#2 has no review cycle — `reviewCycle: 'skip'` declared at workflow level) |
+| `<DeliverablesArea>` (Resources sub-section) | ✅ imports | Always-visible deliverables — Detailed User Guide + Download Extension button (per Q13). Implements `PLATFORM_REQUIREMENTS.md §12.6` shared component pattern #1 |
+| `<CompanionDownload>` | ✅ imports | Chrome extension download — rendered inside the Resources sub-section per `WORKFLOW_COMPONENTS_LIBRARY_DESIGN.md §3.5` Decision 4A. Implements `PLATFORM_REQUIREMENTS.md §12.6` shared component pattern #3 |
+| `<ResetWorkflowButton>` + `<ResetConfirmDialog>` | ✅ imports | Admin-only reset UX with type-the-project-name confirmation; wired to W#2's own `resetWorkflowData(projectId)` function per `PLATFORM_REQUIREMENTS.md §7.3` |
+| `<NotReadyBanner>` | ❌ skipped | W#2 declared "always ready" per §A.6 — no upstream-readiness rule (no W#1 dependency) |
+| `<WorkerCompletionButton>` (Phase 1 path) | ✅ imports | Phase 1: button-driven completion (admin self-completes per `PLATFORM_REQUIREMENTS.md §4.4`). Per-(Project × platform) completion semantics handled INSIDE W#2's custom content component (the multi-table viewer); the library button is for the workflow-level overall completion |
+| `<AdminReviewControls>` (Phase 2) | ❌ skipped | W#2 declared `reviewCycle: 'skip'` — no review cycle |
+| `useEmitAuditEvent()` (Phase 2 / 3) | ✅ imports (Phase 3) | Per Q10, audit emission turns on in Phase 3 |
+
+**Custom React content component** (W#2's own — NOT library): a multi-table viewer with platform → URL → captured-rows navigation, sort/filter, and image expand viewer. This is the workflow's own concern per `PLATFORM_REQUIREMENTS.md §12.6` shared component pattern #2 (content area is the workflow's own concern, not imposed by the library). W#2 is the FIRST workflow to author such a custom content component.
 
 #### Chrome extension
 
-- ❌ **Wholly outside the scaffold.** The scaffold is for PLOS Next.js pages; the extension is a separate codebase (Chrome Manifest V3 + its own UI framework decision + its own build pipeline).
-- The extension SHARES the PLOS API contract and the PLOS data model — but has zero UI inheritance from the scaffold.
+- ❌ **Wholly outside the components library.** The library is a set of React components for PLOS Next.js workflow pages; the extension is a separate codebase (Chrome Manifest V3 + WXT framework per `COMPETITION_SCRAPING_STACK_DECISIONS.md §1` + its own build pipeline).
+- The extension SHARES the PLOS API contract and the PLOS data model — but does not import any library components.
 - We can borrow visual language from PLOS for consistency, but no shared component library between them in Phase 1.
 
-#### Three new scaffold-extension-points W#2 reveals
+#### Three shared component patterns W#2 surfaces (captured in `PLATFORM_REQUIREMENTS.md §12.6`)
 
-These become inputs to the scaffold's own design when it gets built. Captured in `PLATFORM_REQUIREMENTS.md §12.6` (NEW 2026-05-04).
+W#2's design interview surfaced the three patterns the components library implements, captured in `PLATFORM_REQUIREMENTS.md §12.6` (NEW 2026-05-04; framing reframed 2026-05-05):
 
-1. **Always-visible deliverables.** Workflow can have downloadable artifacts (extension files, templates, README PDFs) present regardless of Project state.
-2. **Custom React content components.** Workflow can plug in a fully custom content panel (not just a form). W#2 exercises this first.
-3. **External-client companion pattern.** Workflow can ship a downloadable companion artifact (browser extension, mobile app, desktop tool) that talks to PLOS via API. W#2 is the first.
+1. **Always-visible deliverables.** A workflow may have downloadable artifacts (extension files, templates, README PDFs) present regardless of Project state. Implemented by `<DeliverablesArea>`'s optional Resources sub-section.
+2. **Custom React content components.** A workflow's content area is the workflow's own custom React component — NOT something the library imposes or provides. W#2 exercises this first (multi-table viewer).
+3. **External-client companion pattern.** A workflow may ship a downloadable companion artifact (browser extension, mobile app, desktop tool) that talks to PLOS via API. Implemented by `<CompanionDownload>`. W#2 is the first.
 
 #### Sequencing
 
-Per `PLATFORM_REQUIREMENTS.md §12.4`, the scaffold must be built BEFORE W#2 PLOS-side build begins. Today's interview is the design phase. The scaffold build is a separate session.
+Per `PLATFORM_REQUIREMENTS.md §12.4` (REWRITTEN 2026-05-04), library components are built incrementally as workflows surface concrete needs. The Phase-1 components needed to unblock W#2's PLOS-side build (`useWorkflowContext()`, `<WorkflowTopbar>`, `<StatusBadge>`, `<DeliverablesArea>` with Resources sub-section, `<CompanionDownload>`, `<ResetWorkflowButton>` + `<ResetConfirmDialog>`, `<NotReadyBanner>`, `<WorkerCompletionButton>` Phase 1 path) ship first. Phase 2 components (`<AdminReviewControls>`, `useEmitAuditEvent()`) are built when Phase 2 turn-on is scheduled.
 
 **Recommended session sequence after this interview:**
 
-1. **W#2 Stack-and-Architecture session** — extension framework (Manifest V3 + vanilla JS / React-in-extension / Plasmo / WXT — choose); auth pattern (long-lived API tokens vs OAuth device flow); image storage flow (signed-URL upload helper); region-screenshot mechanism (`chrome.tabs.captureVisibleTab` + canvas crop vs html2canvas); URL-add gesture (Shift+Click recommended); Highlight Terms color palette (~20 distinct accessibility-contrast colors); polling vs realtime upgrade timing. Output: `COMPETITION_SCRAPING_STACK_DECISIONS.md` Group B doc + updates to this doc's §B.
+1. **W#2 Stack-and-Architecture session** — extension framework (Manifest V3 + vanilla JS / React-in-extension / Plasmo / WXT — choose); auth pattern (long-lived API tokens vs OAuth device flow); image storage flow (signed-URL upload helper); region-screenshot mechanism (`chrome.tabs.captureVisibleTab` + canvas crop vs html2canvas); URL-add gesture (Shift+Click recommended); Highlight Terms color palette (~20 distinct accessibility-contrast colors); polling vs realtime upgrade timing. Output: `COMPETITION_SCRAPING_STACK_DECISIONS.md` Group B doc + updates to this doc's §B. ✅ DONE 2026-05-04 (`session_2026-05-04_w2-stack-and-architecture`).
 
-2. **Shared Workflow-Tool Scaffold design + build** — incorporates the three §12.6 extension-points. Cross-workflow concern; not W#2-only.
+2. **Shared Workflow Components Library Phase-1 build** — ships the components named above (per `WORKFLOW_COMPONENTS_LIBRARY_DESIGN.md §A`). Cross-workflow concern; not W#2-only — every workflow #3-#14 imports library components freely.
 
-3. **W#2 PLOS-side build** — using the now-built scaffold. Multiple sessions: routes, schema, custom React content component, sort/filter UI, image expand viewer, admin reset.
+3. **W#2 PLOS-side build** — composes library components + W#2's custom multi-table viewer content component. Multiple sessions: schema migration, API routes, custom React content component, sort/filter UI, image expand viewer, admin reset.
 
-4. **W#2 Chrome extension build** — can run in parallel with the PLOS-side build after stack-and-architecture is locked. Multiple sessions: extension shell, auth, Module 1 capture flow, Module 2 capture flow, image upload, offline queue.
+4. **W#2 Chrome extension build** — can run in parallel with the PLOS-side build after stack-and-architecture is locked + Phase-1 library has shipped. Multiple sessions: extension shell, auth, Module 1 capture flow, Module 2 capture flow, image upload, offline queue.
 
 ---
 
