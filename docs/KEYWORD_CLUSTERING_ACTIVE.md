@@ -127,9 +127,37 @@ Trade-off accepted: the change scope grew from the original ~10-20 LOC estimate 
 **(a) D3 retry resume from batch 53 onward — RECOMMENDED FIRST.** Checkpoint preserved at canvas 194 / 50 of 257 batches done. Need ~205 more batches at ~$0.45 average ≈ ~$92 in Anthropic credits. **Director's offline action items before next-session launch:**
    1. Top up Anthropic API credits (~$70 needed; console.anthropic.com → Settings → Billing → Add credits).
    2. **Re-paste the updated Consolidation Initial Prompt + Primer into the Auto-Analyze UI Consolidation slots.** This is non-negotiable — the prompt drives the model's vocabulary; if the old prompt is still pasted, the model will continue emitting sister-link ops and the applier-side backstop will reject every consolidation atomically (~$0.40 wasted per failed consolidation). The regular Initial Prompt + Primer for per-batch runs are unchanged from 2026-05-03-c — those don't need re-pasting.
-   3. (Optional) Verify the live commit hash matches what's expected post-push. Push from this session is pending Rule 9 approval.
+   3. (Optional) Verify the live commit hash matches what's expected post-push. Commit `38e14cb` was pushed 2026-05-05-b; Vercel auto-redeploys.
 
-   Estimated wall-clock for the back half: ~7-10 hours. Recommend splitting across 2-3 sessions (e.g., ~70 batches per session). Each session's task: resume from the most-recent checkpoint, run until either the agreed batch target is hit OR the credit pool runs low OR a hard error occurs; capture per-batch + per-consolidation cost trajectories; verify zero sister-link ops emitted in every consolidation pass.
+   Estimated wall-clock for the back half: ~7-10 hours. Recommend splitting across 2-3 sessions (e.g., ~70 batches per session). Each session's task: resume from the most-recent checkpoint, run until either the agreed batch target is hit OR the credit pool runs low OR a hard error occurs; capture per-batch + per-consolidation cost trajectories.
+
+   **(a.1) Option A invisibility verification — MANDATORY check folded into D3 resume (NEW 2026-05-05-b).** D3 resume is the primary live verification of Option A's invisibility design from this session — that the consolidation model treats sister links as if they don't exist. The 2026-05-05-b unit tests prove the code does what's intended (336/336 pass; +9 new); only D3 resume can prove the model's *behavior* matches Option A's theory. This verification is GATE-CRITICAL — failure mode signals would invalidate the cleanup and require additional follow-up work before W#1 graduation.
+
+   **Early-warning checkpoint at first new consolidation pass (after batch 62; first to hit the cadence-10 + min-canvas-100 gate post-resume).** Before this consolidation, the canvas has been unchanged from batch 52's 82 sister links + 194 topics (preserved across the offline period). Expected behavior:
+   - **TSV input shape:** the consolidation TSV sent to the model has 8 columns, not 9. The "Sister Nodes" column does not appear in the header row OR any data row. Verifiable via the forensic emit (`pre_api_call` event captures the prompt context). If a 9-column TSV appears, Option A's serializer flag wiring is broken — STOP D3 immediately and surface to director.
+   - **Operations applied:** the operation-type breakdown shows zero ADD_SISTER_LINK + zero REMOVE_SISTER_LINK. Visible in the Activity Log + the per-consolidation-pass log line ("Canvas rebuilt (X nodes, Y removed, Z new sister links)" — Z must be 0).
+   - **Sister-link count on canvas:** stays at 82 before + after the consolidation. Verifiable via canvas GET response. If non-zero change observed, Option A failed silently — the model emitted sister-link ops AND the applier accepted them somehow (would require a bug in the consolidation-mode rejection logic, which the unit tests cover; near-zero probability but worth checking).
+   - **Applier rejection events:** zero `<OP> is not allowed in consolidation mode (sister links are deferred to a separate second-pass functionality run; they do not belong in any Auto-Analyze pass)` errors in Vercel logs OR the Auto-Analyze activity log. Search for the substring `is not allowed in consolidation mode (sister links` — should return zero matches across all of D3 resume.
+
+   **Per-consolidation-pass logging during D3 resume.** Across the ~20 consolidation passes that fire during D3 resume (cadence 10; ~205 batches → consolidations after batches 62, 72, 82, 92, ..., 252), capture for each pass:
+   - Operations applied count breakdown (with explicit line for sister-link ops counts — should always be 0/0)
+   - Sister-link count before + after (should always equal 82 throughout, modulo any sister links the future second-pass functionality adds — but that functionality isn't built yet, so 82 is the floor and ceiling)
+   - Any applier rejection events (should always be zero)
+
+   **Aggregate success criterion (Option A verified live):** across every consolidation pass during D3 resume, sister-link count stayed at 82 AND zero applier rejection events fired AND zero sister-link ops appeared in any operations-applied breakdown. When D3 resume completes with these signals all green, prerequisite #6 of the W#1 PRODUCTION-READINESS GATE flips from "✅ DONE — pending live verification" to "✅ VERIFIED LIVE."
+
+   **Aggregate failure modes + responses:**
+   - **First consolidation triggers `ADD_SISTER_LINK is not allowed in consolidation mode` rejection:** the model regressed from prior-V4 training despite the silent prompt. The applier's atomic rejection means the consolidation pass failed cleanly (canvas state preserved), ~$0.40 wasted. Pause D3 immediately; do NOT keep running batches against a misaligned prompt. Surface to director with: (a) full Vercel error log including the rejection event; (b) prompt context that was sent (forensic emit); (c) recommend follow-up — examine whether the pasted prompt actually matches the post-2026-05-05-b updates (verify by spot-check + char count); if the prompt is correct AND model still regressed, the deeper fix is to drop the SisterLink schema entries from any prior-context conversations OR to add a stronger prompt anchor (we accepted "no anchor" as Option A's design point, but if the model regresses from training in production, we may need a minimal prompt anchor as a hybrid Option A-prime).
+   - **Sister-link count changes silently (non-zero delta) without applier rejection:** would require a bug in the consolidation-mode rejection logic. Near-zero probability given the unit-test coverage but: pause immediately + surface; this would be a HIGH-severity bug in the applier.
+   - **TSV input has 9 columns instead of 8 (Sister Nodes column visible to model):** Option A's serializer-flag wiring is broken. Pause + surface; bug is in `omitSisterNodesColumn` plumbing. The unit tests cover this directly so the bug would be in build/deploy artifacts rather than source — verify the deployed bundle hash matches commit `38e14cb`.
+
+   **What NOT to do during D3 resume:** do NOT manually examine consolidation outputs for sister-link op presence as a routine check. The applier's atomic rejection IS the test for that. Trust the contract; only investigate if a rejection actually fires OR if a sister-link count change is observed in the canvas state.
+
+   **Reference:** test fragment to grep Vercel logs across the D3 run to surface any rejection events:
+   ```
+   is not allowed in consolidation mode (sister links
+   ```
+   Expected match count across the entire D3 resume: zero.
 
 **(b) `[FLAKE]` visibility investigation** — telemetry from 2026-05-04 should log `[FLAKE]` lines for every catch-block error; director's prior Vercel pastes showed full stack traces but NO `[FLAKE]` lines visible. Same gap captured 2026-05-04-c + 2026-05-04-d. Independent of D3; standalone session.
 
