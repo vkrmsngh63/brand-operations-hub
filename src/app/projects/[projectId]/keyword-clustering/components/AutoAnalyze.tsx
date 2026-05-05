@@ -130,8 +130,8 @@ export default function AutoAnalyze({
   const [volumeThreshold, setVolumeThreshold] = useState(1000);
   const [batchSize, setBatchSize] = useState(8);
   const [processingMode, setProcessingMode] = useState<'adaptive' | 'classic'>('adaptive');
-  const [thinkingMode, setThinkingMode] = useState<'adaptive' | 'enabled' | 'disabled'>('adaptive');
-  const [thinkingBudget, setThinkingBudget] = useState(10000);
+  const [thinkingMode, setThinkingMode] = useState<'adaptive' | 'enabled' | 'disabled'>('enabled');
+  const [thinkingBudget, setThinkingBudget] = useState(12000);
   const [keywordScope, setKeywordScope] = useState<'unsorted-only' | 'non-ai-sorted' | 'all'>('unsorted-only');
   const [stallTimeout, setStallTimeout] = useState(90);
   const [reviewMode, setReviewMode] = useState(false);
@@ -2162,7 +2162,7 @@ export default function AutoAnalyze({
                     type="number"
                     value={thinkingBudget || ''}
                     onChange={e => setThinkingBudget(parseInt(e.target.value) || 0)}
-                    onBlur={() => { if (!thinkingBudget) setThinkingBudget(10000); }}
+                    onBlur={() => { if (!thinkingBudget) setThinkingBudget(12000); }}
                     disabled={aaState !== 'IDLE'}
                   />
                 </>
