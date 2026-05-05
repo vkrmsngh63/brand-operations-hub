@@ -1293,7 +1293,7 @@ test('Consolidation: SPLIT_TOPIC succeeds (allowed vocabulary; creates topics vi
   assert.equal(r.newState.nodes.length, 2);
 });
 
-test('Consolidation: MOVE_KEYWORD, MOVE_TOPIC, UPDATE_TOPIC_TITLE, DELETE_TOPIC, ADD_SISTER_LINK all succeed', () => {
+test('Consolidation: MOVE_KEYWORD, MOVE_TOPIC, UPDATE_TOPIC_TITLE, DELETE_TOPIC all succeed', () => {
   const state = stateWith(
     [
       node('t-1'),
@@ -1311,7 +1311,6 @@ test('Consolidation: MOVE_KEYWORD, MOVE_TOPIC, UPDATE_TOPIC_TITLE, DELETE_TOPIC,
         { type: 'MOVE_TOPIC', id: 't-3', newParent: null, newRelationship: 'linear', reason: 'promote to root' },
         { type: 'UPDATE_TOPIC_TITLE', id: 't-2', to: 'Renamed' },
         { type: 'DELETE_TOPIC', id: 't-4', reason: 'empty', reassignKeywordsTo: 'ARCHIVE' },
-        { type: 'ADD_SISTER_LINK', topicA: 't-2', topicB: 't-3' },
       ],
       { consolidationMode: true },
     ),
@@ -1320,7 +1319,69 @@ test('Consolidation: MOVE_KEYWORD, MOVE_TOPIC, UPDATE_TOPIC_TITLE, DELETE_TOPIC,
   assert.equal(r.newState.nodes.length, 3);
   assert.equal(r.newState.nodes.find((n) => n.stableId === 't-2')!.title, 'Renamed');
   assert.equal(r.newState.nodes.find((n) => n.stableId === 't-3')!.parentStableId, null);
-  assert.equal(r.newState.sisterLinks.length, 1);
+  // Sister-link ops are forbidden in consolidation mode (2026-05-05 drift cleanup) — see
+  // dedicated rejection tests below for ADD_SISTER_LINK / REMOVE_SISTER_LINK.
+  assert.equal(r.newState.sisterLinks.length, 0);
+});
+
+test('Consolidation: ADD_SISTER_LINK is rejected with descriptive error', () => {
+  const state = stateWith([node('t-1'), node('t-2')], 100);
+  expectErr(
+    applyOperations(
+      state,
+      [{ type: 'ADD_SISTER_LINK', topicA: 't-1', topicB: 't-2' }],
+      { consolidationMode: true },
+    ),
+    'ADD_SISTER_LINK is not allowed in consolidation mode',
+  );
+});
+
+test('Consolidation: REMOVE_SISTER_LINK is rejected with descriptive error', () => {
+  const state = stateWith([node('t-1'), node('t-2')], 100);
+  // Pre-load a sister link so REMOVE_SISTER_LINK isn't rejected for a different reason.
+  state.sisterLinks.push({ topicAStableId: 't-1', topicBStableId: 't-2' });
+  expectErr(
+    applyOperations(
+      state,
+      [{ type: 'REMOVE_SISTER_LINK', topicA: 't-1', topicB: 't-2' }],
+      { consolidationMode: true },
+    ),
+    'REMOVE_SISTER_LINK is not allowed in consolidation mode',
+  );
+});
+
+test('Consolidation: a forbidden sister-link op fails atomically — earlier allowed ops do NOT persist', () => {
+  const state = stateWith(
+    [
+      node('t-1', { title: 'Original' }),
+      node('t-2'),
+    ],
+    100,
+  );
+  const result = applyOperations(
+    state,
+    [
+      // Allowed — would succeed alone
+      { type: 'UPDATE_TOPIC_TITLE', id: 't-1', to: 'New title' },
+      // Forbidden under the 2026-05-05 cleanup — should reject the whole batch
+      { type: 'ADD_SISTER_LINK', topicA: 't-1', topicB: 't-2' },
+    ],
+    { consolidationMode: true },
+  );
+  expectErr(result, 'ADD_SISTER_LINK is not allowed in consolidation mode');
+  // State is never mutated on a failed apply (atomic contract).
+  assert.equal(state.nodes[0].title, 'Original');
+});
+
+test('Consolidation: explicit consolidationMode=false behaves like no options (sister-link ops allowed)', () => {
+  const state = stateWith([node('t-1'), node('t-2')], 100);
+  expectOk(
+    applyOperations(
+      state,
+      [{ type: 'ADD_SISTER_LINK', topicA: 't-1', topicB: 't-2' }],
+      { consolidationMode: false },
+    ),
+  );
 });
 
 test('Consolidation: a forbidden op fails atomically — earlier allowed ops do NOT persist', () => {

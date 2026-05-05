@@ -1308,3 +1308,86 @@ test('buildOperationsInputTsv: tiered mode throws when tierContext is missing', 
     /requires tierContext/,
   );
 });
+
+// ============================================================
+// omitSisterNodesColumn flag (2026-05-05 sister-link drift cleanup — Option A)
+// Consolidation pass uses { serializationMode: 'full', omitSisterNodesColumn: true }
+// so the model literally cannot see existing sister links on the canvas.
+// ============================================================
+
+test('buildOperationsInputTsv: omitSisterNodesColumn=true drops "Sister Nodes" from header (8 columns instead of 9)', () => {
+  const tsv = buildOperationsInputTsv([], [], [], {
+    serializationMode: 'full',
+    omitSisterNodesColumn: true,
+  });
+  const headerCells = tsv.split('\t');
+  assert.equal(headerCells.length, 8);
+  assert.ok(!tsv.includes('Sister Nodes'), 'header should not include "Sister Nodes"');
+  assert.match(tsv, /\tStability Score\tKeywords$/);
+});
+
+test('buildOperationsInputTsv: omitSisterNodesColumn=true drops sisters field from data rows', () => {
+  const a = row('node-a', 'A', { stableId: 't-1' });
+  const b = row('node-b', 'B', { stableId: 't-2' });
+  const sl: SisterLinkRow[] = [{ id: 's1', nodeA: 'node-a', nodeB: 'node-b' }];
+  const tsv = buildOperationsInputTsv([a, b], sl, [], {
+    serializationMode: 'full',
+    omitSisterNodesColumn: true,
+  });
+  const lines = tsv.split('\n');
+  assert.equal(lines.length, 3); // header + 2 data rows
+  // Each data row has 8 fields (no Sister Nodes column).
+  for (const line of lines) {
+    assert.equal(line.split('\t').length, 8);
+  }
+  // The TSV body should mention neither stable ID in any sister-context — the
+  // sister-link between node-a and node-b should be invisible to the model.
+  assert.ok(!tsv.includes('t-1, t-2'), 'sister link should not appear');
+  assert.ok(!tsv.includes('t-2, t-1'), 'sister link should not appear (other order)');
+});
+
+test('buildOperationsInputTsv: omitSisterNodesColumn=true preserves the Keywords column at position 7 (last)', () => {
+  const n = row('node-1', 'Bursitis basics', {
+    stableId: 't-1',
+    linkedKwIds: ['uuid-1', 'uuid-2'],
+    kwPlacements: { 'uuid-1': 'p', 'uuid-2': 's' },
+  });
+  const tsv = buildOperationsInputTsv(
+    [n],
+    [],
+    [kw('uuid-1', 'female bursitis'), kw('uuid-2', 'older women joint pain')],
+    { serializationMode: 'full', omitSisterNodesColumn: true },
+  );
+  const dataRow = tsv.split('\n')[1].split('\t');
+  // 8 columns total: [0..6] = base, [7] = Keywords (was [8] in 9-column form).
+  assert.equal(dataRow.length, 8);
+  assert.equal(
+    dataRow[7],
+    'uuid-1|female bursitis [p], uuid-2|older women joint pain [s]',
+  );
+});
+
+test('buildOperationsInputTsv: omitSisterNodesColumn=false (default) keeps 9-column behavior unchanged', () => {
+  const a = row('node-a', 'A', { stableId: 't-1' });
+  const b = row('node-b', 'B', { stableId: 't-2' });
+  const sl: SisterLinkRow[] = [{ id: 's1', nodeA: 'node-a', nodeB: 'node-b' }];
+  const explicitFalse = buildOperationsInputTsv([a, b], sl, [], {
+    serializationMode: 'full',
+    omitSisterNodesColumn: false,
+  });
+  const noFlag = buildOperationsInputTsv([a, b], sl, []);
+  // Byte-identical — the new flag with default-false is a pure additive option.
+  assert.equal(explicitFalse, noFlag);
+  // 9 columns, Sister Nodes column populated.
+  assert.match(explicitFalse, /\tSister Nodes\tKeywords/);
+});
+
+test('buildOperationsInputTsv: omitSisterNodesColumn=true on empty canvas → 8-column header only', () => {
+  const tsv = buildOperationsInputTsv([], [], [], {
+    serializationMode: 'full',
+    omitSisterNodesColumn: true,
+  });
+  // No data rows; header cells split by tab should be exactly 8.
+  assert.equal(tsv.split('\n').length, 1);
+  assert.equal(tsv.split('\t').length, 8);
+});

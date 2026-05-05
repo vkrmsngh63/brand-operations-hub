@@ -873,13 +873,23 @@ function runInvariants(s: Scratch, originalKeywordIds: Set<KeywordId>): void {
  * Optional second-arg for {@link applyOperations}.
  *
  * `consolidationMode` — Scale Session E, INPUT_CONTEXT_SCALING_DESIGN.md §4.1
- * Cluster 4 Q14 lock. When `true`, ADD_TOPIC and ADD_KEYWORD are rejected
- * with an explicit error. The consolidation pass restructures existing
- * topics; it does not introduce new topics or new keywords. Defense in
- * depth — the consolidation prompt also instructs the AI not to emit these,
- * but the applier-side rejection means a stray emission fails atomically
- * rather than silently changing the canvas in a way the consolidation
- * contract forbids.
+ * Cluster 4 Q14 lock + 2026-05-05 sister-link consolidation drift cleanup.
+ * When `true`, four operation types are rejected with explicit errors:
+ *   - ADD_TOPIC + ADD_KEYWORD — the consolidation pass restructures existing
+ *     topics; it does not introduce new topics or new keywords. (Original
+ *     Cluster 4 Q14 lock, 2026-05-01.)
+ *   - ADD_SISTER_LINK + REMOVE_SISTER_LINK — sister links are deferred out
+ *     of every Auto-Analyze pass per the director's standing plan; they
+ *     belong to a separate second-pass functionality run after first-pass
+ *     Auto-Analyze is correctly producing topics. (Drift-cleanup follow-up
+ *     to the 2026-05-03-c recency-stickiness fix's `regularBatchMode` flag,
+ *     which had only deferred sister-link ops out of regular batches and
+ *     left consolidation as a residual emission path. KEYWORD_CLUSTERING_ACTIVE
+ *     post-2026-05-05 STATE block standing instruction (a).)
+ * Defense in depth — the consolidation prompt also instructs the AI not to
+ * emit any of these four ops, but applier-side rejection means a stray
+ * emission fails atomically rather than silently changing the canvas in a
+ * way the consolidation contract forbids.
  *
  * `regularBatchMode` — Recency-stickiness fix, INPUT_CONTEXT_SCALING_DESIGN.md
  * §6 Scale Session E D3 partial validation outcome (sister-link op deferral
@@ -906,6 +916,8 @@ export interface ApplyOptions {
 const CONSOLIDATION_FORBIDDEN_OPS = new Set<Operation['type']>([
   'ADD_TOPIC',
   'ADD_KEYWORD',
+  'ADD_SISTER_LINK',
+  'REMOVE_SISTER_LINK',
 ]);
 
 const REGULAR_BATCH_FORBIDDEN_OPS = new Set<Operation['type']>([
@@ -952,10 +964,14 @@ export function applyOperations(
   try {
     operations.forEach((op, i) => {
       if (consolidationMode && CONSOLIDATION_FORBIDDEN_OPS.has(op.type)) {
+        const reason =
+          op.type === 'ADD_TOPIC' || op.type === 'ADD_KEYWORD'
+            ? 'consolidation only restructures existing topics; it does not introduce new ones'
+            : 'sister links are deferred to a separate second-pass functionality run; they do not belong in any Auto-Analyze pass';
         fail(
           i,
           op.type,
-          `${op.type} is not allowed in consolidation mode (consolidation only restructures existing topics; it does not introduce new ones)`,
+          `${op.type} is not allowed in consolidation mode (${reason})`,
         );
       }
       if (regularBatchMode && REGULAR_BATCH_FORBIDDEN_OPS.has(op.type)) {

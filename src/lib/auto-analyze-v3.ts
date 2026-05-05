@@ -119,10 +119,21 @@ export interface BuildOperationsInputTsvOptions {
   serializationMode?: SerializationMode;
   /** Required (and only consulted) when `serializationMode === 'tiered'`. */
   tierContext?: TierContext;
+  /**
+   * When true, the "Sister Nodes" column is omitted from header and rows.
+   * 2026-05-05 sister-link drift cleanup (Option A) — the consolidation pass
+   * uses this so existing sister links on the canvas are invisible to the
+   * model; sister links are deferred out of every Auto-Analyze pass entirely
+   * and belong to a separate second-pass functionality run. Only honored
+   * for `serializationMode === 'full'`; tiered mode is unaffected (regular
+   * batches still see sister-link context for cross-canvas reasoning).
+   */
+  omitSisterNodesColumn?: boolean;
 }
 
 /**
- * 9-column TSV per AUTO_ANALYZE_PROMPT_V3.md "INPUT TABLE COLUMNS".
+ * Default 9-column TSV per AUTO_ANALYZE_PROMPT_V3.md "INPUT TABLE COLUMNS"
+ * (or 8 columns when `omitSisterNodesColumn: true`).
  * Header row first, then rows sorted by stableId integer suffix (deterministic,
  * roughly creation-order). Empty canvas → header row only.
  *
@@ -147,25 +158,42 @@ export function buildOperationsInputTsv(
     }
     return buildTieredTsv(nodes, sisterLinks, keywords, options.tierContext);
   }
-  return buildFullTsv(nodes, sisterLinks, keywords);
+  return buildFullTsv(nodes, sisterLinks, keywords, {
+    omitSisterNodesColumn: options?.omitSisterNodesColumn === true,
+  });
 }
 
 function buildFullTsv(
   nodes: CanvasNodeRow[],
   sisterLinks: SisterLinkRow[],
   keywords: KeywordLite[],
+  opts: { omitSisterNodesColumn: boolean } = { omitSisterNodesColumn: false },
 ): string {
-  const header = [
-    'Stable ID',
-    'Title',
-    'Description',
-    'Parent Stable ID',
-    'Relationship',
-    'Conversion Path',
-    'Stability Score',
-    'Sister Nodes',
-    'Keywords',
-  ].join('\t');
+  const omitSisterNodesColumn = opts.omitSisterNodesColumn;
+  const header = (
+    omitSisterNodesColumn
+      ? [
+          'Stable ID',
+          'Title',
+          'Description',
+          'Parent Stable ID',
+          'Relationship',
+          'Conversion Path',
+          'Stability Score',
+          'Keywords',
+        ]
+      : [
+          'Stable ID',
+          'Title',
+          'Description',
+          'Parent Stable ID',
+          'Relationship',
+          'Conversion Path',
+          'Stability Score',
+          'Sister Nodes',
+          'Keywords',
+        ]
+  ).join('\t');
 
   if (nodes.length === 0) return header;
 
@@ -176,14 +204,16 @@ function buildFullTsv(
   for (const k of keywords) keywordById.set(k.id, k);
 
   const sisterByNodeId = new Map<string, string[]>();
-  for (const sl of sisterLinks) {
-    const a = idToStable.get(sl.nodeA);
-    const b = idToStable.get(sl.nodeB);
-    if (!a || !b) continue;
-    if (!sisterByNodeId.has(sl.nodeA)) sisterByNodeId.set(sl.nodeA, []);
-    if (!sisterByNodeId.has(sl.nodeB)) sisterByNodeId.set(sl.nodeB, []);
-    sisterByNodeId.get(sl.nodeA)!.push(b);
-    sisterByNodeId.get(sl.nodeB)!.push(a);
+  if (!omitSisterNodesColumn) {
+    for (const sl of sisterLinks) {
+      const a = idToStable.get(sl.nodeA);
+      const b = idToStable.get(sl.nodeB);
+      if (!a || !b) continue;
+      if (!sisterByNodeId.has(sl.nodeA)) sisterByNodeId.set(sl.nodeA, []);
+      if (!sisterByNodeId.has(sl.nodeB)) sisterByNodeId.set(sl.nodeB, []);
+      sisterByNodeId.get(sl.nodeA)!.push(b);
+      sisterByNodeId.get(sl.nodeB)!.push(a);
+    }
   }
 
   const sortedNodes = [...nodes].sort(
@@ -196,7 +226,6 @@ function buildFullTsv(
       n.parentId !== null ? (idToStable.get(n.parentId) ?? '') : '';
     const relationship = parentStable ? n.relationshipType : '';
     const stability = (n.stabilityScore ?? 0).toFixed(1);
-    const sisters = (sisterByNodeId.get(n.id) ?? []).sort().join(', ');
 
     const kwParts: string[] = [];
     for (const kwId of n.linkedKwIds ?? []) {
@@ -206,7 +235,7 @@ function buildFullTsv(
       kwParts.push(`${kwId}|${sanitize(kw.keyword)} [${placement}]`);
     }
 
-    rows.push([
+    const baseFields = [
       n.stableId,
       sanitize(n.title),
       sanitize(n.description),
@@ -214,9 +243,14 @@ function buildFullTsv(
       relationship,
       '', // Conversion Path — not stored separately in current schema
       stability,
-      sisters,
-      kwParts.join(', '),
-    ].join('\t'));
+    ];
+
+    if (omitSisterNodesColumn) {
+      rows.push([...baseFields, kwParts.join(', ')].join('\t'));
+    } else {
+      const sisters = (sisterByNodeId.get(n.id) ?? []).sort().join(', ');
+      rows.push([...baseFields, sisters, kwParts.join(', ')].join('\t'));
+    }
   }
 
   return rows.join('\n');
