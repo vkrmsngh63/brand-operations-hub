@@ -421,7 +421,45 @@ Every future session that touches the components library appends a dated entry h
 **Decision:** ...
 ```
 
-(Empty initially.)
+#### 2026-05-05-c — session_2026-05-05-c_components-library-phase-1-build — Phase-1 build SHIPPED
+
+**What surfaced during build (decisions made + rationale):**
+
+1. **File layout choice — `src/lib/workflow-components/` (kebab-case files, .tsx for JSX, .ts for pure logic).** The design doc §5's example used `@/lib/workflow-components` as the import path; the existing `src/lib/` convention is kebab-case files; React conventionally uses PascalCase. Resolution: kebab-case for file names (matches `src/lib/` convention); PascalCase preserved for the exported component identifiers; `.tsx` for files containing JSX, `.ts` for pure-logic files. Pure-logic helpers extracted to `.ts` files (`status-badge-palette.ts`, `reset-confirm-helpers.ts`) so they can be unit-tested via `node --test --experimental-strip-types` (which can't process `.tsx` files). Decision frozen for the library; future component additions follow the same convention.
+
+2. **Styling convention choice — inline styles, dark-theme palette matching the App Shell** (`/projects`, `/dashboard`, `/plos`, etc.). Per §1.4 "Visual design conventions inherit from the existing PLOS app shell." The shell uses inline-style React with hex colors (`#e6edf3`, `#8b949e`, `#161b22`, `#30363d`, `#0d1117`, `#3fb950`, `#1f6feb`, etc.) and `'IBM Plex Sans'` font; W#1's keyword-clustering page uses Tailwind for its content area. Library matches the shell convention since library components are shell concerns, not content concerns.
+
+3. **`<StatusBadge>` palette finalized.** Five-state palette table at `status-badge-palette.ts`. The `active` state gets YELLOW (`#d4a72c`) with label "In progress" per design doc §3.3 Decision 1B. Drift surfaced: the existing inline `<StatusBadge>` at `src/app/projects/[projectId]/page.tsx` uses BLUE/"Active" — captured as a Phase-1 polish-bundle follow-up in `ROADMAP.md` to swap the Projects page to the shared component for visual consistency.
+
+4. **`useWorkflowContext()` return shape finalized for Phase 1.** Provisional sketch in §3.1 added `loading: boolean` + `error: string | null` so consuming pages can render their own loading/error UI without the hook being opinionated. Phase 1 fields populated; Phase 2 fields wired but null/dormant (`workflowAssignment: null`; `userRole: 'admin'` always; `emitAuditEvent` is a no-op stub). Hook accepts `readinessRule?: () => boolean` arg so workflows declare upstream-readiness inline rather than the hook computing it from a centralized resolver (which doesn't exist in Phase 1).
+
+5. **`<ResetConfirmDialog>` mount/unmount pattern.** The dialog body is a separate `ResetConfirmDialogBody` sub-component that only mounts when `open === true`. This gives "fresh state every open" without resorting to `setState` inside a `useEffect`, which trips the `react-hooks/set-state-in-effect` lint rule (caught + fixed during initial build).
+
+6. **Smoke-test page built at `/components-smoke-test`.** Per §9 Session 1 plan. Initial draft used `/__components-smoke-test` (leading `__`); Next.js App Router treats folders prefixed with `_` as private (opt-out of routing), so the route didn't register. Renamed to `/components-smoke-test` (no leading underscore). Captured as INFORMATIONAL CORRECTIONS_LOG entry on App Router private-folder convention.
+
+**What did NOT change vs. §A spec:** the 9-component scope, the prop shapes (frozen-as-provisional in §A, finalized at code-time per §8), the file-layout decision deferred to build-time, and the "no W#1 retrofit" stance. Every component shipped matches the §A intent; the only material additions to the public API were `loading` + `error` on `useWorkflowContext()` (Phase 1 adds — supports the migration from W#1's existing inline pattern) and the `LOADING_PALETTE` placeholder on `<StatusBadge>` (so consuming pages can render the badge before the hook resolves without a layout flash).
+
+**Verification scoreboard:** 349/349 tests pass (was 336; +13 new — 7 status-badge palette tests + 6 reset-confirm-helper tests); tsc clean; build clean (33 routes; was 32 — added smoke-test); lint at exact baseline parity (16e/40w; zero new errors or warnings).
+
+**Files shipped:**
+- `src/lib/workflow-components/types.ts` — shared types (WorkflowStatus, UserRole, WorkflowContextValue, etc.)
+- `src/lib/workflow-components/use-workflow-context.tsx` — auth + project + role + workflow-status hook
+- `src/lib/workflow-components/status-badge.tsx` — five-state badge component
+- `src/lib/workflow-components/status-badge-palette.ts` — pure-logic palette table (testable)
+- `src/lib/workflow-components/status-badge.test.ts` — 7 tests
+- `src/lib/workflow-components/not-ready-banner.tsx` — upstream-readiness banner
+- `src/lib/workflow-components/reset-confirm-dialog.tsx` — type-the-project-name destructive confirm
+- `src/lib/workflow-components/reset-confirm-helpers.ts` — pure match logic (testable)
+- `src/lib/workflow-components/reset-confirm-dialog.test.ts` — 6 tests
+- `src/lib/workflow-components/reset-workflow-button.tsx` — admin-only reset entry point
+- `src/lib/workflow-components/workflow-topbar.tsx` — title + breadcrumb + admin slot
+- `src/lib/workflow-components/deliverables-area.tsx` — Resources + Project deliverables sub-sections
+- `src/lib/workflow-components/companion-download.tsx` — external-client companion download
+- `src/lib/workflow-components/worker-completion-button.tsx` — Phase 1 + Phase 2 button-driven completion
+- `src/lib/workflow-components/index.ts` — barrel export
+- `src/app/components-smoke-test/page.tsx` — smoke-test page rendering all 9 components with fake props
+
+**Next session:** when W#2 returns to its branch for the PLOS-side build, Appendix A's W#2 PLOS-side build template applies — W#2's page composes the library components + W#2's own custom `<CompetitionScrapingViewer />` content component. The smoke-test page at `/components-smoke-test` is the visual reference; W#2's real page replaces it as the authoritative composition example after W#2 ships.
 
 ---
 
