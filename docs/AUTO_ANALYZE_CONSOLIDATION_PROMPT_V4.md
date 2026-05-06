@@ -8,13 +8,15 @@
 - The regular per-batch run analyzes a fixed batch of new keywords against the canvas, where the canvas is shown to the model in three compressed tiers (Tier 0 / 1 / 2) per `INPUT_CONTEXT_SCALING_DESIGN.md`.
 - The consolidation pass receives no batch keywords. Its input is the full canvas at Tier 0 — every topic in full detail. Its job is to scan the whole canvas for structural improvements that the per-batch tier-mode runs may have missed because some topics were compressed away.
 
-**Vocabulary restriction (Cluster 4 Q14 lock):** the consolidation pass MUST NOT emit `ADD_TOPIC` or `ADD_KEYWORD`. The applier rejects either of these operations atomically when consolidation mode is set (`src/lib/operation-applier.ts` `applyOperations(state, ops, { consolidationMode: true })`). Defense in depth — the prompt forbids them, and the applier enforces the same rule. Allowed operations: `MERGE_TOPICS`, `SPLIT_TOPIC`, `MOVE_TOPIC`, `DELETE_TOPIC`, `UPDATE_TOPIC_TITLE`, `UPDATE_TOPIC_DESCRIPTION`, `MOVE_KEYWORD`, `REMOVE_KEYWORD`, `ARCHIVE_KEYWORD`, `ADD_SISTER_LINK`, `REMOVE_SISTER_LINK`.
+**Vocabulary restriction (Cluster 4 Q14 lock + 2026-05-05 sister-link drift cleanup — Option A):** the consolidation pass MUST NOT emit `ADD_TOPIC`, `ADD_KEYWORD`, `ADD_SISTER_LINK`, or `REMOVE_SISTER_LINK`. The applier rejects any of these four operations atomically when consolidation mode is set (`src/lib/operation-applier.ts` `applyOperations(state, ops, { consolidationMode: true })`). The two ADD ops are forbidden because consolidation only restructures existing topics; the two sister-link ops are forbidden because sister links are deferred out of every Auto-Analyze pass entirely — they belong to a separate second-pass functionality run after first-pass Auto-Analyze is correctly producing topics (director's standing plan; surfaced 2026-05-05 mid-D3 after consolidation #1 emitted 3 sister-link ops despite the broader plan). Allowed operations the model knows about: `MERGE_TOPICS`, `SPLIT_TOPIC`, `MOVE_TOPIC`, `DELETE_TOPIC`, `UPDATE_TOPIC_TITLE`, `UPDATE_TOPIC_DESCRIPTION`, `MOVE_KEYWORD`, `REMOVE_KEYWORD`, `ARCHIVE_KEYWORD`.
 
-**Predecessor file:** `docs/AUTO_ANALYZE_PROMPT_V4.md` — V4 of the regular per-batch prompts (canonical since 2026-04-30 Scale Session D). The Consolidation prompts borrow V4's topic-naming + intent-equivalence + stability-score + conversion-funnel-ordering language verbatim; only the framing (consolidation vs. per-batch keyword placement), the input-format section (always Tier 0, no batch keywords), and the operation-vocabulary section (no ADD_TOPIC / ADD_KEYWORD) differ.
+**Option A approach (the model never sees sister links):** the consolidation prompts (sections 1 + 2 below) and the consolidation TSV input have been deliberately stripped of all references to sister-link operations and the Sister Nodes column. The model literally cannot see existing sister links on the canvas; the operation vocabulary it knows excludes the sister-link ops; existing sister links remain as data on the canvas but are managed only by the future second-pass functionality. The applier-side rejection of `ADD_SISTER_LINK` + `REMOVE_SISTER_LINK` in consolidation mode stays as a silent backstop in case the model invents the ops from prior training. (The earlier "explicit deferral framing" approach — telling the model what's forbidden and why — was rejected mid-session: it imposed cognitive load and risked priming the model to think about what it's been told not to think about. See `docs/CORRECTIONS_LOG.md` 2026-05-05 entry on the mid-session pivot from explicit-forbiddance to invisibility.)
 
-**Canonical operation vocabulary:** `src/lib/operation-applier.ts` `Operation` discriminated union, minus the two consolidation-forbidden types.
+**Predecessor file:** `docs/AUTO_ANALYZE_PROMPT_V4.md` — V4 of the regular per-batch prompts (canonical since 2026-04-30 Scale Session D). The Consolidation prompts borrow V4's topic-naming + intent-equivalence + stability-score + conversion-funnel-ordering language verbatim; only the framing (consolidation vs. per-batch keyword placement), the input-format section (always Tier 0, no batch keywords, no Sister Nodes column), and the operation-vocabulary section (no ADD_TOPIC / ADD_KEYWORD / sister-link ops) differ.
 
-**Canonical input format:** `src/lib/auto-analyze-v3.ts` `buildOperationsInputTsv(... { serializationMode: 'full' })`. Consolidation always uses `'full'` — no tier compression — because §4.1's purpose is to give the model every topic at full detail so the Reevaluation Pass triggers can fire on parts of the canvas that the per-batch runs have only seen at Tier 1 or Tier 2.
+**Canonical operation vocabulary:** `src/lib/operation-applier.ts` `Operation` discriminated union, minus the four consolidation-forbidden types (ADD_TOPIC, ADD_KEYWORD, ADD_SISTER_LINK, REMOVE_SISTER_LINK).
+
+**Canonical input format:** `src/lib/auto-analyze-v3.ts` `buildOperationsInputTsv(... { serializationMode: 'full', omitSisterNodesColumn: true })`. Consolidation always uses `'full'` (no tier compression — §4.1's purpose is to give the model every topic at full detail so the Reevaluation Pass triggers can fire on parts of the canvas that the per-batch runs have only seen at Tier 1 or Tier 2) AND `omitSisterNodesColumn: true` (Option A — the model's input has 8 columns, not 9; the Sister Nodes column is dropped so existing sister links are invisible to the consolidation model).
 
 ---
 
@@ -54,7 +56,7 @@ If the operation vocabulary in `src/lib/operation-applier.ts` changes, update bo
 ```
 Context: We are brand owners and manufacturers of products that are perfectly suited for specific health niches. Our main aim is to use keyword data to develop and market these products perfectly matched to the niche and to have CTRs for google ads and ebay listings, amazon listings, Walmart.com listings, etsy listings and google shopping listings that far surpass industry standards and far surpasses averages for competitors within that specific niche. We do this by using the keyword data to first understand the consumer's and the caretaker's demand on such a granular level that our product development, its narratives, our content, our marketing and our post sales support cater directly to those needs, worries/concerns of those people in a way that they find highly intriguing, highly engaging and highly compelling so that they quickly engage with us because our product and our content is hyper-relevant to their immediate needs/concerns/goals and deeply engaging, sticky and emotionally provocative, builds momentum towards a planned narrative that inevitably leads them to convert into highly eager buyers that are convinced our product is unique, better than anything else in the market for that niche and sure to resolve not only their problem but also their concerns which have been built up to a feverish pitch through our planned narratives.
 
-We have already analyzed many batches of keywords against this canvas and built it up over time. The canvas now holds the structured representation of our conversion funnel — every topic, every keyword placement, every parent-child relationship, every sister-link.
+We have already analyzed many batches of keywords against this canvas and built it up over time. The canvas now holds the structured representation of our conversion funnel — every topic, every keyword placement, every parent-child relationship.
 
 This call is a CONSOLIDATION PASS — not a per-batch keyword-placement run.
 
@@ -68,7 +70,7 @@ Your job in this consolidation pass:
 
 (1) Scan the ENTIRE canvas — every topic, every branch — looking for the seven types of structural improvement enumerated in the Consolidation Reevaluation Pass section below. The triggers and thresholds are the same ones used in regular per-batch Reevaluation, but they apply to the whole canvas this pass — not just to recently-touched branches.
 
-(2) Emit operations RESTRICTED TO the consolidation vocabulary: MERGE_TOPICS, SPLIT_TOPIC, MOVE_TOPIC, DELETE_TOPIC, UPDATE_TOPIC_TITLE, UPDATE_TOPIC_DESCRIPTION, MOVE_KEYWORD, REMOVE_KEYWORD, ARCHIVE_KEYWORD, ADD_SISTER_LINK, REMOVE_SISTER_LINK. ADD_TOPIC and ADD_KEYWORD are FORBIDDEN — emitting either fails the entire batch atomically.
+(2) Emit operations RESTRICTED TO the consolidation vocabulary: MERGE_TOPICS, SPLIT_TOPIC, MOVE_TOPIC, DELETE_TOPIC, UPDATE_TOPIC_TITLE, UPDATE_TOPIC_DESCRIPTION, MOVE_KEYWORD, REMOVE_KEYWORD, ARCHIVE_KEYWORD. ADD_TOPIC and ADD_KEYWORD are FORBIDDEN — emitting either fails the entire batch atomically.
 
 (3) Use SPLIT_TOPIC to introduce new topics when an existing topic violates intent-equivalence. SPLIT_TOPIC creates new topics via its `into[]` array and is fully allowed — it is not the same as ADD_TOPIC. The constraint is: do not introduce new topics OR new keywords that don't have a structural justification rooted in restructuring an existing topic or keyword placement.
 
@@ -117,7 +119,7 @@ Each topic carries a stability_score from 0.0 to 10.0 in the Stability Score col
 
 - Score not provided or 0.0 — Treat as fully open. This is the default for newly-created topics.
 
-JUSTIFY_RESTRUCTURE applies to: UPDATE_TOPIC_TITLE, MOVE_TOPIC, MERGE_TOPICS (when EITHER source or target is at threshold), SPLIT_TOPIC, DELETE_TOPIC. It does NOT apply to UPDATE_TOPIC_DESCRIPTION (descriptive-only edits are safe even on stable topics) or to the keyword-placement operations (MOVE_KEYWORD, REMOVE_KEYWORD, ARCHIVE_KEYWORD, ADD_SISTER_LINK, REMOVE_SISTER_LINK).
+JUSTIFY_RESTRUCTURE applies to: UPDATE_TOPIC_TITLE, MOVE_TOPIC, MERGE_TOPICS (when EITHER source or target is at threshold), SPLIT_TOPIC, DELETE_TOPIC. It does NOT apply to UPDATE_TOPIC_DESCRIPTION (descriptive-only edits are safe even on stable topics) or to the keyword-placement operations (MOVE_KEYWORD, REMOVE_KEYWORD, ARCHIVE_KEYWORD).
 
 In a consolidation pass, the high-stability gate is especially important — many topics on a mature canvas have stability scores at or near the threshold. Be specific in justifications; cite which intent-equivalence violation, which structural pattern, or which evidence from the canvas warrants modifying a well-validated topic. Generic justifications ("better fit," "cleaner structure") are NOT acceptable.
 
@@ -159,7 +161,7 @@ Scan the entire canvas for the seven types of structural improvement listed belo
 
 (4) Topic Merging → MERGE_TOPICS operation.
    Signal: two existing topics at the same level have converged in intent. Their descriptions substantially overlap; their keywords would be equally well-served by either topic; maintaining both creates fragmentation without narrative distinction.
-   Action: MERGE_TOPICS. Specify source and target stable IDs, the merged title and description, the merged_intent_fingerprint, and a reason. The applier auto-reparents source's children under target and rewrites source's sister links to target — you do NOT need to emit separate MOVE_TOPIC or sister-link operations for them.
+   Action: MERGE_TOPICS. Specify source and target stable IDs, the merged title and description, the merged_intent_fingerprint, and a reason. The applier auto-reparents source's children under target — you do NOT need to emit separate MOVE_TOPIC operations for them.
 
 (5) Hierarchy Repositioning → MOVE_TOPIC operation.
    Signal: an existing topic's parent-child placement is suboptimal — wrong parent, wrong depth, or wrong branch given the broader pattern visible across the canvas.
@@ -170,7 +172,7 @@ Scan the entire canvas for the seven types of structural improvement listed belo
    Action: MOVE_TOPIC with the same parent but a different relationship value. UPDATE_TOPIC_DESCRIPTION may be paired if the description should reflect the corrected role.
 
 (7) Empty / Stale / Redundant Topic Cleanup → DELETE_TOPIC operation.
-   Signal: a topic has no primary keyword placements, no narrative scaffolding role, no incoming or outgoing sister links that would justify keeping it; OR a topic has been entirely subsumed by a sibling that captures all of its intent better; OR a topic was created speculatively in an earlier batch and never accumulated keywords.
+   Signal: a topic has no primary keyword placements and no narrative scaffolding role that would justify keeping it; OR a topic has been entirely subsumed by a sibling that captures all of its intent better; OR a topic was created speculatively in an earlier batch and never accumulated keywords.
    Action: DELETE_TOPIC with reassign_keywords_to set to either another topic ref (if any keywords remain — typically secondary placements) OR the literal string "ARCHIVE" (which archives keywords whose only placement was at this topic). Constraint: the topic MUST have NO child topics — MOVE_TOPIC the children FIRST.
 
 Consolidation Reevaluation Constraints:
@@ -193,7 +195,7 @@ AUTOMATED PROCESSING CONTEXT:
 This consolidation pass is executed via an automated API pipeline. Your output will be parsed programmatically — not read in a chat interface. Therefore:
 - Do NOT produce interactive artifacts, HTML tables, visual mindmaps, or downloadable files.
 - Do NOT include markdown code fences around your output.
-- Do NOT re-emit the Topics Layout Table or any topic, description, keyword placement, or sister link whose state is unchanged. Emit operations only for changes.
+- Do NOT re-emit the Topics Layout Table or any topic, description, or keyword placement whose state is unchanged. Emit operations only for changes.
 - Do NOT emit any text outside the OPERATIONS block. No commentary, no Reevaluation Report, no "here's what I did." The reason field on each structural operation is the audit record.
 - Focus on the analytical quality of your placement decisions, the precision of the operations you emit, and your justifications on structural operations.
 - Your output MUST contain exactly one delimited block: `=== OPERATIONS ===` ... `=== END OPERATIONS ===`. Each line inside the block is one JSON-formatted operation. The exact operation syntax is in the Topics Layout Table Primer (Consolidation).
@@ -219,7 +221,7 @@ Our methodology centers on organizing keyword intents into Topics (representing 
 
 WHAT THE TOPICS LAYOUT TABLE IS
 
-The Topics Layout Table is the structured representation of our conversion funnel. Each row is a topic node; the combination of Stable ID, Parent Stable ID, and Relationship places that node in the hierarchy. Each topic carries a stability score reflecting how well-validated it is, plus its keyword placements and any sister-link relationships to peer topics in other branches.
+The Topics Layout Table is the structured representation of our conversion funnel. Each row is a topic node; the combination of Stable ID, Parent Stable ID, and Relationship places that node in the hierarchy. Each topic carries a stability score reflecting how well-validated it is, plus its keyword placements.
 
 YOU RECEIVE THE TABLE AS TSV INPUT. The tool serializes the current state of the canvas as tab-separated values and includes it in your prompt context. **You DO NOT re-emit this table on output.** Your job is to emit a list of consolidation operations against the table, using the restricted vocabulary defined further below.
 
@@ -228,12 +230,12 @@ Anything you do not mention in your operation list stays exactly where it was. S
 
 INPUT TABLE FORMAT — CONSOLIDATION PASS (full Tier 0 only)
 
-In a consolidation pass, the entire canvas is shown to you in a single Tier 0 section — every topic at full 9-column detail. There are no Tier 1 or Tier 2 sections. There is no batch of new keywords to place. The purpose of consolidation is to scan the whole canvas at full detail for structural improvements that the per-batch tier-mode runs may have missed because some topics were compressed away.
+In a consolidation pass, the entire canvas is shown to you in a single Tier 0 section — every topic at full 8-column detail. There are no Tier 1 or Tier 2 sections. There is no batch of new keywords to place. The purpose of consolidation is to scan the whole canvas at full detail for structural improvements that the per-batch tier-mode runs may have missed because some topics were compressed away.
 
 The TSV input begins with a `=== TIER 0 ===` delimiter line on its own line, then the column header row, then data rows — one per topic on the canvas, sorted by Stable ID numeric suffix (roughly creation order). On a fresh project with no topics, you would see only the column header row with no data rows (and no consolidation operations would be warranted — emit the empty OPERATIONS block).
 
 
-TIER 0 COLUMNS (full detail — 9 columns, tab-separated, in this exact order, header row first)
+TIER 0 COLUMNS (full detail — 8 columns, tab-separated, in this exact order, header row first)
 
 Stable ID — A persistent identifier for each topic, formatted "t-N" (e.g., "t-42"). This is the handle you use to reference topics in your operations. Stable IDs survive renames, parent changes, the surviving target of a merge, and any other modification. They are the only reliable way to address a topic in this system.
 
@@ -249,8 +251,6 @@ Conversion Path — The name of the conversion funnel this topic belongs to (typ
 
 Stability Score — A float from 0.0 to 10.0 reflecting how well-validated this topic is, based on admin approvals, cross-batch consistency, keyword-placement stability, and related signals. See the Initial Prompt's Stability Score Interpretation section.
 
-Sister Nodes — Comma-separated list of Stable IDs of topics that are sister-linked to this one (e.g., "t-19, t-23"). Empty if no sister links. Sister links are non-hierarchical sideways connections.
-
 Keywords — Comma-separated list of keyword placements at this topic. Each item is formatted "<keyword_uuid>|<keyword_text> [<placement_marker>]" where placement_marker is "p" (primary) or "s" (secondary). Example: `5e8c-f9-abc|female hip pain symptoms [p], 9d2f-cd-xyz|women joint pain hip [s]`. The keyword_uuid is the only field you reference in operations; the keyword_text is provided for your analytical reasoning and human readability.
 
 
@@ -261,7 +261,7 @@ The TSV input is generated deterministically by the tool. You read it; you do no
 - Stable IDs always begin with "t-".
 - Newly-created stable IDs (in your SPLIT_TOPIC operations) use aliases starting with "$" (e.g., "$new1") — these never appear in input.
 - Keywords are referenced in operations exclusively by their UUID, never by their text. Whitespace, smart quotes, case, and unicode in keyword text all create silent text-matching failures; UUIDs do not.
-- Empty cells (e.g., empty Sister Nodes) appear as a single empty string between tab delimiters.
+- Empty cells (e.g., empty Parent Stable ID for root topics) appear as a single empty string between tab delimiters.
 - The order of topics is by Stable ID numeric suffix (roughly creation order). The arrangement does NOT correspond to conversion-funnel order — topics may belong to many different funnels. Use Parent Stable ID + each topic's title and description to reason about funnel placement.
 
 
@@ -325,10 +325,9 @@ Constraint: the new parent cannot be the topic itself or any descendant of the t
 
 MERGE_TOPICS — Combine two topics into one. The applier:
   - re-parents source's children under target,
-  - rewrites source's sister links to point to target (deduplicating self-links and duplicates),
   - merges keyword placements with target winning on collision,
   - removes source.
-Do NOT emit separate MOVE_TOPIC or sister-link operations for these — they happen automatically as part of the merge.
+Do NOT emit separate MOVE_TOPIC operations for these — they happen automatically as part of the merge.
 Fields:
   - op: "MERGE_TOPICS"
   - source_id: Stable ID of the topic being absorbed
@@ -351,7 +350,6 @@ Constraints:
   - The source topic MUST have NO child topics. If it has children, MOVE_TOPIC them to a new parent FIRST (earlier in this batch's operation list).
   - Every keyword currently at the source must be assigned to exactly one of the new topics (via keyword_ids on each "into" entry). Every UUID listed must currently be at the source. No keyword may appear in more than one "into" entry.
   - Each new topic inherits the source's parent and relationship.
-  - Sister links pointing to or from the source topic are DROPPED (not transferred to the new topics — there is no canonical mapping for which new topic inherits each link). If you want the new topics to be sister-linked to peers from the source's old links, emit ADD_SISTER_LINK operations explicitly later in the same batch.
 
 DELETE_TOPIC — Remove a topic.
 Fields:
@@ -364,7 +362,6 @@ Fields:
   - justify_restructure: required if topic's stability_score >= 7.0
 Constraints:
   - The topic MUST have NO child topics. If it has children, MOVE_TOPIC them to a new parent FIRST (earlier in this batch's operation list).
-  - Sister links touching the deleted topic are removed automatically (the topic no longer exists, so there is nothing to link to). No follow-up REMOVE_SISTER_LINK is needed.
 
 
 KEYWORD OPERATIONS (allowed in consolidation mode)
@@ -392,22 +389,6 @@ Fields:
   - reason: plain-English explanation of why the keyword is irrelevant (non-empty; e.g., "homograph: 'bursa' references the Turkish city, not bursitis")
 
 
-SISTER-LINK OPERATIONS (allowed in consolidation mode)
-
-ADD_SISTER_LINK — Create a sideways link between two topics.
-Fields:
-  - op: "ADD_SISTER_LINK"
-  - topic_a: Stable ID
-  - topic_b: Stable ID (must differ from topic_a)
-Constraint: the link must not already exist (in either direction — sister links are bidirectional and the applier deduplicates on canonicalized order).
-
-REMOVE_SISTER_LINK — Remove an existing sister link.
-Fields:
-  - op: "REMOVE_SISTER_LINK"
-  - topic_a: Stable ID
-  - topic_b: Stable ID
-
-
 CROSS-CUTTING RULES
 
 ATOMIC BATCH APPLY. Your operation list is applied as ONE atomic unit. If any single operation fails validation (an invalid reference, a missing required field, a constraint violation, a JUSTIFY_RESTRUCTURE missing on a high-stability target, an ADD_TOPIC or ADD_KEYWORD that violates the consolidation-mode restriction, etc.), the entire batch is rejected and the canvas stays in its pre-batch state. There is no partial-apply mode.
@@ -418,11 +399,11 @@ NEW-TOPIC ALIASES INSIDE SPLIT_TOPIC ($new1, $new2, ...). When SPLIT_TOPIC creat
 
 KEYWORDS BY UUID, NOT TEXT. Every operation that references a keyword uses the keyword's UUID (from the input's Keywords column, the part before the "|"). Whitespace, smart quotes, case, and unicode in keyword text create silent text-matching failures; UUIDs do not.
 
-REASONS ON STRUCTURAL OPERATIONS. MOVE_TOPIC, MERGE_TOPICS, SPLIT_TOPIC, DELETE_TOPIC, and ARCHIVE_KEYWORD all require a non-empty plain-English reason field. The reason is the audit-log entry — admin reviews these during human-in-loop review. UPDATE_TOPIC_TITLE, UPDATE_TOPIC_DESCRIPTION, MOVE_KEYWORD, REMOVE_KEYWORD, ADD_SISTER_LINK, REMOVE_SISTER_LINK do NOT require a reason (they are descriptive only).
+REASONS ON STRUCTURAL OPERATIONS. MOVE_TOPIC, MERGE_TOPICS, SPLIT_TOPIC, DELETE_TOPIC, and ARCHIVE_KEYWORD all require a non-empty plain-English reason field. The reason is the audit-log entry — admin reviews these during human-in-loop review. UPDATE_TOPIC_TITLE, UPDATE_TOPIC_DESCRIPTION, MOVE_KEYWORD, and REMOVE_KEYWORD do NOT require a reason (they are descriptive only).
 
 INTENT FINGERPRINT — REQUIRED on UPDATE_TOPIC_TITLE, MERGE_TOPICS (as `merged_intent_fingerprint`), and on each SPLIT_TOPIC `into[]` entry. OPTIONAL on UPDATE_TOPIC_DESCRIPTION (omit unless the description rewrite has shifted compound intent). Format: short canonical phrase, 5–15 words, in searcher-centric language, capturing the topic's compound intent — audience + situation + goal. Same voice as a good searcher-centric title. Example: "Older bursitis sufferers seeking gentle, low-cost home relief." The fingerprint is the load-bearing field for cross-canvas intent-equivalence detection when the topic later gets compressed to Tier 1 in a per-batch run.
 
-JUSTIFY_RESTRUCTURE — required when an operation targets a topic with stability_score >= 7.0. Applies to: UPDATE_TOPIC_TITLE, MOVE_TOPIC, MERGE_TOPICS (when EITHER source or target is at threshold), SPLIT_TOPIC, DELETE_TOPIC. Does NOT apply to: UPDATE_TOPIC_DESCRIPTION, MOVE_KEYWORD, REMOVE_KEYWORD, ARCHIVE_KEYWORD, ADD_SISTER_LINK, REMOVE_SISTER_LINK.
+JUSTIFY_RESTRUCTURE — required when an operation targets a topic with stability_score >= 7.0. Applies to: UPDATE_TOPIC_TITLE, MOVE_TOPIC, MERGE_TOPICS (when EITHER source or target is at threshold), SPLIT_TOPIC, DELETE_TOPIC. Does NOT apply to: UPDATE_TOPIC_DESCRIPTION, MOVE_KEYWORD, REMOVE_KEYWORD, ARCHIVE_KEYWORD.
 
 When the gate fires, the operation includes a "justify_restructure" object with these six fields:
 
@@ -450,23 +431,21 @@ GENERAL CONSTRAINTS
 
 4. DELETE_TOPIC and SPLIT_TOPIC require the source topic to have NO child topics. If the topic has children, MOVE_TOPIC them to a new parent FIRST (earlier in your operation list).
 
-5. MERGE_TOPICS automatically re-parents source's children under target and rewrites source's sister links to target. Do NOT emit separate MOVE_TOPIC or sister-link operations for these.
+5. MERGE_TOPICS automatically re-parents source's children under target. Do NOT emit separate MOVE_TOPIC operations for these.
 
-6. Sister links are bidirectional and stored once (not twice). Emit ADD_SISTER_LINK once for any new sister relationship (in either field-order; the applier canonicalizes).
+6. Empty topics are valid (and may be deliberate narrative scaffolding). Do not delete an empty topic just because it has no keywords — assess whether it serves a structural / narrative-bridging role first.
 
-7. Empty topics are valid (and may be deliberate narrative scaffolding). Do not delete an empty topic just because it has no keywords — assess whether it serves a structural / narrative-bridging role first.
+7. Topic titles must use searcher-centric language — phrased as the condition sufferer would naturally think, ask, or respond to.
 
-8. Topic titles must use searcher-centric language — phrased as the condition sufferer would naturally think, ask, or respond to.
+8. Stable IDs are emitted verbatim. If you reference t-42, type "t-42" exactly — no extra whitespace, no quotation, no aliases.
 
-9. Stable IDs are emitted verbatim. If you reference t-42, type "t-42" exactly — no extra whitespace, no quotation, no aliases.
+9. Stability scores are read-only metadata. Do not emit operations that change a stability score directly; the tool computes scores from operations and admin's review actions.
 
-10. Stability scores are read-only metadata. Do not emit operations that change a stability score directly; the tool computes scores from operations and admin's review actions.
+10. Conversion Path is read-only. The applier preserves a topic's Conversion Path. If you believe a topic genuinely belongs in a different funnel, note it in your operation's reason field for admin review; do not silently change it.
 
-11. Conversion Path is read-only. The applier preserves a topic's Conversion Path. If you believe a topic genuinely belongs in a different funnel, note it in your operation's reason field for admin review; do not silently change it.
+11. Parent-cycles are forbidden. MOVE_TOPIC's new_parent cannot be a descendant of the moved topic. Walk the new parent's parent chain mentally before emitting; if it reaches the moved topic, the move is illegal.
 
-12. Parent-cycles are forbidden. MOVE_TOPIC's new_parent cannot be a descendant of the moved topic. Walk the new parent's parent chain mentally before emitting; if it reaches the moved topic, the move is illegal.
-
-13. ADD_TOPIC and ADD_KEYWORD are FORBIDDEN. Emitting either fails the entire batch atomically with the error `<OPERATION> is not allowed in consolidation mode`. Use SPLIT_TOPIC for restructuring-driven topic introduction; consolidation does not introduce new keyword placements.
+12. ADD_TOPIC and ADD_KEYWORD are FORBIDDEN. Emitting either fails the entire batch atomically with the error `<OPERATION> is not allowed in consolidation mode`. Use SPLIT_TOPIC for restructuring-driven topic introduction; consolidation does not introduce new keyword placements.
 
 
 OUTPUT RECAP

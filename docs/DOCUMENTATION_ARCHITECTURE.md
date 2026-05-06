@@ -347,7 +347,7 @@ The full list of questions is maintained in `HANDOFF_PROTOCOL.md` Rule 18. Summa
 - Reset rules
 - Data persistence model
 - Edge cases and quality bar
-- Fit with Shared Workflow-Tool Scaffold
+- Fit with the Shared Workflow Components Library (which shared components the workflow imports + which custom React content component it authors)
 
 ### 14.2 Interview deliverable: `<WORKFLOW_NAME>_DESIGN.md`
 
@@ -364,11 +364,13 @@ The final step of every interview is a platform-truths audit. If any answer reve
 
 The doc-system already caught workflow-specific reveals well (through `DATA_CATALOG.md` updates and the Living Questions protocol). It did NOT catch platform-level reveals — those lived in the user's head because no doc was responsible for capturing them. The combination of `PLATFORM_REQUIREMENTS.md` + the Platform-Truths Audit fills that gap.
 
-### 14.5 Relationship to the Shared Workflow-Tool Scaffold
+### 14.5 Relationship to the Shared Workflow Components Library
 
-The Scaffold (per `PLATFORM_REQUIREMENTS.md §12`) is built **once**, before workflow #2 begins. Its design is itself the product of a scaffold-specific interview, captured in `SHARED_SCAFFOLD_DESIGN.md` (Group A or B — TBD at scaffold design time).
+**Reframed 2026-05-04** in `session_2026-05-04_workflow-tool-scaffold-design`. The earlier "Shared Workflow-Tool Scaffold" required-shell concept was retired in favor of a bottom-up library of reusable React components and hooks. There is no required shell. Per `PLATFORM_REQUIREMENTS.md §12` (REWRITTEN 2026-05-04) + `HANDOFF_PROTOCOL.md` Rule 20 (REFRAMED 2026-05-04) + project memory `project_scaffold_pivot_to_components_library.md`.
 
-Each subsequent workflow's Design Doc answers: "How does this workflow plug into the Scaffold?" Workflows that require special-case architecture (like Keyword Clustering's dual-state canvas) explicitly document which scaffold features are waived and why.
+The Components Library design lives in `docs/WORKFLOW_COMPONENTS_LIBRARY_DESIGN.md` (Group B — platform infrastructure). It captures 9 components (`useWorkflowContext()`, `<WorkflowTopbar>`, `<StatusBadge>`, `<DeliverablesArea>`, `<CompanionDownload>`, `<ResetWorkflowButton>` + `<ResetConfirmDialog>`, `<NotReadyBanner>`, `<WorkerCompletionButton>`, `<AdminReviewControls>`, `useEmitAuditEvent()`) plus the workflow-declaration contract.
+
+Each subsequent workflow's Design Doc answers: "Which shared components does this workflow import, and what custom React content component does it author for its own UI?" There is no waiver concept — workflows like Keyword Clustering that have a unique UI (dual-state canvas) simply don't import the components they don't need; W#1 may adopt components piecemeal when convenient (e.g., `<ResetConfirmDialog>` once W#1 reset is built per `PLATFORM_REQUIREMENTS.md §7.5`'s roadmap gap).
 
 ---
 

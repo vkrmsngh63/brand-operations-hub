@@ -128,32 +128,69 @@ I am the director of the PLOS (Product Launch Operating System) project. **I am 
 ## START-OF-SESSION ROUTINE (do these before asking me to confirm task)
 
 1. Confirm you've read this file and will follow every rule.
-2. Read `docs/HANDOFF_PROTOCOL.md` end-to-end (Rules 1–25).
-3. Read the 16 Group A docs (see `docs/DOCUMENT_MANIFEST.md` for the list). The list includes `docs/MULTI_WORKFLOW_PROTOCOL.md` — read it if today's task references any workflow with N ≥ 2 OR if the "Current Active Tools" table in `ROADMAP.md` shows more than one workflow in flight.
-4. Read any Group B docs relevant to today's expected work.
-5. Run `git log --oneline -10` and `git status` to understand current repo state. If `MULTI_WORKFLOW_PROTOCOL.md` applies (per step 3), also run `git pull --rebase origin <branch>` to catch anything the parallel chat just pushed (per HANDOFF_PROTOCOL Rule 25).
-6. Produce a drift check: "Here's where we are. Here's what looks off, if anything. Here's what I understand today's task to be. Ready to proceed?" If multi-workflow mode applies, note any active sister-workflows (their branches, their schema-change-in-flight flag) in the drift check.
-7. Wait for my explicit go-ahead before executing.
+
+2. **Branch verification (NON-NEGOTIABLE — do this BEFORE the heavy doc reads in step 4 below).** Run `git branch --show-current` + `git status`. Compare the current branch against the task's required branch per the table below. If they don't match, **STOP** — surface the mismatch to the director immediately with the exact terminal commands to switch (do NOT continue doc reads on the wrong branch; the doc state on the wrong branch may be stale relative to the task, and any in-progress edits you start will land on the wrong branch). The director may have switched branches before launching you, but verify.
+
+   | Session task type | Required branch |
+   |---|---|
+   | Work on W#1 (Keyword Clustering) | `main` |
+   | Work on W#k for k ≥ 2 (specific named workflow) | `workflow-N-<slug>` (e.g., W#2 → `workflow-2-competition-scraping`) |
+   | Cross-workflow / platform-wide infrastructure (e.g., components library; platform refactors) | `main` |
+
+   The full canonical "How to start a session for any workflow" procedure lives in `docs/MULTI_WORKFLOW_PROTOCOL.md` §11. This branch-check rule was added 2026-05-04 after a session started on the W#2 branch when the task required `main` — the friction surfaced after several minutes of doc reads. Project memory `project_sequential_workflow_operation.md` carries the operational context: director works workflows sequentially in one Codespace; branch state persists across sessions.
+
+3. Read `docs/HANDOFF_PROTOCOL.md` end-to-end (Rules 1–26).
+
+4. Read the 16 Group A docs (see `docs/DOCUMENT_MANIFEST.md` for the list). The list includes `docs/MULTI_WORKFLOW_PROTOCOL.md` — read it if today's task references any workflow with N ≥ 2 OR if the "Current Active Tools" table in `ROADMAP.md` shows more than one workflow in flight.
+
+5. Read any Group B docs relevant to today's expected work.
+
+6. Run `git log --oneline -10` and `git status` to understand current repo state. Run `git pull --rebase origin <current-branch>` to catch anything pushed since this branch's last activity (per HANDOFF_PROTOCOL Rule 25).
+
+7. Produce a drift check: "Here's where we are. Here's what looks off, if anything. Here's what I understand today's task to be. Ready to proceed?" If multi-workflow state is in play, note any in-flight workflows (their branches, their schema-change-in-flight flag) in the drift check.
+
+8. Wait for my explicit go-ahead before executing.
 
 ---
 
-## HOW TO START A NEW CLAUDE CODE SESSION (terminal command + paste-message)
+## HOW TO START A NEW CLAUDE CODE SESSION (terminal commands + paste-message)
 
-**Two steps:**
+**Three steps — Step 1 is non-negotiable for any session that's not a same-workflow continuation.**
 
-**Step 1 — In a Codespaces terminal, run this command to launch Claude Code at the repo root:**
+**Step 1 — In a Codespaces terminal, switch to the right branch for the next session's task and pull the latest.**
+
+The branch depends on what you're working on:
+
+| Session task type | Branch | Step-1 command |
+|---|---|---|
+| Work on W#1 (Keyword Clustering) | `main` | `cd /workspaces/brand-operations-hub && git fetch origin && git checkout main && git pull --rebase origin main` |
+| Work on W#k for k ≥ 2 (specific workflow — replace `workflow-N-<slug>` with the workflow's branch name; for W#2 it's `workflow-2-competition-scraping`) | `workflow-N-<slug>` | `cd /workspaces/brand-operations-hub && git fetch origin && git checkout workflow-N-<slug> && git pull --rebase origin workflow-N-<slug>` |
+| Cross-workflow / platform-wide infrastructure (e.g., components library; platform refactors) | `main` | `cd /workspaces/brand-operations-hub && git fetch origin && git checkout main && git pull --rebase origin main` |
+| FIRST session for a never-before-started workflow | (created in this step from `main`) | `cd /workspaces/brand-operations-hub && git fetch origin && git checkout main && git pull --rebase origin main && git checkout -b workflow-N-<slug>` |
+
+**Why Step 1 matters.** You work workflows sequentially in one Codespace. The branch from your last session is still checked out when you come back. If your last session was W#2 but today's task is W#1 or platform-wide, you'd start on the W#2 branch — and Claude would have to flag the mismatch after several minutes of doc reads. Step 1 prevents that. Captured 2026-05-04 in project memory `project_sequential_workflow_operation.md`.
+
+The full canonical "How to start a session for any workflow" lives in `docs/MULTI_WORKFLOW_PROTOCOL.md` §11.
+
+**Step 2 — Launch Claude Code:**
 
 ```
-cd /workspaces/brand-operations-hub && claude
+claude
 ```
 
-This moves to the repo folder first (important — Claude Code operates in whatever folder you launch it from) and then starts an interactive Claude Code session.
+This starts an interactive Claude Code session in whatever folder you're in (the `cd` in Step 1 made sure that's the repo root).
 
-**Step 2 — As your very first message inside Claude Code, paste this (edit the task description for what you're actually doing):**
+**Step 3 — As your very first message inside Claude Code, paste a launch prompt naming the specific task:**
 
-"Read docs/CLAUDE_CODE_STARTER.md and follow every rule in it. Today's task: [short description]. Start by running the mandatory start-of-session sequence."
+For most sessions, use the templates in `docs/MULTI_WORKFLOW_PROTOCOL.md` Appendix A (W#2), Appendix B (W#1), or §11.1 (cross-workflow / platform-wide). For a generic launch prompt:
 
-That's it. The starter file handles everything else. Claude Code will read the starter prompt, lock in the communication rules, read the handoff protocol, read the Group A docs, check git state, produce a drift-check, and wait for your go-ahead before doing any work.
+```
+Read docs/CLAUDE_CODE_STARTER.md and follow every rule in it. Today's task:
+[short description of what you want to do]. Start by running the mandatory
+start-of-session sequence.
+```
+
+That's it. The starter file handles everything else. Claude Code will read the starter prompt, run the branch verification (Step 2 of the start-of-session routine above), read the handoff protocol, read the Group A docs, check git state, produce a drift-check, and wait for your go-ahead before doing any work.
 
 ---
 

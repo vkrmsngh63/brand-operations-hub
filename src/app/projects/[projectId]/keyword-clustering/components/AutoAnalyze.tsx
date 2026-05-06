@@ -130,8 +130,8 @@ export default function AutoAnalyze({
   const [volumeThreshold, setVolumeThreshold] = useState(1000);
   const [batchSize, setBatchSize] = useState(8);
   const [processingMode, setProcessingMode] = useState<'adaptive' | 'classic'>('adaptive');
-  const [thinkingMode, setThinkingMode] = useState<'adaptive' | 'enabled' | 'disabled'>('adaptive');
-  const [thinkingBudget, setThinkingBudget] = useState(10000);
+  const [thinkingMode, setThinkingMode] = useState<'adaptive' | 'enabled' | 'disabled'>('enabled');
+  const [thinkingBudget, setThinkingBudget] = useState(12000);
   const [keywordScope, setKeywordScope] = useState<'unsorted-only' | 'non-ai-sorted' | 'all'>('unsorted-only');
   const [stallTimeout, setStallTimeout] = useState(90);
   const [reviewMode, setReviewMode] = useState(false);
@@ -1278,11 +1278,17 @@ export default function AutoAnalyze({
     // Consolidation always uses the full Tier 0 view of the canvas — that's
     // the whole point of the pass per §4.1 (Reevaluation Pass coverage on
     // topics that per-batch tier-mode runs only saw at Tier 1 / Tier 2).
+    // Sister Nodes column is omitted (2026-05-05 sister-link drift cleanup —
+    // Option A): existing sister links on the canvas are invisible to the
+    // consolidation model; sister links are deferred to a separate second-pass
+    // functionality run; the applier rejects ADD/REMOVE_SISTER_LINK in
+    // consolidation mode as a silent backstop in case the model invents them
+    // from prior training.
     const inputTsv = buildOperationsInputTsv(
       nodesRef.current,
       sisterLinksRef.current,
       keywordsRef.current,
-      { serializationMode: 'full' },
+      { serializationMode: 'full', omitSisterNodesColumn: true },
     );
     let userContent = '';
     userContent += 'CONSOLIDATION PASS — full canvas at Tier 0 (every topic at full detail).\n\n';
@@ -1295,9 +1301,8 @@ export default function AutoAnalyze({
       'Scan the entire canvas for structural improvements per the Consolidation Reevaluation Pass section. ' +
       'Emit operations restricted to the consolidation vocabulary: MERGE_TOPICS, SPLIT_TOPIC, MOVE_TOPIC, ' +
       'DELETE_TOPIC, UPDATE_TOPIC_TITLE, UPDATE_TOPIC_DESCRIPTION, MOVE_KEYWORD, REMOVE_KEYWORD, ' +
-      'ARCHIVE_KEYWORD, ADD_SISTER_LINK, REMOVE_SISTER_LINK. ADD_TOPIC and ADD_KEYWORD are FORBIDDEN — ' +
-      'emitting either fails the entire batch atomically. An empty operation list is valid output if the ' +
-      'canvas is structurally clean.\n\n';
+      'ARCHIVE_KEYWORD. ADD_TOPIC and ADD_KEYWORD are FORBIDDEN — emitting either fails the entire batch ' +
+      'atomically. An empty operation list is valid output if the canvas is structurally clean.\n\n';
     userContent += 'Emit your output as the operations block defined in the Primer.';
     return { systemText, userContent };
   }
@@ -2157,7 +2162,7 @@ export default function AutoAnalyze({
                     type="number"
                     value={thinkingBudget || ''}
                     onChange={e => setThinkingBudget(parseInt(e.target.value) || 0)}
-                    onBlur={() => { if (!thinkingBudget) setThinkingBudget(10000); }}
+                    onBlur={() => { if (!thinkingBudget) setThinkingBudget(12000); }}
                     disabled={aaState !== 'IDLE'}
                   />
                 </>

@@ -3,10 +3,12 @@
 
 **Created:** April 17, 2026
 **Created in chat:** https://claude.ai/chat/cc15409c-5000-4f4f-a5ce-a42784b5a94f
-**Last updated:** May 5, 2026 (W#2 doc-reframe — Task #8 component: §12.6 reframed from "Scaffold extension-points discovered during workflow interviews" to "Shared component patterns surfaced by workflow interviews" per the components-library architectural pivot landed on `main` 2026-05-04 in `session_2026-05-04_workflow-tool-scaffold-design`. Per-pattern body wording realigned with the components-library framing — `<DeliverablesArea>` component for pattern #1, content-area-as-workflow's-own-concern for pattern #2, `<CompanionDownload>` component for pattern #3. Cross-references to `WORKFLOW_COMPONENTS_LIBRARY_DESIGN.md §3.4 + §3.5` added. §12.1–§12.5 NOT touched on this branch — main rewrote them in the same pivot session and the rewrite will flow into this branch when main merges in. Modified on `workflow-2-competition-scraping` feature branch per MULTI_WORKFLOW_PROTOCOL Rule 3 — only the §12.6 W#2-Platform-Truths-Audit content this branch added is being touched.)
+**Last updated:** May 5, 2026 (W#2 doc-reframe — Task #8 component: §12.6 reframed from "Scaffold extension-points discovered during workflow interviews" to "Shared component patterns surfaced by workflow interviews" per the components-library architectural pivot landed on `main` 2026-05-04 in `session_2026-05-04_workflow-tool-scaffold-design`. Per-pattern body wording realigned with the components-library framing — `<DeliverablesArea>` component for pattern #1, content-area-as-workflow's-own-concern for pattern #2, `<CompanionDownload>` component for pattern #3. Cross-references to `WORKFLOW_COMPONENTS_LIBRARY_DESIGN.md §3.4 + §3.5` added. §12.1–§12.5 NOT touched on this branch at the time — main rewrote them in the same pivot session; the rewrite has now flowed into this branch via the 2026-05-06 merge of main into `workflow-2-competition-scraping`. Modified on `workflow-2-competition-scraping` feature branch per MULTI_WORKFLOW_PROTOCOL Rule 3 — only the §12.6 W#2-Platform-Truths-Audit content this branch added was touched at the time.)
 **Last updated in session:** session_2026-05-05_w2-doc-reframe (Claude Code, on `workflow-2-competition-scraping` branch)
-**Previously updated:** May 4, 2026 (W#2 Workflow Requirements Interview Platform-Truths Audit per HANDOFF_PROTOCOL Rule 19 — director-approved batch of 7 additions: §1.4 per-workflow throughput-bottleneck recognition; §2.2.1 workflow-internal sub-scopes (W#2 platform sub-scope); §6 example updated for W#2 "always ready" + new §6.6 cross-workflow data permissions per-(producing-workflow, data-item, consuming-workflow) granularity; §8.4 Project-scoped shared vocabularies; §10.1 non-web-app clients (Chrome extension as first non-web client); §10.2 image-storage scale projections; §12.6 scaffold extension-points (always-visible deliverables, custom React content components, external-client companion pattern) — note: §12.6 framing reframed in next session; this row's wording preserved for historical accuracy. All additive; no existing requirements removed or weakened. Modified on `workflow-2-competition-scraping` feature branch per MULTI_WORKFLOW_PROTOCOL Rule 3 — only W#2-relevant edits, no other workflow's owned sections touched.)
-**Last updated in session:** session_2026-05-04_w2-workflow-requirements-interview (Claude Code)
+**Previously updated:** May 4, 2026 (scaffold-to-components-library architectural pivot — `§12` rewritten in `session_2026-05-04_workflow-tool-scaffold-design`. Director-approved per §14.3. The earlier "Shared Workflow-Tool Scaffold" required-shell framing was retired in favor of a "Shared Workflow Components Library" — bottom-up toolkit of reusable React components and hooks; no required shell; no scaffold-waiver concept. See `docs/WORKFLOW_COMPONENTS_LIBRARY_DESIGN.md` for the full component-by-component design. Cross-references: project memory `project_scaffold_pivot_to_components_library.md`; `HANDOFF_PROTOCOL.md` Rule 20 reframed in same session. NOTE: this file's `§12.6` content originally lived only on the `workflow-2-competition-scraping` branch — its reframe alongside the §12.1-§12.5 rewrite here was deferred task #8 (executed 2026-05-05 on the W#2 branch).)
+**Last updated in session:** session_2026-05-04_workflow-tool-scaffold-design (Claude Code, on `main` per `MULTI_WORKFLOW_PROTOCOL.md` Rule 25 — scaffold/components-library work is platform-wide, not W#2-specific.)
+**Previously updated (on `workflow-2-competition-scraping` feature branch):** May 4, 2026 (W#2 Workflow Requirements Interview Platform-Truths Audit per HANDOFF_PROTOCOL Rule 19 — director-approved batch of 7 additions: §1.4 per-workflow throughput-bottleneck recognition; §2.2.1 workflow-internal sub-scopes (W#2 platform sub-scope); §6 example updated for W#2 "always ready" + new §6.6 cross-workflow data permissions per-(producing-workflow, data-item, consuming-workflow) granularity; §8.4 Project-scoped shared vocabularies; §10.1 non-web-app clients (Chrome extension as first non-web client); §10.2 image-storage scale projections; §12.6 scaffold extension-points (always-visible deliverables, custom React content components, external-client companion pattern) — note: §12.6 framing reframed in next W#2 session; this row's wording preserved for historical accuracy. All additive; no existing requirements removed or weakened. Modified on `workflow-2-competition-scraping` feature branch per MULTI_WORKFLOW_PROTOCOL Rule 3 — only W#2-relevant edits, no other workflow's owned sections touched.)
+**Previously updated in session:** session_2026-05-04_w2-workflow-requirements-interview (Claude Code, on `workflow-2-competition-scraping` branch)
 **Previously updated:** April 17, 2026
 
 **Purpose:** This document captures the **platform-level truths** that apply across all 14+ workflow tools — scale targets, user model, concurrency, review cycles, audit policy, infrastructure, and phasing. Every feature and workflow built on PLOS must be evaluated against these requirements.
@@ -501,41 +503,53 @@ Some work spans phases:
 
 ---
 
-## 12. The Shared Workflow-Tool Scaffold (architectural commitment)
+## 12. The Shared Workflow Components Library (architectural commitment)
+
+**Reframed 2026-05-04** in `session_2026-05-04_workflow-tool-scaffold-design`. The earlier framing — "Shared Workflow-Tool Scaffold," a top-down required shell that workflows plug into — was retired after the director's mid-session directive that most workflows #3-#14 will have entirely unique UIs once the user clicks in (per project memory `project_future_workflows_custom_ui.md`). A top-down shell forces uniformity where workflows actually differ. The replacement is bottom-up: a library of shared components and hooks that workflows import and compose freely. There is no required shell. Director-approved 2026-05-04 ("removing or softening a requirement is significant — flag explicitly and get approval" per §14.3 — this is that approval).
 
 ### 12.1 Principle
-The Keyword Clustering tool is an **outlier** in complexity — 76KB of Auto-Analyze code, a multi-mode canvas with draggable nodes/pathways/sister-links, dual-state UI, bidirectional table↔canvas sync, AI-powered delta merging, etc. It is **not a template** for the remaining 13 workflows.
+PLOS workflow tools have **shared chrome concerns** (workflow-status display, reset confirmation, file upload/download, topbar with back-to-Project navigation, Phase 2 review controls, Phase 2 audit emission) and **unique content concerns** (the actual UI inside the chrome — multi-table viewers, interactive canvases, drag-and-drop boards, structured forms, whatever each workflow needs).
 
-Most of the remaining workflows are **genuinely simpler** — closer to "structured form + file upload + review + some workflow-specific visualization" than to an interactive canvas application.
+The platform addresses the shared chrome concerns via a **Shared Workflow Components Library** — a set of reusable React components and hooks (e.g., `<StatusBadge>`, `<ResetConfirmDialog>`, `<DeliverablesArea>`, `useWorkflowContext()`) that any workflow can import. The platform does NOT address the content concerns — each workflow's content area is its own custom React component, designed specifically for that workflow's needs.
 
-### 12.2 The scaffold
-Before building workflows 2–N, a **Shared Workflow-Tool Scaffold** will be designed and built. This is a reusable component/pattern that most workflows use. It provides:
-- Standard workflow page shell (route, auth check, workflow-status wiring)
-- Standard topbar (workflow title, back navigation, admin reset button)
-- Standard status indicator (inactive/active/completed, extendable for Phase 2 review states)
-- Standard deliverables area (file upload, file list, file download)
-- Standard structured-content area (forms/text/notes — workflow-specific fields plug in here)
-- Standard worker-facing status controls (Phase 2: "I'm done — please review" button, revision-notes viewer)
-- Standard admin-facing review controls (Phase 2: acceptable / revision-requested + notes)
-- Standard audit-event emission helper (Phase 2: opt-in)
+This replaces the earlier "scaffold-as-required-shell" framing. **There is no shell. Each workflow page authors its own layout.** The library is opt-in per component — a workflow imports the pieces it needs and composes them however it wants.
 
-### 12.3 What each workflow adds
-Each specific workflow plugs into the scaffold by defining:
+### 12.2 The library
+The Shared Workflow Components Library provides (initial set; new components added additively as workflows surface concrete needs):
+
+- **`useWorkflowContext()` hook** — auth check, project-load, role-load, workflow-status load. Every workflow page calls it; ~40 lines of boilerplate avoided per workflow.
+- **`<WorkflowTopbar>`** — workflow title + clickable Project breadcrumb (back to the Project page) + admin-only reset button. Workflows import + drop in.
+- **`<StatusBadge>`** — workflow-status display (inactive/active/completed Phase 1; adds submitted-for-review/revision-requested Phase 2). Centralized component per `§4.6` design implication.
+- **`<ResetWorkflowButton>` + `<ResetConfirmDialog>`** — admin reset UX with type-the-project-name confirmation per `§7`. Each workflow supplies its own `resetWorkflowData(projectId)` function; the dialog wires confirmation.
+- **`<DeliverablesArea>`** — file upload/download region with two optional sub-sections: "Resources" (always-visible artifacts — extension files, user guides, templates; surfaced as one of the patterns in §12.6 below) and "Project deliverables" (per-Project produced files). Workflows declare which sub-sections they use.
+- **`<CompanionDownload>`** — companion-artifact download UI for workflows that ship a browser extension, mobile app, or desktop tool (W#2's Chrome extension is the first; surfaced as one of the patterns in §12.6 below).
+- **`<NotReadyBanner>`** — when a workflow's upstream-readiness rule (per §6) isn't satisfied for the current Project, this banner explains what's missing. Workflows include it conditionally on `readyToStart === false`.
+- **`<WorkerCompletionButton>`** — Phase 1: "Mark complete" (flips to completed). Phase 2 with review cycle: "Submit for review" (flips to submitted-for-review). Always button-driven completion.
+- **`<AdminReviewControls>`** — Phase 2 only. Accept / Request revisions + notes editor for the standard review cycle.
+- **`useEmitAuditEvent()` hook** — Phase 2 only, opt-in per workflow per `§5`. Workflows that declared audit-trail requirements call the helper; structural decision frozen, signature provisional until first concrete workflow demand surfaces.
+
+The detailed design of each component (its props, behaviors, Phase 1/Phase 2 phasing, custom-is-norm posture for the content area) lives in `docs/WORKFLOW_COMPONENTS_LIBRARY_DESIGN.md`.
+
+### 12.3 What each workflow declares + composes
+Each workflow declares (in its design doc):
 - Its name, icon, and card metadata
 - Its readiness rules (§6)
 - Its data schema (tables + fields)
-- Its custom content area (the workflow-specific UI — forms, visualizations, tools)
-- Its reset rules (§7)
+- Its `resetWorkflowData(projectId)` function (so `<ResetWorkflowButton>` can call it)
 - Its audit-event types if any (§5)
 - Its concurrency strategy if any (§3)
+- Its review-cycle declaration: `'standard' | 'skip'` (drives whether `<WorkerCompletionButton>` flips to `submitted-for-review` or directly to `completed`; drives whether `<AdminReviewControls>` renders at all in Phase 2)
+- Its `companion` declaration if it ships an external-client companion artifact (`{ label, url, description }` minimum — see §12.6)
+
+Each workflow then COMPOSES its page — importing whichever shared components it wants — and authors its own custom React content area inside its own composition. The library does not impose a layout; the workflow is free to arrange the topbar, status badge, deliverables area, content area, and worker controls however it wants.
 
 ### 12.4 Implementation timing
-The scaffold is built **before workflow #2**. Once built, adding workflow #3, #4, etc. is substantially faster because the shell is already solved.
+Components are built incrementally as workflows surface concrete needs. The minimum components needed to unblock W#2's PLOS-side build (the `useWorkflowContext()` hook + `<WorkflowTopbar>` + `<StatusBadge>` + `<DeliverablesArea>` with Resources sub-section + `<CompanionDownload>` + `<ResetWorkflowButton>` + `<ResetConfirmDialog>`) are built first. Phase 2 components (`<WorkerCompletionButton>` review-cycle path, `<AdminReviewControls>`, `useEmitAuditEvent()`) are built when Phase 2 turn-on is scheduled.
 
-Keyword Clustering is retrofitted into the scaffold later (low priority — it works fine as-is), OR the scaffold is designed to accommodate custom workflows like Keyword Clustering as a special case.
+Keyword Clustering (W#1) doesn't need to "retrofit into a scaffold" because there is no scaffold. It can adopt shared components piecemeal if convenient (e.g., `<StatusBadge>`, `<ResetConfirmDialog>` once reset is built for W#1) — or not. There is no waiver concept; each workflow uses the components it finds useful.
 
 ### 12.5 Design implication
-When workflow #2 is started, the **first substantive work is designing the scaffold**, not designing workflow #2's specifics. The scaffold work benefits all subsequent workflows, so it's worth doing right.
+When a new workflow is started, the design interview's Q14 (formerly "Scaffold Fit") asks: **"Which shared components from the library will this workflow import, and what custom content component will it author for its own UI?"** — the answer is part of the workflow's design doc. Adding a new component to the library is also a valid answer if the workflow surfaces a chrome concern that no existing component addresses (additive change to the library; no rewrite of existing workflows).
 
 ### 12.6 Shared component patterns surfaced by workflow interviews (NEW 2026-05-04 — surfaced by W#2 design interview; reframed 2026-05-05 from "scaffold extension-points" to "shared component patterns" after the architectural pivot in `session_2026-05-04_workflow-tool-scaffold-design` retired the scaffold-shell concept in favor of the Shared Workflow Components Library — see `docs/WORKFLOW_COMPONENTS_LIBRARY_DESIGN.md`)
 
