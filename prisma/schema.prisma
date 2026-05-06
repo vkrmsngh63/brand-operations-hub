@@ -29,7 +29,8 @@ model Project {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  workflows ProjectWorkflow[]
+  workflows         ProjectWorkflow[]
+  vocabularyEntries VocabularyEntry[]
 
   @@index([userId])
 }
@@ -59,6 +60,7 @@ model ProjectWorkflow {
   pathways        Pathway[]
   sisterLinks     SisterLink[]
   canvasState     CanvasState?
+  competitorUrls  CompetitorUrl[]
 
   @@unique([projectId, workflow])
   @@index([projectId])
@@ -240,4 +242,155 @@ model UserPreference {
 
   @@unique([userId, key])
   @@index([userId])
+}
+
+// ============================================================
+// W#2 Competition Scraping & Deep Analysis tables.
+// Added 2026-05-06 in W#2 PLOS-side build first session.
+// Spec: docs/COMPETITION_SCRAPING_STACK_DECISIONS.md §9.1.
+// ============================================================
+
+// CompetitorUrl — one row per (Project's W#2 workflow, platform, URL).
+model CompetitorUrl {
+  id                  String   @id @default(uuid())
+  projectWorkflowId   String // FK to ProjectWorkflow where workflow="competition-scraping"
+  platform            String // "amazon" | "ebay" | "etsy" | "walmart" | "google-shopping" | "google-ads" | "independent-website"
+  url                 String   @db.Text
+  competitionCategory String? // value from VocabularyEntry; null until user fills
+  productName         String? // value from VocabularyEntry; null until user fills
+  brandName           String? // value from VocabularyEntry; null until user fills
+  resultsPageRank     Int?
+  productStarRating   Float? // 0.0–5.0
+  sellerStarRating    Float? // 0.0–5.0 (Etsy primarily)
+  numProductReviews   Int?
+  numSellerReviews    Int?
+  customFields        Json     @default("{}") // { fieldName: value } user-defined product-scoped fields
+  addedBy             String // userId
+  addedAt             DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  projectWorkflow ProjectWorkflow  @relation(fields: [projectWorkflowId], references: [id], onDelete: Cascade)
+  sizes           CompetitorSize[]
+  capturedTexts   CapturedText[]
+  capturedImages  CapturedImage[]
+
+  @@unique([projectWorkflowId, platform, url])
+  @@index([projectWorkflowId, platform])
+}
+
+// CompetitorSize — one row per Size/Option under a CompetitorUrl.
+model CompetitorSize {
+  id              String   @id @default(uuid())
+  competitorUrlId String
+  sizeOption      String // free-text per §A.7
+  price           Decimal? @db.Decimal(10, 2)
+  shippingCost    Decimal? @db.Decimal(10, 2)
+  customFields    Json     @default("{}") // size-scoped user-defined fields
+  sortOrder       Int      @default(0)
+  addedAt         DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  competitorUrl CompetitorUrl @relation(fields: [competitorUrlId], references: [id], onDelete: Cascade)
+
+  @@index([competitorUrlId])
+}
+
+// CapturedText — one row per highlighted-and-saved text snippet.
+model CapturedText {
+  id              String   @id @default(uuid())
+  clientId        String   @unique // UUIDv4 from extension; idempotency key
+  competitorUrlId String
+  contentCategory String? // value from VocabularyEntry
+  text            String   @db.Text
+  tags            Json     @default("[]") // string[]
+  sortOrder       Int      @default(0)
+  addedBy         String // userId
+  addedAt         DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  competitorUrl CompetitorUrl @relation(fields: [competitorUrlId], references: [id], onDelete: Cascade)
+
+  @@index([competitorUrlId])
+  @@index([competitorUrlId, contentCategory])
+}
+
+// CapturedImage — one row per saved image (regular product shot OR region-screenshot).
+model CapturedImage {
+  id              String   @id @default(uuid())
+  clientId        String   @unique
+  competitorUrlId String
+  imageCategory   String? // value from VocabularyEntry
+  storagePath     String // e.g., "{projectId}/{competitorUrlId}/{capturedImageId}.png"
+  storageBucket   String   @default("competition-scraping")
+  composition     String?  @db.Text // describes what's IN the image
+  embeddedText    String?  @db.Text // text that appears INSIDE the image
+  tags            Json     @default("[]")
+  sourceType      String // "regular" | "region-screenshot"
+  fileSize        Int? // bytes
+  mimeType        String?
+  width           Int? // pixels
+  height          Int?
+  sortOrder       Int      @default(0)
+  addedBy         String
+  addedAt         DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  competitorUrl CompetitorUrl @relation(fields: [competitorUrlId], references: [id], onDelete: Cascade)
+
+  @@index([competitorUrlId])
+  @@index([competitorUrlId, imageCategory])
+}
+
+// VocabularyEntry — platform-shared vocabularies per PLATFORM_REQUIREMENTS.md §8.4.
+// Project-scoped, NOT workflow-scoped. Any workflow on the same Project can READ + ADD.
+model VocabularyEntry {
+  id              String   @id @default(uuid())
+  projectId       String
+  vocabularyType  String // "competition-category" | "product-name" | "brand-name" | "content-category" | "image-category" | "custom-field-name-product" | "custom-field-name-size"
+  value           String
+  addedByWorkflow String // which workflow originated this entry
+  addedBy         String // userId
+  addedAt         DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, vocabularyType, value])
+  @@index([projectId, vocabularyType])
+}
+
+// ============================================================
+// Cross-workflow tables (designed now, used by Phase 2 / Phase 3
+// platform-wide work; W#2 is the first declarer per §9.1).
+// ============================================================
+
+// WorkerAssignment — Phase 2; per PLATFORM_REQUIREMENTS.md §2.2.1.
+// Hard rule per W#2 §A.2: exactly one assignment per (project, workflow, subScope).
+model WorkerAssignment {
+  id          String    @id @default(uuid())
+  userId      String
+  projectId   String
+  workflow    String // "competition-scraping" | "keyword-clustering" | etc.
+  subScope    String? // for W#2: platform name; null for workflows without sub-scope
+  status      String    @default("active") // "active" | "completed" | "revoked"
+  assignedAt  DateTime  @default(now())
+  assignedBy  String // admin userId
+  completedAt DateTime?
+
+  @@unique([projectId, workflow, subScope])
+  @@index([userId, status])
+  @@index([projectId, workflow])
+}
+
+// AuditEvent — Phase 3; per PLATFORM_REQUIREMENTS.md §5.5.
+model AuditEvent {
+  id           String   @id @default(uuid())
+  workflowType String // "competition-scraping" | "keyword-clustering" | etc.
+  projectId    String
+  userId       String
+  eventType    String // "capture" | "edit" | "delete" | "vocabulary-add" | etc.
+  payload      Json // event-specific structured data
+  timestamp    DateTime @default(now())
+
+  @@index([projectId, workflowType])
+  @@index([userId, timestamp])
 }
