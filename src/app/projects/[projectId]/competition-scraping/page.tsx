@@ -27,6 +27,7 @@
 
 import { useState } from 'react';
 import { useParams } from 'next/navigation';
+import { authFetch } from '@/lib/authFetch';
 import {
   CompanionDownload,
   DeliverablesArea,
@@ -84,19 +85,39 @@ export default function CompetitionScrapingPage() {
     );
   }
 
-  // Reset wiring — calls the admin reset endpoint and then refreshes. The
-  // endpoint itself is deferred to a follow-up session per the stack
-  // decisions doc §11; this is the call-site placeholder per the page's
-  // composition spec.
+  // Reset wiring — calls the admin reset endpoint and reloads the page on
+  // success so useWorkflowContext re-mounts from a clean slate (status
+  // flips back to "inactive", deliverables area refreshes).
+  //
+  // The dialog already validated the typed name client-side. The endpoint
+  // re-validates server-side via { confirmProjectName } in the body,
+  // defense-in-depth; we send ctx.project.name (the canonical name the
+  // user just confirmed they typed). Server compares against
+  // prisma.project.findUnique to catch race-edit cases.
+  //
+  // Errors propagate to the dialog body's catch block, which surfaces a
+  // "Reset failed — try again" banner.
   const handleResetConfirm = async () => {
-    // Placeholder — real wiring lands when POST /api/projects/[projectId]/
-    // competition-scraping/reset ships per COMPETITION_SCRAPING_STACK_DECISIONS.md
-    // §11.1. Today the button is wired so the components library composition
-    // is verifiable; the call below intentionally throws to make any wrong-
-    // session use loud.
-    throw new Error(
-      'W#2 admin reset endpoint not yet implemented — deferred to a follow-up session per COMPETITION_SCRAPING_STACK_DECISIONS.md §11.'
+    if (!ctx.project) {
+      throw new Error('No Project loaded — reset cannot proceed.');
+    }
+    const res = await authFetch(
+      `/api/projects/${ctx.project.id}/competition-scraping/reset`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirmProjectName: ctx.project.name }),
+      }
     );
+    if (!res.ok) {
+      const body = (await res
+        .json()
+        .catch(() => ({}))) as { error?: string };
+      throw new Error(body.error ?? `Reset failed (HTTP ${res.status})`);
+    }
+    // Force a full reload so workflow context, deliverables, and any
+    // future content-area state are all re-fetched from a clean DB.
+    window.location.reload();
   };
 
   return (

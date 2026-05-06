@@ -66,3 +66,61 @@ export function isAcceptedMime(value: unknown): value is AcceptedImageMimeType {
     (ACCEPTED_IMAGE_MIME_TYPES as readonly string[]).includes(value)
   );
 }
+
+// ─── Janitor orphan classification ─────────────────────────────────────
+// The daily janitor cron at /api/cron/competition-scraping-janitor walks
+// the whole storage bucket, cross-references each file against the
+// CapturedImage rows, and deletes orphans. The actual SDK calls live in
+// competition-storage.ts; this is the pure logic that decides which
+// listed files are orphans.
+//
+// Per docs/COMPETITION_SCRAPING_STACK_DECISIONS.md §3:
+//   "delete any storage file with no matching DB row" — with a 24h grace
+//   period for in-flight uploads (the :finalize call may still be on its
+//   way; deleting the file before then would race the extension).
+
+export interface StorageImageEntry {
+  storagePath: string;
+  // ISO timestamp from Supabase Storage's FileObject.created_at; null on
+  // entries where the SDK can't determine creation time (e.g., legacy
+  // files predating the metadata feature). Null entries are skipped.
+  createdAt: string | null;
+}
+
+// Default grace window — 24 hours per §3. The two-phase image upload
+// flow (requestUpload → direct PUT → finalize) usually completes in
+// seconds; 24h is a generous slack covering long offline-queue drains
+// or extension restarts mid-upload.
+export const ORPHAN_GRACE_MS = 24 * 60 * 60 * 1000;
+
+// Returns the subset of `entries` that should be deleted as orphans.
+// `knownDbPaths` is the set of storagePaths that CapturedImage rows
+// reference. `nowMs` and `graceMs` are injected for testability — the
+// production caller passes Date.now() + ORPHAN_GRACE_MS.
+//
+// Classification:
+//   - storagePath in knownDbPaths               → keep (has DB row)
+//   - createdAt is null / unparseable           → keep (defensive)
+//   - createdAt + graceMs >= nowMs              → keep (in grace window)
+//   - else                                      → delete (orphan)
+//
+// The grace check is intentionally `>=` so a file created exactly graceMs
+// ago is still considered in-grace; the orphan threshold is strictly
+// older than graceMs.
+export function findOrphans(
+  entries: ReadonlyArray<StorageImageEntry>,
+  knownDbPaths: ReadonlySet<string>,
+  nowMs: number,
+  graceMs: number = ORPHAN_GRACE_MS
+): string[] {
+  const orphans: string[] = [];
+  for (const entry of entries) {
+    if (knownDbPaths.has(entry.storagePath)) continue;
+    if (!entry.createdAt) continue;
+    const created = Date.parse(entry.createdAt);
+    if (Number.isNaN(created)) continue;
+    if (created + graceMs >= nowMs) continue;
+    orphans.push(entry.storagePath);
+  }
+  return orphans;
+}

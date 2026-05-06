@@ -17,6 +17,9 @@ import {
   composeStoragePath,
   splitStoragePath,
   isAcceptedMime,
+  findOrphans,
+  ORPHAN_GRACE_MS,
+  type StorageImageEntry,
 } from './competition-storage-helpers.ts';
 import { ACCEPTED_IMAGE_MIME_TYPES } from './shared-types/competition-scraping.ts';
 
@@ -179,4 +182,93 @@ test('isAcceptedMime: case-sensitive (Image/JPEG → false)', () => {
   // table doesn't drift. requestUpload normalizes to lowercase before
   // calling this guard.
   assert.equal(isAcceptedMime('Image/JPEG'), false);
+});
+
+/* ── findOrphans (janitor) ───────────────────────────────────────────── */
+
+// All findOrphans tests use a fixed `now` so the grace-window arithmetic
+// is reproducible. Time travel via Date.parse on the entries' createdAt.
+const NOW_MS = Date.parse('2026-05-08T12:00:00Z');
+
+function entry(
+  storagePath: string,
+  createdAt: string | null
+): StorageImageEntry {
+  return { storagePath, createdAt };
+}
+
+test('findOrphans: empty input → empty output', () => {
+  assert.deepEqual(findOrphans([], new Set(), NOW_MS), []);
+});
+
+test('findOrphans: file with matching DB row is NOT an orphan', () => {
+  const entries = [entry('p/u/i.jpg', '2026-05-01T00:00:00Z')]; // a week old
+  const known = new Set(['p/u/i.jpg']);
+  assert.deepEqual(findOrphans(entries, known, NOW_MS), []);
+});
+
+test('findOrphans: file with no DB row AND older than 24h IS an orphan', () => {
+  const entries = [entry('p/u/orphan.jpg', '2026-05-06T00:00:00Z')]; // ~60h old
+  assert.deepEqual(findOrphans(entries, new Set(), NOW_MS), ['p/u/orphan.jpg']);
+});
+
+test('findOrphans: file with no DB row but younger than 24h is NOT an orphan (in-flight upload grace)', () => {
+  // 1 hour old — still in grace window even without a DB row.
+  const entries = [entry('p/u/inflight.jpg', '2026-05-08T11:00:00Z')];
+  assert.deepEqual(findOrphans(entries, new Set(), NOW_MS), []);
+});
+
+test('findOrphans: file exactly at the grace boundary is NOT an orphan', () => {
+  // created + graceMs === nowMs — boundary is inclusive (>= keeps it).
+  const createdAt = new Date(NOW_MS - ORPHAN_GRACE_MS).toISOString();
+  const entries = [entry('p/u/edge.jpg', createdAt)];
+  assert.deepEqual(findOrphans(entries, new Set(), NOW_MS), []);
+});
+
+test('findOrphans: file just past the grace boundary IS an orphan', () => {
+  // created + graceMs < nowMs by 1 ms.
+  const createdAt = new Date(NOW_MS - ORPHAN_GRACE_MS - 1).toISOString();
+  const entries = [entry('p/u/edge.jpg', createdAt)];
+  assert.deepEqual(findOrphans(entries, new Set(), NOW_MS), ['p/u/edge.jpg']);
+});
+
+test('findOrphans: createdAt null → skipped (defensive, not an orphan)', () => {
+  const entries = [entry('p/u/nodate.jpg', null)];
+  assert.deepEqual(findOrphans(entries, new Set(), NOW_MS), []);
+});
+
+test('findOrphans: createdAt unparseable → skipped (defensive)', () => {
+  const entries = [entry('p/u/garbage.jpg', 'not-a-date')];
+  assert.deepEqual(findOrphans(entries, new Set(), NOW_MS), []);
+});
+
+test('findOrphans: mixes — keeps DB-matched, keeps in-grace, deletes old orphans', () => {
+  const entries: StorageImageEntry[] = [
+    entry('p/u/keep-known.jpg', '2026-05-01T00:00:00Z'),       // known
+    entry('p/u/keep-fresh.jpg', '2026-05-08T11:30:00Z'),       // 30 min old
+    entry('p/u/delete-old-1.jpg', '2026-05-06T00:00:00Z'),     // 60h old
+    entry('p/u/delete-old-2.jpg', '2026-04-01T00:00:00Z'),     // a month old
+    entry('p/u/skip-no-date.jpg', null),                        // null createdAt
+  ];
+  const known = new Set(['p/u/keep-known.jpg']);
+  const orphans = findOrphans(entries, known, NOW_MS);
+  assert.deepEqual(orphans.sort(), ['p/u/delete-old-1.jpg', 'p/u/delete-old-2.jpg']);
+});
+
+test('findOrphans: respects custom graceMs override', () => {
+  // 2-hour grace; file is 90 min old → in grace.
+  const entries = [entry('p/u/x.jpg', '2026-05-08T10:30:00Z')];
+  assert.deepEqual(
+    findOrphans(entries, new Set(), NOW_MS, 2 * 60 * 60 * 1000),
+    []
+  );
+  // Same file, 1-hour grace → past it.
+  assert.deepEqual(
+    findOrphans(entries, new Set(), NOW_MS, 60 * 60 * 1000),
+    ['p/u/x.jpg']
+  );
+});
+
+test('findOrphans: ORPHAN_GRACE_MS is exactly 24 hours', () => {
+  assert.equal(ORPHAN_GRACE_MS, 24 * 60 * 60 * 1000);
 });

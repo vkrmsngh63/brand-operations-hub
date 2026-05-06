@@ -20,6 +20,7 @@ import type { AcceptedImageMimeType } from '@/lib/shared-types/competition-scrap
 import {
   composeStoragePath,
   splitStoragePath,
+  type StorageImageEntry,
 } from '@/lib/competition-storage-helpers';
 
 export const COMPETITION_SCRAPING_BUCKET = 'competition-scraping';
@@ -219,11 +220,20 @@ export async function wipeProjectImages(projectId: string): Promise<{
   return { deletedCount };
 }
 
+// Entry shape returned by listAllEntries — a subset of Supabase's
+// FileObject. `id` is null for folders and non-null for files; `created_at`
+// is an ISO timestamp string on files (null on legacy entries).
+interface ListedEntry {
+  name: string;
+  id: string | null;
+  created_at: string | null;
+}
+
 // listAllEntries — paginated wrapper around Supabase's list endpoint.
 // Walks the folder one batch at a time until exhausted. Local helper
 // only — not exported.
-async function listAllEntries(folder: string): Promise<{ name: string }[]> {
-  const out: { name: string }[] = [];
+async function listAllEntries(folder: string): Promise<ListedEntry[]> {
+  const out: ListedEntry[] = [];
   let offset = 0;
   while (true) {
     const { data, error } = await bucket().list(folder, {
@@ -239,4 +249,66 @@ async function listAllEntries(folder: string): Promise<{ name: string }[]> {
     offset += data.length;
   }
   return out;
+}
+
+// listAllStorageImages — janitor support helper. Walks the entire bucket
+// (root → projectId folders → competitorUrlId folders → image files) and
+// returns each file's full storage path + createdAt. Used by the daily
+// cron at /api/cron/competition-scraping-janitor to find orphans (files
+// with no matching CapturedImage row whose createdAt is older than the
+// grace window per `competition-storage-helpers.ts findOrphans`).
+//
+// At root and at the project-folder level, Supabase's list returns
+// folder-shaped entries (id === null). At the leaf level it returns
+// files (id !== null). We filter accordingly so a stray placeholder file
+// at a folder level doesn't get treated as an image.
+//
+// Per `PLATFORM_REQUIREMENTS.md §10.2`, a Project's image footprint is
+// ~300 images on average. With Supabase list batching at 1000 per call,
+// the whole bucket is walked in a small number of round-trips even at
+// Phase 3 scale (~150 in-flight Projects × 300 images ≈ 45k files).
+export async function listAllStorageImages(): Promise<StorageImageEntry[]> {
+  const out: StorageImageEntry[] = [];
+  const projectFolders = await listAllEntries('');
+  for (const proj of projectFolders) {
+    if (!proj.name || proj.id !== null) continue; // folders only
+    const urlFolders = await listAllEntries(proj.name);
+    for (const urlFolder of urlFolders) {
+      if (!urlFolder.name || urlFolder.id !== null) continue; // folders only
+      const files = await listAllEntries(`${proj.name}/${urlFolder.name}`);
+      for (const file of files) {
+        if (!file.name || file.id === null) continue; // files only
+        out.push({
+          storagePath: `${proj.name}/${urlFolder.name}/${file.name}`,
+          createdAt: file.created_at,
+        });
+      }
+    }
+  }
+  return out;
+}
+
+// deleteStorageImages — bulk delete by storage path. Idempotent: missing
+// files don't error. Batches at REMOVE_BATCH_SIZE per round-trip. Used
+// by the janitor to remove orphans returned by findOrphans.
+//
+// On error, throws with a message naming the offset of the first failed
+// chunk so the caller can decide whether to surface partial progress
+// (deleted-so-far) or just bail.
+export async function deleteStorageImages(
+  paths: ReadonlyArray<string>
+): Promise<{ deletedCount: number }> {
+  if (paths.length === 0) return { deletedCount: 0 };
+  let deletedCount = 0;
+  for (let i = 0; i < paths.length; i += REMOVE_BATCH_SIZE) {
+    const chunk = paths.slice(i, i + REMOVE_BATCH_SIZE);
+    const { data, error } = await bucket().remove(chunk as string[]);
+    if (error) {
+      throw new Error(
+        `Failed to delete storage images at offset ${i}: ${error.message}`
+      );
+    }
+    deletedCount += data?.length ?? chunk.length;
+  }
+  return { deletedCount };
 }
