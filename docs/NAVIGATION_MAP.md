@@ -1,8 +1,10 @@
 # NAVIGATION MAP
 ## Every route, every click path through PLOS — the single source of truth for UI navigation
 
-**Last updated:** May 5, 2026-c (Shared Workflow Components Library Phase-1 build — added internal smoke-test route at `/components-smoke-test` for visual verification of all 9 Phase-1 components.)
-**Last updated in session:** session_2026-05-05-c_components-library-phase-1-build (Claude Code)
+**Last updated:** May 6, 2026 (W#2 PLOS-side build first slice — added W#2 Competition Scraping & Deep Analysis route at `/projects/[projectId]/competition-scraping` composing 7 components from the Shared Workflow Components Library.)
+**Last updated in session:** session_2026-05-06_w2-plos-side-build-first-slice (Claude Code, on `workflow-2-competition-scraping` branch)
+**Previously updated:** May 5, 2026-c (Shared Workflow Components Library Phase-1 build — added internal smoke-test route at `/components-smoke-test` for visual verification of all 9 Phase-1 components.)
+**Previously updated in session:** session_2026-05-05-c_components-library-phase-1-build (Claude Code)
 **Previously updated:** April 17, 2026 (Phase M COMPLETE — Ckpts 9 + 9.5 deployed to vklf.com; `/projects/[projectId]` detail page live for first time)
 **Last updated in chat:** https://claude.ai/chat/75cc8985-b70a-49f4-8b64-444c34ef541f
 **Chat where originally created:** https://claude.ai/chat/8320490b-3910-4b3d-b3f8-8222e25777c2
