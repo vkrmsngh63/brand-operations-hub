@@ -1,8 +1,10 @@
 # NAVIGATION MAP
 ## Every route, every click path through PLOS — the single source of truth for UI navigation
 
-**Last updated:** May 6, 2026 (W#2 PLOS-side build first slice — added W#2 Competition Scraping & Deep Analysis route at `/projects/[projectId]/competition-scraping` composing 7 components from the Shared Workflow Components Library.)
-**Last updated in session:** session_2026-05-06_w2-plos-side-build-first-slice (Claude Code, on `workflow-2-competition-scraping` branch)
+**Last updated:** May 7, 2026 (W#2 API-routes session-1 SHIPPED — no UI route changes this session. 3 new W#2 API routes (`/api/projects/[projectId]/competition-scraping/urls`, `.../urls/[urlId]`, `/api/projects/[projectId]/vocabulary`) registered in `PLATFORM_ARCHITECTURE.md §3` routes table. The existing W#2 page at `/projects/[projectId]/competition-scraping` continues to render the same library composition — the multi-table viewer for the content area is still a placeholder, replaced incrementally as session-2/3 endpoints come online.)
+**Last updated in session:** session_2026-05-07_w2-api-routes-session-1 (Claude Code, on `workflow-2-competition-scraping` branch)
+**Previously updated:** May 6, 2026 (W#2 PLOS-side build first slice — added W#2 Competition Scraping & Deep Analysis route at `/projects/[projectId]/competition-scraping` composing 7 components from the Shared Workflow Components Library.)
+**Previously updated in session:** session_2026-05-06_w2-plos-side-build-first-slice (Claude Code, on `workflow-2-competition-scraping` branch)
 **Previously updated:** May 5, 2026-c (Shared Workflow Components Library Phase-1 build — added internal smoke-test route at `/components-smoke-test` for visual verification of all 9 Phase-1 components.)
 **Previously updated in session:** session_2026-05-05-c_components-library-phase-1-build (Claude Code)
 **Previously updated:** April 17, 2026 (Phase M COMPLETE — Ckpts 9 + 9.5 deployed to vklf.com; `/projects/[projectId]` detail page live for first time)
