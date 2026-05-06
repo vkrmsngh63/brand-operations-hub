@@ -46,7 +46,7 @@ All captured data flows in real-time into the corresponding Project's "Competiti
 
 W#2 has TWO co-equal halves with different deployment models:
 1. **Chrome extension** — installed in the user's browser; runs outside vklf.com; has its own UI, auth, state, and build pipeline.
-2. **PLOS web section** — lives at `/projects/[projectId]/competition-scraping`; built into the existing Next.js app; partially uses the Shared Workflow-Tool Scaffold (per Q14).
+2. **PLOS web section** — lives at `/projects/[projectId]/competition-scraping`; built into the existing Next.js app; imports specific components from the Shared Workflow Components Library (per Q14).
 
 Both halves talk to the same backend APIs and write to the same Postgres tables. PLOS DB is the single source of truth (per Q12).
 
@@ -160,9 +160,9 @@ Director's framing: "Downstream workflows are allowed to EDIT some of this data.
 
 ### A.7 User experience shape (Q7)
 
-**Two halves with different scaffold relationships (see Q14):**
-1. Chrome browser extension — wholly outside the scaffold; separate codebase
-2. PLOS-side section at `/projects/[projectId]/competition-scraping` — partially uses the scaffold
+**Two halves with different components-library relationships (see Q14):**
+1. Chrome browser extension — wholly outside the components library; separate codebase
+2. PLOS-side section at `/projects/[projectId]/competition-scraping` — imports specific components from the Shared Workflow Components Library
 
 **Bidirectional sync (Option C from Q7.a):** users can EDIT field values in BOTH the extension AND PLOS. The backend syncs both ways.
 
@@ -294,7 +294,7 @@ Fillable later (free-form OR pick-from-prior):
 
 The deliverable is the captured competition dataset; once the worker has captured it, it's available for downstream consumption immediately. No admin sign-off step.
 
-**Implication for Phase-2 worker-status flow:** the worker UI shows a "I'm done with [platform] for this Project" button that flips the assignment to a `completed` state directly, skipping the `submitted-for-review` and `acceptable | revision-requested` states. The standard scaffold's review controls are PRESENT but configurable to skip the review states for workflows like W#2.
+**Implication for Phase-2 worker-status flow:** the worker UI shows a "I'm done with [platform] for this Project" button that flips the assignment to a `completed` state directly, skipping the `submitted-for-review` and `acceptable | revision-requested` states. The library's `<WorkerCompletionButton>` (Phase 1 path) is used; `<AdminReviewControls>` (Phase 2) is skipped for workflows like W#2 that declare `reviewCycle: 'skip'`.
 
 ---
 
@@ -524,7 +524,7 @@ The following platform-level facts surfaced during this interview and were ratif
 | (d) | §8.4 (NEW) | Project-scoped shared vocabularies. Vocabulary tables scoped to (Project × vocabulary-type), not to producing workflow; any workflow on the same Project can READ + ADD entries. |
 | (e) | §10.1 (appended) | Non-web-app clients pattern. Chrome extension is the first non-web-app client of PLOS. Auth, API surface, distribution implications. |
 | (f) | §10.2 (appended) | Image-storage scale projections. ~500 GB/yr Phase 3, ~1 TB/yr Phase 4. Dedicated bucket per workflow + private + signed URLs. |
-| (g) | §12.6 (NEW) | Three new scaffold-extension-points: always-visible deliverables, custom React content components, external-client companion pattern. |
+| (g) | §12.6 (NEW) | Three shared component patterns surfaced by W#2: always-visible deliverables (`<DeliverablesArea>` Resources sub-section), custom React content components (workflow's own concern, not imposed by library), external-client companion pattern (`<CompanionDownload>`). Note: §12.6 was originally framed as "scaffold extension-points" at the time of the 2026-05-04 W#2 interview; reframed 2026-05-05 W#2 doc-reframe to "shared component patterns" per the components-library architectural pivot landed on `main` 2026-05-04. |
 
 ---
 
@@ -553,8 +553,8 @@ These are NOT design-doc questions; they're implementation-detail decisions that
 Per Q14 sequencing analysis:
 
 1. **Next session — W#2 Stack-and-Architecture session.** Resolves §A.17 questions 1-13. Output: `COMPETITION_SCRAPING_STACK_DECISIONS.md` (Group B doc). No code yet; design + decisions only.
-2. **After that — Shared Workflow-Tool Scaffold design + build.** Cross-workflow concern; not W#2-specific. Incorporates `PLATFORM_REQUIREMENTS.md §12.6` extension-points. Multiple sessions.
-3. **After scaffold ships — W#2 PLOS-side build.** Multi-session: schema migration → routes → custom React content component → admin reset → image expand viewer → (Phase 2) admin assignment UI.
+2. **After that — Shared Workflow Components Library Phase-1 build.** Cross-workflow concern; not W#2-specific. Incorporates `PLATFORM_REQUIREMENTS.md §12.6` shared component patterns surfaced by W#2 (always-visible deliverables, custom React content components, external-client companion). Multiple sessions. ✅ DONE 2026-05-05-c on `main` (commit `34e88ea`); reached this branch via 2026-05-06 merge.
+3. **After Phase-1 library ships — W#2 PLOS-side build.** Multi-session: schema migration → routes → custom React content component (composed alongside imported library components per `PLATFORM_REQUIREMENTS.md §12.6` shared component pattern #2 — content area is the workflow's own concern) → admin reset (uses library's `<ResetWorkflowButton>` + `<ResetConfirmDialog>`) → image expand viewer → (Phase 2) admin assignment UI.
 4. **Parallel with PLOS-side build — W#2 Chrome extension build.** Multi-session: shell → auth → Module 1 capture flow → Module 2 capture flow → image upload → offline queue → distribution polish.
 
 ---
