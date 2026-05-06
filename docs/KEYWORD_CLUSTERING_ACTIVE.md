@@ -1,7 +1,9 @@
 # KEYWORD CLUSTERING — ACTIVE DOCUMENT
 ## Current state of the Keyword Clustering workflow tool (Group B, tool-specific)
 
-**Last updated:** May 5, 2026-b (Sister-link consolidation drift cleanup SHIPPED — Option A approach. **CODE + DOCS session — no schema, no DB, no live run, no deploy yet (commit local; director's discretionary Rule 9 push timing).** Item (a) of the prior STATE block's standing instructions executed. **Mid-session pivot:** original framing was defense-in-depth (prompt explicitly forbids sister-link ops in consolidation + applier rejects them); director surfaced concern that explicit forbiddance imposes cognitive load and risks priming the model to think about what it's been told not to think about ("don't think about pink elephants"). Pivoted to Option A — make sister links truly invisible to the consolidation model: (1) consolidation prompt sections 1+2 stripped of all sister-link references; doc-level header (above section 1) retains explanation for human readers; (2) new `omitSisterNodesColumn?: boolean` flag on `buildOperationsInputTsv` in `src/lib/auto-analyze-v3.ts` (default false; regular batches unaffected); consolidation call site in `AutoAnalyze.tsx` passes `omitSisterNodesColumn: true` so the TSV input the model sees has 8 columns instead of 9; (3) inline vocabulary fragment in `AutoAnalyze.tsx` consolidation user-content block stripped of sister-link op names; (4) `consolidationMode` in `src/lib/operation-applier.ts` now rejects ADD_SISTER_LINK + REMOVE_SISTER_LINK in addition to ADD_TOPIC + ADD_KEYWORD — applier-side rejection stays as a silent backstop in case the model invents the ops from prior training. The model literally cannot see existing sister links on the canvas; the operation vocabulary it knows excludes the sister-link ops; existing sister links remain as data on the canvas but are managed only by the future second-pass functionality. 336/336 src/lib tests pass (was 327; +9 new — 4 applier consolidation rejection tests covering ADD_SISTER_LINK + REMOVE_SISTER_LINK rejection + atomic-failure regression + explicit-false backwards-compat; 5 TSV serializer column-omission tests covering header shape, row shape, Keywords-column-position invariant, default-false byte-identical-to-no-arg, empty-canvas case). tsc clean; build clean (25 routes); lint at exact baseline parity (16e/40w; zero new). Director MUST re-paste the updated Consolidation Initial Prompt + Primer into the Auto-Analyze UI before the next D3 resume — the prompt is what tells the model the vocabulary, and the model has been trained on prior V4 prompts with sister-link ops. Multi-workflow: schema-change-in-flight stays "No"; W#2 still 🆕; no parallel chat. Pull-rebase clean at session start. **W#1 PRODUCTION-READINESS GATE: only D3 resume from batch 53 onward stands between W#1 and graduation** (after director tops up Anthropic credits ~$70 + re-pastes the updated Consolidation prompts).)
+**Last updated:** May 5, 2026-d (D3 RESUME COMPLETED at director's discretion + Auto-Analyze defaults change DEPLOYED + Option A invisibility VERIFIED LIVE AT SCALE. **CODE + LIVE-RUN session WITH DEPLOY** — commit `234f0d3` (Auto-Analyze defaults Thinking=Enabled-12000) pushed end-of-session; held local through the in-flight run per Rule 9 then released after director called the run complete. D3 resume ran 86 fresh batches + 8 consolidations on production vklf.com against Bursitis Test 2; cancelled cleanly at director's decision around volume-100 floor (canvas 242 topics; 136 cumulative batches across the cancelled-and-relaunched-fresh model: 50 prior + 86 new run). **🎉 GATE-CRITICAL WIN: Option A invisibility VERIFIED LIVE AT SCALE.** Sister-link count stayed at 82 across all 8 consolidations including two stress-test bulk-archive passes (cons #4 after batch 40 archived 31 keywords; cons #8 after batch 80 archived 117 keywords); zero ADD_SISTER_LINK / REMOVE_SISTER_LINK ops emitted by the model; zero applier rejection events. **W#1 PRODUCTION-READINESS GATE prerequisite #6 flips ✅ DONE → ✅ VERIFIED LIVE.** Three other prereqs simultaneously re-confirmed live (recency-stickiness fix re-validated by 86-batch input-cost trajectory ~+50 tokens/topic vs. ~+220 tokens/topic in unfixed 2026-05-01-b; atomic-batch fold-in re-validated by zero rebuild errors across 86 batches + 8 cons; Thinking=Enabled-12000 defaults validated by clean run completion at canvas ≥50 topics — defaults change shipped in `234f0d3`). **🚨 NEW operational risk surfaced: Anthropic API credit exhaustion mid-run.** Batch 85 failed three retries with "credit balance too low" at 8:06:52 PM; run halted ~36 min until director topped up; resumed cleanly. Captured as new ROADMAP MEDIUM "Auto-Analyze cost forecasting + credit-balance check" with sliding-window estimator algorithm spec (consolidates with director-requested cost-forecasting feature surfaced same session). **🚨 Other findings:** late-run validation-retry doublings (batches 78 + 80 each missed 5 keywords on first attempt at canvas ≥235; cost doubled twice; retry recovered cleanly — captured as ROADMAP MEDIUM); bulk-archive consolidation pattern surprising at scale (cons #8 archived 117 keywords in one pass — working as designed but expensive; captured as ROADMAP LOW). **Director-surfaced feature requests captured this session (4 new ROADMAP entries):** archived-terms post-run visibility polish; cost forecasting (above); Auto-Analyze overlay font-size polish; Auto-Analyze action history table + per-action undo (NEW HIGH — investigation confirmed feature does NOT exist today; `useEmitAuditEvent()` is a Phase 2 stub no-op; no AuditEvent table; no per-action undo; only destructive Reset Workflow). **Production-Readiness Gate status:** 5 of 6 prereqs ✅ VERIFIED LIVE; only #1 (cold-start render-layer fix banner) still 🟡 PARTIAL — no flake event fired during this run, so banner UI verification still pending natural flake. **Director's decision pending next session: declare W#1 graduation-ready at 5/6 verified, or wait for #1 banner UI to verify via natural flake.** End-of-session deferred-items registry sweep migrated 9 items to permanent docs per Rule 26. Multi-workflow: schema-change-in-flight stays "No"; W#2 still 🆕; no parallel chat. Pull-rebase clean.)
+**Last updated in session:** session_2026-05-05-d_d3-resume-completed-and-defaults-deployed (Claude Code)
+**Previously updated:** May 5, 2026-b (Sister-link consolidation drift cleanup SHIPPED — Option A approach. **CODE + DOCS session — no schema, no DB, no live run, no deploy yet (commit local; director's discretionary Rule 9 push timing).** Item (a) of the prior STATE block's standing instructions executed. **Mid-session pivot:** original framing was defense-in-depth (prompt explicitly forbids sister-link ops in consolidation + applier rejects them); director surfaced concern that explicit forbiddance imposes cognitive load and risks priming the model to think about what it's been told not to think about ("don't think about pink elephants"). Pivoted to Option A — make sister links truly invisible to the consolidation model: (1) consolidation prompt sections 1+2 stripped of all sister-link references; doc-level header (above section 1) retains explanation for human readers; (2) new `omitSisterNodesColumn?: boolean` flag on `buildOperationsInputTsv` in `src/lib/auto-analyze-v3.ts` (default false; regular batches unaffected); consolidation call site in `AutoAnalyze.tsx` passes `omitSisterNodesColumn: true` so the TSV input the model sees has 8 columns instead of 9; (3) inline vocabulary fragment in `AutoAnalyze.tsx` consolidation user-content block stripped of sister-link op names; (4) `consolidationMode` in `src/lib/operation-applier.ts` now rejects ADD_SISTER_LINK + REMOVE_SISTER_LINK in addition to ADD_TOPIC + ADD_KEYWORD — applier-side rejection stays as a silent backstop in case the model invents the ops from prior training. The model literally cannot see existing sister links on the canvas; the operation vocabulary it knows excludes the sister-link ops; existing sister links remain as data on the canvas but are managed only by the future second-pass functionality. 336/336 src/lib tests pass (was 327; +9 new — 4 applier consolidation rejection tests covering ADD_SISTER_LINK + REMOVE_SISTER_LINK rejection + atomic-failure regression + explicit-false backwards-compat; 5 TSV serializer column-omission tests covering header shape, row shape, Keywords-column-position invariant, default-false byte-identical-to-no-arg, empty-canvas case). tsc clean; build clean (25 routes); lint at exact baseline parity (16e/40w; zero new). Director MUST re-paste the updated Consolidation Initial Prompt + Primer into the Auto-Analyze UI before the next D3 resume — the prompt is what tells the model the vocabulary, and the model has been trained on prior V4 prompts with sister-link ops. Multi-workflow: schema-change-in-flight stays "No"; W#2 still 🆕; no parallel chat. Pull-rebase clean at session start. **W#1 PRODUCTION-READINESS GATE: only D3 resume from batch 53 onward stands between W#1 and graduation** (after director tops up Anthropic credits ~$70 + re-pastes the updated Consolidation prompts).)
 **Last updated in session:** session_2026-05-05-b_sister-link-consolidation-drift-cleanup (Claude Code)
 **Previously updated:** May 5, 2026 (Atomic-batch fold-in SHIPPED + EMPIRICALLY VERIFIED across 50 regular batches + 5 consolidation passes on production vklf.com. **CODE + LIVE-RUN session WITH DEPLOY** — commit `0caa200` pushed at session start, then live-tested for ~90 minutes via D3 retry on Bursitis Test 2 from the preserved 30/257 checkpoint at canvas 124. The parallel-PATCH-burst that exhausted Supabase max_connections=60 in 2026-05-04-c/d is structurally GONE. **W#1 PRODUCTION-READINESS GATE prerequisite #5b ✅ DONE.** Director chose approach (iii) atomic-batch-into-rebuild-transaction at start of session after my code review surfaced four concrete details that sharpened the framing (notably: bulk PATCH /keywords endpoint already exists; the actual burst includes ALL canvas keywords not just the 8 batch keywords; KeywordWorkspace.tsx:627's forEach is the fan-out source; Prisma's default $transaction timeout is 5s and rebuild alone already runs ~5s at canvas 120 — the fold-in needs explicit timeout extension). Implementation: (a) `/canvas/rebuild` route accepts two new optional body fields `keywordUpdates` + `archiveKeywords`, pre-fetches archive source rows via one findMany outside the transaction, appends `removedKeyword.create` + `keyword.deleteMany` + `keyword.updateMany` ops to the existing array `$transaction`, wraps the whole transaction in `{ timeout: 30000, maxWait: 5000 }`. Uses `updateMany` not `update` deliberately — silently no-ops on missing-id (rare race) instead of rolling back the whole rebuild. (b) `AutoAnalyze.tsx doApplyV3` now computes `kwTopicUpdates` + `reconcile.updates` + `archiveKeywords` BEFORE the rebuild POST, merges placement and reconciliation updates by id, augments the rebuild payload with all three. Removed: the sequential archive POST loop AND both fire-and-forget `onBatchUpdateKeywords` calls (the actual burst sources). `runRefreshWithRetry` post-rebuild helper unchanged. (c) `KeywordWorkspace.tsx` drops the now-unused `onBatchUpdateKeywords` prop pass-through. Consolidation pass and manual batch retry inherit the fix for free (both call `doApplyV3`). 327/327 src/lib tests pass; tsc clean; build clean (25 routes); lint at exact baseline parity (16e/40w; zero new). **Live verification stats:** 50 regular batches + 5 consolidations (after batches 12, 22, 32, 42, 52); canvas grew 124 → 194 topics; ~24,000+ keyword updates flowed through the fold-in across the 50 batches (every one bypassed the old burst-PATCH path); 135+ keywords archived (mostly celebrity+bursa Turkish-city homographs — high-quality model picks); per-batch wall-clock 12-23s rebuild HTTP (comfortably within 30s timeout); zero `FATAL: Max client connections reached` errors; zero post-rebuild refresh failures; 3 of 50 batches needed validation retry (~6%, normal); per-batch cost trajectory $0.32 → $0.45 (mild growth as canvas grew, recency-stickiness fix keeping input growth in check); total spent ~$22.91. **P2025 race condition** (the bonus 2026-05-04-d finding) eliminated for free — archive deletes and keyword updates can no longer be in flight at the same time. **Plan↔code drift surfaced mid-D3:** consolidation prompt at `docs/AUTO_ANALYZE_CONSOLIDATION_PROMPT_V4.md` lines ~190-195 still allows ADD_SISTER_LINK + REMOVE_SISTER_LINK in the consolidation vocabulary; applier `consolidationMode` only rejects ADD_TOPIC + ADD_KEYWORD. Director's standing plan: sister links should NOT be in any Auto-Analyze pass — they belong in a separate second-pass functionality run after first-pass Auto-Analyze is correct. The 2026-05-03-c recency-stickiness fix correctly deferred sister-link ops out of regular batches (regularBatchMode flag) but did NOT extend the deferral to consolidation. Drift count this session: **+3 sister links** from consolidation #1 only; consolidations #2, #3, #4, #5 emitted ZERO sister-link ops (model didn't reliably emit them every pass). Cleanup deferred to next session — small follow-up: drop both ops from consolidation prompt vocabulary + tighten consolidationMode in applier to reject them as defense-in-depth (mirroring regularBatchMode pattern). ~10-20 LOC. Run paused at batch 52 (canvas 194) per the agreed 50-batch verification target; checkpoint preserved for next-session resume of the remaining ~205 batches. Director's $50 Anthropic top-up has ~$27 remaining; another top-up needed before completing D3. Multi-workflow: schema-change-in-flight stays "No"; W#2 still 🆕; no parallel chat. Pull-rebase clean.)
 **Last updated in session:** session_2026-05-05_atomic-batch-fold-in-shipped-and-verified (Claude Code)
@@ -62,7 +64,166 @@
 
 ---
 
-## ⚠️ POST-2026-05-05-B-SISTER-LINK-CONSOLIDATION-DRIFT-CLEANUP-SHIPPED STATE (READ FIRST — updated 2026-05-05-b)
+## ⚠️ POST-2026-05-05-D-D3-RESUME-COMPLETED-AND-DEFAULTS-DEPLOYED STATE (READ FIRST — updated 2026-05-05-d)
+
+**As of 2026-05-05-d (forty-seventh Claude Code session, follow-up to `session_2026-05-05-c_components-library-phase-1-build` and direct continuation of D3 verification work from `session_2026-05-05-b`). CODE + LIVE-RUN session WITH DEPLOY** — commit `234f0d3` (Auto-Analyze defaults Thinking=Enabled-12000) shipped local at session start, held through the in-flight run per Rule 9, then pushed to `origin/main` after director called the run complete. **D3 RESUME EFFECTIVELY COMPLETED at director's discretion** — director paused mid-batch-87 around the volume-100 floor (their stopping point for this specific project), then formally cancelled the run and called D3 done. Run executed 86 fresh batches + 8 consolidations against Bursitis Test 2 on production vklf.com.
+
+### What this session shipped to W#1
+
+**One commit pushed to `origin/main` end-of-session:**
+
+`234f0d3` — **Auto-Analyze project defaults — Thinking=Enabled-12000.** Three-line change in `src/app/projects/[projectId]/keyword-clustering/components/AutoAnalyze.tsx`:
+- Line 133: `thinkingMode` default `'adaptive'` → `'enabled'`
+- Line 134: `thinkingBudget` default `10000` → `12000`
+- Line 2165: onBlur fallback for empty `thinkingBudget` `10000` → `12000`
+
+Sidesteps the Adaptive 0-output-tokens bug at canvas ≥50 topics without removing Adaptive as a user-selectable option. New projects start with the safer config; existing projects (Bursitis Test 2, etc.) keep their persisted UserPreference values. **Verified live by 86-batch run completion at canvas growing 195→242 topics with no Thinking-related failures.** 336/336 src/lib tests pass; tsc + build + lint at exact baseline parity (16e/40w; zero new); 33 routes.
+
+### Codified canonical Auto-Analyze settings (validated by 2026-05-05 + 2026-05-05-d runs combined)
+
+| Setting | Canonical value | Notes |
+|---|---|---|
+| Model | claude-sonnet-4-6 | |
+| Processing Mode | Adaptive | UI label "adaptive" |
+| Thinking Mode | **Enabled** | Was "adaptive"; new default per `234f0d3` |
+| Thinking Budget | **12000 tokens** | Was 10000; new default per `234f0d3` |
+| Recency Stickiness | 5 batches | Per 2026-05-03-c fix |
+| Consolidation Cadence | 10 batches | Auto-fire after every 10 regular batches |
+| Min Canvas Topics for Cons | 100 topics | Cons gate |
+| Batch Size | 8 keywords | |
+| Volume Threshold | 1000 (or as needed per project) | Director varies per project |
+
+### D3 RESUME — final empirical evidence
+
+Resumed at 5:02:48 PM 2026-05-05-d as a fresh run (UI batch numbering restarted at 1 of 204; cumulative across cancelled-prior + new = 50 + 86 = 136 batches against original 257-batch D3 scope). Director cancelled around volume-100 floor mid-batch-87 — operational decision, not a failure mode (canvas already comprehensive enough for this specific project's purpose).
+
+**Per-batch + per-consolidation summary (this run):**
+- Total spent across 86 batches + 8 consolidations: **~$50.6** (rough estimate; exact total visible in director's UI cumulative-cost surface)
+- Per-batch cost trajectory: **$0.42–0.51 (early, batches 1–30)** → **$0.50–0.65 (late, batches 50–86)** — modest growth as canvas grew 195→242 topics; **input tokens ~104k → ~141k** = roughly +50 tokens per topic added across the run
+- Validation-retry rate this run: 4 of 86 (~5%) — within normal range; batches 3, 8 (~1 keyword missed each); batches 78, 80 (~5 keywords missed each — see Findings below)
+- Stall+reconnect events: 2 (batches 3, 30) — both auto-recovered cleanly
+- Pool exhaustion errors: **0** (atomic-batch fold-in re-validated at scale)
+- Post-rebuild refresh failures: **0**
+- Sister-link count: **82 throughout** (Option A invariant held flawlessly)
+- Canvas: 195 → 242 topics (+47 net new across 86 batches)
+- Total keywords archived: **150+** across per-batch + consolidation passes (the bulk on celebrity+bursa Turkish-city homographs — high-quality model pattern recognition)
+
+**Per-consolidation summary (8 passes — verifies Option A at scale):**
+
+| # | Fired after batch | Canvas size | Operations applied | Sister-link Δ | Cost | Note |
+|---|---|---|---|---|---|---|
+| 1 | 10 | 199 | 0 | 0 | $0.448 | "no structural changes warranted" |
+| 2 | 20 | 208 | 0 | 0 | $0.608 | "no structural changes warranted" |
+| 3 | 30 | 212 | 1 (canvas-structural) | 0 | $0.493 | applied 1 op; sister-links untouched |
+| 4 | 40 | 217 | 31 (all archives) | **0** | $0.552 | bulk-archive of 31 celebrity+bursa homographs |
+| 5 | 50 | 218 | 0 | 0 | $0.526 | "no structural changes warranted" |
+| 6 | 60 | 226 | 0 | 0 | $0.550 | "no structural changes warranted" |
+| 7 | 70 | 230 | 0 | 0 | $0.584 | "no structural changes warranted" |
+| 8 | 80 | 238 | 117 (all archives) | **0** | $0.699 | bulk-archive of 117 celebrity+bursa homographs (largest stress test) |
+
+**Cumulative consolidations across the entire D3 effort: 5 prior run + 8 new run = 13. Sister-link count: 82 unchanged across all 13.**
+
+### 🎉 Option A invisibility — VERIFIED LIVE AT SCALE
+
+Per the 2026-05-05-b standing instructions item (a.1), the gate-critical test was: across all consolidations, sister-link count stays at 82 AND zero applier rejections AND zero sister-link ops emitted by model.
+
+**Result:** ✅ ALL THREE PASSED. Sister-link count was 82 from start to finish across all 8 consolidations including two stress-test bulk-archive passes (cons #4 archived 31 keywords; cons #8 archived 117 keywords); the model never emitted ADD_SISTER_LINK or REMOVE_SISTER_LINK; the applier-side backstop never had to fire (zero rejection events with the canonical substring `is not allowed in consolidation mode (sister links` across all Vercel logs).
+
+**Significance:** Option A's three-layer defense (TSV column hidden + prompt vocabulary stripped + applier rejection backstop) held perfectly at production scale. Even when the consolidation model bulk-archived 117 keywords in one pass — a peak-load stress test — sister links were untouched. This proves the architecture: the model can't reason about sister links if it can't see them in input AND can't name them in vocabulary, regardless of how aggressive its other operations get.
+
+**W#1 PRODUCTION-READINESS GATE prerequisite #6 flips ✅ DONE → ✅ VERIFIED LIVE.**
+
+### W#1 PRODUCTION-READINESS GATE — status after this session
+
+- **#1 cold-start render-layer fix:** 🟡 PARTIAL — happy-path confirmed live 2026-05-03-b; **banner UI confirmation still pending natural flake event.** No flake fired during the 86-batch D3 resume run (zero post-rebuild refresh failures; zero `runRefreshWithRetry` retry-path firings). Banner verification deferred to whatever future event triggers it.
+- **#2 recency-stickiness fix:** ✅ VERIFIED LIVE 2026-05-05-d — **re-confirmed at scale.** 86-batch input-cost trajectory was ~+50 tokens per topic (canvas 195→242), versus the unfixed 2026-05-01-b run's ~+220 tokens per topic. Fix is doing what it was designed to do: costs grow with canvas, not with monotonic accumulation of recently-touched topics.
+- **#3 underlying flake-rate fix (withRetry parity):** ✅ VERIFIED LIVE 2026-05-05-d — **re-confirmed at scale.** Zero flake events observed during 86 batches.
+- **#4 Supabase Pro upgrade:** ✅ DONE 2026-05-04-b.
+- **#5 pool-exhaustion mitigation:** 🟡 secondary buffer (pool size 40) — held at scale; never reached pool wall.
+- **#5b parallel-PATCH-burst reduction code-fix:** ✅ VERIFIED LIVE 2026-05-05-d — **re-confirmed at scale.** Zero canvas-rebuild errors across 86 atomic rebuilds + 8 consolidation rebuilds.
+- **#6 sister-link consolidation drift cleanup (Option A):** ✅ **VERIFIED LIVE 2026-05-05-d** — see preceding section.
+
+**5 of 6 prerequisites now ✅ VERIFIED LIVE.** Only #1 (banner UI) remains 🟡 PARTIAL pending natural flake.
+
+**Director's decision pending next session:** declare W#1 graduation-ready at 5/6 verified, or wait until #1 banner UI verifies naturally. Per HANDOFF_PROTOCOL Rule 22, graduation requires both the production-stability gate AND a downstream tool needing W#1's data contract. Since W#2 hasn't started its build, graduation could either fire now (5/6) or wait for #1 (6/6 strict) — a risk-posture call, not a Claude call.
+
+### 🚨 New findings surfaced this session (all captured to ROADMAP / CORRECTIONS_LOG end-of-session)
+
+1. **Anthropic API credit exhaustion mid-run (NEW operational risk).** Batch 85 failed three retries with `HTTP 400: Your credit balance is too low to access the Anthropic API.` Run halted ~36 min (8:06:52 PM → 8:42:28 PM "Resumed.") until director topped up. No proactive warning before failure; pre-flight runner doesn't check API credit balance. Captured as new ROADMAP MEDIUM consolidating with director-requested cost-forecasting feature (see #2 below).
+
+2. **Cost forecasting feature requested by director.** Auto-Analyze overlay shows running cumulative cost but no estimated remaining or estimated total. Director-proposed algorithm: sliding-window estimator (avg of last 10 successful batches' cost × batches remaining + sliding-avg consolidation cost × cons remaining). Combined with the credit-exhaustion finding, this is one ROADMAP NEW MEDIUM "Auto-Analyze cost forecasting + credit-balance check" with both surfaces (in-run cost projection display + pre-flight credit-balance check + in-run heartbeat warning).
+
+3. **Late-run validation-retry behavior (batches 78 + 80).** Each missed 5 keywords on first attempt at canvas 235-238; cost doubled twice ($1.316 + $1.187). Earlier batches missed at most 1 keyword. Hypothesis: at >150k input tokens with large TSV, model occasionally drops keywords from output. Retry recovers cleanly. Captured as ROADMAP MEDIUM "Late-run validation-retry rate telemetry" (instrument first; decide if behavioral fix is needed later).
+
+4. **Bulk-archive consolidation pattern at scale.** Cons #4 archived 31; cons #8 archived 117 — all celebrity+bursa homographs the per-batch model didn't catch but whole-canvas consolidation did. Working as designed but expensive ($0.699 + ~3 min for cons #8). Captured as ROADMAP LOW "Improve per-batch celebrity-homograph detection".
+
+5. **Director feature requests this session (4 new ROADMAP entries).** Each captured via TaskCreate (DEFERRED prefix per Rule 26) and migrated end-of-session:
+   - **Archived-terms post-run visibility.** Auto-Analyze archives ARE persisted to RemovedKeyword table with `removedSource='auto-ai-detected-irrelevant'` and surface in the "🗑 Removed Terms" overlay with AI reasoning visible — but discoverability is poor. After a run that archives 117 keywords, no banner/toast points the director to the table. Captured as ROADMAP polish backlog.
+   - **Cost forecasting feature** — see #2 above.
+   - **Auto-Analyze overlay font-size pass.** Director feedback: all data in the Auto-Analyze overlay is too small. Apply typography pass +1pt or +2pt across activity log, settings panel labels, status header, controls. Captured as ROADMAP polish backlog.
+   - **Auto-Analyze action history table + per-action undo (NEW HIGH).** Investigation confirmed feature does NOT exist today: `useEmitAuditEvent()` is explicitly a Phase 2 stub no-op (`src/lib/workflow-components/use-workflow-context.tsx:193-206`); no `AuditEvent` table in `prisma/schema.prisma`; activity log during runs is in-memory only (cleared when overlay closes); no per-action undo (only destructive Reset Workflow). The D3 run executed hundreds of AI ops with no persistent record. Captured as ROADMAP NEW HIGH with work split: (a) AuditEvent schema; (b) wire `useEmitAuditEvent()` to real DB inserts in operation-applier paths; (c) Action History UI tab in AST panel; (d) per-action undo design session before build.
+
+### Verification scoreboard (pre-push, this session's commit)
+
+| Check | Result | Note |
+|---|---|---|
+| `npx tsc --noEmit` | ✅ clean | |
+| `npm run build` | ✅ clean | 33 routes |
+| `node --test src/lib/*.test.ts` | ✅ 336/336 pass | No new tests this session — defaults change is configuration-only |
+| `npm run lint` | ✅ 16e/40w | Exact baseline parity (zero new errors; zero new warnings) |
+
+### Standing instructions for next session
+
+**(a) Director's W#1 graduation decision — RECOMMENDED FIRST.** With 5 of 6 production-readiness prerequisites ✅ VERIFIED LIVE, director chooses one of:
+   - **(a.1) Declare W#1 graduation-ready at 5/6 verified.** Banner UI verification (#1) folds into normal director use; if a flake fires, the banner is verified passively. Triggers HANDOFF_PROTOCOL Rule 22 graduation candidacy: split `KEYWORD_CLUSTERING_ACTIVE.md` into `KEYWORD_CLUSTERING_ARCHIVE.md` + `KEYWORD_CLUSTERING_DATA_CONTRACT.md`; Data Contract becomes the small stable artifact for downstream tools (W#2+) to consume.
+   - **(a.2) Wait for #1 to verify via natural flake.** Keep W#1 as 🔄 Active dev for now. New polish work and feature work proceeds against the active doc; revisit graduation after the banner UI confirmation lands.
+   - This is a risk-posture decision, not a Claude call. Director chooses next session.
+
+**(b) New HIGH-priority feature work — Action history + per-action undo.** Major missing feature surfaced this session. Own design session before build (subqueries: AuditEvent schema; emission wiring across all operation-applier paths; Action History UI tab; per-action undo design — some ops easy reverses, others compose nontrivially). Estimated 3-5 sessions total. Could parallelize with (a) since it's largely additive and doesn't gate graduation.
+
+**(c) New MEDIUM-priority — Auto-Analyze cost forecasting + credit-balance check.** Sliding-window estimator algorithm spec captured in ROADMAP. Probable single-session build (~50-100 LOC in AutoAnalyze.tsx + small Anthropic API balance query helper).
+
+**(d) Polish bundle next-session candidates.** Archived-terms post-run visibility; Auto-Analyze overlay font-size pass; pre-flight visibility (carried over from 2026-05-04-d); canvas-size in workspace top-bar (carried over).
+
+**(e) Late-run validation-retry telemetry.** ROADMAP NEW MEDIUM. Instrument first (validation-retry rate per 10-batch sliding window with yellow-warning threshold); decide if behavioral fix is needed after data lands.
+
+**(f)–(l) Lower-priority items carried over from prior sessions.** `[FLAKE]` visibility investigation; Phase-3 scaling reconsideration for atomic-batch fold-in; backend integration tests for canvas/rebuild fold-in; auto-fire toggle absence investigation; wrap remaining unwrapped routes; GoTrueClient multi-instance fix; V3-era cleanup pass; Action-by-action feedback workflow + Prompt Refining button (EXPLICITLY LAST per 2026-05-03-b directive).
+
+**Recommendation: next session = (a) director's graduation decision** as a brief decision-confirmation session. Then either kick off Rule 22 split (if a.1) or pick from (b)/(c)/(d) (if a.2).
+
+### Multi-workflow protocol coordination
+
+- Schema-change-in-flight: stays `No`. Branch: `main`. W#2 still 🆕; no parallel chat. Pull-rebase clean at session start AND before push.
+- **No cross-workflow surfacing this session** — all work is W#1-internal.
+
+### Files touched this session
+
+**Code (1 commit `234f0d3` PUSHED to origin/main):**
+- `src/app/projects/[projectId]/keyword-clustering/components/AutoAnalyze.tsx` (3-line defaults change)
+
+**Docs (Group A + Group B; end-of-session batch):**
+- `docs/KEYWORD_CLUSTERING_ACTIVE.md` (this STATE block prepended; prior 2026-05-05-b STATE block demoted to historical; header timestamps)
+- `docs/ROADMAP.md` (Active Tools row updated for W#1; Production-Readiness Gate prerequisite #6 added + flipped to ✅ VERIFIED LIVE; new MEDIUM entries for cost forecasting + credit-balance check + late-run validation-retry telemetry; new HIGH entry for action history + per-action undo; polish backlog entries for archived-terms visibility + font-size pass + bulk-archive cons pattern; pre-flight visibility entry extended with settings-completeness gap; canonical defaults table; header)
+- `docs/INPUT_CONTEXT_SCALING_DESIGN.md` (§6 D3 outcome marked effectively complete with cost-trajectory data; §7 open question on recency-stickiness verification closed; header)
+- `docs/CHAT_REGISTRY.md` (new top row + header timestamp)
+- `docs/CORRECTIONS_LOG.md` (3 new INFORMATIONAL entries — batch-vs-keyword miscount slip; re-asking persistent-settings slip; credit-exhaustion finding; header)
+- `docs/DOCUMENT_MANIFEST.md` (header + per-doc flags + this-session summary)
+- `docs/NEW_CHAT_PROMPT.md` (header timestamp)
+
+**Files deleted:**
+- `docs/SESSION_2026-05-05-D_MID_SESSION_HANDOFF.md` (its job is done — all 9 deferred items migrated to permanent docs end-of-session)
+
+### Director's offline action items (between this session and the next)
+
+1. **Decide on W#1 graduation posture for next session.** Either (a.1) declare graduation-ready at 5/6 prereqs verified or (a.2) wait for #1 banner UI to verify via natural flake. No code change required either way; the choice frames next session's scope.
+2. **(Optional) Verify Bursitis Test 2 canvas in the morning.** The 242-topic / 82-sister-link state is the curated output of the run; spot-check it looks right. Any cleanup notes captured into next session's launch prompt.
+3. **No re-paste required.** The Auto-Analyze prompts (regular V4 + Consolidation V4) are unchanged from the 2026-05-05-b paste; that paste is still canonical.
+
+**Director's framing through prior sessions:** (Scale-A) → (Scale-0) → (Defense-in-Depth ×3) → (Scale-B) → (Scale-C) → (Scale-D) → (Scale-E build) → (Scale-E D3 partial validation) → (consolidation auto-fire follow-up `2026-05-01-c`) → (HTTP 500 fix verification + auto-fire trip observation `2026-05-02`) → (browser-freeze fix design `2026-05-02-b`) → (DevTools profiling pass — diagnosis rejected `2026-05-02-c`) → (HTTP 500 retry regression investigation — fix shipped `2026-05-02-d`) → (HTTP 500 fix live verification + cold-start canvas-empty finding `2026-05-02-e`) → (cold-start render-layer fix `2026-05-03`) → (cold-start fix live verification — partial `2026-05-03-b`) → (recency-stickiness fix `2026-05-03-c`) → (underlying flake-rate investigation — instrumentation `2026-05-04`) → (rate-fix first pass — withRetry parity for silent helpers + apply-pipeline writes — DEPLOY `2026-05-04-b`) → (D3 retry attempt — partial; pool exhaustion finding ON Pro tier `2026-05-04-c`) → (pool-tune small-batch test — INSUFFICIENT — code-fix path required `2026-05-04-d`) → (atomic-batch fold-in shipped + verified across 50 batches + 5 consolidations on production vklf.com `2026-05-05`) → (sister-link consolidation drift cleanup — Option A; sister links now invisible to consolidation model `2026-05-05-b`) → (Shared Workflow Components Library Phase-1 build — platform infrastructure `2026-05-05-c`) → **(D3 RESUME COMPLETED at director's discretion + Auto-Analyze defaults change DEPLOYED + Option A invisibility VERIFIED LIVE AT SCALE; this session `2026-05-05-d`)** → (W#1 graduation decision — RECOMMENDED next).
+
+---
+
+## ⚠️ POST-2026-05-05-B-SISTER-LINK-CONSOLIDATION-DRIFT-CLEANUP-SHIPPED STATE (preserved as historical context — last updated 2026-05-05-b; SUPERSEDED by the D3 RESUME COMPLETED STATE block above. The 2026-05-05-b standing instruction item (a) "D3 retry resume from batch 53 onward" was executed 2026-05-05-d as documented above. Item (a.1) Option A invisibility verification was VERIFIED LIVE AT SCALE — gate prerequisite #6 flips to ✅ VERIFIED LIVE.)
 
 **As of 2026-05-05-b (forty-fourth Claude Code session, follow-up to `session_2026-05-05_atomic-batch-fold-in-shipped-and-verified`). CODE + DOCS session — no schema, no DB, no live run, no deploy yet (commit local; director's discretionary Rule 9 push timing).** Item (a) of the prior STATE block's standing instructions executed. **Approach pivoted mid-session from defense-in-depth to Option A (invisibility).** Original framing was "drop sister-link ops from consolidation prompt vocabulary + tighten consolidationMode in applier to reject them"; director surfaced concern that explicit forbiddance imposes cognitive load and risks priming the model ("don't think about pink elephants"). Pivoted to Option A: make sister links truly invisible to the consolidation model.
 

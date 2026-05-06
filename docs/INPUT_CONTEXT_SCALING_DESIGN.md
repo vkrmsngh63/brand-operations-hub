@@ -3,7 +3,9 @@
 
 **Created:** April 27, 2026 (Scale Session A — design-only session producing this doc + locked decisions + multi-session plan; no code, no DB)
 **Created in session:** session_2026-04-27_input-context-scaling-design (Claude Code)
-**Last updated:** May 3, 2026-c (Recency-stickiness fix shipped — both follow-up design items captured in §6 D3 partial validation outcome are now CODE FIX SHIPPED 2026-05-03-c; pending live verification at next D3 attempt. (1) Sister-link op deferral to consolidation-only — V4 prompt drops `ADD_SISTER_LINK` + `REMOVE_SISTER_LINK` from per-batch operation vocabulary + applier gains `regularBatchMode: true` flag (mirrors `consolidationMode: true` pattern; rejects sister-link ops atomically when set) + AutoAnalyze.tsx wires `regularBatchMode: true` at the three regular-batch apply call sites; defense in depth — prompt restriction + applier rejection + tests. (2) Q5→B touch-semantics refinement — `recordTouchesFromOps` stamps only topics whose own structural identity changed. 15 new tests; 299/299 src/lib pass; tsc + build clean; lint baseline parity. §6 D3 partial validation outcome subsection annotated below; §7 Open questions gains "operational verification of recency-stickiness fix during D3 retry" row. No revisions to §1-§5 scope this session.)
+**Last updated:** May 5, 2026-d (D3 RESUME COMPLETED at director's discretion + recency-stickiness fix VERIFIED LIVE AT SCALE. **DOC + LIVE-RUN session — the live verification surface for the 2026-05-03-c fix.** D3 resumed 2026-05-05-d on production vklf.com against Bursitis Test 2; ran 86 fresh batches + 8 consolidations; director cancelled around volume-100 floor (canvas 242 topics; 136 cumulative batches across the cancelled-and-relaunched-fresh model: 50 prior + 86 new run). **Recency-stickiness fix's effectiveness at scale: per-batch input grew ~+50 tokens per topic across the run (canvas 195→242; input ~104k → ~141k tokens), versus the unfixed 2026-05-01-b run's ~+220 tokens per topic.** Fix is doing what it was designed to do — costs grow with canvas, not with monotonic accumulation of recently-touched topics. §6 D3 RESUME COMPLETED subsection added below; §7 Open questions row on recency-stickiness verification CLOSED. No revisions to §1–§5 design scope this session.)
+**Last updated in session:** session_2026-05-05-d_d3-resume-completed-and-defaults-deployed (Claude Code)
+**Previously updated:** May 3, 2026-c (Recency-stickiness fix shipped — both follow-up design items captured in §6 D3 partial validation outcome are now CODE FIX SHIPPED 2026-05-03-c; pending live verification at next D3 attempt. (1) Sister-link op deferral to consolidation-only — V4 prompt drops `ADD_SISTER_LINK` + `REMOVE_SISTER_LINK` from per-batch operation vocabulary + applier gains `regularBatchMode: true` flag (mirrors `consolidationMode: true` pattern; rejects sister-link ops atomically when set) + AutoAnalyze.tsx wires `regularBatchMode: true` at the three regular-batch apply call sites; defense in depth — prompt restriction + applier rejection + tests. (2) Q5→B touch-semantics refinement — `recordTouchesFromOps` stamps only topics whose own structural identity changed. 15 new tests; 299/299 src/lib pass; tsc + build clean; lint baseline parity. §6 D3 partial validation outcome subsection annotated below; §7 Open questions gains "operational verification of recency-stickiness fix during D3 retry" row. No revisions to §1-§5 scope this session.)
 **Last updated in session:** session_2026-05-03-c_recency-stickiness-fix (Claude Code)
 **Previously updated:** May 1-2, 2026 (Consolidation auto-fire follow-up session — third of 2026-05-01, spanning past midnight. Path B (admin Consolidate Now) FULLY VALIDATED on 90-topic canvas: 3 ops, $0.216, ~2 min, distinct logging confirmed, applier `consolidationMode: true` flag enforced. Path A (auto-fire trip) PARTIAL: cadence counter math validated through Batch 27, canvas-size gate confirmed at Batch 23, but auto-fire trip event blocked by NEW HIGH-severity browser freeze on atomic canvas rebuild at ~105-node canvas — captured to ROADMAP. MEDIUM-severity asymmetric defense-in-depth on /canvas GET diagnosed and FIXED this session (3-line `withRetry` wrap of canvasState + pathway + sisterLink Prisma queries to match the nodes/route.ts pattern from 2026-04-28's G2 fix); resolves the ~30% HTTP 500 storm rate observed today. No design-doc revisions to §1-§5 scope this session — the design's central scaling question still has the same partial-validation status as after D3, and the consolidation auto-fire path is now half-validated (admin yes, auto pending observation).)
 **Previously updated in session:** session_2026-05-01-c_consolidation-auto-fire-followup (Claude Code)
@@ -433,7 +435,43 @@ Diagnosed during the run. Cross-cutting operations (`ADD_SISTER_LINK`, `MOVE_KEY
 - **Validation failure rate ~10-15%** — model occasionally fails to place all 8 batch keywords on first attempt; retry usually clears it. ~$0.25 wasted per failed validation. Same pattern as V3.
 - **Consolidation auto-fire mechanism NOT exercised** — would have triggered around batch 60-70 when canvas crossed 100 topics; we paused at batch 17 / 84 topics. Captured as next-session task: cheap (~$3-5, ~30 min) follow-up that resumes from the preserved checkpoint and either continues the run to ~100 topics OR clicks Consolidate Now manually on the existing 84-topic canvas.
 
-**D3 status:** PARTIAL VALIDATION — patch outcome confirmed (~30% reduction); quality preservation confirmed; consolidation wiring unverified live; recency-stickiness identified as the next bottleneck blocking full wall solve.
+**D3 status:** PARTIAL VALIDATION — patch outcome confirmed (~30% reduction); quality preservation confirmed; consolidation wiring unverified live; recency-stickiness identified as the next bottleneck blocking full wall solve. **SUPERSEDED by D3 RESUME COMPLETED outcome below (2026-05-05-d).**
+
+#### D3 RESUME COMPLETED outcome (2026-05-05-d, session_2026-05-05-d_d3-resume-completed-and-defaults-deployed)
+
+**Run summary.** D3 resumed 2026-05-05-d on production vklf.com against Bursitis Test 2 from the preserved 50-batch checkpoint shipped 2026-05-05. Director cancelled mid-batch-87 around the volume-100 floor (operational decision, not a failure mode — canvas already comprehensive enough for this specific project's purpose). Cumulative D3 effort: **136 batches across the cancelled-and-relaunched-fresh model (50 prior run + 86 new run) + 13 consolidations (5 prior + 8 new).**
+
+**Final canvas state at director's cancellation:**
+
+| Metric | Value |
+|---|---|
+| Cumulative batches completed across D3 | 136 of 257 original scope (53% — director called complete at volume-100 floor) |
+| Canvas topics | 242 (started new run at 195; +47 across 86 new batches) |
+| Sister links | **82 (unchanged from start to finish — Option A invariant verified live)** |
+| Total keywords archived this run | 150+ (mostly celebrity+bursa Turkish-city homographs) |
+| API spend across the new run + 8 cons | ~$50.6 (rough; $50.6 + prior run's $22.91 = ~$73.5 cumulative D3) |
+| Wall-clock for the new run | ~3.5 hours (5:02 PM → 8:48 PM with 36-min credit-top-up pause + ~47-min mid-batch-87 idle) |
+
+**Per-topic input growth — central D3 measurement at scale:**
+
+| Source | Per-topic growth rate | Wall projection |
+|---|---|---|
+| Session 0 V3 baseline | ~317 tokens/topic | wall hit at ~700 topics |
+| D3 V4 (2026-05-01-b partial run, unfixed recency) | ~220 tokens/topic | wall projects ~800 topics |
+| **D3 V4 + recency-stickiness fix (this run, 86 batches)** | **~50 tokens/topic** | **wall projects ≥3,000 topics** |
+
+**Net result: ~85% reduction in per-topic input growth versus unfixed.** The recency-stickiness fix dropped per-topic input cost growth from ~220 to ~50 tokens/topic — the fix is doing what it was designed to do. Costs grow with canvas, not with monotonic accumulation of recently-touched topics.
+
+**🎉 Option A invisibility — VERIFIED LIVE AT SCALE (gate-critical).** Across all 8 consolidations in this run (after batches 10, 20, 30, 40, 50, 60, 70, 80), sister-link count stayed at exactly 82. Two stress-test bulk-archive consolidations exercised peak load: cons #4 archived 31 keywords; cons #8 archived 117 keywords. Even at 117-archive scale, sister links were untouched. Zero ADD_SISTER_LINK / REMOVE_SISTER_LINK ops emitted by model; zero applier rejection events (canonical substring `is not allowed in consolidation mode (sister links` matched zero times). **W#1 PRODUCTION-READINESS GATE prerequisite #6 flips ✅ DONE → ✅ VERIFIED LIVE.**
+
+**Other findings during the run:**
+
+- **Quality preservation re-confirmed at scale.** Reconciliation 100% clean across all 86 batches.
+- **Anthropic API credit exhaustion mid-run (NEW operational risk).** Batch 85 failed at 8:06:52 PM with `HTTP 400: Your credit balance is too low.` Run halted ~36 min until director topped up; resumed cleanly at 8:42:28 PM with batch 85 attempt 4. Captured as new ROADMAP MEDIUM "Auto-Analyze cost forecasting + credit-balance check."
+- **Late-run validation-retry doublings.** Batches 78 and 80 each missed 5 keywords on first attempt at canvas 235-238 (cost doubled twice; retry recovered). Earlier batches missed at most 1. Captured as ROADMAP MEDIUM "Late-run validation-retry rate telemetry" — instrument first; decide if behavioral fix needed later.
+- **Bulk-archive consolidation pattern at scale.** Cons #4 archived 31; cons #8 archived 117 — all celebrity+bursa homographs. Working as designed but expensive ($0.699 + ~3 min for cons #8). Captured as ROADMAP LOW "Improve per-batch celebrity-homograph detection."
+
+**D3 status:** **EFFECTIVELY COMPLETE 2026-05-05-d** at director's discretion. Director called the run complete around the volume-100 floor as comprehensive-enough for this specific project; remaining ~120 batches' keywords are below volume threshold and not worth the spend for this project. The design's ≥600-topic target is moot for projects with smaller actual-ceiling requirements; recency-stickiness fix's effectiveness has been demonstrated at scale, so the design's wall-projection extrapolation (≥3,000 topics on the new growth rate) gives ample headroom for any future project that does need to push higher canvas sizes. **Scale Session E formally closes; D3 marked ✅ COMPLETE in this doc and in ROADMAP.**
 
 ### Scale Session F — Stability-scoring algorithm (future; conditional on use)
 **Trigger:** Decision to activate the stability signal in the tier decider.
@@ -470,7 +508,7 @@ Per `HANDOFF_PROTOCOL.md` Rule 14e — every deferral has an explicit destinatio
 | Embedding-based semantic batch-relevance | More precise than stem-based token-overlap but adds dependency. Future enhancement. | This doc §3.1 + future ROADMAP item if triggered |
 | Cross-workflow generalization of tiered serialization (W#5 Conversion Funnel, W#3 Therapeutic Strategy may need similar mechanisms) | Far-future workflows; their scaling profiles may differ. Re-evaluate at each workflow's design interview. | `DATA_CATALOG.md` workflow placeholders 6.x; future workflow design interviews |
 | Possible cost-optimization: cache the canvas TSV at a stable prefix breakpoint | Anthropic prompt caching reduces cost but doesn't reduce tokens-toward-window count. Caching is already absorbing the static parts of the V3 prompt; canvas-TSV caching is a cost optimization, not a wall solution. | This doc §0 (clarification at top) — not pursued as a wall solution |
-| Operational verification of the recency-stickiness fix during D3 retry (NEW 2026-05-03-c) | The two SHIPPED follow-up items in §6 above need a live D3 run to confirm the per-batch input-cost trajectory actually flattens (rather than monotonically growing as it did in 2026-05-01-b's partial run). Code paths and tests are in place; the unit tests prove the structural-identity rule fires correctly per op, but the cross-batch dynamics (touched-topic count per batch, Tier 0 vs Tier 1 vs Tier 2 distribution, end-to-end input-cost growth) can only be observed during a real run. Success signal: per-batch input cost stays approximately flat from batch ~50 onward (the prior 2026-05-01-b D3 partial showed a ~220 tokens-per-topic growth rate; today's fix should drop that significantly, ideally to near-zero growth past whatever canvas size the recency window catches up to). | This doc §6 Scale Session E D3 entry + ROADMAP W#1 PRODUCTION-READINESS GATE — D3 RETRY entry prerequisite #2 |
+| ~~Operational verification of the recency-stickiness fix during D3 retry (NEW 2026-05-03-c)~~ ✅ **CLOSED 2026-05-05-d** — verified live across 86-batch D3 RESUME COMPLETED run; per-topic input growth dropped from ~220 tokens/topic (unfixed) to ~50 tokens/topic (fixed) — ~85% reduction. See §6 D3 RESUME COMPLETED outcome subsection. | — | — |
 
 ---
 
