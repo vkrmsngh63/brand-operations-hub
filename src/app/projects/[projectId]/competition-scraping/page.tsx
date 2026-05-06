@@ -40,6 +40,7 @@ import {
   WorkerCompletionButton,
   WorkflowTopbar,
 } from '@/lib/workflow-components';
+import { CompetitionScrapingViewer } from './components/CompetitionScrapingViewer';
 
 const WORKFLOW_SLUG = 'competition-scraping';
 const WORKFLOW_NAME = 'Competition Scraping & Deep Analysis';
@@ -198,34 +199,15 @@ export default function CompetitionScrapingPage() {
           }
         />
 
-        {/* Content area — placeholder. The custom multi-table viewer
-            (platforms → URLs → captured rows + sort/filter + image expand)
-            is the workflow's own concern per
-            PLATFORM_REQUIREMENTS.md §12.6 shared component pattern #2 and
-            is deferred to a follow-up session along with the API routes
-            per COMPETITION_SCRAPING_STACK_DECISIONS.md §11. */}
-        <section
-          style={{
-            marginTop: '32px',
-            padding: '32px',
-            background: '#161b22',
-            border: '1px dashed #30363d',
-            borderRadius: '8px',
-            textAlign: 'center',
-            color: '#8b949e',
-          }}
-        >
-          <div style={{ fontSize: '14px', fontWeight: 500, marginBottom: '8px', color: '#e6edf3' }}>
-            Captured competition data will appear here
-          </div>
-          <div style={{ fontSize: '13px', lineHeight: 1.6, maxWidth: '640px', margin: '0 auto' }}>
-            Once the API routes and the multi-table viewer ship in a follow-up
-            session, this area will show the platforms → URLs → captured-rows
-            navigation with sort, filter, and image expand. The schema
-            (CompetitorUrl, CompetitorSize, CapturedText, CapturedImage,
-            VocabularyEntry) is in place as of today.
-          </div>
-        </section>
+        {/* Content area — the W#2 custom multi-table viewer. First slice
+            ships the platforms-→-URLs nav + URL list with sort + free-text
+            search per docs/COMPETITION_SCRAPING_DESIGN.md §A.7 + §A.14 and
+            PLATFORM_REQUIREMENTS.md §12.6 shared component pattern #2 (the
+            content area is the workflow's own concern, not imposed by the
+            library). Follow-up slices add the /url/[urlId] detail page,
+            inline editing, captured-text + image rows, and the image
+            expand viewer. */}
+        <CompetitionScrapingViewer projectId={ctx.project.id} />
       </main>
 
       <ResetConfirmDialog
