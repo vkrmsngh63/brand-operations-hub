@@ -7,7 +7,9 @@
 **Branch:** `workflow-2-competition-scraping`
 **Created:** May 4, 2026
 **Created in session:** session_2026-05-04_w2-stack-and-architecture (Claude Code; second W#2 session, follow-up to 2026-05-04 Workflow Requirements Interview)
-**Last updated:** May 4, 2026 (creation)
+**Last updated:** May 7, 2026 (W#2 API-routes session-2 build — §11.1 doc-update batch: (1) image RPC paths reshaped from colon-suffix `images:requestUpload` / `images:finalize` to slash-based `images/requestUpload` / `images/finalize` for Next.js folder convention alignment, repo precedent (`canvas/sister-links` etc.), and URL-encoding cleanliness — Next.js App Router has no documented support for `:` in folder names and the existing repo uses slash-based sub-resources throughout. Pivoted at code-write time; flagged via deferred task; doc updated end-of-session per Rule 14e. The extension is not yet built so route-rename cost is still cheap per §11.3. (2) `images/finalize` body shape extended from `{ clientId, capturedImageId, composition?, embeddedText?, tags? }` to additionally include `mimeType` (required), `sourceType` (required), `fileSize` (optional), `imageCategory` (optional). Reason: server needs `mimeType` + `sourceType` to (a) re-derive the storagePath at finalize without keeping intermediate state between requestUpload and finalize, and (b) populate the corresponding required schema columns. `fileSize` + `imageCategory` are recorded on the row at finalize so PATCH isn't required for the standard happy path. All four values are echoed from the extension's WAL — no new client knowledge required. The shared types at `src/lib/shared-types/competition-scraping.ts` are the single source of truth and were updated in lockstep with the routes this session.)
+**Last updated in session:** session_2026-05-07_w2-api-routes-session-2 (Claude Code, on `workflow-2-competition-scraping` branch)
+**Previously updated:** May 4, 2026 (creation)
 
 **Companion docs:**
 - `COMPETITION_SCRAPING_DESIGN.md` — Workflow Requirements Interview answers (§A frozen) + in-flight refinements (§B append-only). This stack-decisions doc is referenced from §B.
@@ -657,8 +659,8 @@ model AuditEvent {
 | `POST .../urls/[urlId]/text` | `{ clientId, contentCategory?, text, tags? }` → returns `CapturedText` | Both |
 | `PATCH .../text/[textId]` | Partial update | Both |
 | `DELETE .../text/[textId]` | | Both |
-| `POST .../urls/[urlId]/images:requestUpload` | `{ clientId, mimeType, fileSize, imageCategory?, sourceType }` → returns `{ uploadUrl, capturedImageId, expiresAt }` | Extension only |
-| `POST .../urls/[urlId]/images:finalize` | `{ clientId, capturedImageId, composition?, embeddedText?, tags? }` → returns `CapturedImage` | Extension only |
+| `POST .../urls/[urlId]/images/requestUpload` | `{ clientId, mimeType, fileSize, sourceType, imageCategory? }` → returns `{ uploadUrl, capturedImageId, storagePath, expiresAt }` | Extension only |
+| `POST .../urls/[urlId]/images/finalize` | `{ clientId, capturedImageId, mimeType, sourceType, fileSize?, imageCategory?, composition?, embeddedText?, tags?, width?, height?, sortOrder? }` → returns `CapturedImage` | Extension only |
 | `PATCH .../images/[imageId]` | Partial update | Both |
 | `DELETE .../images/[imageId]` | | Both |
 | `GET /api/projects/[projectId]/vocabulary?type=...` | → `VocabularyEntry[]` for type | Both |
@@ -670,7 +672,9 @@ model AuditEvent {
 
 - **CORS:** routes used by the extension have OPTIONS preflight handlers that allow the `chrome-extension://*` origin. The PLOS web app continues to work via same-origin (no CORS preflight needed for it).
 - **Auth:** every route runs the existing `verifyProjectAuth` chain from `src/lib/auth.ts:88-127`. Extension JWTs are accepted identically to web JWTs.
-- **Idempotency:** `POST .../text` and `POST .../images:finalize` accept the client-generated `clientId` UUID and return the existing record if one already exists for that clientId (so a network retry never creates duplicates).
+- **Idempotency:** `POST .../text` and `POST .../images/finalize` accept the client-generated `clientId` UUID and return the existing record if one already exists for that clientId (so a network retry never creates duplicates).
+- **Image upload retries on requestUpload:** `POST .../images/requestUpload` does NOT dedupe by clientId. Each call generates a fresh `capturedImageId` + signed upload URL. If the extension retries `requestUpload` after a network blip on the response, the prior signed URL's storage path becomes an orphan that the daily janitor (session-3) cleans up if no DB row references it. Idempotency lives at `finalize` (the DB write).
+- **Storage-path derivation at finalize:** server re-derives `storagePath` from `(projectId, urlId, capturedImageId, mimeType)` rather than trusting a client-supplied path — keeps the server as the single source of truth on path layout. Extension echoes `mimeType` + `sourceType` (immutable across the two-phase flow) so the derivation matches the path the upload landed at; server then verifies the file actually exists at that path before creating the DB row (defense against buggy/compromised clients calling finalize without uploading).
 - **Idempotency response shape:** every write response includes the `clientId` echo per §8.3.2.
 - **withRetry:** every Prisma call wrapped with `withRetry()` per the 2026-05-04-b/05 platform-wide pattern.
 - **Connection-pool care:** writes use the same atomic-batch-into-rebuild pattern as W#1's apply-pipeline (per `KEYWORD_CLUSTERING_ACTIVE.md` POST-2026-05-05 STATE block) when applicable. For W#2 specifically, the writes are mostly single-row inserts (one URL, one text row, one image row at a time), so connection-pool burst patterns are NOT a concern at Phase 1 scale; revisit at Phase 3 if bulk-import features get added.
