@@ -648,4 +648,38 @@ This section is for entries added in subsequent sessions when the director adds 
 
 ---
 
+**2026-05-06 — session_2026-05-06_w2-plos-side-viewer-first-slice (Claude Code, on `workflow-2-competition-scraping` branch)**
+
+- **Session purpose:** ship the FIRST SLICE of the W#2 custom React multi-table viewer for the PLOS-side content area per `COMPETITION_SCRAPING_DESIGN.md §A.7 + §A.14` and `PLATFORM_REQUIREMENTS.md §12.6` shared component pattern #2 (the content area is the workflow's own concern, not imposed by the library). W#2 is the FIRST workflow to author such a custom content component.
+
+- **Director's directive (mid-build Read-It-Back per Rule 18):** at session start, director said *"begin item (a) from the W#2 Active Tools Next Session list — multi-session — start by surfacing options for the first slice (likely platforms-→-URLs nav + URL list with sort/filter, building against session-1's GET .../urls)."* Claude surfaced 3 slice-shape options + escape-hatch via `AskUserQuestion`; director picked **Sidebar + URL table (recommended)**. Claude then read back a tight first-slice scope (sidebar with All Platforms + 7 platform rows + counts; URL table with 7 columns, click-to-toggle sort, free-text search across URL+Product+Brand, click-row-to-open-in-new-tab; explicit deferrals enumerated; verification plan stated). Director responded *"Yes, this scope matches what I want. Please proceed..."* — both the slice-shape pick and the scope-recap were approved before code.
+
+- **Alternatives considered:**
+  - **Slice shape (3 options surfaced via forced picker):** (A) Sidebar + URL table — chosen as recommended, most aligned with director's free-form brief in §A.15 ("browseable by clicking on individual platform names or urls"); (B) Top tabs + URL table — more compact for 7 platforms, less scalable to additional nav dimensions; (C) Single grouped table — best for one-glance scanning, weakest for focused work on one platform with many URLs. Director picked (A).
+  - **Sort + filter mechanics (autonomous Rule-15 within the approved slice scope):** sort-by-clicking-column-headers chosen over a separate sort dropdown (column-header sort is the well-established table convention; less screen real estate; familiar to non-technical users). Free-text search-across-URL+Product+Brand chosen as the single search dimension for first slice; per-column filter dropdowns deferred to slice (a.4).
+  - **Click-row behavior (autonomous Rule-15 within the approved slice scope):** `window.open(url, '_blank', 'noopener,noreferrer')` — opens the competitor's URL in a new browser tab. Considered: (i) row click navigates to the deferred `/url/[urlId]` detail page (rejected — page doesn't exist in this slice); (ii) only the URL cell is clickable, not the whole row (rejected — director's bullet during read-it-back said "click on a URL row → opens that competitor's URL in a new browser tab," so the whole row is the click target). Keyboard accessibility added via `tabIndex={0}` + Enter/Space onKeyDown handler + `role="link"` so the row behaves like a link for assistive tech.
+  - **Data-fetch shape (autonomous Rule-15):** single fetch of `GET /urls` (no `?platform=` filter) so per-platform counts can be computed client-side and platform switching is instant. At Phase 3 throughput (~30 URLs/platform/Project) the full list stays small; client-side sort + filter stays snappy without pagination. Server-side pagination + count endpoints would be a larger change with no Phase 1 user benefit; revisit if a future scale pass shows otherwise.
+  - **URL bar sync (autonomous Rule-15):** selected platform persists in `?platform=…` query string via `router.replace` so a refresh preserves the view. Considered also storing in localStorage; rejected because URL-based state is shareable (deep-link to a specific platform's view) and survives a Codespaces / browser session boundary that localStorage doesn't.
+
+- **Decision:** first slice of the multi-table viewer is shipped — platforms → URLs nav (sidebar, 8 entries: All + 7 platforms with counts) + URL list (sortable, free-text searchable, click-row-to-open-in-new-tab). Visual-verified live on the dev server against a real Project (sidebar counts all 0 — empty state confirmed; `?platform=…` URL sync confirmed across a refresh; topbar/status/deliverables/reset chrome unchanged).
+
+- **Director feedback captured during visual verification (3 deferred items, all destination-named per Rule 14e + TaskCreate per Rule 26):**
+  1. **`/plos` dashboard top nav has no `Projects` link** — captured as new Phase-1 polish item in `ROADMAP.md` (§ between the bulk-action button polish item and the sister-link architectural item).
+  2. **`/projects` list should have copy-to-clipboard affordance for Project ID + Project page URL** — captured as new Phase-1 polish item in `ROADMAP.md` (alongside the prior).
+  3. **W#2 card on `/plos` dashboard + Project detail page is currently `active: false, route: null`** — kept disabled today; release-gate decision deferred to a future session, captured in this very §B entry (below) so future sessions see it surfaced.
+
+- **W#2 card-flip deferral (DEFERRED: release-gate decision; tracked here in §B per Rule 14e):** `src/app/projects/[projectId]/page.tsx:15` has W#2 as `active: false, route: null`; `src/app/plos/page.tsx:95` has `badge: "soon", route: null`. Both are deliberate prior-session decisions to keep W#2 hidden in card grids until the workflow has enough working surface that a card-click lands somewhere useful. Today's first slice is one piece of that surface; the release-gate criterion suggested (revisit when satisfied): the `/url/[urlId]` detail page (a.1) AND the image expand viewer (a.2) AND the Chrome extension's Module 1 URL-capture flow (c) are all live, so a user clicking the card on a real Project sees a non-empty viewer (because URLs have been captured by the extension) AND can drill into them (because the detail page exists). This `(a.1)+(a.2)+(c) → flip` framing is recorded in `ROADMAP.md`'s W#2 Active Tools row Next Session item (e); future sessions revisit when those prerequisites land.
+
+- **Affected sections:** §A.14 Q14 sequencing list (item 3 — "W#2 PLOS-side build" — first slice now started); no edits to §A1–§A18; §A remains frozen per Rule 18.
+
+- **Cross-references:**
+  - `docs/ROADMAP.md` — Active Tools W#2 row updated (Status + Last Session + Next Session); 2 new Phase-1 polish items added per director feedback above.
+  - `docs/COMPETITION_SCRAPING_STACK_DECISIONS.md` §10 — PLOS-side route table; the main view at `/projects/[projectId]/competition-scraping` is the target route for today's slice; URL detail page at `/url/[urlId]` (also in §10) is deferred to slice (a.1).
+  - `docs/PLATFORM_REQUIREMENTS.md` §12.6 — shared component pattern #2 (custom React content components) — W#2 is the first workflow to exercise this pattern; today's slice is the first proof point.
+  - `docs/WORKFLOW_COMPONENTS_LIBRARY_DESIGN.md` — confirms the library does NOT include a content-area component; today's slice authors W#2's own.
+  - `docs/CHAT_REGISTRY.md` — new top row.
+  - `docs/DOCUMENT_MANIFEST.md` — header timestamps + per-doc flags.
+
+---
+
 END OF DOCUMENT
