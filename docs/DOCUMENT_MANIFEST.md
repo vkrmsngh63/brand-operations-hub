@@ -103,142 +103,61 @@ These 13 documents form the persistent handoff context.
 | # | Document | Purpose | Last modified | Modified this session? |
 |---|---|---|---|---|
 | 1 | `PROJECT_CONTEXT.md` | Big-picture project context, philosophy, methodology, discover-as-you-build approach | 2026-05-04 (third-batch stale-wording cleanup — line 349 Workflow Requirements Interview list: "scaffold fit" → "components-library fit (which shared components the workflow imports + which custom React content component it authors)"; surgical edit only.) | NO (not modified this session) |
-| 2 | `PLATFORM_ARCHITECTURE.md` | Technical architecture — routes, schema, auth, file structure, tech debt | 2026-05-07-b (W#2 PLOS-side viewer slice (a.2) — `/images` GET row in §3 routes table updated to reflect that the response now includes thumbnail + full-size signed URLs (1-hour TTL each, minted server-side via the existing `competition-storage.ts` helpers); header timestamp.) | ✅ YES |
+| 2 | `PLATFORM_ARCHITECTURE.md` | Technical architecture — routes, schema, auth, file structure, tech debt | 2026-05-07-b (W#2 PLOS-side viewer slice (a.2) — `/images` GET row in §3 routes table updated to reflect that the response now includes thumbnail + full-size signed URLs (1-hour TTL each, minted server-side via the existing `competition-storage.ts` helpers); header timestamp.) | NO (not modified this session 2026-05-07-c — slice (a.3) added no new routes, no schema changes; no architectural updates needed) |
 | 3 | `PLATFORM_REQUIREMENTS.md` | Platform-wide requirements — scale, user-model, review cycle, audit, concurrency, phasing | 2026-05-05 (W#2 doc-reframe on `workflow-2-competition-scraping` — §12.6 reframed from "Scaffold extension-points" to "Shared component patterns" per the components-library architectural pivot landed on `main` 2026-05-04 in `session_2026-05-04_workflow-tool-scaffold-design`. Per-pattern body realigned with components-library framing — `<DeliverablesArea>` for #1, content-as-workflow's-own-concern for #2, `<CompanionDownload>` for #3. §12.1-§12.5 main rewrite [Workflow-Tool Scaffold → Components Library] flowed in via 2026-05-06 merge of main into this branch.) | NO (not modified this session) |
 | 4 | `NAVIGATION_MAP.md` | Every route + click path through PLOS — UI navigation source of truth | 2026-04-17 | NO |
 | 5 | `DATA_CATALOG.md` | Every data item — where it lives, Human Reference Language, cross-workflow sharing contracts | 2026-04-30 (Scale Session B — §5.2 FIELDS list extended to include `intentFingerprint`; new §5.2a section.) | NO |
-| 6 | `ROADMAP.md` | Development execution plan — completed work + remaining phases | 2026-05-05 (W#2 doc-reframe — Current Active Tools W#2 row Last Session column updated to reflect today's session; Next Session items (a) + (b) reframed from "Shared Workflow-Tool Scaffold design + build" / "after scaffold ships" / "plugged into scaffold per §12.6 #2" wording to components-library wording (item (a) now "Shared Workflow Components Library Phase-1 build" with full Phase-1 component list; item (b) "after Phase-1 library ships" with "composed alongside imported library components per §12.6 shared component pattern #2"); new item (a.1) "Branch-housekeeping prep step before (b)" added covering main-merge into the W#2 branch + residual stale-scaffold sweep on W#2-branch-owned sections that main's `8cbc0c6` doesn't reach. Out-of-scope stale-scaffold-wording in non-W#2-row sections deferred to (a.1) housekeeping. Header timestamp updated. PLUS main's 2026-05-04 third-batch stale-wording cleanup [W#2/3/5 prereqs + Phase 1α section + blocker entry] flowed in via 2026-05-06 merge of main; 2026-05-05-d D3 RESUME COMPLETED + components library Phase-1 SHIPPED + sister-link drift cleanup also flowed in via same merge. PLUS 2026-05-07-b W#2 PLOS-side viewer slice (a.2) — Active Tools W#2 row + Workflow #2 section + header updated.) | ✅ YES |
+| 6 | `ROADMAP.md` | Development execution plan — completed work + remaining phases | 2026-05-07-c (W#2 PLOS-side viewer slice (a.3) — per-field inline editing of URL metadata SHIPPED — Active Tools W#2 row Last Session + Workflow #2 section slice (a.3) annotated DONE + (a.3) item removed from Next Session list since shipped (a.4) is now the next-up; header timestamps updated; prior 2026-05-05 W#2 doc-reframe — Current Active Tools W#2 row Last Session column updated to reflect today's session; Next Session items (a) + (b) reframed from "Shared Workflow-Tool Scaffold design + build" / "after scaffold ships" / "plugged into scaffold per §12.6 #2" wording to components-library wording (item (a) now "Shared Workflow Components Library Phase-1 build" with full Phase-1 component list; item (b) "after Phase-1 library ships" with "composed alongside imported library components per §12.6 shared component pattern #2"); new item (a.1) "Branch-housekeeping prep step before (b)" added covering main-merge into the W#2 branch + residual stale-scaffold sweep on W#2-branch-owned sections that main's `8cbc0c6` doesn't reach. Out-of-scope stale-scaffold-wording in non-W#2-row sections deferred to (a.1) housekeeping. Header timestamp updated. PLUS main's 2026-05-04 third-batch stale-wording cleanup [W#2/3/5 prereqs + Phase 1α section + blocker entry] flowed in via 2026-05-06 merge of main; 2026-05-05-d D3 RESUME COMPLETED + components library Phase-1 SHIPPED + sister-link drift cleanup also flowed in via same merge. PLUS 2026-05-07-b W#2 PLOS-side viewer slice (a.2) — Active Tools W#2 row + Workflow #2 section + header updated.) | ✅ YES |
 | 7 | `CORRECTIONS_LOG.md` | Append-only log of mistakes + extracted patterns | 2026-05-05-d (D3 RESUME COMPLETED + Auto-Analyze defaults deployed + Option A invisibility VERIFIED LIVE AT SCALE — THREE new INFORMATIONAL entries: batch-vs-keyword miscount slip; re-asking persistent-settings slip; credit-exhaustion finding. PLUS earlier 2026-05-05 entries from W#2 doc-reframe [Rule 26 cross-branch TaskList persistence gap] + 2026-05-05-c [Next.js App Router private-folder convention slip] + 2026-05-05-b [defense-in-depth-as-default-pattern over-prescription] + 2026-05-04 third-batch [incomplete grep-sweep when retiring vocabulary term] + 2026-05-04 first-batch [over-prescribing blanket rules without concrete user need] + 2026-05-05 atomic-batch [sister-link plan↔code drift] + 2026-05-04 W#2 stack-and-architecture [§A.17 Q2 framing missed direct-credentials option] all preserved.) | NO (not modified this session 2026-05-07-b — no new corrections this session) |
-| 8 | `CHAT_REGISTRY.md` | Chronological log of chats + URLs + work-summaries (post-Ckpt-9: Claude Code sessions use session-identifier format) | 2026-05-05-d (D3 RESUME COMPLETED + Auto-Analyze defaults deployed + Option A invisibility VERIFIED LIVE AT SCALE — header updated. Prior 2026-05-05-c + 2026-05-05-b + 2026-05-05 [W#2 doc-reframe] + 2026-05-04 [W#2 stack-and-architecture] + 2026-05-04 [Workflow-Tool Scaffold → Components Library pivot] entries all preserved. PLUS 2026-05-07-b W#2 PLOS-side viewer slice (a.2) — new top row + header.) | ✅ YES |
+| 8 | `CHAT_REGISTRY.md` | Chronological log of chats + URLs + work-summaries (post-Ckpt-9: Claude Code sessions use session-identifier format) | 2026-05-07-c (W#2 PLOS-side viewer slice (a.3) — new top row + header). Prior 2026-05-05-d (D3 RESUME COMPLETED + Auto-Analyze defaults deployed + Option A invisibility VERIFIED LIVE AT SCALE — header updated. Prior 2026-05-05-c + 2026-05-05-b + 2026-05-05 [W#2 doc-reframe] + 2026-05-04 [W#2 stack-and-architecture] + 2026-05-04 [Workflow-Tool Scaffold → Components Library pivot] entries all preserved. PLUS 2026-05-07-b W#2 PLOS-side viewer slice (a.2) — new top row + header.) | ✅ YES |
 | 9 | `HANDOFF_PROTOCOL.md` | Rules for how chats operate — start/mid/end protocols, communication rules, interview rules | 2026-05-04 (Workflow-Tool Scaffold → Components Library design pivot session — TWO BATCHES of edits. First batch: Rule 20 REFRAMED to align with the components-library architecture (no scaffold shell; no waiver concept; just import-and-compose; director-approved as part of the §12 rewrite). Second batch (sequential-workflow doc-surgery layer): Rule 22 Resume Prompt template rewritten to 3-step terminal-then-paste pattern with branch-checkout commands; §4 Step 4b NEXT-SESSION INSTRUCTIONS template updated to include explicit branch-checkout step; Rule 25 REFRAMED 2026-05-04 to remove parallel-chats framing. All three changes address the branch-mismatch friction surfaced 2026-05-04 when this session inherited the W#2 branch from prior work; cumulative effect: every place that generates a launch prompt or next-session-instructions now includes the branch-checkout step.) | NO (not modified this session) |
 | 10 | `DOCUMENTATION_ARCHITECTURE.md` | Design of the doc-system itself (DLMS, tool graduation, group A/B, workflow interview pattern, Claude Code migration) | 2026-05-04 (third-batch stale-wording cleanup — line 350 interview Q14 list updated; §14.5 substantively rewritten: "Relationship to the Shared Workflow-Tool Scaffold" → "Relationship to the Shared Workflow Components Library" with full reframe — no required shell; no waiver concept; W#1 stance updated to optional-piecemeal-adoption.) | NO (not modified this session) |
 | 11 | `NEW_CHAT_PROMPT.md` | **Historical** — claude.ai era briefing template. Post-Phase-M, Claude Code sessions use `CLAUDE_CODE_STARTER.md` instead. | 2026-04-17 | NO |
-| 12 | `DOCUMENT_MANIFEST.md` | This file — ground-truth doc registry | 2026-05-05 (W#2 doc-reframe — header timestamps + per-doc Modified-this-session flags + this-session summary updated. Per-doc rows updated for the 6 docs modified this session: PLATFORM_REQUIREMENTS [✅ YES], ROADMAP [✅ YES], CORRECTIONS_LOG [✅ YES], CHAT_REGISTRY [✅ YES], COMPETITION_SCRAPING_DESIGN [✅ YES], COMPETITION_SCRAPING_STACK_DECISIONS [✅ YES]; flag for PLATFORM_ARCHITECTURE reset from prior session's ✅ YES → NO since not modified today.) | ✅ YES |
+| 12 | `DOCUMENT_MANIFEST.md` | This file — ground-truth doc registry | 2026-05-07-c (W#2 PLOS-side viewer slice (a.3) — header timestamp + per-doc Modified-this-session flags + this-session summary updated). Prior 2026-05-05 (W#2 doc-reframe — header timestamps + per-doc Modified-this-session flags + this-session summary updated. Per-doc rows updated for the 6 docs modified this session: PLATFORM_REQUIREMENTS [✅ YES], ROADMAP [✅ YES], CORRECTIONS_LOG [✅ YES], CHAT_REGISTRY [✅ YES], COMPETITION_SCRAPING_DESIGN [✅ YES], COMPETITION_SCRAPING_STACK_DECISIONS [✅ YES]; flag for PLATFORM_ARCHITECTURE reset from prior session's ✅ YES → NO since not modified today.) | ✅ YES |
 | 13 | `CLAUDE_CODE_MIGRATION.md` | Migration plan and operational rules for shifting from claude.ai to Claude Code. Executed successfully in Ckpt 9+9.5. | 2026-04-17 | NO |
 | 14 | `AI_TOOL_FEEDBACK_PROTOCOL.md` | Platform-wide standard for every AI-using tool in PLOS. Defines required integration points (structured decision output with reasoning, admin review surface with 3 actions + 2 feedback channels, feedback-repo write/read-back, quality scoring, model/provider registry), 3-phase implementation roll-out, and the primer text to include in every new workflow's design doc. | 2026-04-20 | NO |
 | 15 | `MODEL_QUALITY_SCORING.md` | Stability-score algorithm spec. Defines 0-10 stability_score per AI output item, factors that add/subtract to score, model's interpretation instructions, JUSTIFY_RESTRUCTURE payload requirement for high-score modifications, admin scoring guidelines (1-5 scale with 4 evaluation dimensions), meta-note on how algorithm was derived + review triggers + how to propose weight changes. | 2026-04-20 | NO |
-| 16 | `MULTI_WORKFLOW_PROTOCOL.md` | **NEW 2026-04-29; REFRAMED 2026-05-04.** Methodology for managing multi-workflow state in PLOS. Branch strategy (W#1 on `main`; W#k for k ≥ 2 on `workflow-N-<slug>` feature branches). Doc section ownership; drift coordination (mandatory pull-rebase; schema-change handshake; dev-server exclusivity). The "Current Active Tools" table at top of `ROADMAP.md` is the single source of truth for multi-workflow state. Reframed 2026-05-04 from "parallel Claude Code chats" assumption to sequential-workflows-with-persistent-branch-state reality (per project memory `project_sequential_workflow_operation.md`). NEW §11 (2026-05-04) — canonical "How to start a session for any workflow" with branch-task table + step-by-step + cross-workflow/platform-wide template. Appendix A (W#2) + Appendix B (W#1) launch prompts rewritten to 3-step terminal-then-paste format with branch-checkout commands inline + common-task-description variants. | 2026-05-04 (Sequential-workflow doc-surgery — §1 reframed; §7 retitled (FIRST-session-only); NEW §10 quick-reference table; NEW §11 canonical "How to start a session"; Appendix A (W#2) + Appendix B (W#1) launch prompts rewritten to 3-step branch-checkout-then-launch-then-paste pattern; §11.1 cross-workflow/platform-wide template; §12 retitle.) | ✅ YES |
+| 16 | `MULTI_WORKFLOW_PROTOCOL.md` | **NEW 2026-04-29; REFRAMED 2026-05-04.** Methodology for managing multi-workflow state in PLOS. Branch strategy (W#1 on `main`; W#k for k ≥ 2 on `workflow-N-<slug>` feature branches). Doc section ownership; drift coordination (mandatory pull-rebase; schema-change handshake; dev-server exclusivity). The "Current Active Tools" table at top of `ROADMAP.md` is the single source of truth for multi-workflow state. Reframed 2026-05-04 from "parallel Claude Code chats" assumption to sequential-workflows-with-persistent-branch-state reality (per project memory `project_sequential_workflow_operation.md`). NEW §11 (2026-05-04) — canonical "How to start a session for any workflow" with branch-task table + step-by-step + cross-workflow/platform-wide template. Appendix A (W#2) + Appendix B (W#1) launch prompts rewritten to 3-step terminal-then-paste format with branch-checkout commands inline + common-task-description variants. | 2026-05-04 (Sequential-workflow doc-surgery — §1 reframed; §7 retitled (FIRST-session-only); NEW §10 quick-reference table; NEW §11 canonical "How to start a session"; Appendix A (W#2) + Appendix B (W#1) launch prompts rewritten to 3-step branch-checkout-then-launch-then-paste pattern; §11.1 cross-workflow/platform-wide template; §12 retitle.) | NO (not modified this session 2026-05-07-c) |
 
-**Group A count: 16 documents.** 4 modified this session 2026-05-07-b (W#2 PLOS-side viewer slice (a.2) — image gallery + full-size viewer modal): PLATFORM_ARCHITECTURE (§3 routes table — `/images` GET row updated for the new wire shape that includes minted thumbnail + full-size signed URLs + header), ROADMAP (Active Tools W#2 row + Workflow #2 section + header), CHAT_REGISTRY (new top row + header), DOCUMENT_MANIFEST (this header). 12 not modified this session. **Group B modified:** COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md (slice (a.2) section appended — 14 walked-through tests + seed-data prerequisites). **Group B created:** none this session.
+**Group A count: 16 documents.** 3 modified this session 2026-05-07-c (W#2 PLOS-side viewer slice (a.3) — per-field inline editing of URL metadata): ROADMAP (Active Tools W#2 row Last Session + Workflow #2 section slice (a.3) annotated DONE + (a.3) item removed from Next Session list since shipped + header), CHAT_REGISTRY (new top row + header), DOCUMENT_MANIFEST (this header + per-doc flags). 13 not modified this session (PLATFORM_ARCHITECTURE flag flipped back to NO since slice (a.3) added no routes / no schema changes; MULTI_WORKFLOW_PROTOCOL flag flipped back to NO — was stale ✅ YES from a much earlier session). **Group B modified:** COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md (slice (a.3) section appended — 23 walked-through tests + seed-data prerequisites + API-side confirmation summary). **Group B created:** none this session.
 
 **Created this session (Group A):** no new Group A docs.
 
-**Created this session (Group B):** docs/COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md.
+**Created this session (Group B):** none.
 
-**Modified this session (Group B):**
-- `docs/KEYWORD_CLUSTERING_ACTIVE.md` — new POST-2026-05-04-C-D3-RETRY-PARTIAL-POOL-EXHAUSTION-FINDING STATE block prepended; prior POST-2026-05-04-B-RATE-FIX-FIRST-PASS STATE block demoted to historical; header timestamp.
+**Modified this session (Group B):** `docs/COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` (slice (a.3) section appended — 23 walked-through tests + seed-data prerequisites + API-side confirmation summary; header timestamp).
 
-**Code changes this session (src/ + scripts/):** none. Doc-only session.
+**Code changes this session (src/):** ONE commit `5bd1b4a` (1421 insertions, 46 deletions across 5 src files):
 
-**This-session summary (2026-05-04-c — D3 retry attempt partial; pool-exhaustion finding):** D3 retry attempt launched after the 2026-05-04-b rate-fix shipped. Batch 1 ran cleanly model + apply-pipeline side ($0.312, 15 ops applied, canvas at 124 nodes, 0 new sister links — quiet confirmation V4 prompt paste was correct). Post-rebuild UI refresh exhausted on 3 consecutive HTTP 500s; the 2026-05-02-d post-rebuild fetch retry helper paused the run cleanly. Vercel logs revealed `FATAL: Max client connections reached` — Supabase Postgres pool exhaustion under apply-pipeline's parallel keyword PATCH burst (~22 PATCH /keywords/[id] failures within 0.1 sec at 8:30:40 PM, plus 4 GET /canvas + 2 GET /canvas/nodes failures, all same error). Different failure mode than the 2026-05-04-b rate-fix targets (no Prisma error code; just FATAL message; retrying makes pool pressure worse). Director chose Path B: pause D3, prioritize Supabase Pro upgrade FIRST (director confirmed 2026-05-04-b on Free tier), retry D3 in fresh session. **Open question — `[FLAKE]` line visibility:** flake-counter telemetry shipped 2026-05-04 should have logged `[FLAKE]` line per error; director's Vercel paste showed full stack traces but NO `[FLAKE]` lines visible. Three possibilities: Vercel UI display issue, wiring gap, format issue. Investigation deferred to next-session standalone item. **W#1 PRODUCTION-READINESS GATE updated:** prerequisite #3 status reframed (covers transient flakes; does NOT cover pool exhaustion); NEW prerequisite #4 added — Supabase Pro upgrade (director-action item, ~$25/month, reversible). Gate completion estimate: 1 session remaining AFTER Pro upgrade lands. Multi-workflow: schema-change-in-flight stays "No"; W#2 still 🆕; no parallel chat. Pull-rebase clean at session start. Doc-only commit; push pending Rule 9 approval.
+- `src/lib/shared-types/competition-scraping.ts` (modified) — `UpdateCompetitorUrlRequest` rewritten as an explicit interface with `string | null` / `number | null` on the nullable fields. Additive on the wire (route already accepted non-string/non-number → null at runtime); no behavior change on the server.
+- `src/app/projects/[projectId]/competition-scraping/url/[urlId]/components/EditableField.tsx` (NEW) — shared FieldShell + 3 variants `EditableTextField` / `EditableNumberField` / `EditableVocabularyField`; ✓/Enter saves, ✕/Esc cancels; per-field error message; explicit-commit only (no save-on-blur).
+- `src/app/projects/[projectId]/competition-scraping/url/[urlId]/components/VocabularyPicker.tsx` (NEW) — typeahead combobox; lazy-loads `/vocabulary?type=...` on first focus; case-insensitive filter; "+ Create '<typed>'" row at the bottom when no exact match; idempotent POST /vocabulary on create; outside-click closes popover.
+- `src/app/projects/[projectId]/competition-scraping/url/[urlId]/components/CustomFieldsEditor.tsx` (NEW) — key/value list editor with per-row pencil ✎ + delete ✕; "+ Add custom field" button; rename preserves key order via key-walk substitution NOT spread-and-add; duplicate-name check before save.
+- `src/app/projects/[projectId]/competition-scraping/url/[urlId]/components/UrlDetailContent.tsx` (modified) — `UrlMetadataCard` rewires read-only `Field` components to `EditableVocabularyField` (Product Name / Brand Name / Category) + `EditableNumberField` (Product Stars / Seller Stars / # Product Reviews / # Seller Reviews / Results Page Rank, with min/max/integer validation) + `CustomFieldsEditor` (customFields). New `patchUrl` callback does one-field PATCH; on success the server's authoritative response replaces `urlSlot.data`; on error the promise rejects with plain-language messages the field surfaces inline (404 → "This URL no longer exists.", 409 → "A URL row with that platform + address already exists for this Project.", other → "Save failed (HTTP …)"). Platform / Added On / Last Updated stay read-only via a small `ReadOnlyField` sibling.
+
+**Verification at end-of-session:** 393/393 src/lib tests pass (no test changes — pure UI work); tsc clean (`npx tsc --noEmit`); build clean (49 routes; same as slice (a.2) — zero new API routes); lint reports 13 errors / 39 warnings project-wide (drifted DOWN from slice (a.2)'s 16e/40w during the 2026-05-06 main merge — the 3 fewer errors all live in pre-existing files outside the W#2 surface) with **zero new errors or warnings in any of the slice (a.3) files** (`npx eslint` on just the slice's six files reports clean).
+
+**End-of-session doc commits (separate from the code commit — second commit, docs-only):**
+
+*Docs (Group A):*
+- `docs/ROADMAP.md` (Active Tools W#2 row Last Session + Workflow #2 section slice (a.3) annotated DONE + (a.3) item removed from Next Session list since shipped + header)
+- `docs/CHAT_REGISTRY.md` (new top row + header timestamp)
+- `docs/DOCUMENT_MANIFEST.md` (this file — header + per-doc flags + this-session summary; PLATFORM_ARCHITECTURE flag flipped back to NO since slice (a.3) added no routes / no schema changes; MULTI_WORKFLOW_PROTOCOL flag flipped back to NO — was stale ✅ YES from a much earlier session)
+
+*Docs (Group B):*
+- `docs/COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` (slice (a.3) section appended)
+
+**Multi-workflow:** schema-change-in-flight stays "No"; pull-rebase clean at session start AND right before commit (0 new commits on remote); no parallel chat; W#1 row untouched per Rule 3 ownership.
+
+**TaskList sweep at end-of-session:** 7 tasks tracked + completed; **zero `DEFERRED:` items at any point per Rule 26.**
+
+**Push status:** code commit `5bd1b4a` + this docs commit are LOCAL only; push pending Rule 9 approval. Push to `workflow-2-competition-scraping` does NOT deploy vklf.com (only push-to-main triggers redeploy).
 
 **Modified this session (operational file, not Group A):** none.
 
 **Created this session (memory files, Claude operational):** none.
 
 **Modified this session (memory files, Claude operational):** none.
-
-**Code changes this session (src/ + scripts/) — TWO commits:**
-
-**Commit 1 (`c34ddc9`) — silent helpers wrap:**
-- `src/lib/auth.ts` (modified) — `verifyProjectAuth`'s `prisma.project.findUnique` + `verifyProjectWorkflowAuth`'s `prisma.projectWorkflow.upsert` wrapped in `withRetry()`. New `import { withRetry } from '@/lib/prisma-retry';`. ~10 LOC delta + comments.
-- `src/lib/workflow-status.ts` (modified) — `markWorkflowActive`'s `prisma.projectWorkflow.findUnique` + `prisma.projectWorkflow.create` + both `prisma.projectWorkflow.update` paths wrapped; `ensureProjectWorkflow`'s `prisma.projectWorkflow.upsert` wrapped. New `import { withRetry } from '@/lib/prisma-retry';`. ~20 LOC delta + comments.
-
-**Commit 2 (`1e42394`) — apply-pipeline writes wrap:** each Prisma call wrapped; `recordFlake` call sites in these routes now record `retried: true`:
-- `src/app/api/projects/[projectId]/canvas/route.ts` — PATCH wrap (canvasState.upsert).
-- `src/app/api/projects/[projectId]/canvas/nodes/route.ts` — POST $transaction wrap, PATCH $transaction wrap, DELETE deleteMany wrap.
-- `src/app/api/projects/[projectId]/canvas/rebuild/route.ts` — count wrap + multi-second $transaction wrap.
-- `src/app/api/projects/[projectId]/canvas/sister-links/route.ts` — POST create wrap, DELETE deleteMany wrap.
-- `src/app/api/projects/[projectId]/canvas/pathways/route.ts` — POST create wrap, DELETE deleteMany wrap.
-- `src/app/api/projects/[projectId]/keywords/route.ts` — POST bulk path (aggregate + createMany) wrapped, single path (aggregate + create) wrapped, PATCH $transaction wrap, DELETE deleteMany wrap.
-- `src/app/api/projects/[projectId]/keywords/[keywordId]/route.ts` — PATCH update wrap, DELETE delete wrap.
-- `src/app/api/projects/[projectId]/removed-keywords/route.ts` — POST findMany wrap + atomic $transaction wrap.
-- `src/app/api/projects/[projectId]/removed-keywords/[removedId]/restore/route.ts` — findFirst + findFirst (collision check) + aggregate + atomic $transaction all wrapped.
-
-**Verification at end-of-session:** 327/327 src/lib tests pass (no new tests; existing prisma-retry.test.ts + flake-counter.test.ts cover helper layer; route + helper wraps are mechanical applications); tsc clean; build clean (25 routes); lint at exact baseline parity (16e/40w; zero new errors).
-
-**End-of-session doc commits (separate from the two code commits — third commit, docs-only):**
-
-*Docs (Group A + Group B):*
-- `docs/KEYWORD_CLUSTERING_ACTIVE.md` (new POST-2026-05-04-B STATE block prepended; 2026-05-04 STATE block demoted to historical; header)
-- `docs/PLATFORM_ARCHITECTURE.md` (§10 gains "🛡️ Server-side withRetry parity — first-pass closed (SHIPPED 2026-05-04-b)" entry; prior 2026-05-04 entry preserved; header timestamp)
-- `docs/ROADMAP.md` (Active Tools row + W#1 PRODUCTION-READINESS GATE prerequisite #3 status + "🟡 INSTRUMENTATION SHIPPED 2026-05-04" → "🟡 FIRST RATE-FIX SHIPPED 2026-05-04-b" rename + new "Status update 2026-05-04-b" sub-section + recommended sequencing item 2 marked DONE + Next Session list reordered with D3 retry RECOMMENDED; gate completion estimate revised to "1 session remaining"; header)
-- `docs/CHAT_REGISTRY.md` (new top row + header timestamp)
-- `docs/DOCUMENT_MANIFEST.md` (this file — header + per-doc flags + this-session summary)
-
-**Push status:** ALL 4 commits pushed to origin/main end-of-session per Rule 9 approval (2 code commits + this docs commit + the prior session's instrumentation commit + the older recency-stickiness commit). Vercel auto-redeploy triggered ~minutes after push; live on vklf.com.
-
-**(Earlier-session content below preserved for the prior 2026-05-04 instrumentation pass; not duplicated here.)**
-
-**Code changes from prior 2026-05-04 session (now LIVE on vklf.com via 2026-05-04-b push):**
-
-*New files:*
-- `src/lib/flake-counter.ts` (NEW, ~140 LOC incl. extensive header comment) — pure module exporting `recordFlake(endpoint, error, ctx?)`, `formatFlakeLine(...)`, `extractPrismaCode(...)`, `isTransientCode(...)`, `FlakeContext` interface. Emits one grep-able `[FLAKE]` line per error via `console.error`. Stable line shape: `[FLAKE] endpoint=<METHOD /path> code=<P1001|...|unknown> retried=<true|false> [canvasSize=<N>] [projectWorkflowId=<id>] msg="<200-char-truncated-whitespace-collapsed message>"`.
-- `src/lib/flake-counter.test.ts` (NEW, 28 tests) — `node:test` + `node:assert/strict` pattern matching the other pure-helper test files.
-
-*Modified files (all 19 DB-backed API routes — additive only; each gained one import + N `recordFlake(...)` calls in catch blocks; total 38 call sites; 1-to-1 with catch blocks):*
-- `src/app/api/projects/[projectId]/canvas/route.ts` (+1 import; +2 recordFlake; GET marked retried=true)
-- `src/app/api/projects/[projectId]/canvas/nodes/route.ts` (+1 import; +4 recordFlake; GET marked retried=true)
-- `src/app/api/projects/[projectId]/canvas/rebuild/route.ts` (+1 import; +1 recordFlake; captures `body.nodes.length` as canvasSize via `let payloadNodeCount` declared outside try)
-- `src/app/api/projects/[projectId]/canvas/sister-links/route.ts` (+1 import; +2 recordFlake)
-- `src/app/api/projects/[projectId]/canvas/pathways/route.ts` (+1 import; +2 recordFlake)
-- `src/app/api/projects/[projectId]/keywords/route.ts` (+1 import; +4 recordFlake)
-- `src/app/api/projects/[projectId]/keywords/[keywordId]/route.ts` (+1 import; +2 recordFlake)
-- `src/app/api/projects/[projectId]/removed-keywords/route.ts` (+1 import; +2 recordFlake)
-- `src/app/api/projects/[projectId]/removed-keywords/[removedId]/restore/route.ts` (+1 import; +1 recordFlake)
-- `src/app/api/projects/[projectId]/route.ts` (+1 import; +3 recordFlake)
-- `src/app/api/projects/route.ts` (+1 import; +2 recordFlake)
-- `src/app/api/project-workflows/[projectId]/route.ts` (+1 import; +1 recordFlake)
-- `src/app/api/project-workflows/[projectId]/[workflow]/route.ts` (+1 import; +2 recordFlake)
-- `src/app/api/user-preferences/[key]/route.ts` (+1 import; +2 recordFlake)
-- `src/app/api/admin-notes/route.ts` (+1 import; +2 recordFlake)
-- `src/app/api/admin-notes/[noteId]/route.ts` (+1 import; +3 recordFlake)
-- `src/app/api/admin-notes/[noteId]/attachments/route.ts` (+1 import; +1 recordFlake)
-- `src/app/api/admin-notes/[noteId]/attachments/[attachmentId]/route.ts` (+1 import; +1 recordFlake)
-- `src/app/api/admin-notes/reorder/route.ts` (+1 import; +1 recordFlake)
-
-*Skipped deliberately:*
-- `src/app/api/ai/analyze/route.ts` — uses no Prisma; nothing to instrument.
-
-Code state at end-of-session: 327/327 src/lib tests pass (was 299; +28 new — flake-counter helper); tsc clean; build clean (25 routes); lint at baseline-or-better parity (16e/40w; zero new errors; net -1 warning vs baseline 41w).
-
-**End-of-session doc commits (this session — single commit):**
-
-*Code (new):*
-- `src/lib/flake-counter.ts`
-- `src/lib/flake-counter.test.ts`
-
-*Code (modified — 19 route files, all additive):*
-- `src/app/api/projects/[projectId]/canvas/route.ts`
-- `src/app/api/projects/[projectId]/canvas/nodes/route.ts`
-- `src/app/api/projects/[projectId]/canvas/rebuild/route.ts`
-- `src/app/api/projects/[projectId]/canvas/sister-links/route.ts`
-- `src/app/api/projects/[projectId]/canvas/pathways/route.ts`
-- `src/app/api/projects/[projectId]/keywords/route.ts`
-- `src/app/api/projects/[projectId]/keywords/[keywordId]/route.ts`
-- `src/app/api/projects/[projectId]/removed-keywords/route.ts`
-- `src/app/api/projects/[projectId]/removed-keywords/[removedId]/restore/route.ts`
-- `src/app/api/projects/[projectId]/route.ts`
-- `src/app/api/projects/route.ts`
-- `src/app/api/project-workflows/[projectId]/route.ts`
-- `src/app/api/project-workflows/[projectId]/[workflow]/route.ts`
-- `src/app/api/user-preferences/[key]/route.ts`
-- `src/app/api/admin-notes/route.ts`
-- `src/app/api/admin-notes/[noteId]/route.ts`
-- `src/app/api/admin-notes/[noteId]/attachments/route.ts`
-- `src/app/api/admin-notes/[noteId]/attachments/[attachmentId]/route.ts`
-- `src/app/api/admin-notes/reorder/route.ts`
-
-*Docs (Group A + Group B):*
-- `docs/KEYWORD_CLUSTERING_ACTIVE.md` (new POST-2026-05-04 STATE block prepended; 2026-05-03-c STATE block demoted to historical; header)
-- `docs/PLATFORM_ARCHITECTURE.md` (§10 gains "📊 Platform-wide flake-rate telemetry (SHIPPED 2026-05-04)" entry; header timestamp)
-- `docs/ROADMAP.md` (Active Tools row + W#1 PRODUCTION-READINESS GATE prerequisite #3 status + "NEW HIGH" → "🟡 INSTRUMENTATION SHIPPED 2026-05-04" rename + new "Investigation Findings 2026-05-04" sub-section + recommended sequencing item 1 marked DONE; header)
-- `docs/CHAT_REGISTRY.md` (new top row + header timestamp)
-- `docs/DOCUMENT_MANIFEST.md` (this file — header + per-doc flags + this-session summary)
-
-**Push status:** commit local; push pending director's discretionary Rule 9 approval at end-of-session. Push is purely additive on success path — only error-path catch blocks emit one extra log line per existing console.error. Safe to deploy whenever director chooses; data-collection clock starts after push. Prior session's `9175ab5` recency-stickiness fix still local + unpushed — director's discretionary push timing.
-
-**Earlier-session code changes (recency-stickiness fix from 2026-05-03-c, plus cold-start render-layer fix helper from 2026-05-03, plus post-rebuild-fetch-retry helper from 2026-05-02-d, plus Scale Sessions B + C + D + E and prior + 2026-05-02-b instrumentation — already documented in this manifest's prior-session entries; not duplicated here).**
 
 ---
 
