@@ -9,6 +9,7 @@ import { corsPreflightResponse, withCors } from '@/lib/cors-response';
 import {
   isPlatform,
   type CompetitorUrl,
+  type ReadCompetitorUrlResponse,
   type UpdateCompetitorUrlRequest,
 } from '@/lib/shared-types/competition-scraping';
 
@@ -43,6 +44,62 @@ function toWireShape(
 
 export async function OPTIONS(req: NextRequest) {
   return corsPreflightResponse(req);
+}
+
+// GET /api/projects/[projectId]/competition-scraping/urls/[urlId]
+// Single-row read for the per-URL detail page. The page also fetches the
+// URL's children (text/sizes/images) via sibling collection routes; this
+// route returns only the parent row so 404 on a stale link surfaces in one
+// place rather than four.
+//
+// Auth + scoping: verifyProjectWorkflowAuth confirms the caller can see
+// this Project's W#2 workflow; the where clause adds projectWorkflowId so
+// a forged urlId from another project returns 404 (not the row's data).
+export async function GET(
+  req: NextRequest,
+  {
+    params,
+  }: {
+    params: Promise<{ projectId: string; urlId: string }>;
+  }
+) {
+  const { projectId, urlId } = await params;
+  const auth = await verifyProjectWorkflowAuth(req, projectId, WORKFLOW);
+  if (auth.error) return withCors(req, auth.error);
+  const { projectWorkflowId } = auth;
+
+  try {
+    const row = await withRetry(() =>
+      prisma.competitorUrl.findFirst({
+        where: { id: urlId, projectWorkflowId },
+      })
+    );
+    if (!row) {
+      return withCors(
+        req,
+        NextResponse.json(
+          { error: 'Competitor URL not found' },
+          { status: 404 }
+        )
+      );
+    }
+    const wire = toWireShape(row) satisfies ReadCompetitorUrlResponse | null;
+    return withCors(req, NextResponse.json(wire));
+  } catch (error) {
+    recordFlake(
+      'GET /api/projects/[projectId]/competition-scraping/urls/[urlId]',
+      error,
+      { projectWorkflowId }
+    );
+    console.error('GET competition-scraping url error:', error);
+    return withCors(
+      req,
+      NextResponse.json(
+        { error: 'Failed to fetch competitor URL' },
+        { status: 500 }
+      )
+    );
+  }
 }
 
 // PATCH /api/projects/[projectId]/competition-scraping/urls/[urlId]

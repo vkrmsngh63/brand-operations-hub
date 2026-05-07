@@ -9,6 +9,7 @@ import { corsPreflightResponse, withCors } from '@/lib/cors-response';
 import type {
   CapturedText,
   CreateCapturedTextRequest,
+  ListCapturedTextsResponse,
 } from '@/lib/shared-types/competition-scraping';
 
 // W#2 API — captured text (collection routes).
@@ -46,6 +47,67 @@ function isStringArray(value: unknown): value is string[] {
 
 export async function OPTIONS(req: NextRequest) {
   return corsPreflightResponse(req);
+}
+
+// GET /api/projects/[projectId]/competition-scraping/urls/[urlId]/text
+// Lists every CapturedText attached to the URL. Verifies the parent URL
+// belongs to this Project's W#2 workflow before reading; forged urlIds get
+// 404 the same as the POST handler.
+//
+// Ordering: (sortOrder ASC, addedAt ASC) — stable across reloads so the
+// detail-page table doesn't reshuffle on refresh.
+export async function GET(
+  req: NextRequest,
+  {
+    params,
+  }: {
+    params: Promise<{ projectId: string; urlId: string }>;
+  }
+) {
+  const { projectId, urlId } = await params;
+  const auth = await verifyProjectWorkflowAuth(req, projectId, WORKFLOW);
+  if (auth.error) return withCors(req, auth.error);
+  const { projectWorkflowId } = auth;
+
+  try {
+    const parent = await withRetry(() =>
+      prisma.competitorUrl.findFirst({
+        where: { id: urlId, projectWorkflowId },
+        select: { id: true },
+      })
+    );
+    if (!parent) {
+      return withCors(
+        req,
+        NextResponse.json(
+          { error: 'Competitor URL not found' },
+          { status: 404 }
+        )
+      );
+    }
+    const rows = await withRetry(() =>
+      prisma.capturedText.findMany({
+        where: { competitorUrlId: urlId },
+        orderBy: [{ sortOrder: 'asc' }, { addedAt: 'asc' }],
+      })
+    );
+    const wire = rows.map((r) => toWireShape(r)!) satisfies ListCapturedTextsResponse;
+    return withCors(req, NextResponse.json(wire));
+  } catch (error) {
+    recordFlake(
+      'GET /api/projects/[projectId]/competition-scraping/urls/[urlId]/text',
+      error,
+      { projectWorkflowId }
+    );
+    console.error('GET competition-scraping text error:', error);
+    return withCors(
+      req,
+      NextResponse.json(
+        { error: 'Failed to fetch captured text' },
+        { status: 500 }
+      )
+    );
+  }
 }
 
 // POST /api/projects/[projectId]/competition-scraping/urls/[urlId]/text

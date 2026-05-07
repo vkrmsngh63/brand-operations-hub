@@ -16,13 +16,14 @@
 // sort + filter stays snappy without pagination; revisit if a future scale
 // pass shows otherwise.
 //
-// Deferred to follow-up slices (per the read-it-back the director approved
-// at session start):
-//   - the /url/[urlId] detail page (per-URL captured text + image expand)
-//   - inline editing of any URL field
-//   - per-column filter dropdowns (this slice has only the free-text box)
-//   - captured-text + captured-image rows
-//   - image expand viewer
+// Slice (a.1) wires click-row to navigate to /url/[urlId]; the prior
+// open-in-new-tab behavior is preserved via an explicit "Open original
+// URL ↗" button on the detail page itself.
+//
+// Deferred to follow-up slices:
+//   - inline editing of any URL field (a.3)
+//   - per-column filter dropdowns (a.4)
+//   - image expand viewer (a.2)
 //   - Phase-2 admin assignments view
 
 import { useEffect, useMemo, useState } from 'react';
@@ -126,6 +127,13 @@ export function CompetitionScrapingViewer({ projectId }: Props) {
     router.replace(qs ? `?${qs}` : '?');
   };
 
+  // Click-row → navigate to per-URL detail page. router.push preserves the
+  // history stack so the browser Back button returns to this list view
+  // (with platform + search state survived via the URL bar).
+  const handleRowOpen = (urlId: string) => {
+    router.push(`/projects/${projectId}/competition-scraping/url/${urlId}`);
+  };
+
   const scopedTotal =
     counts === null ? 0 : counts[selectedPlatform];
 
@@ -169,6 +177,7 @@ export function CompetitionScrapingViewer({ projectId }: Props) {
             searchText={searchText}
             onSearchChange={setSearchText}
             scopedTotal={scopedTotal}
+            onRowOpen={handleRowOpen}
           />
         )}
       </div>

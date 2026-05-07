@@ -115,6 +115,11 @@ export type ListCompetitorUrlsResponse = CompetitorUrl[];
 // PATCH .../urls/[urlId] response.
 export type UpdateCompetitorUrlResponse = CompetitorUrl;
 
+// GET .../urls/[urlId] response — single row read for the per-URL detail
+// page. Same shape as the create/update responses; the read path exists to
+// support deep-linkable detail pages and admin reconciliation flows.
+export type ReadCompetitorUrlResponse = CompetitorUrl;
+
 // DELETE .../urls/[urlId] response.
 export interface DeleteCompetitorUrlResponse {
   success: true;
@@ -181,6 +186,10 @@ export interface DeleteCompetitorSizeResponse {
   success: true;
 }
 
+// GET .../urls/[urlId]/sizes — list every size attached to one URL,
+// ordered by sortOrder (stable across reloads).
+export type ListCompetitorSizesResponse = CompetitorSize[];
+
 // ─── CapturedText ───────────────────────────────────────────────────────
 // Wire shape for text captures. Idempotent on clientId per §9.2 — the
 // extension's WAL uses clientId as the dedup key across retries.
@@ -219,6 +228,11 @@ export type UpdateCapturedTextResponse = CapturedText;
 export interface DeleteCapturedTextResponse {
   success: true;
 }
+
+// GET .../urls/[urlId]/text — list every captured-text row for one URL,
+// ordered by (sortOrder ASC, addedAt ASC) so the detail-page table is
+// stable across reloads.
+export type ListCapturedTextsResponse = CapturedText[];
 
 // ─── Image MIME + size constants ─────────────────────────────────────────
 // Per docs/COMPETITION_SCRAPING_STACK_DECISIONS.md §3:
@@ -343,6 +357,14 @@ export type UpdateCapturedImageResponse = CapturedImage;
 export interface DeleteCapturedImageResponse {
   success: true;
 }
+
+// GET .../urls/[urlId]/images — list every captured-image row for one URL,
+// ordered by (sortOrder ASC, addedAt ASC). Storage signed-URL minting for
+// the actual image bytes lives in slice (a.2) — this list returns the
+// metadata + storagePath, and the detail page (slice a.1) uses only the
+// row count to render the "N images captured — viewer ships in (a.2)"
+// placeholder.
+export type ListCapturedImagesResponse = CapturedImage[];
 
 // ─── Reconcile ──────────────────────────────────────────────────────────
 // GET /api/projects/[projectId]/competition-scraping/reconcile?platform=...

@@ -8,9 +8,11 @@
 //   URL · Product Name · Brand Name · Category · Product Stars
 //   · # Reviews · Added On
 //
-// Click a column header to sort asc/desc; click a row to open that
-// competitor URL in a new browser tab. Per-column filter dropdowns and
-// the /url/[urlId] detail page are deferred to the next slice.
+// Click a column header to sort asc/desc; click a row to navigate to
+// that URL's per-URL detail page (in-app). The detail page itself
+// preserves an explicit "Open original URL ↗" button so the prior
+// open-in-new-tab behavior is one click away. Per-column filter
+// dropdowns are deferred to slice (a.4).
 
 import { useMemo, useState } from 'react';
 import type { CompetitorUrl } from '@/lib/shared-types/competition-scraping';
@@ -29,6 +31,9 @@ interface Props {
   searchText: string;
   onSearchChange: (next: string) => void;
   scopedTotal: number;
+  // Click-row handler. The parent owns router + projectId knowledge so
+  // this component stays decoupled from Next.js routing concerns.
+  onRowOpen: (urlId: string) => void;
 }
 
 interface ColumnDef {
@@ -50,7 +55,13 @@ const COLUMNS: ColumnDef[] = [
   { key: 'addedAt', label: 'Added On', align: 'right', defaultDir: 'desc' },
 ];
 
-export function UrlTable({ rows, searchText, onSearchChange, scopedTotal }: Props) {
+export function UrlTable({
+  rows,
+  searchText,
+  onSearchChange,
+  scopedTotal,
+  onRowOpen,
+}: Props) {
   const [sortKey, setSortKey] = useState<SortKey>('addedAt');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
@@ -84,8 +95,8 @@ export function UrlTable({ rows, searchText, onSearchChange, scopedTotal }: Prop
     }
   };
 
-  const handleRowOpen = (url: string) => {
-    window.open(url, '_blank', 'noopener,noreferrer');
+  const handleRowOpen = (urlId: string) => {
+    onRowOpen(urlId);
   };
 
   // Filter-only empty state: data exists, but search box rules everything
@@ -189,16 +200,16 @@ export function UrlTable({ rows, searchText, onSearchChange, scopedTotal }: Prop
               {sorted.map((row) => (
                 <tr
                   key={row.id}
-                  onClick={() => handleRowOpen(row.url)}
+                  onClick={() => handleRowOpen(row.id)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
-                      handleRowOpen(row.url);
+                      handleRowOpen(row.id);
                     }
                   }}
                   role="link"
                   tabIndex={0}
-                  title="Open URL in new tab"
+                  title="Open URL detail page"
                   style={{
                     cursor: 'pointer',
                     borderBottom: '1px solid #21262d',

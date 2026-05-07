@@ -9,6 +9,7 @@ import { corsPreflightResponse, withCors } from '@/lib/cors-response';
 import type {
   CompetitorSize,
   CreateCompetitorSizeRequest,
+  ListCompetitorSizesResponse,
 } from '@/lib/shared-types/competition-scraping';
 
 // W#2 API — competitor sizes (collection routes).
@@ -76,6 +77,68 @@ function normalizePrice(
 
 export async function OPTIONS(req: NextRequest) {
   return corsPreflightResponse(req);
+}
+
+// GET /api/projects/[projectId]/competition-scraping/urls/[urlId]/sizes
+// Lists every CompetitorSize attached to the URL. Verifies the parent URL
+// belongs to this Project's W#2 workflow before reading; forged urlIds get
+// 404 the same as the POST handler.
+//
+// Ordering: (sortOrder ASC, addedAt ASC) — stable across reloads so the
+// detail-page table doesn't reshuffle on refresh. Same convention as the
+// urls collection GET route.
+export async function GET(
+  req: NextRequest,
+  {
+    params,
+  }: {
+    params: Promise<{ projectId: string; urlId: string }>;
+  }
+) {
+  const { projectId, urlId } = await params;
+  const auth = await verifyProjectWorkflowAuth(req, projectId, WORKFLOW);
+  if (auth.error) return withCors(req, auth.error);
+  const { projectWorkflowId } = auth;
+
+  try {
+    const parent = await withRetry(() =>
+      prisma.competitorUrl.findFirst({
+        where: { id: urlId, projectWorkflowId },
+        select: { id: true },
+      })
+    );
+    if (!parent) {
+      return withCors(
+        req,
+        NextResponse.json(
+          { error: 'Competitor URL not found' },
+          { status: 404 }
+        )
+      );
+    }
+    const rows = await withRetry(() =>
+      prisma.competitorSize.findMany({
+        where: { competitorUrlId: urlId },
+        orderBy: [{ sortOrder: 'asc' }, { addedAt: 'asc' }],
+      })
+    );
+    const wire = rows.map((r) => toWireShape(r)!) satisfies ListCompetitorSizesResponse;
+    return withCors(req, NextResponse.json(wire));
+  } catch (error) {
+    recordFlake(
+      'GET /api/projects/[projectId]/competition-scraping/urls/[urlId]/sizes',
+      error,
+      { projectWorkflowId }
+    );
+    console.error('GET competition-scraping sizes error:', error);
+    return withCors(
+      req,
+      NextResponse.json(
+        { error: 'Failed to fetch competitor sizes' },
+        { status: 500 }
+      )
+    );
+  }
 }
 
 // POST /api/projects/[projectId]/competition-scraping/urls/[urlId]/sizes
