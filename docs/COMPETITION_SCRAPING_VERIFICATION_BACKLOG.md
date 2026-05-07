@@ -4,7 +4,8 @@
 **Workflow:** W#2 Competition Scraping & Deep Analysis.
 **Branch:** `workflow-2-competition-scraping`.
 **Created:** 2026-05-07 in `session_2026-05-07_w2-plos-side-viewer-detail-page-slice` (Claude Code).
-**Last updated:** 2026-05-07-f (Extension build — session 1 — section appended in `session_2026-05-07-f_w2-extension-build-session-1` after director's directive to defer all manual testing. **End-of-session refinement:** the "ONE post-coding verification session" plan was split into THREE verification waypoints — see "Verification waypoints" section below).
+**Last updated:** 2026-05-07-g (Extension build — session 2 — section appended in `session_2026-05-07-g_w2-extension-build-session-2` after director's standing directive to defer all manual testing to the verification waypoints below. Session 2 shipped the popup project-picker + platform-picker + Highlight-Terms color-palette UI per `COMPETITION_SCRAPING_STACK_DECISIONS.md §6` + `COMPETITION_SCRAPING_DESIGN.md §A.7` Module 1 setup flow; tests appended below land in Waypoint #1's coverage.)
+**Previously updated:** 2026-05-07-f (Extension build — session 1 — section appended in `session_2026-05-07-f_w2-extension-build-session-1` after director's directive to defer all manual testing. **End-of-session refinement:** the "ONE post-coding verification session" plan was split into THREE verification waypoints — see "Verification waypoints" section below).
 
 ---
 
@@ -308,6 +309,95 @@ Walked-through tests:
 - **Extension ID is volatile during dev mode.** Every `Load unpacked` instance gets a different chrome-extension://\<id\> origin. The CORS allowlist (`chrome-extension://*` per `src/lib/cors.ts`) is intentionally permissive to absorb this; once the Chrome Web Store (Phase 2 distribution per `STACK_DECISIONS §13.2`) issues a stable production ID, we may tighten the allowlist to that specific ID. NOT a today concern; flagging for the future tightening review.
 - **Refresh-token TTL behavior.** Supabase JS handles auto-refresh internally; we haven't observed it in real time yet. Real verification requires letting the access token expire (default ~1 hour) without using the extension, then exercising it — a long-running session test deferred to the verification walkthrough.
 - **Multi-account behavior.** If you sign out and sign in as a different PLOS account, the project count from `Verify connection` should change to that account's project list. Add a manual check at the verification walkthrough.
+
+---
+
+## Extension build — session 2 — popup project-picker + platform-picker + Highlight-Terms color-palette UI — PENDING 2026-05-07-g
+
+Shipped commit: (pending end-of-session commit on `workflow-2-competition-scraping`).
+
+**What changed in session 2.** The popup's signed-in screen was rewritten from session 1's "Verify connection" smoke-test placeholder into the real Module 1 setup screen per `COMPETITION_SCRAPING_DESIGN.md §A.7` and `COMPETITION_SCRAPING_STACK_DECISIONS.md §6`. The setup screen has three pieces:
+
+- A **Project picker** (dropdown) that fetches the user's Projects via the same `GET /api/projects` call session 1 used for the smoke test. Selection persists in `chrome.storage.local` so the popup remembers across opens.
+- A **Platform picker** (dropdown) with the seven platforms per `STACK_DECISIONS §A.7`: Amazon, Ebay, Etsy, Walmart, Google Shopping, Google Ads, Independent Website. Persists in `chrome.storage.local`.
+- A **Highlight Terms manager** — a textarea where the user types one or more terms (separated by commas or newlines); on blur the terms appear as colored chips with a small color swatch button + × remove. Clicking a term's swatch opens the 4×5 grid of 20 colors per `STACK_DECISIONS §6`; clicking a color closes the popover and re-paints that term. First five terms get default colors banana → royal blue → mint → crimson → peach; subsequent terms continue the rotation through the rest of the palette. List persists in `chrome.storage.local` keyed per Project.
+
+When both project and platform are selected, a small "Capturing for **\<Platform Label\>**" banner appears at the top of the signed-in screen so the active session is always visible. Switching to a different project clears the platform selection (you're starting a new context); the per-Project Highlight Terms list is untouched.
+
+**Walked-through tests** (extension session 2 expands the install/sign-in baseline established by session 1 — these tests assume Steps 1–8 of session 1 are already passing):
+
+- [ ] **Step S2-1 — Signed-in screen flips to the setup screen.** From session 1's "Step 8 — Sign in with valid credentials" landing point, instead of the prior smoke-test screen showing "Verify connection" + "Sign out", you should now see: the "Signed in as **\<your email\>**" line, a **Project** dropdown, and (after picking a project) a **Platform** dropdown + **Highlight Terms** field. The "Verify connection" button is gone (its job is now folded into the project picker — successfully loading the project list IS the auth round-trip proof).
+
+- [ ] **Step S2-2 — Project list loads with the right projects.** While the project list is loading, a "Loading your projects…" muted line should appear briefly. Once loaded, the dropdown lists all Projects you can see at vklf.com/projects, sorted with the most recently active at the top. Empty state — sign in as a brand-new user with no Projects yet — should show a "No projects yet. Create one at vklf.com/projects" line with the link clickable.
+
+- [ ] **Step S2-3 — Project list error handling.** With DevTools → Network → set throttling to "Offline" BEFORE opening the popup, then sign in (or reopen). The project list should show a red error box reading "Couldn't load your projects: …" with the underlying network error. Reconnect → close + reopen popup → list loads cleanly.
+
+- [ ] **Step S2-4 — Pick a project.** From the dropdown, pick a Project. The Platform dropdown + Highlight Terms field should appear immediately. Close the popup, reopen it — the same Project should still be selected (project ID was persisted in `chrome.storage.local`).
+
+- [ ] **Step S2-5 — Project picker default value.** Before picking anything, the dropdown should read "Pick a project…" as the default placeholder. The first option in the user-visible list should match the first project in the API response (most recent activity).
+
+- [ ] **Step S2-6 — Platform picker shows all 7 options.** Open the Platform dropdown. Confirm the labels (in this order): Amazon.com / Ebay.com / Etsy.com / Walmart.com / Google Shopping / Google Ads / Independent Website. Default is "Pick a platform…".
+
+- [ ] **Step S2-7 — Platform picker explanatory text.** Below the dropdown, confirm the muted help line reads (paraphrased): "We need this even on Amazon/Ebay/Etsy/Walmart so we can tell apart URLs found via Google Shopping, Google Ads, and independent websites." This is the rationale per `COMPETITION_SCRAPING_DESIGN.md §A.7`.
+
+- [ ] **Step S2-8 — Pick a platform; active-session banner appears.** Pick a platform. A small green "Capturing for **\<Platform Label\>**" banner should appear at the top of the popup (above the project picker). Close + reopen the popup — banner still there with the same platform.
+
+- [ ] **Step S2-9 — Switching projects clears the platform.** With both project and platform picked, switch the Project dropdown to a different Project. The Platform dropdown should reset to "Pick a platform…" and the active-session banner should disappear. (Director can re-pick the platform freshly for the new context.)
+
+- [ ] **Step S2-10 — Highlight Terms — empty state.** With a project picked but no terms yet, the Highlight Terms area should show the textarea + a muted line reading "You haven't added any highlight terms yet."
+
+- [ ] **Step S2-11 — Add a single term.** Type `red light therapy` into the textarea. Click outside the textarea (or Tab away). Expected: the textarea clears; a chip appears reading "red light therapy" on a banana-yellow background with black text; a small banana-yellow swatch button + a × button sit next to it.
+
+- [ ] **Step S2-12 — Add multiple terms in one shot, comma-separated.** Type `infrared, near-infrared, photobiomodulation` then click outside. Expected: three new chips appear (in addition to any existing ones), with the next default colors in the rotation. If the existing list had 1 term (the banana-yellow one from Step S2-11), the new colors should be royal blue (chip-2 white text), mint green (chip-3 black text), and crimson (chip-4 white text).
+
+- [ ] **Step S2-13 — Add multiple terms in one shot, newline-separated.** Add a second batch with the textarea. Type two terms on two lines (press Enter between them) → click outside. Expected: both terms become chips with the next two colors in the rotation.
+
+- [ ] **Step S2-14 — Dedup ignores case.** Type `Red Light Therapy` (with different casing from Step S2-11) → click outside. Expected: NO new chip appears; the existing "red light therapy" chip is preserved unchanged.
+
+- [ ] **Step S2-15 — Auto-flip text color.** Inspect every chip in the list. Light-background chips (banana, mint, peach, etc.) should have **black** text; dark-background chips (royal blue, crimson, navy, etc.) should have **white** text. Both should be plainly readable. (4.5:1 WCAG AA contrast.)
+
+- [ ] **Step S2-16 — Open color picker for one term.** Click the small color-swatch button next to (say) the "red light therapy" chip. Expected: a small popover appears below/beside the chip containing a 4×5 grid of 20 colors (rows 1-2 light, rows 3-4 dark). The currently-selected color (banana yellow) should have a thin border highlight inside the popover. Each swatch should show its color name when you hover (e.g., "Banana yellow").
+
+- [ ] **Step S2-17 — Pick a different color.** Click any other color in the popover (e.g., Slate, the bottom-right dark swatch). Expected: the popover closes; the chip's background changes to slate-blue with white text; the small swatch button matches.
+
+- [ ] **Step S2-18 — Close the picker without picking.** Reopen the picker (click the swatch button); press Esc. Picker closes; chip color unchanged. Reopen → click anywhere outside the picker (e.g., on the project picker label). Picker closes; chip color unchanged.
+
+- [ ] **Step S2-19 — Remove a single term.** Click the × button next to a chip. The chip disappears. Other chips are unchanged. The remaining-chip-count line (if visible) decrements.
+
+- [ ] **Step S2-20 — Clear all.** With 3+ terms present, click the "Clear all highlight terms" link. Expected: all chips disappear; the empty-state line returns.
+
+- [ ] **Step S2-21 — Highlight Terms persist across popup close/reopen.** Add 3 terms, picking custom colors for one of them. Close the popup. Reopen by clicking the toolbar icon. Expected: same 3 terms appear in the same order with the same colors (including the custom one). Then close + Chrome restart → reopen → terms still there.
+
+- [ ] **Step S2-22 — Highlight Terms are per-Project.** Project A has 3 terms; switch to Project B in the project picker — Highlight Terms list should be empty (or show whatever Project B's own list is, if you'd added terms there in a prior session). Switch back to Project A — your 3 terms reappear unchanged.
+
+- [ ] **Step S2-23 — Long term wraps inside the chip.** Add a deliberately long term (e.g., `extra-large bottle for after-workout recovery`). Confirm the chip's text wraps (rather than the popup growing horizontally). The × and swatch buttons stay on the right.
+
+- [ ] **Step S2-24 — Empty / whitespace-only input is dropped silently.** Type whitespace + commas (`,  ,  ,`) → click outside. No new chips; textarea clears; existing list unchanged. Same with empty newlines (just press Enter a few times, then click outside).
+
+- [ ] **Step S2-25 — Sign-out wipes the in-memory state.** With pickers populated + terms in the list, click **Sign out**. Popup flips to the sign-in form. Sign back in. The pickers should hydrate to the same values from `chrome.storage.local` (sign-out only clears the auth token, not the user's own setup state). If you want a clean slate, the future "reset extension state" path will provide that — out of scope today.
+
+- [ ] **Step S2-26 — DevTools → Application → Storage → Local Storage check.** Open the extension's service-worker DevTools (chrome://extensions → Details → Inspect views: service worker). In Application → Storage, the extension's `chrome.storage.local` should show keys: `selectedProjectId`, `selectedPlatform`, and `highlightTerms:<projectId>` (one per Project you've added terms for). The Supabase auth-token key (`sb-*-auth-token`) should also be present.
+
+- [ ] **Step S2-27 — No console errors during normal flow.** Open service-worker DevTools → Console. Walk through Steps S2-1 through S2-21. Console should show only Supabase info-level messages (auth state changes); no red errors.
+
+- [ ] **Step S2-28 — Build artifact integrity.** From Codespaces: `cd extensions/competition-scraping && npm run compile && npm test && npm run build`. All three should be clean. `npm test` should report 42/42 tests pass (the new color-palette + highlight-terms unit suites). `npm run build` should produce `.output/chrome-mv3/` with a similar size to session 1 (~600 KB unpacked) — slight growth is expected from the new components.
+
+**Seed-data prerequisites:**
+
+- Sign in to Chrome with the same Google account you'll always use for the verification walkthrough (so chrome.storage.local persists across sessions consistently).
+- At least 2 Projects on the test PLOS account so Step S2-22 (per-Project terms) is exercisable; ideally one is brand-new with no W#2 activity yet.
+- (Optional) A test PLOS account with zero Projects so the empty-state of Step S2-2 is exercisable.
+
+**API-side already verified at commit time:**
+
+- Extension `npm run compile` (tsc --noEmit) clean — zero errors.
+- Extension `npm test` reports **42/42 pass** across two new unit-test files (color-palette + highlight-terms — pure logic only; no chrome.storage.local mocks).
+- Extension `npm run build` clean — Vite + WXT bundle. `.output/chrome-mv3/` produced with manifest.json + popup.html + background.js + popup chunks + popup css. `npm run zip` produces the chrome zip artifact.
+- Root `npx tsc --noEmit` clean (extensions/ excluded).
+- Root `npm run build` clean — 49 routes (same as session 1 baseline; session 2 added zero new API routes).
+- Root tests pass at exact baseline parity — **393/393 src/lib pass**.
+- Root `npx eslint src` reports project-wide 13 errors / 39 warnings — exact baseline parity (same 13 pre-existing-file errors as session 1).
+- Extension lint (`npx eslint extensions/competition-scraping/src`) clean — zero errors, zero warnings on the session-2 files.
 
 ---
 END OF DOCUMENT

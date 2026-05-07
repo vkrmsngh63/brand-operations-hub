@@ -800,6 +800,75 @@ This section is for entries added in subsequent sessions when the director adds 
 
 ---
 
+**2026-05-07-g — session_2026-05-07-g_w2-extension-build-session-2 (Claude Code, on `workflow-2-competition-scraping` branch)**
+
+- **Session purpose:** ship session 2 of the W#2 Chrome extension build per `STACK_DECISIONS §6` (Highlight Terms 20-color palette) + `STACK_DECISIONS §1, §2, §12` (extension framework + auth + monorepo structure already established in session 1) + `DESIGN §A.7` Module 1 setup flow (sign in → pick Project → pick Platform → set up Highlight Terms). Second of the 5–7 (now 7+ with the 3 verification waypoints) extension-build sessions; ROADMAP Active Tools W#2 row item (c).
+
+- **Director-approved scope at session start via Rule 14f `AskUserQuestion`:** Option A "All three, full per-spec — RECOMMENDED" picked (4 options surfaced: **A recommended** all three full / B pickers-only-defer-Highlight-Terms / C all three + URL-recognition-badge stub / D escape hatch). Concrete-scope read-back per Rule 18 mid-build directive Read-It-Back covered: per-Project Highlight-Terms scoping; progressive-disclosure layout (project always visible; platform + Highlight Terms gated by project pick); switching projects clears platform; pure-helpers location at `extensions/competition-scraping/src/lib/`; on-blur splits commas + newlines; case-insensitive dedup; popover dismiss paths (outside-click + Esc); verification path. Director responded "Sounds right. Please proceed..." — full scope approved before any code.
+
+- **Alternatives considered (Rule 14f, 4 options):**
+  - (A) **All three popup pieces, full per-spec — RECOMMENDED.** Chosen. Lands the entire setup-screen surface (project + platform + Highlight Terms with the §6 4×5 palette + per-Project storage) in one commit so session 3 can build URL capture on a complete setup foundation. Most thorough.
+  - (B) Pickers-only — defer Highlight Terms to session 3. Smaller scope; rejected because it splits the setup screen across two sessions and waypoint #1 would still need to verify all three pieces from different sessions.
+  - (C) All three + URL-recognition badge stub. Reaches forward into session 3's content-script territory; rejected as more speculative than thorough.
+  - (D) Escape-hatch — not selected.
+
+- **Three Rule-15 autonomous picks taken (no user-visible difference within the brief's stated requirements):**
+  - **Highlight Terms storage scope = per-Project** (key: `highlightTerms:<projectId>` in chrome.storage.local) — fits §A.7 framing where Highlight Terms come AFTER project pick; different Projects have different competitor terms.
+  - **Switching projects clears persisted platform** (the platform pick is contextual to the project; new project = new context).
+  - **Verify-Connection button retired** — the project picker itself proves the auth round-trip works (loading the project list IS the smoke test). Session 1's button was scaffolding for the auth shell, no longer needed.
+
+- **Pure-helpers location decision:** `extensions/competition-scraping/src/lib/` (the logical home — these helpers only run inside the extension). Added a `test` script to extension's `package.json` so the extension has its own green test signal independent of the root runner. The `.ts` extensions in imports (required by node:test under `--experimental-strip-types`) initially conflicted with extension `tsconfig`'s default `allowImportingTsExtensions: false`; fixed by adding `allowImportingTsExtensions: true` + `noEmit: true` to extension `tsconfig.json`. Mirrors the root tsconfig's posture (root has both flags).
+
+- **Two transient lint errors caught + fixed mid-session:**
+  - `react-hooks/set-state-in-effect` on `ProjectPicker.tsx`'s `setState({ kind: 'loading' })` inside `useEffect` — same recurring pattern that bit slices (a.1) + (a.2). Fixed by initializing useState with `{ kind: 'loading' }` and just letting the fetch resolve to `ready` or `error`; no setState-in-effect synchronously.
+  - `react/no-unescaped-entities` on the literal `'` in "you haven't" empty-state copy — fixed via `&apos;` escape.
+
+- **Decision (extension session 2 shipped):**
+  - **NEW pure-logic helpers** at `extensions/competition-scraping/src/lib/`:
+    - `color-palette.ts` — 20-color palette per §6 (10 light + 10 dark), `getDefaultColorForIndex` (rotation banana → royal blue → mint → crimson → peach for first 5; continues through the rest of the palette for 6th-onward; wraps modulo 20), `getContrastTextColor` (palette-table lookup → black on light / white on dark; defensive luminance fallback for off-palette hex), `findPaletteColor` (case-insensitive lookup), `relativeLuminance` (WCAG formula; ill-formed input returns 0.5 deterministic fallback).
+    - `highlight-terms.ts` — `parseTermInput` (splits on commas + newlines; trims; dedupes case-insensitively preserving first-seen casing), `mergeWithExisting` (continues color rotation from existing list length so adding terms across two on-blur events keeps default-color spread), `removeTermAt` + `setColorAt` (immutable updaters with bounds defense).
+    - `popup-state.ts` — chrome.storage.local I/O. `getSelectedProjectId` / `setSelectedProject` (switching project clears persisted platform per the §A.7 contract). `getSelectedPlatform` / `setSelectedPlatform`. `getHighlightTerms(projectId)` / `setHighlightTerms(projectId, terms)` — per-Project keying. Adapter guards against `chrome` being undefined so module imports outside extension runtime no-op (mirrors `supabase.ts` pattern).
+    - `platforms.ts` — 7 platform options + `getPlatformLabel` lookup.
+  - **NEW unit tests** at `extensions/competition-scraping/src/lib/`:
+    - `color-palette.test.ts` — 28 tests across COLOR_PALETTE structure (length 20, 10 light + 10 dark, unique hexes/names/uppercase format), DEFAULT_ROTATION_INDICES (opens with banana → royal blue → mint → crimson → peach per §6; covers every palette index exactly once), `getDefaultColorForIndex` (positional + wrap + invalid-index defense), `getContrastTextColor` (every light returns black; every dark returns white; lowercase input handled; off-palette luminance fallback), `relativeLuminance` (white/black/ill-formed defaults), `findPaletteColor` (case-insensitive + missing).
+    - `highlight-terms.test.ts` — 14 tests across `parseTermInput` (empty, comma-split, newline-split, mixed, trim, dedup, non-string defense), `mergeWithExisting` (rotation continuation, dedup against existing, preserves overridden colors, empty-incoming returns copy), `removeTermAt` + `setColorAt` (bounds checks, immutability).
+    - 42/42 pass via `node --test --experimental-strip-types`.
+  - **NEW popup React components** at `extensions/competition-scraping/src/entrypoints/popup/components/`:
+    - `ProjectPicker.tsx` — dropdown with loading/error/empty states; calls existing `listProjects()` from session 1; preserves the persisted selection if still in the list.
+    - `PlatformPicker.tsx` — 7-option dropdown (Amazon / Ebay / Etsy / Walmart / Google Shopping / Google Ads / Independent Website) + muted-help line explaining why platform-pick is mandatory (Google Shopping / Google Ads / independent websites have URL ambiguity).
+    - `HighlightTermsManager.tsx` — textarea + on-blur parse → chip list. Each chip styled with its highlight color (auto-flipped text). Per-chip swatch trigger + × remove. "Clear all highlight terms" link below the list. Anchors a `ColorSwatchPopover` to the chip whose swatch is being edited.
+    - `ColorSwatchPopover.tsx` — 4×5 grid of 20 palette swatches per §6 (light rows 1–2, dark rows 3–4); ~32×32 with 2px gap; selected swatch shows thin black border on light / thin white border + outer ring on dark; color name as `title` tooltip on hover; closes on outside-mousedown + Esc.
+  - **MODIFIED `App.tsx`** — replaced `SignedInScreen` Verify-Connection placeholder with `SetupScreen` composing the three pickers. State hydrates from `popup-state.ts` on mount; persists on every change. Active-session banner (small green "Capturing for **\<Platform Label\>**" line) renders at top once both project + platform are selected. Sign-out button stays at bottom.
+  - **MODIFIED `style.css`** — extended with `field-block` layout + select/textarea styling matching the existing input style + `active-session` banner + `term-list` / `term-row` / `term-chip` / `swatch-trigger` / `term-remove` + `swatch-popover` (anchored, z-index 10, box-shadow) + `swatch-grid` (5×4 with 32×32 cells + 2px gap) + `swatch-cell` + `swatch-cell-selected` (dark vs light variants).
+  - **MODIFIED `api-client.ts`** — typed `listProjects()` return as `ExtensionProject[]` with shape-validation filter that defends against unexpected response shapes (selects `{ id, name, description, lastActivityAt }`). Imports use `.ts` extensions to satisfy node:test under `--experimental-strip-types`.
+  - **MODIFIED extension `tsconfig.json`** — added `allowImportingTsExtensions: true` + `noEmit: true` so .ts-extension imports work in both tsc and node:test.
+  - **MODIFIED extension `package.json`** — added `test` npm script: `node --test --experimental-strip-types $(find src -name '*.test.ts')`.
+
+- **Verification scoreboard:**
+  - Extension `npm run compile` (`tsc --noEmit`): clean — zero errors.
+  - Extension `npm test`: **42/42 pass** — exact baseline parity (no prior test count; this session establishes the baseline).
+  - Extension `npm run build`: clean. `.output/chrome-mv3/` produced (manifest.json + popup.html + background.js + popup chunks + popup css). Bundle ~603 KB unpacked.
+  - Extension `npm run zip`: produces `competition-scraping-extension-0.1.0-chrome.zip` (~165 KB compressed).
+  - Extension `npx eslint extensions/competition-scraping/src`: clean — zero errors, zero warnings on the session-2 files.
+  - Root `npx tsc --noEmit`: clean (`extensions/` excluded).
+  - Root `npm run build`: clean — 49 routes (same baseline; zero new routes; this session adds zero PLOS-side files).
+  - Root tests `find src -name '*.test.ts' | xargs node --test --experimental-strip-types`: **393/393 pass** — exact baseline parity (no root `src/lib` files modified).
+  - Root `npx eslint src`: project-wide 13 errors / 39 warnings — exact baseline parity.
+
+- **Manual smoke test:** NOT performed this session per the standing 2026-05-07-f directive deferring all manual extension testing to the 3 verification waypoints. 28 walked-through tests captured in `COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` "Extension build — session 2" section (Steps S2-1 through S2-28 covering: setup-screen flip from session 1's Verify-Connection / project list load + sort + error / project-picker default + persistence / platform list 7 options + rationale + active-session banner / switching projects clears platform / Highlight Terms empty state + add single + add multi-comma + add multi-newline + dedup case-insensitive + auto-flip text contrast across all swatches / open + change + close color picker / remove single + clear-all / persistence across popup close + Chrome restart / per-Project term lists / long-term wrap / whitespace-only input dropped / sign-out behavior / chrome.storage.local key check via service-worker DevTools / no console errors / build artifact integrity). Lands in waypoint #1 coverage (after extension session 3 ships URL-capture).
+
+- **Affected sections:** §A.14 Q14 sequencing list (item 4 — "W#2 Chrome extension build" — session 2 now done; 3–5 sessions remaining before the 3 verification waypoints; total session-count estimate ~22–26 build + 3 waypoints = ~25–29). §A.13 + §A.15 popup setup flow now first-class implementation rather than design intent. No edits to §A1–§A18; §A remains frozen per Rule 18.
+
+- **Cross-references:**
+  - `docs/ROADMAP.md` — Active Tools W#2 row updated (Status cell adds extension session 2 shipped + Last Session updated + Next Session item (c) wording reflects session 2 done; Workflow #2 section item 4 updated to reflect session 1 + 2 shipped).
+  - `docs/CHAT_REGISTRY.md` — new top row.
+  - `docs/DOCUMENT_MANIFEST.md` — header timestamps + per-doc flags.
+  - `docs/COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` — new "Extension build — session 2" section appended with 28 walked-through tests targeting waypoint #1.
+  - `STACK_DECISIONS §6` — implementation realized; FROZEN spec unchanged.
+  - `STACK_DECISIONS §15 Q2` (extension settings page UI) — partially addressed by sign-out button + future reset path; full settings page still deferred.
+
+---
+
 **2026-05-07-f addendum — verification-waypoint split (3 waypoints replacing 1)**
 
 - **Director's directive (mid-end-of-session, after the doc batch had been committed but before exit):** *"Let's split the testing that way you described above. (1) After session 3 (Module 1 URL-capture lands) — simplest end-to-end loop exists: install → sign in → pick project + platform → capture a competitor URL → see it on the PLOS viewer. ~50–80 tests. (2) After session 5 (image upload lands) — full data-capture surface exists; only WAL/reconciler/distribution polish remain. ~120–150 tests."* Plus the implicit waypoint #3 at extension session 7 covering the remaining ~50 tests.
