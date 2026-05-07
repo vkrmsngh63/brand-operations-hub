@@ -7,10 +7,22 @@ export default defineConfig({
     name: 'PLOS Competition Scraping',
     description:
       'Capture competitor URLs, text, and images for the PLOS Competition Scraping & Deep Analysis workflow.',
-    permissions: ['storage'],
+    // `storage`     — chrome.storage.local for popup state + auth tokens
+    // `contextMenus` — right-click "Add to PLOS" fallback per §5 guardrail #6
+    permissions: ['storage', 'contextMenus'],
+    // Chrome will require the user to re-approve permissions after this
+    // host_permissions expansion when they reload the unpacked extension —
+    // standard MV3 install path. Adding more platforms (Google Shopping,
+    // Google Ads, Independent Websites) in future build sessions appends
+    // new entries here additively.
     host_permissions: [
       'https://vklf.com/*',
       'https://*.supabase.co/*',
+      // §5 guardrail #2 per-platform DOM-pattern modules — 4 sites today.
+      'https://*.amazon.com/*',
+      'https://*.ebay.com/*',
+      'https://*.etsy.com/*',
+      'https://*.walmart.com/*',
     ],
   },
 });

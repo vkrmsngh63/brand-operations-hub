@@ -2,10 +2,16 @@
 // request; surfaces structured errors.
 //
 // Future build sessions extend this file with W#2-specific endpoints
-// (POST .../urls, POST .../text, the two-phase image upload, etc.) using
-// the shared types from src/lib/shared-types/competition-scraping.ts.
+// (POST .../text, the two-phase image upload, etc.) using the shared types
+// from src/lib/shared-types/competition-scraping.ts.
 
 import { getAccessToken } from './auth.ts';
+import type {
+  CompetitorUrl,
+  CreateCompetitorUrlRequest,
+  ListCompetitorUrlsResponse,
+  Platform,
+} from '../../../../src/lib/shared-types/competition-scraping.ts';
 
 const PLOS_API_BASE_URL = 'https://vklf.com';
 
@@ -88,4 +94,76 @@ export async function listProjects(): Promise<ExtensionProject[]> {
       lastActivityAt:
         typeof p.lastActivityAt === 'string' ? p.lastActivityAt : '',
     }));
+}
+
+/**
+ * Reads + parses a JSON body, surfacing a PlosApiError on non-2xx response.
+ * Shared between the GET-list and POST-create paths below.
+ */
+async function readJsonOrThrow<T>(res: Response): Promise<T> {
+  if (!res.ok) {
+    let message = `HTTP ${res.status}`;
+    try {
+      const body = await res.json();
+      if (typeof body?.error === 'string') message = body.error;
+    } catch {
+      // ignore JSON parse errors — fall back to HTTP status
+    }
+    throw new PlosApiError(res.status, message);
+  }
+  return (await res.json()) as T;
+}
+
+/**
+ * Lists CompetitorUrl rows for the given Project, optionally filtered by
+ * platform. The content-script orchestrator calls this once per page-load
+ * (when the user is on a platform that matches their popup-state) to build
+ * the recognition cache for the "already saved" icon + detail-page overlay.
+ *
+ * Server returns the array in any order; the orchestrator's recognition
+ * cache uses a `Set<normalizedUrl>` for O(1) lookups so order doesn't matter.
+ */
+export async function listCompetitorUrls(
+  projectId: string,
+  platform: Platform | null,
+): Promise<ListCompetitorUrlsResponse> {
+  const query = platform ? `?platform=${encodeURIComponent(platform)}` : '';
+  const res = await authedFetch(
+    `/api/projects/${encodeURIComponent(projectId)}/competition-scraping/urls${query}`,
+  );
+  const data = await readJsonOrThrow<unknown>(res);
+  if (!Array.isArray(data)) {
+    throw new PlosApiError(
+      500,
+      'Unexpected response shape from competition-scraping/urls',
+    );
+  }
+  // Server-side type contract is the source of truth (CompetitorUrl in
+  // shared-types). We pass the array through unchanged — the orchestrator
+  // only reads `.url` for the recognition Set, so a future additive
+  // server-side change won't break our parsing.
+  return data as ListCompetitorUrlsResponse;
+}
+
+/**
+ * Creates a new CompetitorUrl for the given Project. Idempotent server-side
+ * per §11.2 — if a row already exists for (projectWorkflowId, platform, url)
+ * the server returns the existing row with status 200 (vs 201 for the
+ * fresh-create path). Either status maps to success here.
+ *
+ * Surfaces PlosApiError on 4xx/5xx; caller (UrlAddOverlayForm) maps the
+ * error to an inline red message under the form.
+ */
+export async function createCompetitorUrl(
+  projectId: string,
+  body: CreateCompetitorUrlRequest,
+): Promise<CompetitorUrl> {
+  const res = await authedFetch(
+    `/api/projects/${encodeURIComponent(projectId)}/competition-scraping/urls`,
+    {
+      method: 'POST',
+      body: JSON.stringify(body),
+    },
+  );
+  return readJsonOrThrow<CompetitorUrl>(res);
 }
