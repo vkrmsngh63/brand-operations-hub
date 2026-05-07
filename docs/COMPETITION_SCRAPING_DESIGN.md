@@ -712,4 +712,30 @@ This section is for entries added in subsequent sessions when the director adds 
 
 ---
 
+**2026-05-07 — session_2026-05-07-e_w2-detailed-user-guide (Claude Code, on `workflow-2-competition-scraping` branch)**
+
+- **Session purpose:** ship slice (b) of the W#2 next-session list — the always-visible Detailed User Guide content per `COMPETITION_SCRAPING_STACK_DECISIONS.md §13.1.1` (install) + §13.1.2 (use) + §13.1.3 (implementation). Independent of the (a.x) viewer slices and the Chrome extension build.
+
+- **Director's directive (mid-build Read-It-Back per Rule 18):** at session start, Claude surfaced 4 Rule-14f options for the next-session pick (b/c/(d|f)/escape) — director picked **(b) Detailed User Guide — RECOMMENDED**. A second 4-option Rule-14f question scoped the build concretely (full install + use content + JSX + Print stylesheet vs Markdown variant vs install-only-defer-use vs escape) — director picked **the full-scope JSX + print recommended option**. No mid-build pivots; no scope expansion; no overrides of recommendations.
+
+- **Alternatives considered (concrete-scope question, 4 options):**
+  - (A) **Full install + use content authored as JSX, screenshot placeholders, print stylesheet + window.print() button, default-expanded collapsible block, placement between Status row and DeliverablesArea — RECOMMENDED.** Chosen. Highest confidence of shipping a complete deliverable in one session with zero new dependencies.
+  - (B) Same content + placement, but render via react-markdown so future content edits are .md files. Closer to §13.1.3 literal wording but adds a dependency + bundling validation; rejected as less thorough for a single-session pick.
+  - (C) Install-only — defer §13.1.2 use walkthrough. Smaller scope; rejected as partial.
+  - (D) Escape-hatch — not selected.
+
+- **PDF strategy decision (closes `STACK_DECISIONS §15 Q8`):** Phase 1 ships browser-native print-to-PDF — a `@media print` stylesheet on the guide block hides everything else and resets to black-on-white; a "Print this guide" button calls `window.print()`; user picks "Save as PDF" in the browser's native Print dialog. Zero new dependencies. If Phase 2+ wants programmatic PDF generation (e.g., for scheduled exports or worker email distribution), a real PDF library can be added then; the print-stylesheet path remains as a no-cost fallback.
+
+- **Decision (slice (b) shipped):** new W#2-specific `<DetailedUserGuide />` component at `src/app/projects/[projectId]/competition-scraping/components/DetailedUserGuide.tsx` (714 LOC including content). Renders inline between the Status row and the `<DeliverablesArea>` per §13.1.3. Default expanded; collapsible via aria-expanded + aria-controls button. Header has 📖 icon + "Detailed User Guide" h2 + "Print this guide" button (only when expanded) + "Hide guide ▾ / Show guide ▸" toggle. Body: lead paragraph + "what you'll need" checklist; Part 1 (install — 7 numbered Step components with screenshot placeholder slots + "when a new version is released" note); Part 2 (use — 10 sub-sections covering sign in / Project + platform / Highlight Terms / capture URL / add Sizes / capture text / capture image / region screenshot / browse / edit / sign out); Tips section. Plain Language passing CLAUDE_CODE_STARTER Rule 1 throughout. Screenshots are gray-bordered figcaption placeholders today; new folder `public/competition-scraping/guide-screenshots/` (with `.gitkeep`) created so future image commits drop in cleanly. `page.tsx` updated to import + render the new component; the prior "Detailed User Guide content authoring deferred to a follow-up session" comment replaced with the now-shipped reference. CompanionDownload description tweaked to point at the user guide.
+
+- **Affected sections:** §A.14 Q14 sequencing list (item 5 area — Detailed User Guide content now shipped); no edits to §A1–§A18; §A remains frozen per Rule 18.
+
+- **Cross-references:**
+  - `docs/ROADMAP.md` — Active Tools W#2 row updated (Status cell adds slice (b) shipped; Last Session updated; Next Session list drops (b)).
+  - `docs/CHAT_REGISTRY.md` — new top row.
+  - `docs/DOCUMENT_MANIFEST.md` — header timestamps + per-doc flags.
+  - `STACK_DECISIONS §15 Q8` (PDF library choice) — informally resolved by this session: Phase 1 = browser print-to-PDF; library decision deferred unless/until programmatic PDF generation becomes a Phase 2+ requirement.
+
+---
+
 END OF DOCUMENT
