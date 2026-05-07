@@ -4,7 +4,7 @@
 **Workflow:** W#2 Competition Scraping & Deep Analysis.
 **Branch:** `workflow-2-competition-scraping`.
 **Created:** 2026-05-07 in `session_2026-05-07_w2-plos-side-viewer-detail-page-slice` (Claude Code).
-**Last updated:** 2026-05-07 (Slice (a.3) — inline editing of URL fields — section appended in `session_2026-05-07-c_w2-plos-side-viewer-inline-editing`).
+**Last updated:** 2026-05-07 (Slice (a.4) — per-column filter dropdowns — section appended in `session_2026-05-07-d_w2-plos-side-viewer-column-filters`).
 
 ---
 
@@ -150,6 +150,72 @@ Walked-through tests once the extension can populate test data:
 - `PATCH .../urls/[urlId]` already supports every field in the slice's scope (route written in API-routes session-1, 2026-05-07). The shared `UpdateCompetitorUrlRequest` type was extended additively to allow `null` on the nullable fields so the inline-edit UI can clear back to "—" without a cast — no runtime change to the route handler (it was already accepting non-string / non-number → null).
 - `GET /vocabulary?type=...` + `POST /vocabulary` (idempotent on `(projectId, vocabularyType, value)`) live since API-routes session-1.
 - TypeScript types compile (`npx tsc --noEmit` clean). Build clean at 49 routes (zero new — slice (a.3) added no API routes). 393/393 src/lib tests pass.
+
+---
+
+## Slice (a.4) — per-column filter dropdowns on the URL list table — PENDING 2026-05-07
+
+Shipped commit: (pending end-of-session commit on `workflow-2-competition-scraping`).
+
+Slice (a.4) adds per-column filter controls to the URL list table at `/projects/<projectId>/competition-scraping`. Each filterable column header gets a small funnel icon next to the column label. Clicking the label still toggles sort (existing slice-(a.1) behavior); clicking the funnel opens a popover for that column's filter. The funnel turns blue with a small dot when a filter is active on that column. A "Clear all filters (N active)" button appears in the toolbar when ≥ 1 column filter is active. All filter state — plus the platform sidebar selection AND the search-box query — serialize into the URL query so refresh, browser back/forward, and copy-paste deep-links all preserve the user's exact view.
+
+Filter shapes per column:
+- **Product Name / Brand Name / Category** — multi-select checkbox dropdowns. Options are the distinct non-null values present in the current platform-scoped row set (NOT narrowed by other filters). A `(blank)` pseudo-row at the top filters for null/empty rows. Search-within-list input appears when the option count is > 6. "Apply" + "Clear" footer buttons.
+- **Product Stars / # Reviews** — min / max number inputs side-by-side. Empty either side = unbounded on that side. Rows with null values fail when any bound is set (a numeric filter implies "rows that have a number"). Apply on Enter or via "Apply" button. Range validation: Min ≤ Max; non-numeric input rejected.
+- **Added On** — from / to date inputs (YYYY-MM-DD). Empty either side = unbounded. From ≤ To validation.
+
+URL-query convention:
+- `?platform=<name>` — existing
+- `?q=<text>` — NEW: free-text search box value, debounced 250ms write so each keystroke doesn't trigger a routing flush
+- `?productName=A&productName=B` — repeated keys for multi-select; `__blank__` token for the blank pseudo-value
+- `?brandName=...` / `?category=...` — same convention
+- `?starsMin=4&starsMax=5` / `?reviewsMin=100&reviewsMax=10000` — numeric ranges
+- `?addedFrom=2026-04-01&addedTo=2026-05-01` — date range
+
+Walked-through tests once the extension can populate test data:
+
+- [ ] **Step 1 — Funnel icon affordance.** From the workflow root page (`/projects/<projectId>/competition-scraping`), confirm each of the 6 filterable column headers (Product Name, Brand Name, Category, Product Stars, # Reviews, Added On) has a small funnel icon to the right of the column label. The URL column has NO funnel (covered by the search box). Hovering the funnel highlights it; clicking the column LABEL (not the funnel) still toggles sort.
+- [ ] **Step 2 — Multi-select popover open + outside-click close.** Click the Brand Name funnel. A popover opens below the header showing a list of all distinct brand names captured for the current platform scope (case-insensitive sorted). Click anywhere outside the popover. Popover closes; no filter applied (since user didn't click Apply).
+- [ ] **Step 3 — Multi-select Apply.** Open Brand Name popover; check 2 brand boxes; click Apply. Popover closes; the table re-renders with only those 2 brands' rows; Brand Name's funnel turns blue with a small dot; toolbar shows "Clear all filters (1 active)" button. URL updates to include `?brandName=Foo&brandName=Bar` (or with `__blank__` for blank entries).
+- [ ] **Step 4 — Multi-select Clear.** With Brand Name filter active, open Brand Name popover; click Clear. Popover closes; filter clears; funnel returns to gray; toolbar's "Clear all filters" button disappears. URL drops the `brandName` keys.
+- [ ] **Step 5 — Multi-select with `(blank)` row.** Confirm `(blank)` pseudo-row appears at the top of the list ONLY when at least one platform-scoped row has null/empty Brand Name. Selecting `(blank)` and applying filters in rows with null/empty Brand Name. URL stores it as `?brandName=__blank__`.
+- [ ] **Step 6 — Multi-select with empty option list.** On a Project that has no Brand Name values populated AND no null-Brand-Name rows in scope, opening the Brand Name popover shows the empty hint ("No brand names captured yet."). Apply does nothing meaningful (no rows match — but the test confirms the empty case doesn't crash).
+- [ ] **Step 7 — Multi-select search-within-list.** With ≥ 7 options in the Product Name list, confirm the search input appears at the top of the popover. Typing "ac" filters the visible options to those containing "ac" (case-insensitive). The blank pseudo-row stays visible regardless of search (or is filtered consistently — confirm the chosen behavior).
+- [ ] **Step 8 — Multi-select option set is platform-scoped, NOT search-narrowed.** Type "Acme" in the global search box. Then open Brand Name popover. Confirm the option list still includes ALL brands in the platform scope, NOT just brands matching "Acme". This prevents a "shrinking options" footgun.
+- [ ] **Step 9 — Numeric range Apply + range validation.** Open Product Stars popover. Type Min=`4`, Max=`5`. Press Enter. Popover closes; rows with Product Stars in [4, 5] remain. URL gets `?starsMin=4&starsMax=5`. Open the popover again; type Min=`5`, Max=`4`. Press Apply. Inline red error: "Min must be ≤ Max." Filter doesn't change.
+- [ ] **Step 10 — Numeric range — null exclusion when bound set.** Add a Min=`4` filter on Product Stars. Confirm rows with Product Stars = null DO NOT appear (numeric filter excludes nulls when any bound is set). Clear the filter; null rows reappear.
+- [ ] **Step 11 — Numeric range invalid input.** Open Product Stars popover. Type Min=`abc`. Press Apply. Inline red error: "Enter a valid number, or leave empty." Filter doesn't change.
+- [ ] **Step 12 — Numeric range integer enforcement on # Reviews.** The # Reviews input has `step={1}`. Browser-native `<input type="number">` rounds `3.5` per its number-input semantics (browser-dependent — confirm visually). The applied filter is whatever number ends up in the input on Apply.
+- [ ] **Step 13 — Date range Apply.** Open Added On popover. Click the From date picker; pick `2026-04-01`. Tab to To; pick `2026-05-01`. Press Apply. Rows with addedAt within that date range remain. URL gets `?addedFrom=2026-04-01&addedTo=2026-05-01`.
+- [ ] **Step 14 — Date range one-sided.** Open Added On popover; pick From=`2026-05-01`, leave To empty. Apply. Rows with addedAt ≥ 2026-05-01 remain. Same with To set + From empty.
+- [ ] **Step 15 — Date range From > To validation.** Type From=`2026-05-15`, To=`2026-04-01`. Press Apply. Inline red error: "From must be ≤ To." Filter doesn't change.
+- [ ] **Step 16 — Multiple filters AND-combine.** Active: Brand Name = "Acme"; Product Stars Min = 4; Added On From = 2026-04-01. Confirm only rows matching ALL three remain (intersection, not union). Toolbar shows "Clear all filters (3 active)".
+- [ ] **Step 17 — Filter alongside free-text search.** With Brand Name filter active, type "widget" in the search box. Confirm rows must match BOTH the brand filter AND the search blob (URL + Product Name + Brand Name contains "widget"). Both filters AND-combine.
+- [ ] **Step 18 — Clear all filters button.** With ≥ 1 column filter active, click "Clear all filters (N active)" in the toolbar. All column filters clear; the search box value is NOT cleared (separate widget); platform sidebar selection is NOT cleared (separate widget). URL drops all filter keys; keeps `?platform=` and `?q=`.
+- [ ] **Step 19 — URL state survives refresh.** With a complex filter set active (e.g., Brand Name = "Acme,Zenith", Stars Min = 4, Added From = 2026-04-01), confirm the URL bar shows all the filter keys. Hard-refresh (Ctrl+Shift+R). The page reloads with the same filter set active and the same rows visible.
+- [ ] **Step 20 — Browser back/forward preserves filter state.** From a filtered view, click a row to navigate to the URL detail page. Click browser Back. The URL list re-renders with the same filter set active. Click browser Forward. Detail page re-renders.
+- [ ] **Step 21 — Deep-link copy/paste.** Copy the current URL (including all filter query params) from the browser bar. Open a new tab; paste; press Enter. The same filter set is active and the same rows are visible.
+- [ ] **Step 22 — Search-box debounce + URL persistence.** Type quickly in the search box. The table filters rows immediately (the input is mirrored locally). Pause for ~300ms. The URL bar updates to include `?q=<text>`. Refresh. The search box is pre-populated with the same text.
+- [ ] **Step 23 — Browser back/forward with search box.** Type something in search; pause for the URL to update; type more; pause again. Click Back twice. Search box value reverts step-by-step. The local input mirror re-syncs from the URL via the `urlSearch` effect.
+- [ ] **Step 24 — "Showing N of M" reflects column filters.** With 30 platform-scoped rows, no filters: `Showing 30 of 30`. Add a Brand filter that matches 12 rows: `Showing 12 of 30`. Add a search query that further narrows to 5: `Showing 5 of 30`. M stays at the platform-scoped total throughout.
+- [ ] **Step 25 — Filter rules everything out.** With 30 rows in scope, set a Brand Name filter on a value that doesn't exist (e.g., type a custom brand into the multi-select… actually, multi-select only offers existing values, so set conflicting filters: Stars Min = 5.0, Stars Max = 4.0). Confirm "No URLs match this filter." empty-state appears. Search box stays visible.
+- [ ] **Step 26 — Sort still works alongside filters.** With column filters active, click the Product Name LABEL (not the funnel). Sort toggles asc/desc. Filter set stays unchanged. Clicking the funnel + sort label both work independently.
+- [ ] **Step 27 — Active-filter visual cue accuracy.** With Brand Name filter set: Brand Name funnel is blue with dot. Other 5 funnels are gray with no dot. Add Product Stars filter: 2 funnels blue, 4 gray. Toolbar shows "Clear all filters (2 active)".
+- [ ] **Step 28 — Esc closes popover.** Open any column's popover. Press Esc. Popover closes; no filter applied (similar to outside-click).
+- [ ] **Step 29 — Cross-platform navigation preserves filter via URL.** With column filters active for amazon, click "Etsy" in the platform sidebar. URL updates `?platform=etsy` BUT all the other filter keys remain. Confirm the table's multi-select option lists update to Etsy's distinct values; numeric/date filters stay applied as-is. (Per the chosen behavior — filter state is global across platform switches; if a user explicitly wants to clear filters when switching platforms, they use the Clear-all button.)
+- [ ] **Step 30 — Lint + build + tests parity.** At commit time: `npx tsc --noEmit` clean; `npm run build` clean (49 routes — same as slice (a.3); zero new); `npx eslint src` reports project-wide 13e/39w at exact baseline parity with slice (a.3) AND `npx eslint` on JUST the slice (a.4) files (`ColumnFilters.tsx`, `UrlTable.tsx`, `CompetitionScrapingViewer.tsx`) reports clean (zero errors, zero warnings); `node --test --experimental-strip-types 'src/lib/**/*.test.ts'` reports 393/393 pass.
+
+**Seed-data prerequisites** (before walking through these tests):
+
+- At least 30 CompetitorUrl rows under one platform with varied values across all 6 filterable fields (covers Step 16 multi-filter AND, Step 24 "Showing N of M", Step 25 empty-after-filter, Step 27 multi-funnel visual cue).
+- Brand Name and Product Name diversity: at least 5 distinct brands AND ≥ 7 distinct product names (covers Step 7 search-within-list which only renders when option count > 6).
+- At least 1 row with null Brand Name + at least 1 row with null Product Stars (covers Step 5 `(blank)` pseudo-row + Step 10 null exclusion when bound set).
+- Two distinct platforms each with their own URL set (covers Step 29 cross-platform navigation preserves filter while option lists swap).
+- Date range across ≥ 1 month so Step 13 + Step 14 + Step 15 exercise meaningful date pickers.
+
+**API-side confirmation already exercised at commit time:**
+
+- **No API surface changes this slice.** Pure UI work atop the existing `GET /api/projects/[projectId]/competition-scraping/urls` endpoint shipped in API-routes session-1. Build clean at 49 routes (zero new). `tsc` + lint + tests all at exact baseline parity.
 
 ---
 END OF DOCUMENT
