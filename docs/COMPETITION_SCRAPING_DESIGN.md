@@ -738,4 +738,66 @@ This section is for entries added in subsequent sessions when the director adds 
 
 ---
 
+**2026-05-07-f — session_2026-05-07-f_w2-extension-build-session-1 (Claude Code, on `workflow-2-competition-scraping` branch)**
+
+- **Session purpose:** ship session 1 of the W#2 Chrome extension build per `STACK_DECISIONS §1, §2, §12` and ROADMAP Active Tools W#2 row item (c). First session of an estimated 5–7 sessions for the full extension build. Scope frozen at session start via two Rule 14f questions (next-step pick: extension build kickoff RECOMMENDED; session-1 scope: WXT init + auth shell + smoke-test API call RECOMMENDED). A third Rule 14f question scoped the smoke-test API target to vklf.com (RECOMMENDED).
+
+- **Director's mid-session directive (Rule 18 mid-build Read-It-Back):** mid-session, after the code shipped + verification scoreboard came clean, director directed: *"I want to do all testing once all the coding is done. Let's add these tests to the roadmap post coding. Make sure you walk me through each test item step by step."* Interpretation: the 9-step in-chat smoke-test walkthrough Claude was about to run becomes a new section in `docs/COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md`. Format mirrors existing slice (a.x) sections: step-by-step click-by-click instructions with exact button labels + expected outcomes. Future extension-build sessions append their own sections. After all 5–7 extension sessions ship, ONE dedicated verification session walks the entire backlog (extends the existing ROADMAP item (f) pattern).
+
+- **Alternatives considered (Rule 14f session-1 scope, 4 options):**
+  - (A) **WXT init + auth shell with sign-in + sign-out + JWT storage + token-refresh + Bearer header on a smoke-test API call — RECOMMENDED.** Chosen. Lands the WXT framework + Supabase JS + chrome.storage.local adapter + popup UI + smoke-test verification all behind a green build, ~150–300 LOC of extension code so the framework reversibility window per `§1` remains open.
+  - (B) WXT init + monorepo + shared-types but stubbed sign-in (no real Supabase). Faster session end but defers integration risks (CORS, refresh tokens, manifest permissions) to session 2 which would carry both auth-land and integration-discovery work.
+  - (C) WXT init only — `Hello world` popup, no auth or shared types. Most conservative; rejected because going maximally narrow today doesn't unlock more reversibility tomorrow (reversibility window is bounded by total extension LOC, not today's session size).
+  - (D) Escape-hatch — not selected.
+
+- **Alternatives considered (Rule 14f smoke-test target, 3 options):**
+  - (A) **Production vklf.com — RECOMMENDED.** Chosen. `host_permissions: ["https://vklf.com/*", "https://*.supabase.co/*"]`; smoke-test calls `GET https://vklf.com/api/projects`. Tests the actual production path the extension will use in real use; CORS/auth surprises caught now, not after 5 capture flows ship on top.
+  - (B) Both production vklf.com + Codespaces dev URL. Slightly more setup; useful only if testing against unmerged branch code, which the W#2 branch isn't deploying anyway.
+  - (C) Escape-hatch — not selected.
+
+- **Three Rule-15 autonomous picks taken (no user-visible difference):**
+  - **Package manager: npm (deviates from `STACK_DECISIONS §12.2` pnpm prescription).** Reason: rest of the repo uses npm; using pnpm just for the extension means the director would need `npm install -g pnpm` first as an extra non-obvious step, and would be running `npm` in the root and `pnpm` in `extensions/`. npm-everywhere is simpler with zero technical downside (WXT supports both). The §12.2 prescription was a tool-choice that wasn't fully justified for a single-package non-workspace setup; relaxed to npm at this session per `feedback_avoid_over_prescribing.md`-style reasoning (prescription was made before the prescription's actual cost/benefit could be measured).
+  - **Shared-types import: relative path (`../../../src/lib/shared-types/competition-scraping`), not tsconfig paths alias** (closes `STACK_DECISIONS §15 Q1`). Reason: zero extra tsconfig setup; alias variant requires WXT/Vite + tsc + IDE all to agree on a paths config. Phase-1 cost is marginally uglier import lines. Reversibility: trivial — flip later in any session by adding `paths` to extension tsconfig.
+  - **Smoke-test endpoint: `GET /api/projects`** (Option A's "e.g., GET /api/projects or the W#2 reconcile endpoint" — picking the first). Reason: simpler — proves Bearer + CORS + auth round-trip without needing a hardcoded projectId. Returns the project list which is meaningful signal for the director ("yes, I see my projects"). The W#2-specific reconcile endpoint gets exercised in session 3+ when capture flows land.
+
+- **Cross-workflow infrastructure edit (surfaced + autonomous Rule 15):** added an OPTIONS preflight handler + `withCors` wrap to `src/app/api/projects/route.ts` so the extension's `Authorization: Bearer` request gets through CORS. `/api/projects` is a non-W#2 cross-workflow endpoint used by W#1's projects list. The change is purely additive (no same-origin behavior change; CORS headers only attach when the request originates from a `chrome-extension://` origin). Mechanically required for any non-web-app PLOS client to ever call `/api/projects`. Surfaced at code-write time per `MULTI_WORKFLOW_PROTOCOL §3` cross-workflow-edit discipline.
+
+- **Decision (extension session 1 shipped):**
+  - **`extensions/competition-scraping/`** scaffolded as a new top-level monorepo subfolder. WXT 0.20.25 + React 19.2 + Supabase JS 2.101 + TypeScript 5.7 + @types/chrome 0.1.42 + @wxt-dev/module-react 1.2.2.
+  - `package.json` with scripts `dev` / `build` / `zip` / `compile` / `postinstall: wxt prepare`.
+  - `wxt.config.ts` declares manifest with `permissions: ['storage']` + `host_permissions: ['https://vklf.com/*', 'https://*.supabase.co/*']`.
+  - `tsconfig.json` extends `.wxt/tsconfig.json` (auto-generated by `wxt prepare`); strict + noUncheckedIndexedAccess + jsx: react-jsx; includes the relative shared-types path.
+  - `.gitignore` — `node_modules/` + `.output/` + `.wxt/` + `*.log` + `.DS_Store`.
+  - `src/lib/supabase.ts` — Supabase client with chrome.storage.local storage adapter; PKCE auth flow; auto-refresh on; persistSession on; detectSessionInUrl off. Adapter guards against `chrome` being undefined so `wxt prepare`'s type-generation pass doesn't crash when it imports the module in Node.
+  - `src/lib/auth.ts` — `signIn(email, password)` / `signOut()` / `getSession()` / `getAccessToken()`.
+  - `src/lib/api-client.ts` — `authedFetch` wrapper that adds `Authorization: Bearer <JWT>`; `listProjects()` smoke-test calling `https://vklf.com/api/projects`; structured `PlosApiError` class.
+  - `src/entrypoints/popup/index.html` + `main.tsx` + `App.tsx` + `style.css` — sign-in screen (email + password form) → signed-in screen (signed-in-as line + Verify Connection button + Sign Out button). React 19 functional components with hooks. CSS at ~360px width.
+  - `src/entrypoints/background.ts` — service worker stub; imports supabase to keep auto-refresh alive while the worker is active. Phase 1 placeholder; future sessions add WAL replay + reconciliation poller + navigator.onLine handlers.
+  - `src/app/api/projects/route.ts` — added OPTIONS handler + `withCors` wrap on GET response + error response.
+  - Root `tsconfig.json` — `extensions` added to `exclude` so root tsc doesn't type-check the extension code (which has its own WXT-aware tsconfig with chrome globals etc.).
+
+- **Verification scoreboard:**
+  - Extension build: clean. `.output/chrome-mv3/` produced (manifest + background.js + popup.html + assets/ + chunks/) at ~600 KB unpacked. `competition-scraping-extension-0.1.0-chrome.zip` produced at ~590 KB.
+  - Extension `tsc --noEmit`: clean (zero errors).
+  - Root PLOS `tsc --noEmit`: clean (extensions/ excluded).
+  - Root PLOS `npm run build`: clean (49 routes — same baseline; CORS edits to `/api/projects` route did not add or change route count).
+  - Tests: `node --test --experimental-strip-types $(find src -name '*.test.ts')` reports **393/393 pass** — exact baseline parity.
+  - Lint: `npx eslint src` reports project-wide **13 errors / 39 warnings** — exact baseline parity (the 13 errors all live in pre-existing files outside the W#2 surface and outside `extensions/`).
+
+- **Smoke test:** NOT performed this session per director's directive to defer all manual testing to a single dedicated post-coding verification session. The 9-step walkthrough is captured in `COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` "Extension build — session 1" section as 18 walked-through tests (Steps 1–18 covering download → unzip → install → pin → sign-in → sign-out → verify connection → token persistence → manifest sanity check → service-worker DevTools → build artifact integrity).
+
+- **Affected sections:** §A.14 Q14 sequencing list (item 4 — "W#2 Chrome extension build" — session 1 now done; 4–6 sessions remaining); no edits to §A1–§A18; §A remains frozen per Rule 18.
+
+- **Cross-references:**
+  - `docs/ROADMAP.md` — Active Tools W#2 row updated (Status cell adds extension session 1 shipped + Last Session updated + Next Session list rotates to extension session 2).
+  - `docs/PLATFORM_ARCHITECTURE.md` §1 — file-structure note added for the new `extensions/` top-level folder.
+  - `docs/PLATFORM_ARCHITECTURE.md` §3 — routes table notes the OPTIONS handler addition on `/api/projects`.
+  - `docs/COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` — new "Extension build — session 1" section appended with 18 walked-through tests.
+  - `docs/CHAT_REGISTRY.md` — new top row.
+  - `docs/DOCUMENT_MANIFEST.md` — header timestamps + per-doc flags.
+  - `STACK_DECISIONS §15 Q1` (tsconfig paths alias vs relative) — closed: relative path chosen for Phase 1 with reversibility note.
+  - `STACK_DECISIONS §12.2` (pnpm prescription) — relaxed to npm for the extension; deviation captured here.
+
+---
+
 END OF DOCUMENT

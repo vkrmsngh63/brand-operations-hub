@@ -4,7 +4,7 @@
 **Workflow:** W#2 Competition Scraping & Deep Analysis.
 **Branch:** `workflow-2-competition-scraping`.
 **Created:** 2026-05-07 in `session_2026-05-07_w2-plos-side-viewer-detail-page-slice` (Claude Code).
-**Last updated:** 2026-05-07 (Slice (a.4) — per-column filter dropdowns — section appended in `session_2026-05-07-d_w2-plos-side-viewer-column-filters`).
+**Last updated:** 2026-05-07-f (Extension build — session 1 — section appended in `session_2026-05-07-f_w2-extension-build-session-1` after director's directive to defer all manual testing to one dedicated post-coding verification session).
 
 ---
 
@@ -218,4 +218,77 @@ Walked-through tests once the extension can populate test data:
 - **No API surface changes this slice.** Pure UI work atop the existing `GET /api/projects/[projectId]/competition-scraping/urls` endpoint shipped in API-routes session-1. Build clean at 49 routes (zero new). `tsc` + lint + tests all at exact baseline parity.
 
 ---
+
+## Extension build — session 1 — WXT init + auth shell + GET /api/projects CORS — PENDING 2026-05-07
+
+Shipped commit: `5b4a3e8` on `workflow-2-competition-scraping`.
+
+This is the **first** of the 5–7 W#2 Chrome extension build sessions. Session-1 ships the WXT scaffold + the auth shell (`signInWithPassword`, JWT + refresh-token storage in `chrome.storage.local`, sign-out) + a "Verify connection" smoke-test button that calls `GET https://vklf.com/api/projects` with a Bearer header. The cross-workflow change to `src/app/api/projects/route.ts` adds the OPTIONS preflight handler + `withCors` wrap so the extension's `Authorization: Bearer` request gets through CORS.
+
+**Prerequisites for these tests** (no PLOS-side seed data needed — this session's flows are install + auth, NOT capture):
+
+- A local Chrome browser on your computer (any recent version).
+- Your PLOS email + password (the same credentials you use to sign in at https://vklf.com).
+- Codespaces session running on the `workflow-2-competition-scraping` branch with the build artifacts present at `extensions/competition-scraping/.output/competition-scraping-extension-0.1.0-chrome.zip` (re-run `cd extensions/competition-scraping && npm run zip` if missing — re-running is idempotent and produces the same artifact).
+
+Walked-through tests:
+
+- [ ] **Step 1 — Download the extension zip from Codespaces to your local computer.** In your VS Code window's Explorer panel (left sidebar), navigate to `extensions/competition-scraping/.output/`. Right-click `competition-scraping-extension-0.1.0-chrome.zip` → **Download…**. The browser saves it to your local Downloads folder. *If `.output` is hidden by VS Code's exclude filter:* press `Ctrl+P` (or `Cmd+P` on Mac), type `extensions/competition-scraping/.output/competition-scraping-extension-0.1.0-chrome.zip`, hit Enter — that opens it; then File → Save As to save locally.
+
+- [ ] **Step 2 — Unzip on your local computer.** *Mac:* double-click the zip in Downloads (auto-extracts into a folder of the same name). *Windows:* right-click → Extract All… → click Extract. Open the extracted folder and **confirm `manifest.json` is directly inside**. If `manifest.json` is one level deeper, use the inner folder for Step 5.
+
+- [ ] **Step 3 — Open Chrome's extensions page.** In your local Chrome's address bar, paste `chrome://extensions` and press Enter. You land on Chrome's extensions management page.
+
+- [ ] **Step 4 — Toggle Developer Mode ON.** In the top-right corner of `chrome://extensions`, click the **"Developer mode"** toggle so it turns blue. Three new buttons appear in the top-left: **Load unpacked**, **Pack extension**, **Update**.
+
+- [ ] **Step 5 — Click "Load unpacked" and pick the unzipped folder.** Click **Load unpacked** in the top-left. Navigate to your Downloads folder → select the unzipped folder from Step 2 (the one containing `manifest.json` directly) → click **Select** (or **Open** / **Choose**). A new tile appears with **Name: PLOS Competition Scraping**, **Version: 0.1.0**, **Description: Capture competitor URLs, text, and images for the PLOS Competition Scraping & Deep Analysis workflow.** Confirm there is **no red error text** under the tile. (If there is, copy the exact error verbatim and report back — it points at a manifest validation issue.)
+
+- [ ] **Step 6 — Pin the extension to your toolbar.** Click the puzzle-piece icon in Chrome's top-right (Extensions menu). Find "PLOS Competition Scraping" in the list → click the pin icon next to it. The extension now appears as a small icon in your toolbar.
+
+- [ ] **Step 7 — Click the extension icon to open the popup.** A 360px-wide popup opens. Confirm it shows: heading "PLOS Competition Scraping", tagline "Workflow #2 — capture URLs, text, images.", a sign-in form with **PLOS email** + **Password** fields, and a "Sign in" button (disabled while either field is empty). Below the form, gray text reads "Use the same email and password you use at vklf.com."
+
+- [ ] **Step 8 — Sign in with valid credentials.** Type your real PLOS email + password → click **Sign in**. While the call is in flight, the button text changes to "Signing in…" and is disabled. On success: the popup flips to the signed-in screen showing "Signed in as **\<your email\>**" in a gray box, a blue "Verify connection" button, a divider, and a white "Sign out" button. **Persistence subcheck:** keep the popup open; close it (click outside / press Esc); reopen by clicking the toolbar icon — should still be signed in (no re-login needed).
+
+- [ ] **Step 9 — Sign in with invalid credentials.** Sign out first if needed, then try with a wrong password. Expected: the form shows a red error box with the Supabase error message (typically "Invalid login credentials"). The button re-enables. Form state preserved (email field keeps its value; password field stays as typed but you can re-edit).
+
+- [ ] **Step 10 — Click "Verify connection" — happy path.** Signed in, click **Verify connection**. Button text changes to "Checking…" while the fetch is in flight. Expected outcome: a **green "notice" box** appears reading **"Connected — N projects visible on vklf.com."** (singular `1 project` if only one). N matches the number of Projects you can see on vklf.com's `/projects` page. **Open DevTools → Network** to inspect the request:
+  - The OPTIONS preflight to `https://vklf.com/api/projects` returns `204 No Content` with `Access-Control-Allow-Origin: chrome-extension://<your-extension-id>` + `Access-Control-Allow-Methods: GET, POST, PATCH, DELETE, OPTIONS` + `Access-Control-Allow-Headers: Content-Type, Authorization`.
+  - The GET to `https://vklf.com/api/projects` returns `200 OK` with a JSON array of project objects + the same Access-Control-Allow-Origin header echoed back.
+  - The Authorization header value starts with `Bearer eyJ…` (a JWT).
+
+- [ ] **Step 11 — Click "Verify connection" — failure path on expired/invalid token.** With DevTools → Application → Storage → IndexedDB / Extension Storage → manually corrupt the stored access_token (or sign in, wait for the refresh-token TTL to elapse — impractical for routine testing; the corruption-DevTools path is faster). Click **Verify connection**. Expected: a **red error box** reading "PLOS API error (401): Unauthorized" (or near-equivalent). The popup remains on the signed-in screen so you can retry or sign out cleanly.
+
+- [ ] **Step 12 — Click "Verify connection" — network unreachable path.** Disconnect from the internet (Wi-Fi off OR DevTools → Network → set Throttling to "Offline"). Click **Verify connection**. Expected: red error box reading "Network error: Failed to fetch" (or near-equivalent). The popup remains usable. Reconnect → click again → green-box success.
+
+- [ ] **Step 13 — Sign-out path.** Click **Sign out**. The popup flips back to the sign-in form within ~200ms. Reopen the popup (close + click icon again) — sign-in form is still showing (sign-out cleared the session, not just the in-memory state). DevTools → Application → Storage → check `chrome.storage.local` — the `sb-*-auth-token` key is gone (or set to a sign-out marker).
+
+- [ ] **Step 14 — Token persistence across browser restart.** Sign in via Step 8. Close the entire Chrome window (not just the popup). Reopen Chrome. Click the extension icon. Expected: still signed-in (the JWT + refresh token survived in `chrome.storage.local`). Click "Verify connection" — green box again.
+
+- [ ] **Step 15 — Token persistence across extension reload.** Sign in via Step 8. On `chrome://extensions`, click the **Reload** circular-arrow button under the PLOS Competition Scraping tile. Click the extension icon. Expected: still signed-in. (Reload re-instantiates the service worker + popup but `chrome.storage.local` survives.)
+
+- [ ] **Step 16 — Manifest sanity check.** On `chrome://extensions`, click **Details** under the PLOS Competition Scraping tile. Confirm:
+  - **Site access:** "Allow access to specific sites" is the default for MV3 host_permissions. Click "Site access" → confirm `https://vklf.com/*` and `https://*.supabase.co/*` are listed and **on**. (If they're listed as "off," the host_permissions never took effect and the network calls would have CORS-blocked at the manifest level rather than via the server's Access-Control headers.)
+  - **Permissions:** "Storage" is listed.
+  - **Inspect views:** the "service worker" link is clickable (opens DevTools for the background.ts).
+
+- [ ] **Step 17 — DevTools inspect of service worker.** From `chrome://extensions` → Details → Inspect views: **service worker** → DevTools opens. Console should show no red errors (Supabase client may log `Auth state change` info-level lines on sign-in / sign-out — those are fine; only RED-stack-trace errors are concerns). Network tab — note any unexpected outgoing requests; should be quiet during idle.
+
+- [ ] **Step 18 — Build artifact integrity.** From the extension folder in Codespaces: `cd extensions/competition-scraping && npm run build` should produce `.output/chrome-mv3/` containing `manifest.json` + `background.js` + `popup.html` + `assets/popup-*.css` + `chunks/popup-*.js`. `npm run zip` should produce a `.output/competition-scraping-extension-0.1.0-chrome.zip` of around ~600 KB. Both commands should be **deterministic** — re-running produces a zip with the same logical contents (file-list + sizes; hashes may differ due to bundler timestamps).
+
+**API-side confirmation already exercised at commit time:**
+
+- `npm run build` (root PLOS app) clean — 49 routes including the modified `/api/projects` route now serving an OPTIONS handler.
+- `npx tsc --noEmit` clean (root + extension separately).
+- `node --test --experimental-strip-types $(find src -name '*.test.ts')` reports **393/393 pass** — exact baseline parity. The CORS edits to `/api/projects` did not break any existing tests.
+- `npx eslint src` reports project-wide 13 errors / 39 warnings — exact baseline parity (the 13 errors all live in pre-existing files outside the W#2 surface and outside `extensions/`).
+- Extension build via WXT 0.20.25 → manifest validates, popup bundle is React 19 + Supabase JS, total unpacked size ~600 KB.
+
+**Remaining cross-cutting concerns to revisit at the post-coding verification session:**
+
+- **Extension ID is volatile during dev mode.** Every `Load unpacked` instance gets a different chrome-extension://\<id\> origin. The CORS allowlist (`chrome-extension://*` per `src/lib/cors.ts`) is intentionally permissive to absorb this; once the Chrome Web Store (Phase 2 distribution per `STACK_DECISIONS §13.2`) issues a stable production ID, we may tighten the allowlist to that specific ID. NOT a today concern; flagging for the future tightening review.
+- **Refresh-token TTL behavior.** Supabase JS handles auto-refresh internally; we haven't observed it in real time yet. Real verification requires letting the access token expire (default ~1 hour) without using the extension, then exercising it — a long-running session test deferred to the verification walkthrough.
+- **Multi-account behavior.** If you sign out and sign in as a different PLOS account, the project count from `Verify connection` should change to that account's project list. Add a manual check at the verification walkthrough.
+
+---
 END OF DOCUMENT
+
