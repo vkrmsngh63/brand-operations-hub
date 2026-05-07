@@ -4,7 +4,7 @@
 **Workflow:** W#2 Competition Scraping & Deep Analysis.
 **Branch:** `workflow-2-competition-scraping`.
 **Created:** 2026-05-07 in `session_2026-05-07_w2-plos-side-viewer-detail-page-slice` (Claude Code).
-**Last updated:** 2026-05-07-f (Extension build — session 1 — section appended in `session_2026-05-07-f_w2-extension-build-session-1` after director's directive to defer all manual testing to one dedicated post-coding verification session).
+**Last updated:** 2026-05-07-f (Extension build — session 1 — section appended in `session_2026-05-07-f_w2-extension-build-session-1` after director's directive to defer all manual testing. **End-of-session refinement:** the "ONE post-coding verification session" plan was split into THREE verification waypoints — see "Verification waypoints" section below).
 
 ---
 
@@ -15,6 +15,26 @@ W#2 PLOS-side slices ship UI faster than the data needed to populate it. The Chr
 Rather than hold each slice's commit on a verification step that can't run, the director chose 2026-05-07: **defer all visual verification of W#2 PLOS-side UI until the extension build provides a data path; maintain a per-slice running tally of pending visual checks here; walk through each slice's checks together when the extension is up.**
 
 This doc is the running tally.
+
+---
+
+## Verification waypoints (set 2026-05-07-f)
+
+The original directive was "defer all manual testing to ONE post-coding verification session." End-of-session 2026-05-07-f, the director refined this to **THREE verification waypoints split across the remaining build sessions**, both to keep each walkthrough at a manageable size and to shorten the find-a-problem-deep-in-the-stack feedback loop.
+
+| Waypoint | Fires after | Cumulative coverage | Approx. test count |
+|---|---|---|---|
+| **#1** | Extension session 3 (Module 1 URL-capture lands) | Slice (a.1)–(a.4) + slice (b) Detailed User Guide + extension sessions 1–3 (install / auth / popup pickers / URL capture). Simplest end-to-end loop: install → sign in → pick Project + platform → capture a competitor URL → see it on the PLOS viewer. | ~50–80 |
+| **#2** | Extension session 5 (image upload lands) | Adds extension session 4 (text + image capture flows) + extension session 5 (two-phase signed-URL image upload). Full data-capture surface exists. | ~70–80 incremental; ~120–150 cumulative |
+| **#3** | Extension session 7 (distribution polish lands; all coding done) | Adds extension session 6 (WAL + failed-write queue + tab-close guard + sync indicator + periodic reconciler) + extension session 7 (distribution polish). | ~50 incremental; ~150–200 cumulative |
+
+**Waypoint discipline:** when a waypoint runs, every section heading covered by that waypoint flips from `PENDING <date>` to `✅ DONE <date>` with a one-line outcome note (the body stays unchanged for historical reference per the format below). Subsequent waypoints only walk through sections still in `PENDING` state plus any new sections appended since the prior waypoint.
+
+**Per-waypoint session structure:**
+
+1. Director runs through every `PENDING` step in the relevant sections. Each step is checked off in the file as it passes (or annotated with a failure note if it doesn't).
+2. Failures get either: (a) immediate fix this session if small, or (b) a new `DEFERRED:` task per Rule 26 with destination doc + section named.
+3. End-of-session: heading flipped to ✅ DONE; backlog committed.
 
 ---
 

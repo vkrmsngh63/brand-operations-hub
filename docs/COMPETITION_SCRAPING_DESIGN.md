@@ -800,4 +800,24 @@ This section is for entries added in subsequent sessions when the director adds 
 
 ---
 
+**2026-05-07-f addendum — verification-waypoint split (3 waypoints replacing 1)**
+
+- **Director's directive (mid-end-of-session, after the doc batch had been committed but before exit):** *"Let's split the testing that way you described above. (1) After session 3 (Module 1 URL-capture lands) — simplest end-to-end loop exists: install → sign in → pick project + platform → capture a competitor URL → see it on the PLOS viewer. ~50–80 tests. (2) After session 5 (image upload lands) — full data-capture surface exists; only WAL/reconciler/distribution polish remain. ~120–150 tests."* Plus the implicit waypoint #3 at extension session 7 covering the remaining ~50 tests.
+
+- **Alternatives considered:** ONE post-coding session covering all 150–200 tests in one sitting (the original 2026-05-07-f directive); SPLIT INTO 2 (after session 3 OR after session 5 + final); SPLIT INTO 3 (chosen). Three waypoints chosen — best balance of "find-a-problem-early feedback loop" + "manageable session size" + "natural stopping points where the next coding sessions don't re-touch the verified surface."
+
+- **Decision:** ROADMAP item (f) wording updated; `COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` "Verification waypoints" section added near the top (under "Why this doc exists") documenting the 3-waypoint plan + per-waypoint discipline (heading flip from PENDING → ✅ DONE per section as covered; new sections accumulate for the next waypoint; failures either get immediate fix or a Rule-26 `DEFERRED:` task with destination).
+
+- **Affected sections:** §A.14 Q14 sequencing list (item 4 — "W#2 Chrome extension build" — verification now interleaved with build, not deferred to end); no edits to §A1–§A18; §A remains frozen per Rule 18.
+
+- **Total session-count impact:** prior estimate (`session_2026-05-07-f` end-of-session handoff) of ~22–26 total W#2 sessions adjusts upward by +2 to **~24–28 total** because we add 2 verification sessions (waypoints #1 and #2) before the original final waypoint (#3, formerly the only verification session). Sessions to first testable end-to-end loop drop from 6 to 3 — director sees the extension working with real data 3 sessions earlier.
+
+- **Cross-references:**
+  - `docs/ROADMAP.md` — Active Tools W#2 row Next Session item (f) wording rewritten.
+  - `docs/COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` — "Verification waypoints" section added near top + header timestamp updated.
+  - `docs/CHAT_REGISTRY.md` — addendum to today's row.
+  - `docs/DOCUMENT_MANIFEST.md` — header timestamp updated.
+
+---
+
 END OF DOCUMENT
