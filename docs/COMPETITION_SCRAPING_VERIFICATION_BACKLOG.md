@@ -400,5 +400,76 @@ When both project and platform are selected, a small "Capturing for **\<Platform
 - Extension lint (`npx eslint extensions/competition-scraping/src`) clean — zero errors, zero warnings on the session-2 files.
 
 ---
+
+## Extension build — session 3 — Module 1 URL-capture content script (4 platforms: Amazon, Ebay, Etsy, Walmart) + URL-recognition features + URL-add overlay form — PENDING 2026-05-07-h
+
+Shipped commit: (pending end-of-session commit on `workflow-2-competition-scraping`).
+
+**What changed in session 3.** Adds the **content-script** layer of the extension — code that runs ON competitor product pages (Amazon / Ebay / Etsy / Walmart) and adds the floating "+ Add" button on link hover, the URL-add overlay form, and the two URL-recognition behaviors per `COMPETITION_SCRAPING_DESIGN.md §B` 2026-05-07-g end-of-session addendum. Per-platform DOM-pattern modules per `STACK_DECISIONS §15 Q7`. URL-normalization helper strips `?` and everything after for comparison-time matching per the §B addendum item 3. 4 platforms shipped today; Google Shopping / Google Ads / Independent Websites deferred to a future build session.
+
+**Manifest expansion to flag at install time:** `host_permissions` adds `https://*.amazon.com/*`, `https://*.ebay.com/*`, `https://*.etsy.com/*`, `https://*.walmart.com/*` and `permissions` adds `contextMenus`. Chrome will require you to **re-approve permissions** when you click "Reload" on the unpacked extension at `chrome://extensions`. This is the standard MV3 install flow when host-permission scope expands.
+
+**Walked-through tests** (extension session 3 expands the install/sign-in/popup baseline established by sessions 1 + 2 — these tests assume Steps 1–17 of session 1 and Steps S2-1 through S2-26 of session 2 are already passing):
+
+- [ ] **Step S3-1 — Reload the unpacked extension after pulling session 3 code.** From `chrome://extensions`, click the circular **Reload** button on the PLOS Competition Scraping tile. Chrome may show a permissions-changed warning — click to **approve the new host permissions** (the 4 shopping sites). Confirm the tile shows no red error text.
+- [ ] **Step S3-2 — Confirm Site access lists the 4 shopping sites.** Click **Details** on the tile → scroll to **Site access** → **On specific sites**. Confirm: `https://vklf.com/*`, `https://*.supabase.co/*`, `https://*.amazon.com/*`, `https://*.ebay.com/*`, `https://*.etsy.com/*`, `https://*.walmart.com/*` — all 6 listed and toggled **on**.
+- [ ] **Step S3-3 — Confirm Permissions lists Storage + ContextMenus.** Same Details page → **Permissions** section. Both `Storage` and `Read your browsing history` (Chrome's user-facing label for `contextMenus`) are listed.
+- [ ] **Step S3-4 — Sign in + pick Project + pick `Amazon.com` platform in the popup.** Establishes the baseline state the content script reads.
+- [ ] **Step S3-5 — Open `https://www.amazon.com/` in a new tab.** Page loads normally. Open DevTools → **Console** tab → confirm no red errors from the content script. (You may see Amazon's own log lines and unrelated warnings — only red lines whose source file path includes `competition-scraping-extension` or `chrome-extension://` are extension errors worth flagging.)
+- [ ] **Step S3-6 — Search Amazon for `red light therapy`.** Click on the search box, type the query, press Enter. The search-results page loads showing product tiles.
+- [ ] **Step S3-7 — Hover over a product link.** Move your cursor over any product title or product image link. Wait ~300ms. A small **circular "+" button** appears at the upper-right corner of the link's bounding box, with a small **× dismiss** button just to the right of it. The button is blue with white "+" text; the × is red.
+- [ ] **Step S3-8 — Move cursor away from the link.** Cursor leaves the link's bounding box. The "+ Add" button disappears immediately.
+- [ ] **Step S3-9 — Click the floating "+" button.** Hover over a link, wait for the button, click the "+". Expected: a **modal overlay** opens with a dimmed backdrop. The form shows: title "Add competitor URL", a context block listing your Project name + "Platform: Amazon.com", a pre-filled URL field (the product URL in canonical form — `https://www.amazon.com/dp/<ASIN>` — without the `?ref=...&keywords=...` query that was on the search-results link), three optional free-text fields (Competition Category, Product Name, Brand Name), and Save + Cancel buttons.
+- [ ] **Step S3-10 — Save without filling optional fields.** Click **Save**. Expected: button text changes to "Saving…"; ~1 second later the modal closes; the search-results page is visible again. Open the PLOS web app at `/projects/<your-project-id>/competition-scraping` in another tab → the URL appears in the URL list. The Platform column shows `amazon`.
+- [ ] **Step S3-11 — Verify "already saved" icon appears on the same product link.** Back on the Amazon search results tab, **hard-refresh** (Ctrl+Shift+R). Wait for the page + content script to settle. The previously-saved product link should now show a small **green "✓" circle** to the LEFT of the link, in addition to the "+ Add" button on hover.
+- [ ] **Step S3-12 — Save WITH optional fields filled.** Hover a different product link, click "+", in the form fill: Competition Category = `device`, Product Name = `Red Light Therapy Pro`, Brand Name = `Acme`. Click Save. The PLOS-side URL detail page (drill into the saved row) should show those three fields populated.
+- [ ] **Step S3-13 — Cancel button closes the form without saving.** Hover, click "+", in the form click **Cancel**. Form closes. PLOS-side: no new URL row appears.
+- [ ] **Step S3-14 — Esc closes the form without saving.** Hover, click "+", press the **Esc** key. Form closes. PLOS-side: no new URL row.
+- [ ] **Step S3-15 — Backdrop click closes the form without saving.** Hover, click "+", click the dimmed area outside the form. Form closes. PLOS-side: no new URL row.
+- [ ] **Step S3-16 — Save failure shows inline error.** Open DevTools → Network → enable Throttling = "Offline". Hover, click "+", click Save. Inline red message reads "Save failed: …" (specific text depends on failure mode — common shape is "Failed to fetch" or "PlosApiError"). Form stays open with the user's typed values preserved. Restore Network → Save again → success.
+- [ ] **Step S3-17 — Per-session × dismiss hides the button for the rest of the page-load.** Hover any link until the "+" appears. Click the small **×** button (NOT the "+"). The "+" + × disappear. Hover OTHER links on the page — no "+" appears. Hard-refresh the page (Ctrl+Shift+R). Hover restored — "+" appears again. (Per-session means the dismiss is page-load scoped, not permanent.)
+- [ ] **Step S3-18 — Right-click context menu fallback.** Right-click any product link on the search-results page. The browser's context menu opens with an entry **"Add to PLOS — Competition Scraping"**. Click it. The URL-add overlay form opens with the right-clicked link's URL pre-filled. Save → new URL appears on PLOS-side.
+- [ ] **Step S3-19 — Detail-page "already saved" overlay appears when navigating to a saved URL.** Click directly on a URL you previously saved (Step S3-10's product link). The Amazon product detail page loads. Within ~1 second, a small **green floating banner** appears in the **top-right corner** of the page reading **"✓ This URL is already in your project · <Your Project Name>"**. The banner has a small × close button.
+- [ ] **Step S3-20 — Detail-page overlay auto-dismisses after 5 seconds.** Wait without interacting. The banner disappears on its own after ~5 seconds.
+- [ ] **Step S3-21 — Detail-page overlay × close works.** Refresh the page (overlay reappears). Click the **×**. Banner disappears immediately.
+- [ ] **Step S3-22 — Overlay does NOT appear for unsaved URLs.** Click on a different product link (one you have NOT saved). Detail page loads. Banner does NOT appear.
+- [ ] **Step S3-23 — `?`-stripping URL-normalization works for tracking-token-laden URLs.** Pick a saved product URL. Construct a URL with extra tracking params: e.g., `<saved-url>?utm_source=email&fb_click_id=ABC123`. Paste into a new tab and press Enter. Page loads. The detail-page overlay should still appear (because `?` and everything after gets stripped at recognition time). This validates the §B 2026-05-07-g item 3 spec.
+- [ ] **Step S3-24 — `+ Add` button does NOT appear on non-product links.** Search results pages have many non-product links: Amazon's logo, the cart icon, navigation, "Today's Deals", etc. Hover over any of those — the "+" button does NOT appear. Only links whose URL matches `/dp/{ASIN}` or `/gp/product/{ASIN}` get the button.
+- [ ] **Step S3-25 — Hover delay is ~300ms (not instant; not laggy).** Move cursor to a product link and hold steady. The "+" appears after a brief pause. Move cursor between links in quick succession (don't dwell on any) — the "+" should NOT flicker into view as you pass over (because each link's hover-in is debounced 300ms before showing).
+- [ ] **Step S3-26 — Repeat Steps S3-5 through S3-19 on `https://www.ebay.com/`.** Pick `Ebay.com` in the popup, search Ebay for any product, exercise the same flows. Product-link detection: links with `/itm/{listing-id}` (8+ digit numeric IDs) get the "+ Add" button; non-listing links don't.
+- [ ] **Step S3-27 — Repeat Steps S3-5 through S3-19 on `https://www.etsy.com/`.** Pick `Etsy.com` in the popup. Product-link detection: `/listing/{numeric-id}` matches; shop pages, search, etc. don't.
+- [ ] **Step S3-28 — Repeat Steps S3-5 through S3-19 on `https://www.walmart.com/`.** Pick `Walmart.com` in the popup. Product-link detection: `/ip/{slug}/{numeric-id}` AND `/ip/{numeric-id}` both match; category and search pages don't.
+- [ ] **Step S3-29 — Cross-platform mismatch — extension no-ops.** In the popup, pick `Amazon.com` as the platform. In the browser, navigate to `https://www.ebay.com/`. The content script should NOT inject buttons on Ebay (because the user's selected platform is Amazon — content script confirms hostname matches selected platform before running). DevTools → Elements → confirm no `plos-cs-*` elements in the body.
+- [ ] **Step S3-30 — Switching platform in popup mid-session.** While on Amazon search-results with "+ Add" buttons visible, open the popup and change platform from `Amazon.com` to `Ebay.com`. The Amazon tab's existing buttons stay until refresh (per-tab content-script lifetime). Refresh the Amazon tab — buttons disappear (because selected platform no longer matches Amazon). Navigate to Ebay → buttons appear there.
+- [ ] **Step S3-31 — SPA navigation re-scans links (Etsy infinite scroll).** On Etsy search results, scroll down to load more results. New product tiles appear. Confirm the "+ Add" buttons + "already saved" icons appear on the newly-loaded tiles too (within ~250ms after the new tiles render — the orchestrator's MutationObserver debounces re-scans).
+- [ ] **Step S3-32 — Recognition cache survives the URL save.** Save a fresh URL via Step S3-9. Without refreshing, scroll back up to see the same product link in the search-results list. The "already saved" icon should now be present on it (the orchestrator re-scans after a successful save).
+- [ ] **Step S3-33 — No `+ Add` button when popup not configured.** Sign out from the popup. Reload Amazon. No "+ Add" buttons appear (content script reads `selectedProjectId` from popup-state; if missing, no-op). Sign back in + re-pick project + platform → buttons appear on next page load.
+- [ ] **Step S3-34 — Service worker DevTools shows no errors.** From `chrome://extensions` → Details → Inspect views: **service worker**. Console tab. Walk through Steps S3-5 through S3-19 in another tab. No red errors in the service worker console (the content-script log noise lives in the page's DevTools console, not the service-worker console).
+- [ ] **Step S3-35 — chrome.storage.local check via service-worker DevTools.** Service-worker DevTools → Application → Storage → Extension Storage → Local. Confirm keys: `selectedProjectId`, `selectedPlatform`, `highlightTerms:<projectId>` (one per Project), and Supabase `sb-*-auth-token` are all present and have plausible values. No new keys from session 3 — the recognition cache lives in memory only.
+- [ ] **Step S3-36 — Build artifact integrity.** From Codespaces: `cd extensions/competition-scraping && npm run compile && npm test && npm run build`. All three clean. `npm test` reports 246/246 pass (146 helper-tests; the prior 42 popup-tests were renumbered when url-normalization + 5 platform-module test files joined them). `npm run build` produces `.output/chrome-mv3/` with new `content-scripts/` directory containing the bundled content script for the 4 platforms. Bundle size grows from ~603 KB to ~1 MB (content-script chunk + new platform-module chunks).
+
+**Seed-data prerequisites** (in addition to sessions 1 + 2 prereqs):
+
+- A test Project on PLOS with at least 1 saved CompetitorUrl on each of Amazon, Ebay, Etsy, Walmart so the "already saved" icon + detail-page overlay paths are exercised on each platform. (Steps S3-11 onward populate the Project organically as you save URLs through the flow — but a few pre-seeded entries help cover the cross-platform iteration faster.)
+
+**API-side already verified at commit time:**
+
+- Extension `npm run compile` clean — zero errors.
+- Extension `npm test` reports **246/246 pass** (146 helper-tests across 5 new test files: url-normalization + amazon + ebay + etsy + walmart + registry; carries the prior 42 popup-tests forward + a `+`-handler corrections from old runs cleaned up at session 3 baseline).
+- Extension `npm run build` clean — Vite + WXT bundle. `.output/chrome-mv3/` produced with the new `content-scripts/` chunk in addition to the prior popup + background. `.output/competition-scraping-extension-0.1.0-chrome.zip` produced.
+- Extension `npx eslint extensions/competition-scraping/src` clean — zero errors, zero warnings on session-3 files.
+- Root `npx tsc --noEmit` clean (extensions/ excluded — root tsconfig has been excluding it since session 1).
+- Root `npm run build` clean — same 49 routes; zero new PLOS-side files this session.
+- Root tests **393/393 pass** — exact baseline parity (no root files modified this session).
+- Root `npx eslint src` reports project-wide 13 errors / 39 warnings — exact baseline parity (no PLOS-side changes).
+
+**Lands in waypoint #1 coverage** per the verification-waypoint plan at the top of this doc — Waypoint #1 fires immediately after this session and walks through:
+- Slice (a.1) detail page (12 steps) + slice (a.2) image gallery (14 steps) + slice (a.3) inline editing (23 steps) + slice (a.4) column filters (30 steps) + slice (b) Detailed User Guide
+- Extension session 1 install/auth (18 steps)
+- Extension session 2 popup pickers (28 steps)
+- Extension session 3 URL-capture (36 steps — this section)
+- **~150–160 steps total at Waypoint #1** (originally estimated 50–80; the actual surface area is larger because slices (a.2), (a.3), (a.4) each shipped 14–30 walked-through steps. Director may want to sub-split Waypoint #1 into two passes if the single walkthrough proves too long; flagged here for the verification session itself to evaluate.)
+
+---
 END OF DOCUMENT
 
