@@ -1,8 +1,20 @@
 import { useEffect, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
-import { supabase } from '../../lib/supabase';
-import { signIn, signOut } from '../../lib/auth';
-import { listProjects, PlosApiError } from '../../lib/api-client';
+import { supabase } from '../../lib/supabase.ts';
+import { signIn, signOut } from '../../lib/auth.ts';
+import {
+  getHighlightTerms,
+  getSelectedPlatform,
+  getSelectedProjectId,
+  setHighlightTerms,
+  setSelectedPlatform,
+  setSelectedProject,
+} from '../../lib/popup-state.ts';
+import type { HighlightTerm } from '../../lib/highlight-terms.ts';
+import { getPlatformLabel } from '../../lib/platforms.ts';
+import { ProjectPicker } from './components/ProjectPicker.tsx';
+import { PlatformPicker } from './components/PlatformPicker.tsx';
+import { HighlightTermsManager } from './components/HighlightTermsManager.tsx';
 
 type LoadState = 'loading' | 'signed-out' | 'signed-in';
 
@@ -33,9 +45,7 @@ export function App() {
       <p className="tagline">Workflow #2 — capture URLs, text, images.</p>
       {state === 'loading' && <p className="muted">Loading…</p>}
       {state === 'signed-out' && <SignInScreen />}
-      {state === 'signed-in' && session && (
-        <SignedInScreen session={session} />
-      )}
+      {state === 'signed-in' && session && <SetupScreen session={session} />}
     </main>
   );
 }
@@ -92,33 +102,57 @@ function SignInScreen() {
   );
 }
 
-function SignedInScreen({ session }: { session: Session }) {
+function SetupScreen({ session }: { session: Session }) {
+  const [hydrated, setHydrated] = useState(false);
+  const [projectId, setProjectId] = useState<string | null>(null);
+  const [platform, setPlatform] = useState<string | null>(null);
+  const [terms, setTerms] = useState<HighlightTerm[]>([]);
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
-  async function handleVerify() {
-    setBusy(true);
-    setResult(null);
-    setError(null);
-    try {
-      const data = await listProjects();
-      const count = countProjects(data);
-      setResult(
-        count === null
-          ? 'Connected — got a response from vklf.com.'
-          : `Connected — ${count} ${count === 1 ? 'project' : 'projects'} visible on vklf.com.`,
-      );
-    } catch (e) {
-      if (e instanceof PlosApiError) {
-        setError(`PLOS API error (${e.status}): ${e.message}`);
-      } else if (e instanceof Error) {
-        setError(`Network error: ${e.message}`);
-      } else {
-        setError('Unknown error contacting vklf.com');
-      }
-    } finally {
-      setBusy(false);
+  // Hydrate persisted state on mount.
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([getSelectedProjectId(), getSelectedPlatform()]).then(
+      async ([pid, plat]) => {
+        if (cancelled) return;
+        setProjectId(pid);
+        setPlatform(plat);
+        if (pid) {
+          const ts = await getHighlightTerms(pid);
+          if (!cancelled) setTerms(ts);
+        }
+        if (!cancelled) setHydrated(true);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function handleProjectChange(next: string | null) {
+    setProjectId(next);
+    // Switching projects clears the platform (per popup-state.ts contract).
+    if (next !== projectId) {
+      setPlatform(null);
+    }
+    await setSelectedProject(next);
+    if (next === null) {
+      setTerms([]);
+    } else {
+      const ts = await getHighlightTerms(next);
+      setTerms(ts);
+    }
+  }
+
+  async function handlePlatformChange(next: string | null) {
+    setPlatform(next);
+    await setSelectedPlatform(next);
+  }
+
+  async function handleTermsChange(next: HighlightTerm[]) {
+    setTerms(next);
+    if (projectId !== null) {
+      await setHighlightTerms(projectId, next);
     }
   }
 
@@ -128,16 +162,45 @@ function SignedInScreen({ session }: { session: Session }) {
     // App.useEffect's onAuthStateChange flips us back to signed-out.
   }
 
+  const showActiveSession = projectId !== null && platform !== null;
+  const platformLabel = getPlatformLabel(platform);
+
   return (
     <>
       <p className="user-line">
         Signed in as <strong>{session.user.email ?? session.user.id}</strong>
       </p>
-      <button onClick={handleVerify} disabled={busy}>
-        {busy ? 'Checking…' : 'Verify connection'}
-      </button>
-      {result && <div className="notice">{result}</div>}
-      {error && <div className="error">{error}</div>}
+
+      {showActiveSession && (
+        <div className="active-session" role="status">
+          <span className="active-session-dot" aria-hidden="true" />
+          Capturing for <strong>{platformLabel}</strong>
+        </div>
+      )}
+
+      {!hydrated ? (
+        <p className="muted">Loading your last session…</p>
+      ) : (
+        <>
+          <ProjectPicker
+            selectedProjectId={projectId}
+            onChange={handleProjectChange}
+          />
+          {projectId !== null && (
+            <>
+              <PlatformPicker
+                selectedPlatform={platform}
+                onChange={handlePlatformChange}
+              />
+              <HighlightTermsManager
+                terms={terms}
+                onChange={handleTermsChange}
+              />
+            </>
+          )}
+        </>
+      )}
+
       <hr className="divider" />
       <button
         type="button"
@@ -149,14 +212,4 @@ function SignedInScreen({ session }: { session: Session }) {
       </button>
     </>
   );
-}
-
-function countProjects(data: unknown): number | null {
-  if (Array.isArray(data)) return data.length;
-  if (data && typeof data === 'object') {
-    const obj = data as Record<string, unknown>;
-    if (Array.isArray(obj.projects)) return obj.projects.length;
-    if (Array.isArray(obj.data)) return obj.data.length;
-  }
-  return null;
 }

@@ -13,7 +13,7 @@
 
 body {
   margin: 0;
-  width: 360px;
+  width: 380px;
   min-height: 320px;
 }
 
@@ -52,7 +52,29 @@ input[type='password'] {
   background: #fff;
 }
 
-input:focus {
+select {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  background: #fff;
+}
+
+textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: inherit;
+  resize: vertical;
+  background: #fff;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
   outline: 2px solid #2563eb;
   outline-offset: -1px;
   border-color: transparent;
@@ -116,6 +138,11 @@ button + button {
   font-size: 12px;
 }
 
+.muted-help {
+  margin-top: 6px;
+  margin-bottom: 0;
+}
+
 .user-line {
   margin: 0 0 12px 0;
   padding: 8px 10px;
@@ -129,4 +156,151 @@ button + button {
   margin: 16px 0;
   border: none;
   border-top: 1px solid #e5e7eb;
+}
+
+/* ─── setup-screen layout ───────────────────────────────────────────── */
+
+.field-block {
+  margin-bottom: 14px;
+  position: relative;
+}
+
+.active-session {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 12px 0;
+  padding: 6px 10px;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #047857;
+}
+
+.active-session-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10b981;
+}
+
+/* ─── highlight terms list ──────────────────────────────────────────── */
+
+.term-list {
+  list-style: none;
+  margin: 8px 0 6px 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.term-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+}
+
+.term-chip {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 13px;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.swatch-trigger {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 1px solid #9ca3af;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.swatch-trigger:hover {
+  border-color: #4b5563;
+}
+
+.term-remove {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  padding: 0;
+  background: transparent;
+  color: #6b7280;
+  border: 1px solid transparent;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.term-remove:hover:not(:disabled) {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.link-button {
+  width: auto;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: normal;
+  text-decoration: underline;
+  border: none;
+}
+
+.link-button:hover:not(:disabled) {
+  background: transparent;
+  color: #1d4ed8;
+}
+
+/* ─── color swatch popover (4×5 grid) ───────────────────────────────── */
+
+.swatch-popover {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 28px;
+  z-index: 10;
+  padding: 8px;
+  background: #fff;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.swatch-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 32px);
+  grid-auto-rows: 32px;
+  gap: 2px;
+}
+
+.swatch-cell {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.swatch-cell:hover {
+  transform: scale(1.06);
+}
+
+.swatch-cell-selected.swatch-cell-light {
+  border-color: #000000;
+}
+
+.swatch-cell-selected.swatch-cell-dark {
+  border-color: #ffffff;
+  box-shadow: 0 0 0 1px #1f2937;
 }
