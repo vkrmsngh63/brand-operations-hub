@@ -1,12 +1,12 @@
 'use client';
 
-// W#2 per-URL detail page — content component (slice a.1).
+// W#2 per-URL detail page — content component (slice a.1 + a.2).
 //
 // Owns four parallel reads (URL row + sizes + captured-text rows +
 // captured-image rows) and renders the metadata card, sizes sub-section,
-// captured-text table, and image-count placeholder. Image rendering itself
-// is slice (a.2)'s job; this slice fetches the image list only to display
-// the count.
+// captured-text table, and captured-images gallery. Slice (a.2) replaced
+// the slice-(a.1) image-count placeholder with a thumbnail grid that
+// opens the full-size viewer modal on click.
 //
 // All four read paths are scoped server-side to the (projectId, urlId)
 // pair via verifyProjectWorkflowAuth + projectWorkflowId so a forged urlId
@@ -17,7 +17,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { authFetch } from '@/lib/authFetch';
 import { WorkflowTopbar } from '@/lib/workflow-components';
 import type {
-  CapturedImage,
+  CapturedImageWithUrls,
   CapturedText,
   CompetitorSize,
   CompetitorUrl,
@@ -27,6 +27,7 @@ import type {
   Platform,
   ReadCompetitorUrlResponse,
 } from '@/lib/shared-types/competition-scraping';
+import { ImageViewerModal } from './ImageViewerModal';
 
 interface Props {
   project: { id: string; name: string };
@@ -67,7 +68,7 @@ export function UrlDetailContent({ project, urlId }: Props) {
     data: null,
     error: null,
   });
-  const [imagesSlot, setImagesSlot] = useState<FetchSlot<CapturedImage[]>>({
+  const [imagesSlot, setImagesSlot] = useState<FetchSlot<CapturedImageWithUrls[]>>({
     data: null,
     error: null,
   });
@@ -157,7 +158,7 @@ export function UrlDetailContent({ project, urlId }: Props) {
             <UrlMetadataCard row={urlSlot.data} />
             <SizesSubsection slot={sizesSlot} />
             <CapturedTextSubsection slot={textSlot} />
-            <ImageCountPlaceholder slot={imagesSlot} />
+            <CapturedImagesGallery slot={imagesSlot} />
           </>
         )}
       </main>
@@ -514,24 +515,24 @@ function CapturedTextSubsection({ slot }: { slot: FetchSlot<CapturedText[]> }) {
   );
 }
 
-function ImageCountPlaceholder({
+function CapturedImagesGallery({
   slot,
 }: {
-  slot: FetchSlot<CapturedImage[]>;
+  slot: FetchSlot<CapturedImageWithUrls[]>;
 }) {
-  let body: string;
-  let tone: 'normal' | 'error' = 'normal';
-  if (slot.error) {
-    body = slot.error;
-    tone = 'error';
-  } else if (slot.data === null) {
-    body = 'Loading captured images…';
-  } else if (slot.data.length === 0) {
-    body =
-      'No images captured for this URL yet. The Chrome extension’s right-click "Save to PLOS" or region-screenshot gesture saves image rows here.';
-  } else {
-    body = `${slot.data.length} image${slot.data.length === 1 ? '' : 's'} captured for this URL — full-size viewer ships in slice (a.2).`;
-  }
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
+
+  const images = slot.data;
+
+  const onPrev = () => {
+    if (openIndex == null || images == null || images.length === 0) return;
+    setOpenIndex((openIndex - 1 + images.length) % images.length);
+  };
+  const onNext = () => {
+    if (openIndex == null || images == null || images.length === 0) return;
+    setOpenIndex((openIndex + 1) % images.length);
+  };
+
   return (
     <section
       style={{
@@ -541,9 +542,138 @@ function ImageCountPlaceholder({
         padding: '20px',
       }}
     >
-      <h2 style={sectionHeading}>Captured Images</h2>
-      <InlineMessage tone={tone === 'error' ? 'error' : undefined} body={body} />
+      <h2 style={sectionHeading}>
+        Captured Images
+        {images ? (
+          <span
+            style={{
+              marginLeft: '8px',
+              fontSize: '12px',
+              color: '#8b949e',
+              fontWeight: 400,
+            }}
+          >
+            ({images.length})
+          </span>
+        ) : null}
+      </h2>
+      {slot.error ? (
+        <InlineMessage tone="error" body={slot.error} />
+      ) : images === null ? (
+        <InlineMessage body="Loading captured images…" />
+      ) : images.length === 0 ? (
+        <InlineMessage body="No images captured for this URL yet. The Chrome extension’s right-click “Save to PLOS” or region-screenshot gesture saves image rows here." />
+      ) : (
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
+            gap: '12px',
+          }}
+        >
+          {images.map((img, idx) => (
+            <ThumbnailButton
+              key={img.id}
+              image={img}
+              onOpen={() => setOpenIndex(idx)}
+            />
+          ))}
+        </div>
+      )}
+      {openIndex != null && images && images[openIndex] ? (
+        <ImageViewerModal
+          key={images[openIndex].id}
+          image={images[openIndex]}
+          index={openIndex}
+          total={images.length}
+          onClose={() => setOpenIndex(null)}
+          onPrev={onPrev}
+          onNext={onNext}
+        />
+      ) : null}
     </section>
+  );
+}
+
+function ThumbnailButton({
+  image,
+  onOpen,
+}: {
+  image: CapturedImageWithUrls;
+  onOpen: () => void;
+}) {
+  const [errored, setErrored] = useState(false);
+  const altLabel =
+    image.imageCategory ??
+    (image.sourceType === 'region-screenshot' ? 'Region screenshot' : 'Captured image');
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      title={altLabel}
+      aria-label={`Open full-size view of ${altLabel}`}
+      style={{
+        position: 'relative',
+        background: '#0d1117',
+        border: '1px solid #30363d',
+        borderRadius: '6px',
+        padding: 0,
+        overflow: 'hidden',
+        cursor: 'pointer',
+        aspectRatio: '1 / 1',
+        display: 'block',
+      }}
+    >
+      {errored ? (
+        <div
+          style={{
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#f85149',
+            fontSize: '11px',
+            textAlign: 'center',
+            padding: '8px',
+          }}
+        >
+          Image failed to load
+        </div>
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={image.thumbnailUrl}
+          alt={altLabel}
+          loading="lazy"
+          onError={() => setErrored(true)}
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: 'contain',
+            display: 'block',
+          }}
+        />
+      )}
+      {image.sourceType === 'region-screenshot' ? (
+        <span
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            bottom: '4px',
+            right: '4px',
+            background: 'rgba(13,17,23,0.85)',
+            color: '#8b949e',
+            fontSize: '10px',
+            padding: '2px 6px',
+            borderRadius: '4px',
+            border: '1px solid #30363d',
+          }}
+        >
+          screenshot
+        </span>
+      ) : null}
+    </button>
   );
 }
 

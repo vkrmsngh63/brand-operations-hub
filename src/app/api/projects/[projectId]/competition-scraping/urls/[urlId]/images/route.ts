@@ -4,20 +4,24 @@ import { verifyProjectWorkflowAuth } from '@/lib/auth';
 import { recordFlake } from '@/lib/flake-counter';
 import { withRetry } from '@/lib/prisma-retry';
 import { corsPreflightResponse, withCors } from '@/lib/cors-response';
+import { getFullSizeUrl, getThumbnailUrl } from '@/lib/competition-storage';
 import type {
   CapturedImage,
+  CapturedImageWithUrls,
   ListCapturedImagesResponse,
 } from '@/lib/shared-types/competition-scraping';
 
 // W#2 API — captured images (collection list route).
-// Spec: docs/COMPETITION_SCRAPING_STACK_DECISIONS.md §11.1.
+// Spec: docs/COMPETITION_SCRAPING_STACK_DECISIONS.md §11.1 + §3.
 // Sibling files: ../requestUpload + ../finalize handle the two-phase
 // upload; ../../../images/[imageId]/route.ts handles per-row PATCH + DELETE.
 //
-// This route exists to support the per-URL detail page (slice a.1) and
-// future image-viewer (slice a.2). It returns metadata + storagePath only;
-// signed-URL minting for the actual image bytes is the viewer slice's
-// concern.
+// This route serves the per-URL detail page's image gallery (slice a.2 +
+// onward). It returns each row's metadata + a 1-hour-TTL thumbnail signed
+// URL (200×200 contain) + a 1-hour-TTL full-size signed URL minted via
+// the competition-storage helper. Embedding both URLs in the list payload
+// keeps the client-side render to a single round-trip; the modal's
+// prev/next navigation is in-memory.
 
 const WORKFLOW = 'competition-scraping';
 
@@ -92,8 +96,28 @@ export async function GET(
         orderBy: [{ sortOrder: 'asc' }, { addedAt: 'asc' }],
       })
     );
-    const wire = rows.map((r) => toWireShape(r)!) satisfies ListCapturedImagesResponse;
-    return withCors(req, NextResponse.json(wire));
+    // Mint thumbnail + full-size signed URLs in parallel per row. Supabase
+    // signs locally where it can and round-trips for the storage-hosted
+    // transform path; for ~30-image URLs (the typical case) total latency
+    // is negligible. Worst-case ~300 images per URL is bounded by the
+    // 5 MB-per-image cap from §3 and Phase 1 admin throughput; if perf
+    // becomes a concern at scale, the next step is pagination on the
+    // gallery, not lazy URL minting (which adds modal-open latency for
+    // marginal gain).
+    const wire: CapturedImageWithUrls[] = await Promise.all(
+      rows.map(async (r) => {
+        const base = toWireShape(r)!;
+        const [thumbnailUrl, fullSizeUrl] = await Promise.all([
+          getThumbnailUrl(base.storagePath),
+          getFullSizeUrl(base.storagePath),
+        ]);
+        return { ...base, thumbnailUrl, fullSizeUrl };
+      })
+    );
+    return withCors(
+      req,
+      NextResponse.json(wire satisfies ListCapturedImagesResponse)
+    );
   } catch (error) {
     recordFlake(
       'GET /api/projects/[projectId]/competition-scraping/urls/[urlId]/images',

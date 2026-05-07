@@ -358,13 +358,33 @@ export interface DeleteCapturedImageResponse {
   success: true;
 }
 
+// CapturedImageWithUrls — list-response row shape: a CapturedImage plus the
+// two short-lived signed URLs the PLOS-side viewer needs to render the
+// image bytes. Slice (a.2) added the URL fields; the bare CapturedImage
+// type is preserved as the DB-shaped row used by PATCH / finalize / etc.
+// where the URLs are not minted (PATCH only changes metadata, so the
+// caller spreads the response into the existing list row, preserving the
+// URLs that the list mint already produced).
+//
+// thumbnailUrl: 200×200 contain-fit signed URL (Supabase on-the-fly
+// transform per `src/lib/competition-storage.ts` getThumbnailUrl). 1-hour
+// TTL.
+//
+// fullSizeUrl: original-resolution signed URL (no transform, served
+// straight from storage per getFullSizeUrl). 1-hour TTL — long enough for
+// any single page session including modal browsing.
+export interface CapturedImageWithUrls extends CapturedImage {
+  thumbnailUrl: string;
+  fullSizeUrl: string;
+}
+
 // GET .../urls/[urlId]/images — list every captured-image row for one URL,
-// ordered by (sortOrder ASC, addedAt ASC). Storage signed-URL minting for
-// the actual image bytes lives in slice (a.2) — this list returns the
-// metadata + storagePath, and the detail page (slice a.1) uses only the
-// row count to render the "N images captured — viewer ships in (a.2)"
-// placeholder.
-export type ListCapturedImagesResponse = CapturedImage[];
+// ordered by (sortOrder ASC, addedAt ASC). Slice (a.2) extended the wire
+// shape from `CapturedImage[]` to `CapturedImageWithUrls[]` so the gallery
+// + modal can render in a single round-trip. The URLs are minted server-
+// side via the competition-storage helper; clients never see Supabase SDK
+// directly.
+export type ListCapturedImagesResponse = CapturedImageWithUrls[];
 
 // ─── Reconcile ──────────────────────────────────────────────────────────
 // GET /api/projects/[projectId]/competition-scraping/reconcile?platform=...
