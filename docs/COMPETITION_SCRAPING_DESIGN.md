@@ -682,4 +682,34 @@ This section is for entries added in subsequent sessions when the director adds 
 
 ---
 
+**2026-05-07 — session_2026-05-07_w2-plos-side-viewer-detail-page-slice (Claude Code, on `workflow-2-competition-scraping` branch)**
+
+- **Session purpose:** ship slice (a.1) of the W#2 PLOS-side viewer — the per-URL detail page at `/projects/[projectId]/competition-scraping/url/[urlId]` (address fixed by `COMPETITION_SCRAPING_STACK_DECISIONS.md §10` as deep-linkable). Continues the multi-table viewer's natural drill-down from URL row → URL detail.
+
+- **Director's directive (mid-build Read-It-Back per Rule 18):** at session start, director said *"begin item (a.1) — Multi-session — start by surfacing options for this slice's scope (likely: detail page chrome + captured-text rows table; image rendering and image-expand modal deferred to a.2)."* Claude surfaced 4 scope options + escape-hatch via `AskUserQuestion` per Rule 14f; director picked **Option B "A + sizes + image count" (recommended)**.
+
+- **Alternatives considered (4 options surfaced via forced picker):**
+  - (A) Page chrome + captured-text rows only — minimal; ~1 session; doesn't surface sizes data that may already exist from extension capture; doesn't show image presence.
+  - (B) **A + read-only sizes sub-section + image-count placeholder + clean read-path foundation** — chosen as recommended; ships the full set of read paths (URL + text + sizes + images) in one structured pass with consistent auth/retry/CORS so future slices (a.2 viewer, a.3 inline editing, a.4 filters) build on the foundation rather than each adding a one-off path; lower risk of inconsistency drift across the foundation; longer than A but still ~1 session. Director's standing preference for most-thorough-and-reliable applied.
+  - (C) B + start of inline editing of 1-2 URL fields — folded slice (a.3) work into (a.1); rejected for blurring slice boundaries.
+  - (D) Escape-hatch — not selected.
+
+- **Mid-session pivot (verification-data deferral, NEW DEFERRED ITEM tracked in §B):** when Claude surfaced the visual-verification checklist for the slice, director's question — *"How would I see any url table without any way to add data in that entire UI"* — exposed a real gap: no PLOS-side manual-URL-add affordance has been built (extension is the canonical data-entry path, and it hasn't been built either). Claude surfaced 4 options for unblocking verification (manual-add UI / seed script / Prisma Studio / DevTools curl + escape-hatch); director chose Option D-class "Other — defer all visual tests until extension captures data; keep a running tally and walk through each set later." NEW Group B doc `docs/COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` created today as the running tally — append-only per-slice; today populates slice (a.1)'s 12-step visual checklist + seed-data prerequisites; future PLOS slices append their own. This deferral is captured in `ROADMAP.md` Active Tools W#2 row Next Session item (f) "Walk through VERIFICATION_BACKLOG slice (a.1) checklist."
+
+- **ROADMAP-wording-vs-actual-shipped drift correction (CORRECTIONS_LOG informational entry):** the W#2 Active Tools row's prior Next Session item (a.1) said *"Builds against session-2's `GET .../urls/[urlId]/text` + `GET .../urls/[urlId]/images` (or whichever read paths apply)"* — but on reading the actual session-2 + session-3 commits Claude found NO GET handlers had shipped on those paths (only POST/PATCH/DELETE). Slice (a.1) added the four GET handlers in-flight today — additive, mechanical, no scope expansion beyond what the slice already needed; surfaced upfront in the start-of-session drift check. Captured as INFORMATIONAL entry in `CORRECTIONS_LOG.md` with the operational lesson for future end-of-session ROADMAP authoring (distinguish "what next slice builds against / what already exists" from "what next slice adds").
+
+- **Decision (slice (a.1) shipped):** detail page composes `useWorkflowContext()` + `<WorkflowTopbar>` library chrome + a custom in-page `UrlDetailContent` component with: sub-breadcrumb (`Competition Scraping › [Platform] › [URL]`, first two segments are `<Link>`); URL metadata read-only grid (Platform, Product Name, Brand Name, Category, Product Stars, Seller Stars, # Product Reviews, # Seller Reviews, Results Page Rank, Added On, Last Updated) + customFields sub-grid; "Open original URL ↗" button preserving the prior new-tab affordance; read-only "Sizes / Options" sub-section (Size/Option, Price, Shipping Cost, Added On); sortable "Captured Text" table (Content Category, Text-wrapping, Tags, Added On) with `(N)` count badge; image-count placeholder. Parallel four-fetch via `Promise.all` against the four GET read paths shipped today; cancelled-flag race guard prevents stale fetches from clobbering newer state. UrlTable click-row rewired from `window.open(url, '_blank')` to `onRowOpen(urlId)` callback; parent `CompetitionScrapingViewer` `router.push`es to the detail page (Back button preserves platform + search state via the URL bar). Image rendering itself ships in slice (a.2); inline editing in (a.3); per-column filter dropdowns in (a.4).
+
+- **Affected sections:** §A.14 Q14 sequencing list (item 3 — "W#2 PLOS-side build" — slice (a.1) now done); no edits to §A1–§A18; §A remains frozen per Rule 18.
+
+- **Cross-references:**
+  - `docs/ROADMAP.md` — Active Tools W#2 row updated (Status + Last Session + Next Session — (a.2) promoted to RECOMMENDED FIRST; new (f) verification backlog walkthrough item added).
+  - `docs/PLATFORM_ARCHITECTURE.md` §3 — routes table updated with the 4 new GETs + the new page route.
+  - `docs/CORRECTIONS_LOG.md` — new INFORMATIONAL entry on ROADMAP wording-vs-actual-shipped drift.
+  - `docs/COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` — NEW Group B doc, slice (a.1) section populated.
+  - `docs/CHAT_REGISTRY.md` — new top row.
+  - `docs/DOCUMENT_MANIFEST.md` — header timestamps + per-doc flags + new Group B doc registration.
+
+---
+
 END OF DOCUMENT
