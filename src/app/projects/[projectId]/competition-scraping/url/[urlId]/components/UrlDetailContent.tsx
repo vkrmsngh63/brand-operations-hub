@@ -1,19 +1,24 @@
 'use client';
 
-// W#2 per-URL detail page — content component (slice a.1 + a.2).
+// W#2 per-URL detail page — content component (slices a.1 + a.2 + a.3).
 //
 // Owns four parallel reads (URL row + sizes + captured-text rows +
 // captured-image rows) and renders the metadata card, sizes sub-section,
 // captured-text table, and captured-images gallery. Slice (a.2) replaced
 // the slice-(a.1) image-count placeholder with a thumbnail grid that
-// opens the full-size viewer modal on click.
+// opens the full-size viewer modal on click. Slice (a.3) replaced the
+// slice-(a.1) read-only metadata grid with per-field inline editing
+// (vocabulary picker for the three category/product/brand fields; numeric
+// inputs for ratings + counts; key/value editor for customFields). Each
+// save fires one PATCH with just the changed field; the URL row state
+// here owns optimistic update + rollback on error.
 //
 // All four read paths are scoped server-side to the (projectId, urlId)
 // pair via verifyProjectWorkflowAuth + projectWorkflowId so a forged urlId
 // from another project returns 404, not the row's data.
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { authFetch } from '@/lib/authFetch';
 import { WorkflowTopbar } from '@/lib/workflow-components';
 import type {
@@ -26,8 +31,14 @@ import type {
   ListCompetitorSizesResponse,
   Platform,
   ReadCompetitorUrlResponse,
+  UpdateCompetitorUrlRequest,
 } from '@/lib/shared-types/competition-scraping';
 import { ImageViewerModal } from './ImageViewerModal';
+import {
+  EditableNumberField,
+  EditableVocabularyField,
+} from './EditableField';
+import { CustomFieldsEditor } from './CustomFieldsEditor';
 
 interface Props {
   project: { id: string; name: string };
@@ -126,6 +137,42 @@ export function UrlDetailContent({ project, urlId }: Props) {
     };
   }, [project.id, urlId]);
 
+  // PATCH callback used by the inline-edit fields in UrlMetadataCard.
+  // Each save sends exactly one changed field. Optimistic-update model:
+  // the caller has already pre-mutated `urlSlot.data` if it wants to
+  // (we don't here — we wait for the server's authoritative response so
+  // the displayed `updatedAt` and any normalization the server applies
+  // both land in one tick). On error the caller's promise rejects with
+  // an Error message that the EditableField surfaces inline; the local
+  // `urlSlot.data` is unchanged so read-mode falls back to the prior
+  // value automatically.
+  const patchUrl = useCallback(
+    async (patch: UpdateCompetitorUrlRequest) => {
+      const res = await authFetch(
+        `/api/projects/${project.id}/competition-scraping/urls/${urlId}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(patch),
+        }
+      );
+      if (res.status === 404) {
+        throw new Error('This URL no longer exists.');
+      }
+      if (res.status === 409) {
+        throw new Error(
+          'A URL row with that platform + address already exists for this Project.'
+        );
+      }
+      if (!res.ok) {
+        throw new Error(`Save failed (HTTP ${res.status}).`);
+      }
+      const updated = (await res.json()) as CompetitorUrl;
+      setUrlSlot({ data: updated, error: null });
+    },
+    [project.id, urlId]
+  );
+
   return (
     <div
       style={{
@@ -155,7 +202,11 @@ export function UrlDetailContent({ project, urlId }: Props) {
           <LoadingPanel />
         ) : (
           <>
-            <UrlMetadataCard row={urlSlot.data} />
+            <UrlMetadataCard
+              row={urlSlot.data}
+              projectId={project.id}
+              onPatch={patchUrl}
+            />
             <SizesSubsection slot={sizesSlot} />
             <CapturedTextSubsection slot={textSlot} />
             <CapturedImagesGallery slot={imagesSlot} />
@@ -224,7 +275,15 @@ function Breadcrumb({
   );
 }
 
-function UrlMetadataCard({ row }: { row: CompetitorUrl }) {
+function UrlMetadataCard({
+  row,
+  projectId,
+  onPatch,
+}: {
+  row: CompetitorUrl;
+  projectId: string;
+  onPatch: (patch: UpdateCompetitorUrlRequest) => Promise<void>;
+}) {
   return (
     <section
       style={{
@@ -288,56 +347,86 @@ function UrlMetadataCard({ row }: { row: CompetitorUrl }) {
           gap: '12px 24px',
         }}
       >
-        <Field label="Platform" value={PLATFORM_LABELS[row.platform]} />
-        <Field label="Product Name" value={row.productName} />
-        <Field label="Brand Name" value={row.brandName} />
-        <Field label="Category" value={row.competitionCategory} />
-        <Field label="Product Stars" value={formatRating(row.productStarRating)} />
-        <Field label="Seller Stars" value={formatRating(row.sellerStarRating)} />
-        <Field
+        {/* Platform stays read-only in slice (a.3) — re-targeting a row to a
+            different platform is rare + needs a confirm dialog (deferred). */}
+        <ReadOnlyField label="Platform" value={PLATFORM_LABELS[row.platform]} />
+        <EditableVocabularyField
+          label="Product Name"
+          value={row.productName}
+          onSave={(next) => onPatch({ productName: next })}
+          projectId={projectId}
+          vocabularyType="product-name"
+        />
+        <EditableVocabularyField
+          label="Brand Name"
+          value={row.brandName}
+          onSave={(next) => onPatch({ brandName: next })}
+          projectId={projectId}
+          vocabularyType="brand-name"
+        />
+        <EditableVocabularyField
+          label="Category"
+          value={row.competitionCategory}
+          onSave={(next) => onPatch({ competitionCategory: next })}
+          projectId={projectId}
+          vocabularyType="competition-category"
+        />
+        <EditableNumberField
+          label="Product Stars"
+          value={row.productStarRating}
+          onSave={(next) => onPatch({ productStarRating: next })}
+          min={0}
+          max={5}
+          step={0.1}
+          formatRead={formatRating}
+        />
+        <EditableNumberField
+          label="Seller Stars"
+          value={row.sellerStarRating}
+          onSave={(next) => onPatch({ sellerStarRating: next })}
+          min={0}
+          max={5}
+          step={0.1}
+          formatRead={formatRating}
+        />
+        <EditableNumberField
           label="# Product Reviews"
-          value={formatCount(row.numProductReviews)}
+          value={row.numProductReviews}
+          onSave={(next) => onPatch({ numProductReviews: next })}
+          min={0}
+          integer
+          formatRead={formatCount}
         />
-        <Field
+        <EditableNumberField
           label="# Seller Reviews"
-          value={formatCount(row.numSellerReviews)}
+          value={row.numSellerReviews}
+          onSave={(next) => onPatch({ numSellerReviews: next })}
+          min={0}
+          integer
+          formatRead={formatCount}
         />
-        <Field
+        <EditableNumberField
           label="Results Page Rank"
-          value={row.resultsPageRank == null ? null : String(row.resultsPageRank)}
+          value={row.resultsPageRank}
+          onSave={(next) => onPatch({ resultsPageRank: next })}
+          min={1}
+          integer
         />
-        <Field label="Added On" value={formatDate(row.addedAt)} />
-        <Field label="Last Updated" value={formatDate(row.updatedAt)} />
+        <ReadOnlyField label="Added On" value={formatDate(row.addedAt)} />
+        <ReadOnlyField label="Last Updated" value={formatDate(row.updatedAt)} />
       </div>
 
-      {Object.keys(row.customFields).length > 0 ? (
-        <div style={{ marginTop: '16px' }}>
-          <div style={{ fontSize: '12px', color: '#8b949e', marginBottom: '6px' }}>
-            Custom fields
-          </div>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
-              gap: '6px 24px',
-            }}
-          >
-            {Object.entries(row.customFields).map(([k, v]) => (
-              <div key={k} style={{ fontSize: '13px', color: '#c9d1d9' }}>
-                <span style={{ color: '#8b949e' }}>{k}:</span>{' '}
-                {typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean'
-                  ? String(v)
-                  : JSON.stringify(v)}
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
+      <CustomFieldsEditor
+        record={row.customFields}
+        onSaveAll={(next) => onPatch({ customFields: next })}
+      />
     </section>
   );
 }
 
-function Field({
+// Read-only field used for Platform / Added On / Last Updated. Mirrors the
+// EditableField shell visually so the card stays consistent.
+function ReadOnlyField({
   label,
   value,
 }: {

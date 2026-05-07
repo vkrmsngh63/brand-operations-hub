@@ -99,8 +99,23 @@ export interface CreateCompetitorUrlRequest {
 
 // PATCH /api/projects/[projectId]/competition-scraping/urls/[urlId] —
 // every CreateCompetitorUrlRequest field is optional; unspecified fields
-// are left unchanged.
-export type UpdateCompetitorUrlRequest = Partial<CreateCompetitorUrlRequest>;
+// are left unchanged. Nullable fields additionally accept `null` to clear
+// the column back to "—" (the route's per-key handler maps non-string /
+// non-number to `null` already; this type makes the wire shape explicit so
+// the inline-edit UI can clear a field without a cast).
+export interface UpdateCompetitorUrlRequest {
+  platform?: Platform;
+  url?: string;
+  competitionCategory?: string | null;
+  productName?: string | null;
+  brandName?: string | null;
+  resultsPageRank?: number | null;
+  productStarRating?: number | null;
+  sellerStarRating?: number | null;
+  numProductReviews?: number | null;
+  numSellerReviews?: number | null;
+  customFields?: Record<string, unknown>;
+}
 
 // POST /api/projects/[projectId]/competition-scraping/urls — response.
 // 201 on first create; 200 on idempotent re-create (existing row returned
