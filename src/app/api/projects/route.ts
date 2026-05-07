@@ -2,6 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth';
 import { recordFlake } from '@/lib/flake-counter';
+import { corsPreflightResponse, withCors } from '@/lib/cors-response';
+
+// CORS preflight for the W#2 Chrome extension. The extension's
+// `Authorization: Bearer` header triggers a preflight; same-origin web
+// callers never reach this handler.
+export async function OPTIONS(req: NextRequest) {
+  return corsPreflightResponse(req);
+}
 
 // GET /api/projects — list all Projects for the authenticated user.
 // Sort order: most recently worked-on first.
@@ -11,7 +19,7 @@ import { recordFlake } from '@/lib/flake-counter';
 //     appear at the top.
 export async function GET(req: NextRequest) {
   const auth = await verifyAuth(req);
-  if (auth.error) return auth.error;
+  if (auth.error) return withCors(req, auth.error);
 
   try {
     const projects = await prisma.project.findMany({
@@ -90,13 +98,13 @@ export async function GET(req: NextRequest) {
       (a, b) => b.lastActivityAt.getTime() - a.lastActivityAt.getTime()
     );
 
-    return NextResponse.json(shaped);
+    return withCors(req, NextResponse.json(shaped));
   } catch (error) {
     recordFlake('GET /api/projects', error);
     console.error('GET /api/projects error:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch projects' },
-      { status: 500 }
+    return withCors(
+      req,
+      NextResponse.json({ error: 'Failed to fetch projects' }, { status: 500 })
     );
   }
 }
