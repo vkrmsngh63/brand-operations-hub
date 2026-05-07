@@ -41,6 +41,7 @@ import {
   WorkflowTopbar,
 } from '@/lib/workflow-components';
 import { CompetitionScrapingViewer } from './components/CompetitionScrapingViewer';
+import { DetailedUserGuide } from './components/DetailedUserGuide';
 
 const WORKFLOW_SLUG = 'competition-scraping';
 const WORKFLOW_NAME = 'Competition Scraping & Deep Analysis';
@@ -185,16 +186,23 @@ export default function CompetitionScrapingPage() {
           />
         </section>
 
+        {/* Detailed User Guide — always-visible inline guide per
+            COMPETITION_SCRAPING_STACK_DECISIONS.md §13.1. Renders BEFORE
+            DeliverablesArea so the install + use walkthrough is the first
+            thing a new worker sees after the status row. Default expanded;
+            collapsible per §13.1.3. Print-this-guide button uses browser
+            print dialog (Save as PDF) — no PDF library needed. */}
+        <DetailedUserGuide />
+
         {/* Deliverables — Resources sub-section with the Chrome extension
-            companion download. Real download URL + Detailed User Guide
-            content authoring deferred to a follow-up session per
-            COMPETITION_SCRAPING_STACK_DECISIONS.md §13.1. */}
+            companion download. Real download URL still pending the Chrome
+            extension build session per ROADMAP W#2 next-session item (c). */}
         <DeliverablesArea
           resources={
             <CompanionDownload
               label="Download Extension (zip)"
               url="#download-extension-pending"
-              description="Chrome extension for capturing competitor URLs, text, and images. Install instructions and full workflow walkthrough land in the Detailed User Guide in a follow-up session."
+              description="Chrome extension for capturing competitor URLs, text, and images. See the Detailed User Guide above for install and use instructions."
             />
           }
         />

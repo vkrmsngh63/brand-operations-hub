@@ -1,0 +1,11 @@
+# Screenshot folder for Competition Scraping Detailed User Guide.
+#
+# Spec: docs/COMPETITION_SCRAPING_STACK_DECISIONS.md §13.1.3.
+#
+# Real screenshots land here once the extension UI exists. The user-guide
+# component (src/app/projects/[projectId]/competition-scraping/components/DetailedUserGuide.tsx)
+# currently shows gray placeholder boxes with caption text describing what
+# each screenshot will eventually show; replacing a placeholder with a real
+# image is a per-screenshot drop-in change at that time.
+#
+# This file exists only to keep the folder tracked in git.
