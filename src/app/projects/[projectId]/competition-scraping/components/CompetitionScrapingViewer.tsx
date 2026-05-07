@@ -1,6 +1,6 @@
 'use client';
 
-// W#2 Competition Scraping & Deep Analysis — content-area viewer (first slice).
+// W#2 Competition Scraping & Deep Analysis — content-area viewer.
 //
 // Implements the platforms-→-URLs navigation + URL list with sort + free-text
 // search per docs/COMPETITION_SCRAPING_DESIGN.md §A.7 + §A.14 and the
@@ -16,15 +16,22 @@
 // sort + filter stays snappy without pagination; revisit if a future scale
 // pass shows otherwise.
 //
+// As of slice (a.4), the platform selection AND the per-column filter set
+// AND the free-text search query all serialize into the URL query — so a
+// refresh, browser back/forward, or a deep-link copy/paste all preserve
+// the user's exact view. Filter state lives in URL; the search box uses a
+// debounced URL write so each keystroke doesn't trigger a routing flush.
+//
 // Slice (a.1) wires click-row to navigate to /url/[urlId]; the prior
 // open-in-new-tab behavior is preserved via an explicit "Open original
 // URL ↗" button on the detail page itself.
 //
 // Deferred to follow-up slices:
-//   - inline editing of any URL field (a.3)
-//   - per-column filter dropdowns (a.4)
-//   - image expand viewer (a.2)
-//   - Phase-2 admin assignments view
+//   - filtering on Seller Stars / # Seller Reviews / Results Page Rank
+//     (currently not surfaced as visible columns)
+//   - filtering on customFields (JSON column; needs its own design pass)
+//   - saved filter combinations / saved views
+//   - server-side filtering (Phase 3 scale concern, revisit at scale)
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -37,10 +44,18 @@ import {
 } from '@/lib/shared-types/competition-scraping';
 import { PlatformSidebar, type ScopeFilter } from './PlatformSidebar';
 import { UrlTable } from './UrlTable';
+import {
+  EMPTY_COLUMN_FILTERS,
+  readFiltersFromQuery,
+  writeFiltersToQuery,
+  type ColumnFiltersState,
+} from './ColumnFilters';
 
 interface Props {
   projectId: string;
 }
+
+const SEARCH_DEBOUNCE_MS = 250;
 
 export function CompetitionScrapingViewer({ projectId }: Props) {
   const router = useRouter();
@@ -49,14 +64,50 @@ export function CompetitionScrapingViewer({ projectId }: Props) {
   // Read selected platform from the URL query — survives a refresh and
   // makes a deep link like ?platform=amazon land on the right view.
   const platformParam = searchParams?.get('platform') ?? null;
-  const initialPlatform: ScopeFilter =
+  const selectedPlatform: ScopeFilter =
     platformParam && isPlatform(platformParam) ? platformParam : 'all';
 
-  const [selectedPlatform, setSelectedPlatform] =
-    useState<ScopeFilter>(initialPlatform);
+  // Filter state lives in the URL. Re-derive on every render so the back/
+  // forward buttons and deep links work without extra wiring.
+  const filters: ColumnFiltersState = useMemo(
+    () =>
+      searchParams
+        ? readFiltersFromQuery(new URLSearchParams(searchParams.toString()))
+        : EMPTY_COLUMN_FILTERS,
+    [searchParams]
+  );
+
+  // Free-text search query lives in `?q=` in the URL (writable with a 250ms
+  // debounce so each keystroke doesn't trigger a routing flush). The
+  // `draftSearch` mirror lets the input update instantly while the URL
+  // catches up asynchronously.
+  const urlSearch = searchParams?.get('q') ?? '';
+  const [draftSearch, setDraftSearch] = useState<string>(urlSearch);
+
+  // When the URL changes from an external source (back/forward, deep link),
+  // re-sync the draft so the input box reflects the URL.
+  useEffect(() => {
+    setDraftSearch(urlSearch);
+  }, [urlSearch]);
+
+  // After the user pauses typing, write the draft to the URL.
+  useEffect(() => {
+    if (draftSearch === urlSearch) return;
+    const id = setTimeout(() => {
+      const params = new URLSearchParams(searchParams?.toString() ?? '');
+      if (draftSearch === '') {
+        params.delete('q');
+      } else {
+        params.set('q', draftSearch);
+      }
+      const qs = params.toString();
+      router.replace(qs ? `?${qs}` : '?');
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(id);
+  }, [draftSearch, urlSearch, router, searchParams]);
+
   const [urls, setUrls] = useState<CompetitorUrl[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [searchText, setSearchText] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -103,23 +154,32 @@ export function CompetitionScrapingViewer({ projectId }: Props) {
     return c;
   }, [urls]);
 
-  // Apply the selected-platform scope and the free-text search to produce
-  // the table's rows. UrlTable handles its own sort.
-  const visibleUrls = useMemo(() => {
+  // Platform-scoped rows — fed to UrlTable as `scopeRows` so its multi-
+  // select dropdowns can derive their option lists from the platform-scoped
+  // set instead of the search-and-column-filter-narrowed set.
+  const scopeRows = useMemo(() => {
     if (!urls) return [];
-    const search = searchText.trim().toLowerCase();
     return urls.filter((u) => {
       if (selectedPlatform !== 'all' && u.platform !== selectedPlatform) {
         return false;
       }
-      if (!search) return true;
+      return true;
+    });
+  }, [urls, selectedPlatform]);
+
+  // Apply the free-text search on top of the platform scope. Column filters
+  // are applied inside UrlTable so the table can reason about them
+  // alongside its sort.
+  const visibleUrls = useMemo(() => {
+    const search = draftSearch.trim().toLowerCase();
+    if (!search) return scopeRows;
+    return scopeRows.filter((u) => {
       const blob = `${u.url} ${u.productName ?? ''} ${u.brandName ?? ''}`.toLowerCase();
       return blob.includes(search);
     });
-  }, [urls, selectedPlatform, searchText]);
+  }, [scopeRows, draftSearch]);
 
-  const handleSelectPlatform = (next: ScopeFilter) => {
-    setSelectedPlatform(next);
+  const handleSelectPlatform = (next: ScopeFilter): void => {
     const params = new URLSearchParams(searchParams?.toString() ?? '');
     if (next === 'all') params.delete('platform');
     else params.set('platform', next);
@@ -127,15 +187,21 @@ export function CompetitionScrapingViewer({ projectId }: Props) {
     router.replace(qs ? `?${qs}` : '?');
   };
 
+  const handleFiltersChange = (next: ColumnFiltersState): void => {
+    const params = new URLSearchParams(searchParams?.toString() ?? '');
+    writeFiltersToQuery(params, next);
+    const qs = params.toString();
+    router.replace(qs ? `?${qs}` : '?');
+  };
+
   // Click-row → navigate to per-URL detail page. router.push preserves the
   // history stack so the browser Back button returns to this list view
-  // (with platform + search state survived via the URL bar).
-  const handleRowOpen = (urlId: string) => {
+  // (with platform + search + filter state survived via the URL bar).
+  const handleRowOpen = (urlId: string): void => {
     router.push(`/projects/${projectId}/competition-scraping/url/${urlId}`);
   };
 
-  const scopedTotal =
-    counts === null ? 0 : counts[selectedPlatform];
+  const scopedTotal = counts === null ? 0 : counts[selectedPlatform];
 
   return (
     <section
@@ -174,9 +240,12 @@ export function CompetitionScrapingViewer({ projectId }: Props) {
         ) : (
           <UrlTable
             rows={visibleUrls}
-            searchText={searchText}
-            onSearchChange={setSearchText}
+            scopeRows={scopeRows}
+            searchText={draftSearch}
+            onSearchChange={setDraftSearch}
             scopedTotal={scopedTotal}
+            filters={filters}
+            onFiltersChange={handleFiltersChange}
             onRowOpen={handleRowOpen}
           />
         )}
