@@ -16,7 +16,9 @@ export default defineConfig({
     // Google Ads, Independent Websites) in future build sessions appends
     // new entries here additively.
     host_permissions: [
-      'https://vklf.com/*',
+      // Use canonical hostname — vklf.com (apex) edge-redirects to www and
+      // breaks CORS preflight chain. See api-client.ts comment.
+      'https://www.vklf.com/*',
       'https://*.supabase.co/*',
       // §5 guardrail #2 per-platform DOM-pattern modules — 4 sites today.
       'https://*.amazon.com/*',

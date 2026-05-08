@@ -13,7 +13,12 @@ import type {
   Platform,
 } from '../../../../src/lib/shared-types/competition-scraping.ts';
 
-const PLOS_API_BASE_URL = 'https://vklf.com';
+// Canonical domain: vklf.com (apex) 308-redirects to www.vklf.com at the
+// Vercel edge before the route handler runs. CORS preflight responses on
+// edge redirects don't carry the Access-Control-* headers, so the browser
+// blocks the chain. Using the canonical hostname directly avoids the
+// redirect and lets the OPTIONS handler in /api/projects respond as designed.
+const PLOS_API_BASE_URL = 'https://www.vklf.com';
 
 export interface ApiError {
   status: number;
