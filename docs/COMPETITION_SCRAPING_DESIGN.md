@@ -994,4 +994,28 @@ This section is for entries added in subsequent sessions when the director adds 
 
 ---
 
+**2026-05-08 — session_2026-05-08_w2-to-main-full-deploy (Claude Code, on `main` branch — first W#2 milestone merge to main since the W#2 branch was created)**
+
+- **Session purpose:** ship the W#2 → main full deploy that closes the deploy-gap blocker that ended Waypoint #1 attempt #1 on 2026-05-07-i. This is the first per-milestone merge of W#2 work to main since the W#2 branch was created — every W#2 session prior to today shipped on `workflow-2-competition-scraping` only; vklf.com (which runs main) had none of it. Per `MULTI_WORKFLOW_PROTOCOL.md §2`'s "feature branch until per-milestone merge" pattern, today's session is the first such milestone — chosen because the deploy gap has become an active blocker (not a stylistic choice).
+
+- **Director's directives (via two Rule 14f `AskUserQuestion` calls at the strategy fork):**
+  - **Schema check before merge:** Option A "Run prisma db pull --print first (recommended)" picked over "Trust the docs and skip the check" + escape hatch. Empirical schema verification preferred over commit-message trust for the first deploy after an out-of-band schema push.
+  - **Merge approach:** Option A "Fast-forward merge (recommended)" picked over "Merge commit (--no-ff)" + escape hatch. Linear history; no extra merge node.
+  - **Push approval (Rule 9 four-option):** Option A "Push now (recommended)" picked over "Run tests first / Hold / Escape." Director chose to deploy directly post-merge rather than gate on additional test runs since `npm run build` already ran clean.
+
+- **Alternatives considered:** (i) cherry-pick only the CORS handler from the W#2 branch as a hot-fix to unblock Waypoint #1 — discussed in 2026-05-07-i Rule 14f; rejected as it would leave 31 W#2 commits stranded on the feature branch and require a second deploy session anyway. (ii) Hot-deploy mid-2026-05-07-i session — rejected then for context-cost reasons. (iii) Merge with `--no-ff` to mark the milestone with an explicit merge commit — rejected today as cosmetic; fast-forward is cleaner for a strict-descendant feature branch.
+
+- **Decision:** Fast-forward merge of all 32 W#2 commits to main + push to origin + Vercel auto-redeploy + visual verification. Merge geometry: `main` 451697d → ea7321b; `workflow-2-competition-scraping` and `main` are now identical at `ea7321b`. **Schema strategy:** verified empirically that prod schema already contains the 7 W#2 tables + back-relations (pushed out-of-band 2026-05-06 per `701775f` commit message) — no `prisma db push` needed during this session; merge is purely code. **Verification:** W#1 visual verification PASSED on production (zero regressions in Keyword Clustering); W#2 PLOS-side visual verification PASSED (empty-state pages render cleanly at `/projects/[id]/competition-scraping`).
+
+- **Affected sections:** §A.0 (referencing the deploy milestone — though §A is frozen, this entry serves as the §B-side acknowledgment); §A.14 Q14 sequencing — item 2 (PLOS-side build) and items 3-7 (extension build) all now LIVE on production, not just on the feature branch; §A.18 (release plan) — the deploy step that was previously implicit is now explicit.
+
+- **Cross-references:**
+  - `docs/ROADMAP.md` — Active Tools W#2 row Last Session updated; Next Session NEW (a) "Resume Waypoint #1 verification" + (c.0) flipped to ✅ DONE; header timestamp updated.
+  - `docs/CHAT_REGISTRY.md` — new top row + header timestamp updated.
+  - `docs/DOCUMENT_MANIFEST.md` — header timestamp updated.
+
+- **Branch implications:** `workflow-2-competition-scraping` continues to exist as the W#2 feature branch for subsequent code-producing sessions per `MULTI_WORKFLOW_PROTOCOL §2`. The next session — Waypoint #1 verification resumption — does not produce code, so it can run on either branch. The director's open scoping question (carried from this session into next): keep the original 2-step verification split or collapse to single-pass now that PLOS-side is also live.
+
+---
+
 END OF DOCUMENT
