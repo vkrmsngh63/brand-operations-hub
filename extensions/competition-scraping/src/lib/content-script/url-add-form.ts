@@ -33,12 +33,55 @@ export interface UrlAddFormProps {
   projectId: string;
   projectName: string | null;
   platform: string;
+  /**
+   * Bounding rect of the link/element that triggered this form. When
+   * provided, the form positions itself away from the trigger so the user
+   * can still see the product listing while filling in the optional fields.
+   * When omitted (e.g., right-click context-menu fallback path), the form
+   * falls back to its centered layout. P-7 fix 2026-05-08-d.
+   */
+  triggerRect?: DOMRect | null;
   /** Callback invoked after a successful save. The orchestrator uses the
    * returned row's url field to update the recognition cache. */
   onSaved(row: CompetitorUrl): void;
   /** Callback invoked when the user closes the form without saving
    * (Cancel, Esc, backdrop). */
   onClose(): void;
+}
+
+const FORM_WIDTH_PX = 480;
+const FORM_MARGIN_PX = 16;
+
+/**
+ * Returns inline-style left/top values that position the form on the side
+ * of the viewport opposite the trigger's horizontal center, so the form
+ * doesn't fully occlude the product listing being captured. Returns null
+ * when no trigger rect is provided — caller falls back to the existing
+ * flex-centered layout. P-7 fix 2026-05-08-d.
+ */
+function computeFormPosition(
+  triggerRect: DOMRect | null,
+): { left: number; top: number } | null {
+  if (!triggerRect) return null;
+  const viewportW = window.innerWidth;
+  const triggerCenterX = triggerRect.left + triggerRect.width / 2;
+  // Trigger in left half of viewport → form goes right; vice versa.
+  const placeOnRight = triggerCenterX < viewportW / 2;
+  let left: number;
+  if (placeOnRight) {
+    left = viewportW - FORM_WIDTH_PX - FORM_MARGIN_PX;
+  } else {
+    left = FORM_MARGIN_PX;
+  }
+  // Clamp for narrow viewports — keep form at least margin-far from each edge.
+  if (left < FORM_MARGIN_PX) left = FORM_MARGIN_PX;
+  if (left + FORM_WIDTH_PX > viewportW - FORM_MARGIN_PX) {
+    left = Math.max(FORM_MARGIN_PX, viewportW - FORM_WIDTH_PX - FORM_MARGIN_PX);
+  }
+  // Vertical: anchor near the top of the viewport. Form's max-height honors
+  // the existing CSS rule (calc(100vh - 32px)) so it scrolls if too tall.
+  const top = FORM_MARGIN_PX;
+  return { left, top };
 }
 
 export interface UrlAddForm {
@@ -264,6 +307,17 @@ export function openUrlAddForm(props: UrlAddFormProps): UrlAddForm {
   document.addEventListener('keydown', onKeydown);
 
   document.body.appendChild(backdrop);
+
+  // P-7 fix 2026-05-08-d: position form away from the triggering listing
+  // when a triggerRect is provided. Form's `position: fixed` removes it
+  // from the backdrop's flex flow, so the explicit left/top take over.
+  const pos = computeFormPosition(props.triggerRect ?? null);
+  if (pos) {
+    form.style.position = 'fixed';
+    form.style.left = `${pos.left}px`;
+    form.style.top = `${pos.top}px`;
+  }
+
   // Focus the URL input on open so the user can immediately edit if they want.
   setTimeout(() => urlField.input.focus(), 0);
 

@@ -5,6 +5,15 @@
 // prefix (PLOS Content Script) so we do not conflict with the host page's
 // styles. Critical layout properties use `!important` to defend against
 // host-page CSS resetters or universal selectors that might override us.
+//
+// Z-index tiers (P-8 fix 2026-05-08-d):
+//   - page-overlay tier  (999990) — saved-icon, +Add button, dismiss ×,
+//     detail-page banner. Sit above host page chrome (Amazon's chrome
+//     max-z-index is ~5000-10000; 999990 has ~100× headroom).
+//   - modal-backdrop tier (999998) — URL-add overlay backdrop.
+//   - modal-content tier (999999) — URL-add overlay form box.
+// Backdrop > page-overlay so the saved-✓ icons + add-button on neighboring
+// product cards don't punch through the open URL-add modal.
 
 export const CONTENT_SCRIPT_CSS = `
 .plos-cs-add-button {
@@ -24,7 +33,7 @@ export const CONTENT_SCRIPT_CSS = `
   border-radius: 50% !important;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2) !important;
   cursor: pointer !important;
-  z-index: 2147483647 !important;
+  z-index: 999990 !important;
   opacity: 0.85 !important;
   transition: opacity 120ms ease, transform 120ms ease !important;
   user-select: none !important;
@@ -52,7 +61,7 @@ export const CONTENT_SCRIPT_CSS = `
   border-radius: 50% !important;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2) !important;
   cursor: pointer !important;
-  z-index: 2147483647 !important;
+  z-index: 999990 !important;
   user-select: none !important;
 }
 
@@ -77,7 +86,7 @@ export const CONTENT_SCRIPT_CSS = `
   user-select: none !important;
   flex-shrink: 0 !important;
   position: relative !important;
-  z-index: 2147483647 !important;
+  z-index: 999990 !important;
 }
 
 .plos-cs-overlay-banner {
@@ -93,7 +102,7 @@ export const CONTENT_SCRIPT_CSS = `
   font-weight: 500 !important;
   border-radius: 6px !important;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18) !important;
-  z-index: 2147483647 !important;
+  z-index: 999990 !important;
   display: flex !important;
   align-items: center !important;
   gap: 8px !important;
@@ -121,7 +130,7 @@ export const CONTENT_SCRIPT_CSS = `
   position: fixed !important;
   inset: 0 !important;
   background: rgba(0, 0, 0, 0.45) !important;
-  z-index: 2147483646 !important;
+  z-index: 999998 !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
@@ -141,7 +150,7 @@ export const CONTENT_SCRIPT_CSS = `
   border-radius: 8px !important;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25) !important;
   padding: 20px !important;
-  z-index: 2147483647 !important;
+  z-index: 999999 !important;
 }
 
 .plos-cs-form-title {
@@ -238,6 +247,23 @@ export const CONTENT_SCRIPT_CSS = `
   color: #c2185b !important;
   font-size: 13px !important;
   border-radius: 4px !important;
+}
+
+/* Live-page Highlight Terms — P-5 fix 2026-05-08-d.
+   background-color + color are set inline per-term via the user's chosen
+   palette entry; the rules here only handle layout/display so the inline
+   color choices come through cleanly. We deliberately do NOT use
+   !important on background/color so the inline style wins; everything
+   else stays !important to defend against host-page CSS resetters. */
+.plos-cs-highlight {
+  display: inline !important;
+  padding: 0 2px !important;
+  margin: 0 !important;
+  border-radius: 2px !important;
+  font: inherit !important;
+  text-decoration: inherit !important;
+  vertical-align: baseline !important;
+  /* background-color + color are set inline. */
 }
 `;
 

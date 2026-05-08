@@ -189,3 +189,82 @@ describe('amazon.canonicalProductUrl', () => {
     assert.equal(amazon.canonicalProductUrl(''), null);
   });
 });
+
+// SSPA sponsored-ads coverage — P-4 fix 2026-05-08-d.
+// Real URLs captured from amazon.com search results during Waypoint #1
+// attempt #4. The /sspa/click?...&url=<encoded path> shape must be peeked
+// into so the floating "+ Add" button appears on sponsored ads too.
+describe('amazon SSPA sponsored-ads (P-4)', () => {
+  // Real captured URL from a sponsored search-results card.
+  const SSPA_URL_1 =
+    'https://www.amazon.com/sspa/click?ie=UTF8&spc=MTo4NjgyODU5MzAxMzA4ODg3OjE3NzgyNzI2MDg6c3BfYXRmOjMwMTA0MTE5MDg2OTIwMjo6MDo6&url=%2FComfpack-Flexible-Replacement-Sciatica-Bursitis%2Fdp%2FB0DWJTLNYT%2Fref%3Dsr_1_2_sspa%3Fcrid%3D2AMUE62JYK11Z';
+
+  // Real captured URL from a different sponsored placement (sp_mtf instead
+  // of sp_atf); same SSPA shape, different ad-slot context.
+  const SSPA_URL_2 =
+    'https://www.amazon.com/sspa/click?ie=UTF8&spc=MTo4NjgyODU5MzAxMzA4ODg3OjE3NzgyNzI2MDg6c3BfbXRmOjIwMDA1MzIyMjc5OTQ5ODo6MDo6&url=%2FPack-Elbow-Support-Therapy-LotFancy%2Fdp%2FB0716F3NFG%2Fref%3Dsr_1_12_sspa%3Fcrid%3D2AMUE62JYK11Z';
+
+  it('matchesProduct true for real sp_atf SSPA URL', () => {
+    assert.equal(amazon.matchesProduct(SSPA_URL_1), true);
+  });
+
+  it('matchesProduct true for real sp_mtf SSPA URL', () => {
+    assert.equal(amazon.matchesProduct(SSPA_URL_2), true);
+  });
+
+  it('canonicalProductUrl extracts ASIN from sp_atf SSPA URL', () => {
+    assert.equal(
+      amazon.canonicalProductUrl(SSPA_URL_1),
+      'https://www.amazon.com/dp/B0DWJTLNYT',
+    );
+  });
+
+  it('canonicalProductUrl extracts ASIN from sp_mtf SSPA URL', () => {
+    assert.equal(
+      amazon.canonicalProductUrl(SSPA_URL_2),
+      'https://www.amazon.com/dp/B0716F3NFG',
+    );
+  });
+
+  it('matchesProduct false when SSPA url= param has no /dp/ path', () => {
+    // Hypothetical SSPA URL whose inner url= param doesn't contain a /dp/
+    // segment (e.g., a sponsored brand carousel pointing at a brand store).
+    const url =
+      'https://www.amazon.com/sspa/click?ie=UTF8&spc=abc&url=%2Fstores%2FACME%2Fpage%2F12345';
+    assert.equal(amazon.matchesProduct(url), false);
+    assert.equal(amazon.canonicalProductUrl(url), null);
+  });
+
+  it('matchesProduct false when /sspa/click is missing the url= param', () => {
+    const url = 'https://www.amazon.com/sspa/click?ie=UTF8&spc=abc';
+    assert.equal(amazon.matchesProduct(url), false);
+    assert.equal(amazon.canonicalProductUrl(url), null);
+  });
+
+  it('matchesProduct false when url= param is empty', () => {
+    const url = 'https://www.amazon.com/sspa/click?ie=UTF8&spc=abc&url=';
+    assert.equal(amazon.matchesProduct(url), false);
+    assert.equal(amazon.canonicalProductUrl(url), null);
+  });
+
+  it('does NOT mistake a non-SSPA URL with a "url" query param for sponsored', () => {
+    // Pathname differs from /sspa/click, so the SSPA branch is not taken.
+    const url =
+      'https://www.amazon.com/some-page?url=%2FBrand%2Fdp%2FB0DWJTLNYT';
+    assert.equal(amazon.matchesProduct(url), false);
+    assert.equal(amazon.canonicalProductUrl(url), null);
+  });
+
+  it('handles SSPA URL with /gp/product/ inside the url= param', () => {
+    // Hypothetical — direct path uses /dp/, but if Amazon ever encodes
+    // /gp/product/ inside SSPA, the same ASIN_RE matches both forms and
+    // the canonical output is still /dp/{ASIN}.
+    const url =
+      'https://www.amazon.com/sspa/click?ie=UTF8&spc=abc&url=%2Fgp%2Fproduct%2FB07XJ8C8F5%2F';
+    assert.equal(amazon.matchesProduct(url), true);
+    assert.equal(
+      amazon.canonicalProductUrl(url),
+      'https://www.amazon.com/dp/B07XJ8C8F5',
+    );
+  });
+});

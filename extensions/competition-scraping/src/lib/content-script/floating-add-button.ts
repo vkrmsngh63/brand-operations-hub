@@ -40,7 +40,7 @@ export interface FloatingAddButton {
 }
 
 export interface FloatingAddButtonOptions {
-  onClick(href: string): void;
+  onClick(href: string, triggerRect: DOMRect | null): void;
 }
 
 export function createFloatingAddButton(
@@ -63,6 +63,7 @@ export function createFloatingAddButton(
   dismiss.style.display = 'none';
 
   let currentHref: string | null = null;
+  let currentLinkRect: DOMRect | null = null;
   let dismissed = false;
   let showTimer: ReturnType<typeof setTimeout> | null = null;
   let hideTimer: ReturnType<typeof setTimeout> | null = null;
@@ -85,6 +86,7 @@ export function createFloatingAddButton(
     clearShowTimer();
     clearHideTimer();
     currentHref = null;
+    currentLinkRect = null;
     button.style.display = 'none';
     dismiss.style.display = 'none';
   }
@@ -126,7 +128,7 @@ export function createFloatingAddButton(
   button.addEventListener('click', (e) => {
     e.preventDefault();
     e.stopPropagation();
-    if (currentHref !== null) opts.onClick(currentHref);
+    if (currentHref !== null) opts.onClick(currentHref, currentLinkRect);
   });
 
   dismiss.addEventListener('click', (e) => {
@@ -159,6 +161,7 @@ export function createFloatingAddButton(
       showTimer = setTimeout(() => {
         if (dismissed) return;
         currentHref = href;
+        currentLinkRect = link.getBoundingClientRect();
         position(link);
         button.style.display = 'block';
         dismiss.style.display = 'block';

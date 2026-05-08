@@ -45,6 +45,8 @@ import {
 import { showAlreadySavedOverlay } from './already-saved-overlay.ts';
 import { openUrlAddForm } from './url-add-form.ts';
 import { isContentScriptMessage } from './messaging.ts';
+import { startLiveHighlighting } from './highlight-terms.ts';
+import type { LiveHighlightController } from './highlight-terms.ts';
 
 const ATTR_LINK_HANDLED = 'data-plos-cs-handled';
 const RESCAN_DEBOUNCE_MS = 250;
@@ -121,13 +123,28 @@ export async function runOrchestrator(): Promise<() => void> {
 
   ensureStylesInjected();
 
+  // Live-page Highlight Terms (P-5 fix 2026-05-08-d). Boots in parallel
+  // with the rest of the orchestrator init; the initial highlight pass
+  // runs via requestIdleCallback so the page can finish painting first.
+  // Failure (e.g., chrome.storage missing in non-extension runtime) leaves
+  // the rest of the orchestrator working — highlights are a nice-to-have.
+  let highlighter: LiveHighlightController | null = null;
+  try {
+    highlighter = await startLiveHighlighting(projectId);
+  } catch (err) {
+    console.warn('[PLOS] could not start live highlight terms', err);
+  }
+
   const floatingButton = createFloatingAddButton({
-    onClick(href) {
-      handleAddRequest(href);
+    onClick(href, triggerRect) {
+      handleAddRequest(href, triggerRect);
     },
   });
 
-  function handleAddRequest(href: string): void {
+  function handleAddRequest(
+    href: string,
+    triggerRect: DOMRect | null,
+  ): void {
     const canonical = platformModule.canonicalProductUrl(href) ?? href;
     floatingButton.hide();
     openUrlAddForm({
@@ -135,6 +152,7 @@ export async function runOrchestrator(): Promise<() => void> {
       projectId,
       projectName,
       platform: platformModule.platform,
+      triggerRect,
       onSaved(row) {
         const normalized = normalizeUrlForRecognition(row.url);
         if (normalized) recognitionSet.add(normalized);
@@ -225,6 +243,13 @@ export async function runOrchestrator(): Promise<() => void> {
     rescanTimer = setTimeout(() => {
       rescanTimer = null;
       scanLinks();
+      // P-5 fix 2026-05-08-d: re-apply highlight terms on each mutation
+      // batch so newly-rendered SPA content / infinite-scroll tiles get
+      // their highlights too. The highlighter does its own remove-then-
+      // reapply pass — idempotent.
+      if (highlighter !== null) {
+        void highlighter.refresh();
+      }
     }, RESCAN_DEBOUNCE_MS);
   });
   observer.observe(document.body, { childList: true, subtree: true });
@@ -234,6 +259,9 @@ export async function runOrchestrator(): Promise<() => void> {
   // even without a full page reload.
   const onLocationChange = (): void => {
     maybeShowDetailOverlay();
+    if (highlighter !== null) {
+      void highlighter.refresh();
+    }
   };
   window.addEventListener('popstate', onLocationChange);
 
@@ -245,7 +273,10 @@ export async function runOrchestrator(): Promise<() => void> {
   ): void => {
     if (!isContentScriptMessage(msg)) return;
     if (msg.kind === 'open-url-add-form') {
-      handleAddRequest(msg.href);
+      // Right-click context-menu fallback — no trigger rect (the click
+      // happened on the host page link, not on the floating "+" button).
+      // Form falls back to centered layout.
+      handleAddRequest(msg.href, null);
       sendResponse({ ok: true });
     }
   };
@@ -257,6 +288,10 @@ export async function runOrchestrator(): Promise<() => void> {
     chrome.runtime.onMessage.removeListener(onMessage);
     floatingButton.destroy();
     detachAllAlreadySavedIcons();
+    if (highlighter !== null) {
+      highlighter.destroy();
+      highlighter = null;
+    }
     cleanupBodyMarker();
   };
 }
