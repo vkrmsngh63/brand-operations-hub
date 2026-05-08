@@ -1,11 +1,16 @@
 // "Already saved" recognition icon per COMPETITION_SCRAPING_DESIGN.md §B
 // 2026-05-07-g end-of-session addendum item 1.
 //
-// Rendered to the LEFT of every competitor product link whose normalized
-// URL matches a saved CompetitorUrl for the current Project. Visually
-// distinct from the floating "+ Add" button (different color — green vs
-// blue; different glyph — checkmark vs +) so the two affordances don't
-// get confused.
+// Rendered ONCE per unique saved CompetitorUrl per page (deduped in
+// orchestrator.scanLinks since platforms like Amazon have multiple anchor
+// tags pointing to the same product on a single card — image link, title
+// link, review-anchor link, price-area link — and we don't want N
+// checkmarks visually cluttering one product's card). The deduped icon
+// attaches to the LEFT of the FIRST matching link (typically the image
+// link on Amazon, which appears earliest in DOM order). Visually distinct
+// from the floating "+ Add" button (different color — green vs blue;
+// different glyph — checkmark vs +) so the two affordances don't get
+// confused.
 //
 // Each icon attaches to the link's parent so it's positioned inline with
 // the link's text (display: inline-flex). On removal (e.g., URL deleted

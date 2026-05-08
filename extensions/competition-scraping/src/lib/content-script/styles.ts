@@ -60,20 +60,24 @@ export const CONTENT_SCRIPT_CSS = `
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
-  width: 16px !important;
-  height: 16px !important;
-  margin-right: 4px !important;
-  background: #388e3c !important;
+  width: 28px !important;
+  height: 28px !important;
+  margin-right: 6px !important;
+  background: #16a34a !important;
   color: #fff !important;
-  font-size: 11px !important;
+  font-size: 18px !important;
   line-height: 1 !important;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif !important;
-  font-weight: 700 !important;
+  font-weight: 900 !important;
   text-align: center !important;
+  border: 3px solid #fff !important;
   border-radius: 50% !important;
+  box-shadow: 0 0 0 2px #16a34a, 0 3px 8px rgba(0, 0, 0, 0.4) !important;
   vertical-align: middle !important;
   user-select: none !important;
   flex-shrink: 0 !important;
+  position: relative !important;
+  z-index: 2147483647 !important;
 }
 
 .plos-cs-overlay-banner {

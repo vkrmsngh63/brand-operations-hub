@@ -8,8 +8,21 @@
 // Per-session dismiss (§5 guardrail #3): a small × button next to the
 // floating button hides BOTH for the rest of the page-load. Page reload
 // restores them.
+//
+// Cursor-traversal grace period (added 2026-05-08-c): hide() schedules a
+// short delayed hide rather than hiding immediately, so the cursor can
+// traverse the gap between the link's bounding box and the floating
+// button without the button vanishing mid-traversal. mouseenter on the
+// button cancels the pending hide; mouseleave on the button reschedules
+// it. Bug surfaced during Waypoint #1 attempt #3 — see verification
+// backlog attempt log + ROADMAP polish backlog.
 
 const HOVER_DELAY_MS = 300;
+// Grace period after link-mouseleave before the button hides. Long enough
+// for the cursor to traverse the small gap from link bbox to the floating
+// "+" button (typically <100ms of cursor travel) but short enough that the
+// button still feels responsive when the user genuinely moves away.
+const HIDE_GRACE_MS = 150;
 
 export interface FloatingAddButton {
   /** Show the button anchored to the upper-right of `link`. */
@@ -52,12 +65,38 @@ export function createFloatingAddButton(
   let currentHref: string | null = null;
   let dismissed = false;
   let showTimer: ReturnType<typeof setTimeout> | null = null;
+  let hideTimer: ReturnType<typeof setTimeout> | null = null;
 
   function clearShowTimer(): void {
     if (showTimer !== null) {
       clearTimeout(showTimer);
       showTimer = null;
     }
+  }
+
+  function clearHideTimer(): void {
+    if (hideTimer !== null) {
+      clearTimeout(hideTimer);
+      hideTimer = null;
+    }
+  }
+
+  function hideNow(): void {
+    clearShowTimer();
+    clearHideTimer();
+    currentHref = null;
+    button.style.display = 'none';
+    dismiss.style.display = 'none';
+  }
+
+  function scheduleHide(): void {
+    // If a hide is already pending, let it run rather than restarting it —
+    // restarting could indefinitely defer the hide if the cursor jitters.
+    if (hideTimer !== null) return;
+    hideTimer = setTimeout(() => {
+      hideTimer = null;
+      hideNow();
+    }, HIDE_GRACE_MS);
   }
 
   function position(link: HTMLElement): void {
@@ -94,10 +133,18 @@ export function createFloatingAddButton(
     e.preventDefault();
     e.stopPropagation();
     dismissed = true;
-    clearShowTimer();
-    button.style.display = 'none';
-    dismiss.style.display = 'none';
+    hideNow();
   });
+
+  // Cursor-over-button cancels any pending hide so the user can reach the
+  // button after the link's mouseleave fires. Cursor-off-button schedules
+  // the same grace timer that link-mouseleave uses. The dismiss × overlaps
+  // the "+" by 2px so cursor traversal between the two doesn't fire a
+  // mouseleave; we still register listeners on both for safety.
+  button.addEventListener('mouseenter', clearHideTimer);
+  button.addEventListener('mouseleave', scheduleHide);
+  dismiss.addEventListener('mouseenter', clearHideTimer);
+  dismiss.addEventListener('mouseleave', scheduleHide);
 
   document.body.appendChild(button);
   document.body.appendChild(dismiss);
@@ -105,6 +152,9 @@ export function createFloatingAddButton(
   return {
     showFor(link, href) {
       if (dismissed) return;
+      // Cursor is now on a link — cancel any pending hide from a previous
+      // mouseleave so the button stays alive across link-to-link traversal.
+      clearHideTimer();
       clearShowTimer();
       showTimer = setTimeout(() => {
         if (dismissed) return;
@@ -115,16 +165,17 @@ export function createFloatingAddButton(
       }, HOVER_DELAY_MS);
     },
     hide() {
-      clearShowTimer();
-      currentHref = null;
-      button.style.display = 'none';
-      dismiss.style.display = 'none';
+      // Schedule a short delayed hide rather than hiding immediately. The
+      // button's own mouseenter cancels this timer so the cursor can
+      // traverse from link → button without losing the button.
+      scheduleHide();
     },
     isDismissedForSession() {
       return dismissed;
     },
     destroy() {
       clearShowTimer();
+      clearHideTimer();
       button.remove();
       dismiss.remove();
     },

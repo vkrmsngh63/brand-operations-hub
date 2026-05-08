@@ -6,6 +6,7 @@
 // from src/lib/shared-types/competition-scraping.ts.
 
 import { getAccessToken } from './auth.ts';
+import { PlosApiError } from './errors.ts';
 import type {
   CompetitorUrl,
   CreateCompetitorUrlRequest,
@@ -20,19 +21,12 @@ import type {
 // redirect and lets the OPTIONS handler in /api/projects respond as designed.
 const PLOS_API_BASE_URL = 'https://www.vklf.com';
 
-export interface ApiError {
-  status: number;
-  message: string;
-}
-
-export class PlosApiError extends Error {
-  status: number;
-  constructor(status: number, message: string) {
-    super(message);
-    this.status = status;
-    this.name = 'PlosApiError';
-  }
-}
+// Re-export error types from errors.ts so existing call sites that import
+// from api-client.ts keep working. Standalone errors.ts exists so modules
+// that only need the error class (api-bridge.ts) don't transitively pull
+// in auth.ts → supabase under node:test.
+export type { ApiError } from './errors.ts';
+export { PlosApiError } from './errors.ts';
 
 // The slice of /api/projects's GET response the extension actually consumes.
 // The PLOS server returns more (workflow rows, _count, etc.); we declare only

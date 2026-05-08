@@ -23,7 +23,7 @@
 import {
   PlosApiError,
   createCompetitorUrl,
-} from '../api-client.ts';
+} from './api-bridge.ts';
 import type { CompetitorUrl } from '../../../../../src/lib/shared-types/competition-scraping.ts';
 import { getPlatformLabel } from '../platforms.ts';
 

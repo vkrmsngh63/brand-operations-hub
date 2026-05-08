@@ -22,7 +22,7 @@
 //   7. Listens for chrome.runtime.onMessage from the background's
 //      right-click context-menu fallback; opens the URL-add form on demand.
 
-import { listProjects, listCompetitorUrls } from '../api-client.ts';
+import { listProjects, listCompetitorUrls } from './api-bridge.ts';
 import {
   getSelectedPlatform,
   getSelectedProjectId,
@@ -151,6 +151,24 @@ export async function runOrchestrator(): Promise<() => void> {
 
   function scanLinks(): void {
     const anchors = document.querySelectorAll<HTMLAnchorElement>('a[href]');
+
+    // Dedupe pass: a single product card on Amazon (and likely other
+    // platforms) may have 4+ anchor tags pointing to the same product
+    // (image link, title link, review-anchor link, price-area link).
+    // The "already saved" icon should appear ONCE per saved product, not
+    // on every link instance — otherwise a saved product visually clutters
+    // the card with multiple checkmarks. Scope: discover URLs that already
+    // have an icon attached anywhere in the DOM (from this scan or any
+    // previous scan), then skip those during the per-link iteration below.
+    const iconUrlSet = new Set<string>();
+    document
+      .querySelectorAll<HTMLAnchorElement>('a[data-plos-cs-has-icon="1"]')
+      .forEach((el) => {
+        const canonical = platformModule.canonicalProductUrl(el.href);
+        const normalized = normalizeUrlForRecognition(canonical ?? el.href);
+        if (normalized) iconUrlSet.add(normalized);
+      });
+
     for (const link of anchors) {
       const href = link.href;
       if (!platformModule.matchesProduct(href)) continue;
@@ -158,9 +176,17 @@ export async function runOrchestrator(): Promise<() => void> {
       const canonical = platformModule.canonicalProductUrl(href);
       const normalized = normalizeUrlForRecognition(canonical ?? href);
 
-      // Already-saved icon: render once per link.
-      if (normalized && recognitionSet.has(normalized)) {
+      // Already-saved icon: render at MOST one per unique normalized URL
+      // (per the dedupe rationale above). First matching link wins — this
+      // is typically the image link on Amazon (which appears earliest in
+      // DOM order), giving a visual cue at the top-left of the card.
+      if (
+        normalized &&
+        recognitionSet.has(normalized) &&
+        !iconUrlSet.has(normalized)
+      ) {
         attachAlreadySavedIcon(link, normalized);
+        iconUrlSet.add(normalized);
       }
 
       // Hover handler: only attach once per link.
