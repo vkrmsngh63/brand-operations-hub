@@ -4,7 +4,9 @@
 **Workflow:** W#2 Competition Scraping & Deep Analysis.
 **Branch:** `workflow-2-competition-scraping`.
 **Created:** 2026-05-07 in `session_2026-05-07_w2-plos-side-viewer-detail-page-slice` (Claude Code).
-**Last updated:** 2026-05-07-g (Extension build — session 2 — section appended in `session_2026-05-07-g_w2-extension-build-session-2` after director's standing directive to defer all manual testing to the verification waypoints below. Session 2 shipped the popup project-picker + platform-picker + Highlight-Terms color-palette UI per `COMPETITION_SCRAPING_STACK_DECISIONS.md §6` + `COMPETITION_SCRAPING_DESIGN.md §A.7` Module 1 setup flow; tests appended below land in Waypoint #1's coverage.)
+**Last updated:** 2026-05-07-i (Waypoint #1 verification ATTEMPTED — PARTIAL outcome — DEPLOY-GAP BLOCKER FOUND. Director worked through extension-session-1 Steps 1-8 in `session_2026-05-07-i_w2-waypoint-1-verification-pass-1`. Steps 1-7 ✅ (download zip / unzip / open chrome://extensions / Developer Mode ON / Load unpacked / Pin / Open popup pre-sign-in screen). Step 8 PARTIAL — sign-in via Supabase ✅, but the post-sign-in project-list path returned **"Couldn't load your projects: Failed to fetch"**. Root cause diagnosed: the OPTIONS handler + `withCors` wrap on `src/app/api/projects/route.ts` exists on `workflow-2-competition-scraping` (commit `5b4a3e8`) but NOT on `origin/main` (last touched 2026-05-03 by `58fe5e6` flake-rate instrumentation, unrelated). vklf.com runs `main` and lacks the CORS handler, so the extension's preflight fails. Same gap blocks all extension API calls: ~24 W#2 API routes (URL save/edit/delete, image upload, vocabulary, reset, janitor) + the schema migration for 7 W#2 tables are also W#2-branch-only and not yet on `main`. Director chose via Rule 14f to **end this session and dedicate next session to the W#2 → main deploy** rather than cherry-pick or cowboy-merge mid-verification. Waypoint #1 verification will resume in a fresh session AFTER the deploy session lands cleanly. Steps 9-18 of session-1 + all of sessions 2-3 untouched today; flag stays PENDING until the resumed verification.)
+**Previously updated:** 2026-05-07-h (Extension build — session 3 — section appended in `session_2026-05-07-h_w2-extension-build-session-3` after director's standing directive to defer all manual testing. Session 3 shipped Module 1 URL-capture content script for 4 shopping platforms.)
+**Previously updated:** 2026-05-07-g (Extension build — session 2 — section appended in `session_2026-05-07-g_w2-extension-build-session-2` after director's standing directive to defer all manual testing to the verification waypoints below. Session 2 shipped the popup project-picker + platform-picker + Highlight-Terms color-palette UI per `COMPETITION_SCRAPING_STACK_DECISIONS.md §6` + `COMPETITION_SCRAPING_DESIGN.md §A.7` Module 1 setup flow; tests appended below land in Waypoint #1's coverage.)
 **Previously updated:** 2026-05-07-f (Extension build — session 1 — section appended in `session_2026-05-07-f_w2-extension-build-session-1` after director's directive to defer all manual testing. **End-of-session refinement:** the "ONE post-coding verification session" plan was split into THREE verification waypoints — see "Verification waypoints" section below).
 
 ---
@@ -16,6 +18,16 @@ W#2 PLOS-side slices ship UI faster than the data needed to populate it. The Chr
 Rather than hold each slice's commit on a verification step that can't run, the director chose 2026-05-07: **defer all visual verification of W#2 PLOS-side UI until the extension build provides a data path; maintain a per-slice running tally of pending visual checks here; walk through each slice's checks together when the extension is up.**
 
 This doc is the running tally.
+
+---
+
+## 🚨 Waypoint #1 attempt log (NEW 2026-05-07-i)
+
+| Attempt | Date | Outcome | Step coverage | Blocker | Disposition |
+|---|---|---|---|---|---|
+| #1 | 2026-05-07-i | PARTIAL | Session-1 Steps 1-7 ✅; Step 8 PARTIAL (sign-in OK, project-list blocked); Steps 9-18 + sessions 2-3 not exercised | **DEPLOY GAP** — OPTIONS/withCors handler on `src/app/api/projects/route.ts` exists on `workflow-2-competition-scraping` (commit `5b4a3e8` 2026-05-07) but NOT on `origin/main` (last touched 2026-05-03 by unrelated `58fe5e6`). Same gap blocks all extension API calls — schema for 7 W#2 tables + ~24 W#2 API routes also W#2-branch-only. | Director chose via Rule 14f to end session here and dedicate next session to W#2 → main deploy as its own focused effort (proper schema-state verification on prod, full merge, push, watch redeploy, visual-verify W#1 stays healthy). Waypoint #1 resumes in a fresh session AFTER deploy lands. |
+
+**Cross-references for the deploy-gap finding:** `ROADMAP.md` Active Tools W#2 row Next Session list (NEW top item: W#2 → main full deploy session); `CORRECTIONS_LOG.md` 2026-05-07-i entry (procedural lesson — verification waypoint can't fire when prerequisite deployment hasn't landed; future build sessions should explicitly note "this slice's verification needs main-deploy of [X commits] before it can fire" as a deferred-item per Rule 14e).
 
 ---
 
@@ -240,9 +252,18 @@ Walked-through tests once the extension can populate test data:
 
 ---
 
-## Extension build — session 1 — WXT init + auth shell + GET /api/projects CORS — PENDING 2026-05-07
+## Extension build — session 1 — WXT init + auth shell + GET /api/projects CORS — PENDING 2026-05-07 (PARTIALLY ATTEMPTED 2026-05-07-i — see Waypoint #1 attempt log at top of doc)
 
 Shipped commit: `5b4a3e8` on `workflow-2-competition-scraping`.
+
+**Waypoint #1 attempt 2026-05-07-i partial outcome (in `session_2026-05-07-i_w2-waypoint-1-verification-pass-1`):**
+
+- ✅ Step 1 download zip / ✅ Step 2 unzip (Windows 11; manifest.json at top level) / ✅ Step 3 chrome://extensions / ✅ Step 4 Developer Mode / ✅ Step 5 Load unpacked (no red errors; Name + Version 0.1.0 confirmed) / ✅ Step 6 Pin to toolbar / ✅ Step 7 Popup pre-sign-in screen (heading + tagline + email/password fields + disabled Sign-in button + gray help text — all four confirmed).
+- 🟡 Step 8 PARTIAL — sign-in via Supabase ✅; signed-in screen flipped ✅; "Signed in as <email>" gray box ✅; **but the post-sign-in project-list path returned "Couldn't load your projects: Failed to fetch"** — diagnosis: deploy gap (CORS handler on `src/app/api/projects/route.ts` not on `origin/main`; vklf.com runs main).
+- Steps 9-18 NOT EXERCISED today. Step 8's persistence subcheck (close + reopen popup → still signed in) NOT EXERCISED today.
+- Steps 10-12 (Verify connection happy / token failure / network failure) **OBSOLETED by session 2** — that button no longer exists; the project-list load is now the auth round-trip proof. Future verification should mark these three steps as "obsoleted — superseded by S2-2" rather than pending.
+
+Section flag stays PENDING until the resumed verification (after W#2 → main deploy session lands).
 
 This is the **first** of the 5–7 W#2 Chrome extension build sessions. Session-1 ships the WXT scaffold + the auth shell (`signInWithPassword`, JWT + refresh-token storage in `chrome.storage.local`, sign-out) + a "Verify connection" smoke-test button that calls `GET https://vklf.com/api/projects` with a Bearer header. The cross-workflow change to `src/app/api/projects/route.ts` adds the OPTIONS preflight handler + `withCors` wrap so the extension's `Authorization: Bearer` request gets through CORS.
 
