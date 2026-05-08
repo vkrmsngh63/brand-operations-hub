@@ -1018,4 +1018,58 @@ This section is for entries added in subsequent sessions when the director adds 
 
 ---
 
+**2026-05-08-c — session_2026-05-08-c_w2-waypoint-1-verification-attempt-3-extension-session-3 (Claude Code)**
+
+- **Session purpose:** Waypoint #1 verification attempt #3 — extension session 3 walkthrough across Amazon (and the deferred S2-3 offline re-verify). Sessions 1+2 had passed in attempt #2; this session was supposed to walk through S3-1 through S3-36 and close out Waypoint #1. **Actual outcome:** PARTIAL — Amazon S3-1 through S3-11 ✅ before director called wrap-up at S3-11 per session-mgmt lucidity preference (3 substantive mid-session pivots already absorbed). Three real bugs in extension session 3 code FIXED INLINE in single code commit `f4226ca`. Three director directives surfaced + captured per Rule 18 mid-build directive Read-It-Back (this entry).
+
+- **Director's directives (three captured this session per Rule 18 mid-build):**
+
+  - **Directive #1 — Per-user-per-project extension state moves to PLOS DB (P-3 broadened from prior Highlight-Terms-on-reinstall observation):** *"Highlight words should be stored server side so that no matter where the user logs in, they can pick up where they left off. The same goes for other similar data so that no matter where the user logs in, they can pick up where they left off."* Surfaced when `Remove + Load unpacked` reload during the messaging-proxy fix wiped `chrome.storage.local`, and the director had to re-enter Highlight Terms per Project. Director's standing principle: extension state should NOT depend on a single Chrome profile / installation.
+
+  - **Directive #2 — Live-page Highlight Terms application (P-5):** *"When using the competition scraping extension, the highlight words should be highlighted on the page that the user is on."* Surfaced during S3-7 walkthrough when director observed that Highlight Terms entered in popup were NOT being applied to the live Amazon search-results page. Current state: zero live-page highlight code in `extensions/competition-scraping/src/lib/content-script/`. Director's intent was always live-page highlighting (not PLOS-side captured-text only).
+
+  - **Directive #3 — "Sponsored Ad" checkbox in URL-add form + PLOS-side tag (P-6):** *"Along with the 3 different fields that the user can fill out when saving a url, there should be a button to check that says 'Sponsored Ad'. This should be shown as a small tag in the PLOS side in Competition Scraping & Deep Analysis UI as well."* Surfaced during S3-10 walkthrough after the Save flow worked end-to-end. Pairs with P-4 (Amazon SSPA-redirect detection) — when P-4 ships, the form's checkbox would be auto-pre-checked for SSPA-detected URLs.
+
+- **Alternatives considered (per directive):**
+
+  - **#1 (state location):** PLOS DB (chosen — meets "no matter where user logs in" bar) vs. `chrome.storage.sync` (Chrome-account-scoped only — rejected, doesn't survive cross-browser-instance) vs. status quo `chrome.storage.local` (per-installation — rejected, fails reinstall test).
+
+  - **#2 (highlight scope):** PLOS-side captured-text only (rejected via the director's clarification) vs. live competitor pages only (would deprioritize PLOS-side which would be a feature regression) vs. **both** PLOS-side AND live competitor pages (chosen — director's clarification explicitly named live-page; PLOS-side is additive future work).
+
+  - **#3 (sponsored-ad capture):** Auto-detect only via P-4 (no manual override — rejected, P-4 may not catch every Amazon ad shape; user needs override) vs. **manual checkbox NOW + auto-pre-check WHEN P-4 ships** (chosen — synergy: P-6 first means P-4 only adds auto-pre-check behavior, not invent a new column).
+
+- **Decisions:**
+
+  - All three directives captured as ROADMAP polish backlog entries (P-3, P-5, P-6) — see `ROADMAP.md` "🔍 W#2 polish backlog" section. Each entry has scope sketch + estimated effort + cross-references. None actionable in this session per session-mgmt lucidity preference (3 substantive in-session pivots already absorbed for the messaging-proxy fix + button-disappear fix + saved-icon dedupe-and-visibility fix).
+
+  - **Schema implication for P-3 + P-6:** when these polish items get built, the schema-change-in-flight flag will need to flip to "Yes" — both add fields (P-3 likely a new table or fields on existing user-project association tables; P-6 adds `isSponsoredAd Boolean @default(false)` to `CompetitorUrl`). Coordination per `MULTI_WORKFLOW_PROTOCOL §4` schema-change handshake applies.
+
+- **Three inline code fixes shipped this session (not directives — bugs surfaced during walkthrough that blocked progression past their respective steps; commit `f4226ca`):**
+
+  - **Fix #1 — Content-script CORS messaging proxy:** original Waypoint #1 attempt #3 trigger. Content scripts run in host page's origin (`amazon.com` etc.) which is NOT in vklf.com's CORS allowlist (`chrome-extension://*` only — see `src/lib/cors.ts:isAllowedOrigin`). Direct fetches from `listCompetitorUrls` + `createCompetitorUrl` failed preflight with `TypeError: Failed to fetch`. Fix: new `extensions/competition-scraping/src/lib/content-script/api-bridge.ts` routes the 3 PLOS API calls (`listProjects` + `listCompetitorUrls` + `createCompetitorUrl`) through `chrome.runtime.sendMessage` → background service worker → fetch from extension origin where CORS passes. Also extracted `PlosApiError` to standalone `errors.ts` so the bridge doesn't transitively pull in `auth.ts → supabase` under `node:test --experimental-strip-types`. **Bonus side effect:** content.js bundle dropped from ~219 KB to ~21 KB (supabase no longer pulled in transitively into per-page content script — real perf win on every Amazon/Ebay/Etsy/Walmart page load).
+
+  - **Fix #2 — Floating "+" button hover grace timer:** moving cursor from link to floating button fired link-mouseleave → button hidden before cursor reached it. Fix: 150ms grace timer scheduled by `hide()`; button mouseenter cancels the timer; button mouseleave reschedules. Same pattern for `×` dismiss button. ~25 LOC change to `floating-add-button.ts`.
+
+  - **Fix #3 — "Already saved" icon dedupe + visibility boost:** Amazon product cards have 4+ anchor tags pointing to the same product (image link, title link, review-anchor link, price link), so 1 saved URL produced 4 ✓ icons cluttering the card. Plus the default 16px muted-green icon was too subtle to spot at default styling against Amazon's busy chrome (director only noticed icons after applying debug outline via DevTools Console). Fix: dedupe in `orchestrator.scanLinks` to 1 icon per unique normalized URL (across MutationObserver re-scans by reading existing `data-plos-cs-has-icon="1"` markers) + CSS visibility boost in `styles.ts` (28×28 vibrant emerald `#16a34a`, 3px white border + green halo ring + drop shadow + bolder ✓ glyph at 18px font-size 900 weight + max z-index 2147483647). ~20 LOC orchestrator change + ~10 LOC CSS update.
+
+- **Three doc-text drift items surfaced + captured for future cleanup or committed inline:**
+
+  - S3-2 expected list said `https://vklf.com/*` — stale; manifest now uses `https://www.vklf.com/*` per attempt #2 fix `5472d26`. Inline doc-text update committed in this session's doc batch.
+  - S3-3 expected `Storage` permission to display in Chrome UI; in practice Chrome only displays permissions with meaningful privacy implications (`storage` is benign internal-only and often hidden). Inline doc-text caveat added.
+  - S3-8 said "+ Add button disappears immediately" on cursor away; with the grace-timer fix it now disappears after 150ms (deliberately, to enable the cursor traversal in fix #2). Inline doc-text update.
+
+- **Affected sections:** §A.7 Module 1 (URL capture flow) — adds (post-implementation) clarifications around content-script CORS architecture (must use messaging proxy, not direct fetch) + saved-icon dedupe behavior + cursor-traversal grace timer. §A is frozen per Rule 18; this §B entry serves as the operational-evolution log. §B's prior 2026-05-07-g end-of-session addendum (search-results "already saved" icon spec) gains an addendum: **icon is now deduped to ONE per unique saved URL per page** (was implicitly per-link in the original spec).
+
+- **Cross-references:**
+  - `docs/ROADMAP.md` — header + Active Tools W#2 row + W#2 polish backlog new entries P-3, P-4, P-5, P-6.
+  - `docs/COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` — header + Waypoint #1 attempt log new row #3 + cross-references for attempt #3 + S3-1 through S3-11 marked ✅ + inline doc-text fixes for S3-2, S3-3, S3-8, S3-11.
+  - `docs/CHAT_REGISTRY.md` — new top row.
+  - `docs/DOCUMENT_MANIFEST.md` — header + per-doc flags.
+  - `docs/CORRECTIONS_LOG.md` — 2026-05-08-c entry (content-script CORS architecture lesson — extensions making cross-origin calls from content scripts MUST route through background service worker; same-origin allowlist `chrome-extension://*` doesn't cover content-script's host-page origin).
+  - Code commit `f4226ca` on `workflow-2-competition-scraping`.
+
+- **Branch implications:** Two commits this session: code `f4226ca` + end-of-session doc-batch (this commit). Both pending Rule 9 push approval — push to `workflow-2-competition-scraping` does NOT deploy vklf.com (which runs `main`). Next session's task is Waypoint #1 attempt #4 covering S3-12 through S3-36 + S2-3 deferred re-verify; next session can run on either branch (no code production expected unless mid-attempt-#4 surfaces another fix-inline pivot).
+
+---
+
 END OF DOCUMENT
