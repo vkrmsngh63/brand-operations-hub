@@ -187,7 +187,7 @@ function Kbd({ children }: { children: ReactNode }) {
 }
 
 export function DetailedUserGuide() {
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
 
   const handlePrint = () => {
     if (typeof window !== 'undefined') {
