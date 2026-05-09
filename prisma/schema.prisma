@@ -264,6 +264,7 @@ model CompetitorUrl {
   sellerStarRating    Float? // 0.0–5.0 (Etsy primarily)
   numProductReviews   Int?
   numSellerReviews    Int?
+  isSponsoredAd       Boolean  @default(false) // P-6 — manual checkbox in URL-add form; auto-pre-checks for Amazon SSPA-detected URLs (P-4 synergy)
   customFields        Json     @default("{}") // { fieldName: value } user-defined product-scoped fields
   addedBy             String // userId
   addedAt             DateTime @default(now())

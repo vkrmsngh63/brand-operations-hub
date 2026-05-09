@@ -54,6 +54,7 @@ function toWireShape(
     sellerStarRating: row.sellerStarRating,
     numProductReviews: row.numProductReviews,
     numSellerReviews: row.numSellerReviews,
+    isSponsoredAd: row.isSponsoredAd,
     customFields: (row.customFields ?? {}) as Record<string, unknown>,
     addedBy: row.addedBy,
     addedAt: row.addedAt.toISOString(),
@@ -185,6 +186,10 @@ export async function POST(
       typeof body.numProductReviews === 'number' ? body.numProductReviews : null,
     numSellerReviews:
       typeof body.numSellerReviews === 'number' ? body.numSellerReviews : null,
+    // P-6 — accept boolean from extension; omit (so schema default false applies) otherwise.
+    ...(typeof body.isSponsoredAd === 'boolean'
+      ? { isSponsoredAd: body.isSponsoredAd }
+      : {}),
     customFields:
       body.customFields && typeof body.customFields === 'object'
         ? (body.customFields as Prisma.InputJsonValue)

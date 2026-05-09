@@ -26,6 +26,7 @@ import { useMemo, useState } from 'react';
 import type { CompetitorUrl } from '@/lib/shared-types/competition-scraping';
 import {
   applyColumnFilters,
+  BooleanFilter,
   computeDistinctValues,
   countActiveColumnFilters,
   DateRangeFilter,
@@ -40,6 +41,7 @@ import {
 
 type SortKey =
   | 'url'
+  | 'isSponsoredAd'
   | 'productName'
   | 'brandName'
   | 'competitionCategory'
@@ -80,6 +82,12 @@ interface ColumnDef {
 
 const COLUMNS: ColumnDef[] = [
   { key: 'url', label: 'URL', defaultDir: 'asc', filterKey: null },
+  {
+    key: 'isSponsoredAd',
+    label: 'Sponsored',
+    defaultDir: 'desc',
+    filterKey: 'isSponsoredAd',
+  },
   {
     key: 'productName',
     label: 'Product Name',
@@ -172,7 +180,11 @@ export function UrlTable({
       if (av == null) return 1;
       if (bv == null) return -1;
       let cmp: number;
-      if (typeof av === 'number' && typeof bv === 'number') {
+      if (typeof av === 'boolean' && typeof bv === 'boolean') {
+        // false < true. Default direction for the Sponsored column is
+        // 'desc' so first click puts sponsored=true rows at the top.
+        cmp = (av === bv ? 0 : av ? 1 : -1);
+      } else if (typeof av === 'number' && typeof bv === 'number') {
         cmp = av - bv;
       } else {
         cmp = String(av).localeCompare(String(bv));
@@ -362,6 +374,13 @@ export function UrlTable({
                   <td style={cellStyle('left')}>
                     <span style={{ color: '#58a6ff' }}>{shortenUrl(row.url)}</span>
                   </td>
+                  <td style={cellStyle('left')}>
+                    {row.isSponsoredAd ? (
+                      <span style={sponsoredBadgeStyle}>Sponsored</span>
+                    ) : (
+                      '—'
+                    )}
+                  </td>
                   <td style={cellStyle('left')}>{row.productName ?? '—'}</td>
                   <td style={cellStyle('left')}>{row.brandName ?? '—'}</td>
                   <td style={cellStyle('left')}>{row.competitionCategory ?? '—'}</td>
@@ -478,6 +497,18 @@ function renderFilterBody(
           onClose={close}
         />
       );
+    case 'isSponsoredAd':
+      return (
+        <BooleanFilter
+          value={filters.isSponsoredAd}
+          trueLabel="Sponsored only"
+          falseLabel="Non-sponsored only"
+          onCommit={(next) =>
+            onFiltersChange({ ...filters, isSponsoredAd: next })
+          }
+          onClose={close}
+        />
+      );
   }
 }
 
@@ -501,6 +532,22 @@ const clearAllButtonStyle: React.CSSProperties = {
   fontFamily: 'inherit',
   padding: '4px 10px',
   cursor: 'pointer',
+  whiteSpace: 'nowrap',
+};
+
+// P-6 — small "Sponsored" pill in the cell when isSponsoredAd === true.
+// Amber tone is consistent with the GitHub-dark palette used elsewhere in
+// the table; subtle enough not to compete with the URL link color.
+const sponsoredBadgeStyle: React.CSSProperties = {
+  display: 'inline-block',
+  padding: '2px 8px',
+  borderRadius: '999px',
+  background: 'rgba(187, 128, 9, 0.15)',
+  color: '#d29922',
+  border: '1px solid rgba(187, 128, 9, 0.40)',
+  fontSize: '11px',
+  fontWeight: 600,
+  lineHeight: '14px',
   whiteSpace: 'nowrap',
 };
 

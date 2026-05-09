@@ -146,6 +146,12 @@ export async function runOrchestrator(): Promise<() => void> {
     triggerRect: DOMRect | null,
   ): void {
     const canonical = platformModule.canonicalProductUrl(href) ?? href;
+    // P-6 + P-4 synergy: detection runs on the ORIGINAL href (pre-
+    // canonicalization), since canonicalProductUrl strips the SSPA wrapper.
+    // Optional method on the platform module — absent on platforms without
+    // sponsored-ad detection (today: only Amazon implements).
+    const sponsoredDetected =
+      platformModule.detectsAsSponsored?.(href) ?? false;
     floatingButton.hide();
     openUrlAddForm({
       initialUrl: canonical,
@@ -153,6 +159,7 @@ export async function runOrchestrator(): Promise<() => void> {
       projectName,
       platform: platformModule.platform,
       triggerRect,
+      defaultIsSponsoredAd: sponsoredDetected,
       onSaved(row) {
         const normalized = normalizeUrlForRecognition(row.url);
         if (normalized) recognitionSet.add(normalized);

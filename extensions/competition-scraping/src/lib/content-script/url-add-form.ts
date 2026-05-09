@@ -41,6 +41,13 @@ export interface UrlAddFormProps {
    * falls back to its centered layout. P-7 fix 2026-05-08-d.
    */
   triggerRect?: DOMRect | null;
+  /**
+   * Initial value for the Sponsored Ad checkbox. P-6 + P-4 synergy: the
+   * orchestrator passes `true` when the URL was detected via Amazon SSPA
+   * decode (so the box is pre-checked); otherwise omitted (defaults to
+   * false). Manual toggle by the user always overrides the default.
+   */
+  defaultIsSponsoredAd?: boolean;
   /** Callback invoked after a successful save. The orchestrator uses the
    * returned row's url field to update the recognition cache. */
   onSaved(row: CompetitorUrl): void;
@@ -195,6 +202,27 @@ export function openUrlAddForm(props: UrlAddFormProps): UrlAddForm {
   form.appendChild(productField.wrap);
   form.appendChild(brandField.wrap);
 
+  // P-6 — Sponsored Ad checkbox. Below the 3 free-text fields. Pre-checked
+  // when defaultIsSponsoredAd is true (orchestrator passes this for Amazon
+  // SSPA-detected URLs per the P-4 synergy); always manually toggleable.
+  const sponsoredWrap = document.createElement('div');
+  sponsoredWrap.className = 'plos-cs-form-field plos-cs-form-field-checkbox';
+  const sponsoredLabel = document.createElement('label');
+  sponsoredLabel.className = 'plos-cs-form-checkbox-label';
+  sponsoredLabel.htmlFor = 'plos-cs-is-sponsored-ad';
+  const sponsoredInput = document.createElement('input');
+  sponsoredInput.id = 'plos-cs-is-sponsored-ad';
+  sponsoredInput.name = 'is-sponsored-ad';
+  sponsoredInput.type = 'checkbox';
+  sponsoredInput.className = 'plos-cs-form-checkbox';
+  sponsoredInput.checked = props.defaultIsSponsoredAd === true;
+  const sponsoredText = document.createElement('span');
+  sponsoredText.textContent = 'Sponsored Ad';
+  sponsoredLabel.appendChild(sponsoredInput);
+  sponsoredLabel.appendChild(sponsoredText);
+  sponsoredWrap.appendChild(sponsoredLabel);
+  form.appendChild(sponsoredWrap);
+
   // Error display (initially hidden; populated on save failure)
   const error = document.createElement('div');
   error.className = 'plos-cs-form-error';
@@ -245,6 +273,7 @@ export function openUrlAddForm(props: UrlAddFormProps): UrlAddForm {
     categoryField.input.disabled = saving;
     productField.input.disabled = saving;
     brandField.input.disabled = saving;
+    sponsoredInput.disabled = saving;
     saveBtn.textContent = saving ? 'Saving…' : 'Save';
   }
 
@@ -273,6 +302,10 @@ export function openUrlAddForm(props: UrlAddFormProps): UrlAddForm {
         ...(brandField.input.value.trim()
           ? { brandName: brandField.input.value.trim() }
           : {}),
+        // P-6 — only send when checked; the schema-level default false
+        // applies when omitted (mirrors the existing "send only when set"
+        // pattern for the optional metadata fields).
+        ...(sponsoredInput.checked ? { isSponsoredAd: true } : {}),
       });
       setSaving(false);
       handle.destroy();

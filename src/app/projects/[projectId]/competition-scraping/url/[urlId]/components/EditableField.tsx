@@ -415,6 +415,105 @@ export function EditableVocabularyField({
   );
 }
 
+// ─── Boolean variant ────────────────────────────────────────────────────
+//
+// One-click toggle. Unlike the text/number/vocabulary fields above, a
+// boolean flip doesn't benefit from a separate edit / save / cancel
+// dance — it's a single bit. Clicking the checkbox optimistically flips
+// the local view, fires `onSave(next)`, and reverts to the prior value if
+// the save throws. Surfaces an inline error on failure.
+
+export function EditableBooleanField({
+  label,
+  value,
+  onSave,
+  editable = true,
+}: {
+  label: string;
+  value: boolean;
+  onSave: (next: boolean) => Promise<void>;
+  editable?: boolean;
+}) {
+  const [optimistic, setOptimistic] = useState<boolean | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Display the optimistic value while a save is in flight; otherwise the
+  // canonical prop value (which the parent updates from the server's
+  // authoritative response on success).
+  const displayed = optimistic ?? value;
+
+  const onToggle = async () => {
+    if (!editable || saving) return;
+    const next = !displayed;
+    setOptimistic(next);
+    setSaving(true);
+    setErrorMessage(null);
+    try {
+      await onSave(next);
+      // Parent updated `value` to the server's response — clear the
+      // optimistic override on the next render.
+      setOptimistic(null);
+    } catch (e) {
+      setErrorMessage(e instanceof Error ? e.message : 'Save failed.');
+      // Revert the optimistic flip — fall back to the prior prop value.
+      setOptimistic(null);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div>
+      <div
+        style={{
+          fontSize: '12px',
+          color: '#8b949e',
+          marginBottom: '2px',
+        }}
+      >
+        {label}
+      </div>
+      <label
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '8px',
+          fontSize: '13px',
+          color: '#c9d1d9',
+          cursor: editable && !saving ? 'pointer' : 'not-allowed',
+          userSelect: 'none',
+          opacity: saving ? 0.7 : 1,
+        }}
+      >
+        <input
+          type="checkbox"
+          checked={displayed}
+          onChange={() => void onToggle()}
+          disabled={!editable || saving}
+          style={{ width: '14px', height: '14px', accentColor: '#1f6feb' }}
+        />
+        <span>{displayed ? 'Yes' : 'No'}</span>
+        {saving ? (
+          <span style={{ fontSize: '11px', color: '#6e7681' }}>Saving…</span>
+        ) : null}
+      </label>
+      {errorMessage ? (
+        <div
+          role="alert"
+          style={{
+            marginTop: '4px',
+            fontSize: '11px',
+            color: '#f85149',
+          }}
+        >
+          {errorMessage}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 // ─── Style helpers (kept local to match the rest of the detail page) ────
 
 const pencilButtonStyle: React.CSSProperties = {

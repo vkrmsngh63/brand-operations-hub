@@ -94,4 +94,15 @@ export const amazon: PlatformModule = {
     }
     return null;
   },
+
+  // P-6 + P-4 synergy: a URL whose pathname is `/sspa/click` AND whose
+  // decoded inner contains an ASIN is an Amazon sponsored-ad placement.
+  // Returns true only when both conditions hold so a non-product `/sspa/click`
+  // (rare; defensively handled) doesn't pre-check the box.
+  detectsAsSponsored(href: string): boolean {
+    if (typeof href !== 'string' || href.length === 0) return false;
+    const inner = decodeSspaInner(href);
+    if (inner === null) return false;
+    return ASIN_RE.test(inner);
+  },
 };

@@ -35,6 +35,7 @@ function toWireShape(
     sellerStarRating: row.sellerStarRating,
     numProductReviews: row.numProductReviews,
     numSellerReviews: row.numSellerReviews,
+    isSponsoredAd: row.isSponsoredAd,
     customFields: (row.customFields ?? {}) as Record<string, unknown>,
     addedBy: row.addedBy,
     addedAt: row.addedAt.toISOString(),
@@ -192,6 +193,11 @@ export async function PATCH(
   if (body.numSellerReviews !== undefined) {
     data.numSellerReviews =
       typeof body.numSellerReviews === 'number' ? body.numSellerReviews : null;
+  }
+  // P-6 — boolean flag. Only accept actual booleans; ignore other types so a
+  // misshapen payload doesn't silently flip the flag.
+  if (typeof body.isSponsoredAd === 'boolean') {
+    data.isSponsoredAd = body.isSponsoredAd;
   }
   if (body.customFields !== undefined) {
     data.customFields =

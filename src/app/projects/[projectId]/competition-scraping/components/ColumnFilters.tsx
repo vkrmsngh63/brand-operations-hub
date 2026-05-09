@@ -49,7 +49,17 @@ export interface ColumnFiltersState {
   // exclusion concern doesn't apply here.
   addedFrom: string | null;
   addedTo: string | null;
+  // P-6 — boolean tri-state filter for the Sponsored Ad column.
+  // 'all'   = no filter (every row passes regardless of the flag)
+  // 'true'  = only rows where isSponsoredAd === true
+  // 'false' = only rows where isSponsoredAd === false
+  isSponsoredAd: BooleanTriState;
 }
+
+// P-6 — tri-state union shared between the filter state, the URL-query
+// serializer, and the BooleanFilter primitive. String type rather than
+// `boolean | 'all'` so the URL-query round-trip stays straightforward.
+export type BooleanTriState = 'all' | 'true' | 'false';
 
 export const EMPTY_COLUMN_FILTERS: ColumnFiltersState = {
   productName: [],
@@ -61,6 +71,7 @@ export const EMPTY_COLUMN_FILTERS: ColumnFiltersState = {
   reviewsMax: null,
   addedFrom: null,
   addedTo: null,
+  isSponsoredAd: 'all',
 };
 
 export type ColumnFilterKey =
@@ -69,7 +80,8 @@ export type ColumnFilterKey =
   | 'competitionCategory'
   | 'productStarRating'
   | 'numProductReviews'
-  | 'addedAt';
+  | 'addedAt'
+  | 'isSponsoredAd';
 
 // Token used in the URL query when the empty-string "(blank)" pseudo-value
 // is part of a multi-select. Empty strings can't round-trip through
@@ -96,6 +108,8 @@ export function isColumnFilterActive(
       return filters.reviewsMin !== null || filters.reviewsMax !== null;
     case 'addedAt':
       return filters.addedFrom !== null || filters.addedTo !== null;
+    case 'isSponsoredAd':
+      return filters.isSponsoredAd !== 'all';
   }
 }
 
@@ -107,6 +121,7 @@ export function countActiveColumnFilters(filters: ColumnFiltersState): number {
     'productStarRating',
     'numProductReviews',
     'addedAt',
+    'isSponsoredAd',
   ];
   return keys.filter((k) => isColumnFilterActive(filters, k)).length;
 }
@@ -137,6 +152,13 @@ export function readFiltersFromQuery(
     return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
   };
 
+  // P-6 — `?sponsored=true|false`. Anything else (missing / unrecognized)
+  // falls back to 'all' so a corrupt URL doesn't trip the filter.
+  const decodeTriState = (key: string): BooleanTriState => {
+    const v = params.get(key);
+    return v === 'true' || v === 'false' ? v : 'all';
+  };
+
   return {
     productName: decodeMulti('productName'),
     brandName: decodeMulti('brandName'),
@@ -147,6 +169,7 @@ export function readFiltersFromQuery(
     reviewsMax: decodeNum('reviewsMax'),
     addedFrom: decodeDate('addedFrom'),
     addedTo: decodeDate('addedTo'),
+    isSponsoredAd: decodeTriState('sponsored'),
   };
 }
 
@@ -180,6 +203,13 @@ export function writeFiltersToQuery(
   writeScalar('reviewsMax', filters.reviewsMax);
   writeScalar('addedFrom', filters.addedFrom);
   writeScalar('addedTo', filters.addedTo);
+  // P-6 — write only when narrowing; 'all' is the default and stays out of
+  // the URL.
+  if (filters.isSponsoredAd === 'all') {
+    params.delete('sponsored');
+  } else {
+    params.set('sponsored', filters.isSponsoredAd);
+  }
 }
 
 // ─── Row-filtering logic ────────────────────────────────────────────────
@@ -213,8 +243,19 @@ export function applyColumnFilters(
     if (!matchDate(filters.addedFrom, filters.addedTo, row.addedAt)) {
       return false;
     }
+    if (!matchBoolean(filters.isSponsoredAd, row.isSponsoredAd)) {
+      return false;
+    }
     return true;
   });
+}
+
+function matchBoolean(
+  filter: BooleanTriState,
+  rowValue: boolean
+): boolean {
+  if (filter === 'all') return true;
+  return filter === 'true' ? rowValue === true : rowValue === false;
 }
 
 function matchMulti(selected: string[], rowValue: string | null): boolean {
@@ -694,6 +735,85 @@ export function DateRangeFilter({
   );
 }
 
+// ─── Boolean tri-state filter (P-6 — Sponsored Ad column) ───────────────
+
+interface BooleanFilterProps {
+  value: BooleanTriState;
+  // Labels for the two non-'all' options. Caller passes them so the same
+  // primitive can serve future boolean columns without hard-coding
+  // "Sponsored only" / "Non-sponsored only" wording.
+  trueLabel: string;
+  falseLabel: string;
+  onCommit: (next: BooleanTriState) => void;
+  onClose: () => void;
+}
+
+export function BooleanFilter({
+  value,
+  trueLabel,
+  falseLabel,
+  onCommit,
+  onClose,
+}: BooleanFilterProps) {
+  const [draft, setDraft] = useState<BooleanTriState>(value);
+
+  const handleApply = (): void => {
+    onCommit(draft);
+    onClose();
+  };
+
+  const handleClear = (): void => {
+    setDraft('all');
+    onCommit('all');
+    onClose();
+  };
+
+  return (
+    <div style={popoverInnerStyle}>
+      <div role="radiogroup" aria-label="Filter mode" style={radioGroupStyle}>
+        <RadioRow
+          label="All"
+          checked={draft === 'all'}
+          onChange={() => setDraft('all')}
+        />
+        <RadioRow
+          label={trueLabel}
+          checked={draft === 'true'}
+          onChange={() => setDraft('true')}
+        />
+        <RadioRow
+          label={falseLabel}
+          checked={draft === 'false'}
+          onChange={() => setDraft('false')}
+        />
+      </div>
+      <FilterFooter onApply={handleApply} onClear={handleClear} />
+    </div>
+  );
+}
+
+function RadioRow({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: () => void;
+}) {
+  return (
+    <label style={checkboxRowStyle}>
+      <input
+        type="radio"
+        checked={checked}
+        onChange={onChange}
+        style={{ marginRight: '8px' }}
+      />
+      <span style={{ color: '#c9d1d9' }}>{label}</span>
+    </label>
+  );
+}
+
 // ─── Footer shared by all filter types ──────────────────────────────────
 
 function FilterFooter({
@@ -788,6 +908,11 @@ const checkboxRowStyle: React.CSSProperties = {
   cursor: 'pointer',
   fontFamily: 'inherit',
   userSelect: 'none',
+};
+
+const radioGroupStyle: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
 };
 
 const emptyHintStyle: React.CSSProperties = {

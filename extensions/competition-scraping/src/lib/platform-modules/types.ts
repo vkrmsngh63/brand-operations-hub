@@ -54,4 +54,18 @@ export interface PlatformModule {
    *     `normalizeUrlForRecognition` strips `?...` per §B 2026-05-07-g).
    */
   canonicalProductUrl(href: string): string | null;
+
+  /**
+   * P-6 + P-4 synergy. Returns true when this platform's detection logic
+   * recognizes the original (pre-canonicalization) `href` as a sponsored-ad
+   * placement. Used by the orchestrator to pre-check the "Sponsored Ad"
+   * checkbox in the URL-add overlay; manual override always available.
+   *
+   * Optional — platforms without sponsored-ad detection (Ebay, Etsy, Walmart
+   * today) omit this method, and the orchestrator treats the absence as
+   * "default false." Amazon implements it via the SSPA-pathname check that
+   * already powers `matchesProduct` + `canonicalProductUrl` for sponsored
+   * URLs.
+   */
+  detectsAsSponsored?(href: string): boolean;
 }

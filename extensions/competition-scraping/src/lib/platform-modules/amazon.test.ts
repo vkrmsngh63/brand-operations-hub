@@ -268,3 +268,69 @@ describe('amazon SSPA sponsored-ads (P-4)', () => {
     );
   });
 });
+
+// detectsAsSponsored coverage — P-6 + P-4 synergy 2026-05-09.
+// Pre-checks the URL-add overlay's "Sponsored Ad" checkbox when the
+// orchestrator opens the form for a recognized SSPA placement.
+describe('amazon.detectsAsSponsored (P-6 + P-4)', () => {
+  const SSPA_URL_1 =
+    'https://www.amazon.com/sspa/click?ie=UTF8&spc=MTo4NjgyODU5MzAxMzA4ODg3OjE3NzgyNzI2MDg6c3BfYXRmOjMwMTA0MTE5MDg2OTIwMjo6MDo6&url=%2FComfpack-Flexible-Replacement-Sciatica-Bursitis%2Fdp%2FB0DWJTLNYT%2Fref%3Dsr_1_2_sspa%3Fcrid%3D2AMUE62JYK11Z';
+
+  it('returns true for a real sp_atf SSPA URL', () => {
+    assert.equal(amazon.detectsAsSponsored?.(SSPA_URL_1), true);
+  });
+
+  it('returns false for a direct /dp/{ASIN} URL (organic listing)', () => {
+    assert.equal(
+      amazon.detectsAsSponsored?.('https://www.amazon.com/dp/B07XJ8C8F5'),
+      false,
+    );
+  });
+
+  it('returns false for a direct /Title-Slug/dp/{ASIN}/ref=... URL', () => {
+    assert.equal(
+      amazon.detectsAsSponsored?.(
+        'https://www.amazon.com/Red-Light-Therapy-Device/dp/B07XJ8C8F5/ref=sr_1_3',
+      ),
+      false,
+    );
+  });
+
+  it('returns false for a non-SSPA URL with a "url" query param', () => {
+    assert.equal(
+      amazon.detectsAsSponsored?.(
+        'https://www.amazon.com/some-page?url=%2FBrand%2Fdp%2FB0DWJTLNYT',
+      ),
+      false,
+    );
+  });
+
+  it('returns false when /sspa/click is missing the url= param', () => {
+    assert.equal(
+      amazon.detectsAsSponsored?.(
+        'https://www.amazon.com/sspa/click?ie=UTF8&spc=abc',
+      ),
+      false,
+    );
+  });
+
+  it('returns false when SSPA url= inner has no ASIN', () => {
+    // Defensive: a /sspa/click whose inner url= points at a non-product
+    // page (e.g., a brand store) should not pre-check the checkbox.
+    assert.equal(
+      amazon.detectsAsSponsored?.(
+        'https://www.amazon.com/sspa/click?ie=UTF8&spc=abc&url=%2Fstores%2FACME%2Fpage%2F12345',
+      ),
+      false,
+    );
+  });
+
+  it('returns false for non-string / empty input', () => {
+    assert.equal(amazon.detectsAsSponsored?.(''), false);
+    assert.equal(
+      // @ts-expect-error — runtime defensive check; type signature requires string.
+      amazon.detectsAsSponsored?.(null),
+      false,
+    );
+  });
+});

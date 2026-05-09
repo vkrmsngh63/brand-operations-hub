@@ -249,6 +249,34 @@ export const CONTENT_SCRIPT_CSS = `
   border-radius: 4px !important;
 }
 
+/* P-6 — Sponsored Ad checkbox row in the URL-add form. Inline-aligned with
+   a small gap between the box and label so the click-target is the entire
+   row (label is bound to the input via htmlFor). */
+.plos-cs-form-field-checkbox {
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+
+.plos-cs-form-checkbox-label {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: #444 !important;
+  cursor: pointer !important;
+  user-select: none !important;
+}
+
+.plos-cs-form-checkbox {
+  width: 16px !important;
+  height: 16px !important;
+  margin: 0 !important;
+  cursor: pointer !important;
+  accent-color: #1976d2 !important;
+}
+
 /* Live-page Highlight Terms — P-5 fix 2026-05-08-d.
    background-color + color are set inline per-term via the user's chosen
    palette entry; the rules here only handle layout/display so the inline

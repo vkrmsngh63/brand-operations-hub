@@ -74,6 +74,11 @@ export interface CompetitorUrl {
   sellerStarRating: number | null;
   numProductReviews: number | null;
   numSellerReviews: number | null;
+  // P-6 — Sponsored Ad flag. NOT NULL with default false at the schema layer
+  // (prisma/schema.prisma CompetitorUrl.isSponsoredAd), so always present on
+  // the wire. Manual checkbox in the extension's URL-add overlay; auto-pre-
+  // checks for Amazon SSPA-detected URLs (P-4 synergy).
+  isSponsoredAd: boolean;
   customFields: Record<string, unknown>;
   addedBy: string;
   addedAt: string;
@@ -94,6 +99,9 @@ export interface CreateCompetitorUrlRequest {
   sellerStarRating?: number;
   numProductReviews?: number;
   numSellerReviews?: number;
+  // P-6 — optional on the wire; defaults to false server-side via the
+  // schema-level @default(false) when omitted.
+  isSponsoredAd?: boolean;
   customFields?: Record<string, unknown>;
 }
 
@@ -114,6 +122,9 @@ export interface UpdateCompetitorUrlRequest {
   sellerStarRating?: number | null;
   numProductReviews?: number | null;
   numSellerReviews?: number | null;
+  // P-6 — non-nullable boolean toggle; PATCH accepts true/false to flip the
+  // flag (no `null` since the column is NOT NULL).
+  isSponsoredAd?: boolean;
   customFields?: Record<string, unknown>;
 }
 

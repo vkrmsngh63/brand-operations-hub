@@ -35,6 +35,7 @@ import type {
 } from '@/lib/shared-types/competition-scraping';
 import { ImageViewerModal } from './ImageViewerModal';
 import {
+  EditableBooleanField,
   EditableNumberField,
   EditableVocabularyField,
 } from './EditableField';
@@ -370,6 +371,11 @@ function UrlMetadataCard({
           onSave={(next) => onPatch({ competitionCategory: next })}
           projectId={projectId}
           vocabularyType="competition-category"
+        />
+        <EditableBooleanField
+          label="Sponsored Ad"
+          value={row.isSponsoredAd}
+          onSave={(next) => onPatch({ isSponsoredAd: next })}
         />
         <EditableNumberField
           label="Product Stars"
