@@ -1111,4 +1111,40 @@ This section is for entries added in subsequent sessions when the director adds 
 
 ---
 
+**2026-05-09-b — session_2026-05-09-b_w2-polish-session-6-p-6-sponsored-ad-build-and-deploy**
+
+- **Director's directive (initial — from launch prompt):** *"W#2 polish session #6 — implement P-6 Sponsored Ad checkbox in URL-add form + PLOS-side tag (per ROADMAP polish backlog P-6 entry; queued by director 2026-05-08-d Option-A 3-session-split). Schema-change-in-flight session — flips flag Yes → No."*
+
+- **Read-It-Back at drift check (per Rule 14a + 14f):** Claude echoed back the 6-part scope from the ROADMAP P-6 entry — (a) schema add `isSponsoredAd Boolean @default(false)` to CompetitorUrl; (b) shared types extended additively; (c) API routes wired (POST/GET/PATCH on /urls + /urls/[urlId]); (d) extension url-add-form checkbox + payload; (e) PLOS-side viewer badge + detail-page toggle + column filter; (f) P-4 synergy via SSPA detection. Director-confirmed via Rule 14f single ambiguity question on the column filter UI shape: Option A new `BooleanFilter` tri-state primitive (All / Sponsored only / Non-sponsored only — recommended) vs Option B reuse `MultiSelectFilter` with synthetic options (less code; leaky abstraction). Director picked **Option A**.
+
+- **Rule-15 autonomous picks (no user-visible difference):**
+  - **Sponsored column position = position 2 (right after URL, before Product Name).** Reasoning: sponsored is the most-important meta-attribute about a URL right after its address; co-locates the badge with the URL identity. Alternative placements (last column / between Category and Stars) considered and rejected as making the badge less spatially tied to the URL.
+  - **Boolean tri-state representation = `'all' | 'true' | 'false'` string union (vs `boolean | null`).** Cleaner round-trip through URLSearchParams (single key `?sponsored=true|false`; key-omission means 'all') without null-vs-undefined ambiguity.
+  - **`detectsAsSponsored` is OPTIONAL on the `PlatformModule` interface** — only Amazon implements it; Ebay/Etsy/Walmart leave it undefined and orchestrator treats absence as "default false." Future platforms with sponsored detection (Google Ads paid placements?) can opt in additively.
+  - **Detail-page toggle UX is one-click flip (no edit/save dance).** Other inline editors (Text/Number/Vocabulary) use a pencil → edit → ✓/✕ pattern; for a boolean that's overkill — clicking the checkbox optimistically flips, fires PATCH, reverts on error. New `EditableBooleanField` primitive captures this pattern (minimal, reusable for future boolean toggles in W#2 + W#3-14).
+
+- **What was decided:** Code shipped per the 6-part scope. Two commits both deployed to vklf.com:
+  - `bc6816c` P-6 implementation — 14 files (+461/-2): schema + 3 shared types + GET/POST/PATCH wiring on /urls + /urls/[urlId] + extension `url-add-form.ts` checkbox + new optional `PlatformModule.detectsAsSponsored()` (Amazon impl + 7 new amazon.test.ts cases + orchestrator passes signal at form-open as `defaultIsSponsoredAd` prop) + new CSS for checkbox row + PLOS-side `UrlTable.tsx` new "Sponsored" column at position 2 (sortable label + funnel + amber pill badge) + new `BooleanFilter` tri-state primitive in `ColumnFilters.tsx` + new `EditableBooleanField` primitive in `EditableField.tsx` wired into `UrlDetailContent.tsx` between Category and Product Stars.
+  - `8115138` post-deploy popover-clipping fix — 1 file (+51/-12): director-observed regression where the column-filter popover got clipped on short tables by the wrapper's `overflow-x: auto` (browsers force overflow-y to clip too). Switched `FilterPopover` from `position: absolute` to `position: fixed` with viewport-anchored top/left computed at click-time from trigger button's `getBoundingClientRect()`; clamped to keep the popover inside the viewport's right edge. Benefits all 7 column filters, not just Sponsored.
+
+- **Mid-session correction (CORRECTIONS_LOG entry, LOW severity):** Claude framed the Step 3 `prisma db push` STOP-gate as targeting "the dev DB only." That was wrong — PLOS uses **one shared Supabase database** for both dev and prod (one connection string in `.env`). The schema column landed in the production DB at the time of the push, before any code had been deployed to read/write it. Safe in this case (additive boolean with `@default(false)`; no data loss; new column simply held the default until vklf.com later got the new code). Acknowledged + correctly framed mid-session at the dev-vs-prod boundary discussion (Step 14). Corrected understanding: dev server (localhost) reads/writes the same DB; vklf.com reads/writes the same DB; "dev" vs "prod" applies to CODE deployment but NOT DB. Future schema-change sessions need to factor this in (a `prisma db push` IS a production schema change, even when described as "dev push" in the session script).
+
+- **Browser-verified live on vklf.com end-to-end:**
+  - Walmart: column appears ✅; detail-page toggle flips Yes/No with optimistic update ✅; badge appears on saved row in list ✅; column filter All/Sponsored/Non-sponsored with `?sponsored=true|false` URL round-trip ✅; sort by Sponsored toggle ✅.
+  - Amazon extension: SSPA-detected sponsored ad → checkbox auto-pre-checked in URL-add overlay ✅; save with checkbox checked → POST persists isSponsoredAd: true → badge appears on viewer row ✅; organic save (unchecked) → em-dash on viewer ✅.
+  - Popover post-fix re-verify: short table; funnel popover opens fully visible (Apply + Clear buttons not clipped) ✅; benefits all 7 column filters ✅.
+
+- **Director-confirmed P-9 status (Walmart highlight-words gap):** existing W#2 polish backlog item P-9 (highlight-terms 500KB cap too aggressive) covers the chrome://extensions Errors panel symptom that surfaced on Walmart again this session. New data point captured: Walmart search exact byte count = 656,627 bytes (`https://www.walmart.com/search?q=bursitis`); 500KB cap fires. Folded into P-9 entry; no new polish item created.
+
+- **Doc updates this session (this commit on `main`):**
+  - `docs/ROADMAP.md` — header + Active Tools W#2 row Next Session item (a.2) marked ✅ DONE 2026-05-09-b + W#2 polish backlog P-6 ✅ SHIPPED ✅ DEPLOYED ✅ BROWSER-VERIFIED + P-9 entry data-point addition.
+  - `docs/CHAT_REGISTRY.md` — new top row + header.
+  - `docs/DOCUMENT_MANIFEST.md` — header + per-doc Modified flags + this-session summary.
+  - `docs/COMPETITION_SCRAPING_DESIGN.md §B` (this entry).
+  - `docs/CORRECTIONS_LOG.md` — LOW-severity 2026-05-09-b entry on dev-DB framing slip.
+
+- **Branch implications:** Code commits `bc6816c` + `8115138` authored on `workflow-2-competition-scraping`, then deployed via fast-forward merge → `main` per `MULTI_WORKFLOW_PROTOCOL.md §11.1`. Both branches now sit at `8115138` (W#2 fast-forwarded back to main after the second deploy push pending). End-of-session doc-batch commit lands on `main` directly (covers session work that happened across both branches; `main` is the canonical home for ROADMAP/CHAT_REGISTRY/DOCUMENT_MANIFEST/CORRECTIONS_LOG; W#2 will be fast-forwarded to match before next session). Push of doc-batch commit pending Rule 9 approval — push triggers Vercel rebuild but contains zero user-visible code changes (docs only).
+
+---
+
 END OF DOCUMENT
