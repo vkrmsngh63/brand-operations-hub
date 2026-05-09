@@ -344,7 +344,15 @@ export function FilterPopover({
   renderBody,
 }: FilterPopoverProps) {
   const [open, setOpen] = useState(false);
+  // Viewport-anchored position for the popover. The outer table wrapper
+  // uses overflow-x: auto for horizontal scroll, which forces the browser
+  // to clip on the y-axis too — so position: absolute popovers get cut off
+  // when the table has few rows. Switching to position: fixed with a
+  // viewport-anchored top/left (computed at open-time from the trigger
+  // button's bounding rect) escapes the parent's clipping context.
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const containerRef = useRef<HTMLSpanElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -365,27 +373,56 @@ export function FilterPopover({
     };
   }, [open]);
 
-  const closePopover = (): void => setOpen(false);
+  const closePopover = (): void => {
+    setOpen(false);
+    setPos(null);
+  };
+
+  // Compute the popover position from the trigger's bounding rect at the
+  // moment the user clicks the funnel — anchor below the trigger
+  // (top = rect.bottom + 4) and align to the trigger's left edge, clamped
+  // so the popover never spills off the right side of the viewport.
+  // Done at click-time (not in a useEffect) to avoid the
+  // react-hooks/set-state-in-effect lint rule.
+  const POPOVER_MIN_WIDTH = 240; // matches popoverStyle.minWidth
+  const VIEWPORT_MARGIN = 8;
+  const handleTriggerClick = (e: React.MouseEvent): void => {
+    // Stop propagation so clicking the filter icon doesn't ALSO toggle
+    // the column's sort (the surrounding header label is separately
+    // clickable for sort).
+    e.stopPropagation();
+    if (open) {
+      setOpen(false);
+      setPos(null);
+      return;
+    }
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (rect) {
+      const maxLeft = window.innerWidth - POPOVER_MIN_WIDTH - VIEWPORT_MARGIN;
+      const left = Math.max(VIEWPORT_MARGIN, Math.min(rect.left, maxLeft));
+      setPos({ top: rect.bottom + 4, left });
+    }
+    setOpen(true);
+  };
 
   return (
     <span ref={containerRef} style={{ position: 'relative', marginLeft: '6px' }}>
       <button
+        ref={triggerRef}
         type="button"
         aria-label={ariaLabel}
         title={isActive ? 'Filter active — click to edit' : 'Filter this column'}
-        onClick={(e) => {
-          // Stop propagation so clicking the filter icon doesn't ALSO
-          // toggle the column's sort (the surrounding header label is
-          // separately clickable for sort).
-          e.stopPropagation();
-          setOpen((prev) => !prev);
-        }}
+        onClick={handleTriggerClick}
         style={triggerStyle(isActive, open)}
       >
         <FunnelIcon />
         {isActive ? <span style={dotStyle} aria-hidden /> : null}
       </button>
-      {open ? <div style={popoverStyle}>{renderBody(closePopover)}</div> : null}
+      {open && pos !== null ? (
+        <div style={{ ...popoverStyle, top: pos.top, left: pos.left }}>
+          {renderBody(closePopover)}
+        </div>
+      ) : null}
     </span>
   );
 }
@@ -864,10 +901,12 @@ const dotStyle: React.CSSProperties = {
   background: '#58a6ff',
 };
 
+// Viewport-anchored (position: fixed) so the popover escapes any
+// overflow-clipping context the table wrapper introduces. The actual
+// top/left values are computed dynamically in FilterPopover from the
+// trigger button's bounding rect at open-time.
 const popoverStyle: React.CSSProperties = {
-  position: 'absolute',
-  top: 'calc(100% + 4px)',
-  left: 0,
+  position: 'fixed',
   background: '#161b22',
   border: '1px solid #30363d',
   borderRadius: '6px',
