@@ -10,9 +10,13 @@ import { PlosApiError } from './errors.ts';
 import type {
   CompetitorUrl,
   CreateCompetitorUrlRequest,
+  ExtensionStateDto,
+  GetExtensionStateResponse,
   ListCompetitorUrlsResponse,
   ListHighlightTermsResponse,
   Platform,
+  ReplaceExtensionStateRequest,
+  ReplaceExtensionStateResponse,
   ReplaceHighlightTermsRequest,
   ReplaceHighlightTermsResponse,
 } from '../../../../src/lib/shared-types/competition-scraping.ts';
@@ -240,6 +244,70 @@ export async function replaceHighlightTerms(
       typeof (t as HighlightTerm).term === 'string' &&
       typeof (t as HighlightTerm).color === 'string',
   );
+}
+
+/**
+ * Reads the user's W#2 Chrome extension state from PLOS DB. P-3 broader
+ * scope (2026-05-10-e) — server-side persistence so signing in from any
+ * device / Chrome profile preserves the user's last-picked Project +
+ * Platform. Both fields nullable (null = "not yet set" or stale-pointer
+ * cleared by the server's GET path).
+ */
+export async function getExtensionState(): Promise<ExtensionStateDto> {
+  const res = await authedFetch('/api/extension-state');
+  const body = await readJsonOrThrow<GetExtensionStateResponse>(res);
+  if (
+    typeof body !== 'object' ||
+    body === null ||
+    (body.selectedProjectId !== null &&
+      typeof body.selectedProjectId !== 'string') ||
+    (body.selectedPlatform !== null &&
+      typeof body.selectedPlatform !== 'string')
+  ) {
+    throw new PlosApiError(500, 'Unexpected response shape from extension-state');
+  }
+  return {
+    selectedProjectId: body.selectedProjectId,
+    selectedPlatform: body.selectedPlatform,
+  };
+}
+
+/**
+ * Replaces the user's W#2 Chrome extension state. PUT-replace semantics:
+ * both fields explicit (null = clear). Server enforces a refined
+ * "switching project clears platform" invariant: platform is forced to
+ * null when (a) the request sets projectId to null, or (b) the request
+ * transitions between two non-null different projects. The migration
+ * case (prior projectId null + cache has both) does NOT trigger the
+ * clear — the pair is preserved. Callers should treat the response as
+ * authoritative (use it to update the local cache mirror).
+ */
+export async function replaceExtensionState(
+  state: ExtensionStateDto,
+): Promise<ExtensionStateDto> {
+  const reqBody: ReplaceExtensionStateRequest = {
+    selectedProjectId: state.selectedProjectId,
+    selectedPlatform: state.selectedPlatform,
+  };
+  const res = await authedFetch('/api/extension-state', {
+    method: 'PUT',
+    body: JSON.stringify(reqBody),
+  });
+  const body = await readJsonOrThrow<ReplaceExtensionStateResponse>(res);
+  if (
+    typeof body !== 'object' ||
+    body === null ||
+    (body.selectedProjectId !== null &&
+      typeof body.selectedProjectId !== 'string') ||
+    (body.selectedPlatform !== null &&
+      typeof body.selectedPlatform !== 'string')
+  ) {
+    throw new PlosApiError(500, 'Unexpected response shape from extension-state');
+  }
+  return {
+    selectedProjectId: body.selectedProjectId,
+    selectedPlatform: body.selectedPlatform,
+  };
 }
 
 /**

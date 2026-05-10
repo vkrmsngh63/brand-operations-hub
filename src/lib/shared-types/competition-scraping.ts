@@ -456,6 +456,28 @@ export interface ReplaceHighlightTermsRequest {
 // PUT response: the canonical post-write list (mirrors GET response).
 export type ReplaceHighlightTermsResponse = ListHighlightTermsResponse;
 
+// ─── Extension State (W#2 P-3 broader scope, 2026-05-10-e) ─────────────
+// Per-user W#2 Chrome extension state — last-picked Project + last-picked
+// Platform — moved from chrome.storage.local-only to PLOS DB so signing
+// in from any device / Chrome profile preserves the user's setup picks.
+// Server enforces today's "switching project clears platform" invariant
+// on PUT (see route.ts).
+export interface ExtensionStateDto {
+  selectedProjectId: string | null;
+  selectedPlatform: string | null;
+}
+
+// GET /api/extension-state response.
+export type GetExtensionStateResponse = ExtensionStateDto;
+
+// PUT /api/extension-state body. Both fields explicit (null = clear).
+export type ReplaceExtensionStateRequest = ExtensionStateDto;
+
+// PUT response: the canonical post-write state (mirrors GET response —
+// reflects the server's view, including any platform-clear that the
+// "switching project clears platform" invariant triggered).
+export type ReplaceExtensionStateResponse = ExtensionStateDto;
+
 // ─── Generic error shape ────────────────────────────────────────────────
 // Returned with non-2xx status codes (consistent with the W#1 routes).
 export interface ApiErrorResponse {

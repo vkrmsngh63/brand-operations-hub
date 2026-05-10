@@ -2,17 +2,15 @@ import { useEffect, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../../lib/supabase.ts';
 import { signIn, signOut } from '../../lib/auth.ts';
-import {
-  getSelectedPlatform,
-  getSelectedProjectId,
-  setSelectedPlatform,
-  setSelectedProject,
-} from '../../lib/popup-state.ts';
 import type { HighlightTerm } from '../../lib/highlight-terms.ts';
 import {
   loadHighlightTerms,
   saveHighlightTerms,
 } from '../../lib/highlight-terms-sync.ts';
+import {
+  loadExtensionState,
+  saveExtensionState,
+} from '../../lib/extension-state-sync.ts';
 import { PlosApiError } from '../../lib/errors.ts';
 import { getPlatformLabel } from '../../lib/platforms.ts';
 import { ProjectPicker } from './components/ProjectPicker.tsx';
@@ -110,45 +108,77 @@ function SetupScreen({ session }: { session: Session }) {
   const [projectId, setProjectId] = useState<string | null>(null);
   const [platform, setPlatform] = useState<string | null>(null);
   const [terms, setTerms] = useState<HighlightTerm[]>([]);
-  // syncWarning surfaces when the server is unreachable and we've fallen
-  // back to the chrome.storage.local cache. Empty when in sync.
+  // syncWarning surfaces when the Highlight Terms server load falls back to
+  // the chrome.storage.local cache. Empty when in sync.
   const [syncWarning, setSyncWarning] = useState<string>('');
-  // saveError surfaces inline when a server PUT fails on a user edit.
-  // Cleared on the next successful save.
+  // saveError surfaces inline when a server PUT fails on a Highlight Terms
+  // edit. Cleared on the next successful Highlight Terms save.
   const [saveError, setSaveError] = useState<string>('');
+  // extStateSyncWarning surfaces when the extension-state server load (P-3
+  // broader scope, 2026-05-10-e) falls back to cache. Empty when in sync.
+  const [extStateSyncWarning, setExtStateSyncWarning] = useState<string>('');
+  // extStateSaveError surfaces inline when a server PUT fails on a project
+  // or platform pick. Cleared on the next successful pick save.
+  const [extStateSaveError, setExtStateSaveError] = useState<string>('');
   const [busy, setBusy] = useState(false);
 
   // Hydrate persisted state on mount.
   useEffect(() => {
     let cancelled = false;
-    Promise.all([getSelectedProjectId(), getSelectedPlatform()]).then(
-      async ([pid, plat]) => {
-        if (cancelled) return;
-        setProjectId(pid);
-        setPlatform(plat);
-        if (pid) {
-          const result = await loadHighlightTerms(pid);
-          if (!cancelled) {
-            setTerms(result.terms);
-            setSyncWarning(result.warning);
-          }
+    loadExtensionState().then(async (extResult) => {
+      if (cancelled) return;
+      setProjectId(extResult.state.selectedProjectId);
+      setPlatform(extResult.state.selectedPlatform);
+      setExtStateSyncWarning(extResult.warning);
+      if (extResult.state.selectedProjectId) {
+        const htResult = await loadHighlightTerms(
+          extResult.state.selectedProjectId,
+        );
+        if (!cancelled) {
+          setTerms(htResult.terms);
+          setSyncWarning(htResult.warning);
         }
-        if (!cancelled) setHydrated(true);
-      },
-    );
+      }
+      if (!cancelled) setHydrated(true);
+    });
     return () => {
       cancelled = true;
     };
   }, []);
 
   async function handleProjectChange(next: string | null) {
+    const priorProjectId = projectId;
+    const priorPlatform = platform;
+    // Optimistic UI update for instant response.
     setProjectId(next);
     // Switching projects clears the platform (per popup-state.ts contract).
-    if (next !== projectId) {
+    if (next !== priorProjectId) {
       setPlatform(null);
     }
-    await setSelectedProject(next);
-    setSaveError('');
+    setExtStateSaveError('');
+    try {
+      // Server enforces "switching project clears platform" too — the
+      // request says null when switching; otherwise carry prior platform.
+      await saveExtensionState({
+        selectedProjectId: next,
+        selectedPlatform: next !== priorProjectId ? null : priorPlatform,
+      });
+      // A successful write means the server is reachable — clear stale warning.
+      setExtStateSyncWarning('');
+    } catch (err) {
+      // Rollback optimistic update; surface inline error.
+      setProjectId(priorProjectId);
+      setPlatform(priorPlatform);
+      const message =
+        err instanceof PlosApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Couldn't save";
+      setExtStateSaveError(`Couldn't save your project pick: ${message}`);
+      return;
+    }
+    // Now load highlight terms for the new project (or clear if cleared).
     if (next === null) {
       setTerms([]);
       setSyncWarning('');
@@ -160,8 +190,27 @@ function SetupScreen({ session }: { session: Session }) {
   }
 
   async function handlePlatformChange(next: string | null) {
+    const priorPlatform = platform;
+    // Optimistic UI update for instant response.
     setPlatform(next);
-    await setSelectedPlatform(next);
+    setExtStateSaveError('');
+    try {
+      await saveExtensionState({
+        selectedProjectId: projectId,
+        selectedPlatform: next,
+      });
+      setExtStateSyncWarning('');
+    } catch (err) {
+      // Rollback optimistic update; surface inline error.
+      setPlatform(priorPlatform);
+      const message =
+        err instanceof PlosApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Couldn't save";
+      setExtStateSaveError(`Couldn't save your platform pick: ${message}`);
+    }
   }
 
   async function handleTermsChange(next: HighlightTerm[]) {
@@ -217,6 +266,16 @@ function SetupScreen({ session }: { session: Session }) {
         <p className="muted">Loading your last session…</p>
       ) : (
         <>
+          {extStateSyncWarning && (
+            <p className="muted muted-help" role="status">
+              {extStateSyncWarning}
+            </p>
+          )}
+          {extStateSaveError && (
+            <div className="error" role="alert">
+              {extStateSaveError}
+            </div>
+          )}
           <ProjectPicker
             selectedProjectId={projectId}
             onChange={handleProjectChange}

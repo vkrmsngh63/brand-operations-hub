@@ -414,3 +414,22 @@ model UserProjectHighlightTerm {
   @@unique([userId, projectId, term])
   @@index([userId, projectId])
 }
+
+// UserExtensionState — W#2 P-3 (broader scope), 2026-05-10-e.
+// Per-user W#2 Chrome extension state — last-picked Project + last-picked
+// Platform — stored server-side so signing in from any device / Chrome
+// profile preserves the user's setup picks. Closes the broader-P-3 scope
+// left open after the Highlight Terms portion shipped 2026-05-10.
+// Schema-shape decision (Rule 18 mid-build Read-It-Back): single record
+// per user with two scalar columns, preserving today's chrome.storage.local
+// behavior 1:1 (switching project clears platform — server enforces this
+// invariant on PUT). One row per user; userId is the natural one-row key.
+model UserExtensionState {
+  id                String   @id @default(uuid())
+  userId            String   @unique
+  selectedProjectId String?
+  selectedPlatform  String?
+  updatedAt         DateTime @updatedAt
+
+  @@index([userId])
+}

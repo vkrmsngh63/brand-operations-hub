@@ -23,6 +23,19 @@
 //      (content scripts can't reach vklf.com directly per the CORS
 //      allowlist; the api-bridge is reserved for URL-recognition flows).
 //
+// HISTORICAL NOTE — selectedProjectId + selectedPlatform (W#2 P-3 broader
+// scope, 2026-05-10-e). These two scalars were once the authoritative
+// store. After P-3 broader shipped, PLOS DB became authoritative; both
+// keys are now per-installation MIRROR CACHE entries managed by
+// `extension-state-sync.ts`. The mirror exists so the content-script
+// orchestrator (which can't reach vklf.com directly per the CORS
+// allowlist) keeps reading cheap chrome.storage.local on every page
+// load. The `setExtensionStateCache` writer below is the canonical
+// mirror-write path used by the sync helper after every successful PUT.
+// `setSelectedProject` / `setSelectedPlatform` remain available for the
+// popup's optimistic-update path (instant UI response) but the canonical
+// write that survives across devices is via `extension-state-sync.ts`.
+//
 // Pure logic for the term list lives in highlight-terms.ts and color-palette.ts;
 // this module is the I/O wrapper. The chrome.storage.local guard mirrors the
 // pattern in supabase.ts so importing this module from a non-extension runtime
@@ -96,6 +109,62 @@ export async function setSelectedPlatform(
     return;
   }
   await storage.set({ [KEY_SELECTED_PLATFORM]: platform });
+}
+
+// ─── extension-state mirror cache (W#2 P-3 broader, 2026-05-10-e) ─────
+//
+// The two functions below are the canonical mirror-cache I/O used by
+// `extension-state-sync.ts` after every successful server load/save.
+// They write the keys directly without re-applying the project-switch-
+// clears-platform invariant — the server already applied it, and the
+// inputs to `setExtensionStateCache` are always the canonical post-
+// invariant state returned by the server.
+
+export interface ExtensionStateCache {
+  selectedProjectId: string | null;
+  selectedPlatform: string | null;
+}
+
+export async function getExtensionStateCache(): Promise<ExtensionStateCache> {
+  const storage = getStorage();
+  if (!storage) return { selectedProjectId: null, selectedPlatform: null };
+  const result = await storage.get([
+    KEY_SELECTED_PROJECT,
+    KEY_SELECTED_PLATFORM,
+  ]);
+  const projectId = result[KEY_SELECTED_PROJECT];
+  const platform = result[KEY_SELECTED_PLATFORM];
+  return {
+    selectedProjectId: typeof projectId === 'string' ? projectId : null,
+    selectedPlatform: typeof platform === 'string' ? platform : null,
+  };
+}
+
+export async function setExtensionStateCache(
+  state: ExtensionStateCache,
+): Promise<void> {
+  const storage = getStorage();
+  if (!storage) return;
+  // Write both keys atomically. null → remove the key entirely (so a
+  // subsequent get returns null rather than the literal string "null").
+  const toRemove: string[] = [];
+  const toSet: Record<string, string> = {};
+  if (state.selectedProjectId === null) {
+    toRemove.push(KEY_SELECTED_PROJECT);
+  } else {
+    toSet[KEY_SELECTED_PROJECT] = state.selectedProjectId;
+  }
+  if (state.selectedPlatform === null) {
+    toRemove.push(KEY_SELECTED_PLATFORM);
+  } else {
+    toSet[KEY_SELECTED_PLATFORM] = state.selectedPlatform;
+  }
+  if (toRemove.length > 0) {
+    await storage.remove(toRemove);
+  }
+  if (Object.keys(toSet).length > 0) {
+    await storage.set(toSet);
+  }
 }
 
 // ─── highlight terms (per project) ────────────────────────────────────────
