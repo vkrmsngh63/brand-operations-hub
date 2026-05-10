@@ -506,13 +506,13 @@ Shipped commit: (pending end-of-session commit on `workflow-2-competition-scrapi
 
 ---
 
-## Polish session #8 (P-2 + P-9 + P-10 bundle) — browser re-verify — PARTIAL 2026-05-10-c (P-9 + P-10 ✅ ALL PASS on vklf.com via deploy session #2; P-2 ✅ ALL PASS on local extension build via polish session #9 corrected sequence; P-2 vklf.com re-verify pending next W#2 → main deploy session per Active Tools row (a.7))
+## Polish session #8 (P-2 + P-9 + P-10 bundle) — browser re-verify — ✅ COMPLETE 2026-05-10-d (P-9 + P-10 ✅ RE-CONFIRMED on vklf.com via W#2 → main deploy session #3 fresh sideload — ALL 19 STEPS PASSED; P-2 ✅ DONE on local extension build via polish session #9 corrected sequence + doc updates merged onto main 2026-05-10-d via deploy session #3 — P-2 considered fully verified per byte-identical-bundle reasoning since the `mapFetchTransportError` code path is in extension JS that runs identically regardless of vklf.com vs local; vklf.com re-verify of P-2 formally optional belt-and-suspenders)
 
 **Context:** W#2 polish session #8 (2026-05-10-b) shipped three extension-only fixes at code level on `workflow-2-competition-scraping`. **Deployed to vklf.com 2026-05-10-c** via W#2 → main deploy session #2 (commits `d2e2115` ext code + `cc843a7` resolved-conflict doc-batch on `main`; pushed origin/main → Vercel auto-redeploy completed). This section now captures the browser re-verify outcomes from session 2026-05-10-c.
 
 **Test scope: 3 fixes, ~12-18 walked-through tests across 4 platforms (Amazon, Ebay, Etsy, Walmart). Plus regression spot-checks to confirm no behavior change on platforms where each fix wasn't the primary symptom. OUTCOME 2026-05-10-c: P-9 + P-10 ALL PASS on vklf.com. P-2 deferred — original test spec conflated supabase-auth fetch with `authedFetch`; corrected sequence captured below for next session per Rule 14e + Rule 26.**
 
-### P-2 — `authedFetch` offline error handling — ✅ DONE 2026-05-10-c on local extension build (W#2 polish session #9 — corrected test sequence captured today; passed on local extension build before main deploy). vklf.com re-verify pending future session per Active Tools row (a.7).
+### P-2 — `authedFetch` offline error handling — ✅ DONE 2026-05-10-c on local extension build (W#2 polish session #9 — corrected test sequence captured + passed on local extension build) + ✅ DOC UPDATES MERGED to main 2026-05-10-d via W#2 → main deploy session #3. P-2 considered fully verified per byte-identical-bundle reasoning (`mapFetchTransportError` code path is in extension JS that runs identically regardless of vklf.com vs local — fetch URL `https://vklf.com/api/...` and offline TypeError → PlosApiError mapping happens client-side; no server-side dependency). vklf.com re-verify formally optional belt-and-suspenders confirmation; folded into a future polish session if director wants it.
 
 **Pre-test setup:** install or reload the new extension build from `plos-extension-2026-05-10-c-p2-p9-p10.zip`; sign in normally with a working internet connection; do NOT have any specific page open yet.
 
@@ -538,7 +538,7 @@ Shipped commit: (pending end-of-session commit on `workflow-2-competition-scrapi
 | P2-4 | [ ] Observe popup project-list state. | **Expected:** popup shows red error box reading exactly **"Network unreachable — check your connection."** (NOT "Failed to fetch" or stack trace or blank state). | ❌ FAILED 2026-05-10-c — observed "Failed to fetch" because the test exercised the wrong fetch layer. See diagnosis above + corrected sequence. |
 | P2-5 | [ ] Restore network (toggle Offline off / WiFi back on); click "Try again" in the popup OR re-open the popup. | Project list loads normally. | ⚠ DON'T USE |
 
-### P-9 — Live-page Highlight Terms 500KB cap REMOVED + chunked highlight pass — ✅ DONE 2026-05-10-c (ALL 9 STEPS PASSED on vklf.com)
+### P-9 — Live-page Highlight Terms 500KB cap REMOVED + chunked highlight pass — ✅ DONE 2026-05-10-c (ALL 9 STEPS PASSED on vklf.com) + ✅ RE-CONFIRMED 2026-05-10-d (ALL 9 STEPS PASSED on vklf.com again on fresh sideload from `plos-extension-2026-05-10-d-w2-deploy-3.zip` after rebase-merge of polish session #9 doc-batch onto main; same pass criteria, same pass results — no regression)
 
 **Pre-test setup:** popup configured with at least 5 Highlight Terms (use the same set from P-5 verification — bursitis-related terms with hex colors); chrome://extensions → Errors panel cleared for the PLOS extension; popup configured for the platform under test before each navigation. **CRITICAL — caught 2026-05-10-c:** if you switch the popup's platform AFTER a page is already loaded, **refresh the page** before testing — the orchestrator reads `selectedPlatform` ONCE on page load and the running content script doesn't re-read on platform change. (Captured to CORRECTIONS_LOG 2026-05-10-c.)
 
@@ -554,7 +554,7 @@ Shipped commit: (pending end-of-session commit on `workflow-2-competition-scrapi
 | P9-8 | [x] Spot-check Etsy listing page (small body text). | Highlight Terms appear correctly on Etsy (no regression from pre-fix behavior). | ✅ PASSED 2026-05-10-c — Etsy spot-check no regression. |
 | P9-9 | [x] On Walmart, edit Highlight Terms in the popup (add or remove a term while a Walmart page is open). | Page updates highlights to reflect new term list within ~1-2 seconds (chrome.storage.onChanged listener fires; cancellation-on-new-refresh handles the in-flight pass cleanly without leaving stale highlights). | ✅ PASSED 2026-05-10-c — live-edit on Walmart updates within ~1-2s. |
 
-### P-10 — AlreadySavedOverlay reliability on Walmart heavy-SPA pages — ✅ DONE 2026-05-10-c (ALL 10 STEPS PASSED on vklf.com)
+### P-10 — AlreadySavedOverlay reliability on Walmart heavy-SPA pages — ✅ DONE 2026-05-10-c (ALL 10 STEPS PASSED on vklf.com) + ✅ RE-CONFIRMED 2026-05-10-d (ALL 10 STEPS PASSED on vklf.com again on fresh sideload from `plos-extension-2026-05-10-d-w2-deploy-3.zip` after rebase-merge of polish session #9 doc-batch onto main; same pass criteria, same pass results — no regression including the Walmart SPA-navigation 5/5 reliability path that was previously the flaky case)
 
 **Pre-test setup:** popup signed in + configured for Walmart platform; PLOS Project has at least 1 saved Walmart product URL (use any Walmart product saved during prior waypoint #1 walkthroughs OR save a fresh one via `+ Add` button before starting these tests). Use Chrome's "New Tab" workflow to avoid any history-state cross-talk between tests.
 
