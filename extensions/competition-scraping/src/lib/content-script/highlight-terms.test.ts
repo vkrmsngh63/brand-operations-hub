@@ -2,12 +2,19 @@
 // DOM-touching functions (applyHighlightsTo, removeAllHighlights,
 // startLiveHighlighting) are verified end-to-end in-browser during the
 // Waypoint #1 attempt #4 re-verify pass.
+//
+// P-9 fix 2026-05-10: added tests for processInChunks (the chunk-and-yield
+// helper used by applyHighlightsTo). Tested in isolation via a synchronous
+// stub yieldFn so we can verify chunk boundaries + cancellation without
+// requiring browser idle-callback APIs.
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildColorMap,
   buildHighlightRegex,
+  processInChunks,
+  type CancellationSignal,
 } from './highlight-terms.ts';
 import type { HighlightTerm } from '../highlight-terms.ts';
 
@@ -153,5 +160,151 @@ describe('buildColorMap', () => {
       term('therapy', '#388E3C'),
     ]);
     assert.equal(map.get('therapy'), '#388E3C');
+  });
+});
+
+describe('processInChunks (P-9 fix 2026-05-10)', () => {
+  // Synchronous resolved-Promise yield. Lets us test chunk boundaries
+  // deterministically without involving real timers or rIC.
+  const noopYield = (): Promise<void> => Promise.resolve();
+
+  it('processes every item in input order with no chunkSize boundary', async () => {
+    const items = [10, 20, 30, 40, 50];
+    const seen: number[] = [];
+    await processInChunks(items, (n) => seen.push(n), {
+      chunkSize: 1000,
+      yieldFn: noopYield,
+    });
+    assert.deepEqual(seen, items);
+  });
+
+  it('processes empty input without calling yieldFn', async () => {
+    let yieldCalls = 0;
+    const recordingYield = (): Promise<void> => {
+      yieldCalls++;
+      return Promise.resolve();
+    };
+    const seen: number[] = [];
+    await processInChunks([], (n: number) => seen.push(n), {
+      chunkSize: 5,
+      yieldFn: recordingYield,
+    });
+    assert.deepEqual(seen, []);
+    assert.equal(yieldCalls, 0);
+  });
+
+  it('yields between chunks at chunkSize boundary', async () => {
+    let yieldCalls = 0;
+    const recordingYield = (): Promise<void> => {
+      yieldCalls++;
+      return Promise.resolve();
+    };
+    // 10 items, chunkSize 3 → yield after item 3, 6, 9 (3 yields).
+    // No yield after item 10 (last item — no more work to do).
+    const items = Array.from({ length: 10 }, (_, i) => i);
+    await processInChunks(items, () => undefined, {
+      chunkSize: 3,
+      yieldFn: recordingYield,
+    });
+    assert.equal(yieldCalls, 3);
+  });
+
+  it('does not yield when item count is exactly one chunk', async () => {
+    let yieldCalls = 0;
+    const recordingYield = (): Promise<void> => {
+      yieldCalls++;
+      return Promise.resolve();
+    };
+    // 5 items, chunkSize 5 → would yield after item 5, but that's the
+    // last item so the yield is skipped.
+    const items = [1, 2, 3, 4, 5];
+    await processInChunks(items, () => undefined, {
+      chunkSize: 5,
+      yieldFn: recordingYield,
+    });
+    assert.equal(yieldCalls, 0);
+  });
+
+  it('yields once when item count is exactly two chunks', async () => {
+    let yieldCalls = 0;
+    const recordingYield = (): Promise<void> => {
+      yieldCalls++;
+      return Promise.resolve();
+    };
+    // 10 items, chunkSize 5 → yield after item 5, no yield after item 10.
+    const items = Array.from({ length: 10 }, (_, i) => i);
+    await processInChunks(items, () => undefined, {
+      chunkSize: 5,
+      yieldFn: recordingYield,
+    });
+    assert.equal(yieldCalls, 1);
+  });
+
+  it('aborts at next chunk boundary when signal.cancelled becomes true', async () => {
+    const signal: CancellationSignal = { cancelled: false };
+    const seen: number[] = [];
+    // After processing the first chunk (3 items), set cancelled = true
+    // inside the yieldFn. The loop checks cancellation at the START of
+    // the next iteration → won't process item 4.
+    const cancellingYield = (): Promise<void> => {
+      signal.cancelled = true;
+      return Promise.resolve();
+    };
+    const items = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    await processInChunks(items, (n) => seen.push(n), {
+      chunkSize: 3,
+      signal,
+      yieldFn: cancellingYield,
+    });
+    // First chunk processed (items 1-3), then yield → cancellation set,
+    // then next iteration's signal check → return. seen: [1, 2, 3].
+    assert.deepEqual(seen, [1, 2, 3]);
+  });
+
+  it('honors cancellation signal set BEFORE first item', async () => {
+    const signal: CancellationSignal = { cancelled: true };
+    const seen: number[] = [];
+    await processInChunks([1, 2, 3], (n) => seen.push(n), {
+      chunkSize: 1,
+      signal,
+      yieldFn: noopYield,
+    });
+    assert.deepEqual(seen, []);
+  });
+
+  it('uses default chunkSize when not specified', async () => {
+    // Default APPLY_CHUNK_SIZE_DEFAULT is 500. With 100 items, no yield
+    // should fire since we're well under one chunk.
+    let yieldCalls = 0;
+    const recordingYield = (): Promise<void> => {
+      yieldCalls++;
+      return Promise.resolve();
+    };
+    const items = Array.from({ length: 100 }, (_, i) => i);
+    await processInChunks(items, () => undefined, {
+      yieldFn: recordingYield,
+    });
+    assert.equal(yieldCalls, 0);
+  });
+
+  it('processes items with side effects in order before each yield', async () => {
+    // Verifies the contract: items are fully processed BEFORE the yield
+    // for that chunk. This is load-bearing for last-wins refresh
+    // cancellation: a cancelled pass that has processed N items leaves
+    // partial state at exactly N items, not N+k items mid-batch.
+    const yieldedAfterCount: number[] = [];
+    const seen: number[] = [];
+    const items = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    const recordingYield = (): Promise<void> => {
+      yieldedAfterCount.push(seen.length);
+      return Promise.resolve();
+    };
+    await processInChunks(items, (n) => seen.push(n), {
+      chunkSize: 3,
+      yieldFn: recordingYield,
+    });
+    // Yields fire AFTER items 3, 6, 9 are processed — never mid-chunk.
+    assert.deepEqual(yieldedAfterCount, [3, 6, 9]);
+    assert.deepEqual(seen, items);
   });
 });

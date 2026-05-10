@@ -43,6 +43,29 @@ export interface ExtensionProject {
   lastActivityAt: string;
 }
 
+/**
+ * Converts native `fetch()` transport-layer failures into a structured
+ * `PlosApiError`. Native `fetch()` throws `TypeError("Failed to fetch")`
+ * when the network is unreachable (offline, DNS failure, CORS preflight
+ * failure, refused connection). Without this conversion, the raw TypeError
+ * propagates uncaught through callers like `listProjects()` and surfaces
+ * as a stack-trace-flavored message in popup UI.
+ *
+ * P-2 polish 2026-05-10: returns `PlosApiError(0, ...)` so downstream code
+ * paths get a consistent error shape (status 0 reserved for "no HTTP
+ * response received"). Non-TypeError errors are re-thrown unchanged so
+ * AbortError + unknown shapes still propagate as their original type.
+ *
+ * Exported for unit testing in isolation — avoids the alternative of
+ * mocking global `fetch` to exercise this single conversion.
+ */
+export function mapFetchTransportError(err: unknown): PlosApiError {
+  if (err instanceof TypeError) {
+    return new PlosApiError(0, 'Network unreachable — check your connection.');
+  }
+  throw err;
+}
+
 async function authedFetch(
   path: string,
   init: RequestInit = {},
@@ -56,7 +79,11 @@ async function authedFetch(
   if (init.body && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
-  return fetch(`${PLOS_API_BASE_URL}${path}`, { ...init, headers });
+  try {
+    return await fetch(`${PLOS_API_BASE_URL}${path}`, { ...init, headers });
+  } catch (err) {
+    throw mapFetchTransportError(err);
+  }
 }
 
 /**

@@ -50,6 +50,11 @@ import type { LiveHighlightController } from './highlight-terms.ts';
 
 const ATTR_LINK_HANDLED = 'data-plos-cs-handled';
 const RESCAN_DEBOUNCE_MS = 250;
+// P-10 fix 2026-05-10: debounce window for the detail-overlay banner
+// check after a detected URL change. Walmart's React Router can pushState
+// several times in quick succession during a single navigation; only the
+// final URL should trigger a banner check.
+const OVERLAY_CHECK_DEBOUNCE_MS = 150;
 
 /**
  * Marker put on the document body when the orchestrator has run on this
@@ -227,7 +232,20 @@ export async function runOrchestrator(): Promise<() => void> {
     }
   }
 
+  // P-10 fix 2026-05-10: dedupe banner-fire by location.href. Tracks the
+  // LAST URL we considered (not the last URL we showed for) so the
+  // navigate-away-and-back case correctly re-fires the banner:
+  //   A(saved) → set lastOverlayUrl='A', show
+  //   B(unsaved) → set lastOverlayUrl='B', no show (recognition miss)
+  //   A again  → set lastOverlayUrl='A', show
+  // Without dedupe, Walmart's React routing can fire several URL-change
+  // events for the same destination during a single navigation, causing
+  // the banner to flicker on/off.
+  let lastOverlayUrl: string | null = null;
+
   function maybeShowDetailOverlay(): void {
+    if (lastOverlayUrl === location.href) return;
+    lastOverlayUrl = location.href;
     const canonical =
       platformModule.canonicalProductUrl(location.href) ??
       location.href;
@@ -237,9 +255,38 @@ export async function runOrchestrator(): Promise<() => void> {
     showAlreadySavedOverlay(projectName);
   }
 
-  // Initial scan + detail-page overlay check.
+  // P-10 fix 2026-05-10: debounce overlay checks across rapid-fire
+  // location changes. A cancellable timer ensures only the final URL
+  // gets a banner check after a burst of pushState calls.
+  let overlayCheckTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function scheduleDetailOverlayCheck(): void {
+    if (overlayCheckTimer !== null) clearTimeout(overlayCheckTimer);
+    overlayCheckTimer = setTimeout(() => {
+      overlayCheckTimer = null;
+      maybeShowDetailOverlay();
+      if (highlighter !== null) {
+        void highlighter.refresh();
+      }
+    }, OVERLAY_CHECK_DEBOUNCE_MS);
+  }
+
+  // P-10 fix 2026-05-10: track URL across MutationObserver ticks so we
+  // can detect SPA navigation that doesn't fire popstate. Chrome content
+  // scripts run in an isolated world with their own `window.history`, so
+  // patching pushState in the content-script context does NOT intercept
+  // host-page React Router calls (Walmart, etc.). The MutationObserver
+  // is our reliable cross-context signal: SPA navigation always causes
+  // immediate DOM mutation, and the URL change is observable from the
+  // shared DOM/location.
+  let lastObservedUrl: string = location.href;
+
+  // Initial scan + initial detail-page overlay check (debounced by
+  // OVERLAY_CHECK_DEBOUNCE_MS so the URL has time to stabilize after
+  // content-script load — relevant on platforms whose routing re-writes
+  // the URL right after the initial render).
   scanLinks();
-  maybeShowDetailOverlay();
+  scheduleDetailOverlayCheck();
 
   // Watch for DOM changes (Amazon/Ebay/Etsy/Walmart all use SPA-style
   // routing or infinite-scroll for search results). Debounce rescans
@@ -257,18 +304,26 @@ export async function runOrchestrator(): Promise<() => void> {
       if (highlighter !== null) {
         void highlighter.refresh();
       }
+      // P-10 fix 2026-05-10: detect SPA URL change since last tick.
+      // Walmart's React routing uses history.pushState() which doesn't
+      // fire popstate; this is our cross-context-safe detection.
+      if (location.href !== lastObservedUrl) {
+        lastObservedUrl = location.href;
+        scheduleDetailOverlayCheck();
+      }
     }, RESCAN_DEBOUNCE_MS);
   });
   observer.observe(document.body, { childList: true, subtree: true });
 
-  // Watch for SPA URL changes via popstate + a manual pushState shim.
-  // The detail-page overlay should re-evaluate when the URL changes
-  // even without a full page reload.
+  // Watch for SPA URL changes via popstate (back/forward navigation —
+  // fires reliably in content-script context). pushState/replaceState
+  // are caught via the MutationObserver-based detection above instead
+  // (see comment on lastObservedUrl).
   const onLocationChange = (): void => {
-    maybeShowDetailOverlay();
-    if (highlighter !== null) {
-      void highlighter.refresh();
+    if (location.href !== lastObservedUrl) {
+      lastObservedUrl = location.href;
     }
+    scheduleDetailOverlayCheck();
   };
   window.addEventListener('popstate', onLocationChange);
 
@@ -298,6 +353,16 @@ export async function runOrchestrator(): Promise<() => void> {
     if (highlighter !== null) {
       highlighter.destroy();
       highlighter = null;
+    }
+    // P-10 fix 2026-05-10: clear pending overlay check + rescan timers
+    // so they don't fire after teardown.
+    if (overlayCheckTimer !== null) {
+      clearTimeout(overlayCheckTimer);
+      overlayCheckTimer = null;
+    }
+    if (rescanTimer !== null) {
+      clearTimeout(rescanTimer);
+      rescanTimer = null;
     }
     cleanupBodyMarker();
   };
