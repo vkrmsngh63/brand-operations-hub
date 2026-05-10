@@ -1285,6 +1285,69 @@ This section is for entries added in subsequent sessions when the director adds 
 
 - **Branch implications:** Code commit (this session's work) lands on `workflow-2-competition-scraping`. **NOT on `main` yet; NOT deployed to vklf.com.** Combined with session #7's P-3 narrowed work (commit `16d4351`), the W#2-vs-main deploy gap now covers FOUR polish items (P-2 + P-3 narrowed + P-9 + P-10) plus session #7's schema addition. The next deploy session (item (a.4) in the Active Tools row) will browser-verify all four together. End-of-session doc-batch commit also lands on `workflow-2-competition-scraping`. Push of both code + doc-batch commits pending Rule 9 approval — push to W#2 branch does NOT deploy vklf.com regardless.
 
+**2026-05-10-c — session_2026-05-10-c_w2-main-deploy-and-p9-p10-browser-verify-and-p2-deferred (Claude Code, twentieth W#2 session — W#2 → main deploy session #2; P-9 + P-10 ✅ DEPLOYED + ✅ BROWSER-VERIFIED on vklf.com; P-2 ✅ DEPLOYED but browser re-verify DEFERRED with corrected test sequence captured)**
+
+- **Director's directive (initial — from launch prompt):** *"W#2 → main deploy session — fast-forward merge `workflow-2-competition-scraping` to `main` and push to deploy four W#2 polish items (P-2 + P-3 narrowed + P-9 + P-10) plus session #7's UserProjectHighlightTerm schema addition."* Per `MULTI_WORKFLOW_PROTOCOL.md §11.1`, work belongs on `main`.
+
+- **Drift-check surfaced 3 facts not in launch prompt (clarified before any git surgery):**
+  - **(a) Two of the four items already shipped + verified.** P-3 + UserProjectHighlightTerm schema landed in the previous deploy session (2026-05-10-b commit `21d717b` on main; verified via `npx prisma db pull --print` + `grep -n UserProjectHighlightTerm prisma/schema.prisma` line 404). Today's actual deploy scope is just **P-2 + P-9 + P-10** (3 fixes, not 4), all extension-only code.
+  - **(b) `git merge --ff-only` is NOT possible — branches diverged.** main's `21d717b` (deploy doc-batch from 2026-05-10-b) had advanced past the merge base. polish session #8 (`9d9cfea` + `6cd9949`) was added to W#2 WITHOUT first pulling main's `21d717b` — neither branch is a strict ancestor of the other.
+  - **(c) Root cause for next-session protocol fix:** polish session #8 should have run `git pull origin main` (not just `git pull --rebase origin workflow-2-competition-scraping`) to absorb main's `21d717b` deploy doc-batch into W#2 before adding new W#2 commits. Captured to CORRECTIONS_LOG with proposed fix to extend `MULTI_WORKFLOW_PROTOCOL §4`.
+
+- **Director-picked Option A (recommended) for divergence resolution:** rebase W#2 onto main + force-push W#2 + ff-only merge to main + push origin/main. Reasoning: produces clean linear history; matches "fast-forward merge" intent from launch prompt; one-time cleanup of the divergence so next W#2 session starts from a clean state.
+
+- **Rebase + conflict resolution executed:** `git checkout workflow-2-competition-scraping && git rebase main`. Three doc-file conflicts (CHAT_REGISTRY, DOCUMENT_MANIFEST, ROADMAP) + two auto-merged (COMPETITION_SCRAPING_DESIGN, COMPETITION_SCRAPING_VERIFICATION_BACKLOG). Conflicts resolved mechanically via Python script:
+  - **Header chains** in CHAT_REGISTRY/DOCUMENT_MANIFEST/ROADMAP: kept HEAD's "Last updated" as top + demoted W#2's content to a new "Previously updated" entry. Same pattern for "Last updated in session" lines (one regex slip required manual fix later).
+  - **W#2 row in ROADMAP Active Tools table:** the row's "Last Session" cell was the trickiest — both versions prepended their own session entry to a flowing concatenated cell. Resolution = take HEAD's row (which has all the latest accurate sub-item statuses including (a.3) → DONE, (a.4) → DONE), surgically prepend the polish session #8 entry to the start of the Last Session cell with " / " separator (HEAD's convention; W#2 had used "PRIOR:" trailing word).
+
+- **Force-push W#2 + ff-only merge to main:** `git push --force-with-lease origin workflow-2-competition-scraping` succeeded (origin's W#2 went `6cd9949...cc843a7 (forced update)`; old commits dangling on GitHub for ~30 days, recoverable). Then `git checkout main && git merge --ff-only workflow-2-competition-scraping` clean (now strictly 2 commits ahead). Per Rule 9 deploy gate, described both commits' impact + asked explicit confirmation; director approved; `git push origin main` clean → Vercel auto-redeploy started. Net result on main: `d2e2115` (P-2/P-9/P-10 extension code, byte-identical to original `9d9cfea` per pre-push code-diff verification) + `cc843a7` (resolved-conflict doc-batch).
+
+- **Extension rebuilt + zipped for sideload:** `npx wxt build` clean in 1.574s (no epoll_wait hang this time after `pkill -f wxt` to clear yesterday's zombies). `.output/chrome-mv3/` total size **638.82 kB** — exact match for polish session #8 verified baseline (no surprise drift from rebase). Zipped `plos-extension-2026-05-10-c-p2-p9-p10.zip` at repo root, 177,116 bytes (slightly larger than yesterday's 175,090 due to polish session #8 code additions). Unique-named filename per the Codespace-zip-cache lesson from yesterday's CORRECTIONS_LOG.
+
+- **P-9 verification — ALL 9 STEPS PASSED on vklf.com (cap-removal + chunked walker confirmed across 4 platforms):**
+  - **P9-1 + P9-2 (Ebay search + listing detail):** Highlight Terms now appear on previously-blocked ~1.5MB / ~1.58MB pages ✅ (cap-removal verified — these pages were entirely blocked pre-fix).
+  - **P9-3 + P9-5 (chrome://extensions Errors panel post-Ebay + post-Walmart):** zero new "exceeds highlight cap" entries ✅ (cap entirely removed → no warning to repeat; held even after Walmart's ~20+ MutationObserver re-renders).
+  - **P9-4 (Walmart search heavy-SPA ~636-675KB):** Highlight Terms appear + page does NOT freeze ✅ (chunked walker yields between batches; 500 nodes ≈ 10-15ms/chunk).
+  - **P9-6 (soft 50-term-count cap):** console warning fires when terms exceed 50 ✅ (separate from removed body-text cap; still active).
+  - **P9-7 + P9-8 (Amazon + Etsy spot-checks):** no regression ✅ (smaller pages still highlight cleanly).
+  - **P9-9 (live-edit on Walmart):** add/remove a term in the popup with a Walmart page open → page updates highlights within ~1-2s without refresh ✅ (chrome.storage.onChanged listener + last-wins cancellation handles in-flight pass cleanly).
+
+- **P-10 verification — ALL 10 STEPS PASSED on vklf.com (Walmart heavy-SPA reliability + cross-platform spot-checks):**
+  - **P10-1 (direct paste of saved Walmart URL):** banner appears within ~1s + auto-dismisses after 5s ✅.
+  - **P10-2 + P10-3 (Walmart SPA-navigation to saved product, repeat 5 times):** banner appears reliably 5/5 times across different saved products ✅ (the previously-flaky path — pre-fix this was intermittent).
+  - **P10-4 (unsaved product navigation):** NO banner appears ✅ (correctly suppressed — URL not in recognition set).
+  - **P10-5 (unsaved → saved navigation):** banner appears ✅ (dedupe correctly tracks last-considered URL — re-fires on URL change).
+  - **P10-6 (refresh same URL):** banner appears again on refresh ✅ (fresh content script = fresh state).
+  - **P10-7 (manual × dismiss + stay on URL):** banner does NOT re-appear at the same URL ✅ (dedupe correctly suppresses re-fire until URL changes).
+  - **P10-8 + P10-9 + P10-10 (Amazon + Ebay + Etsy spot-checks):** banner appears on each saved-product navigation ✅ (no regression on platforms that already worked pre-fix).
+
+- **P-2 BROWSER RE-VERIFY DEFERRED + corrected test sequence captured for next session:**
+  - **What director observed today:** P2-4 still showed "Failed to fetch" instead of friendly "Network unreachable — check your connection." in the popup's red error box.
+  - **Diagnosis (verified via code-read):** P-2's fix (`mapFetchTransportError` in `extensions/competition-scraping/src/lib/api-client.ts:62`) wraps `authedFetch` only. Supabase auth's `signInWithPassword` (in `auth.ts:17-23`) has its OWN internal fetch path that's NOT wrapped by `mapFetchTransportError`. The original verification spec from polish session #8 ("sign out → WiFi off → sign in") hits supabase auth's path BEFORE `authedFetch` ever runs — so P-2's fix doesn't trigger; supabase returns "Failed to fetch" verbatim.
+  - **Corrected test sequence for next session:** (1) sign in normally with WiFi ON (network works → SetupScreen renders → ProjectPicker fetches projects via authedFetch successfully → cached session is established); (2) turn OFF WiFi (stay signed in); (3) close popup, then re-open it (popup's `ProjectPicker` re-fetches via `authedFetch` on mount → P-2 converts the `TypeError` to `PlosApiError(0, 'Network unreachable — check your connection.')`); (4) `ProjectPicker` prepends "Couldn't load your projects (0): " to the error.message → expected red error box reads approximately **"Couldn't load your projects (0): Network unreachable — check your connection."**.
+  - **DEFERRED registered as TaskCreate task #6** per Rule 26 — closes only when a future session walks the corrected sequence on vklf.com + the friendly error message is confirmed in the red error box. If a future session sees "Failed to fetch" still appearing with the corrected sequence, P-2 has a real code bug (likely in `mapFetchTransportError` signature or in `ProjectPicker.tsx:31-35` error.message extraction).
+
+- **Mid-session director-side correction on Walmart platform-switch (verification-spec gap captured to CORRECTIONS_LOG):**
+  - **What director observed:** after switching popup from Amazon → Walmart and navigating to Walmart, neither Highlight Terms nor the floating "+" icon appeared. chrome://extensions Errors panel showed zero new errors.
+  - **Diagnosis (verified via code-read):** `extensions/competition-scraping/src/lib/content-script/orchestrator.ts:78-81` reads `selectedPlatform` from popup-state ONCE on page load. If user switches the popup's platform AFTER the page is already loaded, the running content script doesn't re-read — orchestrator's gate-check at line 102-107 (verify hostname matches selected-platform's module) silently bails out (no errors, no UI). The page needs a refresh to re-read the new platform setting.
+  - **Director refreshed Walmart → Highlight Terms + "+" icon both appeared immediately.** All P-9 + P-10 Walmart steps passed after that.
+  - **Verification-spec gap:** the Polish session #8 spec said "switch the popup to the right platform before each navigation" but didn't explicitly call out "AND refresh the page after switching the popup's platform if you have a page already open." Captured as CORRECTIONS_LOG entry; spec body should be updated in the next polish-spec session.
+
+- **Three CORRECTIONS_LOG entries this session:**
+  - **(a) Polish session #8 didn't pull main into W#2 first → caused today's divergence.** Process gap. Structural fix proposed: extend `MULTI_WORKFLOW_PROTOCOL §4` to require pulling main into feature branches when main has advanced (e.g., after a deploy session). Today's session is W#2 deploy work, not protocol-design work; the protocol update lands in a future session.
+  - **(b) P-2 verification spec design conflated supabase-auth fetch with `authedFetch` fetch paths.** Spec-design gap. Today exercised the wrong layer — a future session needs the corrected sequence (above).
+  - **(c) Verification spec for P-9 + P-10 didn't call out the refresh-after-platform-switch requirement.** Spec-design gap. Today director hit silent gate-check rejection on first Walmart attempt; a future polish-spec update should add the refresh requirement.
+
+- **Schema-change-in-flight stays "No" throughout this session.** No schema work today (today is rebase + deploy + browser-verify + doc-batch only). PLOS uses one shared Supabase DB; schema state was already aligned with main from session #7's `prisma db push`.
+
+- **Multi-workflow per Rule 25:** pull-rebase clean at both checkpoints (session start + before doc-batch commit; both no-ops since no other concurrent work). W#1 row untouched per Rule 3 ownership. W#2 row updated.
+
+- **TaskList sweep at end-of-session per Rule 26:** 6 session tasks tracked + 5 completed; 1 `DEFERRED:` task open at end-of-session — task #6 (P-2 browser re-verify with corrected test sequence). Per Rule 26 the doc entries that the deferred task points to ARE written this session — ROADMAP polish backlog P-2 status updated + COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md "Polish session #8" P-2 sub-table updated with corrected sequence + this §B entry's "Corrected test sequence" sub-bullet captured. The task itself remains open as the persistent reminder for the next session to actually walk the corrected sequence.
+
+- **Cross-references:** ROADMAP.md header + Active Tools W#2 row Last Session + W#2 polish backlog P-2/P-9/P-10 status updates; CHAT_REGISTRY.md 2026-05-10-c row + Last-updated-in-session line; DOCUMENT_MANIFEST.md header + per-doc flags; COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md "Polish session #8" P-9 + P-10 sub-tables marked PASS + P-2 sub-table updated with corrected sequence; CORRECTIONS_LOG.md 2026-05-10-c three new entries; commits `d2e2115` ext code + `cc843a7` resolved-conflict doc-batch (both pushed to origin/main mid-session per Rule 9 approval); `plos-extension-2026-05-10-c-p2-p9-p10.zip` at repo root (gitignored build artifact).
+
+- **Branch implications:** all session work on `main` (the deploy branch). W#2 branch was rebased + force-pushed to align with main + new code commits. After this session: W#2 = main + 0 (W#2 fully caught up since the merge brought everything onto main). Next W#2 session will start clean from `main`'s state. End-of-session doc-batch commit also lands on `main`. Push pending Rule 9 approval — doc-only push triggers Vercel rebuild but contains zero user-visible code changes (the code from `d2e2115` is already deployed earlier in session).
+
 ---
 
 END OF DOCUMENT

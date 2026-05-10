@@ -504,56 +504,69 @@ Shipped commit: (pending end-of-session commit on `workflow-2-competition-scrapi
 
 ---
 
-## Polish session #8 (P-2 + P-9 + P-10 bundle) — browser re-verify — PENDING 2026-05-10-b
+## Polish session #8 (P-2 + P-9 + P-10 bundle) — browser re-verify — PARTIAL 2026-05-10-c (P-9 + P-10 ✅ ALL PASS on vklf.com; P-2 ⏸ DEFERRED with corrected test sequence captured)
 
-**Context:** W#2 polish session #8 (2026-05-10-b) shipped three extension-only fixes at code level on `workflow-2-competition-scraping`. None are deployed to vklf.com yet — they land at the next W#2 → main deploy session (item (a.4) in ROADMAP Active Tools W#2 row Next Session list). This section captures the browser re-verify path for each fix to walk through after deploy.
+**Context:** W#2 polish session #8 (2026-05-10-b) shipped three extension-only fixes at code level on `workflow-2-competition-scraping`. **Deployed to vklf.com 2026-05-10-c** via W#2 → main deploy session #2 (commits `d2e2115` ext code + `cc843a7` resolved-conflict doc-batch on `main`; pushed origin/main → Vercel auto-redeploy completed). This section now captures the browser re-verify outcomes from session 2026-05-10-c.
 
-**Test scope: 3 fixes, ~12-18 walked-through tests across 4 platforms (Amazon, Ebay, Etsy, Walmart). Plus regression spot-checks to confirm no behavior change on platforms where each fix wasn't the primary symptom.**
+**Test scope: 3 fixes, ~12-18 walked-through tests across 4 platforms (Amazon, Ebay, Etsy, Walmart). Plus regression spot-checks to confirm no behavior change on platforms where each fix wasn't the primary symptom. OUTCOME 2026-05-10-c: P-9 + P-10 ALL PASS on vklf.com. P-2 deferred — original test spec conflated supabase-auth fetch with `authedFetch`; corrected sequence captured below for next session per Rule 14e + Rule 26.**
 
-### P-2 — `authedFetch` offline error handling — PENDING 2026-05-10-b
+### P-2 — `authedFetch` offline error handling — ⏸ DEFERRED 2026-05-10-c with corrected test sequence
 
-**Pre-test setup:** install or reload the new extension build; sign in normally; do NOT have any specific page open yet.
+**Original test (P2-1..P2-5 below) was attempted 2026-05-10-c and director observed P2-4 still showed "Failed to fetch" instead of friendly "Network unreachable — check your connection.". Diagnosis (verified via code-read):** P-2's fix (`mapFetchTransportError` in `extensions/competition-scraping/src/lib/api-client.ts:62`) wraps `authedFetch` only. Supabase auth's `signInWithPassword` (in `auth.ts:17-23`) has its OWN internal fetch path that's NOT wrapped by `mapFetchTransportError`. The original verification spec's sequence ("sign out → WiFi off → sign in") hits supabase auth's path BEFORE `authedFetch` ever runs — so P-2's fix doesn't trigger; supabase returns "Failed to fetch" verbatim. This is a SPEC-DESIGN gap, not a code bug. Captured to CORRECTIONS_LOG 2026-05-10-c.
 
-| # | Step | Expected | Result |
-|---|---|---|---|
-| P2-1 | [ ] Sign out via popup. | Signed-out screen with email + password fields. | |
-| P2-2 | [ ] DevTools → Network → set throttle to "Offline" (popup-side OR system WiFi off — both should trigger TypeError on the next fetch). | Browser is offline. | |
-| P2-3 | [ ] Sign in with valid credentials. | Sign-in itself runs through Supabase, which may or may not surface an inline auth error. After sign-in (assuming it succeeds via cached token / OR fails with a different error), the popup attempts to load projects via `authedFetch('/api/projects')` which will throw `TypeError("Failed to fetch")`. | |
-| P2-4 | [ ] Observe popup project-list state. | **Expected:** popup shows red error box reading exactly **"Network unreachable — check your connection."** (NOT "Failed to fetch" or stack trace or blank state). | |
-| P2-5 | [ ] Restore network (toggle Offline off / WiFi back on); click "Try again" in the popup OR re-open the popup. | Project list loads normally. | |
-
-### P-9 — Live-page Highlight Terms 500KB cap REMOVED + chunked highlight pass — PENDING 2026-05-10-b
-
-**Pre-test setup:** popup configured with at least 5 Highlight Terms (use the same set from P-5 verification — bursitis-related terms with hex colors); chrome://extensions → Errors panel cleared for the PLOS extension; popup configured for the platform under test before each navigation.
+**⏸ DEFERRED for next session: corrected test sequence (run THIS instead of P2-1..P2-5 below):**
 
 | # | Step | Expected | Result |
 |---|---|---|---|
-| P9-1 | [ ] Configure popup for **Ebay** platform. Navigate to `https://www.ebay.com/sch/i.html?_nkw=bursitis` (search results, ~1.5MB body text). | Page loads; **Highlight Terms appear colorfully wrapped on matching tokens** (previously: NO highlights — cap blocked the pass). | |
-| P9-2 | [ ] Click into any product on the Ebay search results page (~1.58MB body text). | Detail page loads; **Highlight Terms appear on matching tokens** (previously: NO highlights). | |
-| P9-3 | [ ] Open chrome://extensions → click "Errors" for the PLOS extension. | **Zero new entries containing "exceeds highlight cap"** (the warning is gone — cap was removed entirely). Other errors unchanged from baseline. | |
-| P9-4 | [ ] Configure popup for **Walmart** platform. Navigate to `https://www.walmart.com/search?q=bursitis` (~636-675KB body text + heavy SPA re-renders). | Page loads; **Highlight Terms appear on matching tokens**; page does NOT freeze or noticeably stutter during initial load (chunked walker yields between batches). | |
-| P9-5 | [ ] Open chrome://extensions → click "Errors" for the PLOS extension. | **Zero new entries containing "exceeds highlight cap"** even after Walmart's heavy React re-renders triggered ~20+ MutationObserver passes (no cap → no warning to repeat). | |
-| P9-6 | [ ] Configure popup with 60+ Highlight Terms (paste a long list to exceed the 50-term soft cap). | **Console warning fires: "highlightTerms count (60) exceeds soft cap (50); only the first 50 will highlight."** Confirms the soft cap on TERM count (separate from the removed body-text cap) still works. | |
-| P9-7 | [ ] Reduce term count back to ≤ 50. Spot-check Amazon search results page (~50KB body text) — was the original P-5 happy path. | Highlight Terms appear correctly on Amazon (no regression from pre-fix behavior). | |
-| P9-8 | [ ] Spot-check Etsy listing page (small body text). | Highlight Terms appear correctly on Etsy (no regression from pre-fix behavior). | |
-| P9-9 | [ ] On Walmart, edit Highlight Terms in the popup (add or remove a term while a Walmart page is open). | Page updates highlights to reflect new term list within ~1-2 seconds (chrome.storage.onChanged listener fires; cancellation-on-new-refresh handles the in-flight pass cleanly without leaving stale highlights). | |
+| P2-A | [ ] **Sign in normally with WiFi ON.** Network must work — popup loads, you see your project picker working (the project-list fetch via `authedFetch` succeeded; cached session is established). | Project picker shows your projects normally. | |
+| P2-B | [ ] **Turn OFF WiFi (system Wi-Fi off).** Stay signed in (do NOT sign out). | Browser is offline; popup may still be open. | |
+| P2-C | [ ] **Close the popup, then re-open it.** When it reopens, the popup's `ProjectPicker` re-fetches the project list via `authedFetch` on mount → with WiFi off, `authedFetch` should fail → P-2's `mapFetchTransportError` converts the `TypeError` to `PlosApiError(0, 'Network unreachable — check your connection.')` → ProjectPicker prepends "Couldn't load your projects (0): " to the error.message. | **Expected:** red error box reads approximately **"Couldn't load your projects (0): Network unreachable — check your connection."** (NOT "Failed to fetch", NOT a stack trace, NOT blank state). If you see the expected wording, P-2 is browser-verified. If you still see "Failed to fetch" with this sequence, P-2 has a real code bug (likely in `mapFetchTransportError` signature or `ProjectPicker.tsx:31-35` error.message extraction) — investigate further. | |
+| P2-D | [ ] **Restore network (WiFi back on); click "Try again" in the popup OR close + re-open.** | Project list loads normally. | |
 
-### P-10 — AlreadySavedOverlay reliability on Walmart heavy-SPA pages — PENDING 2026-05-10-b
+**DEFERRED registered as TaskCreate task #6 per Rule 26.** Closes only when a future session walks the corrected sequence on vklf.com + the friendly "Network unreachable…" message is confirmed in the red error box.
+
+**Original (broken) test sequence — kept for reference of what NOT to use:**
+
+| # | Step | Expected | Result |
+|---|---|---|---|
+| P2-1 | [ ] Sign out via popup. | Signed-out screen with email + password fields. | ⚠ DON'T USE — see corrected sequence above |
+| P2-2 | [ ] DevTools → Network → set throttle to "Offline" (popup-side OR system WiFi off — both should trigger TypeError on the next fetch). | Browser is offline. | ⚠ DON'T USE |
+| P2-3 | [ ] Sign in with valid credentials. | Sign-in itself runs through Supabase, which may or may not surface an inline auth error. After sign-in (assuming it succeeds via cached token / OR fails with a different error), the popup attempts to load projects via `authedFetch('/api/projects')` which will throw `TypeError("Failed to fetch")`. | ⚠ This step is the spec gap — sign-in itself goes through supabase's own fetch which is NOT wrapped by `mapFetchTransportError`; supabase returns "Failed to fetch" verbatim before `authedFetch` ever runs. |
+| P2-4 | [ ] Observe popup project-list state. | **Expected:** popup shows red error box reading exactly **"Network unreachable — check your connection."** (NOT "Failed to fetch" or stack trace or blank state). | ❌ FAILED 2026-05-10-c — observed "Failed to fetch" because the test exercised the wrong fetch layer. See diagnosis above + corrected sequence. |
+| P2-5 | [ ] Restore network (toggle Offline off / WiFi back on); click "Try again" in the popup OR re-open the popup. | Project list loads normally. | ⚠ DON'T USE |
+
+### P-9 — Live-page Highlight Terms 500KB cap REMOVED + chunked highlight pass — ✅ DONE 2026-05-10-c (ALL 9 STEPS PASSED on vklf.com)
+
+**Pre-test setup:** popup configured with at least 5 Highlight Terms (use the same set from P-5 verification — bursitis-related terms with hex colors); chrome://extensions → Errors panel cleared for the PLOS extension; popup configured for the platform under test before each navigation. **CRITICAL — caught 2026-05-10-c:** if you switch the popup's platform AFTER a page is already loaded, **refresh the page** before testing — the orchestrator reads `selectedPlatform` ONCE on page load and the running content script doesn't re-read on platform change. (Captured to CORRECTIONS_LOG 2026-05-10-c.)
+
+| # | Step | Expected | Result |
+|---|---|---|---|
+| P9-1 | [x] Configure popup for **Ebay** platform. Navigate to `https://www.ebay.com/sch/i.html?_nkw=bursitis` (search results, ~1.5MB body text). | Page loads; **Highlight Terms appear colorfully wrapped on matching tokens** (previously: NO highlights — cap blocked the pass). | ✅ PASSED 2026-05-10-c on vklf.com |
+| P9-2 | [x] Click into any product on the Ebay search results page (~1.58MB body text). | Detail page loads; **Highlight Terms appear on matching tokens** (previously: NO highlights). | ✅ PASSED 2026-05-10-c |
+| P9-3 | [x] Open chrome://extensions → click "Errors" for the PLOS extension. | **Zero new entries containing "exceeds highlight cap"** (the warning is gone — cap was removed entirely). Other errors unchanged from baseline. | ✅ PASSED 2026-05-10-c — cap entirely removed → no warning to repeat. |
+| P9-4 | [x] Configure popup for **Walmart** platform. Navigate to `https://www.walmart.com/search?q=bursitis` (~636-675KB body text + heavy SPA re-renders). **AFTER switching popup to Walmart, refresh the Walmart page** (per CRITICAL note above). | Page loads; **Highlight Terms appear on matching tokens**; page does NOT freeze or noticeably stutter during initial load (chunked walker yields between batches). | ✅ PASSED 2026-05-10-c after page-refresh — first attempt without refresh silently bailed (orchestrator gate-check rejected since `selectedPlatform` was still set to previous platform); director refreshed → both Highlight Terms + "+" icon appeared immediately. Captured as CORRECTIONS_LOG entry. |
+| P9-5 | [x] Open chrome://extensions → click "Errors" for the PLOS extension. | **Zero new entries containing "exceeds highlight cap"** even after Walmart's heavy React re-renders triggered ~20+ MutationObserver passes (no cap → no warning to repeat). | ✅ PASSED 2026-05-10-c — Errors panel showed zero new "exceeds highlight cap" entries even on heavy Walmart pages. |
+| P9-6 | [x] Configure popup with 60+ Highlight Terms (paste a long list to exceed the 50-term soft cap). | **Console warning fires: "highlightTerms count (60) exceeds soft cap (50); only the first 50 will highlight."** Confirms the soft cap on TERM count (separate from the removed body-text cap) still works. | ✅ PASSED 2026-05-10-c — soft term-count cap still functional. |
+| P9-7 | [x] Reduce term count back to ≤ 50. Spot-check Amazon search results page (~50KB body text) — was the original P-5 happy path. | Highlight Terms appear correctly on Amazon (no regression from pre-fix behavior). | ✅ PASSED 2026-05-10-c — Amazon spot-check no regression. |
+| P9-8 | [x] Spot-check Etsy listing page (small body text). | Highlight Terms appear correctly on Etsy (no regression from pre-fix behavior). | ✅ PASSED 2026-05-10-c — Etsy spot-check no regression. |
+| P9-9 | [x] On Walmart, edit Highlight Terms in the popup (add or remove a term while a Walmart page is open). | Page updates highlights to reflect new term list within ~1-2 seconds (chrome.storage.onChanged listener fires; cancellation-on-new-refresh handles the in-flight pass cleanly without leaving stale highlights). | ✅ PASSED 2026-05-10-c — live-edit on Walmart updates within ~1-2s. |
+
+### P-10 — AlreadySavedOverlay reliability on Walmart heavy-SPA pages — ✅ DONE 2026-05-10-c (ALL 10 STEPS PASSED on vklf.com)
 
 **Pre-test setup:** popup signed in + configured for Walmart platform; PLOS Project has at least 1 saved Walmart product URL (use any Walmart product saved during prior waypoint #1 walkthroughs OR save a fresh one via `+ Add` button before starting these tests). Use Chrome's "New Tab" workflow to avoid any history-state cross-talk between tests.
 
 | # | Step | Expected | Result |
 |---|---|---|---|
-| P10-1 | [ ] Open Walmart in a new tab. Navigate to a saved product detail page directly (paste URL in address bar; full page load, NOT SPA navigation). | Green "✓ This URL is already in your project · <Project Name>" banner appears within ~1 second; auto-dismisses after 5s. | |
-| P10-2 | [ ] In the same tab, navigate to Walmart search results (single click on Walmart's logo or back button). Then click a SAVED product from the search results (this is the SPA pushState path that was failing pre-fix). | **Banner appears reliably** within ~1 second on the saved product detail page; auto-dismisses after 5s. (Previously: intermittent — sometimes appeared, sometimes didn't.) | |
-| P10-3 | [ ] Repeat P10-2 five more times across different saved Walmart products. | Banner appears on EVERY navigation (5/5 reliability). | |
-| P10-4 | [ ] On a search results page, click an UNSAVED product (any non-saved Walmart URL). | NO banner appears (correct — URL not in recognition set). | |
-| P10-5 | [ ] After P10-4, click back to a saved product (navigate from unsaved → saved). | Banner appears (dedupe-by-URL correctly tracks last-considered URL, so navigation to a different URL re-fires the banner). | |
-| P10-6 | [ ] After P10-1 fires the banner once, refresh the page (full reload, same URL). | Banner appears again (refresh = new page-load = fresh content script = fresh `lastOverlayUrl` state — banner re-fires correctly on initial-load). | |
-| P10-7 | [ ] After banner fires once at a saved URL, manually dismiss it via × button. Stay on the same URL — do NOT navigate. | Banner does NOT re-appear at the same URL until URL changes (dedupe correctly suppresses re-fire). | |
-| P10-8 | [ ] Spot-check Amazon: navigate to a saved Amazon product detail page. | Banner appears (no regression from pre-fix behavior on a non-Walmart platform). | |
-| P10-9 | [ ] Spot-check Ebay: navigate to a saved Ebay listing detail page. | Banner appears (no regression). | |
-| P10-10 | [ ] Spot-check Etsy: navigate to a saved Etsy listing detail page. | Banner appears (no regression). | |
+| P10-1 | [x] Open Walmart in a new tab. Navigate to a saved product detail page directly (paste URL in address bar; full page load, NOT SPA navigation). | Green "✓ This URL is already in your project · <Project Name>" banner appears within ~1 second; auto-dismisses after 5s. | ✅ PASSED 2026-05-10-c on vklf.com |
+| P10-2 | [x] In the same tab, navigate to Walmart search results (single click on Walmart's logo or back button). Then click a SAVED product from the search results (this is the SPA pushState path that was failing pre-fix). | **Banner appears reliably** within ~1 second on the saved product detail page; auto-dismisses after 5s. (Previously: intermittent — sometimes appeared, sometimes didn't.) | ✅ PASSED 2026-05-10-c — banner appears reliably on the previously-flaky SPA-pushState path. |
+| P10-3 | [x] Repeat P10-2 five more times across different saved Walmart products. | Banner appears on EVERY navigation (5/5 reliability). | ✅ PASSED 2026-05-10-c — 5/5 reliability across different saved Walmart products. |
+| P10-4 | [x] On a search results page, click an UNSAVED product (any non-saved Walmart URL). | NO banner appears (correct — URL not in recognition set). | ✅ PASSED 2026-05-10-c — unsaved correctly suppresses banner. |
+| P10-5 | [x] After P10-4, click back to a saved product (navigate from unsaved → saved). | Banner appears (dedupe-by-URL correctly tracks last-considered URL, so navigation to a different URL re-fires the banner). | ✅ PASSED 2026-05-10-c — unsaved → saved navigation re-fires banner correctly. |
+| P10-6 | [x] After P10-1 fires the banner once, refresh the page (full reload, same URL). | Banner appears again (refresh = new page-load = fresh content script = fresh `lastOverlayUrl` state — banner re-fires correctly on initial-load). | ✅ PASSED 2026-05-10-c — refresh re-fires banner. |
+| P10-7 | [x] After banner fires once at a saved URL, manually dismiss it via × button. Stay on the same URL — do NOT navigate. | Banner does NOT re-appear at the same URL until URL changes (dedupe correctly suppresses re-fire). | ✅ PASSED 2026-05-10-c — manual × dismiss correctly suppresses re-fire. |
+| P10-8 | [x] Spot-check Amazon: navigate to a saved Amazon product detail page. | Banner appears (no regression from pre-fix behavior on a non-Walmart platform). | ✅ PASSED 2026-05-10-c — Amazon spot-check no regression. |
+| P10-9 | [x] Spot-check Ebay: navigate to a saved Ebay listing detail page. | Banner appears (no regression). | ✅ PASSED 2026-05-10-c — Ebay spot-check no regression. |
+| P10-10 | [x] Spot-check Etsy: navigate to a saved Etsy listing detail page. | Banner appears (no regression). | ✅ PASSED 2026-05-10-c — Etsy spot-check no regression. |
 
 **API-side already verified at commit time (2026-05-10-b):**
 
@@ -567,6 +580,8 @@ Shipped commit: (pending end-of-session commit on `workflow-2-competition-scrapi
 - Root `npx eslint src` reports project-wide **13 errors / 39 warnings** — exact baseline parity.
 
 **Lands in next W#2 → main deploy session** per the ROADMAP Active Tools W#2 row Next Session item (a.4). Combined with session #7's P-3 narrowed work (commit `16d4351`), the deploy gap covers FOUR polish items (P-2 + P-3 narrowed + P-9 + P-10) plus session #7's schema addition. The next deploy session can browser-verify all four together (P-3 verification path is captured in the W#2 polish backlog P-3 entry itself).
+
+**OUTCOME 2026-05-10-c (W#2 → main deploy session #2):** P-3 + UserProjectHighlightTerm schema were already deployed + verified in 2026-05-10-b deploy session #1 (a.4 closed). Today's deploy brought P-2 + P-9 + P-10 onto main via rebased commits `d2e2115` (extension code) + `cc843a7` (resolved-conflict doc-batch). **P-9 + P-10 ALL STEPS PASSED on vklf.com** (see sub-tables above). **P-2 DEFERRED with corrected test sequence** (see P-2 sub-table above) — original spec conflated supabase-auth fetch with `authedFetch` fetch path; corrected sequence captured for next session. DEFERRED as TaskCreate task #6 per Rule 26.
 
 ---
 END OF DOCUMENT
