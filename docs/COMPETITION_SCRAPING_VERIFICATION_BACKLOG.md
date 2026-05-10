@@ -503,5 +503,71 @@ Shipped commit: (pending end-of-session commit on `workflow-2-competition-scrapi
 - **~150–160 steps total at Waypoint #1** (originally estimated 50–80; the actual surface area is larger because slices (a.2), (a.3), (a.4) each shipped 14–30 walked-through steps. Director may want to sub-split Waypoint #1 into two passes if the single walkthrough proves too long; flagged here for the verification session itself to evaluate.)
 
 ---
+
+## Polish session #8 (P-2 + P-9 + P-10 bundle) — browser re-verify — PENDING 2026-05-10-b
+
+**Context:** W#2 polish session #8 (2026-05-10-b) shipped three extension-only fixes at code level on `workflow-2-competition-scraping`. None are deployed to vklf.com yet — they land at the next W#2 → main deploy session (item (a.4) in ROADMAP Active Tools W#2 row Next Session list). This section captures the browser re-verify path for each fix to walk through after deploy.
+
+**Test scope: 3 fixes, ~12-18 walked-through tests across 4 platforms (Amazon, Ebay, Etsy, Walmart). Plus regression spot-checks to confirm no behavior change on platforms where each fix wasn't the primary symptom.**
+
+### P-2 — `authedFetch` offline error handling — PENDING 2026-05-10-b
+
+**Pre-test setup:** install or reload the new extension build; sign in normally; do NOT have any specific page open yet.
+
+| # | Step | Expected | Result |
+|---|---|---|---|
+| P2-1 | [ ] Sign out via popup. | Signed-out screen with email + password fields. | |
+| P2-2 | [ ] DevTools → Network → set throttle to "Offline" (popup-side OR system WiFi off — both should trigger TypeError on the next fetch). | Browser is offline. | |
+| P2-3 | [ ] Sign in with valid credentials. | Sign-in itself runs through Supabase, which may or may not surface an inline auth error. After sign-in (assuming it succeeds via cached token / OR fails with a different error), the popup attempts to load projects via `authedFetch('/api/projects')` which will throw `TypeError("Failed to fetch")`. | |
+| P2-4 | [ ] Observe popup project-list state. | **Expected:** popup shows red error box reading exactly **"Network unreachable — check your connection."** (NOT "Failed to fetch" or stack trace or blank state). | |
+| P2-5 | [ ] Restore network (toggle Offline off / WiFi back on); click "Try again" in the popup OR re-open the popup. | Project list loads normally. | |
+
+### P-9 — Live-page Highlight Terms 500KB cap REMOVED + chunked highlight pass — PENDING 2026-05-10-b
+
+**Pre-test setup:** popup configured with at least 5 Highlight Terms (use the same set from P-5 verification — bursitis-related terms with hex colors); chrome://extensions → Errors panel cleared for the PLOS extension; popup configured for the platform under test before each navigation.
+
+| # | Step | Expected | Result |
+|---|---|---|---|
+| P9-1 | [ ] Configure popup for **Ebay** platform. Navigate to `https://www.ebay.com/sch/i.html?_nkw=bursitis` (search results, ~1.5MB body text). | Page loads; **Highlight Terms appear colorfully wrapped on matching tokens** (previously: NO highlights — cap blocked the pass). | |
+| P9-2 | [ ] Click into any product on the Ebay search results page (~1.58MB body text). | Detail page loads; **Highlight Terms appear on matching tokens** (previously: NO highlights). | |
+| P9-3 | [ ] Open chrome://extensions → click "Errors" for the PLOS extension. | **Zero new entries containing "exceeds highlight cap"** (the warning is gone — cap was removed entirely). Other errors unchanged from baseline. | |
+| P9-4 | [ ] Configure popup for **Walmart** platform. Navigate to `https://www.walmart.com/search?q=bursitis` (~636-675KB body text + heavy SPA re-renders). | Page loads; **Highlight Terms appear on matching tokens**; page does NOT freeze or noticeably stutter during initial load (chunked walker yields between batches). | |
+| P9-5 | [ ] Open chrome://extensions → click "Errors" for the PLOS extension. | **Zero new entries containing "exceeds highlight cap"** even after Walmart's heavy React re-renders triggered ~20+ MutationObserver passes (no cap → no warning to repeat). | |
+| P9-6 | [ ] Configure popup with 60+ Highlight Terms (paste a long list to exceed the 50-term soft cap). | **Console warning fires: "highlightTerms count (60) exceeds soft cap (50); only the first 50 will highlight."** Confirms the soft cap on TERM count (separate from the removed body-text cap) still works. | |
+| P9-7 | [ ] Reduce term count back to ≤ 50. Spot-check Amazon search results page (~50KB body text) — was the original P-5 happy path. | Highlight Terms appear correctly on Amazon (no regression from pre-fix behavior). | |
+| P9-8 | [ ] Spot-check Etsy listing page (small body text). | Highlight Terms appear correctly on Etsy (no regression from pre-fix behavior). | |
+| P9-9 | [ ] On Walmart, edit Highlight Terms in the popup (add or remove a term while a Walmart page is open). | Page updates highlights to reflect new term list within ~1-2 seconds (chrome.storage.onChanged listener fires; cancellation-on-new-refresh handles the in-flight pass cleanly without leaving stale highlights). | |
+
+### P-10 — AlreadySavedOverlay reliability on Walmart heavy-SPA pages — PENDING 2026-05-10-b
+
+**Pre-test setup:** popup signed in + configured for Walmart platform; PLOS Project has at least 1 saved Walmart product URL (use any Walmart product saved during prior waypoint #1 walkthroughs OR save a fresh one via `+ Add` button before starting these tests). Use Chrome's "New Tab" workflow to avoid any history-state cross-talk between tests.
+
+| # | Step | Expected | Result |
+|---|---|---|---|
+| P10-1 | [ ] Open Walmart in a new tab. Navigate to a saved product detail page directly (paste URL in address bar; full page load, NOT SPA navigation). | Green "✓ This URL is already in your project · <Project Name>" banner appears within ~1 second; auto-dismisses after 5s. | |
+| P10-2 | [ ] In the same tab, navigate to Walmart search results (single click on Walmart's logo or back button). Then click a SAVED product from the search results (this is the SPA pushState path that was failing pre-fix). | **Banner appears reliably** within ~1 second on the saved product detail page; auto-dismisses after 5s. (Previously: intermittent — sometimes appeared, sometimes didn't.) | |
+| P10-3 | [ ] Repeat P10-2 five more times across different saved Walmart products. | Banner appears on EVERY navigation (5/5 reliability). | |
+| P10-4 | [ ] On a search results page, click an UNSAVED product (any non-saved Walmart URL). | NO banner appears (correct — URL not in recognition set). | |
+| P10-5 | [ ] After P10-4, click back to a saved product (navigate from unsaved → saved). | Banner appears (dedupe-by-URL correctly tracks last-considered URL, so navigation to a different URL re-fires the banner). | |
+| P10-6 | [ ] After P10-1 fires the banner once, refresh the page (full reload, same URL). | Banner appears again (refresh = new page-load = fresh content script = fresh `lastOverlayUrl` state — banner re-fires correctly on initial-load). | |
+| P10-7 | [ ] After banner fires once at a saved URL, manually dismiss it via × button. Stay on the same URL — do NOT navigate. | Banner does NOT re-appear at the same URL until URL changes (dedupe correctly suppresses re-fire). | |
+| P10-8 | [ ] Spot-check Amazon: navigate to a saved Amazon product detail page. | Banner appears (no regression from pre-fix behavior on a non-Walmart platform). | |
+| P10-9 | [ ] Spot-check Ebay: navigate to a saved Ebay listing detail page. | Banner appears (no regression). | |
+| P10-10 | [ ] Spot-check Etsy: navigate to a saved Etsy listing detail page. | Banner appears (no regression). | |
+
+**API-side already verified at commit time (2026-05-10-b):**
+
+- Extension `npm run compile` clean — zero errors.
+- Extension `npm test` reports **220/220 pass** (was 205/205 — +6 P-2 `mapFetchTransportError` tests in new `api-client.test.ts` + +9 P-9 `processInChunks` tests added to `highlight-terms.test.ts`).
+- Extension `npm run build` clean — Vite + WXT bundle. `.output/chrome-mv3/` total size **638.82 kB** (popup ~401 KB; background ~202 KB; content-scripts/content.js ~30 KB).
+- Extension `npx eslint extensions/competition-scraping/src` exit 0; "Pages directory" informational message from inherited Next eslint plugin — not a lint error.
+- Root `npx tsc --noEmit` clean (extensions/ excluded).
+- Root `npm run build` clean — **50 routes** (exact baseline parity from session #7 — no new routes this session).
+- Root tests **393/393 pass** — exact baseline parity (no root `src/lib` files modified).
+- Root `npx eslint src` reports project-wide **13 errors / 39 warnings** — exact baseline parity.
+
+**Lands in next W#2 → main deploy session** per the ROADMAP Active Tools W#2 row Next Session item (a.4). Combined with session #7's P-3 narrowed work (commit `16d4351`), the deploy gap covers FOUR polish items (P-2 + P-3 narrowed + P-9 + P-10) plus session #7's schema addition. The next deploy session can browser-verify all four together (P-3 verification path is captured in the W#2 polish backlog P-3 entry itself).
+
+---
 END OF DOCUMENT
 
