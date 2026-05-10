@@ -381,14 +381,22 @@ Entries will be added during each workflow's Tool Graduation Ritual:
 - **SHARED WITH:** ANY workflow on the same Project (READ + ADD)
 - **R/W DOWNSTREAM:** READ-WRITE (any workflow on the same Project can ADD entries; only the original creator or admin can soft-delete)
 
-#### 6.1.6 Highlight Terms with colors (extension-local OR per-Project, TBD)
+#### 6.1.6 Highlight Terms with colors (server-stored; cross-device persisted) — DECISION RESOLVED 2026-05-10
 - **HUMAN REF (PROVISIONAL):** "the highlight terms" / "the highlight colors"
-- **CAPTURED IN:** Chrome extension Module 1 setup
-- **TECHNICAL NAME:** TBD — could be `chrome.storage.local` only (per-extension-install) OR `highlight_term` table (per-Project, syncable across worker installs)
-- **DECISION DEFERRED:** to Stack-and-Architecture session. If admin/workers want highlight terms to follow them across devices, server-stored. If purely a per-session convenience, local-only.
-- **FIELDS (provisional, if server-stored):**
-  - `id`, `projectId`, `userId`, `term`, `color` (hex), `createdAt`
-- **SHARED WITH:** Self-only (this user's extension); not shared cross-workflow
+- **CAPTURED IN:** Chrome extension Module 1 setup (popup picker pair)
+- **TECHNICAL NAME:** `UserProjectHighlightTerm` table (per-(user, project, term)), one row per term. Server-side authoritative; chrome.storage.local is per-installation MIRROR cache.
+- **DECISION:** server-stored — director's standing principle "no matter where the user logs in, they can pick up where they left off" (captured 2026-05-08-c) drove the call. Shipped + browser-verified cross-device 2026-05-10-b.
+- **FIELDS:**
+  - `id` String @id @default(uuid)
+  - `userId` String
+  - `projectId` String
+  - `term` String
+  - `color` String (7-char hex from §6 20-color palette)
+  - `sortOrder` Int @default(0)
+  - `createdAt`, `updatedAt` DateTime
+  - `@@unique([userId, projectId, term])` + `@@index([userId, projectId])`
+- **API:** GET + PUT at `/api/projects/[projectId]/extension-state/highlight-terms` (verifyProjectAuth-scoped; PUT is replace-whole-list inside one $transaction).
+- **SHARED WITH:** Self-only (this user's extension); not shared cross-workflow.
 
 #### 6.1.7 Worker assignment with platform sub-scope (Phase 2+)
 - **HUMAN REF (PROVISIONAL):** "the assignment" / "Sarah is assigned to Amazon for Project X"
@@ -397,6 +405,21 @@ Entries will be added during each workflow's Tool Graduation Ritual:
 - **FIELDS (provisional, when Assignment table is built in Phase 2):**
   - `id`, `userId`, `workflow`, `projectId`, `subScope` (String, nullable; W#2 uses platform name), `status` (per Phase-2 review-cycle states OR W#2's simplified `assigned | in-progress | completed`), timestamps
 - **CONSTRAINT:** Unique on `(workflow, projectId, subScope)` — enforces "one worker per (Project, platform)" for W#2
+
+#### 6.1.8 Selected Project + Selected Platform (extension setup picks; server-stored; cross-device persisted) — DECISION RESOLVED 2026-05-10-e
+- **HUMAN REF (PROVISIONAL):** "the project the user is currently capturing for" + "the platform the user is currently capturing from"
+- **CAPTURED IN:** Chrome extension popup setup screen (`ProjectPicker` + `PlatformPicker`)
+- **TECHNICAL NAME:** `UserExtensionState` table (one row per user). Server-side authoritative; chrome.storage.local is per-installation MIRROR cache (read by content-script orchestrator on every page load — content scripts can't reach vklf.com directly per CORS allowlist).
+- **DECISION:** server-stored — extends the same "no matter where the user logs in, they can pick up where they left off" principle that drove §6.1.6. Schema-shape decision per Rule 18 mid-build Read-It-Back: single record-type with two scalar columns per user (preserves today's chrome.storage.local behavior 1:1 — switching project still clears platform). Shipped at code level 2026-05-10-e on `workflow-2-competition-scraping`; browser-verify pending next W#2 → main deploy session.
+- **FIELDS:**
+  - `id` String @id @default(uuid)
+  - `userId` String @unique  (one row per user)
+  - `selectedProjectId` String? (nullable — user has not picked yet, OR cleared)
+  - `selectedPlatform` String? (nullable — same; one of the W#2 platform vocabulary values when set)
+  - `updatedAt` DateTime
+  - `@@index([userId])`
+- **API:** GET + PUT at `/api/extension-state` (verifyAuth-scoped, NOT verifyProjectAuth — this is user-scoped state, not project-scoped). PUT is replace-whole-state with refined "switching project clears platform" invariant: server clears platform when (a) incoming projectId is null OR (b) prior projectId is non-null AND differs from incoming. Migration case preserved (prior null + incoming both → no clear). Project-ownership double-check on PUT for non-null selectedProjectId.
+- **SHARED WITH:** Self-only (this user's extension); not shared cross-workflow.
 
 - 6.2 Therapeutic Strategy & Product Family Design
 - 6.3 Brand Identity & IP

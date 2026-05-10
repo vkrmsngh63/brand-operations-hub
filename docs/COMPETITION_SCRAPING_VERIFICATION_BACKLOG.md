@@ -587,5 +587,42 @@ Shipped commit: (pending end-of-session commit on `workflow-2-competition-scrapi
 **OUTCOME 2026-05-10-c (W#2 → main deploy session #2):** P-3 + UserProjectHighlightTerm schema were already deployed + verified in 2026-05-10-b deploy session #1 (a.4 closed). Today's deploy brought P-2 + P-9 + P-10 onto main via rebased commits `d2e2115` (extension code) + `cc843a7` (resolved-conflict doc-batch). **P-9 + P-10 ALL STEPS PASSED on vklf.com** (see sub-tables above). **P-2 DEFERRED with corrected test sequence** (see P-2 sub-table above) — original spec conflated supabase-auth fetch with `authedFetch` fetch path; corrected sequence captured for next session. DEFERRED as TaskCreate task #6 per Rule 26.
 
 ---
+
+## Polish session #10 (P-3 broader scope — selectedProjectId + selectedPlatform server-side persistence) — browser-verify pending next W#2 → main deploy session #4
+
+**Status:** ✅ SHIPPED at code level 2026-05-10-e (commit `49d396e` on `workflow-2-competition-scraping`); browser verification pending the next W#2 → main deploy session per ROADMAP Active Tools W#2 row Next Session item (a.9).
+
+### P-3 broader scope — cross-device sign-in test (canonical proof of correctness — same shape as P-3 narrowed Highlight Terms verification 2026-05-10-b) — PENDING next W#2 → main deploy session #4
+
+| Step | Action | Expected | Status |
+|---|---|---|---|
+| P3B-1 | [ ] On laptop 1: install / reload the extension from the deploy session #4's fresh build zip; sign in with PLOS credentials. | Popup opens; sign-in succeeds; setup screen renders ProjectPicker + PlatformPicker. | PENDING next deploy session #4 |
+| P3B-2 | [ ] Pick a Project (any project the test user owns). | ProjectPicker shows the picked project; PlatformPicker becomes available. DevTools Network tab shows a successful PUT request to `/api/extension-state` with `selectedProjectId` set + `selectedPlatform: null`. | PENDING |
+| P3B-3 | [ ] Pick a Platform (e.g., Amazon). | PlatformPicker shows Amazon. DevTools Network tab shows a successful PUT to `/api/extension-state` with both fields set. | PENDING |
+| P3B-4 | [ ] Close the popup. Sign in from a DIFFERENT Chrome profile / DIFFERENT laptop (canonical "different installation" path — DOES NOT share `chrome.storage.local` with laptop 1; cache is empty). | Popup opens; sign-in succeeds; setup screen renders. | PENDING |
+| P3B-5 | [ ] On laptop 2: confirm the saved Project + Platform appear ALREADY-SELECTED. | ProjectPicker shows the project from laptop 1 (same name); PlatformPicker shows Amazon. **This is the canonical proof of server-side persistence — the picks could only have come from the server (laptop 2's cache started empty).** | PENDING |
+| P3B-6 | [ ] On laptop 2: switch to a DIFFERENT project. | ProjectPicker shows the new project. PlatformPicker clears (today's "switching project clears platform" behavior preserved). DevTools Network tab shows successful PUT. | PENDING |
+| P3B-7 | [ ] Refresh the popup. Confirm new project still shows; platform is null. | Same. | PENDING |
+| P3B-8 | [ ] Switch back to the original project on laptop 2. Confirm platform stays null (Option-1 semantics: switching doesn't restore per-project last-platform memory; platform must be re-picked). | Project = original; Platform = null. (Option-2 in the schema-shape Read-It-Back would have restored Amazon here; director picked Option 1.) | PENDING |
+| P3B-9 | [ ] DevTools Network → Offline. Reload popup. | Sync warning appears above ProjectPicker: "Couldn't reach PLOS — showing your setup picks from this Chrome." Cached picks still show (cache-fallback path). | PENDING |
+| P3B-10 | [ ] DevTools Network → Online. Reload popup. Confirm sync warning clears + picks reload from server cleanly. | Sync warning clears; picks match the server's authoritative state. | PENDING |
+| P3B-11 | [ ] (Optional) one-time auto-migration smoke test — only meaningful if the test user previously had local-only picks before this code shipped (ran OLD code, then upgraded to NEW code without clearing chrome.storage.local). | The migration path fires: server returns nulls + cache has values → orchestrator pushes cache up → returns `source: 'migrated'`; picks appear without UI nag. | PENDING (optional) |
+
+**API-side already verified at commit time (2026-05-10-e):**
+
+- Extension `npm run compile` clean — zero errors.
+- Extension `npm test` reports **233/233 pass** (was 220/220 — +13 extension-state-sync tests).
+- Extension `npm run build` clean — Vite + WXT bundle. `.output/chrome-mv3/` total size **641.42 kB** (popup ~404 KB; background ~202 KB; content-scripts/content.js ~30 KB; popup CSS ~3.6 kB).
+- Extension `npx eslint extensions/competition-scraping/src` clean — zero errors / zero warnings.
+- Root `npx tsc --noEmit` clean.
+- Root `npm run build` clean — **51 routes** (was 50; new `/api/extension-state`).
+- Root tests **393/393 pass** — exact baseline parity (no root `src/lib` files modified).
+- Root `npx eslint src` reports project-wide **13 errors / 39 warnings** — exact baseline parity.
+
+**Schema:** `npx prisma db push` against prod succeeded in 1.16s (additive — new `UserExtensionState` table only; no existing record-type touched). Schema is now live in production but no main code reads/writes it until the W#2 → main deploy session #4 ships the code that uses it. Safe — additive only.
+
+**Lands in next W#2 → main deploy session #4** per the ROADMAP Active Tools W#2 row Next Session item (a.9). The deploy session will browser-verify the cross-device test path captured above; if all P3B-N steps pass, the long-standing P-3 (a.6) item is fully closed across both narrow + broader portions.
+
+---
 END OF DOCUMENT
 
