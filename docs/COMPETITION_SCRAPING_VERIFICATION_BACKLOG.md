@@ -621,7 +621,32 @@ Shipped commit: (pending end-of-session commit on `workflow-2-competition-scrapi
 
 **Schema:** `npx prisma db push` against prod succeeded in 1.16s (additive — new `UserExtensionState` table only; no existing record-type touched). Schema is now live in production but no main code reads/writes it until the W#2 → main deploy session #4 ships the code that uses it. Safe — additive only.
 
-**Lands in next W#2 → main deploy session #4** per the ROADMAP Active Tools W#2 row Next Session item (a.9). The deploy session will browser-verify the cross-device test path captured above; if all P3B-N steps pass, the long-standing P-3 (a.6) item is fully closed across both narrow + broader portions.
+**OUTCOME 2026-05-10-f (W#2 → main deploy session #4):** Deploy phase ✅ DONE — ff-only merge of `workflow-2-competition-scraping` commits `49d396e` + `cd637f7` onto `main` succeeded clean (main was at `07abf09`, no rebase needed); pushed; Vercel auto-redeployed; `/api/extension-state` route confirmed live via curl returning 401 with auth-gate message. Fresh extension build packaged at `plos-extension-2026-05-10-e-w2-deploy-4.zip` (174 KB) for sideload. **Browser verification of P3B-1..P3B-11 DEFERRED mid-session at director's request.** Director said *"I want to defer all these tests for now. What should we work on next?"* after Claude prepared the full P3B sub-table walkthrough (10 mandatory steps + 1 optional, plus prerequisite of sideloading the fresh extension on TWO Chrome installations). Captured per Rule 14e + Rule 26: this section stays PENDING; ROADMAP Active Tools W#2 row (a.9) flipped to ✅ DEPLOY DONE + VERIFICATION DEFERRED; new (a.10) RECOMMENDED-NEXT for combined deploy session #5 (brings P-1 to main) + walks through deferred P3B verification simultaneously. Deferral was the right call per session-management lucidity preference — the P3B walkthrough requires substantial hands-on work (two Chrome installations + extension sideload + 10 sequential DevTools-observation steps) that a director with lower energy mid-session shouldn't be pushed through. The deploy is already complete and `/api/extension-state` is live; verification is purely a confirmation pass, not a code-deploy gate.
+
+---
+
+## Polish session #11 (P-1 silent token refresh + retry on 401) — browser-verify pending next W#2 → main deploy session #5
+
+**Status:** ✅ SHIPPED at code level 2026-05-10-f (commit `d715cde` on `workflow-2-competition-scraping`); browser verification pending the next W#2 → main deploy session per ROADMAP Active Tools W#2 row Next Session item (a.10). P-1 verification is partly **passive** — director will discover whether the silent refresh works the next time they happen to come back to vklf.com after >1 hour, OR can verify actively via the contrived sequence below.
+
+### P-1 — silent token refresh on 401 — PENDING next W#2 → main deploy session #5
+
+| Step | Action | Expected | Status |
+|---|---|---|---|
+| P1V-1 | [ ] **Passive verification (preferred):** sign in to vklf.com normally; close the tab; come back to vklf.com after >1 hour idle. Click into Projects (or any other page that calls a PLOS API). | Page loads cleanly. **NO** "Could not load Projects (401): Invalid or expired token" red error appears. (Pre-fix, this exact scenario surfaced the 401; the fix should make it invisible.) | PENDING next deploy session #5 (or passive — director will discover next time it would have happened) |
+| P1V-2 | [ ] **Active verification (contrived):** sign in to vklf.com; open DevTools → Application tab → Local Storage → `https://www.vklf.com` → find the Supabase auth entry (key starts with `sb-`); look at the JSON value's `expires_at` field. Manually edit `expires_at` to a Unix timestamp ~5 minutes in the past. Save. Then click into Projects. | DevTools Network tab: a fetch to `/api/projects` fires; returns 401; followed within a fraction of a second by a fetch to Supabase's `/auth/v1/token?grant_type=refresh_token`; followed by a re-fetch to `/api/projects` returning 200. Page loads cleanly with no error to the user. | PENDING |
+| P1V-3 | [ ] **Failure-path verification (the rare 1-week case):** in DevTools Application tab → Local Storage, also delete the `refresh_token` field from the Supabase auth entry while keeping the (already-edited expired) `access_token`. Reload the page. | Fetch to `/api/projects` fires; returns 401; refresh attempt fires; refresh fails (no refresh token); the original 401 is returned to the caller; the existing red error appears: "Could not load Projects (401): Invalid or expired token". User has to manually refresh + re-sign-in. (Confirms failure-path Option (a) — return original 401 unchanged when refresh fails.) | PENDING |
+
+**API-side already verified at commit time (2026-05-10-f):**
+
+- 7 unit tests in `src/lib/authFetch.test.ts` pass via `node --test --experimental-strip-types`: 200 happy path, 401-refresh-success-retry-200, 401-refresh-success-retry-401-no-loop, 401-refresh-fails-returns-original, 500-no-refresh, no-session-throws, POST-body-and-caller-headers-preserved-across-retry.
+- 400/400 src/lib tests pass (was 393; +7 authFetch tests).
+- `npx tsc --noEmit` clean.
+- `npm run build` clean (51 routes, no change — P-1 doesn't add API surface).
+- `npx eslint src/lib/authFetch.ts src/lib/authFetch.test.ts` clean.
+- Project-wide `npx eslint src` 13 errors / 39 warnings — exact baseline parity.
+
+**Lands in next W#2 → main deploy session #5** per the ROADMAP Active Tools W#2 row Next Session item (a.10), batched with the deferred P3B-1..P3B-11 verification. P-1 verification is partly passive (director discovers next time they'd-have-hit-the-401), partly active via the contrived DevTools-edit sequence above.
 
 ---
 END OF DOCUMENT
