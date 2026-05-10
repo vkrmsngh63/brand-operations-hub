@@ -8,6 +8,21 @@
 // Switching projects clears the platform selection (you're starting a new
 // context); see setSelectedProject() below.
 //
+// HISTORICAL NOTE — Highlight Terms (W#2 P-3 narrowed, 2026-05-10).
+// `highlightTerms:<projectId>` was once the authoritative store. After P-3
+// narrowed shipped, PLOS DB became authoritative; this storage key is now
+// a per-installation MIRROR CACHE managed by `highlight-terms-sync.ts`.
+// The mirror exists for two reasons:
+//   1. Offline fallback — the popup can show last-known terms when the
+//      server is unreachable.
+//   2. Live-page sync — the content script's live-page highlight-terms
+//      module reads via `getHighlightTerms` and listens for
+//      `chrome.storage.onChanged`; keeping the mirror in sync after every
+//      successful PUT lets the live-page highlights update without
+//      requiring the content script to talk to the server itself
+//      (content scripts can't reach vklf.com directly per the CORS
+//      allowlist; the api-bridge is reserved for URL-recognition flows).
+//
 // Pure logic for the term list lives in highlight-terms.ts and color-palette.ts;
 // this module is the I/O wrapper. The chrome.storage.local guard mirrors the
 // pattern in supabase.ts so importing this module from a non-extension runtime

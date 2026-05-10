@@ -11,8 +11,12 @@ import type {
   CompetitorUrl,
   CreateCompetitorUrlRequest,
   ListCompetitorUrlsResponse,
+  ListHighlightTermsResponse,
   Platform,
+  ReplaceHighlightTermsRequest,
+  ReplaceHighlightTermsResponse,
 } from '../../../../src/lib/shared-types/competition-scraping.ts';
+import type { HighlightTerm } from './highlight-terms.ts';
 
 // Canonical domain: vklf.com (apex) 308-redirects to www.vklf.com at the
 // Vercel edge before the route handler runs. CORS preflight responses on
@@ -142,6 +146,73 @@ export async function listCompetitorUrls(
   // only reads `.url` for the recognition Set, so a future additive
   // server-side change won't break our parsing.
   return data as ListCompetitorUrlsResponse;
+}
+
+/**
+ * Lists the user's Highlight Terms for the given Project, ordered as the
+ * user arranged them. P-3 narrowed (2026-05-10) — server-side persistence
+ * so signing in from any device / Chrome profile preserves the list.
+ *
+ * Wire shape mirrors HighlightTerm so the popup's existing term-management
+ * code keeps working — the swap from chrome.storage.local to server is
+ * structurally invisible at this seam.
+ */
+export async function listHighlightTerms(
+  projectId: string,
+): Promise<HighlightTerm[]> {
+  const res = await authedFetch(
+    `/api/projects/${encodeURIComponent(projectId)}/extension-state/highlight-terms`,
+  );
+  const body = await readJsonOrThrow<ListHighlightTermsResponse>(res);
+  if (!Array.isArray(body.terms)) {
+    throw new PlosApiError(500, 'Unexpected response shape from highlight-terms');
+  }
+  // Defensive shape check — drop any entry that doesn't look like
+  // HighlightTerm. The route validates on write; this guards against an
+  // older client encountering newer wire shapes.
+  return body.terms.filter(
+    (t): t is HighlightTerm =>
+      typeof t === 'object' &&
+      t !== null &&
+      typeof (t as HighlightTerm).term === 'string' &&
+      typeof (t as HighlightTerm).color === 'string',
+  );
+}
+
+/**
+ * Replaces the user's whole Highlight Terms list for the given Project.
+ * Server semantics: deleteMany prior rows + createMany new rows inside one
+ * $transaction. Idempotent — same body produces same end state.
+ *
+ * Returns the server's canonical view of the post-write list. Callers
+ * should treat the response as authoritative (use it to update the local
+ * cache mirror).
+ */
+export async function replaceHighlightTerms(
+  projectId: string,
+  terms: readonly HighlightTerm[],
+): Promise<HighlightTerm[]> {
+  const reqBody: ReplaceHighlightTermsRequest = {
+    terms: terms.map((t) => ({ term: t.term, color: t.color })),
+  };
+  const res = await authedFetch(
+    `/api/projects/${encodeURIComponent(projectId)}/extension-state/highlight-terms`,
+    {
+      method: 'PUT',
+      body: JSON.stringify(reqBody),
+    },
+  );
+  const body = await readJsonOrThrow<ReplaceHighlightTermsResponse>(res);
+  if (!Array.isArray(body.terms)) {
+    throw new PlosApiError(500, 'Unexpected response shape from highlight-terms');
+  }
+  return body.terms.filter(
+    (t): t is HighlightTerm =>
+      typeof t === 'object' &&
+      t !== null &&
+      typeof (t as HighlightTerm).term === 'string' &&
+      typeof (t as HighlightTerm).color === 'string',
+  );
 }
 
 /**

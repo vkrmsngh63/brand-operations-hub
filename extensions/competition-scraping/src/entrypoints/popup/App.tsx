@@ -3,14 +3,17 @@ import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../../lib/supabase.ts';
 import { signIn, signOut } from '../../lib/auth.ts';
 import {
-  getHighlightTerms,
   getSelectedPlatform,
   getSelectedProjectId,
-  setHighlightTerms,
   setSelectedPlatform,
   setSelectedProject,
 } from '../../lib/popup-state.ts';
 import type { HighlightTerm } from '../../lib/highlight-terms.ts';
+import {
+  loadHighlightTerms,
+  saveHighlightTerms,
+} from '../../lib/highlight-terms-sync.ts';
+import { PlosApiError } from '../../lib/errors.ts';
 import { getPlatformLabel } from '../../lib/platforms.ts';
 import { ProjectPicker } from './components/ProjectPicker.tsx';
 import { PlatformPicker } from './components/PlatformPicker.tsx';
@@ -107,6 +110,12 @@ function SetupScreen({ session }: { session: Session }) {
   const [projectId, setProjectId] = useState<string | null>(null);
   const [platform, setPlatform] = useState<string | null>(null);
   const [terms, setTerms] = useState<HighlightTerm[]>([]);
+  // syncWarning surfaces when the server is unreachable and we've fallen
+  // back to the chrome.storage.local cache. Empty when in sync.
+  const [syncWarning, setSyncWarning] = useState<string>('');
+  // saveError surfaces inline when a server PUT fails on a user edit.
+  // Cleared on the next successful save.
+  const [saveError, setSaveError] = useState<string>('');
   const [busy, setBusy] = useState(false);
 
   // Hydrate persisted state on mount.
@@ -118,8 +127,11 @@ function SetupScreen({ session }: { session: Session }) {
         setProjectId(pid);
         setPlatform(plat);
         if (pid) {
-          const ts = await getHighlightTerms(pid);
-          if (!cancelled) setTerms(ts);
+          const result = await loadHighlightTerms(pid);
+          if (!cancelled) {
+            setTerms(result.terms);
+            setSyncWarning(result.warning);
+          }
         }
         if (!cancelled) setHydrated(true);
       },
@@ -136,11 +148,14 @@ function SetupScreen({ session }: { session: Session }) {
       setPlatform(null);
     }
     await setSelectedProject(next);
+    setSaveError('');
     if (next === null) {
       setTerms([]);
+      setSyncWarning('');
     } else {
-      const ts = await getHighlightTerms(next);
-      setTerms(ts);
+      const result = await loadHighlightTerms(next);
+      setTerms(result.terms);
+      setSyncWarning(result.warning);
     }
   }
 
@@ -150,9 +165,29 @@ function SetupScreen({ session }: { session: Session }) {
   }
 
   async function handleTermsChange(next: HighlightTerm[]) {
+    if (projectId === null) return;
+    // Optimistic update — show the user's edit immediately.
+    const prior = terms;
     setTerms(next);
-    if (projectId !== null) {
-      await setHighlightTerms(projectId, next);
+    setSaveError('');
+    try {
+      const canonical = await saveHighlightTerms(projectId, next);
+      // The server may normalize the list (e.g. trim whitespace). Use the
+      // server's canonical view rather than the client's optimistic copy.
+      setTerms(canonical);
+      // A successful write means the server is reachable — clear any
+      // stale offline warning from the load path.
+      setSyncWarning('');
+    } catch (err) {
+      // Roll back the optimistic update; surface the error inline.
+      setTerms(prior);
+      const message =
+        err instanceof PlosApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Couldn't save changes";
+      setSaveError(`Couldn't save: ${message}`);
     }
   }
 
@@ -192,10 +227,20 @@ function SetupScreen({ session }: { session: Session }) {
                 selectedPlatform={platform}
                 onChange={handlePlatformChange}
               />
+              {syncWarning && (
+                <p className="muted muted-help" role="status">
+                  {syncWarning}
+                </p>
+              )}
               <HighlightTermsManager
                 terms={terms}
                 onChange={handleTermsChange}
               />
+              {saveError && (
+                <div className="error" role="alert">
+                  {saveError}
+                </div>
+              )}
             </>
           )}
         </>

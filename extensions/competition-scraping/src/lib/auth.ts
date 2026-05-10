@@ -3,7 +3,7 @@
 // the API client.
 
 import type { Session } from '@supabase/supabase-js';
-import { supabase } from './supabase';
+import { supabase } from './supabase.ts';
 
 export interface SignInResult {
   ok: boolean;

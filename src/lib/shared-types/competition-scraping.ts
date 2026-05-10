@@ -427,6 +427,35 @@ export interface ReconcileResponse {
   lastModified: string;
 }
 
+// ─── Highlight Terms (W#2 P-3 narrowed, 2026-05-10) ────────────────────
+// Per-user-per-project Highlight Terms moved from chrome.storage.local-only
+// to PLOS DB so signing in from any device / Chrome profile preserves
+// state. Wire shape mirrors the extension's HighlightTerm interface
+// (`{term, color}`) so the storage swap is structurally invisible to the
+// popup's term-management code. Color is a 7-char hex from the §6
+// 20-color palette; term is a non-empty trimmed string.
+export interface HighlightTermDto {
+  term: string;
+  color: string;
+}
+
+// GET /api/projects/[projectId]/extension-state/highlight-terms response.
+// Terms returned in user-facing display order (sortOrder ASC).
+export interface ListHighlightTermsResponse {
+  terms: HighlightTermDto[];
+}
+
+// PUT /api/projects/[projectId]/extension-state/highlight-terms body.
+// Replaces the entire list atomically — server deletes prior rows for
+// (userId, projectId) and inserts the request body's terms in array
+// order (each term's sortOrder = array index).
+export interface ReplaceHighlightTermsRequest {
+  terms: HighlightTermDto[];
+}
+
+// PUT response: the canonical post-write list (mirrors GET response).
+export type ReplaceHighlightTermsResponse = ListHighlightTermsResponse;
+
 // ─── Generic error shape ────────────────────────────────────────────────
 // Returned with non-2xx status codes (consistent with the W#1 routes).
 export interface ApiErrorResponse {

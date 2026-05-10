@@ -395,3 +395,22 @@ model AuditEvent {
   @@index([projectId, workflowType])
   @@index([userId, timestamp])
 }
+
+// UserProjectHighlightTerm — W#2 P-3 (narrowed), 2026-05-10.
+// Per-user-per-project Highlight Terms list, stored server-side so signing
+// in from any device / any Chrome profile preserves the configured terms.
+// Replaces the prior chrome.storage.local-only storage that was lost on
+// every extension reinstall. One row per (user, project, term).
+model UserProjectHighlightTerm {
+  id        String   @id @default(uuid())
+  userId    String
+  projectId String
+  term      String
+  color     String // 7-char hex from §6 20-color palette
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, projectId, term])
+  @@index([userId, projectId])
+}
