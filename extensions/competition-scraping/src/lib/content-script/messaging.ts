@@ -2,10 +2,13 @@
 // scripts.
 //
 // TWO directions:
-//   - Background → Content (one-way push): ContentScriptMessage. Today only
-//     `open-url-add-form`, fired when the user invokes the right-click
-//     context-menu fallback per §5 guardrail #6. Carries the right-clicked
-//     link's URL.
+//   - Background → Content (one-way push): ContentScriptMessage.
+//     - `open-url-add-form` (session 3): right-click context-menu fallback
+//       for URL capture per §5 guardrail #6. Carries the right-clicked link.
+//     - `open-text-capture-form` (session 4): right-click context-menu on a
+//       text selection per §A.7 Module 2 highlight-and-add gesture. Carries
+//       the selected text + the page URL (so the form can suggest matching
+//       a saved CompetitorUrl).
 //   - Content → Background (request/response): BackgroundRequest +
 //     BackgroundResponse envelope. Added 2026-05-08-c — content scripts
 //     cannot reach vklf.com directly because their fetch originates from
@@ -17,10 +20,15 @@
 //     Waypoint #1 attempt #3 row for the discovery context.
 
 import type {
+  CapturedText,
   CompetitorUrl,
+  CreateCapturedTextRequest,
   CreateCompetitorUrlRequest,
+  CreateVocabularyEntryRequest,
   ListCompetitorUrlsResponse,
   Platform,
+  VocabularyEntry,
+  VocabularyType,
 } from '../../../../../src/lib/shared-types/competition-scraping.ts';
 import type { ExtensionProject } from '../api-client.ts';
 
@@ -31,15 +39,41 @@ export interface OpenUrlAddFormMessage {
   href: string;
 }
 
-export type ContentScriptMessage = OpenUrlAddFormMessage;
+export interface OpenTextCaptureFormMessage {
+  kind: 'open-text-capture-form';
+  /** Text the user had selected when they invoked the context menu. May be
+   * empty (e.g., context-menu fired without an active selection — Chrome
+   * still routes the click). The form handles empty selectedText by
+   * showing an empty editable textarea + an inline hint. */
+  selectedText: string;
+  /** Page URL where the right-click happened. The form uses this to
+   * suggest a pre-selection of the saved CompetitorUrl (the form's
+   * URL picker pre-selects the first saved URL whose canonical form
+   * matches this page URL). */
+  pageUrl: string;
+}
+
+export type ContentScriptMessage =
+  | OpenUrlAddFormMessage
+  | OpenTextCaptureFormMessage;
 
 export function isContentScriptMessage(
   value: unknown,
 ): value is ContentScriptMessage {
   if (typeof value !== 'object' || value === null) return false;
-  const msg = value as { kind?: unknown; href?: unknown };
+  const msg = value as {
+    kind?: unknown;
+    href?: unknown;
+    selectedText?: unknown;
+    pageUrl?: unknown;
+  };
   if (msg.kind === 'open-url-add-form') {
     return typeof msg.href === 'string';
+  }
+  if (msg.kind === 'open-text-capture-form') {
+    return (
+      typeof msg.selectedText === 'string' && typeof msg.pageUrl === 'string'
+    );
   }
   return false;
 }
@@ -62,10 +96,32 @@ export interface CreateCompetitorUrlRequestMessage {
   body: CreateCompetitorUrlRequest;
 }
 
+export interface CreateCapturedTextRequestMessage {
+  kind: 'create-captured-text';
+  projectId: string;
+  urlId: string;
+  body: CreateCapturedTextRequest;
+}
+
+export interface ListVocabularyRequest {
+  kind: 'list-vocabulary';
+  projectId: string;
+  vocabularyType: VocabularyType;
+}
+
+export interface CreateVocabularyEntryRequestMessage {
+  kind: 'create-vocabulary-entry';
+  projectId: string;
+  body: CreateVocabularyEntryRequest;
+}
+
 export type BackgroundRequest =
   | ListProjectsRequest
   | ListCompetitorUrlsRequest
-  | CreateCompetitorUrlRequestMessage;
+  | CreateCompetitorUrlRequestMessage
+  | CreateCapturedTextRequestMessage
+  | ListVocabularyRequest
+  | CreateVocabularyEntryRequestMessage;
 
 // Response envelope. Encodes both success + structured error so the
 // content-script wrapper can re-throw PlosApiError with the right status
@@ -84,6 +140,15 @@ export type ListCompetitorUrlsResponseEnvelope = BackgroundResponse<
 export type CreateCompetitorUrlResponseEnvelope = BackgroundResponse<
   CompetitorUrl
 >;
+export type CreateCapturedTextResponseEnvelope = BackgroundResponse<
+  CapturedText
+>;
+export type ListVocabularyResponseEnvelope = BackgroundResponse<
+  VocabularyEntry[]
+>;
+export type CreateVocabularyEntryResponseEnvelope = BackgroundResponse<
+  VocabularyEntry
+>;
 
 export function isBackgroundRequest(
   value: unknown,
@@ -92,13 +157,37 @@ export function isBackgroundRequest(
   const msg = value as {
     kind?: unknown;
     projectId?: unknown;
+    urlId?: unknown;
     body?: unknown;
+    platform?: unknown;
+    vocabularyType?: unknown;
   };
   if (msg.kind === 'list-projects') return true;
   if (msg.kind === 'list-competitor-urls') {
     return typeof msg.projectId === 'string';
   }
   if (msg.kind === 'create-competitor-url') {
+    return (
+      typeof msg.projectId === 'string' &&
+      typeof msg.body === 'object' &&
+      msg.body !== null
+    );
+  }
+  if (msg.kind === 'create-captured-text') {
+    return (
+      typeof msg.projectId === 'string' &&
+      typeof msg.urlId === 'string' &&
+      typeof msg.body === 'object' &&
+      msg.body !== null
+    );
+  }
+  if (msg.kind === 'list-vocabulary') {
+    return (
+      typeof msg.projectId === 'string' &&
+      typeof msg.vocabularyType === 'string'
+    );
+  }
+  if (msg.kind === 'create-vocabulary-entry') {
     return (
       typeof msg.projectId === 'string' &&
       typeof msg.body === 'object' &&

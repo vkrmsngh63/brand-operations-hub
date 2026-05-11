@@ -277,6 +277,88 @@ export const CONTENT_SCRIPT_CSS = `
   accent-color: #1976d2 !important;
 }
 
+/* Module 2 text-capture form — session 4 (2026-05-11).
+   Reuses the existing form chrome (.plos-cs-form*, .plos-cs-form-input,
+   .plos-cs-form-textarea, .plos-cs-form-button*, .plos-cs-form-error).
+   New surfaces below: <select> dropdown, loading-status banner, the
+   inline "add new category" input, and the tags chip-list. */
+.plos-cs-form-select {
+  font-family: inherit !important;
+  font-size: 14px !important;
+  color: #222 !important;
+  background: #fff !important;
+  padding: 8px 10px !important;
+  border: 1px solid #ccc !important;
+  border-radius: 4px !important;
+  outline: none !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  cursor: pointer !important;
+}
+
+.plos-cs-form-select:focus {
+  border-color: #1976d2 !important;
+}
+
+.plos-cs-form-select:disabled {
+  background: #f5f5f5 !important;
+  color: #888 !important;
+  cursor: not-allowed !important;
+}
+
+.plos-cs-form-status {
+  margin: 4px 0 12px !important;
+  padding: 8px 10px !important;
+  background: #e3f2fd !important;
+  color: #1565c0 !important;
+  font-size: 13px !important;
+  border-radius: 4px !important;
+}
+
+.plos-cs-form-inline-add {
+  margin-top: 6px !important;
+}
+
+.plos-cs-chip-row {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 6px !important;
+  margin-bottom: 6px !important;
+  min-height: 0 !important;
+}
+
+.plos-cs-chip {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  padding: 3px 4px 3px 10px !important;
+  background: #e8f0fe !important;
+  color: #1a3a6c !important;
+  font-size: 12px !important;
+  border-radius: 12px !important;
+  line-height: 1 !important;
+}
+
+.plos-cs-chip-remove {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 18px !important;
+  height: 18px !important;
+  padding: 0 !important;
+  border: none !important;
+  background: rgba(26, 58, 108, 0.12) !important;
+  color: #1a3a6c !important;
+  border-radius: 50% !important;
+  cursor: pointer !important;
+  font-size: 14px !important;
+  line-height: 1 !important;
+}
+
+.plos-cs-chip-remove:hover {
+  background: rgba(26, 58, 108, 0.25) !important;
+}
+
 /* Live-page Highlight Terms — P-5 fix 2026-05-08-d.
    background-color + color are set inline per-term via the user's chosen
    palette entry; the rules here only handle layout/display so the inline

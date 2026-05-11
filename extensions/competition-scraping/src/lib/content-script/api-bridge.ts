@@ -21,10 +21,15 @@
 import { PlosApiError } from '../errors.ts';
 import type { ExtensionProject } from '../api-client.ts';
 import type {
+  CapturedText,
   CompetitorUrl,
+  CreateCapturedTextRequest,
   CreateCompetitorUrlRequest,
+  CreateVocabularyEntryRequest,
   ListCompetitorUrlsResponse,
   Platform,
+  VocabularyEntry,
+  VocabularyType,
 } from '../../../../../src/lib/shared-types/competition-scraping.ts';
 import type {
   BackgroundRequest,
@@ -94,6 +99,54 @@ export async function createCompetitorUrl(
 ): Promise<CompetitorUrl> {
   return send<CompetitorUrl>({
     kind: 'create-competitor-url',
+    projectId,
+    body,
+  });
+}
+
+/**
+ * Creates a CapturedText row attached to a CompetitorUrl. Routed through
+ * the background per the same CORS reasoning as createCompetitorUrl.
+ * Idempotent server-side on clientId.
+ */
+export async function createCapturedText(
+  projectId: string,
+  urlId: string,
+  body: CreateCapturedTextRequest,
+): Promise<CapturedText> {
+  return send<CapturedText>({
+    kind: 'create-captured-text',
+    projectId,
+    urlId,
+    body,
+  });
+}
+
+/**
+ * Lists vocabulary entries (e.g., content-category) for the given Project.
+ * Routed through the background.
+ */
+export async function listVocabularyEntries(
+  projectId: string,
+  vocabularyType: VocabularyType,
+): Promise<VocabularyEntry[]> {
+  return send<VocabularyEntry[]>({
+    kind: 'list-vocabulary',
+    projectId,
+    vocabularyType,
+  });
+}
+
+/**
+ * Adds a new vocabulary entry (or returns the existing row on dedup hit per
+ * §11.1 server-side upsert semantics). Routed through the background.
+ */
+export async function createVocabularyEntry(
+  projectId: string,
+  body: CreateVocabularyEntryRequest,
+): Promise<VocabularyEntry> {
+  return send<VocabularyEntry>({
+    kind: 'create-vocabulary-entry',
     projectId,
     body,
   });

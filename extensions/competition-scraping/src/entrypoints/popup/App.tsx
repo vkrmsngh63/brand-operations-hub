@@ -16,6 +16,8 @@ import { getPlatformLabel } from '../../lib/platforms.ts';
 import { ProjectPicker } from './components/ProjectPicker.tsx';
 import { PlatformPicker } from './components/PlatformPicker.tsx';
 import { HighlightTermsManager } from './components/HighlightTermsManager.tsx';
+import { CapturedTextPasteForm } from './components/CapturedTextPasteForm.tsx';
+import type { Platform } from '../../../../../src/lib/shared-types/competition-scraping.ts';
 
 type LoadState = 'loading' | 'signed-out' | 'signed-in';
 
@@ -299,6 +301,12 @@ function SetupScreen({ session }: { session: Session }) {
                 <div className="error" role="alert">
                   {saveError}
                 </div>
+              )}
+              {platform !== null && (
+                <CapturedTextPasteForm
+                  projectId={projectId}
+                  platform={platform as Platform}
+                />
               )}
             </>
           )}

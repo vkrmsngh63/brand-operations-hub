@@ -304,3 +304,68 @@ button + button {
   border-color: #ffffff;
   box-shadow: 0 0 0 1px #1f2937;
 }
+
+/* Module 2 text-capture — popup paste flow (session 4 2026-05-11). */
+.captured-text-paste {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.captured-text-paste h2 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 8px;
+  color: #1f2937;
+}
+
+.captured-text-paste textarea {
+  resize: vertical;
+  min-height: 60px;
+  font-family: inherit;
+  font-size: 13px;
+}
+
+.captured-text-paste select {
+  font-family: inherit;
+  font-size: 13px;
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 4px 3px 10px;
+  background: #e8f0fe;
+  color: #1a3a6c;
+  font-size: 12px;
+  border-radius: 12px;
+  line-height: 1;
+}
+
+.chip-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  background: rgba(26, 58, 108, 0.12);
+  color: #1a3a6c;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.chip-remove:hover {
+  background: rgba(26, 58, 108, 0.25);
+}

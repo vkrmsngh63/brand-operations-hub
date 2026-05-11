@@ -44,7 +44,9 @@ import {
 } from './already-saved-icon.ts';
 import { showAlreadySavedOverlay } from './already-saved-overlay.ts';
 import { openUrlAddForm } from './url-add-form.ts';
+import { openTextCaptureForm } from './text-capture-form.ts';
 import { isContentScriptMessage } from './messaging.ts';
+import type { Platform } from '../../../../../src/lib/shared-types/competition-scraping.ts';
 import { startLiveHighlighting } from './highlight-terms.ts';
 import type { LiveHighlightController } from './highlight-terms.ts';
 
@@ -339,6 +341,28 @@ export async function runOrchestrator(): Promise<() => void> {
       // happened on the host page link, not on the floating "+" button).
       // Form falls back to centered layout.
       handleAddRequest(msg.href, null);
+      sendResponse({ ok: true });
+      return;
+    }
+    if (msg.kind === 'open-text-capture-form') {
+      // Module 2 highlight-and-add gesture (session 4, 2026-05-11).
+      // The form fetches its own saved URLs + content-category vocab via
+      // the api-bridge; orchestrator just hands off the props.
+      openTextCaptureForm({
+        initialText: msg.selectedText,
+        pageUrl: msg.pageUrl,
+        projectId,
+        projectName,
+        platform: platformModule.platform as Platform,
+        onSaved() {
+          // Captured text doesn't affect the recognition Set (it's
+          // attached to a CompetitorUrl, not creating one). The
+          // PLOS-side detail page reflects the new row on next load.
+        },
+        onClose() {
+          // No orchestrator-side state to roll back.
+        },
+      });
       sendResponse({ ok: true });
     }
   };

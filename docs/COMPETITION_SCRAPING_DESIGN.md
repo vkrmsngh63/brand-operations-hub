@@ -1486,4 +1486,70 @@ This section is for entries added in subsequent sessions when the director adds 
 
 ---
 
+**2026-05-11-b — session_2026-05-11-b_w2-extension-session-4-module-2-text-capture**
+
+**Session:** session_2026-05-11-b_w2-extension-session-4-module-2-text-capture (Claude Code; on `workflow-2-competition-scraping`). Seventy-fifth Claude Code session.
+
+**Director's directive (initial — from launch prompt):** today's task was the P3B-1..P3B-11 cross-device verification of P-3 broader scope. Director pivoted mid-drift-check to a coding-with-deferred-testing mode: *"Rather than perform testing. Just tell me what testing needs to be performed in a general sense. I may defer the testing till the very end and just want you to keep coding and updating the code while giving me the option to test or defer the test till the end and keep coding"*. Verification queue tally surfaced (P3B + P1V); director picked Module 2 text-capture build as the next coding item after Claude's mistaken P-6 recommendation was corrected (P-6 shipped 2026-05-09-b).
+
+**Pre-code mistake captured (Rule 10 + Rule 24):** Claude recommended P-6 (Sponsored Ad checkbox) as the next-coding item without first verifying P-6 was actually open. Single-grep of `prisma/schema.prisma` + `url-add-form.ts` would have surfaced that `isSponsoredAd` + the checkbox UI were both already in place from 2026-05-09-b. Logged as CORRECTIONS_LOG 2026-05-11-b entry (synthesis-from-stale-grep failure mode — same root as 2026-04-27 Rule 24 origin entry).
+
+**Rule 14f sub-decisions before any code (text-capture gesture + tags input):**
+
+1. **Text-add gesture shape** — director picked **Option A "right-click context-menu only"** (recommended).
+   - Option A "right-click context-menu only" (RECOMMENDED + chosen) — single discoverable surface for new workers; zero key-chord collision risk with host-page bindings (Amazon/Walmart each bind their own); ship surface area minimized.
+   - Option B "keyboard shortcut only" — fast for power users but undiscoverable + risk of collision with host-page bindings.
+   - Option C "both" — double the surface to test/maintain.
+   - Reversible: a keyboard shortcut can be added additively later without breaking the menu path.
+
+2. **Tags input shape** — director picked **Option A "structured chip-list"** (recommended).
+   - Option A "structured chip-list" (RECOMMENDED + chosen) — Enter or comma adds a chip; X-on-chip removes; case-insensitive dedup with first-seen-casing preserved; clear visual state vs. ambiguous "is the comma part of this tag or a separator?"
+   - Option B "free-text comma-separated" — smaller code surface but ambiguous + less clear visual state.
+   - Reversible at any time.
+
+**Scope split explicitly captured (mid-build directive Read-It-Back, Rule 18):** Module 2 at full scope is text capture + image capture + region-screenshot + image upload — multi-hour build. Today's session ships text-capture ONLY (both gestures — highlight-and-add + paste-into-extension). Image-capture path (right-click "Save to PLOS — Image" + two-phase signed-URL upload) + region-screenshot mode deferred to session 5. Rationale per `STACK_DECISIONS.md` §11 line 559 — the original plan had separate Module-1-capture / Module-2-capture / image-upload / offline-queue / polish sessions; we're following that structure.
+
+**Rule 15 autonomous picks noted in commit:**
+- The text-capture form's URL picker pre-selects the saved-URL row matching the current page (via `pickInitialUrl`) when one is recognized. Falls back to a "Pick a saved URL…" placeholder. Pattern matches the URL-add form's "trigger-derived initial value" UX from session 3.
+- `validateCapturedTextDraft` requires non-empty `contentCategory` at the FORM level (server allows null). Rationale: every captured row is categorized per §A.7 reading + clean filtering on PLOS-side. Server's loose acceptance preserved for future clients (offline queue, manual API callers).
+- The popup paste flow lives in the same SetupScreen as Highlight Terms — gated on Project + Platform both being picked. Empty-state rendered when no saved URLs for the current platform yet.
+- Backdrop click + Esc + Cancel all close the content-script form without saving — same UX as the URL-add form.
+
+**Files changed this session (extension only — no schema, no API, no Next.js routes):**
+- NEW `extensions/competition-scraping/src/lib/captured-text-validation.ts` (~140 LOC).
+- NEW `extensions/competition-scraping/src/lib/captured-text-validation.test.ts` (~180 LOC; **19 tests**).
+- NEW `extensions/competition-scraping/src/lib/content-script/text-capture-form.ts` (~370 LOC; content-script overlay form).
+- NEW `extensions/competition-scraping/src/entrypoints/popup/components/CapturedTextPasteForm.tsx` (~230 LOC; React popup paste flow).
+- Modified `extensions/competition-scraping/src/lib/api-client.ts` — `createCapturedText`, `listVocabularyEntries`, `createVocabularyEntry`.
+- Modified `extensions/competition-scraping/src/lib/content-script/api-bridge.ts` — same 3 functions via background-proxy for content-script use.
+- Modified `extensions/competition-scraping/src/lib/content-script/messaging.ts` — new `open-text-capture-form` content-script push message + 3 new `BackgroundRequest` variants (`create-captured-text`, `list-vocabulary`, `create-vocabulary-entry`).
+- Modified `extensions/competition-scraping/src/lib/content-script/orchestrator.ts` — listens for `open-text-capture-form`, hands off to the new form.
+- Modified `extensions/competition-scraping/src/entrypoints/background.ts` — second context-menu (`'Add to PLOS — Captured Text'` on `contexts: ['selection']`) + handlers for the 3 new request kinds.
+- Modified `extensions/competition-scraping/src/lib/content-script/styles.ts` — `.plos-cs-form-select`, `.plos-cs-form-status`, `.plos-cs-form-inline-add`, `.plos-cs-chip-row`, `.plos-cs-chip`, `.plos-cs-chip-remove`.
+- Modified `extensions/competition-scraping/src/entrypoints/popup/App.tsx` — renders `<CapturedTextPasteForm>` below Highlight Terms when Project + Platform picked.
+- Modified `extensions/competition-scraping/src/entrypoints/popup/style.css` — paste-form section + chip styles.
+
+**API surface used (server-side already exists; no server work this session):**
+- `POST /api/projects/[projectId]/competition-scraping/urls/[urlId]/text` (API-routes session 2, 2026-05-07). Idempotent on `clientId`.
+- `GET /api/projects/[projectId]/vocabulary?type=content-category` (2026-05-07).
+- `POST /api/projects/[projectId]/vocabulary` (2026-05-07; upsert).
+
+**Verification scoreboard:**
+- Extension `npx tsc --noEmit` clean.
+- Extension `npm test` reports **252/252 pass** (was 233; +19 captured-text-validation tests).
+- Extension `npx eslint src` clean — 0 errors / 0 warnings.
+- Extension `npx wxt build` — artifacts written successfully at `.output/chrome-mv3/`; parent process hangs at exit per known issue (CORRECTIONS_LOG 2026-05-10-f INFORMATIONAL). Workaround: `pkill -f wxt` after seeing `.output/` populated; artifacts are intact.
+- Root `npx tsc --noEmit` clean.
+- Root `npm run build` clean (51 routes — exact baseline parity; no new routes since session #11).
+- Root `node --test --experimental-strip-types src/lib/**/*.test.ts` reports **400/400 pass** — baseline parity (no root code changes).
+- Root `npx eslint src` reports 52 problems (13 errors, 39 warnings) — exact baseline parity.
+
+**Multi-Workflow per Rule 25:** `git fetch origin` + `git pull --rebase origin workflow-2-competition-scraping` clean at session start (`workflow-2-competition-scraping` at `daa4ca8`; `origin/main` at `9a1aacd` from deploy session #5 earlier today). This session's commit lands on `workflow-2-competition-scraping`; doc-only flow-through to `main` happens at the next deploy session (which will also carry the image-capture session 5 code). Per CORRECTIONS_LOG 2026-05-10-c entry #1 PROCESS-quality finding, `main` has advanced 1 commit past this branch's last point — that lesson recommends pulling main into the feature branch before adding new commits when main has advanced. This session's commit DOES advance the feature branch without first absorbing main's doc-only commit — flagged at session start in the drift check; director acknowledged via the "Wrap session 4" pick. The next deploy session will rebase or ff-merge per the now-standard pattern (CORRECTIONS_LOG 2026-05-10-c entries #1 + #4). W#1 row untouched per Rule 3 ownership. Schema-change-in-flight stays No (today is pure code at the extension layer; no DB schema, no API surface change).
+
+**TaskList sweep per Rule 26:** 4 session tasks tracked + completed (start-of-session sequence; P3B walkthrough — set aside in favor of coding-with-deferred-testing per director's pivot; Module 2 text-capture build; end-of-session doc batch). Zero `DEFERRED:` (Rule 26 prefix) tasks at any point. Task #2 (P3B-1..P3B-11 verification) left pending across sessions per the standing deferral — destination doc entry (PENDING sub-table in VERIFICATION_BACKLOG.md Polish session #10) already exists from prior sessions.
+
+**Cross-references:** `extensions/competition-scraping/src/lib/captured-text-validation.ts` + `.test.ts`; `extensions/competition-scraping/src/lib/content-script/text-capture-form.ts`; `extensions/competition-scraping/src/entrypoints/popup/components/CapturedTextPasteForm.tsx`; `extensions/competition-scraping/src/entrypoints/background.ts` (new context-menu); `COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` new "Extension build — session 4" S4-A + S4-B + S4-C walkthrough sections; ROADMAP Active Tools W#2 row Last Session 2026-05-11-b entry + new (a.12) RECOMMENDED-NEXT for session 5 image-capture; CORRECTIONS_LOG 2026-05-11-b entry on P-6 stale-grep-synthesis slip.
+
+---
+
 END OF DOCUMENT

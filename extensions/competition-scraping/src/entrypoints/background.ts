@@ -1,14 +1,18 @@
 // Background service worker for the Competition Scraping extension.
 //
-// Phase 1 scope as of session 3 (extended 2026-05-08-c):
+// Phase 1 scope as of session 4 (extended 2026-05-11):
 //   - Importing the supabase module keeps the auto-refresh-token loop alive
 //     while Chrome considers the service worker "active."
-//   - Registers a right-click context menu item per
-//     COMPETITION_SCRAPING_STACK_DECISIONS.md §5 implementation guardrail #6:
-//     "Add to PLOS — Competition Scraping" is always available on link
-//     right-click as a redundant secondary path to the floating "+ Add"
-//     button. Click sends an `open-url-add-form` message to the active
-//     tab's content script.
+//   - Registers TWO right-click context menu items:
+//     1. "Add to PLOS — Competition Scraping" on link right-click per
+//        COMPETITION_SCRAPING_STACK_DECISIONS.md §5 implementation guardrail
+//        #6 — always available as a redundant secondary path to the floating
+//        "+ Add" button. Click sends an `open-url-add-form` message to the
+//        active tab's content script. Shipped session 3 (2026-05-07-h).
+//     2. "Add to PLOS — Captured Text" on text selection per §A.7 Module 2
+//        highlight-and-add gesture. Director-picked Option A (right-click
+//        context-menu only) at session 4 start 2026-05-11. Click sends an
+//        `open-text-capture-form` message with the selected text + page URL.
 //   - Listens for BackgroundRequest messages from content scripts and
 //     proxies them to the PLOS API. Content scripts cannot reach vklf.com
 //     directly because their fetches originate from the host page's
@@ -17,15 +21,18 @@
 //     origin, so its fetch passes preflight. Discovered + fixed during
 //     Waypoint #1 attempt #3 — see verification backlog attempt log.
 //
-// Future build sessions add: WAL replay on startup, periodic reconciliation
-// poller, navigator.onLine handlers.
+// Future build sessions add: image-capture context menu, WAL replay on
+// startup, periodic reconciliation poller, navigator.onLine handlers.
 
 import { supabase } from '../lib/supabase';
 import {
   PlosApiError,
+  createCapturedText,
   createCompetitorUrl,
+  createVocabularyEntry,
   listCompetitorUrls,
   listProjects,
+  listVocabularyEntries,
 } from '../lib/api-client';
 import {
   isBackgroundRequest,
@@ -36,41 +43,72 @@ import {
 
 void supabase;
 
-const CONTEXT_MENU_ID = 'plos-add-to-competition-scraping';
-const CONTEXT_MENU_TITLE = 'Add to PLOS — Competition Scraping';
+const CONTEXT_MENU_URL_ID = 'plos-add-to-competition-scraping';
+const CONTEXT_MENU_URL_TITLE = 'Add to PLOS — Competition Scraping';
+
+// Session 4 (2026-05-11) — text-capture context menu. Fires on text
+// selection; "Add to PLOS — Captured Text" routes the selected text + the
+// page URL to the content-script's text-capture form.
+const CONTEXT_MENU_TEXT_ID = 'plos-add-captured-text';
+const CONTEXT_MENU_TEXT_TITLE = 'Add to PLOS — Captured Text';
 
 export default defineBackground(() => {
-  // Register the context-menu entry once, on install / update. Chrome's
+  // Register the context-menu entries once, on install / update. Chrome's
   // contextMenus API errors if the same id is created twice; remove-then-
   // create makes this idempotent across reloads.
   chrome.runtime.onInstalled.addListener(() => {
     chrome.contextMenus.removeAll(() => {
       chrome.contextMenus.create({
-        id: CONTEXT_MENU_ID,
-        title: CONTEXT_MENU_TITLE,
+        id: CONTEXT_MENU_URL_ID,
+        title: CONTEXT_MENU_URL_TITLE,
         contexts: ['link'],
+      });
+      chrome.contextMenus.create({
+        id: CONTEXT_MENU_TEXT_ID,
+        title: CONTEXT_MENU_TEXT_TITLE,
+        contexts: ['selection'],
       });
     });
   });
 
-  // On context-menu click, forward the link's URL to the active tab's
-  // content script so it can open the URL-add overlay form.
+  // On context-menu click, dispatch to the appropriate content-script
+  // message kind. URL capture → `open-url-add-form` with the link href.
+  // Text capture → `open-text-capture-form` with the selection text + page URL.
   chrome.contextMenus.onClicked.addListener((info, tab) => {
-    if (info.menuItemId !== CONTEXT_MENU_ID) return;
-    const href = info.linkUrl;
     const tabId = tab?.id;
-    if (typeof href !== 'string' || typeof tabId !== 'number') return;
-    const message: ContentScriptMessage = {
-      kind: 'open-url-add-form',
-      href,
-    };
-    // sendMessage may reject if the content script isn't injected on the
-    // current page (e.g., right-click on a non-supported domain). Swallow
-    // the error — the menu entry showing on those pages is a Chrome UX
-    // tradeoff we can address later by scoping `documentUrlPatterns`.
-    chrome.tabs.sendMessage(tabId, message).catch(() => {
-      /* content script not present on this page; no-op */
-    });
+    if (typeof tabId !== 'number') return;
+
+    if (info.menuItemId === CONTEXT_MENU_URL_ID) {
+      const href = info.linkUrl;
+      if (typeof href !== 'string') return;
+      const message: ContentScriptMessage = {
+        kind: 'open-url-add-form',
+        href,
+      };
+      // sendMessage may reject if the content script isn't injected on the
+      // current page (e.g., right-click on a non-supported domain). Swallow
+      // the error — the menu entry showing on those pages is a Chrome UX
+      // tradeoff we can address later by scoping `documentUrlPatterns`.
+      chrome.tabs.sendMessage(tabId, message).catch(() => {
+        /* content script not present on this page; no-op */
+      });
+      return;
+    }
+
+    if (info.menuItemId === CONTEXT_MENU_TEXT_ID) {
+      const selectedText =
+        typeof info.selectionText === 'string' ? info.selectionText : '';
+      const pageUrl =
+        typeof info.pageUrl === 'string' ? info.pageUrl : tab?.url ?? '';
+      const message: ContentScriptMessage = {
+        kind: 'open-text-capture-form',
+        selectedText,
+        pageUrl,
+      };
+      chrome.tabs.sendMessage(tabId, message).catch(() => {
+        /* content script not present on this page; no-op */
+      });
+    }
   });
 
   // Proxy PLOS API calls coming from content scripts. Content scripts run
@@ -111,6 +149,15 @@ async function handleBackgroundRequest(
   }
   if (req.kind === 'create-competitor-url') {
     return createCompetitorUrl(req.projectId, req.body);
+  }
+  if (req.kind === 'create-captured-text') {
+    return createCapturedText(req.projectId, req.urlId, req.body);
+  }
+  if (req.kind === 'list-vocabulary') {
+    return listVocabularyEntries(req.projectId, req.vocabularyType);
+  }
+  if (req.kind === 'create-vocabulary-entry') {
+    return createVocabularyEntry(req.projectId, req.body);
   }
   // Exhaustiveness check — TypeScript narrows req to never here.
   const exhaustive: never = req;

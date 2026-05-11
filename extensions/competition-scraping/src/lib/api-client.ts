@@ -8,17 +8,23 @@
 import { getAccessToken } from './auth.ts';
 import { PlosApiError } from './errors.ts';
 import type {
+  CapturedText,
   CompetitorUrl,
+  CreateCapturedTextRequest,
   CreateCompetitorUrlRequest,
+  CreateVocabularyEntryRequest,
   ExtensionStateDto,
   GetExtensionStateResponse,
   ListCompetitorUrlsResponse,
   ListHighlightTermsResponse,
+  ListVocabularyEntriesResponse,
   Platform,
   ReplaceExtensionStateRequest,
   ReplaceExtensionStateResponse,
   ReplaceHighlightTermsRequest,
   ReplaceHighlightTermsResponse,
+  VocabularyEntry,
+  VocabularyType,
 } from '../../../../src/lib/shared-types/competition-scraping.ts';
 import type { HighlightTerm } from './highlight-terms.ts';
 
@@ -331,4 +337,66 @@ export async function createCompetitorUrl(
     },
   );
   return readJsonOrThrow<CompetitorUrl>(res);
+}
+
+/**
+ * Creates a CapturedText row attached to a CompetitorUrl. Session 4
+ * (Module 2 text-capture path) — POSTs to the existing route shipped in
+ * API-routes session 2 (2026-05-07). Idempotent server-side on `clientId`:
+ * a duplicate clientId returns the existing row with status 200 instead of
+ * 201. Either status maps to success here.
+ */
+export async function createCapturedText(
+  projectId: string,
+  urlId: string,
+  body: CreateCapturedTextRequest,
+): Promise<CapturedText> {
+  const res = await authedFetch(
+    `/api/projects/${encodeURIComponent(projectId)}/competition-scraping/urls/${encodeURIComponent(urlId)}/text`,
+    {
+      method: 'POST',
+      body: JSON.stringify(body),
+    },
+  );
+  return readJsonOrThrow<CapturedText>(res);
+}
+
+/**
+ * Lists project-scoped vocabulary entries for one vocabulary type. Used by
+ * the text-capture form (content-category picker) and future image-capture
+ * form (image-category picker). The server returns entries oldest-first,
+ * matching the "history of what's been used" reading.
+ */
+export async function listVocabularyEntries(
+  projectId: string,
+  vocabularyType: VocabularyType,
+): Promise<VocabularyEntry[]> {
+  const res = await authedFetch(
+    `/api/projects/${encodeURIComponent(projectId)}/vocabulary?type=${encodeURIComponent(vocabularyType)}`,
+  );
+  const data = await readJsonOrThrow<ListVocabularyEntriesResponse>(res);
+  if (!Array.isArray(data)) {
+    throw new PlosApiError(500, 'Unexpected response shape from vocabulary');
+  }
+  return data;
+}
+
+/**
+ * Adds a new vocabulary entry (or returns the existing row on dedup hit per
+ * the server's §11.1 upsert semantics). Used by the text-capture form's
+ * "+ Add new" affordance on the content-category picker, and the popup
+ * paste flow's category picker.
+ */
+export async function createVocabularyEntry(
+  projectId: string,
+  body: CreateVocabularyEntryRequest,
+): Promise<VocabularyEntry> {
+  const res = await authedFetch(
+    `/api/projects/${encodeURIComponent(projectId)}/vocabulary`,
+    {
+      method: 'POST',
+      body: JSON.stringify(body),
+    },
+  );
+  return readJsonOrThrow<VocabularyEntry>(res);
 }
