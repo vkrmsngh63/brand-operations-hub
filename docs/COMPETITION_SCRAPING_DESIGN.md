@@ -1552,4 +1552,69 @@ This section is for entries added in subsequent sessions when the director adds 
 
 ---
 
+**2026-05-11-b-addendum — Forward directive captured for upcoming sessions (popup two-tab restructure + URL viewer)**
+
+**Captured:** end of `session_2026-05-11-b_w2-extension-session-4-module-2-text-capture` (Claude Code; on `workflow-2-competition-scraping`).
+
+**Context:** at end-of-session, after session 4 text-capture shipped + the doc batch committed, director adjusted the forward plan via the personalized-handoff conversation. Two future-session items captured here so the next session (and the one after) sees them at session-start docs read per Rule 21 pre-interview directive scan.
+
+**Forward directive A — verification-first next session (Path A picked via Rule 14f).**
+
+The next session is a pure browser-verification session on vklf.com covering ALL deferred check sub-tables in `COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md`:
+- **P3B-1..P3B-11** — P-3 broader scope cross-device sign-in test (Polish session #10 sub-table, PENDING since 2026-05-10-e, deferred twice).
+- **P1V-1..P1V-3** — P-1 silent token refresh (Polish session #11 sub-table, PENDING since 2026-05-10-f; partly passive).
+- **S4-A + S4-B + S4-C** — Extension build session 4 Module 2 text-capture walkthroughs (new section as of this commit).
+
+**Prerequisite:** a fresh extension zip built from commit `b8423ab` (or later if more code has landed) — the existing `plos-extension-2026-05-11-w2-deploy-5.zip` at repo root predates session 4 and lacks the text-capture code. Build via `cd extensions/competition-scraping && npm run build` (apply the wxt-process-hangs-but-artifacts-are-written workaround from CORRECTIONS_LOG 2026-05-10-f INFORMATIONAL — `pkill -f wxt` once `.output/chrome-mv3/` is populated). Zip the artifacts into `plos-extension-2026-05-12-<slug>.zip` at repo root.
+
+**Branch:** verification-only work for W#k (k ≥ 2) belongs on the W#k feature branch per CORRECTIONS_LOG 2026-05-10-c entry #4 cheat-sheet (c) — `workflow-2-competition-scraping`.
+
+**Forward directive B — popup two-tab restructure + URL viewer (session AFTER verification).**
+
+After the verification session lands clean, the session after that adds a new user-facing feature in the extension popup. Captured here so the build session has the spec ready.
+
+**Spec:**
+
+- The popup gets a **two-tab navigation** at the top, switching between two surfaces:
+  - **Tab 1 — "Identify Competition"** — contains the existing popup surfaces moved here: ProjectPicker dropdown, PlatformPicker dropdown, HighlightTermsManager (with its color-swatch UI + save flow). No behavior change; just relocation into the tab container.
+  - **Tab 2 — "Capture Text & Images"** — contains two stacked surfaces:
+    1. **URL viewer** — a scrollable list of every saved CompetitorUrl for the current Project, **across ALL platforms** (director-picked Option A via Rule 14f at session 2026-05-11-b end). Each row shows: URL, platform (label or icon), competition category, product name, brand name, sponsored-ad badge. Clicking the URL opens that page in a new browser tab (`chrome.tabs.create({url, active: true})` or anchor with `target="_blank"`). The list is scrollable for projects with many URLs; load via existing `listCompetitorUrls(projectId, null)` (null platform = all platforms — verify the api-client supports null; if not, add a passthrough).
+    2. **Text capture paste form** — today's `<CapturedTextPasteForm>` MOVED here from its current location in App.tsx (currently below HighlightTermsManager).
+  - Future: when Module 2 image capture ships (session 5), its popup-side surface (if any) also lives in Tab 2.
+
+- **Active-session banner** — the existing "Capturing for [platform]" banner remains visible regardless of which tab is active (it's a top-level setup-state indicator, not tab content).
+
+- **Tab navigation UX:**
+  - Default open tab on popup-open = Tab 1 ("Identify Competition") — preserves today's behavior for muscle memory.
+  - Tab pick persists in `chrome.storage.local` (one new state key `selectedPopupTab`) so re-opens after navigation return to the user's last-picked tab. NOT synced server-side (UI state only; no cross-device persistence needed per §A.7 storage taxonomy).
+  - Tab switch is instant (React state) — no network call.
+
+- **Edge cases to handle in the build:**
+  - Tab 2's URL viewer renders an empty-state message ("No URLs captured yet for this Project — pick a platform on Tab 1 and use the "+ Add" button on a competitor page") when the project has zero URLs.
+  - The text-capture paste form keeps its existing empty-state ("No saved [platform] URLs yet — capture one via '+ Add' first") when the user is on a platform with no saved URLs.
+  - If the popup opens before Project is picked, Tab 2 should render a friendly "Pick a Project on the Identify Competition tab first" message — don't try to render the URL viewer with no projectId.
+
+- **Out of scope for the first build pass** (defer if needed; capture as polish items if surfaced):
+  - Per-column sort on the URL viewer table (added later if users want).
+  - Per-row edit/delete from the popup (PLOS-side detail page is the canonical edit surface).
+  - Filter by platform / category / sponsored-status in the popup (PLOS-side viewer has filters; popup keeps it simple for now).
+
+**Code surfaces likely affected:**
+- New: `extensions/competition-scraping/src/entrypoints/popup/components/PopupTabs.tsx` (tab navigation chrome).
+- New: `extensions/competition-scraping/src/entrypoints/popup/components/CapturedUrlList.tsx` (URL viewer).
+- New: `extensions/competition-scraping/src/lib/popup-state.ts` extended with `selectedPopupTab` storage key + helpers.
+- Modified: `extensions/competition-scraping/src/entrypoints/popup/App.tsx` (move existing surfaces under Tab 1 + render Tab 2's surfaces; `<CapturedTextPasteForm>` relocated).
+- Modified: `extensions/competition-scraping/src/entrypoints/popup/style.css` (tab strip styles + URL list table styles).
+- Maybe: `extensions/competition-scraping/src/lib/api-client.ts` (confirm `listCompetitorUrls(projectId, null)` works; if not, extend or call without the platform filter).
+
+**Verification surface for that build session:** new "Extension build — session 4b" (or "session N+M" depending on intervening sessions) section in `COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` with walkthrough steps for: tab switch persistence; URL list renders with all expected columns; click row → opens URL; empty-state renders correctly when project has no URLs; existing surfaces (Project / Platform / Highlight Terms / paste form) still work as before from inside their new tabs.
+
+**Schema impact:** none. New feature is pure popup React + a new chrome.storage.local key. No schema change, no API surface change, no `prisma db push`.
+
+**Branch:** code-build work for W#k (k ≥ 2) belongs on the W#k feature branch per CORRECTIONS_LOG 2026-05-10-c entry #4 cheat-sheet (a) — `workflow-2-competition-scraping`.
+
+**Why this entry exists separately from today's main 2026-05-11-b §B entry:** today's main entry captures what SHIPPED this session (session 4 text-capture). This addendum captures forward directives for FUTURE sessions (verification + tabs feature). Future sessions' Rule 21 pre-interview directive scan will pick up this entry as the canonical source for the upcoming work's spec + sub-decisions.
+
+---
+
 END OF DOCUMENT
