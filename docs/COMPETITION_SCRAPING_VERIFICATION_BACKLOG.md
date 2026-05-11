@@ -4,7 +4,86 @@
 **Workflow:** W#2 Competition Scraping & Deep Analysis.
 **Branch:** `workflow-2-competition-scraping`.
 **Created:** 2026-05-07 in `session_2026-05-07_w2-plos-side-viewer-detail-page-slice` (Claude Code).
-**Last updated:** 2026-05-11-b (W#2 Extension build — session 4 — Module 2 text-capture path ✅ SHIPPED at code level on `workflow-2-competition-scraping`. Both gestures landed in one session: (1) **highlight-and-add via right-click context-menu** — director-picked Option A 'right-click context-menu only' per the Rule 14f forced-picker; new content-script overlay form with saved-URL picker (pre-selects via `pickInitialUrl` when current page is recognized), captured-text textarea, content-category dropdown with inline "+ Add new" upsert path, and chip-list tags input (director-picked structured chip-list over comma-separated per Rule 14f). (2) **Paste-into-extension** — new React `<CapturedTextPasteForm>` rendered in the popup below Highlight Terms once Project + Platform are picked; same form surface; runs in extension origin so it calls `api-client.ts` directly without the api-bridge round-trip. New pure-logic module `captured-text-validation.ts` (`validateCapturedTextDraft`, `normalizeTags` with first-seen-casing dedupe, `pickInitialUrl`, UUIDv4 clientId mint) + 19 new node:test cases. New verification surface appended below as the "Extension build — session 4" section (PENDING; flows into Waypoint #2 verification along with future sessions 5 image-capture). **Scope split explicitly captured:** Module 2 image-capture flow (right-click "Save to PLOS — Image" + region-screenshot + two-phase signed-URL upload) deferred to session 5 — keeps each session shippable + verifiable. **Verification scoreboard:** ext tsc clean; ext tests **252/252** pass (was 233; +19 captured-text-validation tests); ext eslint 0e/0w; ext WXT build artifacts written (parent process hangs at exit per the known issue captured in CORRECTIONS_LOG 2026-05-10-f — same workaround applies); root tsc clean; root build clean (51 routes — baseline parity, no new routes); root tests **400/400** pass — baseline parity; root eslint 13e/39w — baseline parity. **Multi-workflow per Rule 25:** pull-rebase clean at session start (workflow-2-competition-scraping at `daa4ca8`; main at `9a1aacd` from deploy session #5 earlier today; this session's commit lands on workflow-2-competition-scraping; doc-only flow-through to main happens at next deploy session); schema-change-in-flight stays No; W#1 row untouched per Rule 3 ownership.)
+**Last updated:** 2026-05-12 (W#2 verification session + vklf.com production hotfix — full launch-prompt verification queue cleared today. See "Outcome 2026-05-12" block immediately below for per-sub-table results + doc-drift annotations. **Key results:** S4-A 12/12 PASS; S4-B 12/12 PASS (with two pre-existing-bug workarounds captured as polish items); S4-C-1 PASS + S4-C-2 SKIPPED OPTIONAL; P1V-2 + P1V-3 both PASS; P3B-1..P3B-10 PASS (P3B-11 N/A — no migration scenario applicable to fresh laptop 2). Production hotfix `08f10e5` shipped to main + deployed to vklf.com mid-session (Illegal invocation regression from P-1; 7-line fix; verified end-to-end via P1V-2). Six new polish items captured P-12..P-17 — destinations in ROADMAP W#2 polish backlog this same end-of-session doc-batch.)
+
+---
+
+## Outcome 2026-05-12 — full verification queue cleared
+
+**Session:** `session_2026-05-12_w2-verification-and-vklf-illegal-invocation-hotfix` (Claude Code, on `workflow-2-competition-scraping` for verification + this doc batch; pivoted to `main` mid-session for the vklf.com hotfix; returned to W#2 to continue verification).
+
+### Production hotfix shipped + verified (commit `08f10e5` on main)
+
+At S4-A-4 first save attempt, director observed `Failed to execute 'fetch' on 'Window': Illegal invocation` on vklf.com. Diagnosed as bare-`fetch` reference in `src/lib/authFetch.ts:82` production export (shipped 2026-05-10-f with P-1 silent token refresh; deployed via session #4 + #5 but invisible because both verification windows ended within the 1-hour access-token freshness window). Fix: wrap `fetch` in arrow `(u, i) => fetch(u, i)` to preserve the browser's window receiver. 7-line commit; tests still 7/7 PASS; build clean; deployed via Vercel `state: success`. Director verified vklf.com loads cleanly post-deploy. **P1V-2 verification immediately after deploy:** 3-request sequence (401 → Supabase refresh 200 → retry 200) observed exactly as designed — hotfix verified end-to-end same session.
+
+### S4 — Module 2 text-capture walkthroughs (Extension build — session 4 surface)
+
+| Sub-table | Result | Notes |
+|---|---|---|
+| S4-A-1 | ✅ PASS | "Paste captured text" section appears below Highlight Terms after Project + Platform pick. |
+| S4-A-2 | ✅ PASS | Form fields render. **Doc drift:** verification doc expected "Save button disabled until URL + category + non-empty text"; code shows `disabled={submitting}` only; validation surfaces via inline error on submit-click of incomplete form. Functionally correct; doc text needs update next session. |
+| S4-A-3 | ✅ PASS | Empty-state message appears with platform name when no saved URLs for picked platform. |
+| S4-A-4 | ✅ PASS | Happy-path save: textarea + URL pick + existing-category pick + Save → POST returns 201; form shows "Captured." + clears. |
+| S4-A-5 | ✅ PASS | "+ Add new…" category inline upsert: POST vocabulary 201 + POST text 201; new category persists in dropdown on next save. Director-requested polish: autofocus inline input on appearance — captured as P-13. |
+| S4-A-6 | ✅ PASS | Tag chips via Enter + comma-paste split into 3 chips; case-insensitive dedupe collapses "REVIEW" against existing "review". |
+| S4-A-7 | ✅ PASS | × button removes one chip; others stay in order. |
+| S4-A-8 / S4-A-9 / S4-A-10 | ✅ PASS | Inline validation errors fire on submit-click for missing text / URL / category. Order: URL → text → category. |
+| S4-A-11 | ✅ PASS | Offline DevTools throttle → save attempt → inline error "Couldn't save: Network unreachable…"; form stays populated with user input preserved. |
+| S4-A-12 | ✅ PASS | Saved rows appear on PLOS detail page Captured Text table with correct text + category + tags. |
+| S4-B-1 / S4-B-2 / S4-B-3 / S4-B-4 | ✅ PASS | Already-saved banner sanity; selection on non-highlighted text stays stable; menu item "Add to PLOS — Captured Text" appears; overlay form opens with text pre-filled. **URL pre-fill ONLY worked sometimes** — failed on Amazon-style slug-variant URLs; captured as P-15 (pickInitialUrl needs platformModule.canonicalProductUrl step). Workaround: manual URL pick. |
+| S4-B-5 / S4-B-6 | ✅ PASS | Save from overlay → row appears on PLOS detail page. |
+| S4-B-7 | ✅ PASS | Menu item HIDDEN without selection (Chrome `contexts: ['selection']` gating). |
+| S4-B-8 | ✅ PASS | Platform mismatch: menu appears but click silently bails (by-design `orchestrator.ts:102-107`). |
+| S4-B-9 | ✅ PASS | URL picker shows all saved URLs for platform; picking a different URL attaches the captured text to THAT URL, not the current page. |
+| S4-B-10 | ✅ PASS | Esc / Cancel button / backdrop click all close the form without saving. |
+| S4-B-11 | ✅ PASS | "+ Add new…" inline upsert from overlay works same as popup S4-A-5 (autofocus polish P-13 applies here too). |
+| S4-B-12 | ✅ PASS | Unsaved page → form opens without URL pre-selection; user picks manually. |
+| S4-C-1 | ✅ PASS | DevTools Application → Local Storage spot-check: no captured-text WAL keys present (today's session doesn't ship WAL). |
+| S4-C-2 | ⚪ SKIPPED OPTIONAL | Manual curl idempotency test — server contract tested at unit-test level; manual exercise skipped per S4-C-2 verification-doc guidance. |
+
+**Workaround applied for S4-B walkthrough:** select text in areas of competitor pages that don't contain any saved highlight terms. **Reason:** the highlight-terms applicator + MutationObserver self-feedback loop causes ~250ms flashing on all platforms (PRE-EXISTING since 2026-05-08-d P-5 ship; only newly-visible-as-blocker today because S4-B's selection gesture surfaces it). Selection on highlighted text is destroyed every cycle. Captured as polish item P-14.
+
+### P1V — silent token refresh active tests
+
+| Sub-table | Result | Notes |
+|---|---|---|
+| P1V-1 (passive) | ⚪ DEFERRED | Passive — will surface naturally next time director returns to vklf.com after >1 hour idle. Annotation: today's P1V-2 + hotfix combined make the P1V-1 path active + verified; passive observation pending natural use. |
+| P1V-2 (active expire → silent refresh) | ✅ PASS | DevTools console snippet expired access_token; reload → exact 3-request sequence: `/api/projects` 401 → Supabase `/auth/v1/token?grant_type=refresh_token` 200 → `/api/projects` retry 200; UI loaded cleanly with NO red error. Today's hotfix verified end-to-end. |
+| P1V-3 (failure path — refresh fails) | ✅ PASS (different mechanism) | DevTools console snippet expired access_token + removed refresh_token; reload → Supabase client fired SIGNED_OUT → app routed to login screen. **Doc drift:** verification doc expected "red error in UI: Could not load Projects (401)"; actual mechanism is auto-signout + login redirect — functionally correct + arguably better UX. Doc text needs update next session. Recovery: sign back in normally. |
+
+### P3B — P-3 broader scope cross-device sign-in test (third attempt; previously deferred twice)
+
+| Sub-table | Result | Notes |
+|---|---|---|
+| P3B-1 | ✅ PASS | Laptop 1 baseline established (extension reloaded from today's fresh zip `plos-extension-2026-05-12-w2-verification-1.zip`; signed in). |
+| P3B-2 | ✅ PASS | Project switch fired PUT `/api/extension-state` 200 with `selectedProjectId` set + `selectedPlatform: null`. |
+| P3B-3 | ✅ PASS | Platform pick fired second PUT `/api/extension-state` 200 with both fields set. |
+| P3B-4 | ✅ PASS | Laptop 2: same zip emailed + sideloaded with fresh chrome.storage.local; sign-in succeeded; GET `/api/extension-state` returned 200 with both picks. |
+| P3B-5 | ✅ PASS (canonical proof) | **Laptop 2's ProjectPicker + PlatformPicker pre-selected both values from laptop 1's session.** Picks could ONLY have come from the server (laptop 2's chrome.storage.local was empty on first sign-in). Server-side persistence verified end-to-end. |
+| P3B-6 | ✅ PASS | Laptop 2: switching to Project B fired PUT 200 + cleared PlatformPicker (per Option-1 semantics). |
+| P3B-7 | ✅ PASS | Laptop 2: close+reopen popup — new project still shows, platform stays null; fresh GET fires on remount. |
+| P3B-8 | ✅ PASS | Laptop 2: switching BACK to Project A — Platform stays null (Option-1 semantics: no per-project last-platform memory; user must re-pick). |
+| P3B-9 | ✅ PASS | Offline path: WiFi turned off on laptop 2; reload popup → sync warning banner appeared above ProjectPicker ("Couldn't reach PLOS — showing your setup picks from this Chrome."); cached picks still rendered. **Note:** DevTools Network throttling on the popup does NOT carry across popup close-and-reopen (the popup detaches DevTools on close and re-opens fresh); to test offline, use actual WiFi-off OR `location.reload()` in the popup's DevTools Console while it stays attached. Useful for future verification doc updates. |
+| P3B-10 | ✅ PASS | WiFi back on; reload popup → sync warning cleared; picks reloaded from server cleanly. |
+| P3B-11 | ⚪ N/A | OPTIONAL one-time auto-migration smoke test only applies when user had pre-existing local-only picks before the P-3-broader code shipped. Not applicable to today's setup (laptop 2 fresh install). |
+
+### Six DEFERRED polish items captured (per Rule 14e + Rule 26) — destinations in ROADMAP W#2 polish backlog
+
+- **P-12** Extension 401-retry / silent-refresh analog to P-1 (extension `api-client.ts authedFetch` has no 401-retry today).
+- **P-13** Autofocus on "+ Add new…" inline input (both popup `CapturedTextPasteForm.tsx` AND content-script `text-capture-form.ts`; director-requested at S4-A-5).
+- **P-14** Highlight-terms applicator + MutationObserver self-feedback loop causes ~250ms flashing on all platforms (PRE-EXISTING since 2026-05-08-d P-5 ship; only newly-visible today because S4-B's selection gesture surfaces it).
+- **P-15** `pickInitialUrl` missing `platformModule.canonicalProductUrl(...)` step on slug-variant URLs (session-4 bug; overlay's URL pre-fill fails on Amazon-style paths with product slug).
+- **P-16** Extension service worker "went to a bad state unexpectedly" surfaced on laptop 2 chrome://extensions (MV3 SW crash with degenerate stack trace; auto-restarted; needs SW DevTools diagnosis).
+- **P-17** Real-fetch integration test for `authFetch.ts` production export (test-coverage gap that allowed today's Illegal invocation to ship).
+
+### Two doc drifts captured (to clean up in a future VERIFICATION_BACKLOG update)
+
+1. S4-A-2 "Save button disabled until filled" — code shows Save only disabled on `submitting`; validation surfaces via inline error.
+2. P1V-3 "red error in UI: Could not load Projects (401)" — actual mechanism is Supabase SIGNED_OUT → app routes to login screen.
+
+---
+
+**Previously updated:** 2026-05-11-b (W#2 Extension build — session 4 — Module 2 text-capture path ✅ SHIPPED at code level on `workflow-2-competition-scraping`. Both gestures landed in one session: (1) **highlight-and-add via right-click context-menu** — director-picked Option A 'right-click context-menu only' per the Rule 14f forced-picker; new content-script overlay form with saved-URL picker (pre-selects via `pickInitialUrl` when current page is recognized), captured-text textarea, content-category dropdown with inline "+ Add new" upsert path, and chip-list tags input (director-picked structured chip-list over comma-separated per Rule 14f). (2) **Paste-into-extension** — new React `<CapturedTextPasteForm>` rendered in the popup below Highlight Terms once Project + Platform are picked; same form surface; runs in extension origin so it calls `api-client.ts` directly without the api-bridge round-trip. New pure-logic module `captured-text-validation.ts` (`validateCapturedTextDraft`, `normalizeTags` with first-seen-casing dedupe, `pickInitialUrl`, UUIDv4 clientId mint) + 19 new node:test cases. New verification surface appended below as the "Extension build — session 4" section (PENDING; flows into Waypoint #2 verification along with future sessions 5 image-capture). **Scope split explicitly captured:** Module 2 image-capture flow (right-click "Save to PLOS — Image" + region-screenshot + two-phase signed-URL upload) deferred to session 5 — keeps each session shippable + verifiable. **Verification scoreboard:** ext tsc clean; ext tests **252/252** pass (was 233; +19 captured-text-validation tests); ext eslint 0e/0w; ext WXT build artifacts written (parent process hangs at exit per the known issue captured in CORRECTIONS_LOG 2026-05-10-f — same workaround applies); root tsc clean; root build clean (51 routes — baseline parity, no new routes); root tests **400/400** pass — baseline parity; root eslint 13e/39w — baseline parity. **Multi-workflow per Rule 25:** pull-rebase clean at session start (workflow-2-competition-scraping at `daa4ca8`; main at `9a1aacd` from deploy session #5 earlier today; this session's commit lands on workflow-2-competition-scraping; doc-only flow-through to main happens at next deploy session); schema-change-in-flight stays No; W#1 row untouched per Rule 3 ownership.)
 
 **Previously updated:** 2026-05-10-c (W#2 polish session #9 — P-2 ✅ BROWSER-VERIFIED on local extension build via corrected sequence captured today. **No code changes** — P-2 fix already shipped at code level 2026-05-10-b in commit `d2e2115`. Director performed the test on `plos-extension-2026-05-10-c-p2-p9-p10.zip` and reported PASS — red error box read exactly the predicted text **"Couldn't load your projects (0): Network unreachable — check your connection."** matching `api-client.ts:62` `mapFetchTransportError` + `ProjectPicker.tsx:32` PlosApiError-branch rendering. **Doc updates this commit:** Polish session #8 P-2 sub-section flipped to ✅ DONE 2026-05-10-c + P-2 sub-table rewritten as P2-A..P2-E with the corrected sequence (sign in normally with WiFi ON → close popup → turn OFF system WiFi → re-open popup → observe red error box; replaces the original `P2-1..P2-5` "sign in WHILE offline" sequence which couldn't cleanly exercise the P-2 code path because Supabase auth itself needs network); each P2-A..P2-D row marked PASS + P2-E cleanup row marked PASS. **P-9 + P-10 still PENDING** — flow with P-2 doc updates to `main` at next W#2 → main deploy session per ROADMAP Active Tools row (a.7). Multi-workflow per Rule 25: pull-rebase clean at session start; W#1 row untouched per Rule 3 ownership; schema-change-in-flight stays "No". TaskList sweep per Rule 26: 4 tasks tracked + completed; zero `DEFERRED:` items at any point.)
 
