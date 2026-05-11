@@ -78,5 +78,11 @@ export function makeAuthFetch(deps: AuthFetchDeps) {
   };
 }
 
+// Wrap `fetch` in an arrow so the browser invokes it with its window receiver.
+// Passing `fetch` bare would detach it and surface "Illegal invocation" on the
+// first call. Unit tests don't catch this because they inject a fake fetchFn.
 export const authFetch: ReturnType<typeof makeAuthFetch> = (url, options) =>
-  makeAuthFetch({ supabase: getProductionSupabase(), fetchFn: fetch })(url, options);
+  makeAuthFetch({
+    supabase: getProductionSupabase(),
+    fetchFn: (u, i) => fetch(u, i),
+  })(url, options);
