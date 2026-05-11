@@ -1,8 +1,10 @@
 # HANDOFF PROTOCOL
 ## The rules Claude must follow at the start, during, and end of EVERY chat
 
-**Last updated:** May 4, 2026-d (Pool-tune small-batch test — INSUFFICIENT session — NEW Rule 26 added: Real-time deferred-items registry via TaskCreate, the formal Rule 14e-extension. Drafted mid-session after director flagged that small things falling through cracks across the long roadmap could be catastrophic. The Rule 14e end-of-session sweep was relying on Claude's memory; Rule 26 makes the deferred-items registry externally observable + persistent + forced-into-existence via TaskCreate. Director-approved at session mid-point.)
-**Last updated in session:** session_2026-05-04-d_pool-tune-small-batch-test-insufficient (Claude Code)
+**Last updated:** May 14, 2026 (P-17 Playwright real-browser regression test session — **NEW Rule 27 added: Playwright forced-picker before manual browser walkthroughs.** Drafted mid-session after director asked "*Is this used to test the code you just wrote and if so, why didn't we use this until now and if this method of testing can save me time and effort, how can I ensure we consistently use such methods moving forward?*" Director chose to codify "consider Playwright first" into a mechanical rule rather than rely on Claude remembering. Rule 27 triggers a Rule 14f forced-picker every time Claude is about to propose a manual browser walkthrough with 5+ steps OR is about to verify code that lives in a real-browser context — comparing Playwright automated test vs. director manual walkthrough vs. hybrid. The honest-cost picker surfaces every time the conditions fire so the time-savings opportunity isn't silently missed. Director-approved end-of-session immediately after Rule 27 was drafted.)
+**Last updated in session:** session_2026-05-14_p17-playwright-real-browser-regression-test (Claude Code)
+**Previously updated:** May 4, 2026-d (Pool-tune small-batch test — INSUFFICIENT session — NEW Rule 26 added: Real-time deferred-items registry via TaskCreate, the formal Rule 14e-extension. Drafted mid-session after director flagged that small things falling through cracks across the long roadmap could be catastrophic. The Rule 14e end-of-session sweep was relying on Claude's memory; Rule 26 makes the deferred-items registry externally observable + persistent + forced-into-existence via TaskCreate. Director-approved at session mid-point.)
+**Previously updated in session:** session_2026-05-04-d_pool-tune-small-batch-test-insufficient (Claude Code)
 **Previously updated:** April 27, 2026 (V3 small-batch test + context-scaling concern session — new Rule 24 added: Pre-capture search before adding any ROADMAP item or proposing new architectural concern. Drafted in response to a HIGH-severity mistake captured in `CORRECTIONS_LOG.md` 2026-04-27 entry — Claude proposed a context-scaling ROADMAP item without first searching existing docs for prior treatment, producing a misframed entry that would have misrepresented the system's design history. Rule 24 is the operational scaffolding for verify-before-write specifically at ROADMAP-capture moments.)
 **Previously updated in session:** session_2026-04-27_v3-prompt-small-batch-test-and-context-scaling-concern (Claude Code)
 **Previously updated in session:** session_2026-04-26_workflow-transition-architecture-and-v3-prompt-refinement (Claude Code)
@@ -549,6 +551,48 @@ The existing Rule 14e end-of-session sweep relied on Claude's memory of what was
 **Relationship to TaskCreate's general use:** TaskCreate is also valuable for tracking in-flight work within a session (e.g., "Run small-batch test on vklf.com" was Task #4 this session, completed when the test finished). Rule 26 is about a specific subset — deferred items going to permanent docs — and is enforced via the `DEFERRED:` prefix. Other TaskCreate uses are encouraged but not Rule-26-mandated.
 
 **Cross-references:** `CLAUDE_CODE_STARTER.md` Session Management section (Rule 26 cross-reference); operational memory file `feedback_deferred_items_registry.md` (Claude-side standing operational behavior). `CORRECTIONS_LOG.md` 2026-05-04-d entry on the Rule 14e slip that triggered codification of Rule 26.
+
+### Rule 27 — Playwright forced-picker before manual browser walkthroughs (NEW 2026-05-14)
+
+When a session is about to propose a director manual browser walkthrough with 5+ steps, OR is about to verify code (new feature or bug fix) that lives in a real-browser context, Claude MUST first run a Rule 14f forced-picker that compares:
+
+- **Option A — Playwright automated test** (recommended for repeatable regression checks; tests against a real Chromium browser; catches the same class of bug if it ever regresses; one-time test-authoring cost; per-run cost ~5-10 seconds; the test is committed to the repo and runs forever)
+- **Option B — Director manual walkthrough** (recommended for one-time exploratory verification or first-time-ever flows that involve visual judgment, copy-correctness, or cross-physical-device concerns; director's time per pass; no test-authoring cost; no regression coverage)
+- **Option C — Hybrid** (Playwright for mechanical parts — clicks, URL transitions, response codes, console errors, network requests; director for judgment parts — copy, visual correctness, screenshots, "does this feel right?")
+- **Option D — I have a question first that I need clarified** (escape hatch per Rule 14f)
+
+The `(recommended)` marker (per Rule 14f) goes on whichever option BEST catches the same bug class again later if it regresses, AND fits the verification's repeatability profile. Default heuristic: if the walkthrough will be repeated more than once (e.g., across regression cycles, deploy verifications, or as part of a recurring test pass), recommend Option A or C. If the walkthrough is genuinely one-off (e.g., novel UI exploration, judgment calls on aesthetics), recommend Option B.
+
+**Mechanical test before proposing a manual walkthrough:**
+1. Count the steps in the walkthrough Claude is about to propose. If 5+, the rule fires.
+2. Identify the bug class or feature class being verified. If it lives in browser context (DOM/fetch/navigation/cookies/window APIs/redirects/forms), the rule fires regardless of step count.
+3. Either trigger fires → run the forced-picker BEFORE proposing the walkthrough.
+4. If neither fires → manual walkthrough is the natural choice; no forced-picker needed.
+
+**Scope exception — when manual walkthrough is the natural choice even after the trigger fires:**
+- One-time exploratory verification of a never-shipped-before flow ("does this flow even make sense?")
+- Cross-physical-device tests where the device-ness is the point (e.g., laptop 1's `chrome.storage.local` vs. laptop 2's — Playwright can simulate two browser contexts but the SPECIFIC concern is real cross-device persistence)
+- Chrome extension popup flows where extension-context testing is too complex relative to verification's repeat-frequency (Playwright extension testing is real but more setup-heavy than for regular web pages; revisit when extension flows stabilize)
+- Visual-judgment checks ("does this look right?", "is this copy correct?", "does this feel like the right UX?") — director's eye is the test
+- Verification of a fix that's been shipped + verified once and is unlikely to be re-verified (one-off post-deploy smoke check)
+
+If Claude is uncertain whether a walkthrough fits the scope exception, Claude runs the forced-picker anyway and lets the director call it. False-positive pickers are cheap (~30 seconds of director's time); false-negative skips lose the time-savings opportunity entirely.
+
+**Concrete examples — past walkthroughs Rule 27 would have flipped to Playwright:**
+- `/plos` redirect test (2026-05-13 (a.12) — would have been a 3-line Playwright test asserting `/plos` → `/projects`)
+- P1V-2 silent token refresh verification (2026-05-12 — 5-second automated test instead of a >1-hour passive wait for token expiry)
+- `/projects` "← Back" button check (2026-05-13 — a Playwright click + URL assertion would have caught the no-op self-loop in seconds, before the slip was flagged via Rule 10)
+
+**Concrete examples — past walkthroughs Rule 27 leaves as manual (scope exceptions):**
+- P3B-1..P3B-11 cross-device sign-in proof (2026-05-12 — device-ness is the point)
+- S4-A 12-step popup paste flow (2026-05-12 — extension popup context; relative cost too high until extension testing stabilizes)
+- Director's "does the new `/plos` shape feel right?" judgment (2026-05-13 — visual)
+
+**Why this rule exists:** Director asked 2026-05-14, after P-17's Playwright ship — *"Is this used to test the code you just wrote and if so, why didn't we use this until now and if this method of testing can save me time and effort, how can I ensure we consistently use such methods moving forward?"* — and chose to codify the "consider Playwright first" reflex into a mechanical rule rather than rely on Claude remembering. Honest answer at the time was that Playwright IS a director-time saver for repeatable browser-context verifications, but the historical pattern was for Claude to default to "let me give you an N-step walkthrough" without surfacing the automated-test alternative. Rule 27 forces the alternative to surface every time the trigger conditions fire.
+
+**Relationship to Rule 14f:** Rule 14f governs HOW multi-option questions are shaped (per-option context + recommended marker + escape hatch + free-text invitation). Rule 27 names WHEN this specific picker fires (manual walkthrough proposal moment) and what its OPTIONS are. The two compose: Rule 14f is the picker-machinery; Rule 27 is the trigger + content for one specific picker kind.
+
+**Cross-references:** Rule 14f (the forced-picker mechanism Rule 27 uses); operational memory `feedback_playwright_for_repeatable_walkthroughs.md` (Claude-side standing operational behavior); `tests/playwright/authFetch-regression.spec.ts` (the first session-shipped Playwright suite + reference shape for future Playwright tests in the repo); `README.md` §"Running the Playwright regression tests" (how to run + the system-libs install workaround); ROADMAP P-18 (the devcontainer postCreateCommand follow-up that makes the test-runner setup zero-touch on fresh Codespaces).
 
 ---
 
