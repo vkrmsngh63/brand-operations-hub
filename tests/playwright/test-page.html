@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>authFetch regression test page</title>
+</head>
+<body>
+<h1>authFetch regression test page (P-17)</h1>
+<p>This page is loaded by tests/playwright/authFetch-regression.spec.ts only.</p>
+<script type="module">
+  import { authFetch } from '/authFetch.bundle.js';
+
+  window.__authFetch = authFetch;
+
+  // Wraps authFetch so the Playwright test can call it via page.evaluate
+  // and receive a JSON-serializable result that distinguishes:
+  //   - normal return: { ok: true, status, body }
+  //   - thrown error:  { ok: false, error, threwIllegalInvocation }
+  // The threwIllegalInvocation flag is the regression signal — if the
+  // production export wires `fetch` bare (the 2026-05-12 bug), real
+  // Chromium throws "TypeError: Failed to execute 'fetch' on 'Window':
+  // Illegal invocation" on the first fetch call.
+  window.__runAuthFetch = async function (url, options) {
+    try {
+      const res = await window.__authFetch(url, options);
+      const body = await res.text();
+      return {
+        ok: true,
+        status: res.status,
+        body,
+        threwIllegalInvocation: false,
+      };
+    } catch (e) {
+      const msg = String(e && (e.message || e));
+      return {
+        ok: false,
+        status: null,
+        body: null,
+        threwIllegalInvocation: /Illegal invocation/i.test(msg),
+        error: msg,
+      };
+    }
+  };
+
+  window.__pageReady = true;
+</script>
+</body>
+</html>

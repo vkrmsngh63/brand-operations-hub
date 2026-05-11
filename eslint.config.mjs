@@ -28,6 +28,10 @@ const eslintConfig = defineConfig([
     // Don't lint the rule's own test fixtures (they intentionally violate
     // the rule).
     "eslint-rules/**/*.test.mjs",
+    // Playwright suite has its own TS handling and ships a generated
+    // bundle of src/lib/authFetch.ts; main eslint config doesn't apply.
+    "tests/**",
+    "playwright.config.ts",
   ]),
 ]);
 
