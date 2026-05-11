@@ -1,8 +1,10 @@
 # NAVIGATION MAP
 ## Every route, every click path through PLOS — the single source of truth for UI navigation
 
-**Last updated:** May 7, 2026 (W#2 API-routes session-2 SHIPPED — no UI route changes this session. 8 new W#2 API routes (`urls/[urlId]/sizes`, `sizes/[sizeId]`, `urls/[urlId]/text`, `text/[textId]`, `urls/[urlId]/images/requestUpload`, `urls/[urlId]/images/finalize`, `images/[imageId]`, `reconcile`) registered in `PLATFORM_ARCHITECTURE.md §3` routes table. The existing W#2 page at `/projects/[projectId]/competition-scraping` continues to render the same library composition — multi-table viewer for the content area is still a placeholder; will be replaced incrementally now that the session-2 endpoints are live on this branch.)
-**Last updated in session:** session_2026-05-07_w2-api-routes-session-2 (Claude Code, on `workflow-2-competition-scraping` branch)
+**Last updated:** May 13, 2026 (Platform-UI fix-pair SHIPPED — (a.12) closed. **(i)** W#2 workflow card on `/projects/[projectId]` workflow grid now navigates to `/projects/[id]/competition-scraping` instead of showing the Ckpt 9.5-era "coming soon" toast — `WORKFLOW_DEFS[1]` in `src/app/projects/[projectId]/page.tsx` flipped from `{active: false, route: null}` to `{active: true, route: "competition-scraping"}`. **(ii)** `/plos` reshaped to a 5-line server-side redirect to `/projects` per director directive (option A picked via Rule 14f forced-picker) — director wanted PLOS to open directly to Projects without the workflow-cards intermediate step. Original 1,525-line workflow-cards landing preserved in git history at commit `23a5985`. Follow-on edit: `/projects` page's "← Back" button retargeted from `/plos` to `/dashboard` (Claude-autonomous per Rule 15; flagged to director per Rule 10 as a small slip from Option-A description's "no orphaned links" claim — caught + corrected in-session before push). Build clean — 51 routes baseline parity preserved. NAVIGATION_MAP `/plos` section + `/projects` "Back" wiring + `/projects/[projectId]` workflow-grid section all updated to match.)
+**Last updated in session:** session_2026-05-13_w2-card-click-and-plos-redirect (Claude Code, on `main` branch)
+**Previously updated:** May 7, 2026 (W#2 API-routes session-2 SHIPPED — no UI route changes this session. 8 new W#2 API routes (`urls/[urlId]/sizes`, `sizes/[sizeId]`, `urls/[urlId]/text`, `text/[textId]`, `urls/[urlId]/images/requestUpload`, `urls/[urlId]/images/finalize`, `images/[imageId]`, `reconcile`) registered in `PLATFORM_ARCHITECTURE.md §3` routes table. The existing W#2 page at `/projects/[projectId]/competition-scraping` continues to render the same library composition — multi-table viewer for the content area is still a placeholder; will be replaced incrementally now that the session-2 endpoints are live on this branch.)
+**Previously updated in session:** session_2026-05-07_w2-api-routes-session-2 (Claude Code, on `workflow-2-competition-scraping` branch)
 **Previously updated:** May 7, 2026 (W#2 API-routes session-1 SHIPPED — no UI route changes this session. 3 new W#2 API routes (`/api/projects/[projectId]/competition-scraping/urls`, `.../urls/[urlId]`, `/api/projects/[projectId]/vocabulary`) registered in `PLATFORM_ARCHITECTURE.md §3` routes table.)
 **Previously updated in session:** session_2026-05-07_w2-api-routes-session-1 (Claude Code, on `workflow-2-competition-scraping` branch)
 **Previously updated:** May 6, 2026 (W#2 PLOS-side build first slice — added W#2 Competition Scraping & Deep Analysis route at `/projects/[projectId]/competition-scraping` composing 7 components from the Shared Workflow Components Library.)
@@ -28,7 +30,9 @@
 - **`/projects/[projectId]` detail page:** ✅ LIVE — Project header + 15-card workflow grid with status badges + coming-soon toast for non-active workflows (Ckpt 9.5 — note: Ckpt 6 docs claimed this was built then but the file didn't exist; built for real in Ckpt 9.5. See CORRECTIONS_LOG for the Pattern 7 recurrence.)
 - **`/projects/[projectId]/keyword-clustering`:** ✅ LIVE (Ckpt 7) — single-state Keyword Clustering workspace, Project pre-selected from URL
 - **`/keyword-clustering`:** ✅ DELETED (Ckpt 7) — folder removed entirely; route no longer exists
-- **`/plos` Keyword Analysis card:** ✅ LIVE (Ckpt 8) — routes to `/projects` list
+- **`/plos` reshaped to server-side redirect → `/projects`** (2026-05-13) — workflow-cards intermediate page replaced with a five-line `redirect("/projects")` server component per director directive. Every entry point (Dashboard PLOS card, typed URL, bookmark, `/plos/notes` back-button) lands on `/projects`. Original 1,525-line landing preserved in git history at commit `23a5985`.
+- **`/projects/[projectId]` W#2 Competition Scraping card:** ✅ LIVE (2026-05-13) — workflow grid card now navigates to `/projects/[id]/competition-scraping` (W#2's real page has been live on main since 2026-05-08; the card's coming-soon toast was a Ckpt 9.5-era leftover).
+- **`/plos` Keyword Analysis card (historical — landing now redirects so card never displays):** Used to route to `/projects` list (Ckpt 8).
 - **`/dashboard/notes` + `/plos/notes`:** ✅ LIVE (Ckpt 8; note-creation fixed in Ckpt 9.5 — API allowlist had to be extended)
 - **`/docs/`:** ✅ CREATED (Ckpt 9) — canonical handoff doc location at repo root
 
@@ -48,19 +52,23 @@
  │    │
  │    ├── → /dashboard/notes   — Dashboard Admin Notes (✅ BUILT Ckpt 8)
  │    │
- │    ├── → /plos              — PLOS Landing Page (14 workflows + Business Ops)
- │    │    │                     + 📝 Notes button (Ckpt 8)
+ │    ├── → /plos              — 307 redirect → /projects (RESHAPED 2026-05-13)
+ │    │    │                       Dashboard "PLOS" tile click lands directly on /projects;
+ │    │    │                       workflow-cards landing retired — original preserved in git at 23a5985
  │    │    │
- │    │    ├── → /plos/notes   — PLOS Admin Notes (✅ BUILT Ckpt 8)
+ │    │    └── → /plos/notes   — PLOS Admin Notes (✅ BUILT Ckpt 8) — still accessible by direct URL;
+ │    │                          Back button → /plos which redirects → /projects
+ │    │
+ │    ├── → /projects          — Projects list (✅ BUILT Ckpt 6); now the de-facto PLOS landing
+ │    │    │                     "← Back" button retargeted /plos → /dashboard 2026-05-13
  │    │    │
- │    │    ├── → /projects     — Keyword Analysis card now points here (Ckpt 8 rewire)
- │    │    │                     Projects list (✅ BUILT Ckpt 6)
- │    │    │    │
- │    │    │    └── → /projects/[projectId] — Project detail page (✅ BUILT Ckpt 6)
- │    │    │         │
- │    │    │         └── → /projects/[projectId]/keyword-clustering — KC workspace (✅ BUILT Ckpt 7)
- │    │    │
- │    │    └── (no other active navigation — 13 other cards + Business Ops show "coming soon" toast)
+ │    │    └── → /projects/[projectId] — Project detail page (✅ BUILT Ckpt 6)
+ │    │         │
+ │    │         ├── → /projects/[projectId]/keyword-clustering — KC workspace (✅ BUILT Ckpt 7)
+ │    │         └── → /projects/[projectId]/competition-scraping — W#2 workspace (✅ wired 2026-05-13;
+ │    │                                                            real page live on main since 2026-05-08)
+ │    │
+ │    │    (12 other workflow cards + Business Ops still show "coming soon" toast)
  │    │
  │    ├── → /pms               — PMS placeholder
  │    │    └── → /pms/notes    — PMS Admin Notes
@@ -123,39 +131,28 @@
 
 ---
 
-### `/plos` — PLOS Landing Page
+### `/plos` — PLOS Server-Side Redirect (RESHAPED 2026-05-13)
 
-**What the user sees:**
-- Top bar: "← Back" button (returns to `/dashboard`) on the left; on the right, a flex container with 📝 Notes (Ckpt 8) + Sign Out
-- Header: 🚀 icon + "Product Launch Operating System" + "Select a workflow to continue"
-- View mode toggle: "Overview" (3 columns, compact) vs "Detailed" (2 columns, with "Show details" expand)
-- In Detailed view: "Expand All" / "Collapse All" buttons
-- Cards grid of 14 workflow cards (filtered to non-standalone only)
-- Below an "Ongoing Operations" divider: the Business Operations standalone card
-- Each card shows icon, title, short description, and Active/Coming Soon badge
-- Each card has an edit pencil (✏️) on hover — opens modal to edit title, short desc, long desc
-- Card edits stored in `localStorage` key `plos_workflow_cards` (to be migrated to DB in Phase 2 — see ROADMAP)
-- Hover effect: bright light blue background with dark text
+**What the user sees:** nothing — `/plos` is a server-side redirect to `/projects`. The previous 1,525-line workflow-cards landing was replaced 2026-05-13 per director directive (director wanted PLOS to open directly to the Projects page; the workflow-cards intermediate step required an extra click).
 
-**Auth required:** Yes
-
-**Which cards are Active (currently only one — and its route is now correct as of Ckpt 8):**
-| Card | Status | Click → |
-|---|---|---|
-| 🔑 Keyword Analysis & Intent Discovery | **Active** | `/projects` (✅ rewired in Ckpt 8 — pick a Project, then enter its Keyword Analysis workflow) |
-| All other 13 cards | Coming Soon | Toast: "<n> — coming soon" |
-| ⚙️ Business Operations (standalone) | Coming Soon | Toast |
+**Auth required:** No (the redirect runs before any rendering; auth is enforced by `/projects` on arrival).
 
 **Transitions out:**
 | Action | Destination |
 |---|---|
-| Click active card (Keyword Analysis) | `/projects` (✅ Ckpt 8 rewire) |
-| Click coming-soon card | Shows toast, stays on `/plos` |
-| Click 📝 Notes (Ckpt 8) | `/plos/notes` |
-| Click "← Back" | `/dashboard` |
-| Click Sign Out | `/` |
+| Any visit to `/plos` (Dashboard PLOS card, typed URL, bookmark, `/plos/notes` back-button) | 307 redirect → `/projects` |
 
-**Source file:** `src/app/plos/page.tsx` — `DEFAULT_CARDS` array at top is authoritative list of all 14 + Business Ops. Keyword Analysis card's `route` field was updated in Ckpt 8 from `/keyword-clustering` to `/projects`. Note: card `route` values are NOT persisted to localStorage (only title/shortDesc/longDesc are), so the route change takes effect immediately on all user machines.
+**Source file:** `src/app/plos/page.tsx` — five-line server component:
+
+```tsx
+import { redirect } from "next/navigation";
+
+export default function PLOSRedirect() {
+  redirect("/projects");
+}
+```
+
+**Historical note — the prior workflow-cards landing** is preserved in git history at commit `23a5985` and can be restored with `git show 23a5985:src/app/plos/page.tsx > src/app/plos/page.tsx`. localStorage card-text edits (`plos_workflow_cards`) are not lost — still in the user's browser, just no longer rendered anywhere. The Edit modal feature, Overview/Detailed view toggle, and the 14-workflow-cards UI are all in the historical version.
 
 ---
 
@@ -190,9 +187,9 @@
 **Transitions out:**
 | Action | Destination |
 |---|---|
-| Back button | `/plos` |
+| Back button | `/plos` → 307 redirect → `/projects` (since 2026-05-13 `/plos` reshape) |
 
-**Source file:** `src/app/plos/notes/page.tsx` (11 lines — thin wrapper around shared `AdminNotes`)
+**Source file:** `src/app/plos/notes/page.tsx` (11 lines — thin wrapper around shared `AdminNotes`). `backRoute="/plos"` left as-is — director picked Option A redirect explicitly knowing this back-button lands on `/projects` via the redirect; updating to `backRoute="/projects"` directly would be a one-line change if the chain ever needs simplifying.
 
 ---
 
@@ -248,7 +245,7 @@
 ### `/projects` — Projects List (✅ BUILT in Ckpt 6)
 
 **What the user sees:**
-- Top bar: "← Back" (returns to `/plos`) + "Sign Out"
+- Top bar: "← Back" (returns to `/dashboard` since 2026-05-13 — previously returned to `/plos` but `/plos` now redirects to `/projects` so the old wiring was a no-op loop) + "Sign Out"
 - Header: 📁 icon + "Projects" + "Your product launches"
 - Controls bar (only shown if there are Projects or the new-form is open):
   - **Search box** — wide input with 🔍 icon and placeholder "Search Projects..." Live-filters by name AND description (200ms debounced). Has ✕ clear-button once you type anything. Not case-sensitive.
@@ -287,7 +284,7 @@
 | Click card body | Expand accordion (stays on `/projects`) |
 | Click Keyword Analysis workflow card | `/projects/[projectId]/keyword-clustering` ✅ (live as of Ckpt 7) |
 | Click other workflow cards | Coming soon toast |
-| Click "← Back" | `/plos` |
+| Click "← Back" | `/dashboard` (since 2026-05-13 — previously `/plos`) |
 | Click Sign Out | `/` |
 
 **Source file:** `src/app/projects/page.tsx` (~1,493 lines)
@@ -307,7 +304,10 @@
   - Status badge (Inactive / Active / Completed)
   - Short description (1–2 sentences)
   - Hover: light-blue-white background, lift + shadow
-- Only Keyword Analysis (🔑) is clickable in Phase 1 — navigates to `/projects/[id]/keyword-clustering` (✅ works as of Ckpt 7). Others show "coming soon" toast.
+- **Two workflow cards are clickable as of 2026-05-13:**
+  - **🔑 Keyword Analysis** → `/projects/[id]/keyword-clustering` (✅ works since Ckpt 7).
+  - **🔍 Competition Scraping** → `/projects/[id]/competition-scraping` (✅ wired 2026-05-13 — `WORKFLOW_DEFS[1]` flipped from `active: false` to `active: true, route: "competition-scraping"` now that W#2's real page has been live on main since 2026-05-08).
+- Other 13 cards still show "coming soon" toast.
 
 **Does NOT include (yet):** editing Project name/description from this page (use `/projects` page for now), reset-workflow-data, Phase 2 review state display, delete Project (use `/projects` page).
 
@@ -318,9 +318,10 @@
 |---|---|
 | Click Back to Projects | `/projects` |
 | Click Keyword Analysis card | `/projects/[id]/keyword-clustering` ✅ |
-| Click any other workflow card | "coming soon" toast |
+| Click Competition Scraping card | `/projects/[id]/competition-scraping` ✅ (NEW 2026-05-13) |
+| Click any of the 13 other workflow cards | "coming soon" toast |
 
-**Source file:** `src/app/projects/[projectId]/page.tsx` (~372 lines)
+**Source file:** `src/app/projects/[projectId]/page.tsx` (~488 lines)
 
 ---
 

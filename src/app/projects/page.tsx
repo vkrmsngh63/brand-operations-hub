@@ -1318,7 +1318,7 @@ export default function ProjectsPage() {
             marginBottom: "16px",
           }}
         >
-          <button onClick={() => router.push("/plos")} style={btnSecondary}>
+          <button onClick={() => router.push("/dashboard")} style={btnSecondary}>
             ← Back
           </button>
           <button onClick={handleLogout} style={btnSecondary}>

@@ -12,7 +12,7 @@ import { useRouter, useParams } from "next/navigation";
 
 const WORKFLOW_DEFS: { id: string; icon: string; title: string; active: boolean; route: string | null }[] = [
   { id: "keyword-clustering", icon: "🔑", title: "Keyword Analysis & Intent Discovery", active: true, route: "keyword-clustering" },
-  { id: "competition-scraping", icon: "🔍", title: "Competition Scraping & Deep Analysis", active: false, route: null },
+  { id: "competition-scraping", icon: "🔍", title: "Competition Scraping & Deep Analysis", active: true, route: "competition-scraping" },
   { id: "therapeutic-strategy", icon: "🧬", title: "Therapeutic Strategy & Product Family Design", active: false, route: null },
   { id: "brand-identity-ip", icon: "🏷️", title: "Brand Identity & IP", active: false, route: null },
   { id: "conversion-funnel", icon: "🎯", title: "Conversion Funnel & Narrative Architecture", active: false, route: null },
