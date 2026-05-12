@@ -4,7 +4,9 @@
 **Workflow:** W#2 Competition Scraping & Deep Analysis.
 **Branch:** `workflow-2-competition-scraping`.
 **Created:** 2026-05-07 in `session_2026-05-07_w2-plos-side-viewer-detail-page-slice` (Claude Code).
-**Last updated:** 2026-05-12-f (W#2 → main deploy session #8 — **P-14 highlight-flashing fix DEPLOYED to vklf.com.** Deploy commit on main `2fc6d15` (ff-only merge of W#2's 6 rebased commits onto `main` after rebasing W#2 onto origin/main to absorb W#1 graduation `b08737b`). Push origin/main triggered Vercel auto-redeploy. Fresh extension zip at repo root: `plos-extension-2026-05-12-f-w2-deploy-8.zip` (181,920 bytes; 9 files; content.js 41,182 bytes vs deploy #7's 40,946 = +236 bytes for muteMutationObserver fix delta; `takeRecords` presence verified in bundle). **Browser verification PASSED:** vklf.com loads clean (no `src/` changes in merge → web bundle byte-identical to pre-deploy `b08737b` baseline; the 2026-05-12 Illegal-invocation hotfix `08f10e5` stays live); Walmart product page → highlights stable + no flashing + text selection survives — P-14 fix verified LIVE on the canonical S4-B reproduction case from polish session #11. New "P-14 FIX DEPLOYED" section appended immediately below the "P-14 FIX SHIPPED" section. Two INFORMATIONAL CORRECTIONS_LOG entries this session: (i) assert-then-stage discipline slip on the third rebase replay (conflict shape diverged from prior replays; resolution script silently exited; committed conflict markers; amended); (ii) session-count numbering drift artifact (both `b08737b` and W#2 polish #12 claim Eighty-second; today numbers itself Eighty-fifth). All cross-referenced in ROADMAP W#2 row Last Session entry for deploy session #8 + (a.18) ✅ DONE + new (a.19) RECOMMENDED-NEXT slot + P-14 polish backlog list-item flipped ✅ SHIPPED-AT-DEPLOY-LEVEL.)
+**Last updated:** 2026-05-12-g (W#2 → main deploy session #9 — **P-15 `pickInitialUrl` canonicalize-slug-variant fix DEPLOYED to vklf.com with PARTIAL verification: PASS on Walmart/ebay/etsy, FAIL on Amazon.** Deploy commit on main `f6b1a98` (ff-only merge of W#2's 2 rebased commits onto `main` after rebase-then-ff per cheat-sheet (b) — `a1b37b7 → f6b1a98` force-push to origin/W#2 + `34dbfd0..f6b1a98` ff-merge onto main). Push origin/main triggered Vercel auto-redeploy (no-op for vklf.com web bundle since no `src/` touched in this merge — extension code only). Fresh extension zip at repo root: `plos-extension-2026-05-12-g-w2-deploy-9.zip` (181,952 bytes; 9 entries; content.js 41,268 bytes — exact parity with session #15's expected size; `canonicalProductUrl` token grep returns 2 references in built content.js — P-15 compiled into bundle). **Browser verification (Rule 27 scope exception — extension popup + cross-platform visual judgment):** PASS / PASS on Walmart, ebay, etsy for both P-14 (text selection survives highlights) AND P-15 (slug-variant URL pre-selects saved row). **FAIL / FAIL on Amazon** — P-14 still flashing + selection collapses; P-15 saved row not pre-selected. **NEW cross-platform finding surfaced during verification:** one-time selection collapse if user selects within ~1-3 sec of page load, correlated by director with green status overlay auto-dismiss. Three new W#2 polish items captured this session (full text in ROADMAP W#2 polish backlog): P-19 green-overlay-dismiss → one-time selection collapse (LOW-MEDIUM; ~5-10 LOC fix), P-20 P-14 fix doesn't generalize to real Amazon (HIGH; design session warranted), P-21 pickInitialUrl + buildRecognitionSet asymmetric canonicalize (MEDIUM; ~2 LOC + 4 tests; recommended as next session). New "P-15 SHIPPED + PARTIAL VERIFY (Amazon FAIL)" section appended immediately below the session #8 "P-14 FIX DEPLOYED" section. One INFORMATIONAL CORRECTIONS_LOG entry this session: **Playwright mock-fidelity gap on real Amazon** — session #14's Playwright suite passed on a STATIC mock product page; real `amazon.com`'s continuously-mutating DOM (lazy reviews, ads, recommendation widgets) drives external-MO-retrigger that the static mock didn't exercise. Cross-references: ROADMAP W#2 row (a.19) flipped ✅ DONE PARTIAL + new (a.20) RECOMMENDED-NEXT = ship P-21 + P-15 polish backlog list-item flipped ✅ SHIPPED AT DEPLOY LEVEL with Amazon-FAIL caveat pointing to P-21 + NEW P-19/P-20/P-21 polish backlog entries; CHAT_REGISTRY new top entry; DOCUMENT_MANIFEST per-doc flags + this-session summary; CORRECTIONS_LOG header + 1 INFORMATIONAL Playwright-mock-fidelity entry.)
+
+**Previously updated:** 2026-05-12-f (W#2 → main deploy session #8 — **P-14 highlight-flashing fix DEPLOYED to vklf.com.** Deploy commit on main `2fc6d15` (ff-only merge of W#2's 6 rebased commits onto `main` after rebasing W#2 onto origin/main to absorb W#1 graduation `b08737b`). Push origin/main triggered Vercel auto-redeploy. Fresh extension zip at repo root: `plos-extension-2026-05-12-f-w2-deploy-8.zip` (181,920 bytes; 9 files; content.js 41,182 bytes vs deploy #7's 40,946 = +236 bytes for muteMutationObserver fix delta; `takeRecords` presence verified in bundle). **Browser verification PASSED:** vklf.com loads clean (no `src/` changes in merge → web bundle byte-identical to pre-deploy `b08737b` baseline; the 2026-05-12 Illegal-invocation hotfix `08f10e5` stays live); Walmart product page → highlights stable + no flashing + text selection survives — P-14 fix verified LIVE on the canonical S4-B reproduction case from polish session #11. New "P-14 FIX DEPLOYED" section appended immediately below the "P-14 FIX SHIPPED" section. Two INFORMATIONAL CORRECTIONS_LOG entries this session: (i) assert-then-stage discipline slip on the third rebase replay (conflict shape diverged from prior replays; resolution script silently exited; committed conflict markers; amended); (ii) session-count numbering drift artifact (both `b08737b` and W#2 polish #12 claim Eighty-second; today numbers itself Eighty-fifth). All cross-referenced in ROADMAP W#2 row Last Session entry for deploy session #8 + (a.18) ✅ DONE + new (a.19) RECOMMENDED-NEXT slot + P-14 polish backlog list-item flipped ✅ SHIPPED-AT-DEPLOY-LEVEL.)
 
 **Previously updated:** 2026-05-12-e (W#2 polish session #14 — **P-14 highlight-flashing FIX SHIPPED at code level on `workflow-2-competition-scraping`** in code commit `45c9a15`. The 12 `test.fail`-annotated regression specs from sessions #12+#13 flipped to genuine GREEN; annotations removed in the same commit. Playwright extension 17/17 ✓ genuine green-pass post-fix including P-10 SPA-NAVIGATION guard (zero collateral damage). Code change: `extensions/competition-scraping/src/lib/content-script/highlight-terms.ts` (new `StartLiveHighlightingOptions.muteMutationObserver` callback; refresh body wrapped in it with no-op default) + `extensions/competition-scraping/src/lib/content-script/orchestrator.ts` (forward-declared `let observer: MutationObserver | null = null;` + `muteMutationObserver` closure defined BEFORE `await startLiveHighlighting(...)` + `observer = new MutationObserver(...)` reassigns same variable + cleanup uses optional chaining) + the spec annotation removals. New "P-14 FIX SHIPPED" section appended immediately below the session #13 hardening section. Deploy to vklf.com pending W#2 → main deploy session #8 — (a.18) RECOMMENDED-NEXT in ROADMAP.)
 
@@ -88,6 +90,61 @@ At S4-A-4 first save attempt, director observed `Failed to execute 'fetch' on 'W
 
 1. S4-A-2 "Save button disabled until filled" — code shows Save only disabled on `submitting`; validation surfaces via inline error.
 2. P1V-3 "red error in UI: Could not load Projects (401)" — actual mechanism is Supabase SIGNED_OUT → app routes to login screen.
+
+---
+
+## P-15 `pickInitialUrl` canonicalize SHIPPED + PARTIAL VERIFY (Amazon FAIL) (NEW 2026-05-12-g — W#2 → main deploy session #9)
+
+**Session:** `session_2026-05-12-g_w2-main-deploy-session-9-p15-canonicalize-deployed-partial-amazon-fail` (Claude Code, on `main`).
+
+### Deploy mechanics
+
+Rebase-then-ff per cheat-sheet (b) — same shape as deploy #8 (`session_2026-05-12-f`) but smaller scope (1 W#2-side commit ahead → rebase + ff). State at session start: main was 1 ahead of W#2 (deploy-#8 doc batch `34dbfd0`); W#2 was 2 ahead of main (P-15 code `74c7165` + session #15 doc batch `a1b37b7`). ff-only blocked → director-confirmed cheat-sheet (b) per Rule 8 destructive-op gate → rebased W#2 onto `origin/main` HEAD `34dbfd0` → 4 doc-header conflicts auto-resolved by Option-A Python helper (CHAT_REGISTRY, CORRECTIONS_LOG, DOCUMENT_MANIFEST, ROADMAP top) + 1 ROADMAP W#2-row body conflict resolved by taking HEAD (preserves post-deploy-#8 (a.18) ✅ DONE state) → strict marker check (`grep -cE "^(<<<<<<< |=======$|>>>>>>> )"`) passed zero markers on all 4 files BEFORE staging per the 2026-05-12-f lesson → `git add` + `git rebase --continue` → force-push `origin/W#2 --force-with-lease` (`a1b37b7 → f6b1a98`) → switch to `main` + ff-merge clean (`34dbfd0..f6b1a98`, 7 files +150/-10) → push `origin/main` → Vercel auto-redeploy (web bundle byte-identical pre/post since no `src/` touched — the merge's source-code changes are all in `extensions/competition-scraping/src/`).
+
+Fresh extension build: `cd extensions/competition-scraping && rm -rf .output && npx wxt build` clean in 2.4 s (no pipe-block this time — the 2026-05-12-c entry b pattern didn't fire) → flat-archive zip:
+
+- File: `plos-extension-2026-05-12-g-w2-deploy-9.zip`
+- Size: 181,952 bytes (+32 bytes vs deploy #8's 181,920 — explained by content.js's +86-byte delta compressing to ~32 bytes via deflate)
+- 9 entries (3 dir entries + manifest.json + popup.html + background.js + popup CSS + popup chunk + content.js)
+- content.js: 41,268 bytes — exact parity with session #15's expected size from its commit message; `canonicalProductUrl` token grep returns 2 references (P-15 fix compiled into bundle)
+- background.js: 203,936 bytes (parity with session #14 baseline); popup chunk: 410,206 bytes (parity)
+
+### Browser verification (PARTIAL — Rule 27 scope exception)
+
+Director sideloaded the new zip + walked through P-15 verification on each of the 4 platforms + defensive P-14 re-verify on Walmart.
+
+| Platform | P-14 (text selection on highlighted mark survives) | P-15 (slug-variant URL pre-selects saved row in right-click overlay) |
+|---|---|---|
+| Walmart | ✅ PASS | ✅ PASS |
+| ebay | ✅ PASS | ✅ PASS |
+| etsy | ✅ PASS | ✅ PASS |
+| **Amazon** | ❌ FAIL — still flashing, selection still collapses | ❌ FAIL — saved row not pre-selected |
+
+Director's verbatim observation: *"P-14 and P-15 work in Walmart.com, ebay.com and etsy.com but not Amazon. In Amazon, the highlighted words keep flashing and selected text in the product listing page does not stay selected. Also, using right click to add the selected text does not show the url already selected."*
+
+### NEW cross-platform finding (separate bug class)
+
+Director surfaced an additional bug class during verification: *"in the platforms where the highlighted words don't keep flickering, the selected text is unselected one time if the text is selected soon after the page loads. I think this happens when the green overlay goes away on its own."*
+
+Captured as P-19 in ROADMAP W#2 polish backlog. Root cause CLEAR per in-session code reading: the green status overlay's auto-removal is a DOM mutation observed by orchestrator's MutationObserver → 250ms debounce → highlighter.refresh() → strip-and-reapply → any active selection on a stripped `<mark>` is cleared. Same strip-and-reapply mechanism as P-14 but a different trigger (overlay-dismiss is NOT inside the muted refresh window). Fix shape ~5-10 LOC; preferred direction = detach overlay element while-muted via the existing `muteMutationObserver` helper (re-uses P-14 infrastructure).
+
+### Root-cause investigation outcomes
+
+Director picked "investigate before closing" via Rule 14f forced-picker. ~15 min in-session code-reading produced findings for all 3 failures:
+
+1. **P-15 Amazon FAIL** — root cause IDENTIFIED. `pickInitialUrl` (captured-text-validation.ts:128) canonicalizes pageUrl (LEFT side of comparison) but NOT row.url (RIGHT side); when saved Amazon row is in non-canonical form (slug-variant `/Product-Name/dp/{ASIN}/ref=...`, or `gp/product/{ASIN}`, or trailing slash), the comparison string-fails. Same asymmetry in `buildRecognitionSet` (url-normalization.ts:63) used by orchestrator's "already saved" banner check. Captured as P-21 (~2 LOC fix + ~4 tests).
+
+2. **P-14 Amazon FAIL** — root cause HYPOTHESIZED (needs in-session verification). Orchestrator's MutationObserver fires on ANY document.body mutation. P-14 mute fix only prevents SELF-retrigger from refresh's own strip-and-reapply. Real `amazon.com` product page has continuous async content loading (lazy reviews, sponsored ads loading in, recommendation widgets re-rendering, image carousel auto-rotation, "Customers also viewed" panels populating) → MO fires constantly → 250ms debounce → highlighter.refresh() → strip-and-reapply → visible flashing. Walmart/ebay/etsy have stable DOM post-load → loop doesn't fire enough to be visible. **Session #14's Playwright tests passed on a STATIC mock product page** that doesn't simulate continuous async DOM mutation. Captured as P-20 (HIGH severity; design session warranted — fix options not 5-LOC).
+
+3. **Overlay-dismiss → one-time selection collapse** — root cause CLEAR. See P-19 entry above.
+
+Director picked recommended "capture P-19/P-20/P-21 + close" (no fix shipped this session; cleaner to give each finding its own focused next session).
+
+### Cross-references
+
+- ROADMAP W#2 row (a.19) flipped ✅ DONE PARTIAL + new (a.20) RECOMMENDED-NEXT = ship P-21 (`pickInitialUrl` + `buildRecognitionSet` symmetric canonicalize).
+- W#2 polish backlog: P-15 list-item flipped ✅ SHIPPED AT DEPLOY LEVEL with Amazon-FAIL caveat pointing to P-21 + NEW P-19/P-20/P-21 entries.
+- CORRECTIONS_LOG 2026-05-12-g INFORMATIONAL entry: Playwright mock-fidelity gap on real Amazon — static-page mock under-represented Amazon's mutation rate; Rule 27 lesson on mock-vs-real-browser fidelity for SPA-dynamic platforms.
 
 ---
 
