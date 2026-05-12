@@ -1,8 +1,10 @@
 # DATA CATALOG
 ## Master index of all data captured across the PLOS platform, with Human Reference Language
 
-**Last updated:** May 4, 2026 (W#2 Workflow Requirements Interview — provisional W#2 entries added to §6.1 (7 sub-sections covering competitor URL records, sizes/options, captured text, captured images, platform-shared vocabularies, highlight terms, worker assignments with platform sub-scope) + §7.2.2 W#2 row in Cross-Tool Data Flow Map filled in with reciprocal output declarations per Rule 18 + W#1-as-W#2-input speculation rejected. All entries provisional pending W#2 Tool Graduation; finalized HRL authored per Doc Architecture §5 at graduation time. Modified on `workflow-2-competition-scraping` feature branch per MULTI_WORKFLOW_PROTOCOL Rule 3 — only W#2-relevant additions, no W#1 sections touched.)
-**Last updated in session:** session_2026-05-04_w2-workflow-requirements-interview (Claude Code)
+**Last updated:** May 12, 2026 (**W#1 Tool Graduation — Data Capture Interview executed.** §5 header retired the "all PROVISIONAL" framing; 11 entries (§5.1, §5.2, §5.2a, §5.3, §5.4, §5.5, §5.6, §5.7, §5.9, §5.11, §5.12) had Human Reference Language finalized in the live Data Capture Interview; entries §5.8 + §5.10 were already locked in earlier sessions. Every §5.x entry now carries a `CONTRACT DOC` pointer to `KEYWORD_CLUSTERING_DATA_CONTRACT.md` §2. §7.2.1 (W#1 Cross-Tool Data Flow Map row) updated from PROVISIONAL → FINAL with the 12 data items + downstream consumer table. §7.1 summary table updated to point at the finalized contract. Three NEW client-side-to-server-side migration items surfaced mid-interview (Main Terms, Terms In Focus, Auto-Analyze checkpoint) per director's standing 2026-05-08-c "pick up where you left off" principle; captured in `KEYWORD_CLUSTERING_POLISH_BACKLOG.md` §"Pending server-side migrations" — Data Contract v1 locks current localStorage technical names; future v2 ships when migrations complete per Rule 23 versioned-contract pattern.)
+**Last updated in session:** session_2026-05-12_w1-graduation-ritual (Claude Code)
+**Previously updated:** May 4, 2026 (W#2 Workflow Requirements Interview — provisional W#2 entries added to §6.1 (7 sub-sections covering competitor URL records, sizes/options, captured text, captured images, platform-shared vocabularies, highlight terms, worker assignments with platform sub-scope) + §7.2.2 W#2 row in Cross-Tool Data Flow Map filled in with reciprocal output declarations per Rule 18 + W#1-as-W#2-input speculation rejected. All entries provisional pending W#2 Tool Graduation; finalized HRL authored per Doc Architecture §5 at graduation time. Modified on `workflow-2-competition-scraping` feature branch per MULTI_WORKFLOW_PROTOCOL Rule 3 — only W#2-relevant additions, no W#1 sections touched.)
+**Previously updated in session:** session_2026-05-04_w2-workflow-requirements-interview (Claude Code)
 **Previously updated:** April 30, 2026 (Scale Session B — `CanvasNode` gains a third Pivot-era data item: `intentFingerprint` (Human Reference Language: "the topic's one-line searcher intent" / "the canonical phrase that captures who is searching and what they want"; format 5–15 words searcher-centric; NOT NULL after 3-step migration completed this session; live-backfilled across 37 Bursitis Test rows by `scripts/backfill-intent-fingerprints.ts`). Section 5.2 amended (FIELDS list extended); new section §5.2a added with full data-item record (format / validation / G3 guard / cross-reference). Foundation for Tiered Canvas Serialization (Sessions C/D/E pending).)
 **Previously updated:** April 25, 2026 (Pivot Session B — `CanvasNode` gained `stableId` + `stabilityScore`; both backfilled across 104 Bursitis rows.)
 **Last updated in session:** session_2026-04-25_phase1g-test-followup-part3-pivot-session-B (Claude Code)
@@ -179,29 +181,32 @@ These data items are required for Phase 2 (multi-user infrastructure) per `PLATF
 
 ## 5. Keyword Clustering — captured data
 
-**Status:** All Human References below are PROVISIONAL. User will refine during Tool Graduation Interview.
+**Status:** ✅ FINALIZED 2026-05-12 — W#1 graduated per HANDOFF_PROTOCOL §4 Step 2 Scenario B. All Human Reference Language entries below are the canonical phrasings the director uses; every entry has a CONTRACT DOC pointer to `KEYWORD_CLUSTERING_DATA_CONTRACT.md` §2.
 
 **Foreign key:** All KC data tables now reference `projectWorkflowId` (live as of Checkpoint 4). Pre-Phase M references to `projectId` are obsolete.
 
 ### 5.1 Keywords
-- **HUMAN REF (PROVISIONAL):** "the keywords" / "the search terms" / "the list of keywords"
+- **HUMAN REF:** *"the keywords"* / *"the search terms"* / *"the list of keywords"* — all three are canonical equivalents (director confirmed 2026-05-12 graduation interview Cluster A.1)
 - **CAPTURED IN:** Keyword Clustering → AST (All Search Terms) table via import, manual entry, or paste
 - **TECHNICAL NAME:** `Keyword` table; foreign key `projectWorkflowId` (live)
+- **CONTRACT DOC:** `KEYWORD_CLUSTERING_DATA_CONTRACT.md` §2 row #1
 - **PER-KEYWORD FIELDS:** `keyword`, `volume`, `sortingStatus` (Unsorted/Partially Sorted/Completely Sorted/AI-Sorted/**Reshuffled** — last value added 2026-04-25 Session 3b; assigned by P3-F7 reconciliation pass when a keyword that was previously AI-Sorted is no longer linked to any topic on the canvas after a batch-rebuild; surfaced as a yellow badge in the AST so admin can spot the alarm; auto-eligible for re-placement under Auto-Analyze's default scope), `tags`, `topic`, `canvasLoc`, `topicApproved`
 - **SHARED WITH:** TBD — likely Content Development, Conversion Funnel, Marketplace Optimization
 - **R/W DOWNSTREAM:** TBD at per-workflow design time
 
 ### 5.2 Topics (Canvas Nodes)
-- **HUMAN REF (PROVISIONAL):** "the topics" / "the topic nodes" / "the mindmap topics"
+- **HUMAN REF:** *"the topics"* / *"the topic nodes"* / *"the mindmap topics"* / *"nodes"* / *"boxes"* — all five are canonical equivalents (director confirmed 2026-05-12 graduation interview Cluster A.2; "nodes" + "boxes" newly captured this session)
 - **CAPTURED IN:** Canvas (Mindmap or Table mode) → Node creation / Edit Panel
 - **TECHNICAL NAME:** `CanvasNode` table; foreign key `projectWorkflowId` (live)
+- **CONTRACT DOC:** `KEYWORD_CLUSTERING_DATA_CONTRACT.md` §2 row #2
 - **FIELDS:** `title`, `description`, `altTitles`, `parentId`, `pathwayId`, `relationshipType`, `narrativeBridge`, `linkedKwIds`, `kwPlacements`, position/size, collapse states, `stableId` (Pivot B), `stabilityScore` (Pivot B), `intentFingerprint` (Scale Session B)
 - **SHARED WITH:** TBD — highly likely Conversion Funnel, Content Development
 - **R/W DOWNSTREAM:** TBD
 
 ### 5.2a Topic Intent Fingerprint (NEW 2026-04-30 — Scale Session B)
-- **HUMAN REF (PROVISIONAL):** "the topic's one-line searcher intent" / "the canonical phrase that captures who is searching for this topic and what they want"
+- **HUMAN REF:** *"searcher intent"* — canonical conversational form (director confirmed 2026-05-12 graduation interview Cluster A.3; the prior PROVISIONAL long-form descriptions *"the topic's one-line searcher intent"* and *"the canonical phrase that captures who is searching for this topic and what they want"* are retired)
 - **CAPTURED IN:** AI emits via `intent_fingerprint` field on `ADD_TOPIC` / `UPDATE_TOPIC_TITLE` / `UPDATE_TOPIC_DESCRIPTION` (optional) ops + `merged_intent_fingerprint` on `MERGE_TOPICS` + `intent_fingerprint` per `into[]` entry on `SPLIT_TOPIC` — once V4 prompts ship in Scale Session D. Until then, populated via the AI-driven backfill script `scripts/backfill-intent-fingerprints.ts` (one-time per project) + the `''` placeholder default that future non-AI canvas-node creates supply.
+- **CONTRACT DOC:** `KEYWORD_CLUSTERING_DATA_CONTRACT.md` §2 row #2a
 - **TECHNICAL NAME:** `CanvasNode.intentFingerprint String NOT NULL` (added 2026-04-30 via 3-step migration)
 - **FORMAT:** Short canonical phrase, 5–15 words, in searcher-centric language. Example: *"Older bursitis sufferers seeking gentle, low-cost home relief."* (Scale Session B live backfill produced 11–13 word phrases on Sonnet 4.6.)
 - **VALIDATION:**
@@ -213,64 +218,77 @@ These data items are required for Phase 2 (multi-user infrastructure) per `PLATF
 - **CROSS-REFERENCE:** `INPUT_CONTEXT_SCALING_DESIGN.md` §1.2 (definition + format + who-writes-it) + §6 Scale Session B (build spec) + `KEYWORD_CLUSTERING_ACTIVE.md` POST-2026-04-30-SCALE-SESSION-B STATE block (live shipped state) + `DEFENSE_IN_DEPTH_AUDIT_DESIGN.md` §5.4 (G3 guard).
 
 ### 5.3 Primary Keywords in a Topic
-- **HUMAN REF (PROVISIONAL):** "the primary keywords of a topic" / "the bold keywords" / "the main keywords under a node"
+- **HUMAN REF:** *"Primary Keywords"* — canonical (capital P, capital K). Director confirmed 2026-05-12 graduation interview Cluster A.4 that *"Primaries"* shorthand is NOT used; the prior PROVISIONAL alternative phrasings *"the bold keywords"* / *"the main keywords under a node"* are descriptive but secondary.
 - **TECHNICAL NAME:** Keyword IDs where `CanvasNode.kwPlacements[keywordId] === 'p'`
-- **DISPLAY:** Bold dark text
+- **CONTRACT DOC:** `KEYWORD_CLUSTERING_DATA_CONTRACT.md` §2 row #3
+- **DISPLAY:** Bold dark text on canvas
 - **SHARED WITH:** TBD
 
 ### 5.4 Secondary Keywords in a Topic
-- **HUMAN REF (PROVISIONAL):** "the secondary keywords of a topic" / "the italic purple keywords"
+- **HUMAN REF:** *"Secondary Keywords"* — canonical (capital S, capital K). Director confirmed 2026-05-12 graduation interview Cluster A.5 that *"Secondaries"* shorthand is NOT used; the prior PROVISIONAL alternative phrasing *"the italic purple keywords"* is descriptive but secondary.
 - **TECHNICAL NAME:** Keyword IDs where `CanvasNode.kwPlacements[keywordId] === 's'`
-- **DISPLAY:** Italic purple text
+- **CONTRACT DOC:** `KEYWORD_CLUSTERING_DATA_CONTRACT.md` §2 row #4
+- **DISPLAY:** Italic purple text on canvas
 - **SHARED WITH:** TBD
 
 ### 5.5 Pathways
-- **HUMAN REF (PROVISIONAL):** "the pathways" / "the conversion pathways"
+- **HUMAN REF:** *"pathways"* / *"conversion pathways"* — both canonical equivalents (director confirmed 2026-05-12 graduation interview Cluster B.1)
 - **TECHNICAL NAME:** `Pathway` table (id, projectWorkflowId)
+- **CONTRACT DOC:** `KEYWORD_CLUSTERING_DATA_CONTRACT.md` §2 row #5
 - **SHARED WITH:** TBD — likely Conversion Funnel
 
 ### 5.6 Sister Links
-- **HUMAN REF (PROVISIONAL):** "the sister links" / "the purple dashed lines between topics"
+- **HUMAN REF:** *"sister links"* / *"deferred sister links"* — both canonical equivalents (director confirmed 2026-05-12 graduation interview Cluster B.2; "deferred sister links" reflects the post-2026-05-05-b Option A invisibility cleanup where the consolidation model no longer sees them). The prior PROVISIONAL alternative *"the purple dashed lines between topics"* is descriptive but secondary.
 - **TECHNICAL NAME:** `SisterLink` table (nodeA, nodeB, projectWorkflowId)
+- **CONTRACT DOC:** `KEYWORD_CLUSTERING_DATA_CONTRACT.md` §2 row #6
 - **DISPLAY:** Dashed purple lines between canvas nodes
-- **SHARED WITH:** TBD
+- **SHARED WITH:** DEFERRED — managed by future second-pass functionality run, not first-pass Auto-Analyze. Existing sister links persist as canvas data; new sister-link emission is invisible to the consolidation model.
 
 ### 5.7 Canvas State
-- **HUMAN REF (PROVISIONAL):** "the canvas viewport" / "the zoom level"
+- **HUMAN REF:** *"where the canvas is"* — canonical conversational form for the reload-position state (director confirmed 2026-05-12 graduation interview Cluster B.3). The prior PROVISIONAL phrasings *"the canvas viewport"* / *"the zoom level"* were over-techy descriptions, retired.
 - **TECHNICAL NAME:** `CanvasState` table (viewX, viewY, zoom, nextNodeId, nextPathwayId, projectWorkflowId unique)
-- **SHARED WITH:** N/A (UI state)
+- **CONTRACT DOC:** `KEYWORD_CLUSTERING_DATA_CONTRACT.md` §2 row #7
+- **SHARED WITH:** N/A (UI viewport state, per-(user, project-workflow))
 
 ### 5.8 Auto-Analyze config + prompts (DB-backed via UserPreference + apiKey-in-localStorage split — fixed 2026-04-24 Session 3a)
-- **HUMAN REF:** "the auto-analyze settings" / "the AI prompts" / "the seed words" / "my Anthropic key"
+- **HUMAN REF:** *"the auto-analyze settings"* / *"the AI prompts"* / *"the seed words"* / *"my Anthropic key"* (LOCKED 2026-04-24 Session 3a; confirmed unchanged in 2026-05-12 graduation interview — no Cluster question needed)
+- **CONTRACT DOC:** `KEYWORD_CLUSTERING_DATA_CONTRACT.md` §2 row #8
 - **TECHNICAL REALITY (Session 3a):** Settings auto-save 800ms after any change in `AutoAnalyze.tsx` and load on panel mount. Two storage paths split for security:
-  - **`apiKey`** — browser `localStorage` key `aa_apikey_{projectId}`. Per-browser, per-project. Never sent to our DB to avoid storing the user's Anthropic secret in plain-text Postgres.
+  - **`apiKey`** — browser `localStorage` key `aa_apikey_{projectId}`. Per-browser, per-project. Never sent to our DB to avoid storing the user's Anthropic secret in plain-text Postgres. **2026-05-12 graduation interview decision:** this remains the deliberate exception to the platform's standing "pick up where you left off" principle (2026-05-08-c) — server-side storage of a user's third-party secret is a meaningful security delta.
   - **All other settings** (apiMode, model, seedWords, volumeThreshold, batchSize, processingMode, thinkingMode, thinkingBudget, keywordScope, stallTimeout, reviewMode, initialPrompt, primerPrompt) — single JSON blob stored in existing `UserPreference` table at key `aa_settings_{projectId}` via `PUT /api/user-preferences/aa_settings_{projectId}`. Per-user-per-project. Syncs across devices.
 - **Hydration on mount:** GET reads both paths in parallel; missing values fall back to hardcoded defaults; `settingsLoaded` flag prevents the auto-save useEffect from overwriting fresh-loaded values with stale React-default values during the initial render.
 - **HISTORY:** Pre-2026-04-24 was ephemeral React state — settings reset on every page refresh. Director's "Phase 1-polish: persist Auto-Analyze settings in UserPreference" item shipped this session.
 - **SHARED WITH:** N/A
 
-### 5.9 Auto-Analyze checkpoint (localStorage)
-- **HUMAN REF (PROVISIONAL):** "the auto-analyze progress" / "where I left off in auto-analyze"
-- **TECHNICAL NAME (corrected 2026-04-18):** localStorage key `aa_checkpoint_{Project.id}` — **uses `Project.id`, NOT `ProjectWorkflow.id`.** The code is at line 227 of `AutoAnalyze.tsx`: `const cpKey = 'aa_checkpoint_' + projectId;` where `projectId` comes from `useParams()` which reads `Project.id` from the URL. Prior docs were wrong on this.
+### 5.9 Auto-Analyze checkpoint (localStorage today — server-side migration pending)
+- **HUMAN REF:** *"the auto-analyze progress"* / *"where I left off in auto-analyze"* / *"the checkpoint"* / *"the saved run"* — all four are canonical equivalents (director confirmed 2026-05-12 graduation interview Cluster B.4; *"the checkpoint"* and *"the saved run"* newly captured this session)
+- **CONTRACT DOC:** `KEYWORD_CLUSTERING_DATA_CONTRACT.md` §2 row #9
+- **🟡 PENDING SERVER-SIDE MIGRATION:** captured 2026-05-12 graduation interview. Today's localStorage path means a paused run can't be Resumed from a different browser/device. Migration scope: schema (`AutoAnalyzeCheckpoint` table OR extend `UserPreference`), API, AutoAnalyze.tsx Resume-detection wiring, localStorage → DB one-time backfill. ~1–2 sessions estimated. On ship, Data Contract bumps to v2 per Rule 23. See `KEYWORD_CLUSTERING_POLISH_BACKLOG.md` §"Pending server-side migrations".
+- **TECHNICAL NAME (today; corrected 2026-04-18):** localStorage key `aa_checkpoint_{Project.id}` — **uses `Project.id`, NOT `ProjectWorkflow.id`.** The code is at line 227 of `AutoAnalyze.tsx`: `const cpKey = 'aa_checkpoint_' + projectId;` where `projectId` comes from `useParams()` which reads `Project.id` from the URL. Prior docs were wrong on this.
 - **Content when populated:** full config (§5.8 fields), batches array, currentIdx, totalSpent, deltaMode, batchTier, elapsed seconds, logEntries.
 - **Lifecycle:** Created on first `saveCheckpoint()` call during a run; updated after each batch; cleared on ✕ Cancel (via `handleCancel()` → `clearCheckpoint()`); restored on ▶ Resume via `handleResumeCheckpoint()`.
 - **SHARED WITH:** N/A
 
 ### 5.10 Removed Terms (DB-backed soft archive — fixed 2026-04-24 Session 3a)
-- **HUMAN REF:** "the removed terms" / "the archived keywords" / "the trash" (Modal labels them "🗑 Removed Terms")
+- **HUMAN REF:** *"the removed terms"* / *"the archived keywords"* / *"the trash"* (Modal labels them "🗑 Removed Terms") — LOCKED 2026-04-24; confirmed unchanged in 2026-05-12 graduation interview — no Cluster question needed
+- **CONTRACT DOC:** `KEYWORD_CLUSTERING_DATA_CONTRACT.md` §2 row #10
 - **TECHNICAL NAME:** Prisma model `RemovedKeyword`. FK to `ProjectWorkflow`. Fields: `id, projectWorkflowId, originalKeywordId (nullable), keyword, volume, sortingStatus, tags, topic, canvasLoc, removedAt, removedBy (userId), removedSource ('manual' | 'auto-ai-detected-irrelevant'), aiReasoning (nullable Text)`. Read via `GET /api/projects/[projectId]/removed-keywords`; written via `POST .../removed-keywords` (transactional copy-then-delete) and `POST .../removed-keywords/[removedId]/restore` (transactional reverse).
 - **PERSISTENCE:** Database. Survives page refresh, syncs across devices (per-ProjectWorkflow scope).
 - **SHARED WITH:** Future Auto-Analyze salvage mechanism (Session 3b) writes here with `removedSource='auto-ai-detected-irrelevant'`. Future Auto-Remove BUTTON (deferred per director) would also write here.
 - **HISTORY:** Pre-2026-04-24 was localStorage-only (key `kst_rm`); UI showed an empty list on every page refresh and the underlying delete actually hard-deleted the Keyword row. Director caught the bug in Session 2; fix shipped Session 3a as Option B (per-ProjectWorkflow DB table).
 
-### 5.11 Main Terms entries (localStorage — Phase 1-persist pending)
-- **HUMAN REF (PROVISIONAL):** "the main terms" / "the MT entries"
-- **TECHNICAL NAME:** localStorage key `kst_mt`
+### 5.11 Main Terms (localStorage today — server-side migration pending)
+- **HUMAN REF:** *"Main Terms"* — canonical (capital M, capital T). Director confirmed 2026-05-12 graduation interview Cluster C.1 that *"MT entries"* is NOT a thing — that prior PROVISIONAL phrasing is RETIRED.
+- **CONTRACT DOC:** `KEYWORD_CLUSTERING_DATA_CONTRACT.md` §2 row #11
+- **🟡 PENDING SERVER-SIDE MIGRATION:** captured 2026-05-12 graduation interview. Director: *"We want nothing stored locally and this functionality should have been moved server side."* Today's localStorage path violates the platform-standing 2026-05-08-c "pick up where you left off" principle. Migration scope: new `MainTerm` table FK'd to ProjectWorkflow OR extend `Keyword` with a `isMainTerm` flag; API; AutoAnalyze.tsx wiring; localStorage → DB one-time backfill. ~1–2 sessions estimated. On ship, Data Contract bumps to v2 per Rule 23. See `KEYWORD_CLUSTERING_POLISH_BACKLOG.md` §"Pending server-side migrations".
+- **TECHNICAL NAME (today):** localStorage key `kst_mt`
 - **SHARED WITH:** TBD
 
-### 5.12 Terms In Focus (session-only)
-- **HUMAN REF (PROVISIONAL):** "the terms in focus" / "the TIF terms"
-- **TECHNICAL NAME:** Session-only React state
+### 5.12 Terms In Focus (session-only React state today — server-side migration pending)
+- **HUMAN REF:** *"Terms In Focus"* — canonical (capital T, capital I, capital F). Director confirmed 2026-05-12 graduation interview Cluster C.2 that *"TIF terms"* is NOT a real spoken shorthand — that prior PROVISIONAL phrasing is RETIRED.
+- **CONTRACT DOC:** `KEYWORD_CLUSTERING_DATA_CONTRACT.md` §2 row #12
+- **🟡 PENDING SERVER-SIDE MIGRATION:** captured 2026-05-12 graduation interview. Today's session-only React state clears on every page refresh — the worst of the three pending migrations because nothing is preserved across reloads. Migration scope: new `TermInFocus` table FK'd to ProjectWorkflow + API + AutoAnalyze.tsx wiring; no localStorage backfill needed (session-only state has nothing to migrate). ~1 session estimated, lightest of the three. On ship, Data Contract bumps to v2 per Rule 23. See `KEYWORD_CLUSTERING_POLISH_BACKLOG.md` §"Pending server-side migrations".
+- **TECHNICAL NAME (today):** Session-only React state
 - **SHARED WITH:** TBD
 
 ---
@@ -455,26 +473,32 @@ The Map is an always-loaded index that points OUT to per-tool Data Contracts for
 |---|---|---|---|---|
 | Project record | `Project.name`, `Project.description` | All 14 workflows | READ-ONLY (edit on `/projects` page only) | LIVE |
 | All workflows | `ProjectWorkflow.lastActivityAt` | `/projects` page (sort-by-last-activity) | WRITE from workflow APIs; READ from `/projects` page | LIVE |
-| Workflow #1 (Keyword Clustering) | (full contract pending W#1 graduation) | TBD per per-workflow design interviews | TBD | PROVISIONAL — see §7.2.1 |
+| Workflow #1 (Keyword Clustering) | 12 data items (Keywords, Topics, Topic Intent Fingerprint, Primary/Secondary Keywords, Pathways, Sister Links, Canvas State, Auto-Analyze settings, Auto-Analyze checkpoint, Removed Terms, Main Terms, Terms In Focus) — see `KEYWORD_CLUSTERING_DATA_CONTRACT.md` §2 | W#5 confirmed bidirectional (read topic hierarchy + write narrative-bridge topics); W#2 confirmed reads-nothing; W#3/W#4/W#6/W#7 likely-readers per ROADMAP; W#8–W#14 TBD per interview | per-consumer at consumer's design interview | ✅ FINAL — Data Contract v1 ratified 2026-05-12 — see §7.2.1 |
 
 ### 7.2 Per-tool detail (filled in as workflows graduate / get designed)
 
 #### 7.2.1 Workflow #1 — Keyword Clustering
 
-**Status:** Active development; Data Contract not yet ratified (will be at graduation).
+**Status:** ✅ GRADUATED 2026-05-12. Data Contract v1 ratified — see `KEYWORD_CLUSTERING_DATA_CONTRACT.md`. Production-Readiness Gate met at 5 of 6 prereqs ✅ VERIFIED LIVE; prereq #1 (cold-start banner UI) 🟡 PARTIAL — happy-path verified, banner code covered by unit tests + code review, natural-flake confirmation engineered close to never-fires.
 
-**Produces (provisional list; will be finalized at graduation per Rule 18 reciprocal output declarations):**
+**Produces (finalized per Rule 18 reciprocal output declarations at 2026-05-12 graduation Data Capture Interview — 12 items; full detail in `KEYWORD_CLUSTERING_DATA_CONTRACT.md` §2):**
 
-- Topic hierarchy (canvas) — the structured conversion-funnel topic tree with primary + secondary keyword placements per Strategy 3 layered placement (per `AUTO_ANALYZE_PROMPT_V3.md`)
-- Per-topic stable IDs (`t-N` format) and stability scores (0.0-10.0)
-- Per-keyword classification (topic placement + sortingStatus + tags)
-- Removed Terms (soft-archived irrelevant keywords with `removedSource` + `aiReasoning`)
-- Pathways (conversion pathways through the canvas)
-- Sister Links (cross-cutting topic relationships)
+- *"the keywords"* / *"the search terms"* (`Keyword` table) — the AST rows with volume, sortingStatus, tags, topic placement
+- *"the topics"* / *"the nodes"* / *"the boxes"* (`CanvasNode` table) — the structured conversion-funnel topic hierarchy with stable IDs, stability scores, intent fingerprints
+- *"searcher intent"* (`CanvasNode.intentFingerprint`) — 5–15-word searcher-centric phrase per topic; load-bearing for tiered serialization + cross-canvas intent-equivalence detection
+- *"Primary Keywords"* + *"Secondary Keywords"* (`CanvasNode.kwPlacements`) — per-topic keyword classification (bold dark text vs. italic purple text)
+- *"pathways"* / *"conversion pathways"* (`Pathway` table) — conversion pathways through the canvas
+- *"sister links"* / *"deferred sister links"* (`SisterLink` table) — cross-cutting topic relationships; managed by future second-pass functionality run, invisible to first-pass Auto-Analyze consolidation per 2026-05-05-b Option A cleanup
+- *"the removed terms"* / *"the archived keywords"* / *"the trash"* (`RemovedKeyword` table) — soft-archived irrelevant keywords with `removedSource` + `aiReasoning`
+- *"where the canvas is"* (`CanvasState` table) — UI viewport state, per-(user, project-workflow)
+- *"the auto-analyze settings"* / *"the AI prompts"* / *"my Anthropic key"* (`UserPreference` table + `localStorage` for apiKey only)
+- *"the auto-analyze progress"* / *"the checkpoint"* / *"the saved run"* (`localStorage aa_checkpoint_*` — pending server-side migration per Polish Backlog)
+- *"Main Terms"* (`localStorage kst_mt` — pending server-side migration per Polish Backlog)
+- *"Terms In Focus"* (session-only React state — pending server-side migration per Polish Backlog)
 
 **Anticipated downstream consumers (per `PROJECT_CONTEXT.md` §2; specific R/W flags decided per-consumer at consumer's design interview):**
 
-- Workflow #2 (Competition Scraping) — likely reads topic hierarchy to seed competitor-content gap analysis. R/W TBD at W#2 design interview.
+- Workflow #2 (Competition Scraping) — ✅ DECIDED at W#2 interview 2026-05-04: **W#2 reads NOTHING from W#1** (W#2 is fully self-contained input-wise).
 - Workflow #3 (Therapeutic Strategy) — likely reads per-topic primary keywords to inform product family architecture. R/W TBD.
 - Workflow #4 (Brand Identity) — likely reads searcher-centric topic titles to inform brand-language alignment. R/W TBD.
 - Workflow #5 (Conversion Funnel & Narrative Architecture) — reads topic hierarchy as the structural foundation for narrative-driven funnel design; per the 2026-04-26 directive (see `ROADMAP.md` Workflow #5 entry), W#5 ALSO adds new narrative-bridge topics that are NOT surfaced by W#1's keyword analysis. R/W: READ from W#1's hierarchy + WRITE new narrative-bridge topics back to the canvas (canonical placement TBD at W#5 design interview — could be a separate W#5-owned table referencing W#1's canvas, or augmentation of W#1's canvas via a new `narrativeBridge` flag).
