@@ -130,6 +130,33 @@ export async function runOrchestrator(): Promise<() => void> {
 
   ensureStylesInjected();
 
+  // P-14 fix 2026-05-12-e: forward-declare the orchestrator's
+  // MutationObserver so the highlight-terms refresh can disconnect +
+  // reconnect it around each pass. The applicator's strip-and-reapply of
+  // <mark> elements would otherwise feed back into this MO and trigger an
+  // immediate re-refresh — the self-feedback loop that produced the
+  // highlight flashing + text-selection collapse described in the P-14
+  // polish entry. The closure binds late: `observer` is still null when
+  // muteMutationObserver is first invoked from the highlighter's
+  // requestIdleCallback-scheduled initial pass (the orchestrator hasn't
+  // constructed the real observer yet at that point); disconnect/observe
+  // safely no-op via optional chaining in that window.
+  let observer: MutationObserver | null = null;
+  async function muteMutationObserver<T>(
+    work: () => Promise<T>,
+  ): Promise<T> {
+    observer?.disconnect();
+    try {
+      return await work();
+    } finally {
+      // takeRecords() drains any records that snuck through before the
+      // disconnect landed; observe() restarts observation with no backlog
+      // so the highlight refresh's own mutations don't enqueue a tick.
+      observer?.takeRecords();
+      observer?.observe(document.body, { childList: true, subtree: true });
+    }
+  }
+
   // Live-page Highlight Terms (P-5 fix 2026-05-08-d). Boots in parallel
   // with the rest of the orchestrator init; the initial highlight pass
   // runs via requestIdleCallback so the page can finish painting first.
@@ -137,7 +164,9 @@ export async function runOrchestrator(): Promise<() => void> {
   // the rest of the orchestrator working — highlights are a nice-to-have.
   let highlighter: LiveHighlightController | null = null;
   try {
-    highlighter = await startLiveHighlighting(projectId);
+    highlighter = await startLiveHighlighting(projectId, {
+      muteMutationObserver,
+    });
   } catch (err) {
     console.warn('[PLOS] could not start live highlight terms', err);
   }
@@ -293,8 +322,14 @@ export async function runOrchestrator(): Promise<() => void> {
   // Watch for DOM changes (Amazon/Ebay/Etsy/Walmart all use SPA-style
   // routing or infinite-scroll for search results). Debounce rescans
   // so we don't re-walk the whole DOM on every micro-mutation.
+  //
+  // P-14 fix 2026-05-12-e: assign to the forward-declared `observer` so
+  // muteMutationObserver can disconnect+reconnect the same instance during
+  // each highlight refresh pass. The variable is the SAME one declared as
+  // `let observer: MutationObserver | null = null;` above — do not
+  // re-declare with const here or the closure will read a stale null.
   let rescanTimer: ReturnType<typeof setTimeout> | null = null;
-  const observer = new MutationObserver(() => {
+  observer = new MutationObserver(() => {
     if (rescanTimer !== null) return; // already pending
     rescanTimer = setTimeout(() => {
       rescanTimer = null;
@@ -369,7 +404,8 @@ export async function runOrchestrator(): Promise<() => void> {
   chrome.runtime.onMessage.addListener(onMessage);
 
   return function cleanup(): void {
-    observer.disconnect();
+    observer?.disconnect();
+    observer = null;
     window.removeEventListener('popstate', onLocationChange);
     chrome.runtime.onMessage.removeListener(onMessage);
     floatingButton.destroy();

@@ -1,44 +1,40 @@
 // Playwright extension-context regression test for the P-14 highlight-flashing
 // bug class.
 //
-// Coverage (W#2 polish session #13, 2026-05-12 — hardens the harness shipped
-// in session #12):
+// Coverage (W#2 polish sessions #12 + #13 set up the harness; session #14
+// 2026-05-12-e SHIPPED the P-14 fix and flipped the regression specs from
+// `test.fail`-protected RED to genuine GREEN — annotations removed in the
+// same commit per Playwright's "Expected to fail, but passed" semantics):
 //
 //   Per platform (amazon / ebay / etsy / walmart, route-intercepted):
 //     A. SMOKE — extension loads, content script attaches on a route-intercepted
 //        product URL, initial highlight pass produces <mark> elements.
-//        Passes on current code.
 //     B. P-14 REGRESSION (count) — observes <mark> element churn over a 2.0s
-//        window after initial paint settles. Tightened from session #12 (1.5s
-//        window after 500ms settle) → 2.0s window after 800ms settle gives
-//        ~8 MO cycles of headroom for the bug to manifest. Currently expected
-//        to FAIL because the orchestrator's MutationObserver self-feedback loop
-//        keeps the highlight refresh cycle running every ~250ms
-//        (RESCAN_DEBOUNCE_MS). Marked with `test.fail` so the suite stays
-//        green; the annotation MUST be removed when P-14 ships.
+//        window after initial paint settles (800ms settle gives ~8 MO cycles
+//        of headroom). Post-P-14-fix the orchestrator's MutationObserver is
+//        muted around each refresh, so count === 0 is the expected outcome;
+//        any non-zero value is a regression of the bug class.
 //     C. P-14 REGRESSION (identity) — tags each initial mark with a
 //        data-test-id attribute, then checks after the window that every
-//        tagged mark is STILL in the DOM. Catches the case where churn count
-//        stays low but marks are nonetheless destroyed-and-recreated (e.g.,
-//        a future partial-fix that reduces but doesn't eliminate the loop).
-//        Also `test.fail`-annotated.
-//     D. SELECTION-STABILITY — user-visible second symptom of P-14: a text
-//        selection drawn over a highlighted region collapses every ~250ms
-//        because the underlying <mark> nodes get destroyed and recreated.
-//        Test asserts the selection still contains the original text after
-//        a 1.0s observation window. `test.fail`-annotated.
+//        tagged mark is STILL in the DOM. Catches a future partial regression
+//        where churn count stays low but marks are nonetheless destroyed-and-
+//        recreated (e.g., a debounce-bump that reduces but doesn't eliminate
+//        a re-introduced loop).
+//     D. SELECTION-STABILITY — user-visible second symptom of P-14 pre-fix:
+//        a text selection drawn over a highlighted region collapsed every
+//        ~250ms because the underlying <mark> nodes were destroyed and
+//        recreated. Test asserts the selection still contains the original
+//        text after a 1.0s observation window.
 //
 //   Single platform (amazon, sufficient because SPA-navigation path is
 //   platform-independent in the orchestrator — see comment on
 //   `lastObservedUrl` at orchestrator.ts:284):
 //     E. P-10 SPA-NAVIGATION REGRESSION — exercises the
 //        history.pushState detection path that P-10 (2026-05-10) added.
-//        The P-14 fix will mute the MutationObserver around highlight
-//        refresh; we must protect P-10's MO-based URL-change detection
-//        from regressing in the process. Pushes a new URL + injects new
-//        DOM content; asserts new content gets highlights applied. NOT
-//        `test.fail`-annotated — passes on current code; must continue
-//        passing after the P-14 fix lands.
+//        The P-14 fix mutes the MutationObserver around highlight refresh;
+//        this test protects P-10's MO-based URL-change detection from
+//        regressing as collateral. Pushes a new URL + injects new DOM
+//        content; asserts new content gets highlights applied.
 //
 // Why route interception (instead of a custom test domain): the content
 // script is gated by `manifest.content_scripts[].matches`
@@ -75,10 +71,11 @@ const HIGHLIGHT_TERMS = [
 ];
 
 // Observation-window constants. RESCAN_DEBOUNCE_MS in orchestrator.ts is
-// 250ms; a 2.0s window covers ~8 MO cycles. Pre-fix observed mutation count
-// in 2.0s on the mock page is in the tens (every cycle strips + re-adds
-// ~6-9 marks); the assertion of exactly 0 is the right tightness — any
-// non-zero is a regression of the bug class.
+// 250ms; a 2.0s window covers ~8 MO cycles. Pre-fix the mock page produced
+// mutation counts in the tens over this window (every cycle stripped +
+// re-added ~6-9 marks). Post-P-14-fix the orchestrator's MO is muted
+// around each refresh, so the count is 0 and the assertion of exactly 0
+// is the right tightness — any non-zero is a regression of the bug class.
 const SETTLE_MS = 800;
 const OBSERVE_MS = 2_000;
 
@@ -200,21 +197,14 @@ for (const pl of PLATFORMS) {
       ).toBeGreaterThan(2);
     });
 
-    test(`P-14 REGRESSION (count) — <mark>s STABLE for ${OBSERVE_MS}ms on ${pl.host} (FAILING pre-fix)`, async ({
+    test(`P-14 REGRESSION (count) — <mark>s STABLE for ${OBSERVE_MS}ms on ${pl.host}`, async ({
       context,
     }) => {
-      // EXPECTED FAILURE today: orchestrator's MutationObserver self-feedback
-      // loop strips + re-applies marks every ~250ms (RESCAN_DEBOUNCE_MS).
-      // When P-14 ships (muteMutationObserver plumbed through highlight-terms
-      // refresh), this test will start passing — at which point the
-      // test.fail() annotation MUST be removed. Playwright reports a
-      // test.fail-marked test that PASSES as a failure, which is the
-      // intended signal to flip it.
-      test.fail(
-        true,
-        `P-14 bug present (platform=${pl.platform}); remove this annotation when fix ships.`,
-      );
-
+      // P-14 SHIPPED 2026-05-12-e: orchestrator's MutationObserver is now
+      // disconnected + reconnected around each highlight refresh pass via
+      // the muteMutationObserver wrapper plumbed through startLiveHighlighting.
+      // The applicator's strip-and-reapply DOM mutations no longer feed back
+      // into the observer; <mark> count stabilizes after initial paint.
       const page = await context.newPage();
       await page.goto(urlFor(pl));
 
@@ -282,7 +272,7 @@ for (const pl of PLATFORMS) {
       ).toBe(0);
     });
 
-    test(`P-14 REGRESSION (identity) — tagged marks survive ${OBSERVE_MS}ms on ${pl.host} (FAILING pre-fix)`, async ({
+    test(`P-14 REGRESSION (identity) — tagged marks survive ${OBSERVE_MS}ms on ${pl.host}`, async ({
       context,
     }) => {
       // Identity-stability check complements the count-stability check.
@@ -291,14 +281,9 @@ for (const pl of PLATFORMS) {
       // to 1500ms — count drops but marks still get destroyed). This test
       // catches that case by tagging every initial mark with a unique
       // attribute, then checking after the window that every tagged
-      // element is still present in the DOM. Pre-fix: tagged elements
-      // disappear within one cycle because the highlighter strips ALL
-      // marks before re-applying.
-      test.fail(
-        true,
-        `P-14 bug destroys tagged marks (platform=${pl.platform}); remove when fix ships.`,
-      );
-
+      // element is still present in the DOM. Post-P-14-fix: tagged
+      // elements all survive because the orchestrator's MO is muted
+      // around each refresh — no strip-and-reapply churn.
       const page = await context.newPage();
       await page.goto(urlFor(pl));
 
@@ -345,19 +330,17 @@ for (const pl of PLATFORMS) {
       ).toBe(taggedCount);
     });
 
-    test(`SELECTION-STABILITY — selection over highlights survives ${SELECTION_OBSERVE_MS}ms on ${pl.host} (FAILING pre-fix)`, async ({
+    test(`SELECTION-STABILITY — selection over highlights survives ${SELECTION_OBSERVE_MS}ms on ${pl.host}`, async ({
       context,
     }) => {
-      // User-visible second symptom of P-14: drawing a text selection over
-      // a highlighted region collapses every ~250ms because the underlying
-      // <mark> nodes are destroyed and recreated by the loop. The
-      // collapsed selection is what blocks S4-B (highlight-and-add gesture)
-      // verification per VERIFICATION_BACKLOG 2026-05-12 entry.
-      test.fail(
-        true,
-        `P-14 selection-destruction symptom present (platform=${pl.platform}); remove when fix ships.`,
-      );
-
+      // User-visible second symptom of P-14 pre-fix: drawing a text
+      // selection over a highlighted region collapsed every ~250ms because
+      // the underlying <mark> nodes were destroyed and recreated by the
+      // self-feedback loop. Post-P-14-fix 2026-05-12-e: the orchestrator's
+      // MutationObserver is muted around each refresh, the marks stay put,
+      // and the selection survives intact. This unblocks S4-B (highlight-
+      // and-add gesture) verification per VERIFICATION_BACKLOG 2026-05-12
+      // entry.
       const page = await context.newPage();
       await page.goto(urlFor(pl));
 

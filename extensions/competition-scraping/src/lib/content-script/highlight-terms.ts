@@ -315,6 +315,21 @@ export interface LiveHighlightController {
   destroy(): void;
 }
 
+export interface StartLiveHighlightingOptions {
+  /**
+   * P-14 fix 2026-05-12-e: optional wrapper invoked around every refresh
+   * pass (initial requestIdleCallback boot, chrome.storage.onChanged update,
+   * and external .refresh() calls). The orchestrator passes a wrapper that
+   * disconnects + reconnects its own MutationObserver around the work, so
+   * the applicator's strip-and-reapply of <mark> elements doesn't feed back
+   * into that MO and trigger another refresh — the self-feedback loop that
+   * produced the highlight flashing + text-selection collapse described in
+   * the P-14 polish entry. No-op default keeps standalone use (tests,
+   * future non-orchestrator callers) working unchanged.
+   */
+  muteMutationObserver?: <T>(work: () => Promise<T>) => Promise<T>;
+}
+
 /**
  * Starts live highlight-terms application for `projectId`. Returns a
  * controller; orchestrator calls .refresh() on its MutationObserver tick
@@ -330,10 +345,18 @@ export interface LiveHighlightController {
  * MutationObserver-driven re-fires on heavy-SPA pages (Walmart) don't
  * accumulate stale in-flight passes — each new refresh cancels the prior
  * one before starting.
+ *
+ * P-14 fix 2026-05-12-e: refresh() now runs inside an
+ * options.muteMutationObserver wrapper when provided, which gives the
+ * caller (orchestrator) a hook to silence its own MutationObserver around
+ * the DOM mutations the applicator makes.
  */
 export async function startLiveHighlighting(
   projectId: string,
+  options: StartLiveHighlightingOptions = {},
 ): Promise<LiveHighlightController> {
+  const muteMutationObserver =
+    options.muteMutationObserver ?? (async (work) => work());
   let currentTerms: HighlightTerm[] = [];
   let currentRegex: RegExp | null = null;
   let currentColorMap: Map<string, string> = new Map();
@@ -361,31 +384,40 @@ export async function startLiveHighlighting(
 
   async function refresh(): Promise<void> {
     if (destroyed) return;
-    // Cancel any in-flight pass before starting fresh. The cancelled
-    // pass returns at its next chunk boundary; the partial highlights
-    // it placed are wiped by removeAllHighlights below.
-    if (activeApplySignal !== null) {
-      activeApplySignal.cancelled = true;
-      activeApplySignal = null;
-    }
-    if (!currentRegex) {
-      // Term list went empty (e.g., user cleared all). Strip any leftover
-      // highlights from a previous pass.
+    // P-14 fix 2026-05-12-e: run the strip-and-reapply work inside the
+    // caller's mute wrapper so the resulting DOM mutations don't feed
+    // back into the orchestrator's MutationObserver and trigger another
+    // immediate refresh. The default wrapper is a no-op pass-through.
+    await muteMutationObserver(async () => {
+      // Cancel any in-flight pass before starting fresh. The cancelled
+      // pass returns at its next chunk boundary; the partial highlights
+      // it placed are wiped by removeAllHighlights below.
+      if (activeApplySignal !== null) {
+        activeApplySignal.cancelled = true;
+        activeApplySignal = null;
+      }
+      if (!currentRegex) {
+        // Term list went empty (e.g., user cleared all). Strip any
+        // leftover highlights from a previous pass.
+        removeAllHighlights();
+        return;
+      }
       removeAllHighlights();
-      return;
-    }
-    removeAllHighlights();
-    const signal: CancellationSignal = { cancelled: false };
-    activeApplySignal = signal;
-    try {
-      await applyHighlightsTo(document.body, currentRegex, currentColorMap, {
-        signal,
-      });
-    } finally {
-      // Only clear the slot if THIS pass still owns it — otherwise a
-      // newer refresh has already replaced it and is in flight.
-      if (activeApplySignal === signal) activeApplySignal = null;
-    }
+      const signal: CancellationSignal = { cancelled: false };
+      activeApplySignal = signal;
+      try {
+        await applyHighlightsTo(
+          document.body,
+          currentRegex,
+          currentColorMap,
+          { signal },
+        );
+      } finally {
+        // Only clear the slot if THIS pass still owns it — otherwise a
+        // newer refresh has already replaced it and is in flight.
+        if (activeApplySignal === signal) activeApplySignal = null;
+      }
+    });
   }
 
   await reload();
