@@ -8,7 +8,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:e2e": "playwright test",
+    "test:e2e": "playwright test --project=chromium",
+    "test:e2e:ext": "playwright test --project=extension",
+    "test:e2e:all": "playwright test",
     "test:e2e:install": "playwright install chromium"
   },
   "dependencies": {

@@ -22,11 +22,30 @@ This project uses [`next/font`](https://nextjs.org/docs/app/building-your-applic
 
 ## Running the Playwright regression tests
 
-The repo has one Playwright suite at `tests/playwright/authFetch-regression.spec.ts` (added 2026-05-14 for ROADMAP polish item P-17). It loads the production `authFetch` wiring into a real Chromium browser and asserts the wrapper does not throw `TypeError: Failed to execute 'fetch' on 'Window': Illegal invocation` — the regression class fixed by commit `08f10e5`.
+The repo has two Playwright projects, each at its own directory under `tests/playwright/`:
+
+- **`chromium`** (the P-17 authFetch suite, added 2026-05-14). Specs at `tests/playwright/*.spec.ts`. Loads the production `authFetch` wiring into a real Chromium browser and asserts the wrapper does not throw `TypeError: Failed to execute 'fetch' on 'Window': Illegal invocation` — the regression class fixed by commit `08f10e5`.
+- **`extension`** (the P-14 highlight-flashing harness, added 2026-05-12). Specs at `tests/playwright/extension/*.spec.ts`. Uses `chromium.launchPersistentContext` + `--load-extension` to load the freshly-built competition-scraping Chrome extension into a real Chromium browser, then route-intercepts `*.amazon.com` to serve a local mock product page. The smoke test verifies harness mechanics; the regression test observes `<mark>` element churn after the initial highlight paint and is currently `test.fail`-annotated because P-14 itself is still OPEN — when the P-14 fix lands, the now-passing regression test will trigger Playwright's "Expected to fail, but passed" signal, telling the next developer to remove the annotation.
 
 ```bash
+# Run the original chromium project (authFetch P-17)
 npm run test:e2e
+
+# Run the extension project (P-14 harness — requires a fresh
+# extension build at extensions/competition-scraping/.output/chrome-mv3/)
+npm run test:e2e:ext
+
+# Run both projects sequentially
+npm run test:e2e:all
 ```
+
+**Building the extension before running `test:e2e:ext`.** The harness loads whatever bundle is at `extensions/competition-scraping/.output/chrome-mv3/`. Build it via:
+
+```bash
+cd extensions/competition-scraping && npx wxt build
+```
+
+Note: per `docs/CORRECTIONS_LOG.md` 2026-05-10-f, `wxt build` may hang the parent shell after artifacts are written. The build is complete once `.output/chrome-mv3/manifest.json` + `assets/` + `chunks/` all exist; you can kill the hung process safely with `pkill -f "wxt build"` after that.
 
 **First-time setup on a fresh Codespace.** The default Codespaces Ubuntu 24.04 image ships without the GTK/X11 system libraries Chromium needs at runtime. Playwright's normal `npx playwright install --with-deps chromium` fails because `/etc/apt/sources.list.d/yarn.list` has an unverifiable GPG signature blocking `apt update`. Workaround:
 

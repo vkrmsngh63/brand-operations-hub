@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Mock Amazon product page (test harness)</title>
+</head>
+<body>
+<!--
+  Served by Playwright route interception for tests/playwright/extension/*.spec.ts.
+  The content script attaches by matching `https://*.amazon.com/*` in the
+  manifest; this mock page is what the route handler returns when the spec
+  navigates to a fake `/dp/{ASIN}` URL.
+
+  Text is intentionally repetitive across multiple paragraphs so the
+  TreeWalker pass in highlight-terms.ts has enough text nodes to exercise
+  the chunk-and-yield code path (APPLY_CHUNK_SIZE_DEFAULT = 500).
+
+  Highlightable seed terms used by the smoke spec:
+    - "cat"
+    - "scratch"
+    - "post"
+  Word-boundary anchored matching means "category" and "scratcher" should
+  NOT match (verified at orchestrator level).
+-->
+<h1>Sturdy Cat Scratching Post for Indoor Cats</h1>
+<p id="p1">A heavy-duty cat scratching post built to last. Your cat will love
+the sisal-wrapped post and the carpeted base. This scratching post deters
+furniture damage by giving the cat a designated scratch surface.</p>
+<p id="p2">Made for indoor cats who love to scratch. The cat scratching post
+ships fully assembled. Each post is hand-finished in our workshop.</p>
+<p id="p3">The cat-friendly design includes a stable base and a tall post.
+Cats can scratch, climb, and lounge on the post. Compatible with kittens up
+to adult cats.</p>
+<div id="reviews">
+  <p>★★★★★ My cat loves this scratching post. Best post we've owned.</p>
+  <p>★★★★★ The post is solid, my cat scratches it every day.</p>
+  <p>★★★★☆ Good post for a cat. Scratch surface holds up well.</p>
+</div>
+<a href="/dp/B0FAKE2222" id="related-1">Related cat scratching post (Tall)</a>
+<a href="/dp/B0FAKE3333" id="related-2">Related cat scratching post (Wide)</a>
+<script>
+  // Mark when DOM is parse-complete so the spec can wait for content-script
+  // attach with a stable signal. The actual content-script attach signal is
+  // the orchestrator setting `data-plos-cs-active=1` on document.body.
+  window.__pageReady = true;
+</script>
+</body>
+</html>
