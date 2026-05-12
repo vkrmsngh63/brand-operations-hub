@@ -93,6 +93,62 @@ At S4-A-4 first save attempt, director observed `Failed to execute 'fetch' on 'W
 
 ---
 
+## P-15 PASS-VERIFY on real Amazon (controlled repro) (NEW 2026-05-12-h — W#2 polish session #16)
+
+**Session:** `session_2026-05-12-h_w2-polish-session-16-amazon-p-15-fail-controlled-reproduce-PASS` (Claude Code, on `workflow-2-competition-scraping`).
+
+### Outcome
+
+**PASS.** P-15 fix works on real Amazon for slug-variant URLs with ASIN-match-controlled test setup. Session #9's observed FAIL retroactively attributed to test-setup ASIN mismatch (director's organic Amazon navigation reached a slug-variant URL whose ASIN didn't match any of the 9 saved canonical rows).
+
+### Setup confirmed with director
+
+- **Loaded extension build:** `plos-extension-2026-05-12-g-w2-deploy-9.zip` (deploy-#9 build with P-15 fix) running on test browser; director confirmed at session start.
+- **Saved Amazon row picked:** ASIN `B0CTTF514L` from the 9 canonical-form `/dp/{ASIN}` rows (the set confirmed by 2026-05-12-g DB inspection); director-confirmed visible in the popup's saved-URLs list.
+- **DevTools accessible** on the test browser (default behavior in regular Chrome on desktop).
+
+### Walkthrough sequence
+
+**Phase 1 — Sanity check on canonical URL.** Director opened a fresh Amazon tab, opened DevTools Console, then navigated to `https://www.amazon.com/dp/B0CTTF514L`. Amazon's internal redirect appended `?th=1` (variant parameter) — final loaded URL was `https://www.amazon.com/dp/B0CTTF514L?th=1`. **Green "Already saved" overlay appeared in the top-right** ✅ — confirms the orchestrator's `maybeShowDetailOverlay` canonicalize-and-recognize path works on the canonical+`?th=1` URL form (amazon.canonicalProductUrl correctly strips the `?th=1` query because the ASIN_RE allows `?` as a path boundary). DevTools Console showed many Amazon ad-tracking errors (`amazon-adsystem`, `googlesyndication`, `doubleclick` blocked by ad-blocker; `NoriLogger DSPClientStrategy` warnings; `pixel.ts` `Failed to fetch` from blocked ad pixels) — none PLOS-related; noise only.
+
+**Phase 2 — Slug-variant URL with same ASIN.** Director navigated to constructed slug-variant `https://www.amazon.com/Test-Product-Name/dp/B0CTTF514L/ref=sr_1_1` (final URL after Amazon's internal redirects: `https://www.amazon.com/Test-Product-Name/dp/B0CTTF514L/ref=sr_1_1?th=1` — confirmed via Chrome address bar). **Green "Already saved" overlay still appeared** ✅ — confirms the orchestrator's slug-variant canonicalize path works on real Amazon. The slug-variant URL's `/Test-Product-Name/dp/B0CTTF514L/ref=sr_1_1` matched ASIN_RE → canonicalProductUrl returned `https://www.amazon.com/dp/B0CTTF514L` → normalize stripped nothing (no `?…` at canonical form) → matched the saved-row's normalized form → recognition succeeded.
+
+**Procedural note — DevTools context selector pitfall surfaced this Phase.** Director's first `location.href` evaluation in DevTools returned `https://m.media-amazon.com/images/S/sash/ZjX5dSxC9UqUC39.html` — that's an Amazon CDN iframe URL, not the top frame's URL. Root cause: DevTools' "JavaScript context" selector at the top of the Console panel had drifted into an iframe context (likely auto-selected when DevTools opened on an element-inside-iframe). Amazon embeds many image/ad iframes for sash + ad content; the context selector can land on any of them. Redirected director to read the Chrome address bar instead (cleaner solution). **Future Amazon-DevTools walkthroughs should default to "read the address bar" or explicitly switch the Console's context selector to "top" before evaluating any `location.*` expressions.** Captured as INFORMATIONAL in CORRECTIONS_LOG 2026-05-12-h header.
+
+**Phase 3 — Right-click capture test.** Director selected 2-3 words of text on the Phase-2 slug-variant page → right-clicked the selection → clicked "Add to PLOS — Captured Text" from the context menu. The overlay form opened. **URL dropdown PRE-SELECTED the matching saved row automatically** ✅ — option (a) per the Phase-3 forced-picker we'd prepared for the result. Console post-right-click showed only Amazon's `NoriLogger DSPClientStrategy` ad-telemetry warnings (`No events to send to endpoint`) — noise only.
+
+### Code-path trace (no instrumentation needed, but documented for future debug sessions)
+
+The PASS result is consistent with the code as authored:
+
+- **At right-click,** Chrome's `chrome.contextMenus.onClicked` handler in `extensions/competition-scraping/src/entrypoints/background.ts:98-110` reads `info.pageUrl` (Chrome-provided page URL of the right-clicked frame's top document) → forwards via message `open-text-capture-form` to content-script orchestrator.
+- **Orchestrator** at `extensions/competition-scraping/src/lib/content-script/orchestrator.ts:382-401` calls `openTextCaptureForm({ pageUrl: msg.pageUrl, platform: platformModule.platform, ... })`. `platformModule` is bound to `amazon` at content-script init (gated by `getModuleByHostname`).
+- **Form** at `extensions/competition-scraping/src/lib/content-script/text-capture-form.ts:466-473` looks up `getModuleByPlatform('amazon')` → calls `pickInitialUrl(props.pageUrl, rows, amazon.canonicalProductUrl)`.
+- **`pickInitialUrl`** at `extensions/competition-scraping/src/lib/captured-text-validation.ts:128-147` canonicalizes pageUrl via `canonicalize?.(pageUrl) ?? pageUrl` → `normalizeUrlForRecognition` strips `?…` → loops over rows, normalizing each row.url → returns the row whose normalized form matches.
+
+For today's controlled-repro inputs: `pageUrl = https://www.amazon.com/Test-Product-Name/dp/B0CTTF514L/ref=sr_1_1?th=1` → `canonicalize → https://www.amazon.com/dp/B0CTTF514L` → `normalize → https://www.amazon.com/dp/B0CTTF514L`. Saved row `https://www.amazon.com/dp/B0CTTF514L` → `normalize → https://www.amazon.com/dp/B0CTTF514L`. **Match.** ✅
+
+### Verification-spec lesson (captured to CORRECTIONS_LOG as INFORMATIONAL)
+
+ASIN-match-dependent verification specs MUST explicitly construct a known-good test setup BEFORE declaring FAIL. Session #9's verification let the director navigate organically on real Amazon — without a per-page ASIN-vs-saved-rows consistency check, "FAIL" became ambiguous between "code bug" and "test-setup mismatch". The controlled-repro pattern (pre-flight (1) confirm saved-row's stored ASIN with director → (2) construct or navigate to a slug-variant URL whose `/dp/{ASIN}` matches → (3) THEN test) is the recommended default for any Amazon-FAIL-style verification or any platform with multiple URL forms per product (Amazon ASIN, eBay item ID, Etsy listing ID, Walmart item ID).
+
+### Status updates from this section
+
+- **W#2 polish backlog P-15** — Amazon-FAIL caveat resolved as "test-setup mismatch, NOT code bug"; status stays ✅ SHIPPED AT DEPLOY LEVEL.
+- **W#2 polish backlog P-21** — demoted from "fixes today's Amazon FAIL" to "future-defensive improvement covering user-pasted slug-variant URLs at the URL-add form"; remains OPEN at MEDIUM-defensive priority.
+- **ROADMAP (a.20)** — flipped to ✅ DONE PASS.
+- **ROADMAP (a.21)** — NEW RECOMMENDED-NEXT slot for W#2 polish backlog continuation OR Waypoint #2 Extension build session 5.
+
+### Cross-references
+
+- `extensions/competition-scraping/src/lib/captured-text-validation.ts pickInitialUrl` (lines 128-147) — the function whose behavior was under test.
+- `extensions/competition-scraping/src/lib/content-script/text-capture-form.ts:466-473` — the call site.
+- `extensions/competition-scraping/src/lib/platform-modules/amazon.ts canonicalProductUrl` (lines 68-95) — the canonicalize function that does the heavy lifting on real Amazon URLs.
+- ROADMAP W#2 row Last Session 2026-05-12-h entry (this session's full session header); (a.20) ✅ DONE PASS; (a.21) RECOMMENDED-NEXT; W#2 polish backlog P-15 + P-21 entries (both annotated this session).
+- CORRECTIONS_LOG 2026-05-12-h header — ASIN-match verification-spec discipline + the DevTools-iframe-context procedural note.
+
+---
+
 ## P-15 `pickInitialUrl` canonicalize SHIPPED + PARTIAL VERIFY (Amazon FAIL) (NEW 2026-05-12-g — W#2 → main deploy session #9)
 
 **Session:** `session_2026-05-12-g_w2-main-deploy-session-9-p15-canonicalize-deployed-partial-amazon-fail` (Claude Code, on `main`).
