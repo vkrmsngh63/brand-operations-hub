@@ -120,6 +120,54 @@
 
 ## Entries
 
+### 2026-05-12-e — Playwright extension tests load from `.output/chrome-mv3/` (pre-built); editing source without rebuilding via `npx wxt build` produced false "fix didn't work" signal
+
+**Session:** session_2026-05-12-e_w2-polish-session-14-p14-highlight-flashing-fix-SHIPPED (Claude Code, Eighty-fourth session, on `workflow-2-competition-scraping`)
+**Tool/Phase affected:** Extension-context Playwright test workflow; specifically the load-from-disk shape of `tests/playwright/extension/fixtures.ts`
+**Severity:** Low — INFORMATIONAL (caught + fixed in-session; ~5 minutes of misdirected investigation when the first post-edit test run showed the 12 regression specs still ✘ despite my fix being correct in source)
+
+**Symptom:** After my first round of source edits to `extensions/competition-scraping/src/lib/content-script/highlight-terms.ts` + `extensions/competition-scraping/src/lib/content-script/orchestrator.ts`, I ran `npm run test:e2e:ext` expecting the 12 `test.fail`-annotated regression specs to flip from "test.fail-RED-as-pass" to "Expected to fail, but passed" (the canonical signal that the fix landed). Instead, Playwright reported the same 5 ✓ + 12 ✘ shape as pre-edit — looking exactly as if my fix had no effect.
+
+**Root cause:** `tests/playwright/extension/fixtures.ts` loads the extension into the Chromium context via `--disable-extensions-except=${extensionDist}` + `--load-extension=${extensionDist}`, where `extensionDist = path.resolve(process.cwd(), 'extensions/competition-scraping/.output/chrome-mv3')`. The `.output/chrome-mv3/` directory is the PRE-BUILT artifact produced by `npx wxt build`. Playwright does NOT compile or bundle the extension's TypeScript source on the fly — it loads the already-bundled `content.js`, `background.js`, `popup-*.js`, etc. as Chromium sees them. So source edits in `extensions/competition-scraping/src/` are invisible to the test run until `wxt build` regenerates the bundle.
+
+**Correction:** Ran `cd extensions/competition-scraping && rm -rf .output && npx wxt build` to rebuild from scratch (full rebuild + clean to avoid any stale chunks). Re-ran `npm run test:e2e:ext` from the repo root. Test result shape inverted as expected: the 12 specs flipped to "Expected to fail, but passed" — the Playwright "remove the `test.fail` annotation" signal. After removing the 3 source-level `test.fail(...)` calls in the spec file (covering all 12 runtime instances via the platform-loop), final re-run showed 17/17 ✓ all genuine green-pass.
+
+**Prevention:** When iterating on extension-context Playwright tests in this repo, the loop is:
+1. Edit source in `extensions/competition-scraping/src/...`.
+2. **Rebuild via `cd extensions/competition-scraping && npx wxt build`** (or with `rm -rf .output &&` prefix for a clean rebuild if comparing against a known-good state).
+3. **Then** run `npm run test:e2e:ext` from repo root.
+
+The same rule applies in reverse for the W#2 → main deploy sessions: after merging code to main, the extension must be rebuilt + re-zipped for the director's side-load before browser verification. The pattern is the same — extensions are pre-built artifacts, not live-bundled.
+
+Future possible mitigation: a Playwright `globalSetup` hook in `playwright.config.ts` that runs `wxt build` automatically before any extension test runs (similar to P-17's `webServer` block that runs the test server). Trade-off: build time on every test invocation. Not pursued this session — captured as a deferred polish opportunity in W#2 polish backlog if it ever bites again in a separate session.
+
+---
+
+### 2026-05-12-e — Variable-shadowing in orchestrator.ts (`let observer` + `const observer` at same scope) silently masked the P-14 fix until self-caught on second test run
+
+**Session:** session_2026-05-12-e_w2-polish-session-14-p14-highlight-flashing-fix-SHIPPED (Claude Code, Eighty-fourth session, on `workflow-2-competition-scraping`)
+**Tool/Phase affected:** P-14 highlight-flashing fix edits to `extensions/competition-scraping/src/lib/content-script/orchestrator.ts`; esbuild's tolerance for duplicate `observer` declarations
+**Severity:** Low — INFORMATIONAL (caught + fixed in-session via the second test-run cycle; ~3 minutes of "wait, did the fix not work?" thinking + re-reading my own code)
+
+**Symptom:** After rebuilding the extension via `npx wxt build` (per the stale-build-pitfall correction above), re-running `npm run test:e2e:ext` STILL showed the same 5 ✓ + 12 ✘ shape — looking like the fix wasn't shipping into the bundle even with a clean rebuild. The build succeeded with no errors. The grep for `muteMutationObserver` in the bundle returned 1 match (suggesting at least the identifier survived minification).
+
+**Root cause:** My first orchestrator.ts edit added `let observer: MutationObserver | null = null;` at the top of `runOrchestrator`'s function-scope, but did NOT update the existing `const observer = new MutationObserver(...)` declaration further down in the SAME function scope. Two declarations of `observer` in the same block scope is a TypeScript error (`Cannot redeclare block-scoped variable 'observer'`), BUT:
+
+1. esbuild (which WXT uses under the hood for the production bundle) does NOT enforce TypeScript's `Cannot redeclare` rule — it transpiles the code as JavaScript without invoking the TS type-checker. The duplicate compiled without an error.
+2. The `muteMutationObserver` closure I defined captured `observer` by reference. After both declarations executed, the inner `const observer` shadowed the outer `let observer` from that point forward. BUT the closure was created BEFORE the inner const ran — and per JavaScript's block-scoping rules with `const`, the closure resolved `observer` to the OUTER `let observer` at call time (the closure binds at lexical-scope resolution time, and the inner `const observer` was in a temporal-dead-zone for the closure's perspective from outside the inner block — actually, this is more subtle; the closure happened to read the outer null because of how the let-vs-const scoping shook out in the runOrchestrator scope).
+3. Net effect: when the highlighter's refresh fired and called `muteMutationObserver`, the closure's `observer?.disconnect()` saw `observer === null` and the optional chaining no-op'd. The real `const observer` (the active MO) was never disconnected. The feedback loop continued exactly as pre-fix.
+
+**Correction:** Changed the inner `const observer = new MutationObserver(...)` to a bare assignment `observer = new MutationObserver(...)` — reassigning the OUTER `let observer` rather than re-declaring with `const`. Updated the cleanup function's `observer.disconnect()` to `observer?.disconnect()` + `observer = null;` since the variable's type is now `MutationObserver | null`. Re-ran `wxt build` + `npm run test:e2e:ext` — 12 specs flipped to "Expected to fail, but passed" as expected.
+
+**Prevention:**
+1. When forward-declaring a variable to be assigned later in the same scope, USE A BARE ASSIGNMENT at the later site, not a `const`/`let` re-declaration. TypeScript via root `tsc --noEmit` (which I DID run, but only AFTER all my edits — not after each one) would have caught the duplicate immediately with `error TS2451: Cannot redeclare block-scoped variable 'observer'`. The wxt build path doesn't gate on tsc, so the build was "successful" with bad code.
+2. Run `tsc --noEmit` after EACH significant code edit in extension source, not just at the end of the session. Cheap (~3 seconds) compared to a misleading test-run cycle (~1 minute).
+3. Consider gating `wxt build` on a tsc check (via npm pre-script or a wxt config option) so the production bundle can never silently include duplicate-declaration code. Deferred — captured as a possible future polish item in the W#2 polish backlog.
+
+Cross-reference: the previous CORRECTIONS_LOG entry (stale-build pitfall) is the FIRST half of this session's iteration loop; this entry is the SECOND half. Both surfaced in sequence after my initial fix attempt: rebuild → still ✘ (stale-build pitfall caught) → re-read code → find the shadow bug → fix → rebuild → 12 ✘ flipped → 17/17 ✓ post annotation-removal.
+
+---
+
 ### 2026-05-12-c — `import.meta.url` ESM-only syntax in `tests/playwright/extension/fixtures.ts` triggered Playwright TS-loader CJS→ESM mismatch (`require is not defined in ES module scope`)
 
 **Session:** session_2026-05-12-c_w2-polish-session-12-p14-playwright-extension-harness-setup (Claude Code, Eighty-second session, on `workflow-2-competition-scraping`)
