@@ -108,6 +108,19 @@ export function normalizeTags(input: readonly string[]): string[] {
  * right-click happens may differ on query-string noise (tracking params,
  * `?ref=...`, etc.). The url-normalization helper strips those uniformly.
  *
+ * Optional `canonicalize` (P-15 fix 2026-05-12): when a platform's
+ * `canonicalProductUrl` extractor is available, the caller may pass it so
+ * that slug-variant URLs (e.g. Amazon's `/Product-Name-Slug/dp/{ASIN}/ref=sr_1_3`)
+ * collapse to their canonical form BEFORE normalization. Without this step,
+ * a saved row stored as `/dp/{ASIN}` would fail to pre-select when the user
+ * right-clicks on a slug-variant page URL, because `normalizeUrlForRecognition`
+ * only strips `?…` (query) — not path-level noise like `/Product-Name-Slug/`
+ * or `/ref=sr_1_3`. Mirrors the working "already saved" overlay path at
+ * `orchestrator.ts:280-282`. When omitted or when `canonicalize` returns null
+ * for a given URL, the function falls back to the pre-canonicalization URL
+ * (preserves backward-compatible behavior for callers that don't have access
+ * to a platform module + for non-product pages like search/listing pages).
+ *
  * Returns null when the rows list is empty OR no row matches. The caller
  * decides how to render that state (the form shows a "Pick a URL"
  * placeholder; the popup paste flow shows the same).
@@ -115,9 +128,14 @@ export function normalizeTags(input: readonly string[]): string[] {
 export function pickInitialUrl(
   pageUrl: string,
   rows: readonly CompetitorUrl[],
+  canonicalize?: (href: string) => string | null,
 ): CompetitorUrl | null {
   if (rows.length === 0) return null;
-  const targetNormalized = normalizeUrlForRecognition(pageUrl);
+  const canonicalPageUrl =
+    typeof pageUrl === 'string' && canonicalize
+      ? canonicalize(pageUrl) ?? pageUrl
+      : pageUrl;
+  const targetNormalized = normalizeUrlForRecognition(canonicalPageUrl);
   if (!targetNormalized) return null;
   for (const row of rows) {
     const rowNormalized = normalizeUrlForRecognition(row.url);

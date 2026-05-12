@@ -30,6 +30,7 @@ import {
 } from './api-bridge.ts';
 import type { Platform } from '../../../../../src/lib/shared-types/competition-scraping.ts';
 import { getPlatformLabel } from '../platforms.ts';
+import { getModuleByPlatform } from '../platform-modules/registry.ts';
 import {
   normalizeTags,
   pickInitialUrl,
@@ -456,7 +457,20 @@ export function openTextCaptureForm(
             (row.url.length > 80 ? row.url.slice(0, 77) + '…' : row.url);
           urlSelect.appendChild(opt);
         }
-        const initial = pickInitialUrl(props.pageUrl, rows);
+        // P-15 fix 2026-05-12: canonicalize the page URL through the platform
+        // module BEFORE the pickInitialUrl normalization step. Without this,
+        // slug-variant pageUrls (e.g. Amazon's `/Product-Name-Slug/dp/{ASIN}/ref=…`)
+        // fail to pre-select their saved-as-`/dp/{ASIN}` rows because
+        // `normalizeUrlForRecognition` only strips `?…`, not path-level noise.
+        // Mirrors orchestrator.ts:280-282 (the "already saved" overlay path).
+        const platformModule = getModuleByPlatform(props.platform);
+        const initial = pickInitialUrl(
+          props.pageUrl,
+          rows,
+          platformModule
+            ? (href) => platformModule.canonicalProductUrl(href)
+            : undefined,
+        );
         if (initial) urlSelect.value = initial.id;
         urlSelect.disabled = false;
       }

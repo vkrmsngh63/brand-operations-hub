@@ -187,4 +187,104 @@ describe('pickInitialUrl', () => {
       null,
     );
   });
+
+  // P-15 fix 2026-05-12 — regression coverage. The pickInitialUrl
+  // normalization step strips `?…` (query) but NOT path-level noise like
+  // Amazon's `/Product-Name-Slug/dp/{ASIN}/ref=sr_1_3`. Without the
+  // optional `canonicalize` step, a slug-variant pageUrl would fail to
+  // pre-select its saved-as-`/dp/{ASIN}` row. The optional 3rd argument
+  // (passed by text-capture-form.ts:459 as the active platform module's
+  // `canonicalProductUrl` extractor) collapses the slug-variant to its
+  // canonical form before normalization.
+  describe('pickInitialUrl — canonicalize step (P-15)', () => {
+    // Stand-in for amazon.canonicalProductUrl — extracts ASIN from /dp/{ASIN}
+    // or /gp/product/{ASIN} regardless of any path-prefix slugs or trailing
+    // /ref=… segments, returning the canonical `https://www.amazon.com/dp/{ASIN}`.
+    const fakeAmazonCanonical = (href: string): string | null => {
+      const m = href.match(/\/(?:dp|gp\/product)\/([A-Z0-9]{10})(?=\/|$|\?|#)/);
+      if (!m) return null;
+      try {
+        const u = new URL(href);
+        return `${u.protocol}//${u.host}/dp/${m[1]}`;
+      } catch {
+        return null;
+      }
+    };
+
+    it('matches a slug-variant pageUrl to its canonical saved row via canonicalize', () => {
+      // ROW_A is saved as the canonical form `https://www.amazon.com/dp/B0DWJTLNYT`.
+      // Page URL has the slug prefix + /ref= suffix as Amazon serves them
+      // from search-results clicks.
+      const slugVariantPageUrl =
+        'https://www.amazon.com/Product-Name-Slug/dp/B0DWJTLNYT/ref=sr_1_3';
+
+      // Without canonicalize: the slug-variant fails to match (the P-15 bug).
+      assert.equal(
+        pickInitialUrl(slugVariantPageUrl, [ROW_A, ROW_B]),
+        null,
+      );
+
+      // With canonicalize: the slug-variant collapses to /dp/B0DWJTLNYT,
+      // matching ROW_A.
+      const picked = pickInitialUrl(
+        slugVariantPageUrl,
+        [ROW_A, ROW_B],
+        fakeAmazonCanonical,
+      );
+      assert.equal(picked?.id, 'urlid-a');
+    });
+
+    it('falls back to the original pageUrl when canonicalize returns null', () => {
+      // Non-product page (e.g. search results page) — canonicalize returns
+      // null because the URL doesn't match the /dp/{ASIN} pattern. The
+      // function should still attempt a match using the original pageUrl
+      // (which won't match anything, but should not crash).
+      const searchPageUrl = 'https://www.amazon.com/s?k=cat+scratcher';
+      assert.equal(
+        pickInitialUrl(searchPageUrl, [ROW_A, ROW_B], fakeAmazonCanonical),
+        null,
+      );
+    });
+
+    it('still strips query-string noise when canonicalize is provided', () => {
+      // canonicalize may itself strip query (the real platform extractors do),
+      // and then `normalizeUrlForRecognition` strips any remaining `?…` from
+      // the saved row's url. Composition should produce a clean match.
+      const pageUrlWithQuery =
+        'https://www.amazon.com/dp/B0DWJTLNYT/ref=sr_1_3?tag=foo&utm_source=bar';
+      const picked = pickInitialUrl(
+        pageUrlWithQuery,
+        [ROW_A, ROW_B],
+        fakeAmazonCanonical,
+      );
+      assert.equal(picked?.id, 'urlid-a');
+    });
+
+    it('is backward-compatible — omitting canonicalize preserves legacy behavior', () => {
+      // The pre-P-15 callers (e.g. any future paste-flow context where no
+      // platform module is in scope) should keep working exactly as before.
+      // Direct /dp/{ASIN} pageUrl still matches via the normalization step
+      // alone — the canonicalize parameter is strictly additive.
+      const directPageUrl = 'https://www.amazon.com/dp/B0716F3NFG';
+      const picked = pickInitialUrl(directPageUrl, [ROW_A, ROW_B]);
+      assert.equal(picked?.id, 'urlid-b');
+    });
+
+    it('handles a canonicalize fn that always returns null (platform absent)', () => {
+      // Simulates `getModuleByPlatform(props.platform)` returning null for
+      // an unregistered platform value (e.g. `google-shopping` deferred to a
+      // future session). In text-capture-form.ts:459 the call site passes
+      // `undefined` for canonicalize when the registry lookup misses, but a
+      // defensive caller could also pass a no-op fn. Either way, the
+      // function falls back to the raw pageUrl.
+      const directPageUrl = 'https://www.amazon.com/dp/B0DWJTLNYT';
+      const alwaysNull = () => null;
+      const picked = pickInitialUrl(
+        directPageUrl,
+        [ROW_A, ROW_B],
+        alwaysNull,
+      );
+      assert.equal(picked?.id, 'urlid-a');
+    });
+  });
 });
