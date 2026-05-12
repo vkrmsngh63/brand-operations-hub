@@ -4,7 +4,9 @@
 **Workflow:** W#2 Competition Scraping & Deep Analysis.
 **Branch:** `workflow-2-competition-scraping`.
 **Created:** 2026-05-07 in `session_2026-05-07_w2-plos-side-viewer-detail-page-slice` (Claude Code).
-**Last updated:** 2026-05-12-e (W#2 polish session #14 — **P-14 highlight-flashing FIX SHIPPED at code level on `workflow-2-competition-scraping`** in code commit `45c9a15`. The 12 `test.fail`-annotated regression specs from sessions #12+#13 flipped to genuine GREEN; annotations removed in the same commit. Playwright extension 17/17 ✓ genuine green-pass post-fix including P-10 SPA-NAVIGATION guard (zero collateral damage). Code change: `extensions/competition-scraping/src/lib/content-script/highlight-terms.ts` (new `StartLiveHighlightingOptions.muteMutationObserver` callback; refresh body wrapped in it with no-op default) + `extensions/competition-scraping/src/lib/content-script/orchestrator.ts` (forward-declared `let observer: MutationObserver | null = null;` + `muteMutationObserver` closure defined BEFORE `await startLiveHighlighting(...)` + `observer = new MutationObserver(...)` reassigns same variable + cleanup uses optional chaining) + the spec annotation removals. New "P-14 FIX SHIPPED" section appended immediately below the session #13 hardening section. Deploy to vklf.com pending W#2 → main deploy session #8 — (a.18) RECOMMENDED-NEXT in ROADMAP.)
+**Last updated:** 2026-05-12-f (W#2 → main deploy session #8 — **P-14 highlight-flashing fix DEPLOYED to vklf.com.** Deploy commit on main `2fc6d15` (ff-only merge of W#2's 6 rebased commits onto `main` after rebasing W#2 onto origin/main to absorb W#1 graduation `b08737b`). Push origin/main triggered Vercel auto-redeploy. Fresh extension zip at repo root: `plos-extension-2026-05-12-f-w2-deploy-8.zip` (181,920 bytes; 9 files; content.js 41,182 bytes vs deploy #7's 40,946 = +236 bytes for muteMutationObserver fix delta; `takeRecords` presence verified in bundle). **Browser verification PASSED:** vklf.com loads clean (no `src/` changes in merge → web bundle byte-identical to pre-deploy `b08737b` baseline; the 2026-05-12 Illegal-invocation hotfix `08f10e5` stays live); Walmart product page → highlights stable + no flashing + text selection survives — P-14 fix verified LIVE on the canonical S4-B reproduction case from polish session #11. New "P-14 FIX DEPLOYED" section appended immediately below the "P-14 FIX SHIPPED" section. Two INFORMATIONAL CORRECTIONS_LOG entries this session: (i) assert-then-stage discipline slip on the third rebase replay (conflict shape diverged from prior replays; resolution script silently exited; committed conflict markers; amended); (ii) session-count numbering drift artifact (both `b08737b` and W#2 polish #12 claim Eighty-second; today numbers itself Eighty-fifth). All cross-referenced in ROADMAP W#2 row Last Session entry for deploy session #8 + (a.18) ✅ DONE + new (a.19) RECOMMENDED-NEXT slot + P-14 polish backlog list-item flipped ✅ SHIPPED-AT-DEPLOY-LEVEL.)
+
+**Previously updated:** 2026-05-12-e (W#2 polish session #14 — **P-14 highlight-flashing FIX SHIPPED at code level on `workflow-2-competition-scraping`** in code commit `45c9a15`. The 12 `test.fail`-annotated regression specs from sessions #12+#13 flipped to genuine GREEN; annotations removed in the same commit. Playwright extension 17/17 ✓ genuine green-pass post-fix including P-10 SPA-NAVIGATION guard (zero collateral damage). Code change: `extensions/competition-scraping/src/lib/content-script/highlight-terms.ts` (new `StartLiveHighlightingOptions.muteMutationObserver` callback; refresh body wrapped in it with no-op default) + `extensions/competition-scraping/src/lib/content-script/orchestrator.ts` (forward-declared `let observer: MutationObserver | null = null;` + `muteMutationObserver` closure defined BEFORE `await startLiveHighlighting(...)` + `observer = new MutationObserver(...)` reassigns same variable + cleanup uses optional chaining) + the spec annotation removals. New "P-14 FIX SHIPPED" section appended immediately below the session #13 hardening section. Deploy to vklf.com pending W#2 → main deploy session #8 — (a.18) RECOMMENDED-NEXT in ROADMAP.)
 
 **Previously updated:** 2026-05-12-d (W#2 polish session #13 — **Playwright extension-context REGRESSION SPEC COVERAGE HARDENED at code level on `workflow-2-competition-scraping`**; P-14 fix itself still DEFERRED per the multi-session decomposition picked in session #12. `tests/playwright/extension/highlight-flashing.spec.ts` rewritten +419/-131 (550-line file; was 207 lines). Same `fixtures.ts` + `product-page.html` from session #12 reused unchanged — the hardening lives entirely in the spec file. Four hardening axes shipped: (i) cross-platform parametrization across amazon / ebay / etsy / walmart via route interception + matching `selectedPlatform` seed (the orchestrator's `getModuleByHostname`-vs-`selectedPlatform` check at `orchestrator.ts:105-109` requires both); (ii) tighter REGRESSION (count) window — 1.5s → 2.0s after 800ms settle (was 500ms); (iii) NEW REGRESSION (identity) sub-spec — tags every initial mark and asserts survival in the DOM after the window; (iv) NEW SELECTION-STABILITY sub-spec — selection over highlighted text must survive 1.0s. Plus one cross-cutting NEW P-10 SPA-NAVIGATION regression sub-test (single-platform amazon, sufficient because the SPA-detection path is platform-independent in shared orchestrator code) — PASSES pre-fix; must continue passing post-(a.17)-P-14-fix to guard against the P-10 detection silently regressing when the P-14 fix mutes the orchestrator's MutationObserver. Playwright extension project 17/17 pass (1.5m): 5 ✓ green-pass (4 SMOKE + 1 P-10 SPA-NAV), 12 ✘ expected-fail-as-pass under `test.fail` (4 REGRESSION count + 4 REGRESSION identity + 4 SELECTION-STABILITY). When (a.17) P-14 fix lands, ALL 12 `test.fail` annotations must flip off in the same commit — Playwright reports a `test.fail`-marked test that PASSES as a failure, the canonical "remove this annotation" signal. New "Playwright extension-context regression spec coverage hardened" section appended immediately below the session #12 section. Next session = (a.17) ship the P-14 fix.)
 
@@ -86,6 +88,49 @@ At S4-A-4 first save attempt, director observed `Failed to execute 'fetch' on 'W
 
 1. S4-A-2 "Save button disabled until filled" — code shows Save only disabled on `submitting`; validation surfaces via inline error.
 2. P1V-3 "red error in UI: Could not load Projects (401)" — actual mechanism is Supabase SIGNED_OUT → app routes to login screen.
+
+---
+
+## P-14 highlight-flashing FIX DEPLOYED to vklf.com (NEW 2026-05-12-f — W#2 → main deploy session #8)
+
+**Session:** `session_2026-05-12-f_w2-main-deploy-session-8-p14-highlight-flashing-fix-deployed` (Claude Code, on `main`).
+
+**Outcome:** P-14 highlight-flashing fix DEPLOYED to vklf.com via W#2 → main deploy session #8. ROADMAP Active Tools W#2 row (a.18) RECOMMENDED-NEXT slot closed. P-14 polish backlog list-item flipped ✅ SHIPPED-AT-DEPLOY-LEVEL.
+
+### Deploy mechanics
+
+| Step | Result |
+|---|---|
+| Branch state at session start | W#2 6 commits ahead (P-14 harness + harden + fix + 3 doc batches); main 1 commit ahead (W#1 graduation `b08737b`); ff-only from W#2→main BLOCKED. |
+| Rebase shape | W#2 onto origin/main per CORRECTIONS_LOG 2026-05-10-c entry #1 + cheat-sheet (b). |
+| Conflict resolution | Expected doc-header conflicts on all 3 W#2 doc-batch commits (session #12 `2fd2dff`, session #13 `72bb397`, session #14 `e419cbe`) — Option-A reconciliation (W#2 entries stay "Last updated"; `b08737b` graduation demoted to "Previously updated"). ROADMAP W#2-row body conflicts resolved by keeping HEAD's GRADUATED W#1 row + incoming's W#2 row with session-specific (a.16/17/18) entries. |
+| Force-push | origin/W#2 `--force-with-lease` (`e419cbe → 2fc6d15`). |
+| ff-merge | `b08737b..2fc6d15`, 13 files +1025/-49 — clean. |
+| Push origin/main | Vercel auto-redeploy. |
+| Fresh extension build | `rm -rf .output && npx wxt build` → zip `plos-extension-2026-05-12-f-w2-deploy-8.zip` (181,920 bytes; 9 files). |
+| P-14 fix presence in bundle | `takeRecords` API call present in `content-scripts/content.js` (the distinctive identifier from the muteMutationObserver fix's "disconnect → await → takeRecords + observe" sequence); content.js 41,182 bytes vs deploy #7's 40,946 = +236 bytes for fix delta. |
+
+### Browser verification
+
+| Check | Result |
+|---|---|
+| vklf.com smoke | ✅ PASS — loads clean; no `src/` changes in merge so web bundle byte-identical to pre-deploy `b08737b` baseline; 2026-05-12 Illegal-invocation hotfix `08f10e5` stays live. |
+| Walmart product page (canonical S4-B reproduction case from polish session #11) | ✅ PASS — highlights appear once, stay put with no flicker, text selection survives unchanged for 30+ seconds. |
+
+### Mid-session slips captured
+
+(a) Assert-then-stage discipline slip — Python conflict-resolution script's `AssertionError` (raised when e419cbe rebase replay's conflict shape diverged from prior replays' — 4 incoming lines instead of 2 because session #14 had added a new "(a.18) detail" paragraph below the table that grew the conflict region) silently exited before `git add`; I staged + `git rebase --continue`'d the still-conflicted ROADMAP anyway → commit `49d025e` shipped with conflict markers in source; caught by post-rebase `grep -c "^<<<<<<<"` over all docs/*; recovered via post-rebase resolution + `git commit --amend` (`49d025e → 2fc6d15`). **Lesson:** verify zero conflict markers in resolved files BEFORE `git add` + before `git rebase --continue`, not just trust the resolution script's success path. Full INFORMATIONAL entry in CORRECTIONS_LOG header for 2026-05-12-f.
+
+(b) Session-count numbering drift artifact — both `b08737b` (W#1 graduation) and `334c666`-ex-`2fd2dff` (W#2 polish session #12) claim "Eighty-second Claude Code session" — parallel-branch authorship. Today's deploy session #8 numbers itself Eighty-fifth (one past polish #14's "Eighty-fourth" claim) and lets the drift artifact stand. **Lesson:** session count numbering will drift in a multi-branch flow; the order in the Last → Previously chain is the authoritative chronological signal, not the integer count. Full INFORMATIONAL entry in CORRECTIONS_LOG header for 2026-05-12-f.
+
+### Cross-references
+
+- `tests/playwright/extension/highlight-flashing.spec.ts` — the 17-test regression suite (12 previously `test.fail`-annotated, now all genuine green per session #14's fix)
+- `extensions/competition-scraping/src/lib/content-script/highlight-terms.ts` + `orchestrator.ts` — the P-14 fix files (now on main via ff-merge)
+- `plos-extension-2026-05-12-f-w2-deploy-8.zip` (repo root; untracked / gitignored — director's local sideload artifact)
+- ROADMAP W#2 row (a.18) ✅ DONE + (a.19) RECOMMENDED-NEXT
+- ROADMAP P-14 polish backlog list-item ✅ SHIPPED-AT-DEPLOY-LEVEL
+- CHAT_REGISTRY 2026-05-12-f top entry
 
 ---
 
