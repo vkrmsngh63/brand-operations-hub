@@ -4,7 +4,9 @@
 **Workflow:** W#2 Competition Scraping & Deep Analysis.
 **Branch:** `workflow-2-competition-scraping`.
 **Created:** 2026-05-07 in `session_2026-05-07_w2-plos-side-viewer-detail-page-slice` (Claude Code).
-**Last updated:** 2026-05-12 (W#2 verification session + vklf.com production hotfix — full launch-prompt verification queue cleared today. See "Outcome 2026-05-12" block immediately below for per-sub-table results + doc-drift annotations. **Key results:** S4-A 12/12 PASS; S4-B 12/12 PASS (with two pre-existing-bug workarounds captured as polish items); S4-C-1 PASS + S4-C-2 SKIPPED OPTIONAL; P1V-2 + P1V-3 both PASS; P3B-1..P3B-10 PASS (P3B-11 N/A — no migration scenario applicable to fresh laptop 2). Production hotfix `08f10e5` shipped to main + deployed to vklf.com mid-session (Illegal invocation regression from P-1; 7-line fix; verified end-to-end via P1V-2). Six new polish items captured P-12..P-17 — destinations in ROADMAP W#2 polish backlog this same end-of-session doc-batch.)
+**Last updated:** 2026-05-12-c (W#2 polish session #12 — **Playwright extension-context harness for the P-14 highlight-flashing bug class SHIPPED at code level on `workflow-2-competition-scraping`**; P-14 fix itself DEFERRED to a future session per director's "harness setup only today" pick. New `tests/playwright/extension/` sub-directory with fixture (Chromium new-headless-mode + `--load-extension` against the freshly-built `.output/chrome-mv3/` artifacts) + mock Amazon product page (route-intercepted via Playwright) + two-test spec (SMOKE proving harness mechanics work + P-14 REGRESSION using `test.fail`-annotation pre-fix so the suite stays green while the regression assertion correctly identifies the live bug class). Sanity-check round-trip applied per P-17 discipline: with current code (P-14 bug present) → regression test fails-as-expected → suite green; temporarily disabled `observer.observe(...)` line in `orchestrator.ts` (eliminates the loop) → regression test passes-unexpectedly → `test.fail` flips to "Expected to fail, but passed" → suite RED — proving the harness detects BOTH directions of the bug class. New "Playwright extension-context harness" section appended immediately below; details cross-referenced from ROADMAP W#2 row Last Session 2026-05-12-c entry. Next session = (a.16) author the actual regression spec coverage on top of this harness; session after that = (a.17) ship the P-14 fix.)
+
+**Previously updated:** 2026-05-12 (W#2 verification session + vklf.com production hotfix — full launch-prompt verification queue cleared today. See "Outcome 2026-05-12" block immediately below for per-sub-table results + doc-drift annotations. **Key results:** S4-A 12/12 PASS; S4-B 12/12 PASS (with two pre-existing-bug workarounds captured as polish items); S4-C-1 PASS + S4-C-2 SKIPPED OPTIONAL; P1V-2 + P1V-3 both PASS; P3B-1..P3B-10 PASS (P3B-11 N/A — no migration scenario applicable to fresh laptop 2). Production hotfix `08f10e5` shipped to main + deployed to vklf.com mid-session (Illegal invocation regression from P-1; 7-line fix; verified end-to-end via P1V-2). Six new polish items captured P-12..P-17 — destinations in ROADMAP W#2 polish backlog this same end-of-session doc-batch.)
 
 ---
 
@@ -80,6 +82,57 @@ At S4-A-4 first save attempt, director observed `Failed to execute 'fetch' on 'W
 
 1. S4-A-2 "Save button disabled until filled" — code shows Save only disabled on `submitting`; validation surfaces via inline error.
 2. P1V-3 "red error in UI: Could not load Projects (401)" — actual mechanism is Supabase SIGNED_OUT → app routes to login screen.
+
+---
+
+## Playwright extension-context regression coverage (NEW 2026-05-12-c — W#2 polish session #12)
+
+**Status:** Harness shipped at code level on `workflow-2-competition-scraping`. Regression-detection capability sanity-check-proven via round-trip (see below). Actual P-14 fix DEFERRED to a future session per director's "harness setup only today" pick.
+
+**Where:** `tests/playwright/extension/` — three files:
+
+- `fixtures.ts` — Playwright fixture extending `base.extend` with:
+  - `context` — created via `chromium.launchPersistentContext('', { channel: 'chromium', args: ['--disable-extensions-except=<extensionDist>', '--load-extension=<extensionDist>'] })`. Uses Chromium's "new headless mode" via `channel: 'chromium'` (Playwright 1.60+ feature) — this is the only mode that supports loading unpacked extensions WITHOUT a real display, which is the only viable path on a Codespace.
+  - `serviceWorker` — Worker handle extracted via `context.serviceWorkers()` + `context.waitForEvent('serviceworker')` fallback.
+  - `extensionId` — regex-extracted from `chrome-extension://<id>/` URL pattern on the SW URL.
+- `product-page.html` — mock Amazon product page with predictable highlightable text. Multiple paragraphs containing "cat", "scratch", "post" so the TreeWalker pass has enough text nodes to exercise the chunk-and-yield path.
+- `highlight-flashing.spec.ts` — TWO tests:
+  - **SMOKE** — seeds chrome.storage.local via `serviceWorker.evaluate(...)` with `selectedProjectId` + `selectedPlatform: 'amazon'` + `highlightTerms:<projectId>`; route-intercepts `**://*.amazon.com/**` to fulfill with the local mock HTML; navigates to a fake `/dp/B0FAKE1234` URL; waits for `data-plos-cs-active=1` body attribute (orchestrator-attach signal); asserts mark count > 2 after initial highlight pass settles. Passes on current code.
+  - **P-14 REGRESSION** — observes `<mark>` element addition/removal count over a 1.5-second observation window after 500ms of initial-paint settling. Expected post-fix: mutationCount === 0 (MO muted around refresh). Current pre-fix: many additions+removals (the orchestrator's MutationObserver self-feedback loop strips + re-applies marks every ~250ms). `test.fail(true, '…')` annotation keeps the suite green while the bug is present; when the P-14 fix lands and mutationCount becomes 0, Playwright will report "Expected to fail, but passed" — the canonical signal to remove the `test.fail` annotation in the same session that ships the fix.
+
+**Playwright config wiring (`playwright.config.ts`):**
+- New `extension` Playwright project — `testDir: './tests/playwright/extension'`, no `use` block (the fixture's `launchPersistentContext` bypasses default browser fixtures).
+- Existing `chromium` project gets `testIgnore: 'extension/**'` so it only catches the P-17 authFetch suite.
+
+**npm scripts (`package.json`):**
+- `test:e2e` — runs `--project=chromium` only (preserves the P-17 invocation; unchanged behavior for any caller that was using it before).
+- `test:e2e:ext` — runs `--project=extension` only.
+- `test:e2e:all` — runs both projects.
+
+**README** — extended with the new "extension" project description, build-prerequisite note (the harness loads whatever is at `.output/chrome-mv3/`), and cross-reference to the wxt-build pipe-blocking workaround from CORRECTIONS_LOG 2026-05-10-f.
+
+**Sanity-check round-trip (P-17 discipline applied):**
+
+| Step | Action | Expected outcome | Actual outcome |
+|---|---|---|---|
+| 1 | Run `npm run test:e2e:ext` against current code (P-14 bug present) | Regression test's assertion FAILS (mutationCount > 0); `test.fail` flips to "expected fail → reported as PASS" | ✅ Suite green; regression spec's ✘ symbol confirms it failed-as-expected |
+| 2 | Temporarily comment out `observer.observe(document.body, { childList: true, subtree: true })` in `extensions/competition-scraping/src/lib/content-script/orchestrator.ts:318` (eliminates the loop trivially since no MO triggers the refresh cycle); rebuild extension via `wxt build` | Regression test's assertion PASSES (mutationCount === 0); `test.fail` flips to "Expected to fail, but passed" → reported as FAIL → suite RED | ✅ Suite RED; "Expected to fail, but passed" message displayed exactly as predicted |
+| 3 | Restore the `observer.observe(...)` line; rebuild extension | Suite returns to step-1 state (green; regression spec ✘-but-expected) | ✅ Suite green again |
+
+The round-trip proves the harness detects BOTH directions of the P-14 bug class:
+- It catches the bug AS-IS today (the `test.fail`-protected failure is the proof).
+- It will correctly flag the future fix as "your annotation is stale, remove it" when P-14 ships (because the now-passing assertion will violate the `test.fail` expectation).
+
+**Coverage delta vs. director-manual approach:**
+
+Today's harness covers ONE platform (Amazon via route interception of `*.amazon.com`). The other three production platforms (ebay.com / etsy.com / walmart.com) each have their own slug variations + content shapes the orchestrator dispatches against per the `getModuleByHostname` registry. The P-14 bug is platform-independent (the MO self-feedback loop is in the orchestrator + highlight-terms refresh — not in any platform module), so single-platform coverage should be sufficient to catch the bug class. Cross-platform coverage is a (a.16) next-session enhancement: route-intercept the other three hosts too + extend the spec to cover each.
+
+**What the harness does NOT cover (gaps to surface next session(s)):**
+- The selection-on-highlighted-text destruction symptom (where selection collapses every 250ms because the marks under it get destroyed and recreated). This is the user-visible second symptom of P-14 beyond the visual flashing. A "selection holds across one MO debounce window" sub-spec is straightforward to add.
+- Cross-platform coverage (ebay / etsy / walmart) per the note above.
+- The P-10 SPA-navigation overlay banner regression case — the P-14 fix must preserve P-10 behavior; the regression spec should include a sub-test exercising `history.pushState` to confirm the SPA-detection path still fires post-fix.
+
+**Cross-references:** ROADMAP W#2 row (a.16) RECOMMENDED-NEXT (author the actual regression spec coverage on top of this harness) + (a.17) RECOMMENDED-NEXT-AFTER (ship the P-14 fix); ROADMAP polish backlog P-14 entry (annotated with harness-landed + fix-shape captured); CORRECTIONS_LOG 2026-05-12-c entries (the `import.meta.url` ESM/CJS slip + the cwd-drift slip + the P-17 baseline doc-drift correction); README §"Running the Playwright regression tests" (extended Playwright section); `tests/playwright/authFetch-regression.spec.ts` (P-17's sibling test that the round-trip discipline was inherited from); `extensions/competition-scraping/src/lib/content-script/orchestrator.ts:297-318` + `highlight-terms.ts:362-389` (the buggy code paths the regression spec asserts against).
 
 ---
 
