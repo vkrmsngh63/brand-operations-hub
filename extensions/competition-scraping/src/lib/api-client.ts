@@ -5,7 +5,8 @@
 // (POST .../text, the two-phase image upload, etc.) using the shared types
 // from src/lib/shared-types/competition-scraping.ts.
 
-import { getAccessToken } from './auth.ts';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { supabase as productionSupabase } from './supabase.ts';
 import { PlosApiError } from './errors.ts';
 import type {
   CapturedText,
@@ -76,25 +77,97 @@ export function mapFetchTransportError(err: unknown): PlosApiError {
   throw err;
 }
 
-async function authedFetch(
-  path: string,
-  init: RequestInit = {},
-): Promise<Response> {
-  const token = await getAccessToken();
-  if (!token) {
-    throw new PlosApiError(401, 'Not signed in');
-  }
-  const headers = new Headers(init.headers);
-  headers.set('Authorization', `Bearer ${token}`);
-  if (init.body && !headers.has('Content-Type')) {
-    headers.set('Content-Type', 'application/json');
-  }
-  try {
-    return await fetch(`${PLOS_API_BASE_URL}${path}`, { ...init, headers });
-  } catch (err) {
-    throw mapFetchTransportError(err);
-  }
+// ── authedFetch ────────────────────────────────────────────────
+// Adds Authorization: Bearer <JWT> on every request; on 401 attempts
+// a single silent refresh of the Supabase session via refreshSession()
+// and retries once with the new access token. If the refresh ALSO fails
+// (refresh token expired ~1 week away, network offline, server-side
+// revocation) the original 401 Response is returned to the caller —
+// preserving the existing PlosApiError(401) error path the popup UI
+// renders today. P-12 mirrors P-1's makeAuthFetch in src/lib/authFetch.ts;
+// the extension's API client previously had no 401-retry, so transient
+// 401s surfaced as broken-popup state until popup re-open.
+//
+// The 401-retry covers the common case where the access token has
+// expired (1-hour TTL) but the refresh token is still valid (~1-week
+// TTL). With autoRefreshToken: true on the Supabase client (see
+// supabase.ts), the client refreshes in the background — but the
+// explicit refresh on 401 closes the window between token expiry and
+// the next background refresh tick.
+
+type FetchFn = (url: string, init?: RequestInit) => Promise<Response>;
+
+export interface AuthedFetchDeps {
+  supabase: Pick<SupabaseClient, 'auth'>;
+  fetchFn: FetchFn;
 }
+
+export function makeAuthedFetch(deps: AuthedFetchDeps) {
+  return async function authedFetchImpl(
+    path: string,
+    init: RequestInit = {},
+  ): Promise<Response> {
+    const { data: { session } } = await deps.supabase.auth.getSession();
+    const initialToken = session?.access_token;
+
+    if (!initialToken) {
+      throw new PlosApiError(401, 'Not signed in');
+    }
+
+    const buildHeaders = (token: string) => {
+      const h = new Headers(init.headers);
+      h.set('Authorization', `Bearer ${token}`);
+      if (init.body && !h.has('Content-Type')) {
+        h.set('Content-Type', 'application/json');
+      }
+      return h;
+    };
+
+    let firstResponse: Response;
+    try {
+      firstResponse = await deps.fetchFn(`${PLOS_API_BASE_URL}${path}`, {
+        ...init,
+        headers: buildHeaders(initialToken),
+      });
+    } catch (err) {
+      throw mapFetchTransportError(err);
+    }
+
+    if (firstResponse.status !== 401) {
+      return firstResponse;
+    }
+
+    // Access token rejected — try a silent refresh + one retry.
+    const refreshResult = await deps.supabase.auth.refreshSession();
+    const newToken = refreshResult?.data?.session?.access_token;
+
+    if (refreshResult?.error || !newToken) {
+      return firstResponse;
+    }
+
+    try {
+      return await deps.fetchFn(`${PLOS_API_BASE_URL}${path}`, {
+        ...init,
+        headers: buildHeaders(newToken),
+      });
+    } catch (err) {
+      throw mapFetchTransportError(err);
+    }
+  };
+}
+
+// Production export. Wrap fetch in an arrow so the browser invokes it
+// with its window receiver — passing `fetch` bare would detach it and
+// surface "Illegal invocation" on the first call. Same regression P-17
+// captured for the web side's authFetch.ts production wiring (commit
+// 08f10e5 hotfix 2026-05-12). The Supabase client singleton from
+// supabase.ts already wires the chrome.storage.local adapter so token
+// persistence + autoRefreshToken work correctly in the extension runtime.
+const authedFetch: ReturnType<typeof makeAuthedFetch> = (path, init) =>
+  makeAuthedFetch({
+    supabase: productionSupabase,
+    fetchFn: (u, i) => fetch(u, i),
+  })(path, init);
 
 /**
  * Lists the Projects accessible to the signed-in user.
