@@ -4,7 +4,7 @@
 
 **For:** the next Claude Code session, whatever it is.
 
-**Status:** PROVISIONAL — will be finalized at end-of-session per HANDOFF_PROTOCOL.md §4 Step 1 row 12. The "no obvious next task" interview fires this session because today's work (platform-wide resume-mechanism ship) wrapped cleanly with no natural continuation; director picks at end-of-session.
+**Status:** FINALIZED 2026-05-13-c end-of-session — director picked Option A (W#2 (a.23) deploy-#10 verification on `main`) via the §4 Step 1c "No obvious next task" Rule 14f forced-picker. Recommended pick was Option A per `feedback_recommendation_style.md` (most-thorough-and-reliable: closes yesterday's partial-verify state, exercises the new `./resume` mechanism for the first time, natural continuation of most-recent in-flight work).
 
 ---
 
