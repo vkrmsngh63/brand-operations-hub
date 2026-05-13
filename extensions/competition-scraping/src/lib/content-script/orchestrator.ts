@@ -45,6 +45,7 @@ import {
 import { showAlreadySavedOverlay } from './already-saved-overlay.ts';
 import { openUrlAddForm } from './url-add-form.ts';
 import { openTextCaptureForm } from './text-capture-form.ts';
+import { openImageCaptureForm } from './image-capture-form.ts';
 import { isContentScriptMessage } from './messaging.ts';
 import type { Platform } from '../../../../../src/lib/shared-types/competition-scraping.ts';
 import { startLiveHighlighting } from './highlight-terms.ts';
@@ -393,6 +394,29 @@ export async function runOrchestrator(): Promise<() => void> {
           // Captured text doesn't affect the recognition Set (it's
           // attached to a CompetitorUrl, not creating one). The
           // PLOS-side detail page reflects the new row on next load.
+        },
+        onClose() {
+          // No orchestrator-side state to roll back.
+        },
+      });
+      sendResponse({ ok: true });
+      return;
+    }
+    if (msg.kind === 'open-image-capture-form') {
+      // Module 2 regular-image gesture (session 5, 2026-05-12-i).
+      // The form drives the end-to-end two-phase upload through the
+      // background's submit-image-capture handler; orchestrator just hands
+      // off the props.
+      openImageCaptureForm({
+        srcUrl: msg.srcUrl,
+        pageUrl: msg.pageUrl,
+        projectId,
+        projectName,
+        platform: platformModule.platform as Platform,
+        onSaved() {
+          // Captured image doesn't affect the recognition Set (attached to
+          // a CompetitorUrl, doesn't create one). The PLOS-side detail
+          // page reflects the new row on next load.
         },
         onClose() {
           // No orchestrator-side state to roll back.

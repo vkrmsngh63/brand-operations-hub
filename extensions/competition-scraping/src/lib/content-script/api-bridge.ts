@@ -21,11 +21,14 @@
 import { PlosApiError } from '../errors.ts';
 import type { ExtensionProject } from '../api-client.ts';
 import type {
+  AcceptedImageMimeType,
+  CapturedImage,
   CapturedText,
   CompetitorUrl,
   CreateCapturedTextRequest,
   CreateCompetitorUrlRequest,
   CreateVocabularyEntryRequest,
+  ImageSourceType,
   ListCompetitorUrlsResponse,
   Platform,
   VocabularyEntry,
@@ -149,5 +152,45 @@ export async function createVocabularyEntry(
     kind: 'create-vocabulary-entry',
     projectId,
     body,
+  });
+}
+
+/**
+ * End-to-end image capture submit. The background fetches the image bytes
+ * from `srcUrl`, runs Phase 1 (requestUpload) + Phase 2 (signed-URL PUT) +
+ * Phase 3 (finalize), and returns the finalized CapturedImage row. The
+ * content-script form treats this as a single atomic save — the form
+ * disables its Save button while the message is in flight and surfaces
+ * a single error on any failure (matches the captured-text Save path
+ * shape so users see consistent form behavior across both gestures).
+ *
+ * See messaging.ts SubmitImageCaptureRequestMessage for the wire shape and
+ * STACK_DECISIONS.md §3 for why the bytes flow through the background
+ * rather than the content script.
+ */
+export async function submitImageCapture(args: {
+  projectId: string;
+  urlId: string;
+  srcUrl: string;
+  request: {
+    clientId: string;
+    mimeType: AcceptedImageMimeType;
+    sourceType: ImageSourceType;
+    imageCategory?: string;
+  };
+  finalize: {
+    imageCategory?: string;
+    composition?: string;
+    embeddedText?: string;
+    tags?: string[];
+  };
+}): Promise<CapturedImage> {
+  return send<CapturedImage>({
+    kind: 'submit-image-capture',
+    projectId: args.projectId,
+    urlId: args.urlId,
+    srcUrl: args.srcUrl,
+    request: args.request,
+    finalize: args.finalize,
   });
 }

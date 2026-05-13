@@ -9,12 +9,16 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase as productionSupabase } from './supabase.ts';
 import { PlosApiError } from './errors.ts';
 import type {
+  AcceptedImageMimeType,
+  CapturedImage,
   CapturedText,
   CompetitorUrl,
   CreateCapturedTextRequest,
   CreateCompetitorUrlRequest,
   CreateVocabularyEntryRequest,
   ExtensionStateDto,
+  FinalizeImageUploadRequest,
+  FinalizeImageUploadResponse,
   GetExtensionStateResponse,
   ListCompetitorUrlsResponse,
   ListHighlightTermsResponse,
@@ -24,8 +28,15 @@ import type {
   ReplaceExtensionStateResponse,
   ReplaceHighlightTermsRequest,
   ReplaceHighlightTermsResponse,
+  RequestImageUploadRequest,
+  RequestImageUploadResponse,
   VocabularyEntry,
   VocabularyType,
+} from '../../../../src/lib/shared-types/competition-scraping.ts';
+import {
+  ACCEPTED_IMAGE_MIME_TYPES,
+  IMAGE_UPLOAD_MAX_BYTES,
+  isAcceptedImageMimeType,
 } from '../../../../src/lib/shared-types/competition-scraping.ts';
 import type { HighlightTerm } from './highlight-terms.ts';
 
@@ -472,4 +483,188 @@ export async function createVocabularyEntry(
     },
   );
   return readJsonOrThrow<VocabularyEntry>(res);
+}
+
+// ─── Image upload — Module 2 two-phase flow (session 5, 2026-05-12-i) ────
+//
+// Spec: docs/COMPETITION_SCRAPING_STACK_DECISIONS.md §3 + §11.1. Three calls
+// per save: requestImageUpload (Phase 1) → putImageBytesToSignedUrl (Phase
+// 2, direct to Supabase Storage) → finalizeImageUpload (Phase 3, server
+// creates the CapturedImage row).
+//
+// All three are invoked end-to-end inside the background service worker
+// (see entrypoints/background.ts → handleSubmitImageCapture) — fetching
+// the image bytes happens in extension origin so cross-origin image CDNs
+// are covered by wxt.config.ts host_permissions; PUT to Supabase Storage
+// from extension origin sidesteps the host-page CORS preflight that would
+// block the same PUT from a content-script origin.
+
+/**
+ * Phase 1 — POST metadata to PLOS, get back a 5-minute signed Supabase
+ * Storage URL the extension PUTs the bytes to in Phase 2.
+ *
+ * Idempotency: server generates a fresh `capturedImageId` per call (the
+ * DB row doesn't exist yet — it's created in Phase 3). Retries on transport
+ * failure yield a new signed URL pointing at a fresh storage path; orphan
+ * objects from failed retries are cleaned by the daily janitor.
+ */
+export async function requestImageUpload(
+  projectId: string,
+  urlId: string,
+  body: RequestImageUploadRequest,
+): Promise<RequestImageUploadResponse> {
+  const res = await authedFetch(
+    `/api/projects/${encodeURIComponent(projectId)}/competition-scraping/urls/${encodeURIComponent(urlId)}/images/requestUpload`,
+    {
+      method: 'POST',
+      body: JSON.stringify(body),
+    },
+  );
+  return readJsonOrThrow<RequestImageUploadResponse>(res);
+}
+
+/**
+ * Phase 2 — direct PUT of the image bytes to the signed Supabase Storage
+ * URL returned by Phase 1. Bytes never pass through Vercel (bypasses the
+ * 4.5 MB body cap + 5-min function timeout — STACK_DECISIONS §3).
+ *
+ * The signed URL embeds auth + the storage path; no Authorization header
+ * is needed. `Content-Type` must match the MIME the server pre-recorded
+ * at Phase 1 (Supabase Storage rejects MIME mismatches as 415).
+ *
+ * Throws PlosApiError on any non-2xx response or transport failure so the
+ * caller (background) can surface a consistent error shape to the form.
+ *
+ * Optional `fetchFn` is the injection seam node:test exercises in
+ * api-client.test.ts; production callers omit it (uses global fetch).
+ */
+export async function putImageBytesToSignedUrl(
+  uploadUrl: string,
+  bytes: ArrayBuffer | Blob,
+  mimeType: AcceptedImageMimeType,
+  fetchFn: FetchFn = (u, i) => fetch(u, i),
+): Promise<void> {
+  let res: Response;
+  try {
+    res = await fetchFn(uploadUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': mimeType },
+      body: bytes,
+    });
+  } catch (err) {
+    throw mapFetchTransportError(err);
+  }
+  if (!res.ok) {
+    let message = `Supabase Storage PUT failed: HTTP ${res.status}`;
+    try {
+      // Supabase returns text/plain or XML on PUT errors; surface the body
+      // verbatim so the daily logs are debuggable.
+      const text = await res.text();
+      if (text) message = `${message} — ${text.slice(0, 200)}`;
+    } catch {
+      // ignore — fall back to status-only message
+    }
+    throw new PlosApiError(res.status, message);
+  }
+}
+
+/**
+ * Phase 3 — POST finalize to PLOS; server creates the CapturedImage row
+ * referencing the uploaded file. Idempotent server-side on `clientId`:
+ * a duplicate clientId returns the existing row with 200 instead of 201.
+ *
+ * The mimeType / sourceType / fileSize fields are echoed back to the
+ * server from Phase 1 so the server can re-derive the storage path
+ * without keeping intermediate state between calls (per STACK_DECISIONS
+ * §11.1 finalize body reshape note 2026-05-07).
+ */
+export async function finalizeImageUpload(
+  projectId: string,
+  urlId: string,
+  body: FinalizeImageUploadRequest,
+): Promise<FinalizeImageUploadResponse> {
+  const res = await authedFetch(
+    `/api/projects/${encodeURIComponent(projectId)}/competition-scraping/urls/${encodeURIComponent(urlId)}/images/finalize`,
+    {
+      method: 'POST',
+      body: JSON.stringify(body),
+    },
+  );
+  return readJsonOrThrow<CapturedImage>(res);
+}
+
+export interface FetchedImageBytes {
+  bytes: ArrayBuffer;
+  mimeType: AcceptedImageMimeType;
+  fileSize: number;
+}
+
+/**
+ * Fetches the bytes of a host-page image given its srcUrl. Called from
+ * the background service worker (extension origin) so cross-origin image
+ * CDNs covered by wxt.config.ts host_permissions are reachable.
+ *
+ * Returns the bytes alongside the resolved MIME type — preference order:
+ *   1. The response's `Content-Type` header (verified against the
+ *      three-MIME allow list per STACK_DECISIONS §3).
+ *   2. The src URL's extension as a last resort for CDNs that don't set
+ *      Content-Type (uncommon for image CDNs, but defensive).
+ *
+ * Rejects with PlosApiError when:
+ *   - the URL is unreachable (TypeError → status 0)
+ *   - the response is non-2xx (status echoed)
+ *   - the MIME isn't one of the three accepted types (PlosApiError(415))
+ *   - the bytes exceed IMAGE_UPLOAD_MAX_BYTES (PlosApiError(413)) — saves
+ *     a round-trip to the server which would reject at requestUpload
+ *
+ * The MIME-and-size pre-check here is defense-in-depth; the server route
+ * enforces both at Phase 1 regardless of what the extension claims.
+ *
+ * Optional `fetchFn` is the injection seam for node:test.
+ */
+export async function fetchImageBytes(
+  srcUrl: string,
+  fetchFn: FetchFn = (u, i) => fetch(u, i),
+): Promise<FetchedImageBytes> {
+  let res: Response;
+  try {
+    res = await fetchFn(srcUrl, { method: 'GET' });
+  } catch (err) {
+    throw mapFetchTransportError(err);
+  }
+  if (!res.ok) {
+    throw new PlosApiError(
+      res.status,
+      `Could not fetch the image (HTTP ${res.status}). The image's CDN may not be authorized for this extension yet.`,
+    );
+  }
+  const headerType = (res.headers.get('content-type') ?? '')
+    .toLowerCase()
+    .split(';')[0]
+    ?.trim();
+  let mimeType: string | null = isAcceptedImageMimeType(headerType)
+    ? headerType
+    : null;
+  if (!mimeType) {
+    // Fallback: derive from URL extension.
+    const lower = srcUrl.toLowerCase();
+    if (lower.endsWith('.jpg') || lower.endsWith('.jpeg'))
+      mimeType = 'image/jpeg';
+    else if (lower.endsWith('.png')) mimeType = 'image/png';
+    else if (lower.endsWith('.webp')) mimeType = 'image/webp';
+  }
+  if (!mimeType || !isAcceptedImageMimeType(mimeType)) {
+    throw new PlosApiError(
+      415,
+      `Unsupported image type. PLOS accepts ${ACCEPTED_IMAGE_MIME_TYPES.join(', ')}.`,
+    );
+  }
+  const bytes = await res.arrayBuffer();
+  if (bytes.byteLength > IMAGE_UPLOAD_MAX_BYTES) {
+    throw new PlosApiError(
+      413,
+      `Image is ${bytes.byteLength} bytes — exceeds the 5 MB cap.`,
+    );
+  }
+  return { bytes, mimeType, fileSize: bytes.byteLength };
 }

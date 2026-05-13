@@ -359,6 +359,49 @@ export const CONTENT_SCRIPT_CSS = `
   background: rgba(26, 58, 108, 0.25) !important;
 }
 
+/* Module 2 image-capture form — session 5 (2026-05-12-i).
+   Image preview block sits between the saved-URL picker and the category
+   picker; bordered + max-height-clamped so a tall image doesn't push the
+   Save button below the fold. Object-fit: contain so portrait/landscape
+   images render uncropped. */
+.plos-cs-form-image-preview-wrap {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  gap: 6px !important;
+  margin-bottom: 10px !important;
+  padding: 10px !important;
+  background: #f9fafb !important;
+  border: 1px solid #e5e7eb !important;
+  border-radius: 4px !important;
+}
+
+.plos-cs-form-image-preview {
+  display: block !important;
+  max-width: 100% !important;
+  max-height: 200px !important;
+  width: auto !important;
+  height: auto !important;
+  object-fit: contain !important;
+  background: #fff !important;
+  border-radius: 3px !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06) !important;
+}
+
+.plos-cs-form-image-meta {
+  font-size: 11px !important;
+  color: #6b7280 !important;
+  text-align: center !important;
+  word-break: break-all !important;
+  line-height: 1.3 !important;
+}
+
+.plos-cs-form-image-meta-failed {
+  font-size: 11px !important;
+  color: #c2185b !important;
+  text-align: center !important;
+}
+
 /* Live-page Highlight Terms — P-5 fix 2026-05-08-d.
    background-color + color are set inline per-term via the user's chosen
    palette entry; the rules here only handle layout/display so the inline

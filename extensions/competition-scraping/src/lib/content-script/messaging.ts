@@ -9,6 +9,10 @@
 //       text selection per §A.7 Module 2 highlight-and-add gesture. Carries
 //       the selected text + the page URL (so the form can suggest matching
 //       a saved CompetitorUrl).
+//     - `open-image-capture-form` (session 5): right-click context-menu on an
+//       image per §A.7 Module 2 regular-image gesture. Carries the image's
+//       srcUrl + the page URL so the form can preview the image and
+//       pre-select the matching saved CompetitorUrl.
 //   - Content → Background (request/response): BackgroundRequest +
 //     BackgroundResponse envelope. Added 2026-05-08-c — content scripts
 //     cannot reach vklf.com directly because their fetch originates from
@@ -20,6 +24,8 @@
 //     Waypoint #1 attempt #3 row for the discovery context.
 
 import type {
+  AcceptedImageMimeType,
+  CapturedImage,
   CapturedText,
   CompetitorUrl,
   CreateCapturedTextRequest,
@@ -53,9 +59,27 @@ export interface OpenTextCaptureFormMessage {
   pageUrl: string;
 }
 
+export interface OpenImageCaptureFormMessage {
+  kind: 'open-image-capture-form';
+  /** The image's source URL as Chrome reported via `info.srcUrl` on the
+   * context-menu click. Used both to preview the image in the form and to
+   * fetch the bytes for upload (the background performs the fetch — see
+   * `submit-image-capture` below).
+   *
+   * May be `data:` for inline images that the host page constructed
+   * client-side; the upload path handles both `http(s):` and `data:` srcs.
+   */
+  srcUrl: string;
+  /** Page URL where the right-click happened. Used for pre-selecting the
+   * saved CompetitorUrl in the form's picker (same shape as the text
+   * capture's `pageUrl`). */
+  pageUrl: string;
+}
+
 export type ContentScriptMessage =
   | OpenUrlAddFormMessage
-  | OpenTextCaptureFormMessage;
+  | OpenTextCaptureFormMessage
+  | OpenImageCaptureFormMessage;
 
 export function isContentScriptMessage(
   value: unknown,
@@ -66,6 +90,7 @@ export function isContentScriptMessage(
     href?: unknown;
     selectedText?: unknown;
     pageUrl?: unknown;
+    srcUrl?: unknown;
   };
   if (msg.kind === 'open-url-add-form') {
     return typeof msg.href === 'string';
@@ -74,6 +99,9 @@ export function isContentScriptMessage(
     return (
       typeof msg.selectedText === 'string' && typeof msg.pageUrl === 'string'
     );
+  }
+  if (msg.kind === 'open-image-capture-form') {
+    return typeof msg.srcUrl === 'string' && typeof msg.pageUrl === 'string';
   }
   return false;
 }
@@ -115,13 +143,54 @@ export interface CreateVocabularyEntryRequestMessage {
   body: CreateVocabularyEntryRequest;
 }
 
+/**
+ * Session 5 — end-to-end image-capture submit. Content script hands off
+ * everything the background needs to fetch the bytes (the image's srcUrl)
+ * and run the §3 two-phase upload (requestUpload → PUT → finalize). The
+ * background returns the finalized CapturedImage row on success.
+ *
+ * Why end-to-end in the background instead of split across phases (see
+ * STACK_DECISIONS.md §3): the background fetches the image bytes from
+ * extension origin (covered by the per-platform image-CDN host_permissions
+ * declared in wxt.config.ts). Doing the PUT from the content script would
+ * succeed only when the host-page's CDN response carries permissive CORS
+ * headers — Amazon/Etsy CDNs typically do NOT. Doing it in the background
+ * avoids the per-platform CORS gamble.
+ */
+export interface SubmitImageCaptureRequestMessage {
+  kind: 'submit-image-capture';
+  projectId: string;
+  urlId: string;
+  /** The image's source URL the user right-clicked. The background fetches
+   * the bytes from this URL using extension-origin fetch. */
+  srcUrl: string;
+  /** Phase-1 request payload (MIME, size, sourceType, clientId,
+   * imageCategory). `fileSize` is the byte length the background measured
+   * after fetching the bytes — content script doesn't see the bytes. */
+  request: {
+    clientId: string;
+    mimeType: AcceptedImageMimeType;
+    sourceType: 'regular' | 'region-screenshot';
+    imageCategory?: string;
+  };
+  /** Phase-3 finalize body's user-provided fields. clientId / mimeType /
+   * sourceType / fileSize are echoed from phase 1 by the background. */
+  finalize: {
+    imageCategory?: string;
+    composition?: string;
+    embeddedText?: string;
+    tags?: string[];
+  };
+}
+
 export type BackgroundRequest =
   | ListProjectsRequest
   | ListCompetitorUrlsRequest
   | CreateCompetitorUrlRequestMessage
   | CreateCapturedTextRequestMessage
   | ListVocabularyRequest
-  | CreateVocabularyEntryRequestMessage;
+  | CreateVocabularyEntryRequestMessage
+  | SubmitImageCaptureRequestMessage;
 
 // Response envelope. Encodes both success + structured error so the
 // content-script wrapper can re-throw PlosApiError with the right status
@@ -148,6 +217,10 @@ export type ListVocabularyResponseEnvelope = BackgroundResponse<
 >;
 export type CreateVocabularyEntryResponseEnvelope = BackgroundResponse<
   VocabularyEntry
+>;
+
+export type SubmitImageCaptureResponseEnvelope = BackgroundResponse<
+  CapturedImage
 >;
 
 export function isBackgroundRequest(
@@ -192,6 +265,24 @@ export function isBackgroundRequest(
       typeof msg.projectId === 'string' &&
       typeof msg.body === 'object' &&
       msg.body !== null
+    );
+  }
+  if (msg.kind === 'submit-image-capture') {
+    const m = msg as {
+      projectId?: unknown;
+      urlId?: unknown;
+      srcUrl?: unknown;
+      request?: unknown;
+      finalize?: unknown;
+    };
+    return (
+      typeof m.projectId === 'string' &&
+      typeof m.urlId === 'string' &&
+      typeof m.srcUrl === 'string' &&
+      typeof m.request === 'object' &&
+      m.request !== null &&
+      typeof m.finalize === 'object' &&
+      m.finalize !== null
     );
   }
   return false;

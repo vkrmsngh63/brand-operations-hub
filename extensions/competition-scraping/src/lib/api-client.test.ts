@@ -10,8 +10,14 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { makeAuthedFetch, mapFetchTransportError } from './api-client.ts';
+import {
+  fetchImageBytes,
+  makeAuthedFetch,
+  mapFetchTransportError,
+  putImageBytesToSignedUrl,
+} from './api-client.ts';
 import { PlosApiError } from './errors.ts';
+import { IMAGE_UPLOAD_MAX_BYTES } from '../../../../src/lib/shared-types/competition-scraping.ts';
 
 describe('mapFetchTransportError', () => {
   it('converts TypeError → PlosApiError(0, "Network unreachable...")', () => {
@@ -380,5 +386,203 @@ describe('makeAuthedFetch (P-12 silent-refresh + 401-retry)', () => {
     assert.match((caught as PlosApiError).message, /network unreachable/i);
     assert.equal(calls.length, 2);
     assert.equal(refreshCallCount(), 1);
+  });
+});
+
+/* ── Session 5: image upload pure-helper tests ──────────────────────── */
+
+function makeImageResponse(opts: {
+  status?: number;
+  body?: ArrayBuffer;
+  contentType?: string;
+  throwTypeError?: boolean;
+}): (url: string, init?: RequestInit) => Promise<Response> {
+  return async () => {
+    if (opts.throwTypeError) {
+      throw new TypeError('Failed to fetch');
+    }
+    const headers = new Headers();
+    if (opts.contentType) headers.set('Content-Type', opts.contentType);
+    return new Response(opts.body ?? new ArrayBuffer(0), {
+      status: opts.status ?? 200,
+      headers,
+    });
+  };
+}
+
+describe('fetchImageBytes (session 5)', () => {
+  it('200 + image/jpeg Content-Type → returns bytes + resolved mimeType + fileSize', async () => {
+    const body = new ArrayBuffer(1024);
+    const fetchFn = makeImageResponse({
+      status: 200,
+      body,
+      contentType: 'image/jpeg',
+    });
+    const result = await fetchImageBytes(
+      'https://m.media-amazon.com/images/I/abc.jpg',
+      fetchFn,
+    );
+    assert.equal(result.mimeType, 'image/jpeg');
+    assert.equal(result.fileSize, 1024);
+    assert.equal(result.bytes.byteLength, 1024);
+  });
+
+  it('200 + Content-Type missing → falls back to extension-based MIME (image/png)', async () => {
+    const fetchFn = makeImageResponse({
+      status: 200,
+      body: new ArrayBuffer(512),
+      contentType: undefined,
+    });
+    const result = await fetchImageBytes(
+      'https://i.ebayimg.com/thumbs/images/g/abc/s-l500.png',
+      fetchFn,
+    );
+    assert.equal(result.mimeType, 'image/png');
+    assert.equal(result.fileSize, 512);
+  });
+
+  it('200 + Content-Type missing + non-image extension → 415 PlosApiError', async () => {
+    const fetchFn = makeImageResponse({
+      status: 200,
+      body: new ArrayBuffer(100),
+      contentType: undefined,
+    });
+    let caught: unknown = null;
+    try {
+      await fetchImageBytes(
+        'https://i.ebayimg.com/thumbs/images/g/abc/s-l500.gif',
+        fetchFn,
+      );
+    } catch (err) {
+      caught = err;
+    }
+    assert.ok(caught instanceof PlosApiError);
+    assert.equal((caught as PlosApiError).status, 415);
+  });
+
+  it('200 + image/svg+xml Content-Type → 415 PlosApiError (XSS rejection)', async () => {
+    const fetchFn = makeImageResponse({
+      status: 200,
+      body: new ArrayBuffer(100),
+      contentType: 'image/svg+xml',
+    });
+    let caught: unknown = null;
+    try {
+      await fetchImageBytes('https://example.com/icon.svg', fetchFn);
+    } catch (err) {
+      caught = err;
+    }
+    assert.ok(caught instanceof PlosApiError);
+    assert.equal((caught as PlosApiError).status, 415);
+  });
+
+  it('404 → PlosApiError with status echoed', async () => {
+    const fetchFn = makeImageResponse({ status: 404 });
+    let caught: unknown = null;
+    try {
+      await fetchImageBytes('https://example.com/missing.jpg', fetchFn);
+    } catch (err) {
+      caught = err;
+    }
+    assert.ok(caught instanceof PlosApiError);
+    assert.equal((caught as PlosApiError).status, 404);
+    assert.match((caught as PlosApiError).message, /CDN may not be authorized/);
+  });
+
+  it('TypeError → PlosApiError(0) — CDN unreachable / host_permissions missing', async () => {
+    const fetchFn = makeImageResponse({ throwTypeError: true });
+    let caught: unknown = null;
+    try {
+      await fetchImageBytes('https://unknown-cdn.example/x.jpg', fetchFn);
+    } catch (err) {
+      caught = err;
+    }
+    assert.ok(caught instanceof PlosApiError);
+    assert.equal((caught as PlosApiError).status, 0);
+  });
+
+  it('bytes exceeding 5 MB cap → PlosApiError(413)', async () => {
+    const fetchFn = makeImageResponse({
+      status: 200,
+      body: new ArrayBuffer(IMAGE_UPLOAD_MAX_BYTES + 1),
+      contentType: 'image/jpeg',
+    });
+    let caught: unknown = null;
+    try {
+      await fetchImageBytes('https://example.com/huge.jpg', fetchFn);
+    } catch (err) {
+      caught = err;
+    }
+    assert.ok(caught instanceof PlosApiError);
+    assert.equal((caught as PlosApiError).status, 413);
+  });
+
+  it('Content-Type with charset suffix → strips to bare MIME', async () => {
+    // Some CDNs (Etsy historically) send `image/jpeg; charset=binary`.
+    const fetchFn = makeImageResponse({
+      status: 200,
+      body: new ArrayBuffer(100),
+      contentType: 'image/jpeg; charset=binary',
+    });
+    const result = await fetchImageBytes('https://example.com/x.jpg', fetchFn);
+    assert.equal(result.mimeType, 'image/jpeg');
+  });
+});
+
+describe('putImageBytesToSignedUrl (session 5)', () => {
+  it('200 response → resolves cleanly', async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    const fetchFn = async (url: string, init?: RequestInit): Promise<Response> => {
+      calls.push({ url, init });
+      return new Response(null, { status: 200 });
+    };
+    await putImageBytesToSignedUrl(
+      'https://x.supabase.co/upload/signed',
+      new ArrayBuffer(100),
+      'image/jpeg',
+      fetchFn,
+    );
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0]!.init?.method, 'PUT');
+    const h = calls[0]!.init?.headers as Record<string, string>;
+    assert.equal(h['Content-Type'], 'image/jpeg');
+  });
+
+  it('non-2xx response → PlosApiError with body excerpt', async () => {
+    const fetchFn = async (): Promise<Response> =>
+      new Response('Object too large', { status: 413 });
+    let caught: unknown = null;
+    try {
+      await putImageBytesToSignedUrl(
+        'https://x.supabase.co/upload/signed',
+        new ArrayBuffer(100),
+        'image/jpeg',
+        fetchFn,
+      );
+    } catch (err) {
+      caught = err;
+    }
+    assert.ok(caught instanceof PlosApiError);
+    assert.equal((caught as PlosApiError).status, 413);
+    assert.match((caught as PlosApiError).message, /Object too large/);
+  });
+
+  it('TypeError during fetch → PlosApiError(0)', async () => {
+    const fetchFn = async (): Promise<Response> => {
+      throw new TypeError('Failed to fetch');
+    };
+    let caught: unknown = null;
+    try {
+      await putImageBytesToSignedUrl(
+        'https://x.supabase.co/upload/signed',
+        new ArrayBuffer(100),
+        'image/jpeg',
+        fetchFn,
+      );
+    } catch (err) {
+      caught = err;
+    }
+    assert.ok(caught instanceof PlosApiError);
+    assert.equal((caught as PlosApiError).status, 0);
   });
 });

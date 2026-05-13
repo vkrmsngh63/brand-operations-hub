@@ -25,6 +25,18 @@ export default defineConfig({
       'https://*.ebay.com/*',
       'https://*.etsy.com/*',
       'https://*.walmart.com/*',
+      // Session 5 (2026-05-12-i) — image-CDN hostnames so the background
+      // service worker's fetch() can read image bytes for the Module 2
+      // regular-image upload path. Without these, fetchImageBytes() rejects
+      // with PlosApiError on cross-origin CDN fetches. The four sites
+      // above only cover the product-listing page origins, not the image
+      // hosts Amazon / Ebay / Etsy / Walmart serve their product photos
+      // from. If a platform adds a new CDN later, append additively.
+      'https://*.media-amazon.com/*',
+      'https://*.ssl-images-amazon.com/*',
+      'https://*.ebayimg.com/*',
+      'https://*.etsystatic.com/*',
+      'https://*.walmartimages.com/*',
     ],
   },
 });
