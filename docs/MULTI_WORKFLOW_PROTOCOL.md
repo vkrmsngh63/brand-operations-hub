@@ -5,6 +5,8 @@
 
 **REFRAMED 2026-05-04** in `session_2026-05-04_workflow-tool-scaffold-design`: the original framing assumed PARALLEL Claude Code chats (one for W#1, one for W#2, both alive at the same time). The director's actual operational reality is SEQUENTIAL — single Codespace, single terminal, one workflow at a time. Branch state persists across sessions because it's the same Codespace. The state-coordination scaffolding in this doc (active-tools table, schema-change-in-flight flag, per-workflow doc-section ownership) remains valuable for tracking state across sequential sessions over long stretches of time, but the parallel-chat framing was retired. See §11 (NEW 2026-05-04) for the canonical "how to start a session for any workflow" procedure both director and Claude follow.
 
+**EXTENDED 2026-05-13-c** in `session_2026-05-13-c_resume-script-design`: §10 quick-reference table and §11 procedure now surface the EASY PATH — `./resume` — as the default one-command session-start, with the original 4-step path retained as the documented ESCAPE HATCH. The resume script reads `docs/NEXT_SESSION.md` (written by every end-of-session per `HANDOFF_PROTOCOL.md` §4 Step 1 row 12) and collapses branch-checkout + pull + `claude` launch + first-message paste into one command. Existing references to `§11.1` (cross-workflow / platform-wide launch prompt template) remain stable.
+
 **Audience:** Claude reads this at session start whenever the start-of-session task references any workflow with N ≥ 2, or when the "Current Active Tools" table in `ROADMAP.md` shows more than one workflow in active development. Establishes the branch + state-coordination rules.
 
 **Status:** Group A (always-loaded) doc #16. Read alongside `HANDOFF_PROTOCOL.md` at session start.
@@ -250,23 +252,37 @@ Pick whichever next-priority item the director chose; copy its description from 
 
 ---
 
-## 10. Canonical "How to start a session for any workflow" — quick reference (NEW 2026-05-04)
+## 10. Canonical "How to start a session for any workflow" — quick reference (NEW 2026-05-04; EASY PATH added 2026-05-13-c)
 
 (See §11 below for the full procedure with branch-task table + step-by-step instructions. This sub-section here is the quick lookup.)
 
-| Workflow / task type | Branch | Launch prompt template |
+**The fastest path for any of the cases below is `./resume`** — one command at the repo root that reads `docs/NEXT_SESSION.md` and does all 4 steps. The table is the ESCAPE HATCH used when `./resume` is unavailable or fails.
+
+| Workflow / task type | Branch | Launch prompt template (ESCAPE HATCH) |
 |---|---|---|
 | W#1 (Keyword Clustering) | `main` | Appendix B above |
 | W#2 (Competition Scraping) | `workflow-2-competition-scraping` | Appendix A above |
 | W#k for k ≥ 3 (future workflow, already started) | `workflow-N-<slug>` | Same shape as Appendix A; replace branch name |
 | W#k for k ≥ 2 (FIRST session, never started) | (created in session, from `main`) | §7 above (the first-session-only procedure) |
-| Cross-workflow / platform-wide infrastructure (e.g., components library; platform refactors; scaffold rewrites) | `main` | §11 below has the template |
+| Cross-workflow / platform-wide infrastructure (e.g., components library; platform refactors; scaffold rewrites) | `main` | §11.1 below has the template |
 
 ---
 
-## 11. How to start a session for any workflow (canonical procedure — NEW 2026-05-04)
+## 11. How to start a session for any workflow (canonical procedure — NEW 2026-05-04; EASY PATH added 2026-05-13-c)
 
 This is the canonical procedure both director and Claude follow at the start of every session. It replaces the implicit assumption that branch state is "already correct."
+
+**EASY PATH (NEW 2026-05-13-c) — `./resume`.** If the previous session wrote `docs/NEXT_SESSION.md` (per `HANDOFF_PROTOCOL.md` §4 Step 1 row 12 — mandatory for every end-of-session), the next session can collapse all 4 of the steps below into one command:
+
+```
+cd /workspaces/brand-operations-hub && ./resume
+```
+
+The script reads the pointer file, switches to the named branch, pulls the latest, prints the pointer file's contents so you see what's about to happen, then launches `claude` with the sentinel first-message (`"Resume per docs/NEXT_SESSION.md"`) that triggers Claude's sentinel-handling in `docs/CLAUDE_CODE_STARTER.md`. Claude reads the pointer file as its first action and proceeds with the standard start-of-session sequence (branch verification per Step 5 below, Group A doc reads, drift check).
+
+If `./resume` ever fails (pointer missing or malformed, branch checkout fails, pull fails), the script aborts loudly with a clear error message + the commands you'd run for the 4-step ESCAPE HATCH below. **The 4-step path is the documented escape hatch** — always works, always available, always shown in every end-of-session handoff. Full design + the rule that enforces every session writing the pointer file lives in `HANDOFF_PROTOCOL.md` §4 Step 1 row 12 + §4 Step 1c (the "No obvious next task" interview).
+
+### ESCAPE HATCH — the original 4-step path (always works)
 
 **Step 1 — Identify the right branch for the next session's task.**
 
@@ -311,7 +327,7 @@ Per `CLAUDE_CODE_STARTER.md` start-of-session routine, Claude's first action aft
 
 ---
 
-### §11.1 Cross-workflow / platform-wide launch prompt template
+### §11.1 Cross-workflow / platform-wide launch prompt template (used by the ESCAPE HATCH path)
 
 For platform-wide infrastructure work (e.g., components library, platform refactors, cross-workflow concerns surfaced as the recommended next-session in W#1 or W#2 standing instructions):
 

@@ -5,6 +5,22 @@
 
 ---
 
+## 🟢 Sentinel-message handling (NEW 2026-05-13-c — the `./resume` companion)
+
+**If the session's very first user message is exactly:**
+
+> *"Resume per docs/NEXT_SESSION.md — read this pointer file first, then proceed with the start-of-session sequence per docs/CLAUDE_CODE_STARTER.md."*
+
+**(or any close variant containing the phrase "Resume per docs/NEXT_SESSION.md"):**
+
+Claude's first action is to read `docs/NEXT_SESSION.md` and treat its `## Launch prompt` section AS IF the director had pasted that launch prompt directly as the first message. The pointer file is the source of truth for branch + task + pre-session notes. Then continue with the standard start-of-session routine below — branch verification per Step 2, the rest of the Group A doc reads, drift check, wait for go-ahead.
+
+This sentinel is the bridge between the `./resume` shell script at repo root and the existing start-of-session routine. The script does the terminal-side work (switch branch + pull + launch `claude` with the sentinel); Claude does the docs-side work (read the pointer + execute the launch prompt). The two layers compose cleanly. Full design + rule codification: `HANDOFF_PROTOCOL.md` §4 Step 1 row 12 + §4 Step 1c "No obvious next task" interview + §5 special-purpose handoff file note.
+
+**If the first message is anything OTHER than the sentinel** (e.g., the director pasted a full launch prompt directly via the 3-step escape hatch), proceed as before — read `docs/CLAUDE_CODE_STARTER.md`, run the mandatory start-of-session routine, treat the director's pasted text as the task. No pointer-file read needed in that path.
+
+---
+
 ## 🚨 NON-NEGOTIABLE RULES — CLAUDE READS AND CONFIRMS BEFORE ANY WORK 🚨
 
 I am the director of the PLOS (Product Launch Operating System) project. **I am a NON-PROGRAMMER.** I have no formal programming background, no developer-tools experience, and no technical vocabulary. This instruction has been necessary in MULTIPLE successive chats in the predecessor (claude.ai) system — most recently flagged as Pattern 11 recurrence #4 in `docs/CORRECTIONS_LOG.md`. The rule is mechanical, not aspirational.
@@ -43,7 +59,7 @@ I am the director of the PLOS (Product Launch Operating System) project. **I am 
 
 14. **Session identifier format:** `session_YYYY-MM-DD_short-topic-slug`. Capture at start, use in end-of-session doc updates. Multiple sessions same day: append `-a`, `-b`.
 
-15. **End-of-session doc update** is mandatory. Run the checklist in `docs/HANDOFF_PROTOCOL.md` §4 Step 1. Update whatever changed, commit to git, and produce a personalized handoff summary. **Per `HANDOFF_PROTOCOL.md` Rule 26 (NEW 2026-05-04-d), the end-of-session deferred-items sweep is driven by `TaskList` — Claude calls `TaskList`, reviews every `DEFERRED:`-prefixed task, migrates each one's content to its destination doc, then closes the task via `TaskUpdate → completed`. Any `DEFERRED:` task still open at end-of-session is an automatic CORRECTIONS_LOG entry. Mid-session, every defer creates a `TaskCreate` immediately — same sentence as the destination-naming per Rule 14e.**
+15. **End-of-session doc update** is mandatory. Run the checklist in `docs/HANDOFF_PROTOCOL.md` §4 Step 1. Update whatever changed, commit to git, and produce a personalized handoff summary. **Per `HANDOFF_PROTOCOL.md` Rule 26 (NEW 2026-05-04-d), the end-of-session deferred-items sweep is driven by `TaskList` — Claude calls `TaskList`, reviews every `DEFERRED:`-prefixed task, migrates each one's content to its destination doc, then closes the task via `TaskUpdate → completed`. Any `DEFERRED:` task still open at end-of-session is an automatic CORRECTIONS_LOG entry. Mid-session, every defer creates a `TaskCreate` immediately — same sentence as the destination-naming per Rule 14e.** **Per `HANDOFF_PROTOCOL.md` §4 Step 1 row 12 (NEW 2026-05-13-c), every end-of-session ALSO writes `docs/NEXT_SESSION.md` — the pointer file the next session's `./resume` script reads. If today's session has no obvious continuation, Claude runs the §4 Step 1c "No obvious next task" Rule 14f forced-picker BEFORE writing the pointer — never silently guess.**
 
     **MANDATORY content of that handoff summary — no exceptions, applies to every session:**
 
@@ -158,6 +174,26 @@ I am the director of the PLOS (Product Launch Operating System) project. **I am 
 ---
 
 ## HOW TO START A NEW CLAUDE CODE SESSION (terminal commands + paste-message)
+
+**You have two paths. The EASY PATH is one command. The ESCAPE HATCH is the original 3-step path — always works, always documented in every end-of-session handoff.**
+
+---
+
+### EASY PATH (recommended — NEW 2026-05-13-c)
+
+**One command:**
+
+```
+cd /workspaces/brand-operations-hub && ./resume
+```
+
+The `resume` script at repo root reads `docs/NEXT_SESSION.md` (written by the previous session's end-of-session checklist per `HANDOFF_PROTOCOL.md` §4 Step 1 row 12), switches to the branch the pointer names, pulls the latest, prints the pointer file's contents to your terminal so you see what's about to happen, then launches Claude Code with the sentinel first-message ("Resume per docs/NEXT_SESSION.md") that triggers Claude's sentinel-handling at the top of this file.
+
+**If `./resume` fails for any reason** (pointer file missing or malformed, branch checkout fails, pull fails, etc.), the script aborts loudly with a clear error message + the commands you'd run for the ESCAPE HATCH. The 3-step path below is always available as a known-good fallback.
+
+---
+
+### ESCAPE HATCH (the original 3-step path — always works)
 
 **Three steps — Step 1 is non-negotiable for any session that's not a same-workflow continuation.**
 

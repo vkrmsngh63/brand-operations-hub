@@ -1,8 +1,10 @@
 # HANDOFF PROTOCOL
 ## The rules Claude must follow at the start, during, and end of EVERY chat
 
-**Last updated:** May 14, 2026 (P-17 Playwright real-browser regression test session — **NEW Rule 27 added: Playwright forced-picker before manual browser walkthroughs.** Drafted mid-session after director asked "*Is this used to test the code you just wrote and if so, why didn't we use this until now and if this method of testing can save me time and effort, how can I ensure we consistently use such methods moving forward?*" Director chose to codify "consider Playwright first" into a mechanical rule rather than rely on Claude remembering. Rule 27 triggers a Rule 14f forced-picker every time Claude is about to propose a manual browser walkthrough with 5+ steps OR is about to verify code that lives in a real-browser context — comparing Playwright automated test vs. director manual walkthrough vs. hybrid. The honest-cost picker surfaces every time the conditions fire so the time-savings opportunity isn't silently missed. Director-approved end-of-session immediately after Rule 27 was drafted.)
-**Last updated in session:** session_2026-05-14_p17-playwright-real-browser-regression-test (Claude Code)
+**Last updated:** May 13, 2026-c (Resume-script design + ship session — **NEW §4 Step 1 row 12 added: ALWAYS — Write `docs/NEXT_SESSION.md` for the next session.** Also NEW §4 Step 1c "No obvious next task" interview sub-section codifying the Rule 14f forced-picker that fires at end-of-session when today's session has no obvious continuation. Also UPDATED §4 Step 4b NEXT-SESSION INSTRUCTIONS template to show both the new EASY PATH (`./resume`) and the ESCAPE HATCH (the original 3-step path) so the director always has both options readable in every handoff. Also UPDATED §5 to add the special-purpose `docs/NEXT_SESSION.md` file (not Group A; written end-of-session; read by `./resume`). Companion change: new executable `resume` shell script at repo root + new `docs/NEXT_SESSION.md` pointer file + Rule 15 cross-reference in `docs/CLAUDE_CODE_STARTER.md` + sentinel-handling section in `docs/CLAUDE_CODE_STARTER.md` (Claude reads `docs/NEXT_SESSION.md` and follows its `## Launch prompt` section verbatim when the session's first message is the sentinel `"Resume per docs/NEXT_SESSION.md"`). Director's framing: the new mechanism collapses the 3-step session-start (cd+checkout, `claude`, paste long first-message) to one command (`./resume`); the 3-step path stays documented as the known-good escape hatch.)
+**Last updated in session:** session_2026-05-13-c_resume-script-design (Claude Code, on `main`)
+**Previously updated:** May 14, 2026 (P-17 Playwright real-browser regression test session — **NEW Rule 27 added: Playwright forced-picker before manual browser walkthroughs.** Drafted mid-session after director asked "*Is this used to test the code you just wrote and if so, why didn't we use this until now and if this method of testing can save me time and effort, how can I ensure we consistently use such methods moving forward?*" Director chose to codify "consider Playwright first" into a mechanical rule rather than rely on Claude remembering. Rule 27 triggers a Rule 14f forced-picker every time Claude is about to propose a manual browser walkthrough with 5+ steps OR is about to verify code that lives in a real-browser context — comparing Playwright automated test vs. director manual walkthrough vs. hybrid. The honest-cost picker surfaces every time the conditions fire so the time-savings opportunity isn't silently missed. Director-approved end-of-session immediately after Rule 27 was drafted.)
+**Previously updated in session:** session_2026-05-14_p17-playwright-real-browser-regression-test (Claude Code)
 **Previously updated:** May 4, 2026-d (Pool-tune small-batch test — INSUFFICIENT session — NEW Rule 26 added: Real-time deferred-items registry via TaskCreate, the formal Rule 14e-extension. Drafted mid-session after director flagged that small things falling through cracks across the long roadmap could be catastrophic. The Rule 14e end-of-session sweep was relying on Claude's memory; Rule 26 makes the deferred-items registry externally observable + persistent + forced-into-existence via TaskCreate. Director-approved at session mid-point.)
 **Previously updated in session:** session_2026-05-04-d_pool-tune-small-batch-test-insufficient (Claude Code)
 **Previously updated:** April 27, 2026 (V3 small-batch test + context-scaling concern session — new Rule 24 added: Pre-capture search before adding any ROADMAP item or proposing new architectural concern. Drafted in response to a HIGH-severity mistake captured in `CORRECTIONS_LOG.md` 2026-04-27 entry — Claude proposed a context-scaling ROADMAP item without first searching existing docs for prior treatment, producing a misframed entry that would have misrepresented the system's design history. Rule 24 is the operational scaffolding for verify-before-write specifically at ROADMAP-capture moments.)
@@ -615,6 +617,7 @@ Claude must explicitly answer each of these questions before producing handoff f
 | 9 | Did we start a new tool? | Create `<NEW_TOOL>_ACTIVE.md` |
 | 10 | Did we add or remove any docs to the system? | `DOCUMENT_MANIFEST.md` |
 | 11 | **ALWAYS** — Update these regardless | `CHAT_REGISTRY.md`, `NEW_CHAT_PROMPT.md`, `DOCUMENT_MANIFEST.md` (timestamps) |
+| 12 | **ALWAYS** — Write the pointer file so the next session can run `./resume`. Pick the next session's branch + launch prompt + pre-session notes. If today's session has a clear RECOMMENDED-NEXT item, write that verbatim. If today's session wrapped a phase / tool graduation / methodology design with no obvious continuation, run the "no obvious next task" interview in Step 1c BEFORE writing — never silently guess. Any session that closes without this file updated is an automatic `CORRECTIONS_LOG.md` entry by the next session at start. | `docs/NEXT_SESSION.md` |
 
 Claude should state out loud: "Running end-of-chat doc update checklist..." and answer each question honestly, then proceed to updates.
 
@@ -625,6 +628,38 @@ Before producing handoff files, Claude runs a sweep of everything flagged-and-de
 - Where it's being captured (which doc + section)
 
 No deferred item is allowed to leave a chat uncaptured.
+
+### Step 1c — "No obvious next task" interview (NEW 2026-05-13-c — supports §4 Step 1 row 12)
+
+Row 12 of the §4 Step 1 checklist requires every session to update `docs/NEXT_SESSION.md` so the next session can run `./resume` instead of the 3-step path. Most sessions have a clear "RECOMMENDED-NEXT" item (the `(a.NN)` pattern in recent ROADMAP rows) that gets copied verbatim into the pointer file.
+
+But some sessions wrap cleanly with no obvious continuation:
+- A tool just graduated (HANDOFF_PROTOCOL §4 Step 2 Scenario B).
+- A phase or milestone closed.
+- A methodology / design session completed (like `session_2026-05-13-c_resume-script-design`).
+- The director shifts focus to a different workflow at end-of-session.
+
+For those sessions, Claude **MUST** ask the director via a Rule 14f forced-picker before writing `docs/NEXT_SESSION.md` — never silently guess.
+
+**Mechanical trigger:** if today's session does NOT have a written `(a.NN) RECOMMENDED-NEXT` item (or equivalent next-task pointer somewhere in this session's doc batch), the interview fires.
+
+**Forced-picker shape (Rule 14f-compliant):**
+
+> *"Today's session wrapped <what just shipped>; there's no obvious continuation item from this session itself. Which workflow should the next session work on? Each option below maps to a branch + a launch-prompt template per `MULTI_WORKFLOW_PROTOCOL.md` §11.*
+>
+> *(A) Continue platform-wide work on `main` — name a specific task (e.g., further infrastructure, components-library work, a roadmap item flagged earlier). I'll write the launch prompt verbatim into `docs/NEXT_SESSION.md`. — Branch: `main`.*
+>
+> *(B) Return to a graduated tool per Rule 22 (e.g., W#1 Keyword Clustering). I'll pull the canonical Resume Prompt from that tool's Data Contract (`<TOOL>_DATA_CONTRACT.md` §Resume Prompt) and copy it verbatim into `docs/NEXT_SESSION.md`. — Branch: typically `main`; check the Data Contract.*
+>
+> *(C) Continue an in-flight workflow on its feature branch (e.g., W#2 on `workflow-2-competition-scraping`, or future W#k for k ≥ 2 on `workflow-N-<slug>`). Tell me which workflow + the specific next task. I'll write the launch prompt verbatim into `docs/NEXT_SESSION.md`. — Branch: the workflow's feature branch.*
+>
+> *(D) Start a never-before-started workflow (W#3 through W#14). Tell me which one + the rough goal. I'll write a Workflow-Requirements-Interview launch prompt per Rule 18. — Branch: created on first session from `main` per MULTI_WORKFLOW_PROTOCOL.md §7.*
+>
+> *(E) I have a question first that I need clarified."*
+
+Director's answer fills in the Branch + Launch prompt + Pre-session notes fields of the pointer file. The standard end-of-session doc batch + Rule 9 deploy gate then proceeds normally.
+
+**Why this rule exists:** the director's framing 2026-05-13-c was *"The only exception is when there is nothing more left to do in a session, in that case the session should ask enough questions about the next workflow that needs to be worked on so that the docs/NEXT_SESSION.md file can be updated appropriately."* Without Step 1c, sessions that wrap cleanly would either (a) leave the pointer file stale — triggering the automatic `CORRECTIONS_LOG.md` entry — or (b) tempt Claude to silently guess what the director wants next, which Rule 14a + Rule 14d would already prohibit but Step 1c makes the asking-discipline mechanical at this specific session-boundary moment.
 
 ### Step 2 — Determine scenario and execute
 
@@ -749,9 +784,20 @@ Step-by-step, concrete. Example:
 
 ### 🚪 NEXT-SESSION INSTRUCTIONS — what you do when you come back
 
-Step-by-step, concrete. **The branch-checkout in Step 1 is non-negotiable** — your terminal will still be on whatever branch this session ended on, and that may not match the next session's required branch. The full "how to start a session for any workflow" procedure lives in `docs/MULTI_WORKFLOW_PROTOCOL.md` §11; the example below follows that procedure.
+Step-by-step, concrete. **You have two paths.** The EASY PATH is `./resume` (one command, reads `docs/NEXT_SESSION.md` for the right branch + launch prompt, switches branches + pulls + launches Claude with the right first-message). The ESCAPE HATCH is the original 3-step path — always documented in this handoff, always works if `./resume` ever doesn't behave. The full "how to start a session for any workflow" procedure lives in `docs/MULTI_WORKFLOW_PROTOCOL.md` §11.
 
-Example (substitute the right branch + task):
+**EASY PATH (recommended — added 2026-05-13-c):**
+
+1. Open a new Codespaces terminal — OR reopen the one you left running.
+
+2. Type this exact command and press Enter:
+   ```
+   cd /workspaces/brand-operations-hub && ./resume
+   ```
+
+That's it. The script reads `docs/NEXT_SESSION.md`, switches to the right branch, pulls the latest, prints the pointer file's contents so you see what's about to happen, then launches Claude Code with the sentinel first-message ("Resume per docs/NEXT_SESSION.md") that tells Claude to read the pointer file and follow the launch prompt inside it. Claude then runs the standard start-of-session sequence (branch verification, Group A doc reads, drift check) before waiting for your go-ahead.
+
+**ESCAPE HATCH (3-step path — use this if `./resume` ever fails or you'd rather drive it manually):**
 
 1. Open a new Codespaces terminal — OR reopen the one you left running.
 
@@ -801,6 +847,8 @@ Example (substitute the right branch + task):
 12. `DOCUMENT_MANIFEST.md`
 
 Plus whatever Group B (tool-specific) docs are relevant to the current work.
+
+**Special-purpose handoff file (NEW 2026-05-13-c):** `docs/NEXT_SESSION.md` is the session-handoff pointer — written by every end-of-session per §4 Step 1 row 12, read by `./resume` at the start of the next session to find the right branch + launch prompt. It is NOT Group A (not always loaded by Claude at every session start), but it IS always written and always present in the repo. Loaded by Claude when the session's first message is the sentinel `"Resume per docs/NEXT_SESSION.md"` — at which point Claude reads it as its first action and treats its `## Launch prompt` section as if the director had pasted that launch prompt directly.
 
 ---
 

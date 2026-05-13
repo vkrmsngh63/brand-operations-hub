@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# resume — one-command session-start for PLOS Claude Code sessions.
+#
+# Reads docs/NEXT_SESSION.md (written by the previous session's end-of-session
+# checklist per HANDOFF_PROTOCOL.md §4 Step 1 row 12), switches to the branch
+# the pointer names, pulls the latest, prints the pointer's contents so the
+# director sees what's about to happen, then launches `claude` with a tiny
+# sentinel first-message ("Resume per docs/NEXT_SESSION.md").
+#
+# If anything fails, this script aborts with a clear error pointing back to
+# the 3-step escape hatch documented in docs/CLAUDE_CODE_STARTER.md.
+#
+# See docs/RESUME_SCRIPT_DESIGN — codified in HANDOFF_PROTOCOL.md §4 Step 1
+# row 12 + the "no obvious next task" interview sub-section.
+
+set -euo pipefail
+
+POINTER="docs/NEXT_SESSION.md"
+SENTINEL="Resume per docs/NEXT_SESSION.md — read this pointer file first, then proceed with the start-of-session sequence per docs/CLAUDE_CODE_STARTER.md."
+
+abort() {
+  echo ""
+  echo "❌ resume aborted: $1"
+  echo ""
+  echo "Fall back to the 3-step escape hatch documented in"
+  echo "docs/CLAUDE_CODE_STARTER.md → \"HOW TO START A NEW CLAUDE CODE SESSION\":"
+  echo ""
+  echo "  1. Switch branch + pull the latest. For W#1 / platform-wide work that's:"
+  echo "       cd /workspaces/brand-operations-hub && git fetch origin && git checkout main && git pull --rebase origin main"
+  echo "     For W#k feature branches replace 'main' with the workflow branch name."
+  echo "  2. Launch Claude Code:"
+  echo "       claude"
+  echo "  3. Paste the launch prompt verbatim from your most recent end-of-session"
+  echo "     handoff message (or from docs/NEXT_SESSION.md if it exists)."
+  exit 1
+}
+
+if [ ! -f "$POINTER" ]; then
+  abort "$POINTER not found. The previous session was supposed to write this file at end-of-session (per HANDOFF_PROTOCOL.md §4 Step 1 row 12). The next session should also log this as a CORRECTIONS_LOG.md entry."
+fi
+
+BRANCH=$(awk '/^## Branch[[:space:]]*$/{getline; while ($0 ~ /^[[:space:]]*$/) getline; print; exit}' "$POINTER" | tr -d '[:space:]')
+
+if [ -z "$BRANCH" ]; then
+  abort "Could not read the 'Branch' field from $POINTER. The file may be malformed."
+fi
+
+echo "── resume — session pointer ──"
+echo "Branch: $BRANCH"
+echo ""
+
+git fetch origin || abort "git fetch origin failed."
+git checkout "$BRANCH" || abort "git checkout $BRANCH failed. If you have uncommitted changes, stash or commit them before re-running ./resume."
+git pull --rebase origin "$BRANCH" || abort "git pull --rebase origin $BRANCH failed. Resolve any conflicts before re-running ./resume."
+
+echo ""
+echo "── docs/NEXT_SESSION.md (the pointer the previous session left for this one) ──"
+echo ""
+cat "$POINTER"
+echo ""
+echo "── Launching Claude Code with the sentinel first-message ──"
+echo "Sentinel: $SENTINEL"
+echo ""
+
+# Claude Code's CLI accepts an initial prompt as a positional argument.
+# If your Claude Code version doesn't support this, the script falls back:
+# `claude` launches without a first-message, then you paste the sentinel
+# above by hand. Either way, Claude reads docs/NEXT_SESSION.md as its
+# first action and proceeds from there.
+exec claude "$SENTINEL"
