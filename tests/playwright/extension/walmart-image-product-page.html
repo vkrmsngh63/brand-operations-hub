@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Mock Walmart product page with image (test harness)</title>
+</head>
+<body>
+<!--
+  Served by Playwright route interception for tests/playwright/extension/image-capture.spec.ts.
+  The content script attaches by matching `https://*.walmart.com/*` in the
+  manifest; this mock page is what the route handler returns when the spec
+  navigates to a fake `/ip/<slug>/<id>` URL.
+
+  The <img> uses a `https://i5.walmartimages.com/...` src so the background's
+  fetchImageBytes() in handleSubmitImageCapture goes through the walmart
+  image-CDN host_permission pattern. The spec route-intercepts that CDN to
+  return fake JPEG bytes (the bytes never actually have to render visibly).
+-->
+<h1>Cool Heat Medicated Patches — test fixture</h1>
+<p id="p1">Product description for fixture purposes only.</p>
+<img id="hero" src="https://i5.walmartimages.com/asr/fake-cool-heat-patches.jpg"
+     alt="Cool Heat Medicated Patches hero image" width="400" height="400">
+<p id="p2">Additional description so the content-script has text to scan.</p>
+<script>
+  window.__pageReady = true;
+</script>
+</body>
+</html>
