@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/check-next-session-doc.sh"
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/check-next-session-doc.sh"
           }
         ]
       }
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/inject-next-session-pointer.sh"
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/inject-next-session-pointer.sh"
           }
         ]
       }

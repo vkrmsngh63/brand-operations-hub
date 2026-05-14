@@ -154,6 +154,37 @@
 
 ## Entries
 
+### 2026-05-14 — `.claude/settings.json` hook paths were relative; failed open (exit 127) on every Bash call from a subdir; surfaced today via 53 visible UI noise warnings in this session, with a latent reliability gap that effectively disabled HANDOFF_PROTOCOL Rule 28 Layer 4 whenever Claude committed from a subdir (NEAR-MISS — fixed same session)
+
+**Session:** session_2026-05-14_w2-main-deploy-session-13-p23-amazon-context-menu-DEPLOYED-FULL-VERIFY (Claude Code; landed on `main`)
+**Tool/Phase affected:** Claude Code hook system — both PreToolUse Bash hook (`check-next-session-doc.sh`, the NEXT_SESSION.md guard) and SessionStart hook (`inject-next-session-pointer.sh`, the resume-flow pointer-injector).
+**Severity:** NEAR-MISS. No data loss today — the actual end-of-session `git commit` happened from repo-root cwd so the guard hook fired correctly. But the bug was a real reliability gap: any "End-of-session" commit issued from a subdir would have slipped past Layer 4 of Rule 28's multi-layered defense, silently failing the load-bearing guarantee that the NEXT_SESSION.md guard was created to enforce.
+**Type:** PROCESS + CONFIGURATION — hook wiring shape worth capturing as a general lesson.
+
+**What happened.** Director noticed many "PreToolUse:Bash hook errors" in their UI mid-session and asked Claude what was firing. Claude couldn't see them directly (the harness only surfaces hook stderr to Claude when the hook BLOCKS a tool call via exit-2 — non-blocking exit-127 errors go to the user UI but not to Claude). Claude inspected the session transcript JSONL file and found 53 `hook_non_blocking_error` attachments, all identical:
+
+```
+stderr: Failed with non-blocking status code: /bin/sh: 1: .claude/hooks/check-next-session-doc.sh: not found
+exitCode: 127
+```
+
+Root cause: `.claude/settings.json` wired both hooks with **relative paths** (`".claude/hooks/check-next-session-doc.sh"` + `".claude/hooks/inject-next-session-pointer.sh"`). The harness runs each hook command from the cwd of the Bash call. When Claude `cd`-ed into subdirs (`extensions/competition-scraping` for ext build/test/tsc; `.output/chrome-mv3` for zip packaging; etc.), the relative path didn't resolve and `/bin/sh` returned exit-127 "not found." The harness classified this as a non-blocking error, so:
+
+1. **Cosmetic noise:** ~53 visible warnings in the director's UI in this single session. Future W#2 sessions touching the extension subdir would generate similar volumes.
+2. **Latent reliability gap:** the NEXT_SESSION.md guard at Layer 4 of Rule 28's multi-layered defense effectively was disabled whenever Claude committed from a subdir. Today the actual end-of-session commit happened from repo root so the guard fired correctly — but this was a coincidence, not a guarantee.
+
+**Lesson — generalizable.** Hooks wired in `.claude/settings.json` MUST use absolute paths or the `$CLAUDE_PROJECT_DIR` substitution token for executable paths. Relative paths in hook commands are cwd-dependent and will fail open (exit 127) on any Bash call whose cwd differs from repo root — which is most Bash calls in a multi-workflow PLOS session (extension build, test, zip, etc.).
+
+**Cross-cuts Rule 28's test discipline.** HANDOFF_PROTOCOL Rule 28 line 626 reads: *"every time a new session ships changes to `.claude/hooks/inject-next-session-pointer.sh`, `.claude/settings.json` SessionStart entry, `./resume`, or `docs/CLAUDE_CODE_STARTER.md` sentinel section, the session-AFTER-ship is responsible for verifying the full flow end-to-end."* The flow-end-to-end test focuses on the SessionStart hook firing during a `./resume` launch — which works correctly even when run from repo root. The Bash-from-subdir failure mode wasn't part of the documented verification surface. **Rule 28 should be extended:** the post-ship verification must ALSO run a Bash command from a subdir (e.g., `cd extensions/competition-scraping && pwd`) and confirm zero exit-127 hook errors land in the transcript.
+
+**Fix shipped same session:** one-line edit in `.claude/settings.json` — both hook command entries changed from `".claude/hooks/<name>.sh"` to `"$CLAUDE_PROJECT_DIR/.claude/hooks/<name>.sh"`. Smoke-tested by running two Bash commands from subdirs (`extensions/competition-scraping` and `.output/chrome-mv3`); transcript inspection confirmed zero new `hook_non_blocking_error` attachments after the fix. Committed + pushed to `main` as a small follow-up after the W#2 → main deploy session #13 doc batch.
+
+**Cross-references:**
+- `.claude/settings.json` (the fix site).
+- `HANDOFF_PROTOCOL.md` Rule 28 line 626 (the test-discipline rule that needs extension to cover this failure mode).
+- `.claude/hooks/check-next-session-doc.sh` + `.claude/hooks/inject-next-session-pointer.sh` (the hook scripts — unchanged; only the wiring was buggy).
+- The session's transcript JSONL at `/home/codespace/.claude/projects/-workspaces-brand-operations-hub/5be2ffa9-5b2e-4517-9005-18c76046b7de.jsonl` (where the 53 historical errors live, all timestamped before the fix at ~21:47 UTC 2026-05-14).
+
 ### 2026-05-14 — Playwright capture-phase listener-attach race in P-23 spec; placed listener after async init in orchestrator; caught via first test run, fixed via source re-architecture (INFORMATIONAL — content-script test-shape lesson worth recording)
 
 **Session:** session_2026-05-14_w2-polish-session-18-p23-amazon-right-click-context-menu-SHIP (Claude Code, on `workflow-2-competition-scraping`)
