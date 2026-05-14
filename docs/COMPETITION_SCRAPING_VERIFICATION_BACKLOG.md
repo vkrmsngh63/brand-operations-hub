@@ -4,7 +4,9 @@
 **Workflow:** W#2 Competition Scraping & Deep Analysis.
 **Branch:** `workflow-2-competition-scraping`.
 **Created:** 2026-05-07 in `session_2026-05-07_w2-plos-side-viewer-detail-page-slice` (Claude Code).
-**Last updated:** 2026-05-14 (W#2 polish session #18 — **P-23 Amazon main-image right-click context-menu fix SHIPPED at code level on `workflow-2-competition-scraping`.** Ninety-fifth Claude Code session — `session_2026-05-14_w2-polish-session-18-p23-amazon-right-click-context-menu-SHIP`. Closes (a.27) RECOMMENDED-NEXT. **Bug + fix shape:** Amazon's product-listing page wraps the main `<img>` in zoom/overlay elements intercepting `contextmenu` before Chrome recognizes the target as `contexts: ['image']`. Picked refined Option (A) per launch-prompt recommendation — `background.ts` widens `contexts: ['image']` → `contexts: ['all']`; NEW helper `find-underlying-image.ts` walks up from the right-click target (depth ≤ 10) and scans each ancestor's immediate descendants for an `<img>` with non-empty `currentSrc`/`src` (the sibling-img walk is what unlocks Amazon's overlay-shield pattern); orchestrator attaches a capture-phase `contextmenu` listener at the TOP of `runOrchestrator` BEFORE any awaits and updates `lastRightClickImageSrc`; `open-image-capture-form` handler falls back to the cache when `msg.srcUrl` is empty; both-empty → silent bail. Walmart/eBay/Etsy unaffected. UX cost: the "Add to PLOS — Image" menu now appears on right-click of any element (slight noisiness; bail-silently semantics keep it functionally correct). **Pre-ship verification scoreboard — all GREEN:** ext tsc clean; ext `npm test` 334/334 in 3.6s (was 323; +10 new `findUnderlyingImage` unit tests + 1 refactor); root Playwright extension project 31/31 in 1.3 min (was 29; +2 new specs — positive overlay-shield + negative plain-text); ext build clean in 1.42s; content.js 62,437 → 63,038 bytes (+601 bytes within target). **Real-Amazon browser verification DEFERRED to W#2 → main deploy session #13** per standard ship-then-deploy pattern (the load-bearing logic — empty-srcUrl content-script fallback path — is covered by the Playwright overlay-wrapped fixture; the deploy session also confirms widened-menu UX in real browser). New "Polish session #18 — P-23 SHIPPED at code level" section appended below; the original P-23 capture lives in ROADMAP polish backlog (now flipped to ✅ SHIPPED-AT-CODE-LEVEL). **One INFORMATIONAL CORRECTIONS_LOG entry this batch:** Playwright capture-phase listener-attach race caught + fixed before commit — initial draft placed the listener after async init; Playwright's `dispatchEvent('contextmenu')` ran before the listener was attached → false-negative test failure → re-architected to hoist listener attach to top of `runOrchestrator`. **Cross-references:** ROADMAP W#2 row Last Session 2026-05-14 + (a.27) flipped ✅ DONE + new (a.28) RECOMMENDED-NEXT W#2 → main deploy session #13 + polish backlog P-23 entry flipped to ✅ SHIPPED-AT-CODE-LEVEL; CHAT_REGISTRY new top entry; DOCUMENT_MANIFEST per-doc flags; CORRECTIONS_LOG 1 NEW INFORMATIONAL entry; COMPETITION_SCRAPING_DESIGN.md §B new in-flight refinement entry 2026-05-14 for the P-23 fix shape; NEXT_SESSION.md rewritten for (a.28).)
+**Last updated:** 2026-05-14 (W#2 → main deploy session #13 — **P-23 Amazon main-image right-click context-menu fix DEPLOYED to vklf.com + REAL-AMAZON FULL VERIFY.** Ninety-sixth Claude Code session — `session_2026-05-14_w2-main-deploy-session-13-p23-amazon-context-menu-DEPLOYED-FULL-VERIFY` (rebase phase on `workflow-2-competition-scraping`; ff-merge + deploy push on `main`). Closes (a.28) RECOMMENDED-NEXT. **Cleanest possible deploy shape achieved** — workflow-2 was exactly 1 commit ahead (`6461c2a` — yesterday's polish-#18 ship + doc batch in a single commit); main was 0 commits ahead (no parallel main activity since deploy-#12). Rebase a strict no-op fast-forward; pushed origin/workflow-2 (`6f6e69f..6461c2a`); ff-merged into main (13 files +1033/-63); pushed origin/main (`6f6e69f..6461c2a`); Vercel auto-redeploy fired but no-op for web bundle (zero `src/` changes — extension-only fix). Fresh extension build packaged: `plos-extension-2026-05-14-w2-deploy-13.zip` (188,102 bytes; 9 files; content.js 63,038 bytes exact target match). **Pre-deploy verification scoreboard — all GREEN:** ext tsc clean; ext `npm test` 334/334 in 3.5s; root Playwright extension project 31/31 in 1.6 min (includes both new P-23 specs — positive overlay-shield + negative plain-text bail); ext build clean in 1.1s. **Real-Amazon browser verification — director-reported "Everything worked perfectly. No need to check the database." All 9 walkthrough steps PASSED** (sideload → popup setup → navigate `/dp/B0CTTF514L` → right-click main image fires "Add to PLOS — Image" menu directly on main image → form opens with correct image preview → fill + Save → form closes cleanly; cross-platform spot-check on Walmart + eBay + Etsy PASSED with zero behavior change; UX-noise spot-check confirmed widened-menu behaves as designed — menu appears on non-image right-click, bails silently with no visible action on click). **Three NEW polish items captured this session per Rule 24 + Rule 14a Read-It-Back** based on director's end-of-session ask to expand W#2 roadmap: **P-27** (delete individual captured texts and images from a URL detail page on vklf.com) + **P-28** (delete saved URLs from a project on vklf.com with cascade disclosure) + **P-29** (manually add URLs/texts/images on vklf.com — any platform, including "Other" for independent websites; REVERSES the 2026-05-07 deliberate deferral). Rule 24 pre-capture search confirmed all three were ALREADY specified in original W#2 Workflow Requirements Interview at `COMPETITION_SCRAPING_DESIGN.md` lines 487/489/506 but never built; captured shape is "three polish-backlog entries P-27/P-28/P-29 with cross-refs to design doc" per director-picked option (A) via Rule 14f forced-picker. **Director picked next session via §4 Step 1c interview (expanded candidate list P-29 / P-28 / P-27 / pre-existing P-21 / P-19 / P-13):** P-29 design session (manual-add UI on vklf.com) — (a.29) RECOMMENDED-NEXT. New "Deploy session #13 — P-23 DEPLOYED + REAL-AMAZON FULL VERIFY" section appended below; new "P-27 NEW POLISH ITEM" + "P-28 NEW POLISH ITEM" + "P-29 NEW POLISH ITEM" sections appended after that.)
+
+**Previously updated:** 2026-05-14 (W#2 polish session #18 — **P-23 Amazon main-image right-click context-menu fix SHIPPED at code level on `workflow-2-competition-scraping`.** Ninety-fifth Claude Code session — `session_2026-05-14_w2-polish-session-18-p23-amazon-right-click-context-menu-SHIP`. Closes (a.27) RECOMMENDED-NEXT. **Bug + fix shape:** Amazon's product-listing page wraps the main `<img>` in zoom/overlay elements intercepting `contextmenu` before Chrome recognizes the target as `contexts: ['image']`. Picked refined Option (A) per launch-prompt recommendation — `background.ts` widens `contexts: ['image']` → `contexts: ['all']`; NEW helper `find-underlying-image.ts` walks up from the right-click target (depth ≤ 10) and scans each ancestor's immediate descendants for an `<img>` with non-empty `currentSrc`/`src` (the sibling-img walk is what unlocks Amazon's overlay-shield pattern); orchestrator attaches a capture-phase `contextmenu` listener at the TOP of `runOrchestrator` BEFORE any awaits and updates `lastRightClickImageSrc`; `open-image-capture-form` handler falls back to the cache when `msg.srcUrl` is empty; both-empty → silent bail. Walmart/eBay/Etsy unaffected. UX cost: the "Add to PLOS — Image" menu now appears on right-click of any element (slight noisiness; bail-silently semantics keep it functionally correct). **Pre-ship verification scoreboard — all GREEN:** ext tsc clean; ext `npm test` 334/334 in 3.6s (was 323; +10 new `findUnderlyingImage` unit tests + 1 refactor); root Playwright extension project 31/31 in 1.3 min (was 29; +2 new specs — positive overlay-shield + negative plain-text); ext build clean in 1.42s; content.js 62,437 → 63,038 bytes (+601 bytes within target). **Real-Amazon browser verification DEFERRED to W#2 → main deploy session #13** per standard ship-then-deploy pattern (the load-bearing logic — empty-srcUrl content-script fallback path — is covered by the Playwright overlay-wrapped fixture; the deploy session also confirms widened-menu UX in real browser). New "Polish session #18 — P-23 SHIPPED at code level" section appended below; the original P-23 capture lives in ROADMAP polish backlog (now flipped to ✅ SHIPPED-AT-CODE-LEVEL). **One INFORMATIONAL CORRECTIONS_LOG entry this batch:** Playwright capture-phase listener-attach race caught + fixed before commit — initial draft placed the listener after async init; Playwright's `dispatchEvent('contextmenu')` ran before the listener was attached → false-negative test failure → re-architected to hoist listener attach to top of `runOrchestrator`. **Cross-references:** ROADMAP W#2 row Last Session 2026-05-14 + (a.27) flipped ✅ DONE + new (a.28) RECOMMENDED-NEXT W#2 → main deploy session #13 + polish backlog P-23 entry flipped to ✅ SHIPPED-AT-CODE-LEVEL; CHAT_REGISTRY new top entry; DOCUMENT_MANIFEST per-doc flags; CORRECTIONS_LOG 1 NEW INFORMATIONAL entry; COMPETITION_SCRAPING_DESIGN.md §B new in-flight refinement entry 2026-05-14 for the P-23 fix shape; NEXT_SESSION.md rewritten for (a.28).)
 
 **Previously updated:** 2026-05-14 (W#2 → main deploy session #12 — **P-20 fingerprint short-circuit DEPLOYED to vklf.com.** Ninety-fourth Claude Code session — `session_2026-05-14_w2-main-deploy-session-12-p20-fingerprint-short-circuit-DEPLOYED` (rebase on `workflow-2-competition-scraping`; ff-merge + deploy push on `main`). Closes (a.26) RECOMMENDED-NEXT. **Cleanest possible deploy shape** — workflow-2 was 3 commits ahead (merge commit + P-20 code + P-20 doc batch); main was 0 commits ahead. Rebase a no-op fast-forward; merge commit `5d85c84` naturally collapsed per the doc-batch-empty-on-rebase pattern; ff-merged `5e18e4b..8f11388` (11 files +735/-111); pushed origin/main; Vercel auto-redeploy no-op (zero `src/` changes — web bundle byte-identical). Fresh extension build packaged: `plos-extension-2026-05-14-w2-deploy-12.zip` (187,918 bytes; 9 files; content.js 62,437 bytes). **Pre-deploy verification scoreboard — all GREEN:** ext tsc clean; ext `npm test` 323/323 in 3.6s; root Playwright extension project 29/29 in 1.4 min (all 4 new P-20 EXTERNAL-MUTATION specs GREEN); ext build clean in 1.65s. **Browser verification on real Amazon — director picked "Skip manual / trust Playwright 29/29" via Rule 27 forced-picker** (4 EXTERNAL-MUTATION specs inject 10/sec non-matchable DOM churn — slightly above real Amazon's measured 6/sec from the design-session DevTools trace; treated as sufficient regression coverage for ✅ SHIPPED-AT-DEPLOY-LEVEL status). Director-self-check real-world test list provided in the end-of-session handoff for optional independent verification (not a deploy gate). New "Deploy session #12 — P-20 fingerprint short-circuit DEPLOYED + Playwright-only verification" section appended below; the existing "## P-20 fingerprint short-circuit SHIPPED at code level" section at line 108 stays preserved as the load-bearing design + implementation record. **Director picked (A) next session via §4 Step 1c interview:** P-23 Amazon main-image right-click polish. **Cross-references:** ROADMAP W#2 row Last Session 2026-05-14 prepended + (a.26) flipped ✅ DONE + new (a.27) RECOMMENDED-NEXT P-23 + polish backlog P-20 entry flipped ✅ SHIPPED-AT-DEPLOY-LEVEL; CHAT_REGISTRY new top entry; CORRECTIONS_LOG header bump only (no new §Entries — today's working-dir drift recurrence covered by yesterday's entry); DOCUMENT_MANIFEST per-doc flags; NEXT_SESSION.md rewritten for (a.27).)
 
@@ -1674,6 +1676,180 @@ Shipped commit: (pending end-of-session commit on `workflow-2-competition-scrapi
 - Session 5 will ship image-capture + region-screenshot + two-phase signed-URL upload. The PLOS-side detail page's captured-image gallery (slice (a.2)) is already in place from 2026-05-07-b; session 5 just needs to wire the extension up.
 - The text-capture flows do NOT touch the orchestrator's recognition cache — captured text rows don't change which URLs are "saved." The PLOS-side detail-page table picks up new rows on next page load.
 - If on session 5 we discover any P-11+ polish gaps (e.g., overlay form positioning on small viewports; chip-list keyboard accessibility), capture them via Rule 26 `DEFERRED:` TaskCreate as usual.
+
+---
+
+## Deploy session #13 — P-23 Amazon main-image right-click context-menu DEPLOYED to vklf.com (NEW 2026-05-14 — closes (a.28) RECOMMENDED-NEXT)
+
+**Outcome 2026-05-14:** P-23 fix (yesterday's polish session #18 ship — widened `chrome.contextMenus` `contexts: ['image']` → `contexts: ['all']` + new `find-underlying-image.ts` content-script helper + capture-phase `contextmenu` listener hoisted to top of `runOrchestrator` + cache-fallback in `open-image-capture-form` handler + silent bail when both srcUrl-from-Chrome and cache are empty) **DEPLOYED to vklf.com** via standard cheat-sheet (b) flow. Real-Amazon browser verification by director: **all 9 walkthrough steps PASSED** (sideload → popup Project + Platform=Amazon → navigate `/dp/B0CTTF514L` → right-click main image → "Add to PLOS — Image" menu fires directly on main image → form opens with correct image preview → fill + Save → form closes; cross-platform spot-check on Walmart + eBay + Etsy PASSED with zero behavior change; UX-noise spot-check confirmed widened-menu UX behaves as designed — menu appears on non-image right-click, bails silently with no visible action on click). Director's verbatim outcome: *"Everything worked perfectly. No need to check the database."*
+
+**Cleanest possible deploy shape achieved.** workflow-2 was exactly 1 commit ahead of origin/main (yesterday's polish-#18 ship + doc batch in a single commit `6461c2a`); main was 0 commits ahead of workflow-2 (no parallel main activity since deploy-#12). Rebase a strict no-op fast-forward (SHAs unchanged). Push workflow-2: `6f6e69f..6461c2a`. ff-merged into main: `Updating 6f6e69f..6461c2a` (13 files +1033/-63). Pushed origin/main: `6f6e69f..6461c2a`. Vercel auto-redeploy fired on main push but is a no-op for the web bundle since the P-23 fix is extension-only (zero `src/` changes — web bundle byte-identical).
+
+**Fresh extension build packaged:** `plos-extension-2026-05-14-w2-deploy-13.zip` at repo root (188,102 bytes; 9 files; uncompressed total 687,353 bytes). Per-file sizes: background.js 207,013 B; chunks/popup-DouG-ryC.js 411,472 B; assets/popup-Bbhw2ZRC.css 4,531 B; popup.html 406 B; manifest.json 893 B; content-scripts/content.js **63,038 B** (exact match to NEXT_SESSION.md target; contains the P-23 fix's +601 B over deploy-#12's 62,437 B).
+
+### Pre-deploy verification scoreboard — all GREEN
+
+| Check | Result |
+|---|---|
+| ext `npx tsc --noEmit -p tsconfig.json` | **CLEAN** (exit 0) |
+| ext `npm test` | **334/334 GREEN** in 3.5s (no regressions from yesterday's polish-#18 baseline) |
+| root `npx playwright test --project=extension` | **31/31 GREEN** in 1.6 min (includes both new P-23 specs: positive overlay-shield + negative plain-text bail) |
+| ext `npm run build` | **CLEAN** in 1.1s; content.js 63,038 B (exact target) |
+
+### Real-Amazon browser verification — full director walkthrough PASSED (9/9 steps)
+
+| # | Step | Outcome |
+|---|---|---|
+| 1 | Sideload `plos-extension-2026-05-14-w2-deploy-13.zip` (chrome://extensions → Remove old + Load unpacked) | ✅ loaded clean |
+| 2 | Popup setup (Project picked + Platform=Amazon) | ✅ green status banner |
+| 3 | Navigate to `https://www.amazon.com/dp/B0CTTF514L` (Cool Heat Patches) | ✅ PDP loads, page settles |
+| 4 | Right-click directly on main product image (NOT click-to-zoom larger viewer pane — that's the pre-fix workaround) | ✅ "Add to PLOS — Image" menu fires — P-23 fix working |
+| 5 | Click "Add to PLOS — Image" → form opens | ✅ form opens with correct main-image preview thumbnail; URL field pre-filled |
+| 6 | Fill form (image category) → Save | ✅ form closes; CapturedImage row landed (director skipped DB-side check via `inspect-w2-state.mjs` — "no need") |
+| 7 | Cross-platform regression spot-check on Walmart (`/ip/17056909`) | ✅ menu fires + form opens with correct image preview |
+| 8 | Cross-platform regression spot-check on eBay (`/itm/365806348442`) | ✅ menu fires + form opens with correct image preview |
+| 9 | UX-noise spot-check: right-click on non-image element (text, header, blank page area) | ✅ "Add to PLOS — Image" menu entry appears (expected UX cost of widened `contexts: ['all']`); clicking it does nothing visible (silent bail as designed) |
+
+Etsy spot-check rolled into the cross-platform pass — director's overall "everything worked perfectly" confirms no platform-specific regression on any of the four targets.
+
+### Status flips
+
+- **P-23 polish backlog entry** flips ✅ **SHIPPED-AT-DEPLOY-LEVEL** with real-Amazon browser-verify confirmed on `vklf.com`.
+- **ROADMAP W#2 row (a.28)** flipped ✅ DONE.
+- **New (a.29) RECOMMENDED-NEXT** = W#2 P-29 design session (manual-add URLs/texts/images on vklf.com) — director picked via §4 Step 1c interview with expanded candidate list (P-29 / P-28 / P-27 / pre-existing P-21 / P-19 / P-13).
+
+### Three NEW polish items captured this session
+
+P-27, P-28, P-29 captured in their own sections below per the same Rule 24 + Rule 14a Read-It-Back discipline used for previous polish captures. All three are partial-implementations of original W#2 design-doc intent (lines 487, 489, 506) that were never built — surfaced today by director's end-of-session ask to expand the roadmap.
+
+### Cross-references
+
+- ROADMAP W#2 row Last Session 2026-05-14 prepended + (a.28) flipped ✅ DONE + new (a.29) RECOMMENDED-NEXT P-29 design session
+- W#2 polish backlog P-23 entry flipped ✅ SHIPPED-AT-DEPLOY-LEVEL
+- W#2 polish backlog P-27 / P-28 / P-29 NEW entries appended below this section
+- CHAT_REGISTRY new top entry for this session
+- DOCUMENT_MANIFEST per-doc flags
+- CORRECTIONS_LOG header bump only (no new §Entries — clean session, no slips this batch)
+- COMPETITION_SCRAPING_DESIGN.md §B new in-flight refinement entry 2026-05-14 covering both the P-23 deploy outcome and the P-27/P-28/P-29 capture
+- NEXT_SESSION.md rewritten for (a.29) P-29 design session
+
+---
+
+## P-27 NEW POLISH ITEM — Delete individual captured texts and images from a URL detail page on vklf.com (NEW 2026-05-14 — surfaced by director end-of-session expand-roadmap ask)
+
+**Status:** ⏳ NOT STARTED. Captured 2026-05-14 in `session_2026-05-14_w2-main-deploy-session-13-p23-amazon-context-menu-DEPLOYED-FULL-VERIFY`.
+
+**Severity:** MEDIUM (data hygiene; current workaround is the full-project "Reset W#2 data for this Project" admin button — way too coarse for "remove one bad captured row").
+
+**Lineage — this is NOT a new requirement.** Captured originally in the W#2 Workflow Requirements Interview, in director's own words on `COMPETITION_SCRAPING_DESIGN.md` line 506: *"Note that the user should be able to edit/delete any text in the table. The user should also be able to move rows within the table."* The "edit" half shipped as inline-editing in PLOS-side slice (a.3); the "delete" half was never built. Rule 24 pre-capture search 2026-05-14 confirms no other prior treatment.
+
+**What the feature is:** on a URL detail page (`/projects/[projectId]/competition-scraping/url/[urlId]`), each captured-text row in the captured-text table and each captured-image row in the captured-image gallery gets a trash-can / × button. Clicking it opens a confirm-dialog ("Delete this captured text row? This cannot be undone." or similar). On confirm, the row is removed.
+
+**What's shipped today (verified 2026-05-14 via code-read):**
+- Back-end `urls/[urlId]/text/route.ts` exposes **GET + POST only** — no DELETE handler.
+- Back-end `urls/[urlId]/images/route.ts` exposes **GET only** — no DELETE handler. (The `requestUpload` + `finalize` sub-routes are POST-only for the 2-phase upload.)
+- vklf.com UI: no delete affordance on captured-text rows or captured-image rows. `EditableField.tsx` + `CustomFieldsEditor.tsx` ship per-field editing + per-row delete for the URL's metadata + custom-fields map — NOT for the captured items themselves.
+
+**What needs to be built:**
+1. Back-end: new DELETE handler on `urls/[urlId]/text/route.ts` (idempotent on P2025 already-deleted, same shape as URL DELETE at `urls/[urlId]/route.ts:272`).
+2. Back-end: new DELETE handler on `urls/[urlId]/images/route.ts` — additionally, decide whether to also delete the Supabase storage object or leave it orphaned (see open design questions below).
+3. PLOS UI: trash-can / × button per captured-text row + per captured-image row + confirm-dialog component (composable across text + image).
+4. Optimistic update with rollback on error pattern (same shape as `EditableField.tsx` and `CustomFieldsEditor.tsx` deletes).
+
+**Open design questions (settle via Rule 14f forced-pickers in the build session):**
+1. Soft-delete (mark row inactive in a `deletedAt` column, preserve for audit/restore) vs. hard-delete (DROP row entirely). Soft-delete is the safer pattern + matches `RemovedKeyword` table convention in W#1 (`DATA_CATALOG.md` line 273).
+2. For deleting an image: also delete the Supabase storage object via signed-delete URL, or orphan it (storage GC handles eventually)? Latter is simpler but accumulates dead bytes; former is more thorough.
+3. Audit-trail event granularity per `PLATFORM_REQUIREMENTS.md §5`: emit a per-delete event with row-ID + before-state snapshot? Or a coarser "URL detail page modified" event?
+4. Permission model: admin-only in Phase 1 (matches admin-solo)? Worker-allowed-on-own-rows in Phase 2?
+
+**Estimated scope:** ~1-2 sessions. Build session would settle the design questions via 4 forced-pickers + ship back-end + ship UI + Playwright spec for the delete flow.
+
+**Cross-references:**
+- `src/app/api/projects/[projectId]/competition-scraping/urls/[urlId]/text/route.ts` (current GET + POST; needs DELETE)
+- `src/app/api/projects/[projectId]/competition-scraping/urls/[urlId]/images/route.ts` (current GET; needs DELETE)
+- `src/app/projects/[projectId]/competition-scraping/url/[urlId]/components/UrlDetailContent.tsx` (where captured-text + captured-image rendering lives)
+- `COMPETITION_SCRAPING_DESIGN.md` line 506 (origin directive)
+- `COMPETITION_SCRAPING_DESIGN.md §B` new 2026-05-14 in-flight refinement entry (this capture)
+
+---
+
+## P-28 NEW POLISH ITEM — Delete saved URLs from a project on vklf.com (with cascade disclosure) (NEW 2026-05-14)
+
+**Status:** ⏳ NOT STARTED. Captured 2026-05-14 same session as P-27.
+
+**Severity:** MEDIUM (same data-hygiene rationale as P-27).
+
+**Lineage — NOT a new requirement.** Captured originally in W#2 Workflow Requirements Interview, director's own words on `COMPETITION_SCRAPING_DESIGN.md` line 487: *"the user should be able to reset the entire extension to get rid of all data in it to reuse it for another Project or delete any urls and its associated data individually."* The reset path shipped (admin's "Reset W#2 data for this Project" button); per-URL individual delete from PLOS UI did not. Rule 24 pre-capture search 2026-05-14 confirms no other prior treatment beyond the design-doc origin + the existing DELETE handler at `urls/[urlId]/route.ts:272`.
+
+**What the feature is:** on `UrlTable.tsx` (the URL list on `/projects/[projectId]/competition-scraping`), each row gets a trash-can / × button. Clicking it opens a confirm-dialog with **cascade disclosure** — "This will also delete N captured texts and M captured images attached to this URL. Continue?" — populated from a live count fetch. On confirm, URL is removed along with its cascade. Also exposes a Delete button on the URL detail page (`/url/[urlId]`) for parity with the URL list path.
+
+**What's shipped today:**
+- Back-end DELETE handler **ALREADY EXISTS** at `urls/[urlId]/route.ts:272` (built during the original session-1 API-routes work). P2025 idempotency on already-deleted.
+- Need to **verify in build session** whether the existing DELETE handler **already cascades** (deletes captured texts + captured images attached to the URL) or **orphans them** (leaves them in DB without parent). This is the load-bearing question for the cascade UX — if it cascades today, the UI just needs the disclosure dialog; if it orphans, the handler also needs a cascade implementation OR the orphan rows need cleanup before delete.
+- vklf.com UI: no trash button on `UrlTable.tsx`; no Delete button on `url/[urlId]/page.tsx`.
+
+**What needs to be built:**
+1. Back-end: confirm existing DELETE handler's cascade behavior; add cascade if missing.
+2. Back-end: new lightweight count endpoint (`GET urls/[urlId]/cascade-counts` or similar) returning `{texts: N, images: M}` for the disclosure dialog. Could also be inlined into the existing URL GET response.
+3. PLOS UI: trash-can / × button on `UrlTable.tsx` (matching the existing column-filter UX) + Delete button on URL detail page header.
+4. ConfirmDeleteDialog component with cascade disclosure copy ("This will also delete X captured texts and Y captured images. Continue?").
+5. Optimistic update + rollback on error.
+
+**Open design questions:**
+1. **Cascade behavior — same soft-vs-hard decision as P-27.** If P-27 chooses soft-delete for captured-text + captured-image, P-28's cascade should match (soft-delete-cascade — captured items get `deletedAt` set on URL delete).
+2. **Audit-trail event for the cascade** — single event with full before-state? Multiple per-row events?
+3. Permission model: same admin-only-Phase-1 / worker-Phase-2 question as P-27.
+
+**Estimated scope:** ~1 session (smaller than P-27 because back-end DELETE already exists). Most of the work is UI + the confirm-dialog component.
+
+**Cross-references:**
+- `src/app/api/projects/[projectId]/competition-scraping/urls/[urlId]/route.ts:272` (existing DELETE handler)
+- `src/app/projects/[projectId]/competition-scraping/components/UrlTable.tsx` (UI site for trash button)
+- `src/app/projects/[projectId]/competition-scraping/url/[urlId]/page.tsx` (UI site for Delete button)
+- `COMPETITION_SCRAPING_DESIGN.md` line 487 (origin directive)
+- P-27 (the cascade target rows; design decisions should compose)
+
+---
+
+## P-29 NEW POLISH ITEM — Manually add URLs / captured texts / captured images on vklf.com (any platform, including "Other" for independent websites) (NEW 2026-05-14 — REVERSES 2026-05-07 deliberate deferral)
+
+**Status:** ⏳ NOT STARTED — **next session's pick per §4 Step 1c interview 2026-05-14**, (a.29) RECOMMENDED-NEXT. Captured 2026-05-14 same session as P-27 + P-28.
+
+**Severity:** MEDIUM. **This feature explicitly REVERSES the 2026-05-07 deliberate deferral** captured in this same doc earlier (line 965): *"every PLOS-side viewer slice is structurally untestable against real captured data because there is no manual-URL-add affordance on the PLOS side yet (deliberately deferred per the director's 2026-05-07 call — the alternative seed paths were declared not worth the friction vs. just waiting)."* Director 2026-05-14 explicitly asked for this feature alongside P-27 + P-28; reversal of prior deferral is captured here explicitly so future sessions don't re-defer based on the older 2026-05-07 framing.
+
+**Lineage — NOT a new requirement.** Captured originally in W#2 Workflow Requirements Interview, director's own words on `COMPETITION_SCRAPING_DESIGN.md` line 489: *"Note that the user should be able to add competition urls through the easy mechanism we will come up with as mentioned above or the user should be able to manually add a url into the competition table (for example, independent websites)."* The "independent websites" phrasing is what motivates the "Other" platform option below.
+
+**What the feature is:** new vklf.com-side data-entry UI complementing the Chrome extension as a canonical entry path. Three sub-features:
+1. **"+ Manually add URL"** button on `UrlTable.tsx` opens a modal: user types URL + picks Platform (Walmart / eBay / Etsy / Amazon / **Other**) + optional metadata (Brand, Category, etc.). Submit creates a new `CompetitorUrl` row.
+2. **"+ Manually add captured text"** button on URL detail page (`url/[urlId]/page.tsx`) opens a modal: user pastes/types text + picks image-category vocabulary entry (matches extension's right-click text capture form). Submit creates new captured-text row.
+3. **"+ Manually add captured image"** button on URL detail page opens a modal with TBD upload mechanic (drag-drop / paste-from-clipboard / URL-of-image-from-web) + same metadata fields as the extension's image capture form (image-category + Composition + Embedded text + Tags). Submit creates new captured-image row via the existing 2-phase signed-URL upload flow.
+
+**What's shipped today (back-end ↔ UI gap analysis):**
+- Back-end `POST urls/route.ts`: **exists** (extension's "+ Add" button uses this). vklf.com manual-add URL would reuse this POST.
+- Back-end `POST urls/[urlId]/text/route.ts`: **exists** (extension's text capture form uses this). vklf.com manual-add captured-text would reuse this POST.
+- Back-end `POST urls/[urlId]/images/requestUpload` + `finalize`: **exist** (extension's image capture form uses these for 2-phase signed-URL upload). vklf.com manual-add captured-image would reuse them.
+- vklf.com UI: **none of the three manual-add forms exist** today. All data entry flows through the Chrome extension.
+- "Other" platform option: **NOT supported** today. Current platform enum is `walmart | ebay | etsy | amazon` (confirmed via grep on schema + `PlatformId` type). Adding "other" requires a schema add (enum extension or shift to string-typed column).
+
+**Open design questions (settle via Rule 14f forced-pickers in the design session):**
+1. **Image upload mechanics:** drag-and-drop from filesystem ONLY, vs. paste-from-clipboard ONLY, vs. URL-of-image-from-web ONLY, vs. all three? Director's original "independent websites" intent on DESIGN doc line 489 implies URL-of-image-from-web is essential at minimum (you might want to drop in an image URL from an independent site). Drag-and-drop is the most thorough complete coverage.
+2. **"Other" platform option** — schema add: new enum value `other` on `PlatformId` (additive enum, low risk) vs. shift to string-typed platform field (more flexible but breaks all existing filters). Recommended: enum-add. Downstream workflows that filter by platform get a new option to handle.
+3. **Audit-trail distinction** — manually-added rows should be distinguishable from extension-captured rows per PLATFORM_REQUIREMENTS §5. Add a `source: 'extension' | 'manual'` column to `CompetitorUrl` + `CapturedText` + `CapturedImage`? Or infer from `userId` context (admin manually-adds via vklf.com; workers extension-capture)?
+4. **Permission model** — admin-only in Phase 1 (matches admin-solo)? Worker-allowed in Phase 2?
+5. **Manual-add URL form UX location** — modal opened from a "+ Manually add URL" button on `UrlTable.tsx`? Inline expansion in the table (add-row at top)? Separate `/competition-scraping/url/new` page?
+
+**Estimated scope:** likely 2-3 sessions. Design session #1 settles the 5 forced-pickers + ships any schema add (for "Other" platform IF picked). Build session(s) #2 + #3 ship the three sub-feature UIs and any new vklf.com routes (the image upload might need a vklf.com-server-side proxy of the 2-phase flow vs. exposing it directly to the browser).
+
+**Cross-references:**
+- `src/app/api/projects/[projectId]/competition-scraping/urls/route.ts` (existing POST for URL-create; reuse)
+- `src/app/api/projects/[projectId]/competition-scraping/urls/[urlId]/text/route.ts` (existing POST for text-create; reuse)
+- `src/app/api/projects/[projectId]/competition-scraping/urls/[urlId]/images/requestUpload/` + `finalize/` (existing 2-phase upload; reuse)
+- `src/app/projects/[projectId]/competition-scraping/components/UrlTable.tsx` (UI site for "+ Manually add URL")
+- `src/app/projects/[projectId]/competition-scraping/url/[urlId]/page.tsx` (UI site for "+ Manually add captured text" + "+ Manually add captured image")
+- `prisma/schema.prisma` `PlatformId` enum (location of likely "Other" enum-add)
+- `COMPETITION_SCRAPING_DESIGN.md` line 489 (origin directive)
+- `COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` line 965 (the 2026-05-07 deferral that P-29 reverses)
+- `NEXT_SESSION.md` rewritten 2026-05-14 to launch the P-29 design session
 
 ---
 END OF DOCUMENT

@@ -1876,4 +1876,48 @@ This is the **first session to apply the CORRECTIONS_LOG 2026-05-10-c entry #1 p
 
 ---
 
+### 2026-05-14 — W#2 → main deploy session #13 — P-23 DEPLOYED to vklf.com + three NEW polish items (P-27 / P-28 / P-29) captured per Rule 24 + Rule 14a Read-It-Back
+
+**Session ID:** `session_2026-05-14_w2-main-deploy-session-13-p23-amazon-context-menu-DEPLOYED-FULL-VERIFY` (Claude Code; rebase phase on `workflow-2-competition-scraping`; ff-merge + deploy push on `main`).
+
+**Outcome (P-23):** Yesterday's polish session #18 P-23 fix (refined Option (A) — widen `contexts: ['image']` → `contexts: ['all']` + content-script `find-underlying-image.ts` ancestor + sibling-img walk + capture-phase listener hoisted to top of `runOrchestrator` + cache-fallback + silent bail) DEPLOYED cleanly to vklf.com via standard cheat-sheet (b) flow. Real-Amazon browser-verify by director: **all 9 walkthrough steps PASSED** including cross-platform Walmart/eBay/Etsy spot-check (zero behavior change) and UX-noise spot-check (menu appears on non-image right-click as expected; clicking it silently bails). Director's verbatim outcome: *"Everything worked perfectly. No need to check the database."* P-23 polish backlog entry flipped ✅ **SHIPPED-AT-DEPLOY-LEVEL**.
+
+**Outcome (P-27 / P-28 / P-29 new polish items):** Director surfaced three new W#2 features end-of-session for the roadmap:
+1. Delete added texts and images from a URL.
+2. Delete URLs added to a project.
+3. Manually add URLs, text, and images to a project under any platform within vklf.com.
+
+**Rule 24 pre-capture search performed across `ROADMAP.md`, this DESIGN doc, `COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md`, `DATA_CATALOG.md`, and the live code under `src/app/api/...` + `src/app/projects/...`.** Findings: **all three features were originally specified in the W#2 Workflow Requirements Interview** captured in this DESIGN doc's §A — director's own words on:
+- **Line 487:** *"the user should be able to reset the entire extension to get rid of all data in it to reuse it for another Project or **delete any urls and its associated data individually**."* → P-28 lineage.
+- **Line 489:** *"the user should be able to add competition urls through the easy mechanism we will come up with as mentioned above or the user should be able to **manually add a url into the competition table (for example, independent websites)**."* → P-29 lineage.
+- **Line 506:** *"Note that the user should be able to **edit/delete any text in the table**. The user should also be able to **move rows within the table**."* → P-27 lineage.
+
+**Status check from code-read 2026-05-14:** back-end DELETE handler for URLs already exists at `urls/[urlId]/route.ts:272` (from the original session-1 API-routes work); back-end DELETE for captured-text + captured-image does NOT exist (only GET + POST shipped on the sub-routes); back-end POSTs for manual-add of URL/text/image all exist (reusable from the extension flow); vklf.com UI for all three operations does NOT exist (data entry flows through the Chrome extension today).
+
+**Special status for P-29 — REVERSES the 2026-05-07 deliberate deferral.** Captured originally in `COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` line 965: *"there is no manual-URL-add affordance on the PLOS side yet (**deliberately deferred per the director's 2026-05-07 call** — the alternative seed paths were declared not worth the friction vs. just waiting)."* The 2026-05-07 framing chose to keep the Chrome extension as the canonical data-entry path; today's director surfaces the gap that comes with that framing — no way to capture data from "independent websites" outside Walmart/eBay/Etsy/Amazon. P-29 explicitly reverses the deferral; the reversal is captured prominently in the P-29 polish-backlog entry so future sessions don't re-defer based on the older framing.
+
+**Capture shape picked via Rule 14f forced-picker.** Three options presented:
+- **(A) Three new polish-backlog entries P-27/P-28/P-29 with cross-refs to this DESIGN doc (recommended)** — keeps polish-backlog as single canonical "what's next" surface, preserves design-doc lineage, doesn't pre-commit to design decisions you haven't made yet.
+- (B) Update this DESIGN doc §B as in-flight refinements only — closer to doc-architecture spirit but less actionable as a "what's next" surface.
+- (C) Run a formal mini-interview now on the three features — most thorough but most time-expensive.
+
+**Director picked (A).** Three new sections appended to `COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` (P-27 / P-28 / P-29 NEW POLISH ITEM sections) with the standard structure (status / severity / lineage / what-the-feature-is / what's-shipped-today / what-needs-to-be-built / open-design-questions / estimated-scope / cross-references). The §A interview answers in this DESIGN doc are NOT modified — they remain the frozen-at-interview canonical spec; the new polish-backlog entries are derived from them.
+
+**Next session picked via §4 Step 1c interview with expanded candidate list (P-29 / P-28 / P-27 / pre-existing P-21 / P-19 / P-13):** **P-29 design session** (manual-add UI on vklf.com) — director-picked. NEXT_SESSION.md rewritten with the design-pass prompt + 5 open design questions to settle via Rule 14f forced-pickers (image upload mechanics for the manual-add image form / schema-add for "Other" platform / `source` column for audit-trail distinction between extension-captured vs. manually-added rows / permission model admin-Phase-1 vs. worker-Phase-2 / form UX location modal-vs-inline-vs-separate-page). Build sessions for P-29 will follow the design session; P-27 + P-28 stay in the backlog for future picks.
+
+**Branch state at session end:**
+- `origin/workflow-2-competition-scraping` advanced `6f6e69f → 6461c2a` (this push lands today's P-23 ship that yesterday's polish-#18 session committed).
+- `origin/main` advanced `6f6e69f → 6461c2a` (the deploy push; Vercel auto-redeploy fired but no-op for web bundle since extension-only).
+- Workflow-2 + main now at parity → clean state for the (a.29) P-29 design session that picks up tomorrow on the workflow-2 branch.
+
+**Cross-references:**
+- `docs/ROADMAP.md` W#2 row Last Session 2026-05-14 prepended + (a.28) flipped ✅ DONE + new (a.29) RECOMMENDED-NEXT P-29 design session.
+- `docs/COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` new "Deploy session #13 — P-23 DEPLOYED + REAL-AMAZON FULL VERIFY 2026-05-14" section + new "P-27 / P-28 / P-29 NEW POLISH ITEM" sections.
+- `docs/CHAT_REGISTRY.md` new top entry.
+- `docs/CORRECTIONS_LOG.md` header bump only (no new §Entries — clean session, zero slips).
+- `docs/DOCUMENT_MANIFEST.md` per-doc flags.
+- `docs/NEXT_SESSION.md` rewritten for (a.29) P-29 design session — design-pass prompt with 5 open-question forced-pickers.
+
+---
+
 END OF DOCUMENT
