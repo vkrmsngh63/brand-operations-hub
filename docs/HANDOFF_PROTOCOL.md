@@ -356,12 +356,23 @@ At the start of any Workflow Requirements Interview (per Rule 18), Claude must s
 1. `ROADMAP.md` — primary location for forward-looking directives addressed to specific workflows; check the workflow's section.
 2. `DATA_CATALOG.md` §6.x placeholders — secondary location for forward-looking data-design directives or pointers back to ROADMAP.
 3. The workflow's own `<TOOL>_DESIGN.md` if one was drafted in advance — directives may live in §B (in-flight refinements) even before formal interview.
+4. **Operational-memory files matching `project_*_scheduled.md` (NEW 2026-05-13).** Memory lives at `/home/codespace/.claude/projects/-workspaces-brand-operations-hub/memory/`. Any file matching the `*_scheduled.md` pattern represents work the director scheduled to a future session. If the upcoming interview / build / refactor touches a topic covered by a scheduled-memory file, the directive lives there — not in ROADMAP — and silent omission is the recurring failure mode. The scan is `ls /home/codespace/.claude/projects/-workspaces-brand-operations-hub/memory/project_*_scheduled.md` + read each one's description. If the current session's task name + scope touches any of them, treat the memory file's content as a binding directive identical in weight to a ROADMAP directive.
 
 **What to do with found directives:**
 
 Surface every found directive to the director as the FIRST item of the interview, before the standard 14-question structure. The director may confirm the directive still applies, refine it, or retire it. If confirmed, the directive becomes a binding input to the interview answers.
 
-**Why this rule exists:** without it, a director gives a forward-looking directive in session N, and session N+M (months later) starts the workflow's interview without surfacing the prior directive — the directive is silently lost. The scan ensures continuity across the gap.
+**Extension for scheduled-memory directives (NEW 2026-05-13):** when a `project_*_scheduled.md` file is found AND the current session's task overlaps with it (e.g., today's session adds the same kind of redundancy the scheduled file designs, or touches the same files/concepts), Claude MUST run a Rule 14f forced-picker comparing:
+- (A) Narrow scope (the current task as the director framed it)
+- (B) Narrow scope PLUS the additive parts of the scheduled work that compose cleanly with today's task (most thorough per `feedback_recommendation_style.md`)
+- (C) Full scheduled design (the originally-scheduled bigger scope)
+- (D) Escape hatch ("I have a question first that I need clarified")
+
+Director picks; the picker is non-negotiable when scope overlap is detected, even if Claude's working scope feels "small" — narrow-without-surfacing-the-wider-option is exactly the failure mode this extension prevents. See `CORRECTIONS_LOG.md` 2026-05-13 entry "scope-narrowing on the NEXT_SESSION.md guard work" for the canonical slip + lesson.
+
+**Why this rule exists (original):** without it, a director gives a forward-looking directive in session N, and session N+M (months later) starts the workflow's interview without surfacing the prior directive — the directive is silently lost. The scan ensures continuity across the gap.
+
+**Why the 2026-05-13 extension exists:** scheduled cross-cutting work (not workflow-specific) lives in operational-memory files, not in ROADMAP. The original Rule 21 scan covered ROADMAP + DATA_CATALOG + DESIGN docs but missed memory. Session_2026-05-13_w2-extension-build-session-6 caught this slip: the director hit `cat: docs/NEXT_SESSION.md: No such file or directory` and asked for a redundancy; the canonical scheduled `./resume`-script-design work in memory `project_resume_script_design_scheduled.md` overlapped substantially with the requested redundancy, but Claude scoped narrowly to "small guard only" without surfacing the wider option as a Rule 14f picker. The CORRECTIONS_LOG entry captures the full slip; this rule extension is the mechanical prevention.
 
 ### Rule 22 — Graduated-Tool Re-Entry Protocol (NEW 2026-04-26)
 
