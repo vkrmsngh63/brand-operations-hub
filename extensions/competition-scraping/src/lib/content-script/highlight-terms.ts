@@ -289,6 +289,89 @@ function wrapMatchesInTextNode(
 }
 
 /**
+ * P-20 fix 2026-05-15. Hashes a list of regex matches (matched string +
+ * within-node index) into a fingerprint string for === comparison. Pure
+ * function so unit tests can verify the hash algorithm without needing a
+ * DOM; the DOM-walking caller `computeMatchableFingerprint` is verified
+ * end-to-end via the Playwright extension regression suite.
+ *
+ * djb2-style: init 5381, multiplier 33 (`(h << 5) + h`). 32-bit truncation
+ * via `| 0` keeps the hash bounded. Returns `${count}:${hash}` so two states
+ * that hash-collide but have different match counts still produce different
+ * fingerprint strings.
+ */
+export function hashFingerprintMatches(
+  matches: readonly { readonly matched: string; readonly index: number }[],
+): string {
+  let hash = 5381;
+  for (const m of matches) {
+    const s = m.matched;
+    for (let i = 0; i < s.length; i++) {
+      hash = ((hash << 5) + hash + s.charCodeAt(i)) | 0;
+    }
+    hash = ((hash << 5) + hash + m.index) | 0;
+  }
+  return `${matches.length}:${hash}`;
+}
+
+/**
+ * P-20 fix 2026-05-15. Computes a deterministic fingerprint of every regex
+ * match in the visible-and-not-already-highlighted text under `root`. The
+ * live-highlight controller's refresh() compares this fingerprint to the
+ * one from the previous refresh; if unchanged, the refresh short-circuits
+ * (no strip, no reapply) — the common case on heavily-mutating pages like
+ * real amazon.com where most external DOM mutations don't add new matchable
+ * text. See the P-20 polish-backlog entry in ROADMAP.md for the bug class
+ * and the 2026-05-15 real-amazon DevTools trace that informed this fix.
+ *
+ * Important property — by design the walk reuses `shouldSkipSubtree` so it
+ * skips existing <mark class="plos-cs-highlight"> elements. That means the
+ * fingerprint reflects only PENDING highlight work, not all matches on
+ * page: in steady state (everything that should be highlighted already is)
+ * the fingerprint is "0:5381" (zero matches, init hash) and stays stable
+ * until new matchable text appears or existing marks are destroyed by
+ * external mutation. Both transitions correctly change the fingerprint and
+ * trigger a reapply.
+ */
+export function computeMatchableFingerprint(
+  root: Node,
+  regex: RegExp,
+): string {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      const parent = (node as Text).parentElement;
+      if (!parent) return NodeFilter.FILTER_REJECT;
+      let cur: Element | null = parent;
+      while (cur) {
+        if (shouldSkipSubtree(cur)) return NodeFilter.FILTER_REJECT;
+        if (cur === root) break;
+        cur = cur.parentElement;
+      }
+      if (!node.nodeValue || node.nodeValue.trim().length === 0) {
+        return NodeFilter.FILTER_REJECT;
+      }
+      return NodeFilter.FILTER_ACCEPT;
+    },
+  });
+
+  const matches: { matched: string; index: number }[] = [];
+  const source = regex.source;
+  const flags = regex.flags;
+  let node: Node | null = walker.nextNode();
+  while (node) {
+    const text = (node as Text).nodeValue || '';
+    const re = new RegExp(source, flags);
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text)) !== null) {
+      matches.push({ matched: m[0], index: m.index });
+      if (m[0].length === 0) re.lastIndex++;
+    }
+    node = walker.nextNode();
+  }
+  return hashFingerprintMatches(matches);
+}
+
+/**
  * Strips every .plos-cs-highlight span from `root`, restoring original text.
  * .normalize() merges the freshly-adjacent text nodes so subsequent walks
  * see clean text.
@@ -365,6 +448,14 @@ export async function startLiveHighlighting(
   // new refresh() can cancel it before starting fresh. Last-wins: the
   // most-recent DOM/term state always becomes the eventual visible state.
   let activeApplySignal: CancellationSignal | null = null;
+  // P-20 fix 2026-05-15: fingerprint of the page's pending-highlight work
+  // at the end of the previous refresh. The next refresh computes a fresh
+  // fingerprint and short-circuits when unchanged — eliminates the flash +
+  // selection-collapse loop on heavy-DOM-churn pages like real amazon.com
+  // (where most external mutations don't add new matchable text). Set to
+  // null whenever a forcing event happens (term-list change, no-terms
+  // state), so the very next refresh always runs.
+  let lastFingerprint: string | null = null;
 
   async function reload(): Promise<void> {
     if (destroyed) return;
@@ -384,6 +475,34 @@ export async function startLiveHighlighting(
 
   async function refresh(): Promise<void> {
     if (destroyed) return;
+
+    // P-20 fix 2026-05-15: short-circuit on unchanged matchable-text
+    // fingerprint. The walk is sync + lightweight (one TreeWalker pass
+    // honoring the same skip rules as applyHighlightsTo) and skips
+    // existing <mark> elements, so the fingerprint reflects PENDING
+    // highlight work — in steady state it's "0:5381" (zero matches)
+    // and stays stable until external mutation actually adds new
+    // matchable text or destroys an existing mark. Computed outside
+    // the mute window because it doesn't touch the DOM. See the
+    // P-20 polish-backlog entry + the 2026-05-15 real-amazon trace
+    // (`docs/p-20-trace-script.js`) for evidence motivating this fix.
+    //
+    // Note: the pre-check intentionally DOES NOT update lastFingerprint.
+    // The post-apply recompute inside the mute window does (only on
+    // uncancelled completion), so a cancelled apply leaves the stored
+    // fingerprint at its prior value and the next refresh re-evaluates
+    // from scratch.
+    if (currentRegex !== null) {
+      const fingerprint = computeMatchableFingerprint(
+        document.body,
+        currentRegex,
+      );
+      if (fingerprint === lastFingerprint) return;
+    } else if (lastFingerprint === null) {
+      // No terms AND already in stripped state. Nothing to do.
+      return;
+    }
+
     // P-14 fix 2026-05-12-e: run the strip-and-reapply work inside the
     // caller's mute wrapper so the resulting DOM mutations don't feed
     // back into the orchestrator's MutationObserver and trigger another
@@ -400,6 +519,9 @@ export async function startLiveHighlighting(
         // Term list went empty (e.g., user cleared all). Strip any
         // leftover highlights from a previous pass.
         removeAllHighlights();
+        // P-20: mark cleared state so the next no-terms refresh
+        // short-circuits at the top.
+        lastFingerprint = null;
         return;
       }
       removeAllHighlights();
@@ -412,6 +534,19 @@ export async function startLiveHighlighting(
           currentColorMap,
           { signal },
         );
+        // P-20 fix 2026-05-15: capture the post-apply fingerprint
+        // INSIDE the mute window so the read is consistent with the
+        // DOM state we just produced (no external mutation can race
+        // here because the orchestrator's MO is disconnected). Skip
+        // on cancellation — partial state shouldn't be stored as
+        // "steady state"; the next refresh's pre-check will see the
+        // partial fingerprint and proceed to a fresh apply.
+        if (!signal.cancelled && !destroyed) {
+          lastFingerprint = computeMatchableFingerprint(
+            document.body,
+            currentRegex,
+          );
+        }
       } finally {
         // Only clear the slot if THIS pass still owns it — otherwise a
         // newer refresh has already replaced it and is in flight.
@@ -444,6 +579,14 @@ export async function startLiveHighlighting(
     if (!(STORAGE_KEY in changes)) return;
     void (async () => {
       await reload();
+      // P-20 fix 2026-05-15: term-list change invalidates the cached
+      // fingerprint. Without this, a term edit that produces the same
+      // match-set on the page (e.g., user changes a term's color, or
+      // adds a term that doesn't match the current page content) would
+      // hash to the same fingerprint and the next refresh would
+      // short-circuit — missing the color update or the new term's
+      // future-matching potential. Invalidating forces one full pass.
+      lastFingerprint = null;
       void refresh();
     })();
   };

@@ -13,6 +13,7 @@ import assert from 'node:assert/strict';
 import {
   buildColorMap,
   buildHighlightRegex,
+  hashFingerprintMatches,
   processInChunks,
   type CancellationSignal,
 } from './highlight-terms.ts';
@@ -306,5 +307,116 @@ describe('processInChunks (P-9 fix 2026-05-10)', () => {
     // Yields fire AFTER items 3, 6, 9 are processed — never mid-chunk.
     assert.deepEqual(yieldedAfterCount, [3, 6, 9]);
     assert.deepEqual(seen, items);
+  });
+});
+
+describe('hashFingerprintMatches (P-20 fix 2026-05-15)', () => {
+  it('returns the canonical steady-state string for empty input', () => {
+    // The pending-highlight-work walk produces zero matches in the
+    // common steady state (page fully highlighted; nothing pending).
+    // The refresh() short-circuit relies on this exact string being
+    // stable across calls so post-apply state always compares equal
+    // to the next steady-state pre-check.
+    assert.equal(hashFingerprintMatches([]), '0:5381');
+  });
+
+  it('is deterministic across calls with the same input', () => {
+    const matches = [
+      { matched: 'cat', index: 12 },
+      { matched: 'therapy', index: 27 },
+      { matched: 'cat', index: 81 },
+    ];
+    assert.equal(
+      hashFingerprintMatches(matches),
+      hashFingerprintMatches(matches),
+    );
+  });
+
+  it('encodes the match count as the prefix', () => {
+    // The `${count}:${hash}` shape ensures that any state with N matches
+    // can never collide with a state with M matches even if their hash
+    // tails accidentally agree. The refresh short-circuit treats
+    // count-changes as a guaranteed re-apply trigger.
+    const oneMatch = hashFingerprintMatches([{ matched: 'cat', index: 0 }]);
+    const twoMatches = hashFingerprintMatches([
+      { matched: 'cat', index: 0 },
+      { matched: 'dog', index: 5 },
+    ]);
+    assert.ok(oneMatch.startsWith('1:'));
+    assert.ok(twoMatches.startsWith('2:'));
+    assert.notEqual(oneMatch, twoMatches);
+  });
+
+  it('changes when a match string changes', () => {
+    const a = hashFingerprintMatches([{ matched: 'cat', index: 0 }]);
+    const b = hashFingerprintMatches([{ matched: 'dog', index: 0 }]);
+    assert.notEqual(a, b);
+  });
+
+  it('changes when a match index changes within a text node', () => {
+    // Catches the case where the same word moves position inside the
+    // same text node (e.g., a piece of leading text was inserted
+    // before it). The wrapping mark would need re-positioning, so
+    // the fingerprint must register the change.
+    const a = hashFingerprintMatches([{ matched: 'cat', index: 0 }]);
+    const b = hashFingerprintMatches([{ matched: 'cat', index: 4 }]);
+    assert.notEqual(a, b);
+  });
+
+  it('is order-sensitive — different sequences of the same matches produce different hashes', () => {
+    // The TreeWalker visits text nodes in document order. If two pages
+    // contain the same matches in different orders, the fingerprint
+    // distinguishes them so a reordered carousel triggers re-apply
+    // even when the multiset of matches is unchanged.
+    const a = hashFingerprintMatches([
+      { matched: 'cat', index: 0 },
+      { matched: 'dog', index: 4 },
+    ]);
+    const b = hashFingerprintMatches([
+      { matched: 'dog', index: 0 },
+      { matched: 'cat', index: 4 },
+    ]);
+    assert.notEqual(a, b);
+  });
+
+  it('preserves equality when matches and order are identical', () => {
+    // The core invariant: identical input → identical output. This is
+    // the property the refresh() short-circuit depends on for
+    // correctness — false positives (treating same state as different)
+    // produce unnecessary re-applies; false negatives (treating
+    // different state as same) skip a needed re-apply.
+    const matches = [
+      { matched: 'red light therapy', index: 7 },
+      { matched: 'lamp', index: 38 },
+    ];
+    const copy = matches.map((m) => ({ matched: m.matched, index: m.index }));
+    assert.equal(
+      hashFingerprintMatches(matches),
+      hashFingerprintMatches(copy),
+    );
+  });
+
+  it('handles long matched strings without truncation collisions', () => {
+    // djb2 over the full string ensures long matches contribute the
+    // full sequence of character codes. A 200-char string differing
+    // only at the tail must still produce a different hash.
+    const longA = 'a'.repeat(199) + 'b';
+    const longB = 'a'.repeat(199) + 'c';
+    const a = hashFingerprintMatches([{ matched: longA, index: 0 }]);
+    const b = hashFingerprintMatches([{ matched: longB, index: 0 }]);
+    assert.notEqual(a, b);
+  });
+
+  it('handles large match counts within 32-bit truncation', () => {
+    // The `| 0` truncation keeps the hash bounded to 32 bits. Verifies
+    // that hashing 10k matches doesn't throw, doesn't produce NaN, and
+    // produces a stable string shape.
+    const many = Array.from({ length: 10_000 }, (_, i) => ({
+      matched: 'cat',
+      index: i,
+    }));
+    const fp = hashFingerprintMatches(many);
+    assert.ok(fp.startsWith('10000:'));
+    assert.ok(/^10000:-?\d+$/.test(fp), `fingerprint shape: ${fp}`);
   });
 });

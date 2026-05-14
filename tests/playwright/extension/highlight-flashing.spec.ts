@@ -330,6 +330,127 @@ for (const pl of PLATFORMS) {
       ).toBe(taggedCount);
     });
 
+    test(`P-20 EXTERNAL-MUTATION — <mark>s STABLE under continuous non-matchable churn on ${pl.host}`, async ({
+      context,
+    }) => {
+      // P-20 SHIPPED 2026-05-15: highlight-terms.ts refresh() now computes
+      // a fingerprint of the page's PENDING highlight work (matchable text
+      // not yet wrapped in a <mark>) and short-circuits when unchanged
+      // since the previous refresh. Real `amazon.com` continuously mutates
+      // (lazy reviews, ads, recommendation carousels) — the existing
+      // P-14 mute fix only handles the SELF-retrigger from refresh's own
+      // strip-and-reapply, so external mutations were still triggering the
+      // visible flash + selection-collapse loop. With the fingerprint
+      // short-circuit, external mutations that don't add new matchable text
+      // produce a no-op refresh — exactly the behavior this regression spec
+      // asserts. The pre-fix Playwright suite passed only because it ran on
+      // a STATIC mock product page; this spec adds the missing real-world
+      // dynamism by injecting a setInterval that adds + removes
+      // non-matchable DOM nodes every 100ms (~10/sec — comparable to the
+      // 6/sec real-Amazon rate measured 2026-05-15 in `docs/p-20-trace-script.js`).
+      const page = await context.newPage();
+      await page.goto(urlFor(pl));
+
+      await page.waitForFunction(
+        () => document.body.getAttribute('data-plos-cs-active') === '1',
+        undefined,
+        { timeout: 10_000 },
+      );
+      await page.waitForFunction(
+        () => document.querySelectorAll('mark.plos-cs-highlight').length > 0,
+        undefined,
+        { timeout: 5_000 },
+      );
+      await page.waitForTimeout(SETTLE_MS);
+
+      // Start the external-mutation simulator: every 100ms, append a new
+      // <div> with non-matchable text and remove the prior one. Mimics
+      // Amazon's carousel-rotation pattern (steady add/remove churn with
+      // bounded DOM growth). The injected text deliberately contains
+      // none of the HIGHLIGHT_TERMS ('cat', 'scratch', 'post'), so the
+      // matchable-text fingerprint stays at "0:5381" (steady state) and
+      // the orchestrator's debounced refresh() short-circuits each time.
+      await page.evaluate(() => {
+        const target = document.createElement('div');
+        target.id = 'plos-test-external-mutation-target';
+        document.body.appendChild(target);
+        let counter = 0;
+        (window as unknown as { __plosExternalMutationInterval: number }).__plosExternalMutationInterval =
+          window.setInterval(() => {
+            counter++;
+            const tile = document.createElement('div');
+            tile.id = `plos-test-tile-${counter}`;
+            // Non-matchable content — no 'cat' / 'scratch' / 'post' words.
+            tile.textContent = `Recommendation tile rotation ${counter} — sample non-matchable filler text`;
+            target.appendChild(tile);
+            const prior = document.getElementById(
+              `plos-test-tile-${counter - 1}`,
+            );
+            if (prior) prior.remove();
+          }, 100);
+      });
+
+      // Observe <mark> mutations over the OBSERVE_MS window. Pre-P-20-fix
+      // expectation on a dynamic page: tens of mark adds+removes (the
+      // refresh() loop keeps firing every 250ms). Post-fix expectation:
+      // count === 0 (each refresh fingerprints, finds no change in
+      // matchable text, short-circuits before the strip-and-reapply).
+      const mutationCount = await page.evaluate(
+        async (windowMs) =>
+          new Promise<number>((resolve) => {
+            let count = 0;
+            const obs = new MutationObserver((records) => {
+              for (const r of records) {
+                for (const n of Array.from(r.addedNodes)) {
+                  if (
+                    n.nodeType === Node.ELEMENT_NODE &&
+                    (n as Element).tagName === 'MARK' &&
+                    (n as Element).classList.contains('plos-cs-highlight')
+                  ) {
+                    count++;
+                  }
+                }
+                for (const n of Array.from(r.removedNodes)) {
+                  if (
+                    n.nodeType === Node.ELEMENT_NODE &&
+                    (n as Element).tagName === 'MARK' &&
+                    (n as Element).classList.contains('plos-cs-highlight')
+                  ) {
+                    count++;
+                  }
+                }
+              }
+            });
+            obs.observe(document.body, {
+              childList: true,
+              subtree: true,
+            });
+            setTimeout(() => {
+              obs.disconnect();
+              resolve(count);
+            }, windowMs);
+          }),
+        OBSERVE_MS,
+      );
+
+      // Stop the simulator before the test ends so other tests in the
+      // same browser context don't inherit a runaway interval.
+      await page.evaluate(() => {
+        const w = window as unknown as { __plosExternalMutationInterval?: number };
+        if (typeof w.__plosExternalMutationInterval === 'number') {
+          window.clearInterval(w.__plosExternalMutationInterval);
+        }
+        document
+          .getElementById('plos-test-external-mutation-target')
+          ?.remove();
+      });
+
+      expect(
+        mutationCount,
+        `Under continuous non-matchable external DOM churn (${pl.host}, ${OBSERVE_MS}ms window, ~10 mutations/sec), <mark> elements should not be re-created. Non-zero count indicates the P-20 fingerprint short-circuit is regressed.`,
+      ).toBe(0);
+    });
+
     test(`SELECTION-STABILITY — selection over highlights survives ${SELECTION_OBSERVE_MS}ms on ${pl.host}`, async ({
       context,
     }) => {
