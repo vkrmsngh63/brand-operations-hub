@@ -1822,4 +1822,58 @@ This is the **first session to apply the CORRECTIONS_LOG 2026-05-10-c entry #1 p
 
 ---
 
+### 2026-05-14 — W#2 polish session #18 — P-23 Amazon main-image right-click context-menu fix SHIPPED at code level on `workflow-2-competition-scraping`
+
+**Director's directive (per launch prompt):** *"W#2 polish session #18 — ship P-23 Amazon main-image right-click context-menu fix on `workflow-2-competition-scraping`. Closes (a.27) RECOMMENDED-NEXT. Standard ship-then-deploy pattern — today's work is the code-level ship; a future deploy session brings it to vklf.com."* Launch prompt also enumerated 3 candidate fix shapes (A/B/C — same 3 captured during deploy-#10 doc batch when P-23 was first identified) and recommended starting with (A).
+
+**The bug.** On Amazon's product-listing page, right-clicking the main product `<img>` does NOT show the "Add to PLOS — Image" menu. Workaround pre-fix: click image → Amazon opens it in a larger viewer pane → right-click on the now-clean `<img>` in that viewer → menu fires + full upload chain works. Affects only Amazon; Walmart/eBay/Etsy all work on direct right-click on the main listing-page image. Severity MEDIUM (workflow degradation only; non-obvious workaround). Root cause: Amazon's main `<img>` is wrapped in zoom/overlay elements (typically a `.imgTagWrapper` div containing the `<img>` PLUS a sibling overlay shield `<div>` that intercepts pointer events). The overlay div catches the `contextmenu` event before Chrome's contextMenus API recognizes the right-click target as matching `contexts: ['image']`.
+
+**Alternatives considered (the 3 candidate fixes from deploy-#10 doc batch):**
+
+- **(A) Widen `chrome.contextMenus` `contexts` to `['all']` + element-walk in handler.** Smallest code change for the contexts setting; expands menu surface across all right-clicks (UX wart); element-walk needs to live content-script-side because `info.srcUrl` is only populated when Chrome's native image-context detection matches.
+- **(B) Inject a content-script right-click listener that walks DOM up from `event.target` to find an underlying `<img>`.** Keeps `contexts: ['image']` for Walmart/eBay/Etsy (zero behavior change on stable platforms); adds a parallel content-script-only path for Amazon. Higher implementation cost (new listener + new "synthesize a click" / "show floating affordance" UI path).
+- **(C) Reuse the §5 floating "+ Add" button pattern from URL capture.** Lowest implementation cost (existing code path); mixes UX patterns (right-click for some platforms, floating button for Amazon main image) — a UX wart.
+
+**What was decided — refined Option (A):** picked the launch-prompt-recommended (A) AS THE STARTING POINT but refined the mechanism after reading the existing content-script structure. Key refinement: the "element-walk in handler" lives in the content-script (not the background) because Chrome doesn't populate `info.srcUrl` for non-image right-click targets even under `contexts: ['all']`. So the mechanism becomes:
+
+1. `background.ts` widens `contexts: ['image']` → `contexts: ['all']`. The menu now fires on any right-click target.
+2. `background.ts` removes the early-bail `if (!srcUrl) return;` guard — empty-srcUrl is now an expected case to be handled downstream.
+3. `background.ts` dispatches `open-image-capture-form` with `srcUrl: info.srcUrl ?? ''` (may be empty for non-image targets).
+4. NEW content-script helper `find-underlying-image.ts` exports `findUnderlyingImage(target: Element | null): string | null` that walks up from `target` (depth ≤ MAX_ANCESTOR_DEPTH=10) and at EACH ancestor both checks if cursor IS an `<img>` AND scans `cursor.querySelector('img')` for an `<img>` descendant. The descendant-scan is what unlocks Amazon's pattern: the right-click lands on the sibling overlay div, so walking UP from the shield won't find the image directly — but the shared parent's `querySelector('img')` DOES. Prefers `currentSrc` (browser-picked URL respecting `srcset`) over `src` (raw attribute).
+5. `orchestrator.ts` attaches a capture-phase `contextmenu` listener at the TOP of `runOrchestrator` (BEFORE any awaits — see CORRECTIONS_LOG 2026-05-14 entry for the listener-attach race that surfaced this placement decision). The listener always updates `lastRightClickImageSrc` on every right-click (sets to discovered src OR null).
+6. `orchestrator.ts` message handler — when `open-image-capture-form` arrives with empty `msg.srcUrl`, falls back to `lastRightClickImageSrc`; if both empty, bails silently with `sendResponse({ ok: false, reason: 'no-image-found' })`.
+
+**Why this refined-(A) shape over a clean (B):** simpler mechanism (one new helper file + one cache variable + one capture-phase listener; no new message kind; no UI synthesis path). Walmart/eBay/Etsy behavior is unchanged because Chrome's image-context detection still runs under `contexts: ['all']` — direct-`<img>` right-clicks populate `info.srcUrl` natively and the cache is never consulted. UX cost on all 4 platforms: the "Add to PLOS — Image" menu now appears on right-click of any element (slight noisiness; bail-silently semantics keep it functionally correct). Bounded acceptable trade-off vs. the Amazon-fix benefit; if the UX noise becomes a problem, a future polish session can scope the wider contexts to Amazon only via `documentUrlPatterns`.
+
+**Verification scoreboard — all GREEN:**
+
+- ext `npx tsc --noEmit -p tsconfig.json` → exit 0.
+- ext `npm test` → **334/334 pass** in 3.6s (was 323; +10 new `findUnderlyingImage` unit tests + 1 net adjustment).
+- root `npx playwright test --project=extension` → **31/31 pass** in 1.3 min (was 29; +2 new P-23 specs — positive overlay-shield → falls-back-to-cache; negative plain-text → silent bail).
+- ext `wxt build` → clean in 1.42s; content.js 62,437 → **63,038 bytes (+601 bytes)** within the launch-prompt "few hundred bytes" target.
+
+**Files changed this session:**
+
+- modified `extensions/competition-scraping/src/entrypoints/background.ts` (widen contexts + drop early bail).
+- modified `extensions/competition-scraping/src/lib/content-script/orchestrator.ts` (top-of-function listener attach + cache + cache-fallback in message handler + detach in early returns + main cleanup).
+- NEW `extensions/competition-scraping/src/lib/content-script/find-underlying-image.ts`.
+- NEW `extensions/competition-scraping/src/lib/content-script/find-underlying-image.test.ts`.
+- NEW `tests/playwright/extension/p23-amazon-overlay-image.spec.ts`.
+- NEW `tests/playwright/extension/amazon-overlay-image-product-page.html` fixture.
+
+**Mid-build slip caught + fixed before commit:** initial draft placed the contextmenu listener AFTER the orchestrator's async init flow (after several awaits for `getSelectedProjectId` / `listCompetitorUrls` / `listProjects` / `startLiveHighlighting`). The Playwright spec's `dispatchEvent('contextmenu')` then ran in the race window between `data-plos-cs-active=1` being set (synchronous, top of function) and the listener actually attaching (later, after awaits) — false-negative test failure with "form did not render" even though all production code paths were correct. Fix: hoist the listener attach to the TOP of `runOrchestrator` (synchronous with `data-plos-cs-active=1`), add `detachContextMenuListener()` calls in each early-return path to prevent listener leak on unsupported platforms. Full lesson recorded in `CORRECTIONS_LOG.md` 2026-05-14 entry "Playwright capture-phase listener-attach race in P-23 spec."
+
+**Real-Amazon browser verification DEFERRED to W#2 → main deploy session #13** per standard ship-then-deploy pattern.
+
+**Cross-references:**
+
+- `docs/ROADMAP.md` W#2 row Last Session 2026-05-14 prepended + (a.27) flipped ✅ DONE + new (a.28) RECOMMENDED-NEXT W#2 → main deploy session #13 + polish backlog P-23 entry flipped ✅ SHIPPED-AT-CODE-LEVEL.
+- `docs/CORRECTIONS_LOG.md` 1 new INFORMATIONAL entry — Playwright capture-phase listener-attach race caught + fixed.
+- `docs/COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` new "P-23 Amazon main-image right-click context-menu fix SHIPPED at code level (W#2 polish session #18)" section.
+- `docs/CHAT_REGISTRY.md` new top entry.
+- `docs/DOCUMENT_MANIFEST.md` per-doc flags.
+- `docs/NEXT_SESSION.md` rewritten for W#2 → main deploy session #13 with the standard deploy-session prompt + pre-deploy verification scoreboard + browser-verification steps for real Amazon.
+
+---
+
 END OF DOCUMENT

@@ -1,10 +1,10 @@
 # Next session
 
-**Written:** 2026-05-14 — session_2026-05-14_w2-main-deploy-session-12-p20-fingerprint-short-circuit-DEPLOYED (Claude Code, on `main` after ff-merge from `workflow-2-competition-scraping`).
+**Written:** 2026-05-14 — session_2026-05-14_w2-polish-session-18-p23-amazon-right-click-context-menu-SHIP (Claude Code, on `workflow-2-competition-scraping`).
 
 **For:** the next Claude Code session, whatever it is.
 
-**Status of P-20 (highlight-flashing on real Amazon):** ✅ **SHIPPED-AT-DEPLOY-LEVEL today** on vklf.com via deploy session #12. Two commits brought to main (`865ffd6` P-20 code + `8f11388` P-20 doc batch via ff-merge `5e18e4b..8f11388`). Fresh extension zip `plos-extension-2026-05-14-w2-deploy-12.zip` (187,918 bytes; content.js 62,437 bytes) packaged at repo root. Browser verification on real Amazon SKIPPED per Rule 27 forced-picker — director picked "trust Playwright 29/29" — sufficient regression coverage from the 4 new EXTERNAL-MUTATION specs (10/sec injected DOM churn vs real Amazon's measured 6/sec). Director-self-check real-world test list provided in `COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` "Deploy session #12" section for optional independent verification (not a deploy gate).
+**Status of P-23 (Amazon main-image right-click context-menu):** ✅ **SHIPPED-AT-CODE-LEVEL today** on `workflow-2-competition-scraping`. One commit on the workflow-2 branch contains the code + tests + doc batch together. Pre-ship verification scoreboard all GREEN: ext tsc clean; ext `npm test` 334/334; root Playwright extension project 31/31; ext build clean; content.js 62,437 → 63,038 bytes (+601 bytes). Real-Amazon browser verification DEFERRED to this next session (the standard W#2 ship-then-deploy pattern).
 
 ---
 
@@ -14,60 +14,56 @@ workflow-2-competition-scraping
 ## Launch prompt
 
 Read docs/CLAUDE_CODE_STARTER.md and follow every rule in it. Today's task:
-**W#2 polish session #18 — ship P-23 Amazon main-image right-click context-menu fix** on `workflow-2-competition-scraping`. Closes (a.27) RECOMMENDED-NEXT. Standard ship-then-deploy pattern — today's work is the code-level ship; a future deploy session brings it to vklf.com.
+**W#2 → main deploy session #13 — P-23 Amazon main-image right-click context-menu fix DEPLOYED to vklf.com.** Closes (a.28) RECOMMENDED-NEXT. Standard cheat-sheet (b) flow — rebase `workflow-2-competition-scraping` onto `origin/main`, ff-merge to `main`, push origin/main, package fresh extension zip, real-Amazon browser verification.
 
-**The bug (captured 2026-05-14 in deploy session #10 cross-platform smoke):** Amazon main-image right-click context-menu does NOT fire on Amazon's product-listing page. Workaround that works: click image → Amazon opens a larger viewer pane → right-click on the opened image → "Add to PLOS — Image" menu fires + full upload chain works. Affects only Amazon (Walmart/eBay/Etsy worked on direct right-click during deploy-#10 cross-platform verification). Severity MEDIUM — functional Amazon image-capture path has a workaround but the workaround is non-obvious for users.
+**What's on workflow-2 ahead of main:** ONE commit (today's P-23 ship: code + tests + doc batch in a single commit). Cleanest possible deploy shape — `git log origin/main..workflow-2-competition-scraping` should show 1 commit; `git log workflow-2-competition-scraping..origin/main` should show 0 commits (no parallel main activity since today's deploy-#12 ff-merge that landed P-20).
 
-**Likely cause:** Amazon's `<img>` is wrapped in zoom/overlay elements that intercept the `contextmenu` event before Chrome recognizes the target as matching the `contexts: ['image']` predicate. The Chrome contextMenus API uses event-target inspection; Amazon's overlay div may not look like an image even though it visually IS an image.
+**Per HANDOFF_PROTOCOL.md Rule 25 + MULTI_WORKFLOW_PROTOCOL.md, this is a dual-branch session** — rebase phase on `workflow-2-competition-scraping`, ff-merge + deploy push + browser verification on `main`. Verify branch state with `git branch --show-current` before any doc reads — the `./resume` script will have placed you on workflow-2 per the Branch field above; if not, STOP and surface to director. **Per the 2026-05-14 launch-prompt-staleness CORRECTIONS_LOG entry, at session start run `git log origin/main..workflow-2-competition-scraping` AND `git log workflow-2-competition-scraping..origin/main` BEFORE reading this launch prompt's framing as authoritative.**
 
-**Candidate fixes (already enumerated in the deploy-#10 doc batch — pick the lowest-risk one that compiles cleanly):**
+**Pre-deploy verification scoreboard targets (re-run before commit on workflow-2 branch; rebase is a no-op so the results carry to main):**
 
-  - **(A) Widen `chrome.contextMenus` `contexts` to `['all']` + check element-type in the click handler** — broadens the menu to fire on any element, but adds a content-script-side element-walk in the handler to verify there's actually an image somewhere in the DOM tree. Lowest-risk fix mechanism-wise; menu appears on more elements (more visible to users) but only fires through to the upload flow if there's an actual image target. Backward-compatible across Walmart/eBay/Etsy because the element-walk gracefully exits when the underlying element isn't image-like.
-  - **(B) Inject a content-script right-click listener that walks the DOM up from `event.target` to find an underlying `<img>`** — more surgical fix; keeps `contexts: ['image']` for Walmart/eBay/Etsy (zero behavior change there) and adds a parallel content-script-only path that fires on Amazon's zoom-overlay-wrapped images. Higher implementation cost (new code path) but cleaner separation of platform-specific workarounds.
-  - **(C) Reuse the §5 floating "+ Add" button pattern from existing code** — the floating "+ Add" overlay (introduced 2026-05-09 for Walmart heavy-SPA pages) already walks the DOM to find image targets and renders a clickable element. Could be reused for Amazon main-image capture too. Lowest implementation cost (existing code path) but mixes UX patterns (right-click for some platforms, floating "+ Add" for Amazon main image) which may be a UX wart.
+  - ext `npx tsc --noEmit -p tsconfig.json` — expect CLEAN.
+  - ext `npm test` — expect **334/334** (the P-23 fix shipped today; baseline confirmed in session).
+  - root `npx playwright test --project=extension` — expect **31/31** GREEN (the 2 new P-23 specs shipped today; baseline confirmed in session).
+  - ext `npm run build` — expect CLEAN; content.js ≈ **63,038 bytes** (the P-23 fix's content.js byte target).
 
-**My recommendation (per `feedback_recommendation_style.md` — most thorough and reliable):** Pick **(A) widen `contexts` to `['all']` + element-walk in handler** as the first slice. It's the most surgical fix-as-a-mechanism (single `contexts: ['all']` flag change + a small handler-side element-walk) that preserves backward compatibility with the 3 stable-DOM platforms while unblocking Amazon. If it doesn't work cleanly in implementation (some edge case in element-walk), fall back to (B) as slice 2. Director can pick a different recommendation by overriding the launch-prompt task.
+**Deploy mechanics (cheat-sheet (b)):**
 
-**Verification approach for THIS code-level ship session (per HANDOFF_PROTOCOL Rule 27 — Playwright forced-picker before any real-browser walkthrough):**
+1. `cd /workspaces/brand-operations-hub && git fetch origin` (already done by `./resume`).
+2. Verify `git log origin/main..workflow-2-competition-scraping` = 1 commit (today's P-23 ship); `git log workflow-2-competition-scraping..origin/main` = 0 commits.
+3. `git rebase origin/main` from workflow-2 — should be a no-op fast-forward (no parallel main activity since deploy-#12). If conflicts surface (unlikely), STOP + surface to director per Rule 8 destructive-op gate.
+4. `git push --force-with-lease origin workflow-2-competition-scraping` (Rule 8+9 STOP — Rule 9 deploy describe + verify-approach picker before any push).
+5. `git checkout main && git pull --rebase origin main` — should be clean.
+6. `git merge --ff-only workflow-2-competition-scraping` — should advance main by exactly 1 commit.
+7. `git push origin main` (Rule 8+9 STOP — the actual deploy push; Vercel auto-redeploy is a no-op for the web bundle since zero `src/` changes — the P-23 fix is extension-only).
+8. Package fresh extension zip at repo root: `plos-extension-2026-05-15-w2-deploy-13.zip` (or whatever the date is at deploy time). Run via `cd extensions/competition-scraping && npx wxt zip` OR a manual `cd .output/chrome-mv3 && zip -r ../../../../plos-extension-...zip .` — match the existing zip-creation pattern from prior deploys.
 
-  - **Option A — Playwright extension-context regression spec for P-23** (recommended for code-level ship — repeatable regression coverage; spec injects an Amazon-style image-with-overlay-wrapper fixture HTML page and asserts the context-menu fires + the upload-form-render message dispatches; mirrors the existing P-22 image-capture spec shape; locks in the bug class as permanent regression coverage).
-  - **Option B — Director manual on real Amazon at code-level ship** — premature; the code lives on workflow-2 branch, not deployed to vklf.com yet; real-Amazon manual verification belongs in the deploy session, not the code-level ship session.
-  - **Option C — Hybrid** (Playwright now + director manual on real Amazon at the future deploy session) — effectively equivalent to A given B is deferred to deploy session. Recommended.
+**Browser verification on real Amazon (Rule 27 scope-exception — the bug class IS "real-Amazon-DOM-ness is the point"):**
 
-**Pre-ship verification scoreboard (re-run before commit):**
+  1. Sideload the new zip on Chrome (chrome://extensions → Developer mode → Remove old + Load unpacked from unzipped folder; re-approve host permissions if Chrome prompts).
+  2. Open the extension popup → set Project = (any director-test project) + Platform = Amazon.
+  3. Navigate to a real Amazon product detail page (any `/dp/{ASIN}` URL; the existing `/dp/B0CTTF514L` Cool Heat Patches works as a familiar test target from prior sessions).
+  4. Wait 5–10 seconds for the page to settle through Amazon's mutation cycles (lazy reviews, ads, recommendation widgets).
+  5. **Right-click directly on the main product image** (NOT on the click-to-zoom larger viewer pane — that's the pre-fix workaround). Confirm the "Add to PLOS — Image" menu fires.
+  6. Click "Add to PLOS — Image" → confirm the form opens with the main product image previewed (the underlying `<img>` src, not empty/broken).
+  7. Fill the form (saved-URL pre-select should already work per P-15; image-category dropdown; optional composition/embedded-text/tags) and click Save → confirm the form closes + a new CapturedImage row lands in the DB (verify via `scripts/inspect-w2-state.mjs` if available, OR via the vklf.com URL-detail-page image gallery).
+  8. **Cross-platform regression spot-check:** repeat right-click on a direct `<img>` on Walmart/eBay/Etsy product pages — confirm the menu still fires correctly + the form still opens with the right image preview. Zero behavior change expected on those platforms.
+  9. **UX-noise spot-check:** on any platform, right-click on a non-image element (a paragraph of text, a header, a link, blank page area). Confirm the "Add to PLOS — Image" menu entry now appears (this is the expected UX cost of the widened `contexts: ['all']` change). Confirm clicking it does NOTHING visible (the handler bails silently because there's no image to find at that right-click target).
 
-  - ext `npx tsc --noEmit -p tsconfig.json` — expect CLEAN
-  - ext `npm test` — expect 323/323 + however many new tests P-23's fix adds (likely +3-6 unit tests for the element-walk helper)
-  - root `npx playwright test --project=extension` — expect 29/29 + 1 new P-23 spec = 30/30 GREEN
-  - ext `npm run build` — expect CLEAN; content.js delta = +few-hundred bytes for the contexts widening + element-walk
+**Rule 27 scope-exception logic:** the load-bearing logic (empty-srcUrl content-script fallback path) is covered by the Playwright overlay-wrapped fixture (`tests/playwright/extension/p23-amazon-overlay-image.spec.ts` — 2 specs, positive + negative, both GREEN). Real-Amazon manual verification is the natural choice for this deploy session because (a) the bug class is "real-Amazon-DOM-ness is the point" — the Playwright fixture mirrors Amazon's pattern but real Amazon may have additional variants; (b) the widened-menu UX needs real-browser confirmation (Playwright can't drive Chrome's native context-menu UI); (c) this is a one-off deploy-time verification, not a regression-cycle thing.
 
-**Per HANDOFF_PROTOCOL.md Rule 25 + MULTI_WORKFLOW_PROTOCOL.md + project memory project_sequential_workflow_operation.md, this is W#2 work and belongs on the `workflow-2-competition-scraping` branch.** Verify branch state with `git branch --show-current` before any doc reads — the `./resume` script will have placed you on workflow-2 per the Branch field above; if not, STOP and surface to director.
+**If real-Amazon verification PASSES:** P-23 flips ✅ SHIPPED-AT-DEPLOY-LEVEL; polish backlog entry closes; (a.28) closes; next (a.29) RECOMMENDED-NEXT opens for the next priority polish item (likely P-21 pickInitialUrl asymmetric canonicalize per existing W#2 polish backlog, OR P-19 green-overlay-dismiss → one-time selection collapse, OR P-13 autofocus on "+ Add new…" inline category input — director picks).
 
-Start by running the mandatory start-of-session sequence including reading MULTI_WORKFLOW_PROTOCOL.md + the recent CORRECTIONS_LOG entries (for the working-directory-drift recurring pattern — use absolute paths in Bash calls, avoid `cd` chains where possible). Also: at session start, run `git log origin/main..workflow-2-competition-scraping` AND `git log workflow-2-competition-scraping..origin/main` to surface parallel-branch divergence before reading this launch prompt's framing as authoritative.
+**If real-Amazon verification FAILS:** capture the failure mode precisely (which step fails, what symptom, which Amazon URL), STOP, surface to director via Rule 8+10 acknowledge-mistakes — likely scope is "the refined-Option-A mechanism didn't generalize" → consider falling back to Option (B) per launch-prompt's "if Option A doesn't work cleanly, fall back to (B) as slice 2."
 
 ## Pre-session notes (optional, offline steps to do between sessions)
 
-**Optional self-check on the just-shipped P-20 fix:**
-
-The deploy-#12 doc batch (`docs/COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` "Deploy session #12" section) includes a numbered self-check test list for verifying P-20 on real Amazon. The Playwright simulator is the formal verification (29/29 GREEN with the 4 new EXTERNAL-MUTATION specs); the self-check is for your own intuition / spot-check. No need to report results back to the next session — just for your visibility. The self-check tests are:
-
-  1. Sideload `plos-extension-2026-05-14-w2-deploy-12.zip` from repo root (chrome://extensions → Developer mode → Remove old + Load unpacked from unzipped folder).
-  2. Set Platform = Amazon + add a highlight term in the popup.
-  3. Open a real Amazon product page; wait 10–15 seconds for lazy content + ads + recommendation widgets to settle.
-  4. Observe: highlighted words STAY highlighted continuously without flashing (P-20 fix's primary symptom).
-  5. Try selecting text by click-dragging over highlighted regions; selection stays held without collapsing (P-20 fix's second symptom).
-  6. Switch Platform = Walmart (or eBay/Etsy); confirm zero regression on stable-DOM platforms.
-
-**If any test fails:** just report it in the next session's launch prompt — which test failed, what symptom, which Amazon URL. The next session will treat it as a higher-priority polish item than P-23 and re-evaluate scope.
-
-Nothing else strictly required between sessions.
+Nothing strictly required. The P-23 fix is staged on `workflow-2-competition-scraping` ready for the deploy session. If you (the director) want to do a quick offline sanity check: the new helper file is `extensions/competition-scraping/src/lib/content-script/find-underlying-image.ts` (~95 lines, plain-language comments throughout). The new Playwright specs are at `tests/playwright/extension/p23-amazon-overlay-image.spec.ts`. Neither file is heavy reading; both are well-commented.
 
 ## Why this pointer was written this way (debug aid)
 
-Today's session (W#2 → main deploy session #12) brought yesterday's P-20 fingerprint short-circuit fix to vklf.com via the standard cheat-sheet (b) flow. Cleanest possible deploy shape — workflow-2 was 3 commits ahead of origin/main and main was 0 commits ahead; rebase a no-op fast-forward; the merge commit `5d85c84` naturally collapsed during the non-merge rebase per the doc-batch-empty-on-rebase pattern.
+Today's session (W#2 polish session #18) shipped the P-23 fix at code level per the launch-prompt-recommended refined Option (A): widen background's contexts to `['all']` + content-script element-walk fallback. The cleanest possible shape was achieved — one commit on workflow-2 (code + tests + doc batch together), pre-ship verification scoreboard all GREEN (334/334 ext tests + 31/31 Playwright extension project), content.js byte target met (+601 bytes within "few hundred bytes" launch-prompt target). One INFORMATIONAL CORRECTIONS_LOG entry captured mid-session: a Playwright capture-phase listener-attach race surfaced when the listener was first placed AFTER orchestrator's async init flow — false-negative test failure caught and fixed via source re-architecture (hoist listener to top of `runOrchestrator`). Pattern lesson worth recording for future content-script tests that exercise capture-phase event listeners.
 
-Browser verification on real Amazon was SKIPPED per Rule 27 forced-picker — director picked "trust Playwright 29/29" over the recommended "Director manual on real Amazon + cross-platform spot-check" option. Director's rationale: the 4 new EXTERNAL-MUTATION specs (10/sec mutation rate vs real Amazon's measured 6/sec from yesterday's design-session DevTools trace) provide sufficient regression coverage for the bug class. P-20 polish backlog flipped ✅ SHIPPED-AT-DEPLOY-LEVEL on this basis. Optional director-self-check real-world test list provided (above + in the VERIFICATION_BACKLOG section) for independent spot-checking — not a deploy gate.
+The deploy is the natural next session — standard ship-then-deploy pattern, no scope ambiguity. The Rule 27 forced-picker for the verification approach was effectively pre-decided: real-Amazon manual verification is the right choice for this specific bug class (the widened-menu UX + the listing-page overlay-wrapped image both want real-browser confirmation; Playwright already covers the load-bearing logic at regression level).
 
-The (a.27) RECOMMENDED-NEXT pick was P-23 Amazon main-image right-click context-menu polish — director picked (A) via the §4 Step 1c "no obvious next task" interview. P-23 was captured 2026-05-14 during deploy session #10 cross-platform smoke when director hit the "right-click doesn't fire on main image" issue on Amazon (workaround: click image → opened viewer → right-click → works). P-23 is MEDIUM severity (Amazon-specific functional issue with known workaround), well-scoped (candidate fixes already enumerated in the deploy-#10 doc batch), and a clean single-session ship per the W#2 polish backlog pattern.
-
-If you (the next Claude session) read this and the P-23 ship has already happened, the director may have revised intent — check ROADMAP.md Current Active Tools for the actual current state and ask the director which task they'd like to work on instead. The next-most-likely polish items after P-23 ships are P-19 (green-overlay-dismiss → one-time selection collapse) or P-21 (pickInitialUrl asymmetric canonicalize) — both already captured in the W#2 polish backlog.
+If you (the next Claude session) read this and the P-23 deploy has already happened OR director has revised intent, check `ROADMAP.md` Current Active Tools for the actual current state and ask the director which task they'd like to work on instead. The next-most-likely polish items after P-23 fully deploys are P-21 (pickInitialUrl asymmetric canonicalize), P-19 (green-overlay-dismiss → one-time selection collapse), or P-13 (autofocus on "+ Add new…" inline category input) — all already captured in the W#2 polish backlog.

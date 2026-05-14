@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Mock Amazon overlay-wrapped product page (P-23 test harness)</title>
+  <style>
+    /* Mirrors Amazon's product-listing zoom/overlay pattern. The zoom
+       container holds the underlying <img> AND an overlay shield div on
+       top of it. The overlay shield intercepts pointer + contextmenu
+       events before they reach the underlying <img> — which is exactly
+       what breaks Chrome's `contexts: ['image']` matching on real Amazon. */
+    .imgTagWrapper {
+      position: relative;
+      width: 400px;
+      height: 400px;
+    }
+    .imgTagWrapper #hero {
+      width: 100%;
+      height: 100%;
+    }
+    .imgTagWrapper #overlay-shield {
+      position: absolute;
+      inset: 0;
+      background: transparent;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+<!--
+  Served by Playwright route interception for tests/playwright/extension/p23-amazon-overlay-image.spec.ts.
+  The content script attaches by matching `https://*.amazon.com/*` in the
+  manifest. Right-clicks on `#overlay-shield` do NOT match Chrome's
+  contexts:['image']; pre-P-23 the "Add to PLOS — Image" menu never fired.
+  Post-P-23, background.ts widens contexts to ['all'] so the menu fires,
+  and the content-script's contextmenu-capture listener walks up from the
+  overlay div to find #hero — feeding the underlying image src into the
+  open-image-capture-form fallback path.
+-->
+<h1>Cool Heat Medicated Patches — P-23 overlay test fixture</h1>
+<div class="imgTagWrapper">
+  <img id="hero"
+       src="https://m.media-amazon.com/images/I/fake-cool-heat-patches.jpg"
+       alt="Cool Heat Medicated Patches hero image">
+  <div id="overlay-shield"></div>
+</div>
+<p>Additional content so the content-script has body to scan.</p>
+<script>
+  window.__pageReady = true;
+</script>
+</body>
+</html>

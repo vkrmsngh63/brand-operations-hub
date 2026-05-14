@@ -98,7 +98,17 @@ export default defineBackground(() => {
       chrome.contextMenus.create({
         id: CONTEXT_MENU_IMAGE_ID,
         title: CONTEXT_MENU_IMAGE_TITLE,
-        contexts: ['image'],
+        // P-23 fix 2026-05-14: widen from `['image']` to `['all']` so the
+        // menu fires on Amazon's overlay-wrapped main product image (the
+        // overlay's contextmenu interception prevents Chrome from
+        // recognizing the right-click target as `contexts: ['image']`).
+        // When the menu fires on a non-image target, `info.srcUrl` is
+        // empty; the content-script orchestrator's contextmenu-capture
+        // listener tracks the last right-click target and falls back to
+        // its underlying-image lookup so the form still opens with the
+        // correct image. See orchestrator.ts `lastRightClickImageSrc` +
+        // `find-underlying-image.ts` for the fallback path.
+        contexts: ['all'],
       });
     });
   });
@@ -144,20 +154,25 @@ export default defineBackground(() => {
     }
 
     if (info.menuItemId === CONTEXT_MENU_IMAGE_ID) {
-      // Session 5 — regular-image gesture. Chrome populates `info.srcUrl`
-      // with the image's resolved URL (handles relative srcs against the
-      // page's base URL). Image with `srcset` resolves to the URL the
-      // browser picked for the current viewport, which is fine — the user
-      // sees that resolution in the page.
+      // Session 5 — regular-image gesture. When the right-click target is
+      // an <img>, Chrome populates `info.srcUrl` with its resolved URL
+      // (handles relative srcs against the page's base URL; resolves
+      // `srcset` to whichever variant the browser picked).
+      //
+      // P-23 fix 2026-05-14: the menu's `contexts` is now `['all']` (widened
+      // from `['image']`), so it ALSO fires on non-image right-click
+      // targets — notably Amazon's overlay-wrapped main product image,
+      // where Chrome doesn't recognize the right-click target as an image
+      // and leaves `info.srcUrl` empty. We pass the empty string through to
+      // the content-script's open-image-capture-form handler, which falls
+      // back to its `lastRightClickImageSrc` cache populated by its
+      // contextmenu-capture listener. If both Chrome's info.srcUrl AND the
+      // content-script's cache are empty, the handler bails silently — the
+      // user right-clicked something that wasn't an image and isn't near an
+      // image in the DOM tree.
       const srcUrl = typeof info.srcUrl === 'string' ? info.srcUrl : '';
       const pageUrl =
         typeof info.pageUrl === 'string' ? info.pageUrl : tab?.url ?? '';
-      if (!srcUrl) {
-        // Degenerate click — no image URL. Bail silently; Chrome's UI
-        // already gave the user the menu entry so re-clicking is the
-        // straightforward recovery.
-        return;
-      }
       const message: ContentScriptMessage = {
         kind: 'open-image-capture-form',
         srcUrl,

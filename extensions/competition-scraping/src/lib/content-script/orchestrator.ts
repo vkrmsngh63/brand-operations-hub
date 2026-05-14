@@ -47,6 +47,7 @@ import { openUrlAddForm } from './url-add-form.ts';
 import { openTextCaptureForm } from './text-capture-form.ts';
 import { openImageCaptureForm } from './image-capture-form.ts';
 import { openRegionScreenshotOverlay } from './region-screenshot-overlay.ts';
+import { findUnderlyingImage } from './find-underlying-image.ts';
 import { isContentScriptMessage } from './messaging.ts';
 import type { Platform } from '../../../../../src/lib/shared-types/competition-scraping.ts';
 import { startLiveHighlighting } from './highlight-terms.ts';
@@ -77,6 +78,26 @@ export async function runOrchestrator(): Promise<() => void> {
   }
   document.body.setAttribute(BODY_MARKER, '1');
 
+  // P-23 fix 2026-05-14: attach the contextmenu capture-phase listener at
+  // the top of runOrchestrator — BEFORE any awaits — so the underlying-
+  // image cache is wired by the time the BODY_MARKER signal is observable.
+  // Right-clicks before this point in init can't be intercepted (orchestrator
+  // hasn't run yet); right-clicks during the rest of init reliably populate
+  // the cache. Cache is closed over by the open-image-capture-form handler
+  // attached later in this function. See find-underlying-image.ts for the
+  // walk semantics + cache-on-every-right-click rationale.
+  let lastRightClickImageSrc: string | null = null;
+  const onContextMenu = (event: MouseEvent): void => {
+    const target = event.target instanceof Element ? event.target : null;
+    lastRightClickImageSrc = findUnderlyingImage(target);
+  };
+  document.addEventListener('contextmenu', onContextMenu, { capture: true });
+  function detachContextMenuListener(): void {
+    document.removeEventListener('contextmenu', onContextMenu, {
+      capture: true,
+    });
+  }
+
   // Resolve the user's setup state in parallel — both calls are
   // cheap chrome.storage.local reads.
   const [projectIdRaw, platformRaw] = await Promise.all([
@@ -84,6 +105,7 @@ export async function runOrchestrator(): Promise<() => void> {
     getSelectedPlatform(),
   ]);
   if (!projectIdRaw || !platformRaw) {
+    detachContextMenuListener();
     cleanupBodyMarker();
     return () => undefined;
   }
@@ -95,6 +117,7 @@ export async function runOrchestrator(): Promise<() => void> {
   if (!platformModuleResolved) {
     // User picked a platform that doesn't have a module yet (e.g.,
     // google-shopping deferred to a future session). Don't run.
+    detachContextMenuListener();
     cleanupBodyMarker();
     return () => undefined;
   }
@@ -106,6 +129,7 @@ export async function runOrchestrator(): Promise<() => void> {
   // amazon but is currently on etsy.com, the orchestrator no-ops.
   const pageModule = getModuleByHostname(location.hostname);
   if (pageModule?.platform !== platformModule.platform) {
+    detachContextMenuListener();
     cleanupBodyMarker();
     return () => undefined;
   }
@@ -408,8 +432,22 @@ export async function runOrchestrator(): Promise<() => void> {
       // The form drives the end-to-end two-phase upload through the
       // background's submit-image-capture handler; orchestrator just hands
       // off the props.
+      //
+      // P-23 fix 2026-05-14: when `msg.srcUrl` is empty, fall back to the
+      // image src discovered at the last right-click target. Empty msg.srcUrl
+      // happens on Amazon's overlay-wrapped main image — Chrome's
+      // contextMenus widened-to-'all' menu fires but `info.srcUrl` is empty
+      // because Chrome didn't recognize the right-click target as an image.
+      // If both msg.srcUrl AND the cache are empty, the user right-clicked
+      // something that's not an image; bail silently (matches the old
+      // background-side `if (!srcUrl) return;` guard).
+      const srcUrl = msg.srcUrl || lastRightClickImageSrc || '';
+      if (!srcUrl) {
+        sendResponse({ ok: false, reason: 'no-image-found' });
+        return;
+      }
       openImageCaptureForm({
-        srcUrl: msg.srcUrl,
+        srcUrl,
         pageUrl: msg.pageUrl,
         projectId,
         projectName,
@@ -477,6 +515,7 @@ export async function runOrchestrator(): Promise<() => void> {
     observer?.disconnect();
     observer = null;
     window.removeEventListener('popstate', onLocationChange);
+    detachContextMenuListener();
     chrome.runtime.onMessage.removeListener(onMessage);
     floatingButton.destroy();
     detachAllAlreadySavedIcons();
