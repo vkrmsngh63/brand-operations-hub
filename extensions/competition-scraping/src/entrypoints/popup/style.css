@@ -369,3 +369,14 @@ button + button {
 .chip-remove:hover {
   background: rgba(26, 58, 108, 0.25);
 }
+
+/* Module 2 region-screenshot — popup trigger button (session 6 2026-05-13). */
+.region-screenshot-trigger {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.region-screenshot-trigger .muted-help {
+  margin-top: 6px;
+}

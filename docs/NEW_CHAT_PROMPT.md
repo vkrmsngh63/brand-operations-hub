@@ -1,7 +1,8 @@
 # NEW CHAT PROMPT
 ## Paste this at the start of every new chat to brief Claude
 
-**Last updated:** April 17, 2026 (Phase M COMPLETE — final claude.ai chat for this project; next session is in Claude Code)
+**Last updated:** May 13, 2026 (timestamp-only touch per HANDOFF_PROTOCOL §4 Step 1 item #11 — this file remains historical/post-Phase-M; new work sessions launch via `docs/NEXT_SESSION.md` + `docs/CLAUDE_CODE_STARTER.md`. No content changes this session.)
+**Previously updated:** April 17, 2026 (Phase M COMPLETE — final claude.ai chat for this project; next session is in Claude Code)
 **Last updated in chat:** https://claude.ai/chat/75cc8985-b70a-49f4-8b64-444c34ef541f
 
 **⚠️ IMPORTANT:** This file is the claude.ai-era briefing template. **The project has migrated to Claude Code.** New work sessions should use `docs/CLAUDE_CODE_STARTER.md` as the paste-at-start prompt, not this file. This file is preserved as historical reference and as a fallback if the project ever needs to temporarily return to claude.ai (see `docs/CLAUDE_CODE_MIGRATION.md` §8 Rollback plan).

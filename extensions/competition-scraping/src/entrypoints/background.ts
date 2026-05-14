@@ -28,11 +28,15 @@
 //     bytes from extension origin (covered by per-platform image-CDN
 //     host_permissions declared in wxt.config.ts), runs the two-phase
 //     signed-URL upload, and returns the finalized CapturedImage row.
+//   - Session 6 (2026-05-13) — handles `capture-visible-tab` requests from
+//     the region-screenshot overlay. The chrome.tabs.captureVisibleTab API
+//     is background-only in MV3; content scripts route through this proxy.
+//     The overlay then decodes the returned data URL + crops via canvas
+//     before feeding the cropped Blob into the same `submit-image-capture`
+//     pipeline session 5 built (sourceType: 'region-screenshot').
 //
-// Future build sessions add: region-screenshot mode (Module 2 gesture 2
-// — captureVisibleTab + canvas crop; deferred to session 6 per the session
-// 5 scope split), WAL replay on startup, periodic reconciliation poller,
-// navigator.onLine handlers.
+// Future build sessions add: WAL replay on startup, periodic reconciliation
+// poller, navigator.onLine handlers.
 
 import { supabase } from '../lib/supabase';
 import {
@@ -52,6 +56,7 @@ import {
   isBackgroundRequest,
   type BackgroundRequest,
   type BackgroundResponse,
+  type CaptureVisibleTabRequest,
   type ContentScriptMessage,
   type SubmitImageCaptureRequestMessage,
 } from '../lib/content-script/messaging';
@@ -215,10 +220,40 @@ async function handleBackgroundRequest(
   if (req.kind === 'submit-image-capture') {
     return handleSubmitImageCapture(req);
   }
+  if (req.kind === 'capture-visible-tab') {
+    return handleCaptureVisibleTab(req);
+  }
   // Exhaustiveness check — TypeScript narrows req to never here.
   const exhaustive: never = req;
   void exhaustive;
   throw new PlosApiError(0, 'Unknown background request kind');
+}
+
+/**
+ * Session 6 (2026-05-13) — Module 2 region-screenshot path. Content script
+ * cannot call `chrome.tabs.captureVisibleTab` directly (background-only API
+ * in MV3); the region-screenshot overlay requests this via the
+ * `capture-visible-tab` message. Returns a base64 data URL of the active
+ * tab's visible viewport at device-pixel resolution.
+ *
+ * Permission requirement: captureVisibleTab needs `activeTab`, `<all_urls>`,
+ * OR a host permission that matches the active tab's URL. Our wxt.config.ts
+ * host_permissions list each supported platform explicitly (amazon, ebay,
+ * etsy, walmart), so capture works on those sites. On a non-supported
+ * domain the API rejects with a permission error which we surface to the
+ * overlay via the standard BackgroundResponse error envelope.
+ */
+async function handleCaptureVisibleTab(
+  req: CaptureVisibleTabRequest,
+): Promise<{ dataUrl: string }> {
+  void req; // format is currently fixed to 'png'; reserved for future expansion
+  // Omit windowId — defaults to the current window's active tab, which is
+  // the tab the content-script is running in (and asking us to capture).
+  const dataUrl = await chrome.tabs.captureVisibleTab({ format: 'png' });
+  if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/')) {
+    throw new PlosApiError(0, 'captureVisibleTab returned an unexpected value');
+  }
+  return { dataUrl };
 }
 
 /**

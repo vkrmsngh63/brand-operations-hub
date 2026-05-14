@@ -46,6 +46,7 @@ import { showAlreadySavedOverlay } from './already-saved-overlay.ts';
 import { openUrlAddForm } from './url-add-form.ts';
 import { openTextCaptureForm } from './text-capture-form.ts';
 import { openImageCaptureForm } from './image-capture-form.ts';
+import { openRegionScreenshotOverlay } from './region-screenshot-overlay.ts';
 import { isContentScriptMessage } from './messaging.ts';
 import type { Platform } from '../../../../../src/lib/shared-types/competition-scraping.ts';
 import { startLiveHighlighting } from './highlight-terms.ts';
@@ -420,6 +421,51 @@ export async function runOrchestrator(): Promise<() => void> {
         },
         onClose() {
           // No orchestrator-side state to roll back.
+        },
+      });
+      sendResponse({ ok: true });
+      return;
+    }
+    if (msg.kind === 'enter-region-screenshot-mode') {
+      // Module 2 region-screenshot gesture (session 6, 2026-05-13).
+      // The popup-side button sent us here. Arm the overlay; on a valid
+      // capture, open the image-capture-form with the cropped data URL
+      // and sourceType='region-screenshot' (the form's existing two-phase
+      // upload flow handles both gestures uniformly because fetchImageBytes
+      // accepts both `http(s):` and `data:` srcs — see session 5 §B note).
+      const pageUrl = msg.pageUrl;
+      const overlay = openRegionScreenshotOverlay({
+        onCaptured(capturedDataUrl) {
+          // Tear down the overlay before opening the form so the form's
+          // backdrop doesn't fight with the overlay's z-index.
+          overlay.destroy();
+          openImageCaptureForm({
+            srcUrl: capturedDataUrl,
+            pageUrl,
+            projectId,
+            projectName,
+            platform: platformModule.platform as Platform,
+            sourceType: 'region-screenshot',
+            onSaved() {
+              // Same as regular-image — no recognition-Set side effects.
+            },
+            onClose() {
+              // No orchestrator-side state to roll back.
+            },
+          });
+        },
+        onCancel(_reason) {
+          // Silent close on Escape / too-small / outside-viewport. The user
+          // re-arms via the popup button if they want to retry.
+          overlay.destroy();
+        },
+        onError(_message) {
+          // Capture pipeline error. Destroy the overlay; the user can re-arm
+          // from the popup. A more elaborate "error toast" UX is a polish
+          // item — for now the popup-side error inline (when the user
+          // re-clicks and the message-send returns an error envelope)
+          // provides the recovery affordance.
+          overlay.destroy();
         },
       });
       sendResponse({ ok: true });

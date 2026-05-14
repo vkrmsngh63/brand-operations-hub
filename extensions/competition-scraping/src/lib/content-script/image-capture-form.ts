@@ -47,12 +47,16 @@ import {
   validateCapturedImageDraft,
   type CapturedImageValidationReason,
 } from '../captured-image-validation.ts';
+import type { ImageSourceType } from '../../../../../src/lib/shared-types/competition-scraping.ts';
 
 export interface ImageCaptureFormProps {
-  /** Image URL the user right-clicked. Used both for the preview <img>
-   * and routed back to the background's fetchImageBytes() during Save. */
+  /** Image URL the user right-clicked, OR a `data:image/png;base64,...` URL
+   * the region-screenshot overlay produced via captureVisibleTab + canvas
+   * crop (session 6 2026-05-13). Used both for the preview <img> and routed
+   * back to the background's fetchImageBytes() during Save — fetchImageBytes
+   * handles `http(s):` and `data:` URLs uniformly. */
   srcUrl: string;
-  /** Page URL where the right-click happened. Used to pre-select the
+  /** Page URL where the gesture happened. Used to pre-select the
    * saved-URL picker via pickInitialUrl (same shape as text-capture). */
   pageUrl: string;
   /** Currently selected Project from popup-state. */
@@ -63,6 +67,11 @@ export interface ImageCaptureFormProps {
    * picker — image capture without a target URL for the page's platform
    * doesn't make sense. */
   platform: Platform;
+  /** Which Module 2 gesture produced this capture. Default 'regular' covers
+   * session 5's right-click flow; 'region-screenshot' is set by the
+   * session 6 overlay path. Recorded on the CapturedImage row server-side
+   * so future analytics can distinguish gesture types. */
+  sourceType?: ImageSourceType;
   /** Callback invoked after a successful save. The orchestrator currently
    * has no special post-save behavior; this is informational. */
   onSaved(): void;
@@ -407,7 +416,11 @@ export function openImageCaptureForm(
       // are defensive only.
       mimeType: 'image/jpeg',
       fileSize: 1,
-      sourceType: 'regular',
+      // Default 'regular' covers session 5's right-click flow; the
+      // region-screenshot overlay passes 'region-screenshot' through the
+      // optional prop so it lands on the validator + flows into the
+      // background's finalize body.
+      sourceType: props.sourceType ?? 'regular',
       imageCategory: category,
       composition: compositionArea.value,
       embeddedText: embeddedArea.value,

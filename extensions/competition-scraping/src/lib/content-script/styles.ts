@@ -418,6 +418,105 @@ export const CONTENT_SCRIPT_CSS = `
   vertical-align: baseline !important;
   /* background-color + color are set inline. */
 }
+
+/* ── Module 2 region-screenshot overlay (session 6 2026-05-13) ─────────
+   Full-viewport transparent layer that captures the user's drag-rectangle.
+   z-index sits above .plos-cs-form-backdrop so the overlay can be armed
+   without interference from a stray open form (defensive — the
+   orchestrator dismisses any open form before arming the overlay anyway).
+
+   Layout: a single fixed-position container fills the viewport. Inside it,
+   a top-pinned banner shows the always-visible hint copy. The drag rectangle
+   itself is a child <div> whose dimensions follow the user's mouse during
+   drag; the four sides outside the rectangle are rendered as four sibling
+   <div>s with the dim background to give the "dim outside" effect described
+   in STACK_DECISIONS §4. */
+.plos-cs-region-screenshot-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 2147483646;
+  cursor: crosshair;
+  /* Capture all pointer events even on top of host-page elements. */
+  pointer-events: auto;
+  /* No background here — the dim is provided by the four "outside" panels
+     so the rectangle interior stays fully visible during drag. */
+  background: transparent;
+  /* Avoid the iframe-isolation gotcha — overlay should sit above any
+     z-index:auto positioned host content but below browser chrome. */
+}
+
+.plos-cs-region-screenshot-banner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 10px 14px;
+  background: rgba(20, 20, 24, 0.92);
+  color: #ffffff;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    Helvetica, Arial, sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+  text-align: center;
+  /* The banner is informational, not interactive — let drags pass through
+     when the user starts above it. */
+  pointer-events: none;
+}
+
+.plos-cs-region-screenshot-banner kbd {
+  display: inline-block;
+  padding: 1px 6px;
+  margin: 0 2px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    Helvetica, Arial, sans-serif;
+  font-size: 12px;
+}
+
+/* The four "outside" panels — top / right / bottom / left — that dim the
+   regions outside the user's drag rectangle. While the user is mid-drag,
+   the overlay updates each panel's position so they collectively wrap the
+   rectangle. Before the user starts dragging, only the top panel covers
+   the whole viewport (the rectangle is hidden). */
+.plos-cs-region-screenshot-dim {
+  position: absolute;
+  background: rgba(20, 20, 24, 0.42);
+  pointer-events: none;
+}
+
+.plos-cs-region-screenshot-rect {
+  position: absolute;
+  border: 2px solid #ffffff;
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(0, 0, 0, 0.5);
+  /* No fill — the host-page content shows through the rectangle interior. */
+  background: transparent;
+  pointer-events: none;
+}
+
+/* "Processing…" state while we round-trip captureVisibleTab + crop.
+   Replaces the rectangle + dim panels with a centered spinner-ish copy so
+   the user knows something is happening. */
+.plos-cs-region-screenshot-processing {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 16px 22px;
+  background: rgba(20, 20, 24, 0.92);
+  color: #ffffff;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    Helvetica, Arial, sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+  border-radius: 6px;
+  pointer-events: none;
+}
 `;
 
 const STYLE_ELEMENT_ID = 'plos-cs-styles';

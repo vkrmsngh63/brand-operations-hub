@@ -13,6 +13,11 @@
 //       image per §A.7 Module 2 regular-image gesture. Carries the image's
 //       srcUrl + the page URL so the form can preview the image and
 //       pre-select the matching saved CompetitorUrl.
+//     - `enter-region-screenshot-mode` (session 6 2026-05-13): popup-side
+//       "Region-screenshot mode" button per §A.7 Module 2 region-screenshot
+//       gesture. Carries the page URL so the content-script overlay can
+//       open the existing image-capture-form pre-selecting the matching
+//       saved CompetitorUrl after the user finishes their drag-rectangle.
 //   - Content → Background (request/response): BackgroundRequest +
 //     BackgroundResponse envelope. Added 2026-05-08-c — content scripts
 //     cannot reach vklf.com directly because their fetch originates from
@@ -76,10 +81,30 @@ export interface OpenImageCaptureFormMessage {
   pageUrl: string;
 }
 
+/**
+ * Session 6 (2026-05-13) — popup-initiated region-screenshot mode. The popup
+ * sends this message to the active tab's content script when the user clicks
+ * "Region-screenshot mode." The content-script orchestrator arms the overlay
+ * (transparent layer + crosshair cursor + drag-rectangle) per the §A.7
+ * Module 2 A+ Content Module flow. The selectedText / srcUrl fields the text
+ * and image messages carry are not relevant here — region-screenshot derives
+ * its image bytes from `chrome.tabs.captureVisibleTab` (background-only API)
+ * + canvas crop, not from a pre-existing DOM element.
+ */
+export interface EnterRegionScreenshotModeMessage {
+  kind: 'enter-region-screenshot-mode';
+  /** Page URL where the user invoked the region-screenshot button. Used for
+   * pre-selecting the saved CompetitorUrl in the form's picker after the
+   * user finishes their drag-rectangle (same pre-selection shape as
+   * open-image-capture-form's pageUrl). */
+  pageUrl: string;
+}
+
 export type ContentScriptMessage =
   | OpenUrlAddFormMessage
   | OpenTextCaptureFormMessage
-  | OpenImageCaptureFormMessage;
+  | OpenImageCaptureFormMessage
+  | EnterRegionScreenshotModeMessage;
 
 export function isContentScriptMessage(
   value: unknown,
@@ -102,6 +127,9 @@ export function isContentScriptMessage(
   }
   if (msg.kind === 'open-image-capture-form') {
     return typeof msg.srcUrl === 'string' && typeof msg.pageUrl === 'string';
+  }
+  if (msg.kind === 'enter-region-screenshot-mode') {
+    return typeof msg.pageUrl === 'string';
   }
   return false;
 }
@@ -183,6 +211,23 @@ export interface SubmitImageCaptureRequestMessage {
   };
 }
 
+/**
+ * Session 6 (2026-05-13) — content-script asks the background to capture
+ * the visible viewport as a base64 PNG. `chrome.tabs.captureVisibleTab` is
+ * a background-only API in Manifest V3 (content scripts cannot call it
+ * directly), so the region-screenshot overlay routes through the background
+ * via this request. Background responds with a base64 data URL the overlay
+ * then decodes + crops via canvas to produce the cropped image Blob.
+ */
+export interface CaptureVisibleTabRequest {
+  kind: 'capture-visible-tab';
+  /** Output format. PNG is the canonical choice — lossless, predictable
+   * size for typical viewport screenshots, matches the data URL shape the
+   * canvas crop produces on its toDataURL call. JPEG support reserved
+   * for a future quality-vs-size tradeoff if needed. */
+  format: 'png';
+}
+
 export type BackgroundRequest =
   | ListProjectsRequest
   | ListCompetitorUrlsRequest
@@ -190,7 +235,8 @@ export type BackgroundRequest =
   | CreateCapturedTextRequestMessage
   | ListVocabularyRequest
   | CreateVocabularyEntryRequestMessage
-  | SubmitImageCaptureRequestMessage;
+  | SubmitImageCaptureRequestMessage
+  | CaptureVisibleTabRequest;
 
 // Response envelope. Encodes both success + structured error so the
 // content-script wrapper can re-throw PlosApiError with the right status
@@ -222,6 +268,16 @@ export type CreateVocabularyEntryResponseEnvelope = BackgroundResponse<
 export type SubmitImageCaptureResponseEnvelope = BackgroundResponse<
   CapturedImage
 >;
+
+/**
+ * Session 6 (2026-05-13) — background returns the captured viewport image
+ * as a base64 data URL (e.g. `data:image/png;base64,iVBORw...`). The overlay
+ * decodes it via parseDataUrl + draws onto a hidden canvas to crop the
+ * user's rectangle.
+ */
+export type CaptureVisibleTabResponseEnvelope = BackgroundResponse<{
+  dataUrl: string;
+}>;
 
 export function isBackgroundRequest(
   value: unknown,
@@ -284,6 +340,10 @@ export function isBackgroundRequest(
       typeof m.finalize === 'object' &&
       m.finalize !== null
     );
+  }
+  if (msg.kind === 'capture-visible-tab') {
+    const m = msg as { format?: unknown };
+    return m.format === 'png';
   }
   return false;
 }

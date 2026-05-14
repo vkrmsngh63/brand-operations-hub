@@ -194,3 +194,22 @@ export async function submitImageCapture(args: {
     finalize: args.finalize,
   });
 }
+
+/**
+ * Session 6 (2026-05-13) — Module 2 region-screenshot helper. Routes a
+ * `capture-visible-tab` request through the background; returns the
+ * base64 PNG data URL of the active tab's viewport. The overlay then
+ * decodes + crops via canvas before opening the image-capture-form.
+ *
+ * Background-side handler at
+ * `extensions/competition-scraping/src/entrypoints/background.ts`
+ * (`handleCaptureVisibleTab`) calls chrome.tabs.captureVisibleTab and
+ * surfaces permission errors via the standard BackgroundResponse error
+ * envelope (re-thrown here as PlosApiError).
+ */
+export async function requestVisibleTabCapture(): Promise<{ dataUrl: string }> {
+  return send<{ dataUrl: string }>({
+    kind: 'capture-visible-tab',
+    format: 'png',
+  });
+}
