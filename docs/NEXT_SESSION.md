@@ -1,10 +1,10 @@
 # Next session
 
-**Written:** 2026-05-14 — session_2026-05-14_w2-deploy-10-cross-platform-smoke-verify (Claude Code, on `main`).
+**Written:** 2026-05-14 — session_2026-05-14_w2-main-deploy-session-11-region-screenshot-DEPLOYED-FULL-VERIFY (Claude Code, on `main`).
 
 **For:** the next Claude Code session, whatever it is.
 
-**Status:** FINALIZED 2026-05-14 end-of-session — director picked Option A (W#2 Module 2 region-screenshot session 6 on `workflow-2-competition-scraping`) via the §4 Step 1c "No obvious next task" Rule 14f forced-picker. Recommended pick per `feedback_recommendation_style.md` (most-thorough-and-reliable: closes out Module 2 image-capture pair fully — the regular-image gesture (Walmart yesterday + eBay/Etsy/Amazon today) is now fully verified in production; the paired region-screenshot mechanism per `COMPETITION_SCRAPING_STACK_DECISIONS.md §4` was deferred at the (a.22) pick when director picked deploy-#10).
+**Status:** FINALIZED 2026-05-14 end-of-session — director picked Option A (P-20 design session — Amazon highlight-flashing/selection-collapse) via the §4 Step 1c "No obvious next task" Rule 14f forced-picker. Recommended pick per `feedback_recommendation_style.md` (most-thorough-and-reliable: tackles the highest-severity outstanding W#2 issue — P-20 is HIGH severity because Amazon is the primary platform per W#2 Phase 1 throughput target, and the flashing + selection-collapse on real Amazon post-P-14-deploy is the biggest unresolved user-visible issue).
 
 ---
 
@@ -14,66 +14,100 @@ workflow-2-competition-scraping
 ## Launch prompt
 
 Read docs/CLAUDE_CODE_STARTER.md and follow every rule in it. Today's task:
-W#2 Extension build session 6 — Module 2 region-screenshot mechanism per
-`docs/COMPETITION_SCRAPING_STACK_DECISIONS.md` §4 (`chrome.tabs.captureVisibleTab`
-+ canvas crop) and `docs/COMPETITION_SCRAPING_DESIGN.md` §A.7 / §B 2026-05-13
-in-flight refinement (region-screenshot scope-split deferral from session 5).
+W#2 polish session — **P-20 design session: P-14 fix doesn't generalize to real
+Amazon** — external-mutation retrigger from continuously-mutating amazon.com DOM
+keeps the strip-and-reapply loop active on Amazon despite P-14's `muteMutationObserver`
+self-retrigger fix. Symptom: highlighted words keep flashing + text selection collapses
+on real Amazon product pages; Walmart/eBay/Etsy are stable post-load so the loop
+doesn't fire visibly there. HIGH severity — Amazon is the primary platform per W#2
+Phase 1 throughput target.
+
+Goal of this session: **design pass**, not necessarily a code ship. Evaluate the
+candidate fix shapes (per P-20 entry in `COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md`
+polish backlog):
+  (a) longer debounce (1000ms+) — accept slower refresh on dynamic pages
+  (b) fingerprint the would-be highlight-set + short-circuit refresh when unchanged
+      (idempotent no-op for the common case of "external mutation didn't add new
+      highlightable text")
+  (c) scope MO observe to platform-specific DOM regions on Amazon
+      (need per-platform CSS selectors)
+  (d) IntersectionObserver-based "only highlight what's visible" instead of
+      body-wide refresh
+
+Recommended pre-step: run a real-Amazon DevTools mutation-rate trace as evidence
+(use `MutationObserver` in the Console to count mutations per second on a typical
+Amazon product page) so the design can be informed by actual data, not just the
+hypothesis. Then evaluate the 4 fix shapes against the trace evidence + Rule 16
+zoom-out (how each option interacts with the 4 platforms, with future P-26
+full-page-scroll-capture if it ever ships, with P-14's existing infrastructure).
 
 Per HANDOFF_PROTOCOL.md Rule 25 + MULTI_WORKFLOW_PROTOCOL.md + project memory
-project_sequential_workflow_operation.md, this is W#2 build work and belongs on
+project_sequential_workflow_operation.md, this is W#2 polish work and belongs on
 the workflow-2-competition-scraping branch. Verify branch state with
 `git branch --show-current` before any doc reads — if you're not on
-workflow-2-competition-scraping, STOP and surface to director (the terminal
-commands in Step 1 of the cd+checkout path above should have switched you, but
-verify).
+workflow-2-competition-scraping, STOP and surface to director.
 
 Start by running the mandatory start-of-session sequence including reading
-MULTI_WORKFLOW_PROTOCOL.md. Read COMPETITION_SCRAPING_STACK_DECISIONS.md §4 (the
-frozen region-screenshot mechanism decision) + COMPETITION_SCRAPING_DESIGN.md §B
-(the 2026-05-13 scope-split entry) before designing the build plan. The
-regular-image gesture's `text-capture-form.ts`-pattern shape (image preview +
-saved-URL picker + image-category picker + Composition/Embedded text/Tags +
-Save) is the right reference for region-screenshot UX — it should reuse the
-same form once the user has drawn their rectangle and captured the screenshot
-bytes.
+MULTI_WORKFLOW_PROTOCOL.md. Read the P-20 entry in
+`docs/COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` polish backlog +
+`extensions/competition-scraping/src/lib/content-script/orchestrator.ts`
+MutationObserver setup (the call site for P-14's mute fix is near line 297) +
+`extensions/competition-scraping/src/lib/content-script/highlight-terms.ts`
+refresh() (the strip-and-reapply path P-14 wrapped) + the existing P-14 Playwright
+suite (`tests/playwright/extension/highlight-flashing.spec.ts`, 17 specs across
+4 platforms) for the regression test shape any P-20 fix must continue to pass.
 
-Today's session is platform-side build only — no deploy. Standard W#2
-ship-then-deploy pattern: ship at code level on workflow-2-competition-scraping
-this session; deploy to main + vklf.com is a separate future session.
+Today's session may produce a designed approach + a code commit if the pick
+turns out to be small-scope; OR may produce only a design with the ship as
+a follow-up session if the chosen approach is larger. Director picks scope at
+the design-pass forced-picker.
 
-Note: W#2 polish backlog now has 23 items (P-1 through P-23). NEW P-23 added
-2026-05-14: "Amazon main-image right-click context-menu does not fire — workaround:
-click image to open in viewer pane first, then right-click." Affects only Amazon
-(Walmart/eBay/Etsy work on direct right-click); user-experience degradation only,
-not a hard failure. NOT in scope for today's region-screenshot session — its own
-future polish session. See `docs/COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md`
-polish backlog for the full P-23 entry.
+Note: W#2 polish backlog now has 26 items (P-1 through P-26). NEW P-26 added
+2026-05-14: "Below-fold capture limitation — current design captures only viewport;
+'two halves' workaround documented; full-page scroll-capture is a future
+enhancement with significant trade-offs (sticky headers, lazy content timing,
+layout-changes-on-scroll, infinite-scroll handling, multi-captureVisibleTab
+performance cost)." NOT in scope for today's P-20 design — captured for future
+re-evaluation only.
 
 ## Pre-session notes (optional, offline steps to do between sessions)
 
 Nothing offline — you're all set. The deployed extension zip
-(`plos-extension-2026-05-13-w2-deploy-10.zip`) is already at repo root from
-the 2026-05-13-b session and remains the production-running build until the
-next deploy session ships a newer one. No reinstall needed for today's build
-session — region-screenshot work is code-level only.
+(`plos-extension-2026-05-14-w2-deploy-11.zip`) is at repo root from today's
+deploy session #11 and remains the production-running build until the next
+deploy session ships a newer one. No reinstall needed for the P-20 design
+session — it's design + maybe-code work on the workflow branch; deploy comes
+later if a fix ships.
+
+If you DID want to repro the P-20 symptom in advance: sideload the current
+extension zip (or stick with the one you have from today's deploy session),
+sign in, set Project + Platform = Amazon + at least one highlight term that
+appears on Amazon product pages, navigate to any Amazon product page, watch
+the page settle for 5-10 seconds, observe the flashing on highlighted text.
+That's the symptom P-20 will design a fix for.
 
 ## Why this pointer was written this way (debug aid)
 
-Today's session (2026-05-14) closed deploy-#10 verification at four-of-four
-platforms (Walmart ✅ FULL yesterday + eBay/Etsy/Amazon ✅ today). The
-2026-05-13 scope-split at session 5 had deferred Module 2's region-screenshot
-half to a future session; the (a.22) Rule 14f forced-picker offered deploy
-OR region-screenshot session 6, and director picked deploy (which became
-deploy-#10). With deploy-#10 now fully verified, region-screenshot session 6
-is the natural unblock: it closes the Module 2 image-capture pair fully and
-keeps W#2 forward-progress on the build side.
+Today's session (2026-05-14) closed deploy session #11 — Module 2 region-screenshot
+gesture DEPLOYED to vklf.com + cross-platform FULL VERIFY across all 4 platforms
+(Walmart + eBay + Etsy + Amazon, all confirmed via DB inspection script showing
+`sourceType=region-screenshot` rows in CapturedImage table). Module 2's full
+image-capture pair (regular-image + region-screenshot) is now complete + deployed.
 
 Per the §4 Step 1c interview at end-of-session today, the picker offered (A)
-region-screenshot session 6 [recommended], (B) P-23 quick fix, (C) different
-polish item, (D) different workflow, (E) clarification escape hatch. Director
-picked (A).
+P-20 design session [HIGH severity, recommended], (B) P-23 fix (Amazon main-image
+right-click context-menu), (C) P-22 slice 3 (error-path Playwright coverage),
+(D) Dating cleanup (platform-wide hygiene on `main`). Director picked (A) —
+tackles the highest-severity outstanding W#2 issue.
 
-If you (the next Claude session) read this and the W#2 region-screenshot
-session has already shipped, the director may have revised intent — check
-ROADMAP.md Current Active Tools for the actual current state and ask the
-director which task they'd like to work on instead.
+Mid-verification, director asked why the region-screenshot rectangle can't be
+dragged below the fold — Claude explained Chrome's `chrome.tabs.captureVisibleTab`
+is viewport-only by design + walked the "two halves" workaround vs. full-page
+scroll-capture trade-offs. Director picked "keep current design + capture P-26
+polish entry for future re-evaluation." P-26 is now in ROADMAP polish backlog
+but NOT today's next-session task.
+
+If you (the next Claude session) read this and the P-20 design session has
+already shipped, the director may have revised intent — check ROADMAP.md
+Current Active Tools for the actual current state and ask the director which
+task they'd like to work on instead.
