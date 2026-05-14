@@ -142,6 +142,35 @@
 
 ## Entries
 
+### 2026-05-14 — Resume-flow design flaw: original `./resume` script's `exec claude "$SENTINEL"` doesn't auto-submit in interactive mode (MEDIUM severity — fixed same session with multi-layered defense per HANDOFF_PROTOCOL Rule 28)
+
+**What happened.** Director ran `cd /workspaces/brand-operations-hub && ./resume` at the start of today's session (per `feedback_session_management.md` and the docs that promised a one-command session-handoff). The script ran successfully (switched branch, pulled latest, printed pointer contents to terminal, launched `claude`). But when Claude Code launched in interactive mode, it just sat waiting for input — the sentinel string passed via `exec claude "$SENTINEL"` was NOT auto-submitted as a first message. Director had to manually copy the launch prompt from the terminal scrollback and paste it as their first Claude Code message, defeating the "one-command" UX promise.
+
+**Why it happened.** Claude Code's CLI documentation lists `[prompt]` as a positional argument and the original `./resume` design assumed it would auto-submit in interactive mode. In fact, the positional `[prompt]` **only auto-submits in non-interactive print mode** (`claude -p "..."`). In interactive mode (which `./resume` wants), the positional pre-fills the input box silently or is ignored entirely — director still has to manually press Enter or paste. This is documented behavior, but the original `./resume` design (shipped 2026-05-13-c) didn't test the full flow end-to-end before declaring the design "verified" (the session_2026-05-13-c CHAT_REGISTRY entry explicitly said "live end-to-end run deferred to next session — first real run IS the next session's launch, which doubles as the verification"). When the first real run finally happened today, the bug surfaced.
+
+**Why this is worth recording.** Two distinct lessons:
+
+(1) **Don't ship a CLI-integration design without testing the full flow on a real session start.** The 2026-05-13-c session deferred verification with the rationale "first real run IS the verification" — but if the first real run fails (as today did), the failure surfaces in front of the director instead of in a controlled test. Better discipline: when a new mechanism touches CLI invocation, sandbox-test it (e.g., `bash -x ./resume` with a faked NEXT_SESSION.md + observe whether claude actually receives the prompt) BEFORE declaring shipped. Today's fix verifies via Claude Code's `claude --help` output explicitly noting the `[prompt]` positional is for "starts interactive session by default, use -p/--print for non-interactive output" — i.e., the documented behavior didn't promise auto-submit in interactive mode in the first place.
+
+(2) **Single-mechanism designs are structurally fragile for user-facing redundancy promises.** Director's framing: *"despite many redundancies in place, it looks like the methodology you applied still led to issues."* The original `./resume` design had only one path: positional `[prompt]` auto-submit. When that path was broken, there was no fallback layer; the "redundancy" was nominal not real. The fix replaces this with four composed layers (Rule 28 multi-layered defense): SessionStart hook (primary, mechanical) + sentinel-string match (procedural fallback) + ESCAPE HATCH 3-step path (manual fallback) + NEXT_SESSION.md guard hook (end-of-session enforcement). Each layer covers a different failure mode of the others; at least one layer is always available.
+
+**Lesson.** **When shipping any director-facing automation that promises N redundancies, count the actual independent layers that produce the same outcome — not the number of files/docs/rules that reference the mechanism.** "Redundancy" in design language means "if X fails, Y still produces the right outcome." Five docs all describing the same single-path mechanism is one layer, not five. Today's fix is genuinely multi-layered because each layer has a different failure mode + a different recovery path.
+
+**Severity.** MEDIUM — the bug forced director to do extra work (manual paste) on every `./resume` use until fixed; not destructive but a real UX failure that violated the stated design promise. Fixed same session via Rule 28 + the file changes catalogued in `CHAT_REGISTRY.md` 2026-05-14 follow-up entry.
+
+**Corrected in this session's follow-up batch:**
+- NEW `.claude/hooks/inject-next-session-pointer.sh` (the SessionStart hook — Layer 1)
+- UPDATED `.claude/settings.json` (wired the new SessionStart hook alongside the existing PreToolUse guard hook)
+- UPDATED `./resume` (removed broken `"$SENTINEL"` positional arg from `exec claude` line; improved terminal-side guidance for the wake-up keystroke)
+- UPDATED `docs/CLAUDE_CODE_STARTER.md` "Resume-flow handling" section (now describes the multi-layered defense)
+- NEW `docs/HANDOFF_PROTOCOL.md` Rule 28 (codifies the multi-layered defense + test discipline)
+- UPDATED `docs/NEXT_SESSION.md` (adds the end-to-end test plan for the next session — verify the fix works before doing P-20 design work)
+- Fix landed on both `main` AND `workflow-2-competition-scraping` (merged from main) so the hook + settings + script are present regardless of which branch `./resume` checks out.
+
+**Cross-references.** `HANDOFF_PROTOCOL.md` Rule 28 (the canonical Rule for the multi-layered defense); `CLAUDE_CODE_STARTER.md` "Resume-flow handling" section (the user-facing description); session_2026-05-13-c CHAT_REGISTRY entry (the original ship that had the design flaw + the explicit deferral of end-to-end verification that allowed the flaw to ship undetected); `claude --help` output (the canonical documentation that the positional `[prompt]` only auto-submits in print mode).
+
+---
+
 ### 2026-05-14 — Launch-prompt staleness pattern: pasted launch prompt described state main had moved past (INFORMATIONAL — start-of-session drift caught cleanly)
 
 **What happened.** Director's pasted launch prompt at session start said *"W#2 → main deploy session #10 — bring session 5 + session 6 Module 2 image-capture (regular-image + region-screenshot, both gestures) to vklf.com … both unverified on vklf.com."* But main had already moved past that state: session 5's regular-image gesture had been deployed in commit `bd7b39a` (deploy-#10) and cross-platform fully verified in commit `907a363` (a.24-verify-COMPLETE) — both already on main when today's session started. The launch prompt's premise of "both unverified" no longer held; only session 6's region-screenshot was unverified.

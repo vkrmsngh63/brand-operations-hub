@@ -610,6 +610,35 @@ If Claude is uncertain whether a walkthrough fits the scope exception, Claude ru
 
 **Cross-references:** Rule 14f (the forced-picker mechanism Rule 27 uses); operational memory `feedback_playwright_for_repeatable_walkthroughs.md` (Claude-side standing operational behavior); `tests/playwright/authFetch-regression.spec.ts` (the first session-shipped Playwright suite + reference shape for future Playwright tests in the repo); `README.md` §"Running the Playwright regression tests" (how to run + the system-libs install workaround); ROADMAP P-18 (the devcontainer postCreateCommand follow-up that makes the test-runner setup zero-touch on fresh Codespaces).
 
+### Rule 28 — Resume-flow multi-layered defense (NEW 2026-05-14)
+
+The `./resume` one-command session-handoff design (introduced 2026-05-13-c) is enforced and survived by FOUR composed layers of defense, codified here so future sessions don't accidentally regress the design. The 2026-05-14 director-flagged bug (`exec claude "$SENTINEL"` doesn't auto-submit in interactive mode → director had to manually paste the launch prompt despite running `./resume`) revealed that a single-mechanism design is structurally fragile; multi-layered defense is the correct shape.
+
+**The four layers (in order of activation, with redundancy guaranteed):**
+
+| # | Layer | Mechanism | When it fires | What it catches |
+|---|---|---|---|---|
+| 1 | **Primary, mechanical** | `SessionStart` hook at `.claude/hooks/inject-next-session-pointer.sh` (wired in `.claude/settings.json`); reads `docs/NEXT_SESSION.md` and emits its contents as JSON `additionalContext` so Claude has the pointer-file content as a system reminder BEFORE the user's first prompt | Every Claude Code session start with `matcher: startup` (i.e., not `--resume` or `--continue`) where the workflow branch has the hook + settings file | Director sends ANY first message (even just "go" + Enter) → Claude already has the pointer-file content as context → reads it and follows the launch prompt verbatim. Director-zero-effort beyond a single wake-up keystroke. |
+| 2 | **Procedural fallback** | `CLAUDE_CODE_STARTER.md` sentinel-string match rule — if the user's first message contains "Resume per docs/NEXT_SESSION.md", Claude reads the pointer and follows it | When Layer 1 didn't fire (e.g., `claude --bare` skips hooks; branch doesn't yet have the hook because the fix is mid-distribution; hook script erroneously emitted empty additionalContext) AND director happened to paste the sentinel manually | Director still has a path to one-command resume even when the hook layer is unavailable. Claude-side discipline (the rule), not harness-side enforcement. |
+| 3 | **Manual escape hatch** | Documented 3-step path in every end-of-session handoff: `cd /workspaces/brand-operations-hub && git fetch origin && git checkout <branch> && git pull --rebase origin <branch>` + `claude` + paste full launch prompt | When `./resume` itself errors out OR when director prefers the manual path for any reason | Director always has a working session-start path. Multi-step but fully self-contained — doesn't depend on hooks, doesn't depend on Claude recognizing a sentinel; the pasted launch prompt IS the first user message and works in interactive mode. |
+| 4 | **Procedural enforcement** | `NEXT_SESSION.md` guard hook at `.claude/hooks/check-next-session-doc.sh` (wired as a PreToolUse hook on Bash in `.claude/settings.json`); blocks any `git commit` whose message contains "End-of-session" unless `docs/NEXT_SESSION.md` is staged in that commit | Every end-of-session commit attempt | Layer 1's hook is useless if `docs/NEXT_SESSION.md` is stale or missing; Layer 4 enforces that every session refreshes the pointer file before closing. The four layers together guarantee that EITHER the pointer file is fresh AND the hook will fire AND the resume flow works, OR (if any layer fails) at least one fallback path is available. |
+
+**Test discipline:** every time a new session ships changes to `.claude/hooks/inject-next-session-pointer.sh`, `.claude/settings.json` SessionStart entry, `./resume`, or `docs/CLAUDE_CODE_STARTER.md` sentinel section, the session-AFTER-ship is responsible for **verifying the full flow end-to-end** by running `./resume` + observing whether the SessionStart hook fired (look for the "🟢 RESUME-FLOW POINTER" marker in the session's first system reminder) + sending only a single-word wake-up message + confirming Claude reads the pointer + executes the launch prompt without manual paste. If the test fails, the next session must capture the failure to CORRECTIONS_LOG and propose a fix BEFORE doing the planned work.
+
+**Why this rule exists:** Director's verbatim 2026-05-14 framing after hitting the original `./resume` bug: *"Why didn't the 'cd /workspaces/brand-operations-hub && ./resume' work alone and despite many redundancies in place, it looks like the methodology you applied still led to issues for starting the session off correctly with all the correct instructions given to claude at the correct time. How can you not only fix this issue but also make sure it doesn't happen again."* The director's framing has two parts: (a) fix the immediate bug (Layer 1's SessionStart hook does this); (b) make sure it doesn't happen again (Layer 2/3/4 redundancy + the test discipline above do this).
+
+**The "type ONE thing to wake Claude up" constraint:** Claude Code's interactive-mode CLI requires SOME user input to begin a session's first response. There is no way (as of 2026-05-14) to launch `claude` in interactive mode with an auto-submitted first message — the positional `[prompt]` only auto-submits in non-interactive print mode (`-p`). This is a hard constraint of the CLI, not a script bug. After Rule 28 ships, the realistic flow is: director runs `./resume` → terminal prints pointer + launch instructions → claude launches with hook-injected pointer context → director types literally one word ("go" / "proceed" / "yes") + Enter → Claude responds by following the launch prompt verbatim. The "one-command" UX promise is honest: ONE shell command + ONE keystroke. Never ZERO keystrokes.
+
+**Cross-references:**
+- `docs/CLAUDE_CODE_STARTER.md` "Resume-flow handling" section (Layer 1 + Layer 2 user-facing description)
+- `.claude/hooks/inject-next-session-pointer.sh` (Layer 1 implementation)
+- `.claude/hooks/check-next-session-doc.sh` (Layer 4 implementation)
+- `.claude/settings.json` (hook wiring)
+- `./resume` (the entry-point shell script; Layer 1 + Layer 3 hand-off point)
+- `CORRECTIONS_LOG.md` 2026-05-14 "Resume-flow design flaw" entry (the slip that triggered Rule 28)
+- §4 Step 1 row 12 of this doc (the ALWAYS-update rule that enforces a fresh pointer at end-of-session)
+- §4 Step 1c "No obvious next task" interview (how end-of-session pointer-writing is shaped when there's no obvious continuation)
+
 ---
 
 ## 4. END-OF-CHAT PROTOCOL

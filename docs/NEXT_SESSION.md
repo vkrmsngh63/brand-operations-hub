@@ -1,10 +1,22 @@
 # Next session
 
-**Written:** 2026-05-14 — session_2026-05-14_w2-main-deploy-session-11-region-screenshot-DEPLOYED-FULL-VERIFY (Claude Code, on `main`).
+**Written:** 2026-05-14 — session_2026-05-14_w2-main-deploy-session-11-region-screenshot-DEPLOYED-FULL-VERIFY + same-session follow-up shipping the resume-flow multi-layered defense fix per HANDOFF_PROTOCOL Rule 28 (Claude Code, on `main`).
 
 **For:** the next Claude Code session, whatever it is.
 
-**Status:** FINALIZED 2026-05-14 end-of-session — director picked Option A (P-20 design session — Amazon highlight-flashing/selection-collapse) via the §4 Step 1c "No obvious next task" Rule 14f forced-picker. Recommended pick per `feedback_recommendation_style.md` (most-thorough-and-reliable: tackles the highest-severity outstanding W#2 issue — P-20 is HIGH severity because Amazon is the primary platform per W#2 Phase 1 throughput target, and the flashing + selection-collapse on real Amazon post-P-14-deploy is the biggest unresolved user-visible issue).
+**🟢 NEW THIS SESSION (2026-05-14 follow-up) — RESUME-FLOW FIX SHIPPED. Test it on next session start:**
+
+The original `./resume` script's `exec claude "$SENTINEL"` line was structurally broken (Claude Code's positional `[prompt]` doesn't auto-submit in interactive mode); director hit this at the start of today's session and had to manually paste the launch prompt despite running `./resume`. **The fix shipped this same session:** NEW `.claude/hooks/inject-next-session-pointer.sh` (SessionStart hook that reads this pointer file and injects its contents as a system reminder before the user's first prompt) + UPDATED `.claude/settings.json` (wires the new SessionStart hook alongside the existing PreToolUse guard hook) + UPDATED `./resume` (removed the broken positional arg + improved terminal-side wake-up guidance) + UPDATED `docs/CLAUDE_CODE_STARTER.md` "Resume-flow handling" section (now describes multi-layered defense: Layer 1 SessionStart hook = primary, Layer 2 sentinel-string match = procedural fallback, Layer 3 ESCAPE HATCH 3-step path = manual fallback, Layer 4 NEXT_SESSION.md guard hook = end-of-session enforcement) + NEW `docs/HANDOFF_PROTOCOL.md` Rule 28 codifying the multi-layered defense. Fix is on `main` AND merged into `workflow-2-competition-scraping` so the hook fires regardless of which branch `./resume` checks out.
+
+**Next session's PRIMARY task is to test the fix end-to-end per HANDOFF_PROTOCOL Rule 28's "Test discipline" requirement BEFORE proceeding with P-20 design work.** Test steps:
+1. Run `./resume` in a Codespaces terminal (Layer 1 should fire automatically when claude launches).
+2. Watch for the "🟢 RESUME-FLOW POINTER" marker in the session's first system reminder — that's Layer 1 confirming it fired. If you see the marker, Layer 1 works; if you don't, Layer 1 failed and you fall through to Layer 2.
+3. Send a SINGLE-WORD wake-up message (literally just `go` + Enter, or `proceed` + Enter, or even just Enter on a blank line if that works).
+4. Confirm Claude reads this pointer file + treats its "## Launch prompt" section verbatim + executes the start-of-session sequence WITHOUT requiring any further input from director (no manual paste of the launch prompt).
+5. If the full flow works without manual paste: capture as a CORRECTIONS_LOG INFORMATIONAL entry "Resume-flow Rule 28 fix verified working end-to-end on first real run" + proceed with P-20 design work.
+6. If the flow fails at any step: capture the failure to CORRECTIONS_LOG + halt P-20 work + propose Rule 28 refinement BEFORE doing anything else (per Rule 28's "test discipline" clause).
+
+**Status of the P-20 task (the original planned next-session work):** FINALIZED 2026-05-14 end-of-session — director picked Option A (P-20 design session — Amazon highlight-flashing/selection-collapse) via the §4 Step 1c "No obvious next task" Rule 14f forced-picker. Recommended pick per `feedback_recommendation_style.md` (most-thorough-and-reliable: tackles the highest-severity outstanding W#2 issue — P-20 is HIGH severity because Amazon is the primary platform per W#2 Phase 1 throughput target, and the flashing + selection-collapse on real Amazon post-P-14-deploy is the biggest unresolved user-visible issue). The P-20 design work is the PRIMARY POST-TEST TASK after step 5 above succeeds.
 
 ---
 

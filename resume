@@ -4,19 +4,32 @@
 # Reads docs/NEXT_SESSION.md (written by the previous session's end-of-session
 # checklist per HANDOFF_PROTOCOL.md §4 Step 1 row 12), switches to the branch
 # the pointer names, pulls the latest, prints the pointer's contents so the
-# director sees what's about to happen, then launches `claude` with a tiny
-# sentinel first-message ("Resume per docs/NEXT_SESSION.md").
+# director sees what's about to happen, then launches `claude`.
 #
-# If anything fails, this script aborts with a clear error pointing back to
-# the 3-step escape hatch documented in docs/CLAUDE_CODE_STARTER.md.
+# A `SessionStart` hook (`.claude/hooks/inject-next-session-pointer.sh`,
+# wired in `.claude/settings.json`) fires when claude launches; it reads
+# the SAME `docs/NEXT_SESSION.md` file and injects its contents as a system
+# reminder BEFORE the user's first prompt. Claude then has the pointer-file
+# content as context — no manual paste needed. The director still types ONE
+# thing (e.g., "go" + Enter) to wake Claude up; this is a hard constraint
+# of Claude Code's interactive-mode CLI (positional `[prompt]` does NOT
+# auto-submit in interactive mode — only with `-p` print mode).
 #
-# See docs/RESUME_SCRIPT_DESIGN — codified in HANDOFF_PROTOCOL.md §4 Step 1
-# row 12 + the "no obvious next task" interview sub-section.
+# Multi-layered defense per HANDOFF_PROTOCOL Rule 28:
+#   Layer 1 (primary, mechanical): SessionStart hook injects pointer as system reminder
+#   Layer 2 (procedural fallback): CLAUDE_CODE_STARTER.md sentinel-handling rule — if user pastes the sentinel string manually OR types "resume per docs/NEXT_SESSION.md", Claude follows the pointer
+#   Layer 3 (manual escape hatch): 3-step path documented in every handoff — cd + checkout + paste full launch prompt
+#   Layer 4 (procedural enforcement): NEXT_SESSION.md guard hook (.claude/hooks/check-next-session-doc.sh) blocks End-of-session commits without an updated pointer file
+#
+# Cross-references:
+#   docs/CLAUDE_CODE_STARTER.md — sentinel-handling section (Layer 1 + Layer 2)
+#   docs/HANDOFF_PROTOCOL.md Rule 28 — Resume-flow multi-layered defense
+#   .claude/hooks/inject-next-session-pointer.sh — the SessionStart hook this script depends on
+#   .claude/settings.json — hook wiring
 
 set -euo pipefail
 
 POINTER="docs/NEXT_SESSION.md"
-SENTINEL="Resume per docs/NEXT_SESSION.md — read this pointer file first, then proceed with the start-of-session sequence per docs/CLAUDE_CODE_STARTER.md."
 
 abort() {
   echo ""
@@ -58,13 +71,27 @@ echo "── docs/NEXT_SESSION.md (the pointer the previous session left for thi
 echo ""
 cat "$POINTER"
 echo ""
-echo "── Launching Claude Code with the sentinel first-message ──"
-echo "Sentinel: $SENTINEL"
+echo "════════════════════════════════════════════════════════════════════"
+echo "  Launching Claude Code now."
+echo ""
+echo "  📌 IMPORTANT: when Claude finishes loading, type any single word"
+echo "     (e.g., 'go' or 'proceed') and press Enter."
+echo ""
+echo "     The SessionStart hook will have already injected the pointer"
+echo "     content above into the session as context, so Claude will"
+echo "     immediately follow the pointer's '## Launch prompt' section"
+echo "     once you send your first message. NO COPY-PASTE NEEDED."
+echo ""
+echo "     If for any reason Claude doesn't act on the pointer after your"
+echo "     first message, fall back to pasting the launch prompt manually"
+echo "     from the pointer contents printed above (the 3-step escape hatch)."
+echo "════════════════════════════════════════════════════════════════════"
 echo ""
 
-# Claude Code's CLI accepts an initial prompt as a positional argument.
-# If your Claude Code version doesn't support this, the script falls back:
-# `claude` launches without a first-message, then you paste the sentinel
-# above by hand. Either way, Claude reads docs/NEXT_SESSION.md as its
-# first action and proceeds from there.
-exec claude "$SENTINEL"
+# NOTE: We do NOT pass a positional [prompt] argument to claude here.
+# Claude Code's positional [prompt] only auto-submits in non-interactive
+# mode (`-p`). In interactive mode it pre-fills the input box silently or
+# is ignored — director would still have to manually press Enter or paste.
+# The SessionStart hook handles context injection; the director's single
+# wake-up keystroke is the minimum interaction Claude Code's CLI requires.
+exec claude

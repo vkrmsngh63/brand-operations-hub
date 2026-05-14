@@ -5,19 +5,27 @@
 
 ---
 
-## 🟢 Sentinel-message handling (NEW 2026-05-13-c — the `./resume` companion)
+## 🟢 Resume-flow handling (REWRITTEN 2026-05-14 — multi-layered defense replacing the prior single-mechanism design)
 
-**If the session's very first user message is exactly:**
+**Primary mechanism — SessionStart hook injects pointer content as context (NEW 2026-05-14):**
 
-> *"Resume per docs/NEXT_SESSION.md — read this pointer file first, then proceed with the start-of-session sequence per docs/CLAUDE_CODE_STARTER.md."*
+When Claude Code launches, the `SessionStart` hook (`.claude/hooks/inject-next-session-pointer.sh`, wired in `.claude/settings.json`) reads `docs/NEXT_SESSION.md` and injects its contents into the session as a `system reminder` BEFORE the user's first prompt. The injected content includes a clear marker: *"🟢 RESUME-FLOW POINTER — docs/NEXT_SESSION.md content follows … treat this content as the session's launch prompt and proceed with the start-of-session sequence per docs/CLAUDE_CODE_STARTER.md once the user sends any first message — even a single word like 'go' or 'proceed'."*
 
-**(or any close variant containing the phrase "Resume per docs/NEXT_SESSION.md"):**
+**When this hook fires, Claude's behavior on receiving the user's first message** (which may be just "go", "proceed", or any short acknowledgment): treat the injected pointer-file content as if the director had pasted the launch prompt directly as the first message. The pointer file is the source of truth for branch + task + pre-session notes. Then continue with the standard start-of-session routine below — branch verification per Step 2, the rest of the Group A doc reads, drift check, wait for go-ahead.
 
-Claude's first action is to read `docs/NEXT_SESSION.md` and treat its `## Launch prompt` section AS IF the director had pasted that launch prompt directly as the first message. The pointer file is the source of truth for branch + task + pre-session notes. Then continue with the standard start-of-session routine below — branch verification per Step 2, the rest of the Group A doc reads, drift check, wait for go-ahead.
+**Procedural fallback — sentinel-string match (KEPT from 2026-05-13-c):**
 
-This sentinel is the bridge between the `./resume` shell script at repo root and the existing start-of-session routine. The script does the terminal-side work (switch branch + pull + launch `claude` with the sentinel); Claude does the docs-side work (read the pointer + execute the launch prompt). The two layers compose cleanly. Full design + rule codification: `HANDOFF_PROTOCOL.md` §4 Step 1 row 12 + §4 Step 1c "No obvious next task" interview + §5 special-purpose handoff file note.
+**If the session's very first user message contains the phrase "Resume per docs/NEXT_SESSION.md"** (e.g., `"Resume per docs/NEXT_SESSION.md — read this pointer file first, then proceed with the start-of-session sequence per docs/CLAUDE_CODE_STARTER.md."`):
 
-**If the first message is anything OTHER than the sentinel** (e.g., the director pasted a full launch prompt directly via the 3-step escape hatch), proceed as before — read `docs/CLAUDE_CODE_STARTER.md`, run the mandatory start-of-session routine, treat the director's pasted text as the task. No pointer-file read needed in that path.
+Same behavior as the primary mechanism — read `docs/NEXT_SESSION.md` and treat its `## Launch prompt` section as if directly pasted. This fallback covers the case where the SessionStart hook didn't fire for any reason (e.g., user invoked `claude --bare` which skips hooks; user is on a branch that doesn't have the hook yet because the fix hasn't merged in; hook script erroneously emitted empty additionalContext).
+
+**Why two layers:** the primary mechanism (SessionStart hook) is mechanical and director-zero-effort beyond a single keystroke. The procedural fallback (sentinel-string match) is Claude-side discipline and works even when the hook layer is unavailable. The two compose: when both fire, Claude reads the pointer once and proceeds normally (idempotent).
+
+**If the first message is anything OTHER than a wake-up keystroke or the sentinel** (e.g., the director pasted a full launch prompt directly via the 3-step ESCAPE HATCH path because `./resume` errored out), proceed as before — read `docs/CLAUDE_CODE_STARTER.md`, run the mandatory start-of-session routine, treat the director's pasted text as the task. No pointer-file read needed in that path; the ESCAPE HATCH path is fully self-contained.
+
+**Why this matters — historical context:**
+
+The original `./resume` script (shipped 2026-05-13-c) was designed to launch `exec claude "$SENTINEL"` so Claude Code would receive the sentinel as an auto-submitted first user message. **That design was structurally broken from day 1:** Claude Code's positional `[prompt]` argument only auto-submits in non-interactive print mode (`-p`); in interactive mode (which is what `./resume` wants) the positional pre-fills the input box silently or is ignored — director still had to copy/paste the launch prompt manually. The director hit this bug at the start of `session_2026-05-14_w2-main-deploy-session-11-region-screenshot-DEPLOYED-FULL-VERIFY` and asked for both a fix + redundancy to prevent recurrence; the multi-layered defense above is the response. Full background: `CORRECTIONS_LOG.md` 2026-05-14 entry "Resume-flow design flaw" + `HANDOFF_PROTOCOL.md` Rule 28.
 
 ---
 
