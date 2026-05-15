@@ -2,8 +2,11 @@
 ## Append-only record of mistakes made during chats and lessons learned
 
 **Started:** April 16, 2026
-**Last updated:** 2026-05-15-d (One-hundredth Claude Code session — **W#2 → main deploy session #14 — P-29 Slices #1+#2 DEPLOYED + SIX polish items P-32/P-33/P-34/P-35/P-36/P-37 SHIPPED + VERIFIED in same session.** `session_2026-05-15-d_w2-main-deploy-session-14-p29-slices-1-and-2-plus-six-walkthrough-polish-fixes` (dual-branch — main for deploy + fixes; workflow-2 fast-forwarded after each main push). Closes (a.32) RECOMMENDED-NEXT. **TWO NEW INFORMATIONAL §Entries added below this batch:** (1) extension tsc test-file slip carried from Slice #1 (2026-05-15-b — verification scoreboard ran only root tsc, not extension's own `npm run compile`; caught + fixed inline this session); (2) CWD-drift Bash slip recurrence — early `cd docs/` and later `cd extensions/competition-scraping` persisted across commands until reset to repo root with absolute paths; recurrence of the 2026-05-12-c slip class (`cd <subdir>` Bash-tool invocation effectively persists as session's cwd); caught + recovered same-session. **Multi-Workflow per Rule 25:** dual-branch session — initial pre-deploy verification on workflow-2; ff-merge + deploy + 3 ping-pong cycles on main + workflow-2 fast-forwarded after each main push. Pull-rebase clean at all checkpoints. Schema-change-in-flight stays "No" entire session. W#1 row untouched per Rule 3. **TaskList sweep per Rule 26:** 15 tasks tracked + all 15 closed; zero `DEFERRED:` items at session end. **End-of-session:** FOUR commits — `cd215bb` Slice #2.5 + `d3a44a0` Fix #6 + `688f310` Fix #5 + this doc-batch commit; all Rule 9-approved per Option A bundled approval scope per `feedback_approval_scope_per_decision_unit.md`.)
-**Last updated in session:** session_2026-05-15-d_w2-main-deploy-session-14-p29-slices-1-and-2-plus-six-walkthrough-polish-fixes (Claude Code, dual-branch — main for deploy + fixes; workflow-2 fast-forwarded each cycle)
+**Last updated:** 2026-05-15-h (One-hundred-and-fourth Claude Code session — **W#2 P-31 BUILD session — route-handler DI refactor SHIPPED at code level on `workflow-2-competition-scraping` + P-32 multi-file-drop warning fix SHIPPED + 62 new node:test cases all passing.** `session_2026-05-15-h_w2-p31-route-handler-di-refactor`. Closes (a.36) RECOMMENDED-NEXT. **ONE NEW INFORMATIONAL §Entry added below this batch** — original Rule 14f forced-picker for P-31 DI seam shape was shown (Option A per-route closure factory / B module-level pure function / C three-layer adapter) without first verifying whether `next/server` could be imported under `node --test --experimental-strip-types`. Director picked Option A. Mid-flight probe revealed `next/server` is NOT in Next's `package.json` `exports` field — Node ESM cannot resolve `import { NextRequest } from 'next/server'`. The original Option A premise (tests construct `new NextRequest(...)`) was not viable. Surfaced honestly mid-flight + ran a second Rule 14f forced-picker (A' RequestLike contract in factory / B switch to pure function / C add vitest+next plugin) → director picked Option A' (RequestLike contract; Next types only at the route boundary). Net cost ~3 min. Pattern lesson: future Rule 14f pickers involving test-runner constraints should verify the constraint BEFORE the picker fires, not after. Concrete operational test — when about to surface a Rule 14f picker that involves a test-runner mechanism (node:test / vitest / playwright / etc.), run a 30-second probe of the smallest viable case BEFORE drafting the picker; if the probe surfaces a constraint, the picker's option set + recommendation marker change. **HEADLINE P-31 DELTA: src/lib node:test went from 447/447 → 509/509 in a single session** — exactly +62 new P-31 cases (16 urls + 15 url-text + 16 images-finalize + 15 fetch-by-url) well over the launch-prompt's "30-40" target. Combined with P-30's UI-mechanical regression coverage, the P-29 area now has end-to-end automated regression coverage on both UI mechanical AND API route-handler layers at zero director-time cost. **Multi-Workflow per Rule 25:** session ran on `workflow-2-competition-scraping`; schema-change-in-flight stays "No"; pull-rebase no-op; W#1 untouched. **TaskList sweep per Rule 26:** 7 session tasks tracked + completed; zero `DEFERRED:` items. **End-of-session:** TWO commits — (1) P-31/P-32 code (~13 files), (2) the doc-batch commit. NOT pushed; flows to main at deploy session #16.)
+**Last updated in session:** session_2026-05-15-h_w2-p31-route-handler-di-refactor (Claude Code, on `workflow-2-competition-scraping`)
+
+**Previously updated:** 2026-05-15-d (One-hundredth Claude Code session — **W#2 → main deploy session #14 — P-29 Slices #1+#2 DEPLOYED + SIX polish items P-32/P-33/P-34/P-35/P-36/P-37 SHIPPED + VERIFIED in same session.** `session_2026-05-15-d_w2-main-deploy-session-14-p29-slices-1-and-2-plus-six-walkthrough-polish-fixes` (dual-branch — main for deploy + fixes; workflow-2 fast-forwarded after each main push). Closes (a.32) RECOMMENDED-NEXT. **TWO NEW INFORMATIONAL §Entries added below this batch:** (1) extension tsc test-file slip carried from Slice #1 (2026-05-15-b — verification scoreboard ran only root tsc, not extension's own `npm run compile`; caught + fixed inline this session); (2) CWD-drift Bash slip recurrence — early `cd docs/` and later `cd extensions/competition-scraping` persisted across commands until reset to repo root with absolute paths; recurrence of the 2026-05-12-c slip class (`cd <subdir>` Bash-tool invocation effectively persists as session's cwd); caught + recovered same-session. **Multi-Workflow per Rule 25:** dual-branch session — initial pre-deploy verification on workflow-2; ff-merge + deploy + 3 ping-pong cycles on main + workflow-2 fast-forwarded after each main push. Pull-rebase clean at all checkpoints. Schema-change-in-flight stays "No" entire session. W#1 row untouched per Rule 3. **TaskList sweep per Rule 26:** 15 tasks tracked + all 15 closed; zero `DEFERRED:` items at session end. **End-of-session:** FOUR commits — `cd215bb` Slice #2.5 + `d3a44a0` Fix #6 + `688f310` Fix #5 + this doc-batch commit; all Rule 9-approved per Option A bundled approval scope per `feedback_approval_scope_per_decision_unit.md`.)
+**Previously updated in session:** session_2026-05-15-d_w2-main-deploy-session-14-p29-slices-1-and-2-plus-six-walkthrough-polish-fixes (Claude Code, dual-branch — main for deploy + fixes; workflow-2 fast-forwarded each cycle)
 
 **Previously updated:** 2026-05-15 (Ninety-seventh Claude Code session — **W#2 P-29 design session.** `session_2026-05-15_w2-p29-design-session` on `workflow-2-competition-scraping`. Closes (a.29) RECOMMENDED-NEXT. All 5 open design questions for P-29 settled via Rule 14f forced-pickers (Q3 source column / Q4 permission model / Q5 form location / Q1 image upload mechanics / Q2 reframing) + 1 Rule 27 verification picker (Hybrid). **ONE NEW INFORMATIONAL §Entry added below:** Q2 code-vs-doc drift caught — yesterday's polish-backlog framing of Q2 was wrong against current schema; caught BEFORE the Q2 forced-picker fired (Rule 24 sub-step d "verify against actual code" applied at start-of-session) so no false-premise decision was made. **Also captured in this batch:** DATA_CATALOG.md §6.1.1 underscore-vs-hyphen drift (`google_shopping`/`independent_website` vs. code's `google-shopping`/`independent-website`) — fixed inline this batch via search-replace; surfaced in the same Q2-drift §Entry for consolidated record. **No coding changes this session per launch prompt's design-only framing.** Build sequencing: three slices, three sessions; Slice #1 = manual-add URL modal + one-shot `source` schema migration covering all 3 W#2 tables; Slice #2 = manual-add captured-text modal; Slice #3 = manual-add captured-image modal with all three input modalities + server-side URL-fetch endpoint with SSRF guardrails. Director picked Path A (wrap design session here; start Slice #1 fresh) per session-management lucidity preference. **TaskList sweep per Rule 26:** 11 tasks tracked + all closed; zero open `DEFERRED:` at session end. **End-of-session:** one consolidated doc-batch commit; push to origin/workflow-2-competition-scraping (doc-only — does NOT change vklf.com web bundle since zero `src/` changes).)
 **Previously updated:** 2026-05-14 (Ninety-sixth Claude Code session — **W#2 → main deploy session #13 — P-23 DEPLOYED to vklf.com + REAL-AMAZON FULL VERIFY + three NEW polish items captured (P-27 / P-28 / P-29).** `session_2026-05-14_w2-main-deploy-session-13-p23-amazon-context-menu-DEPLOYED-FULL-VERIFY` (rebase phase on `workflow-2-competition-scraping`; ff-merge + deploy push on `main`). Closes (a.28) RECOMMENDED-NEXT. **HEADER BUMP ONLY — no new §Entries this batch.** Clean session, zero slips: pre-deploy verification scoreboard all GREEN; deploy executed cleanly via standard cheat-sheet (b); real-Amazon browser-verify by director PASSED all 9 walkthrough steps (cross-platform spot-check + UX-noise spot-check both clean); P-27/P-28/P-29 captures executed properly via Rule 24 pre-capture search + Rule 14a Read-It-Back + director-approved capture shape (option A: three polish-backlog entries with design-doc cross-references). Director picked next session via §4 Step 1c interview: P-29 design session — (a.29) RECOMMENDED-NEXT. **Multi-Workflow per Rule 25:** dual-branch session — rebase on workflow-2, ff-merge + deploy push on main; pull-rebase clean at session start; schema-change-in-flight stays "No"; W#1 row untouched. **TaskList sweep per Rule 26:** 6 tasks tracked + all 6 closed; zero open `DEFERRED:`. **End-of-session:** ONE doc-batch commit covering today's deploy outcome + P-27/P-28/P-29 captures + next-session pointer; push covered by 2-push deploy-approval scope per `feedback_approval_scope_per_decision_unit.md`.)
@@ -157,6 +160,76 @@
 ---
 
 ## Entries
+
+### 2026-05-15-h — Rule 14f forced-picker for P-31 DI seam shape shown before verifying the test-runner constraint that `next/server` could not be imported under `node --test --experimental-strip-types` (INFORMATIONAL — surfaced honestly mid-flight; ran a second picker; net cost ~3 min)
+
+**Severity:** INFORMATIONAL — the slip surfaced as a structural constraint discovery, not a wrong-decision shipped to code. The first picker ran, director picked Option A, I wrote the factory, the first probe immediately revealed the constraint, I surfaced honestly and ran a second picker. No false-premise decision was acted on; net cost ~3 minutes of director time + one extra picker round.
+
+**The slip:**
+
+For the W#2 P-31 route-handler DI refactor, the launch prompt instructed me to surface a Rule 14f forced-picker comparing three candidate DI seam shapes:
+- (A) Per-route closure factory `makeHandler(deps): (req, ctx) => Promise<NextResponse>` — production wires real deps at module load; tests construct `new NextRequest(...)` + fakes and exercise the returned handler.
+- (B) Module-level pure function `createCompetitorUrl({...deps}): Promise<{ status, body }>` — fully testable; no Next.js types in test surface.
+- (C) Three-layer adapter pattern.
+
+I drafted the picker, marked Option B as `(recommended)` per `feedback_recommendation_style.md`, and showed it to the director. **Director picked Option A.**
+
+I started implementing the factory + the first test file. Wrote `urls.ts` factory + `urls.test.ts` with `import { NextRequest } from 'next/server'`. Tried to run `node --test --experimental-strip-types src/lib/competition-scraping/handlers/urls.test.ts` — failed:
+
+```
+Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'next/server' imported from .../urls.test.ts
+```
+
+Probed Next's `package.json`:
+
+```js
+exports = { ... }  // server keys: []
+```
+
+`next/server` is NOT in Next's `package.json` `exports` field — only top-level `server.js` + `server.d.ts` files exist at `node_modules/next/`, but no subpath export points at them. Node ESM resolution cannot reach the subpath. The factory file imports + the test file imports both fail under the existing `node --test --experimental-strip-types` infrastructure.
+
+This is a structural constraint of the existing test runner. Option A's premise (tests construct NextRequest objects) was therefore not directly viable with the test runner the launch prompt's verification scoreboard relied on (`find src/lib -name "*.test.ts" | xargs node --test --experimental-strip-types`).
+
+**What I did (Rule 10 acknowledge openly):**
+
+Surfaced honestly to the director: "I missed verifying the test-runner constraint before showing the picker. Three honest paths forward: (A') adapt Option A to a RequestLike interface; (B) switch to Option B my original recommendation; (C) add vitest+next plugin (significant infra investment)." Ran a second Rule 14f forced-picker. Director picked **Option A' — RequestLike contract in the factory; Next types only at the route boundary**. Net cost ~3 min.
+
+**Root cause:**
+
+I treated the test-runner mechanism as a "known fact" rather than as a constraint to verify before showing the picker. The check was a 30-second probe (`cat > probe.test.ts <<EOF; node --test EOF`), and the cost of skipping it was ~3 minutes director time + one extra picker round. The check should have been part of "drafting the Rule 14f picker", not "after the director chose".
+
+**Pattern lesson:**
+
+When a Rule 14f forced-picker involves a test-runner / build-tool / module-loader mechanism (node:test / vitest / playwright / esbuild / etc.), the picker draft must include a 30-second probe of the smallest viable case BEFORE surfacing the picker. If the probe surfaces a constraint, the picker's option set + recommendation marker may change; the picker should reflect the constraint as part of each option's description.
+
+**Concrete operational test going forward:**
+
+Before surfacing a Rule 14f picker whose options involve a test-runner / build-tool / module-loader mechanism:
+1. Pick the option set's most "structurally aggressive" shape (the one with strongest assumptions about the mechanism — typically the "no abstraction" or "purest" option).
+2. Write a 5-line probe that exercises the assumption (e.g., for Option A's "tests construct NextRequest", a probe is `import { NextRequest } from 'next/server'; new NextRequest('http://x/')`).
+3. Run the probe.
+4. If it succeeds: surface the picker as drafted.
+5. If it fails: re-draft the picker with the constraint surfaced + adjusted option set.
+
+The probe cost is ~30 seconds; the cost of skipping it is ~3 minutes director time PLUS the operational confusion of "we just picked something that's now broken."
+
+**Relationship to existing rules:**
+
+- Rule 14a (Read-It-Back test) — applies to questions, not pickers' options.
+- Rule 14b/14f (multi-option question structure) — governs HOW the picker is shaped; not WHEN to verify its premises.
+- Rule 24 (pre-capture search) — applies to ROADMAP captures; the spirit (verify before write) generalizes to pickers too.
+- This entry adds the operational scaffolding for "verify the test-runner / build-tool / module-loader mechanism's premise" specifically at the moment of drafting a Rule 14f picker that involves one.
+
+**Cross-references:**
+
+- COMPETITION_SCRAPING_DESIGN.md §B 2026-05-15-h entry (the session that surfaced the slip)
+- COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md new "## P-31 SHIPPED at code level" section (the design pick + implementation outcome)
+- `src/lib/competition-scraping/handlers/{shared,urls,url-text,images-finalize,images-fetch-by-url}.ts` (the factory files; all imports avoid `next/server`)
+- 4 route.ts shim files (the production wrapping that imports `next/server` only at the route boundary)
+
+**Director feedback:** none captured this session — the slip was caught + recovered within ~3 min of surfacing; director moved on to the second picker without commentary.
+
+---
 
 ### 2026-05-15-d — Extension tsc test-file fixture slip carried from Slice #1's verification scoreboard gap (INFORMATIONAL — caught + fixed inline this session)
 

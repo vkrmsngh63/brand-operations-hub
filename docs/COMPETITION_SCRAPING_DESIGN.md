@@ -6,7 +6,9 @@
 **Branch:** `workflow-2-competition-scraping`
 **Created:** May 4, 2026
 **Created in session:** session_2026-05-04_w2-workflow-requirements-interview (Claude Code)
-**Last updated:** May 15, 2026-g (W#2 P-30 BUILD session — Playwright React-bundle stub-page rig SHIPPED at code level on `workflow-2-competition-scraping` in commit `0548da7`. §B 2026-05-15-g entry appended below covering the Rule 14f forced-picker outcome (Option A — extend P-17 authFetch esbuild stub-page pattern), the rig architecture, and the headline scoreboard delta (P-29 Playwright cases went from 31 skipped → 30 pass + 1 P-32-deferred-skip). §A unchanged per Rule 18. Schema-change-in-flight stays "No".)
+**Last updated:** May 15, 2026-h (W#2 P-31 BUILD session — route-handler DI refactor SHIPPED at code level on `workflow-2-competition-scraping` + P-32 multi-file-drop warning fix SHIPPED + 62 new node:test cases all passing. §B 2026-05-15-h entry appended below covering the Option A → A' DI seam fork (per-route closure factory adapted to RequestLike contract after mid-flight probe revealed `next/server` cannot load under `node --test --experimental-strip-types`), the factory architecture across all 4 W#2 routes, and the headline scoreboard delta (src/lib node:test 447 → 509). §A unchanged per Rule 18. Schema-change-in-flight stays "No".)
+
+**Previously updated:** May 15, 2026-g (W#2 P-30 BUILD session — Playwright React-bundle stub-page rig SHIPPED at code level on `workflow-2-competition-scraping` in commit `0548da7`. §B 2026-05-15-g entry appended below covering the Rule 14f forced-picker outcome (Option A — extend P-17 authFetch esbuild stub-page pattern), the rig architecture, and the headline scoreboard delta (P-29 Playwright cases went from 31 skipped → 30 pass + 1 P-32-deferred-skip). §A unchanged per Rule 18. Schema-change-in-flight stays "No".)
 
 **Previously updated:** May 15, 2026-f (W#2 → main deploy session #15 — P-29 Slice #3 DEPLOYED to vklf.com + REAL-INDEPENDENT-WEBSITE FULL VERIFY across all five parts in a single batched pass; zero walkthrough-found polish items. §B 2026-05-15-f entry appended below covering the deploy outcome + walkthrough verification + P-29 three-slice arc completion. §A unchanged. Schema-change-in-flight stays "No".)
 
@@ -2400,6 +2402,82 @@ The multi-file-drop test failed on first run, revealing a real production bug in
 - `COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` new P-30 SHIPPED section + new P-32 polish entry + the three Slice #N SHIPPED sections' "all N currently `test.skip()`" lines flipped inline
 - ROADMAP W#2 row (a.35) flipped ✅ SHIPPED-AT-CODE-LEVEL + new (a.36) RECOMMENDED-NEXT P-31 + polish backlog P-30 entry flipped ✅ SHIPPED-AT-CODE-LEVEL + new P-32 polish entry
 - `NEXT_SESSION.md` rewritten 2026-05-15-g for P-31 build session
+
+---
+
+### 2026-05-15-h — W#2 P-31 BUILD session — route-handler DI refactor SHIPPED + P-32 multi-file-drop warning fix SHIPPED + 62 new node:test cases all passing
+
+**Session:** `session_2026-05-15-h_w2-p31-route-handler-di-refactor` (Claude Code, on `workflow-2-competition-scraping` end-to-end). One-hundred-and-fourth Claude Code session. Closes (a.36) RECOMMENDED-NEXT.
+
+**Session opener — P-32 one-line fix:** In `CapturedImageAddModal.tsx`, the multi-file drop warning text was set in `onDrop` then silently cleared by `tryLoadFile`'s clear-on-entry line before React commits. P-30's Playwright spec caught this bug on first authoring. Small Rule 14f forced-picker at session start (move clear out of `tryLoadFile` / re-set after `await` / pass warning text in as arg) → director picked **Option A — move the clear out of `tryLoadFile`** (smallest diff that fully eliminates the race; preserves the existing clear-on-entry semantics for the paste + file-input paths that need it). After the fix shipped + re-enabling the Playwright `test.skip()` line → captured-image spec went from **16/17 + 1 skip to 17/17 PASS** in real time, demonstrating P-30's regression coverage working end-to-end.
+
+**Two Rule 14f forced-pickers fired for the P-31 DI seam shape:**
+
+First picker surfaced three candidate shapes:
+- **(A) Per-route closure factory** `makeHandler(deps): (req, ctx) => Promise<NextResponse>` — deps explicit at the seam. Director picked.
+- **(B) Module-level pure function** `createCompetitorUrl({...deps}): Promise<{ status, body }>` — fully testable; no Next types in test surface; my recommendation per `feedback_recommendation_style.md`.
+- **(C) Three-layer adapter pattern** — split route into parse / business-logic / shape.
+
+Mid-flight probe revealed a structural constraint I missed before showing the picker: `next/server` is NOT in Next's `package.json` `exports` field (only top-level `server.js`/`server.d.ts` files exist; no subpath export points at them). `node --test --experimental-strip-types` cannot resolve `import { NextRequest } from 'next/server'`. The original Option A premise (tests construct NextRequest objects) was therefore not viable with the existing test infrastructure.
+
+Surfaced honestly mid-flight + ran a second Rule 14f forced-picker:
+- **(A') Adapt Option A** — type the inner handler against a minimal `RequestLike` interface; route shim wraps with a one-line adapter at the boundary. Tests pass a plain literal object — no `next/server` import needed. Director picked.
+- (B) Switch to Option B (my original recommendation).
+- (C) Add vitest+next plugin (significant test-infra investment).
+
+Net cost ~3 min. Captured to CORRECTIONS_LOG 2026-05-15-h as INFORMATIONAL: future Rule 14f pickers involving test-runner constraints should verify the constraint BEFORE the picker fires.
+
+**Architecture (Option A' applied to all 4 W#2 routes):**
+
+Created `src/lib/competition-scraping/handlers/` directory containing:
+- `shared.ts` — `RequestLike` + `HandlerResult` + `VerifyAuthFn` + `VerifyAuthResult` shared types.
+- `urls.ts` — `makeUrlsHandlers(deps): { GET, POST }`. Each handler returns `{ status, body }`.
+- `url-text.ts` — `makeUrlTextHandlers(deps): { GET, POST }`. Adds `competitorUrl.findFirst` parent-existence check.
+- `images-finalize.ts` — `makeImagesFinalizeHandlers(deps): { POST }`. Adds injectable `verifyUploadedFile` + `composeStoragePath` + `bucket`.
+- `images-fetch-by-url.ts` — `makeImagesFetchByUrlHandlers(deps): { POST }`. Adds injectable `safeFetch` + `uploadBytesAsServer` + `getFullSizeUrl` + `composeStoragePath` + `generateCapturedImageId`.
+
+Each `src/app/api/projects/[projectId]/competition-scraping/.../route.ts` shim is now ~70 LOC: imports factory + production deps; builds `productionVerifyAuth` adapter (real `verifyProjectWorkflowAuth` returns NextResponse on 401 — adapter clones the body into `HandlerResult` shape); calls factory with production deps to get inner handlers; exports thin Next-typed wrappers that delegate + apply `withCors(req, NextResponse.json(result.body, { status: result.status }))`.
+
+**Test coverage (62 new cases across 4 test files; all PASS):**
+
+| Spec | Cases | Coverage |
+|---|---|---|
+| `urls.test.ts` | **16** | POST 401 / 400 invalid JSON / 400 missing/invalid platform / 400 missing/empty url / 400 invalid source / 201 happy default-source / 201 explicit source manual / 201 trim metadata + isSponsoredAd / 200 P2002 idempotent lookup / 500 prisma error → recordFlake; GET 401 / 200 no filter / 200 with platform filter / 400 invalid platform filter. |
+| `url-text.test.ts` | **15** | POST 401 / 400 invalid JSON + missing fields + invalid tags/sortOrder/source / 404 parent / 201 happy + source manual / 200 P2002 / 500 prisma; GET 401 / 404 parent / 200 ordered list. |
+| `images-finalize.test.ts` | **16** | POST 401 / 400 invalid JSON + missing clientId/capturedImageId + invalid mimeType/sourceType/fileSize/tags/source / 404 parent / 400 file missing in storage / 400 verifyUploadedFile throws (recordFlake fires) / 201 happy + source manual / 200 P2002 / 500 prisma. |
+| `images-fetch-by-url.test.ts` | **15** | POST 401 / 400 invalid JSON + missing imageUrl / 404 parent / 403 SSRF private-v4 + metadata-hostname / 400 SSRF invalid-scheme / 504 timeout / 413 body-too-large / 502 redirect-blocked / 415 wrong + missing content-type / 502 upload throws / 502 preview-URL throws / 200 happy. |
+| **Total** | **62** | All PASS. 447 baseline → **509/509 src/lib node:test cases.** |
+
+**Verification scoreboard — all GREEN:**
+
+- `npx tsc --noEmit`: clean
+- `cd extensions/competition-scraping && npm run compile`: clean
+- `npm run build`: compiled successfully (52 routes — same baseline; no new routes since P-31 is a refactor)
+- src/lib node:test: **509/509 pass** (was 447 → +62 new P-31 cases — exactly matches the new test count)
+- Extension `npm test`: 334/334 pass (unchanged)
+- `npx playwright test`: **64/64 pass** (was 63 + 1 P-32-deferred-skip; P-32 fix flipped)
+
+**HEADLINE DELTA: src/lib node:test went from 447/447 → 509/509 in a single session** (well over the launch-prompt's "30-40 new cases" target). Combined with P-30's UI-mechanical regression coverage + the already-DONE director walkthrough verification from deploys #14/#15, the P-29 area now has end-to-end automated regression coverage on both the UI mechanical AND the API route-handler layers AT ZERO director-time cost. **W#2 → main deploy session #16 is the natural next** ((a.37) RECOMMENDED-NEXT picked via §4 Step 1c forced-picker).
+
+**Per Rule 23 Change Impact Audit — Additive (safe):** new factory + new test files + thin route.ts shims that delegate to the factory. Production behavior byte-for-byte unchanged — same status codes, same error messages, same persistence semantics, same side-effects in identical order. No schema changes; no shared-types changes; no Chrome extension or PLOS-side UI sees any API contract difference. P-32 fix is a production bug fix surfacing an existing-intended-but-unreachable warning UI.
+
+**Affected sections:**
+- §A.13 (Data persistence) — unchanged.
+- §A.18 (Recommended next-session sequence) — P-31 closed; next pick is **W#2 → main deploy session #16** ((a.37) RECOMMENDED-NEXT).
+
+**Multi-Workflow per Rule 25:** session ran on `workflow-2-competition-scraping` end-to-end; schema-change-in-flight stays No; pull-rebase no-op at start; W#1 untouched per Rule 3 ownership. **TaskList sweep per Rule 26:** 7 session tasks tracked + completed; zero `DEFERRED:` items at session end.
+
+**Cross-references:**
+
+- `src/lib/competition-scraping/handlers/{shared,urls,url-text,images-finalize,images-fetch-by-url}.ts` (5 new factory files)
+- `src/lib/competition-scraping/handlers/{urls,url-text,images-finalize,images-fetch-by-url}.test.ts` (4 new test files)
+- 4 rewritten route.ts shim files under `src/app/api/projects/[projectId]/competition-scraping/`
+- `src/app/projects/[projectId]/competition-scraping/components/CapturedImageAddModal.tsx` (P-32 fix)
+- `tests/playwright/p29-manual-add-captured-image-modal.spec.ts` (P-32 skip removal)
+- COMPETITION_SCRAPING_VERIFICATION_BACKLOG P-31 ✅ SHIPPED status flip + P-32 ✅ FIXED status flip + new "## P-31 SHIPPED at code level" section
+- ROADMAP W#2 row (a.36) flipped ✅ SHIPPED-AT-CODE-LEVEL + new (a.37) RECOMMENDED-NEXT deploy session #16
+- CORRECTIONS_LOG 2026-05-15-h INFORMATIONAL entry — original Rule 14f picker shown without first verifying the test-runner constraint
+- `NEXT_SESSION.md` rewritten 2026-05-15-h for deploy session #16
 
 ---
 
