@@ -37,6 +37,13 @@ interface Props {
   onChange: (next: string) => void;
   disabled?: boolean;
   placeholder?: string;
+  // 2026-05-15-d Slice #2.5: optional opt-outs/overrides so the picker can
+  // be reused inside a modal where (a) some OTHER field owns autofocus
+  // (e.g., URL input in UrlAddModal) and (b) the modal's input styling
+  // differs from EditableVocabularyField's inline-edit look. Defaults
+  // preserve the original inline-edit caller's behavior.
+  autoFocus?: boolean;
+  inputStyleOverride?: React.CSSProperties;
 }
 
 export function VocabularyPicker({
@@ -46,6 +53,8 @@ export function VocabularyPicker({
   onChange,
   disabled,
   placeholder,
+  autoFocus = true,
+  inputStyleOverride,
 }: Props) {
   const [entries, setEntries] = useState<VocabularyEntry[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -57,8 +66,8 @@ export function VocabularyPicker({
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
+    if (autoFocus) inputRef.current?.focus();
+  }, [autoFocus]);
 
   // Lazy-load on first focus / open.
   useEffect(() => {
@@ -170,7 +179,7 @@ export function VocabularyPicker({
         // Prevent the parent FieldShell's Enter/Esc handlers from firing
         // when the popover is showing AND a "Create" row is being clicked
         // — the click already saves through handleCreate.
-        style={inputStyle}
+        style={inputStyleOverride ?? inputStyle}
       />
 
       {open ? (

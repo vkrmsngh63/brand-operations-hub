@@ -32,6 +32,7 @@ import {
   type CreateCompetitorUrlRequest,
   type Platform,
 } from '@/lib/shared-types/competition-scraping';
+import { VocabularyPicker } from '../url/[urlId]/components/VocabularyPicker';
 
 // Mirror the extension's user-facing labels (extensions/competition-scraping/
 // src/lib/platforms.ts) so users see identical naming on web + extension.
@@ -50,11 +51,24 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: (row: CompetitorUrl) => void;
+  // 2026-05-15-d Slice #2.5 — when the modal is opened from a platform-
+  // filtered view (e.g., user clicked "Google Shopping" in the sidebar),
+  // pre-select that platform. When opened from the "all platforms" view,
+  // `defaultPlatform` is undefined and the modal falls back to its
+  // first-platform default.
+  defaultPlatform?: Platform;
 }
 
-export function UrlAddModal({ projectId, isOpen, onClose, onSuccess }: Props) {
+export function UrlAddModal({
+  projectId,
+  isOpen,
+  onClose,
+  onSuccess,
+  defaultPlatform,
+}: Props) {
+  const initialPlatform: Platform = defaultPlatform ?? 'amazon';
   const [url, setUrl] = useState('');
-  const [platform, setPlatform] = useState<Platform>('amazon');
+  const [platform, setPlatform] = useState<Platform>(initialPlatform);
   const [brandName, setBrandName] = useState('');
   const [productName, setProductName] = useState('');
   const [competitionCategory, setCompetitionCategory] = useState('');
@@ -67,11 +81,13 @@ export function UrlAddModal({ projectId, isOpen, onClose, onSuccess }: Props) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const urlInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Reset form whenever the modal closes so re-opens start clean.
+  // Reset form whenever the modal closes so re-opens start clean. Platform
+  // resets to the current `defaultPlatform` so a re-open from a filtered
+  // view still pre-selects the right platform.
   useEffect(() => {
     if (!isOpen) {
       setUrl('');
-      setPlatform('amazon');
+      setPlatform(initialPlatform);
       setBrandName('');
       setProductName('');
       setCompetitionCategory('');
@@ -82,7 +98,7 @@ export function UrlAddModal({ projectId, isOpen, onClose, onSuccess }: Props) {
       setSubmitting(false);
       setErrorMessage(null);
     }
-  }, [isOpen]);
+  }, [isOpen, initialPlatform]);
 
   // Autofocus the URL field whenever the modal opens — same convention as
   // the extension's URL-add overlay.
@@ -113,9 +129,15 @@ export function UrlAddModal({ projectId, isOpen, onClose, onSuccess }: Props) {
       setErrorMessage('URL is required.');
       return;
     }
+    // 2026-05-15-d Slice #2.5 — accept schemeless input (e.g. "diverticleanse.com")
+    // and auto-prepend "https://" so the saved URL is well-formed. Director
+    // picked option (i) over save-as-typed during deploy session #14.
+    const normalizedUrl = /^https?:\/\//i.test(trimmedUrl)
+      ? trimmedUrl
+      : `https://${trimmedUrl}`;
     const body: CreateCompetitorUrlRequest = {
       platform,
-      url: trimmedUrl,
+      url: normalizedUrl,
       source: 'manual',
     };
     const brand = brandName.trim();
@@ -214,10 +236,10 @@ export function UrlAddModal({ projectId, isOpen, onClose, onSuccess }: Props) {
             <Field label="URL" required>
               <input
                 ref={urlInputRef}
-                type="url"
+                type="text"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                placeholder="https://www.amazon.com/dp/..."
+                placeholder="competitor-brand.com or https://www.amazon.com/dp/..."
                 required
                 disabled={submitting}
                 aria-label="URL"
@@ -264,13 +286,14 @@ export function UrlAddModal({ projectId, isOpen, onClose, onSuccess }: Props) {
             </Field>
 
             <Field label="Competition Category">
-              <input
-                type="text"
+              <VocabularyPicker
+                projectId={projectId}
+                vocabularyType="competition-category"
                 value={competitionCategory}
-                onChange={(e) => setCompetitionCategory(e.target.value)}
+                onChange={setCompetitionCategory}
                 disabled={submitting}
-                aria-label="Competition Category"
-                style={textInputStyle}
+                autoFocus={false}
+                inputStyleOverride={textInputStyle}
               />
             </Field>
 

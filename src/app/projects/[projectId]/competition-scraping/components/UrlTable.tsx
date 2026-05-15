@@ -23,7 +23,7 @@
 // Click a row → navigate to that URL's per-URL detail page (in-app).
 
 import { useMemo, useState } from 'react';
-import type { CompetitorUrl } from '@/lib/shared-types/competition-scraping';
+import type { CompetitorUrl, Platform } from '@/lib/shared-types/competition-scraping';
 import { UrlAddModal } from './UrlAddModal';
 import {
   applyColumnFilters,
@@ -73,6 +73,11 @@ interface Props {
   // this component but POSTs back to the parent's URL list state.
   projectId: string;
   onUrlAdded: (row: CompetitorUrl) => void;
+  // 2026-05-15-d Slice #2.5 — current platform filter from the URL query
+  // (?platform=<value>). Passed through to UrlAddModal as `defaultPlatform`
+  // when not 'all' so a click on "+ Manually add URL" from a filtered view
+  // pre-selects the matching platform.
+  selectedPlatform: Platform | 'all';
 }
 
 interface ColumnDef {
@@ -145,6 +150,7 @@ export function UrlTable({
   onRowOpen,
   projectId,
   onUrlAdded,
+  selectedPlatform,
 }: Props) {
   const [sortKey, setSortKey] = useState<SortKey>('addedAt');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
@@ -290,6 +296,9 @@ export function UrlTable({
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
         onSuccess={onUrlAdded}
+        defaultPlatform={
+          selectedPlatform === 'all' ? undefined : selectedPlatform
+        }
       />
 
       {showFilterEmpty ? (

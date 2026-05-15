@@ -31,6 +31,7 @@ import type {
   CapturedText,
   CreateCapturedTextRequest,
 } from '@/lib/shared-types/competition-scraping';
+import { VocabularyPicker } from '../url/[urlId]/components/VocabularyPicker';
 
 interface Props {
   projectId: string;
@@ -180,13 +181,14 @@ export function CapturedTextAddModal({
             </Field>
 
             <Field label="Content Category">
-              <input
-                type="text"
+              <VocabularyPicker
+                projectId={projectId}
+                vocabularyType="content-category"
                 value={contentCategory}
-                onChange={(e) => setContentCategory(e.target.value)}
+                onChange={setContentCategory}
                 disabled={submitting}
-                aria-label="Content Category"
-                style={textInputStyle}
+                autoFocus={false}
+                inputStyleOverride={textInputStyle}
               />
             </Field>
 

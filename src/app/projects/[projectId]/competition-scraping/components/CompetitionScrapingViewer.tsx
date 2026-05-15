@@ -266,6 +266,7 @@ export function CompetitionScrapingViewer({ projectId }: Props) {
             onRowOpen={handleRowOpen}
             projectId={projectId}
             onUrlAdded={handleUrlAdded}
+            selectedPlatform={selectedPlatform}
           />
         )}
       </div>
