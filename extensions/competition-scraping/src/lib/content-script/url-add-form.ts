@@ -23,9 +23,20 @@
 import {
   PlosApiError,
   createCompetitorUrl,
+  createVocabularyEntry,
+  listVocabularyEntries,
 } from './api-bridge.ts';
-import type { CompetitorUrl } from '../../../../../src/lib/shared-types/competition-scraping.ts';
+import type {
+  CompetitorUrl,
+  VocabularyEntry,
+} from '../../../../../src/lib/shared-types/competition-scraping.ts';
 import { getPlatformLabel } from '../platforms.ts';
+
+// 2026-05-15-d Slice #2.5 — sentinel value the Competition Category select
+// uses to mean "add a new category." Mirrors the popup CapturedTextPasteForm's
+// content-category sentinel pattern but lives in a different namespace so
+// the two don't clash if the DOMs ever overlap.
+const ADD_NEW_CATEGORY_VALUE = '__plos_add_new_competition_category__';
 
 export interface UrlAddFormProps {
   /** Pre-filled URL — usually the canonical form per the platform module. */
@@ -171,6 +182,133 @@ export function openUrlAddForm(props: UrlAddFormProps): UrlAddForm {
     return { wrap, input };
   }
 
+  // 2026-05-15-d Slice #2.5 — Competition Category field with the same
+  // sentinel-based dropdown pattern the popup's CapturedTextPasteForm uses
+  // for content-category. The DOM lives in plain TS here (content-script
+  // context, no React framework) so we build it imperatively.
+  function makeCategoryField(): {
+    wrap: HTMLElement;
+    getValue: () => string;
+    isAddingNew: () => boolean;
+    setDisabled: (disabled: boolean) => void;
+    populateEntries: (entries: VocabularyEntry[]) => void;
+    setLoadError: (message: string | null) => void;
+    absorbNewEntry: (entry: VocabularyEntry) => void;
+  } {
+    const wrap = document.createElement('div');
+    wrap.className = 'plos-cs-form-field';
+
+    const lab = document.createElement('label');
+    lab.className = 'plos-cs-form-label';
+    lab.textContent = 'Competition Category (optional)';
+    lab.htmlFor = 'plos-cs-category';
+    wrap.appendChild(lab);
+
+    const select = document.createElement('select');
+    select.id = 'plos-cs-category';
+    select.name = 'category';
+    select.className = 'plos-cs-form-input';
+
+    const placeholderOpt = document.createElement('option');
+    placeholderOpt.value = '';
+    placeholderOpt.textContent = 'Pick or add a category…';
+    select.appendChild(placeholderOpt);
+
+    const addNewOpt = document.createElement('option');
+    addNewOpt.value = ADD_NEW_CATEGORY_VALUE;
+    addNewOpt.textContent = '+ Add new…';
+    select.appendChild(addNewOpt);
+
+    wrap.appendChild(select);
+
+    const newInput = document.createElement('input');
+    newInput.type = 'text';
+    newInput.className = 'plos-cs-form-input';
+    newInput.placeholder = 'Type the new category name';
+    newInput.style.marginTop = '6px';
+    newInput.hidden = true;
+    wrap.appendChild(newInput);
+
+    const loadNote = document.createElement('div');
+    loadNote.className = 'plos-cs-form-help';
+    loadNote.style.marginTop = '4px';
+    loadNote.style.fontSize = '12px';
+    loadNote.style.color = '#f0883e';
+    loadNote.hidden = true;
+    wrap.appendChild(loadNote);
+
+    select.addEventListener('change', () => {
+      if (select.value === ADD_NEW_CATEGORY_VALUE) {
+        newInput.hidden = false;
+        // Defer focus so the layout has settled.
+        setTimeout(() => newInput.focus(), 0);
+      } else {
+        newInput.hidden = true;
+        newInput.value = '';
+      }
+    });
+
+    return {
+      wrap,
+      getValue() {
+        if (select.value === ADD_NEW_CATEGORY_VALUE) {
+          return newInput.value.trim();
+        }
+        return select.value;
+      },
+      isAddingNew() {
+        return select.value === ADD_NEW_CATEGORY_VALUE;
+      },
+      setDisabled(disabled: boolean) {
+        select.disabled = disabled;
+        newInput.disabled = disabled;
+      },
+      populateEntries(entries: VocabularyEntry[]) {
+        // Sort by value for a stable, scannable dropdown order.
+        const sorted = [...entries].sort((a, b) =>
+          a.value.localeCompare(b.value, undefined, { sensitivity: 'base' }),
+        );
+        // Insert each entry's option just before the "+ Add new…" sentinel
+        // so existing entries appear above the create row.
+        for (const entry of sorted) {
+          const opt = document.createElement('option');
+          opt.value = entry.value;
+          opt.textContent = entry.value;
+          select.insertBefore(opt, addNewOpt);
+        }
+      },
+      setLoadError(message: string | null) {
+        if (message === null) {
+          loadNote.hidden = true;
+          loadNote.textContent = '';
+        } else {
+          loadNote.hidden = false;
+          loadNote.textContent = message;
+        }
+      },
+      absorbNewEntry(entry: VocabularyEntry) {
+        // After a successful create-or-return-existing POST: ensure the
+        // entry is an option in the select, then select it (so the same
+        // form on next open shows the new value already in the dropdown
+        // — but the form re-mounts on each open, so this is mainly for
+        // the rare case where the user picks "+ Add new…" twice with the
+        // same value).
+        const existing = Array.from(select.options).find(
+          (o) => o.value === entry.value,
+        );
+        if (!existing) {
+          const opt = document.createElement('option');
+          opt.value = entry.value;
+          opt.textContent = entry.value;
+          select.insertBefore(opt, addNewOpt);
+        }
+        select.value = entry.value;
+        newInput.hidden = true;
+        newInput.value = '';
+      },
+    };
+  }
+
   const urlField = makeField(
     'URL',
     'url',
@@ -178,12 +316,7 @@ export function openUrlAddForm(props: UrlAddFormProps): UrlAddForm {
     'https://...',
     true,
   );
-  const categoryField = makeField(
-    'Competition Category (optional)',
-    'category',
-    '',
-    'e.g., device, topical product, supplement',
-  );
+  const categoryField = makeCategoryField();
   const productField = makeField(
     'Product Name (optional)',
     'product-name',
@@ -270,7 +403,7 @@ export function openUrlAddForm(props: UrlAddFormProps): UrlAddForm {
     saveBtn.disabled = saving;
     cancelBtn.disabled = saving;
     urlField.input.disabled = saving;
-    categoryField.input.disabled = saving;
+    categoryField.setDisabled(saving);
     productField.input.disabled = saving;
     brandField.input.disabled = saving;
     sponsoredInput.disabled = saving;
@@ -287,14 +420,38 @@ export function openUrlAddForm(props: UrlAddFormProps): UrlAddForm {
       return;
     }
 
+    // 2026-05-15-d Slice #2.5 — resolve Competition Category from the select +
+    // optional "Add new" free-text. If the user picked "+ Add new…" with a
+    // non-empty typed value, upsert it as a vocabulary entry FIRST so future
+    // form opens see it in the dropdown; on POST failure, abort the save.
+    const categoryDraft = categoryField.getValue();
+    if (
+      categoryField.isAddingNew() &&
+      categoryDraft.length === 0
+    ) {
+      setError(
+        'You picked "+ Add new…" — please type the new category name, or pick a different option.',
+      );
+      return;
+    }
+
     setSaving(true);
 
     try {
+      if (categoryField.isAddingNew() && categoryDraft.length > 0) {
+        const created = await createVocabularyEntry(props.projectId, {
+          vocabularyType: 'competition-category',
+          value: categoryDraft,
+          addedByWorkflow: 'competition-scraping',
+        });
+        categoryField.absorbNewEntry(created);
+      }
+
       const row = await createCompetitorUrl(props.projectId, {
         platform: props.platform as never, // cast — runtime-validated by server
         url,
-        ...(categoryField.input.value.trim()
-          ? { competitionCategory: categoryField.input.value.trim() }
+        ...(categoryDraft
+          ? { competitionCategory: categoryDraft }
           : {}),
         ...(productField.input.value.trim()
           ? { productName: productField.input.value.trim() }
@@ -353,6 +510,28 @@ export function openUrlAddForm(props: UrlAddFormProps): UrlAddForm {
 
   // Focus the URL input on open so the user can immediately edit if they want.
   setTimeout(() => urlField.input.focus(), 0);
+
+  // 2026-05-15-d Slice #2.5 — async-load existing Competition Category
+  // entries so the dropdown is populated by the time the user reaches that
+  // field. The form is usable before this load completes (the select still
+  // shows the placeholder + "+ Add new…" so the user can type a new
+  // category immediately). On load failure, the field stays usable —
+  // we just show a small inline note that the dropdown is unavailable.
+  listVocabularyEntries(props.projectId, 'competition-category')
+    .then((entries) => {
+      categoryField.populateEntries(entries);
+    })
+    .catch((err) => {
+      const message =
+        err instanceof PlosApiError
+          ? `${err.message} (HTTP ${err.status})`
+          : err instanceof Error
+            ? err.message
+            : "Couldn't load existing categories";
+      categoryField.setLoadError(
+        `Could not load existing categories (${message}). You can still type a new one via "+ Add new…".`,
+      );
+    });
 
   const handle: UrlAddForm = {
     destroy() {
