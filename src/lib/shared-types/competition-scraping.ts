@@ -406,6 +406,47 @@ export interface FinalizeImageUploadRequest {
 
 export type FinalizeImageUploadResponse = CapturedImage;
 
+// W#2 P-29 Slice #3 — server-side fetch-by-URL endpoint that powers the
+// "or paste an image URL" modality in the manual-add captured-image modal.
+//
+// POST .../urls/[urlId]/images/fetch-by-url
+//
+// Body: { imageUrl: string } — a user-supplied public image URL.
+//
+// Server-side flow (security-class — see src/lib/ssrf-guard.ts):
+//   1. Pre-resolve URL safety check (scheme + cloud-metadata hostname).
+//   2. DNS-resolve hostname + reject if any returned IP is in a blocked
+//      private/loopback/link-local range.
+//   3. Connect to the validated IP directly (closes DNS-rebind window).
+//   4. Stream bytes with 5 MB cap + 10s timeout + 3xx-redirect refusal.
+//   5. Validate Content-Type is in ACCEPTED_IMAGE_MIME_TYPES.
+//   6. Upload bytes to Supabase Storage server-side (admin client; no
+//      signed URL needed since the upload happens in-process).
+//   7. Return RequestImageUploadResponse-shape so the client can call
+//      finalize on the standard route. The two-phase + this Phase-0
+//      shape converge at finalize.
+//
+// On any guardrail failure, returns 4xx with an `error` message.
+export interface FetchImageByUrlRequest {
+  imageUrl: string;
+}
+
+// Response shape mirrors RequestImageUploadResponse except `uploadUrl`
+// is omitted — the bytes are already uploaded server-side, so the client
+// goes straight to finalize. mimeType + fileSize are derived from the
+// fetched bytes; the client echoes both into the finalize call (mimeType
+// is required by the finalize route, fileSize is optional metadata).
+// previewUrl is a short-lived (1-hour TTL) signed URL pointing at the
+// uploaded storage path so the modal can render a preview thumbnail
+// before the user finalizes the upload.
+export interface FetchImageByUrlResponse {
+  capturedImageId: string;
+  storagePath: string;
+  mimeType: AcceptedImageMimeType;
+  fileSize: number;
+  previewUrl: string;
+}
+
 // PATCH .../images/[imageId] — fields the user can edit after the upload
 // is finalized. clientId, sourceType, storagePath, fileSize, mimeType,
 // width, height are immutable after capture.

@@ -14,6 +14,7 @@ import { composeStoragePath } from '@/lib/competition-storage-helpers';
 import {
   isAcceptedImageMimeType,
   isImageSourceType,
+  isSource,
   type CapturedImage,
   type FinalizeImageUploadRequest,
 } from '@/lib/shared-types/competition-scraping';
@@ -193,6 +194,23 @@ export async function POST(
       )
     );
   }
+  // P-29 Slice #3: client may pass source='manual' to mark the row as
+  // vklf.com-modal-originated. Slice #1 added the column + plumbed the
+  // shared-types DTO field; this slice wires the runtime persistence.
+  // Default `'extension'` server-side when omitted preserves extension's
+  // existing byte-for-byte POST traffic.
+  if (body.source !== undefined && !isSource(body.source)) {
+    return withCors(
+      req,
+      NextResponse.json(
+        {
+          error:
+            'source must be either "extension" or "manual" when provided',
+        },
+        { status: 400 }
+      )
+    );
+  }
 
   // Verify the parent CompetitorUrl belongs to this Project's W#2 workflow.
   const parent = await withRetry(() =>
@@ -274,6 +292,7 @@ export async function POST(
     width: typeof body.width === 'number' ? body.width : null,
     height: typeof body.height === 'number' ? body.height : null,
     sortOrder: typeof body.sortOrder === 'number' ? body.sortOrder : 0,
+    source: body.source ?? 'extension',
     addedBy: userId,
   };
 

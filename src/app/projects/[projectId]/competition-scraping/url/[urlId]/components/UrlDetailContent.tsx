@@ -41,6 +41,7 @@ import {
 } from './EditableField';
 import { CustomFieldsEditor } from './CustomFieldsEditor';
 import { CapturedTextAddModal } from '../../../components/CapturedTextAddModal';
+import { CapturedImageAddModal } from '../../../components/CapturedImageAddModal';
 
 interface Props {
   project: { id: string; name: string };
@@ -139,6 +140,40 @@ export function UrlDetailContent({ project, urlId }: Props) {
     };
   }, [project.id, urlId]);
 
+  // P-29 Slice #3 — manual-add captured-image modal calls this after the
+  // finalize POST succeeds. Unlike captured-text where the POST response
+  // IS the wire shape the list uses, the image-finalize response is just
+  // the bare CapturedImage row (no signed URLs). The list endpoint
+  // mints fresh thumbnailUrl + fullSizeUrl per row, so the cleanest
+  // shape is to refetch the images endpoint after a successful save.
+  // One extra round-trip in exchange for not threading signed-URL minting
+  // through the finalize path (which the extension also uses, and
+  // shouldn't pay the cost of minting URLs it never reads).
+  const refreshImages = useCallback(async (): Promise<void> => {
+    const base = `/api/projects/${project.id}/competition-scraping/urls/${urlId}/images`;
+    try {
+      const res = await authFetch(base);
+      if (res.status === 404) {
+        setImagesSlot({ data: null, error: 'captured images not found.' });
+        return;
+      }
+      if (!res.ok) {
+        setImagesSlot({
+          data: null,
+          error: `Could not load captured images (HTTP ${res.status}).`,
+        });
+        return;
+      }
+      const data = (await res.json()) as ListCapturedImagesResponse;
+      setImagesSlot({ data, error: null });
+    } catch (e) {
+      setImagesSlot({
+        data: null,
+        error: e instanceof Error ? e.message : 'Could not load captured images.',
+      });
+    }
+  }, [project.id, urlId]);
+
   // P-29 Slice #2 — manual-add captured-text modal calls this with the
   // newly-created row so the table updates without a refetch round-trip.
   // POST is idempotent on clientId (extension WAL convention reused for
@@ -235,7 +270,12 @@ export function UrlDetailContent({ project, urlId }: Props) {
               urlId={urlId}
               onTextAdded={handleTextAdded}
             />
-            <CapturedImagesGallery slot={imagesSlot} />
+            <CapturedImagesGallery
+              slot={imagesSlot}
+              projectId={project.id}
+              urlId={urlId}
+              onImageAdded={refreshImages}
+            />
           </>
         )}
       </main>
@@ -665,10 +705,17 @@ function CapturedTextSubsection({
 
 function CapturedImagesGallery({
   slot,
+  projectId,
+  urlId,
+  onImageAdded,
 }: {
   slot: FetchSlot<CapturedImageWithUrls[]>;
+  projectId: string;
+  urlId: string;
+  onImageAdded: () => Promise<void> | void;
 }) {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
 
   const images = slot.data;
 
@@ -690,21 +737,31 @@ function CapturedImagesGallery({
         padding: '20px',
       }}
     >
-      <h2 style={sectionHeading}>
-        Captured Images
-        {images ? (
-          <span
-            style={{
-              marginLeft: '8px',
-              fontSize: '12px',
-              color: '#8b949e',
-              fontWeight: 400,
-            }}
-          >
-            ({images.length})
-          </span>
-        ) : null}
-      </h2>
+      <div style={sectionHeaderRowStyle}>
+        <h2 style={sectionHeading}>
+          Captured Images
+          {images ? (
+            <span
+              style={{
+                marginLeft: '8px',
+                fontSize: '12px',
+                color: '#8b949e',
+                fontWeight: 400,
+              }}
+            >
+              ({images.length})
+            </span>
+          ) : null}
+        </h2>
+        <button
+          type="button"
+          onClick={() => setModalOpen(true)}
+          data-testid="manual-add-captured-image-button"
+          style={manualAddButtonStyle}
+        >
+          + Manually add captured image
+        </button>
+      </div>
       {slot.error ? (
         <InlineMessage tone="error" body={slot.error} />
       ) : images === null ? (
@@ -739,6 +796,15 @@ function CapturedImagesGallery({
           onNext={onNext}
         />
       ) : null}
+      <CapturedImageAddModal
+        projectId={projectId}
+        urlId={urlId}
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onSuccess={() => {
+          void onImageAdded();
+        }}
+      />
     </section>
   );
 }

@@ -109,6 +109,33 @@ export async function requestUploadUrl(args: {
   };
 }
 
+// uploadBytesAsServer — server-side direct upload bypassing the signed-
+// URL handshake. Used by the W#2 P-29 Slice #3 fetch-by-url endpoint:
+// the server has already fetched the bytes from the user's URL under
+// SSRF guards, so there's no need to mint a signed URL + ship the bytes
+// back through Vercel + have the client PUT them up.
+//
+// Returns the storage path. Throws on Supabase error. Idempotent if the
+// path already exists (overwrites) — call sites generate a fresh UUID
+// per upload so collisions are virtually impossible.
+export async function uploadBytesAsServer(args: {
+  storagePath: string;
+  bytes: Uint8Array;
+  contentType: string;
+}): Promise<{ storagePath: string }> {
+  const { storagePath, bytes, contentType } = args;
+  const { error } = await bucket().upload(storagePath, bytes, {
+    contentType,
+    upsert: true,
+  });
+  if (error) {
+    throw new Error(
+      `Failed to upload bytes server-side to ${storagePath}: ${error.message}`
+    );
+  }
+  return { storagePath };
+}
+
 // verifyUploadedFile — server-side check that the extension actually
 // uploaded bytes to the signed URL before the client called :finalize.
 // Without this, a buggy or compromised client could create DB rows that
