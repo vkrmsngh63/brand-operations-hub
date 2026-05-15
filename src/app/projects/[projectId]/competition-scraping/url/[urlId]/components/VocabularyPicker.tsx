@@ -255,15 +255,20 @@ const inputStyle: React.CSSProperties = {
   outline: 'none',
 };
 
+// 2026-05-15-d Slice #2.5 — popover background, border, and shadow lifted
+// for contrast against both the page background (#0d1117) AND the modal
+// dialog background (#161b22). Previously popover was #161b22 which made
+// it invisible against the modal background when rendered inside
+// UrlAddModal / CapturedTextAddModal.
 const popoverStyle: React.CSSProperties = {
   position: 'absolute',
   top: 'calc(100% + 4px)',
   left: 0,
   right: 0,
-  background: '#161b22',
-  border: '1px solid #30363d',
-  borderRadius: '4px',
-  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.4)',
+  background: '#21262d',
+  border: '1px solid #484f58',
+  borderRadius: '6px',
+  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.7)',
   maxHeight: '240px',
   overflowY: 'auto',
   zIndex: 10,
@@ -284,8 +289,9 @@ function popoverRowStyle(selected: boolean): React.CSSProperties {
     padding: '6px 10px',
     background: selected ? '#1f3a5f' : 'transparent',
     border: 'none',
-    borderBottom: '1px solid #21262d',
-    color: '#c9d1d9',
+    // Row divider visible on the new #21262d popover bg.
+    borderBottom: '1px solid #373d44',
+    color: '#e6edf3',
     fontSize: '13px',
     cursor: 'pointer',
     fontFamily: 'inherit',
