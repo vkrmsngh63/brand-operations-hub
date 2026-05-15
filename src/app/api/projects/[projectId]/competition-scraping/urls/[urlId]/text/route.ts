@@ -6,10 +6,11 @@ import { markWorkflowActive } from '@/lib/workflow-status';
 import { recordFlake } from '@/lib/flake-counter';
 import { withRetry } from '@/lib/prisma-retry';
 import { corsPreflightResponse, withCors } from '@/lib/cors-response';
-import type {
-  CapturedText,
-  CreateCapturedTextRequest,
-  ListCapturedTextsResponse,
+import {
+  isSource,
+  type CapturedText,
+  type CreateCapturedTextRequest,
+  type ListCapturedTextsResponse,
 } from '@/lib/shared-types/competition-scraping';
 
 // W#2 API — captured text (collection routes).
@@ -20,6 +21,12 @@ import type {
 // per §8.3.1). A duplicate-clientId attempt returns the existing row
 // with 200 instead of erroring. Matches §11.2 extension-idempotency
 // intent and the urls collection POST pattern.
+//
+// P-29 Slice #2 (2026-05-15-c) — POST accepts optional `source` in the
+// body. Defaults to 'extension' server-side when omitted so the Chrome
+// extension's existing POST traffic stays byte-for-byte unchanged.
+// vklf.com's manual-add captured-text modal sends `source: 'manual'`
+// explicitly so the resulting row is distinguishable.
 
 const WORKFLOW = 'competition-scraping';
 
@@ -180,6 +187,16 @@ export async function POST(
       )
     );
   }
+  if (body.source !== undefined && !isSource(body.source)) {
+    return withCors(
+      req,
+      NextResponse.json(
+        { error: 'source must be one of: extension, manual' },
+        { status: 400 }
+      )
+    );
+  }
+  const source = body.source ?? 'extension';
 
   // Verify the parent CompetitorUrl belongs to this Project's W#2 workflow
   // before creating the text. Same defense as the sizes POST handler.
@@ -211,6 +228,7 @@ export async function POST(
     text,
     tags: body.tags ?? [],
     sortOrder: typeof body.sortOrder === 'number' ? body.sortOrder : 0,
+    source,
     addedBy: userId,
   };
 

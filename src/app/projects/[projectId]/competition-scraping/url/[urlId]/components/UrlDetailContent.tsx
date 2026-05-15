@@ -40,6 +40,7 @@ import {
   EditableVocabularyField,
 } from './EditableField';
 import { CustomFieldsEditor } from './CustomFieldsEditor';
+import { CapturedTextAddModal } from '../../../components/CapturedTextAddModal';
 
 interface Props {
   project: { id: string; name: string };
@@ -138,6 +139,25 @@ export function UrlDetailContent({ project, urlId }: Props) {
     };
   }, [project.id, urlId]);
 
+  // P-29 Slice #2 — manual-add captured-text modal calls this with the
+  // newly-created row so the table updates without a refetch round-trip.
+  // POST is idempotent on clientId (extension WAL convention reused for
+  // the manual-add path via crypto.randomUUID()), so a duplicate-create
+  // returns the existing row with 200; we dedup here on clientId to avoid
+  // double-listing. Mirrors handleUrlAdded in CompetitionScrapingViewer.
+  const handleTextAdded = useCallback((row: CapturedText): void => {
+    setTextSlot((prev) => {
+      const list = prev.data ?? [];
+      const existing = list.findIndex((r) => r.clientId === row.clientId);
+      if (existing >= 0) {
+        const next = [...list];
+        next[existing] = row;
+        return { data: next, error: prev.error };
+      }
+      return { data: [row, ...list], error: prev.error };
+    });
+  }, []);
+
   // PATCH callback used by the inline-edit fields in UrlMetadataCard.
   // Each save sends exactly one changed field. Optimistic-update model:
   // the caller has already pre-mutated `urlSlot.data` if it wants to
@@ -209,7 +229,12 @@ export function UrlDetailContent({ project, urlId }: Props) {
               onPatch={patchUrl}
             />
             <SizesSubsection slot={sizesSlot} />
-            <CapturedTextSubsection slot={textSlot} />
+            <CapturedTextSubsection
+              slot={textSlot}
+              projectId={project.id}
+              urlId={urlId}
+              onTextAdded={handleTextAdded}
+            />
             <CapturedImagesGallery slot={imagesSlot} />
           </>
         )}
@@ -505,9 +530,20 @@ function SizesSubsection({ slot }: { slot: FetchSlot<CompetitorSize[]> }) {
 
 type TextSortKey = 'contentCategory' | 'text' | 'addedAt';
 
-function CapturedTextSubsection({ slot }: { slot: FetchSlot<CapturedText[]> }) {
+function CapturedTextSubsection({
+  slot,
+  projectId,
+  urlId,
+  onTextAdded,
+}: {
+  slot: FetchSlot<CapturedText[]>;
+  projectId: string;
+  urlId: string;
+  onTextAdded: (row: CapturedText) => void;
+}) {
   const [sortKey, setSortKey] = useState<TextSortKey>('addedAt');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [modalOpen, setModalOpen] = useState(false);
 
   const sorted = useMemo(() => {
     if (!slot.data) return [];
@@ -543,21 +579,31 @@ function CapturedTextSubsection({ slot }: { slot: FetchSlot<CapturedText[]> }) {
         marginBottom: '20px',
       }}
     >
-      <h2 style={sectionHeading}>
-        Captured Text
-        {slot.data ? (
-          <span
-            style={{
-              marginLeft: '8px',
-              fontSize: '12px',
-              color: '#8b949e',
-              fontWeight: 400,
-            }}
-          >
-            ({slot.data.length})
-          </span>
-        ) : null}
-      </h2>
+      <div style={sectionHeaderRowStyle}>
+        <h2 style={sectionHeading}>
+          Captured Text
+          {slot.data ? (
+            <span
+              style={{
+                marginLeft: '8px',
+                fontSize: '12px',
+                color: '#8b949e',
+                fontWeight: 400,
+              }}
+            >
+              ({slot.data.length})
+            </span>
+          ) : null}
+        </h2>
+        <button
+          type="button"
+          onClick={() => setModalOpen(true)}
+          data-testid="manual-add-captured-text-button"
+          style={manualAddButtonStyle}
+        >
+          + Manually add captured text
+        </button>
+      </div>
       {slot.error ? (
         <InlineMessage tone="error" body={slot.error} />
       ) : slot.data === null ? (
@@ -606,6 +652,13 @@ function CapturedTextSubsection({ slot }: { slot: FetchSlot<CapturedText[]> }) {
           </table>
         </div>
       )}
+      <CapturedTextAddModal
+        projectId={projectId}
+        urlId={urlId}
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onSuccess={onTextAdded}
+      />
     </section>
   );
 }
@@ -867,6 +920,27 @@ const sectionHeading: React.CSSProperties = {
   fontWeight: 600,
   color: '#e6edf3',
   margin: '0 0 12px 0',
+};
+
+const sectionHeaderRowStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: '12px',
+  marginBottom: '4px',
+};
+
+const manualAddButtonStyle: React.CSSProperties = {
+  background: '#238636',
+  border: '1px solid rgba(240, 246, 252, 0.10)',
+  color: '#ffffff',
+  borderRadius: '6px',
+  fontFamily: 'inherit',
+  fontSize: '12px',
+  fontWeight: 500,
+  padding: '5px 12px',
+  cursor: 'pointer',
+  whiteSpace: 'nowrap',
 };
 
 const tableStyle: React.CSSProperties = {
