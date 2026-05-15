@@ -2240,4 +2240,76 @@ P-37 shipped in commit `d3a44a0`; P-36 shipped in commit `688f310`. Each pushed 
 
 ---
 
+### 2026-05-15-f — session_2026-05-15-f_w2-main-deploy-session-15-p29-slice-3-DEPLOYED-FULL-VERIFY (Claude Code, dual-branch — main for deploy + workflow-2 fast-forwarded after the main push)
+
+**Session purpose:** W#2 → main deploy session #15 — bring P-29 Slice #3 (manual-add captured-image modal + SSRF-guarded `fetch-by-url` endpoint + `ssrf-guard.ts` security module) from `workflow-2-competition-scraping` to `main` → vklf.com via standard W#2 → main deploy cheat-sheet (rebase + ff-merge + Rule 9 deploy gate + push + Vercel auto-redeploy + ping-pong sync) + director walkthrough on a real Independent Website URL exercising all three input modalities + SSRF defensive spot-check + extension regression spot-check. Closes (a.34) RECOMMENDED-NEXT. **Completes the P-29 three-slice manual-add arc end-to-end on vklf.com.**
+
+**What shipped to production this session** (zero new code; ff-merge brought 2026-05-15-e's bundled commit `8018294` onto main and into the live web bundle):
+
+- The `+ Manually add captured image` button at the right end of every URL detail page's Captured Images section header.
+- The `CapturedImageAddModal` with three input modalities (drag-drop, clipboard paste, URL-of-image text field).
+- The new server-side `POST /api/projects/[projectId]/competition-scraping/urls/[urlId]/images/fetch-by-url` endpoint.
+- The `ssrf-guard.ts` security boundary protecting that endpoint.
+- The `uploadBytesAsServer` storage helper for server-side direct upload (bypasses signed-URL handshake).
+- The `body.source` validation + persistence wire-in on the existing `images/finalize` route.
+- The `refreshImages` callback wired through `UrlDetailContent.tsx` + `CapturedImagesGallery`.
+
+(For the full code-level shape see §B 2026-05-15-e — the BUILD session entry — this entry covers only the deploy + verification.)
+
+**Pre-deploy scoreboard re-run on workflow-2 at session start — all GREEN:**
+- `npx tsc --noEmit` clean
+- `cd extensions/competition-scraping && npm run compile` clean
+- `npm run build` clean (50 routes — `fetch-by-url` registered)
+- `node --test` on all 18 src/lib test files: **447/447 pass** (37 ssrf-guard cases + baseline 410)
+- Extension `npm test`: **334/334 pass** (unchanged — Slice #3 shared-types additions accretive)
+- `npx playwright test tests/playwright/p29-manual-add-captured-image-modal.spec.ts`: 17/17 skipped as designed (pending P-30 React-bundle rig)
+
+**Deploy execution per `MULTI_WORKFLOW_PROTOCOL.md` standard W#2 → main path:**
+1. `git checkout main && git pull --rebase origin main` — clean; main at `1607933` (deploy-#14's end-of-session doc-batch commit, unchanged since 2026-05-15-d).
+2. `git merge --ff-only workflow-2-competition-scraping` — clean fast-forward `1607933..8018294`; 15 files +3124/-73 (incl. 5 new code/test files: `ssrf-guard.ts` + `ssrf-guard.test.ts` + `fetch-by-url/route.ts` + `CapturedImageAddModal.tsx` + Playwright Slice #3 spec; 4 modified code files: `shared-types/competition-scraping.ts` + `competition-storage.ts` + `finalize/route.ts` + `UrlDetailContent.tsx`; 6 modified docs: ROADMAP + CHAT_REGISTRY + DOCUMENT_MANIFEST + NEXT_SESSION + COMPETITION_SCRAPING_DESIGN + COMPETITION_SCRAPING_VERIFICATION_BACKLOG).
+3. **Rule 9 deploy gate** — issued via `AskUserQuestion` forced-picker (Yes — push to main / No — hold off / I have a question first). Director picked Yes. Plain-language deploy describe covered: what user-visible change goes live (new "+ Manually add captured image" button + three input modalities + new server-side endpoint + SSRF guardrail), what does NOT change (Chrome extension byte-for-byte unchanged; no schema change), reversibility (revert commit 8018294 if anything breaks; additive change), what happens after push (Vercel auto-redeploy ~1-2 min, then workflow-2 sync, then walkthrough).
+4. `git push origin main` — pushed `1607933..8018294`. Vercel auto-redeployed cleanly.
+5. `git checkout workflow-2-competition-scraping && git push origin workflow-2-competition-scraping` — pushed `1607933..8018294` to keep workflow-2 in lockstep with main (ping-pong sync; same Rule 9 approval scope per `feedback_approval_scope_per_decision_unit.md`).
+
+**Rule 23 Change Impact Audit outcome:** Additive (safe). Confirmed at session start. Slice #3's new endpoint + new modal + new SSRF guard + finalize route's new optional `source` input branch are all additive — extension's existing `requestUpload + finalize` traffic byte-for-byte unchanged; no coordinated downstream-consumer update required.
+
+**Director manual walkthrough on real Independent Website URL — all five parts ✅ GREEN in a single batched pass** (deploy #14 director-preferred reporting style — director ran all five parts end-to-end before reporting back with "all green"):
+- **Part A — drag-and-drop modality:** drag a JPEG/PNG/WebP from desktop into the drop zone → dropzone highlights on dragover → drop produces a preview thumbnail + mime + size text → optional metadata fields fillable (Image Category via VocabularyPicker, Composition, Embedded Text, Tags) → Save → modal closes → new row appears in the gallery. ✅
+- **Part B — clipboard paste modality:** modal reopened with no image; Ctrl/Cmd+V with a clipboard image → preview thumbnail appears → Save → new row in gallery. ✅
+- **Part C — URL-of-image modality (the new server-side endpoint):** paste a real public image URL into the URL text field → click Fetch image → spinner (~1-3s) → preview thumbnail appears with the fetched image → Save → new row in gallery (server-side direct upload bypassing signed-URL handshake). ✅
+- **Part D — SSRF defensive spot-check:** paste a private-range URL (e.g., `http://localhost/...` / `http://192.168.x.x/...` / `http://169.254.169.254/computeMetadata/v1/`) → click Fetch image → inline plain-language error rejecting the resolve (no successful fetch; no preview; the SSRF guard fires as designed). ✅
+- **Part E — Chrome extension regression spot-check:** with the extension active on any supported platform (Amazon / eBay / Etsy / Walmart / Google Shopping / Google Ads / Independent Website), saved an image via the existing right-click "Save to PLOS" or region-screenshot gesture → row appears in gallery as before; `source='extension'` default persisted (defense in depth — extension's POST traffic is byte-for-byte unchanged from pre-Slice-#3 because the extension doesn't send a `source` field, so the route falls through to the `'extension'` default). ✅
+
+**Zero walkthrough-found polish items** — Slice #3 + Slices #1+#2's foundation work shipped cleanly into production on the first deploy cycle. Contrast deploy session #14 (three deploy cycles + six walkthrough-found polish fixes P-32 through P-37) — this session's single-pass green outcome reflects the maturity of the P-29 three-slice arc by Slice #3 (and the design-rigor of the 2026-05-15 design pass that frontloaded the cross-modality + SSRF + symmetric-permission decisions).
+
+**P-29 three-slice arc completion summary:**
+
+| Slice | What it shipped | Built | Deployed |
+|---|---|---|---|
+| #1 | Manual-add URL modal + `source` schema migration on all 3 W#2 tables | 2026-05-15-b | 2026-05-15-d (deploy session #14) |
+| #2 | Manual-add captured-text modal on URL-detail page | 2026-05-15-c | 2026-05-15-d (deploy session #14) |
+| #3 | Manual-add captured-image modal (3 modalities) + SSRF-guarded `fetch-by-url` endpoint + `ssrf-guard.ts` module | 2026-05-15-e | **2026-05-15-f (deploy session #15 — this session)** |
+
+The manual-add feature is now end-to-end on vklf.com. Admins can add URLs (Slice #1 toolbar button), captured texts (Slice #2 section-header button on URL detail page), and captured images (Slice #3 section-header button on URL detail page with three input modalities) without using the Chrome extension. The original 2026-05-07 deliberate deferral of "manual-add UI on vklf.com" is fully closed.
+
+**Deferred items captured per Rule 14e + Rule 26:** None new this session. The pre-existing P-30 (Playwright React-bundle rig) and P-31 (route-handler DI refactor) captured during Slice #1's build still cover the regression-coverage gap for the entire three-slice arc.
+
+**Director-approved end-of-session pick** (§4 Step 1c forced-picker fired — P-29 arc wrapped with no obvious continuation): **P-30 Playwright React-bundle stub-page rig** = (a.35) RECOMMENDED-NEXT. Rationale per `feedback_recommendation_style.md`: most thorough/reliable next pick — locks in mechanical-UX regression coverage for the entire P-29 manual-add feature while the modal code is fresh; converts the 31 currently-skipped Playwright cases (17 image + 8 text + 6 URL) into running coverage in one session; highest-leverage choice because every future P-29-area polish/walkthrough then has automated regression coverage at zero director-time cost. NEXT_SESSION.md rewritten 2026-05-15-f with the P-30 build session prompt + Rule 14f forced-picker among the four candidate rig shapes (Vite stub-page / Next.js test-only route / Playwright Component Testing / JSDOM unit tests).
+
+**Multi-Workflow per Rule 25:** dual-branch session — pre-deploy scoreboard verification on `workflow-2-competition-scraping`, ff-merge + deploy phases on `main`, one ping-pong sync after the main push (both branches now at `8018294`). Pull-rebase clean at all checkpoints. Schema-change-in-flight stays "No" entire session (no schema work — Slice #1's `source`-column migration already in place since 2026-05-15-b). W#1 row untouched per Rule 3 ownership. **TaskList sweep per Rule 26:** 6 session tasks tracked (pre-deploy scoreboard / checkout main + pull + ff-merge / Rule 9 deploy gate + push main / push workflow-2 sync / director walkthrough Parts A-E / end-of-session doc batch); all 6 closed by end-of-session; zero `DEFERRED:` items at session end. **Three pushes this session:** origin/main (Rule 9-approved deploy push); origin/workflow-2 (ping-pong sync, same approval scope); end-of-session doc-batch push (same approval scope per `feedback_approval_scope_per_decision_unit.md`).
+
+**Affected sections:**
+- §A.7 (Module 2 captured-image UX) — captured-image is now also serviced by vklf.com's `CapturedImageAddModal` in addition to the Chrome extension's right-click "Save to PLOS" / region-screenshot gestures; all three input modalities are now LIVE on production for any URL detail page across all 7 supported platforms.
+- §A.10 (Audit trail) — `source` column is now load-bearing across all three W#2 tables (CompetitorUrl + CapturedText + CapturedImage) in production. Distinguishes extension-captured vs. manual-modal-captured rows everywhere; per-row provenance is queryable.
+- §A.13 (Data persistence) — no schema change. Storage bucket `competition-scraping` holds all three sources of image bytes (extension-uploaded via signed-URL Phase 1+2; manual-modal drag-drop / paste via the same Phase 1+2; manual-modal URL-fetch via server-side direct upload bypassing the signed-URL handshake via `uploadBytesAsServer`).
+- §A.18 (Recommended next-session sequence) — P-29 three-slice arc fully closed; next pick is P-30 (test-infrastructure work that converts the 31 currently-skipped Playwright cases into running regression coverage).
+
+**Cross-references:**
+- Single doc-batch commit on `main` (this session — code changes were carried by the ff-merge of 2026-05-15-e's bundled commit `8018294`).
+- ROADMAP W#2 row (a.34) ✅ DONE + new (a.35) RECOMMENDED-NEXT P-30 Playwright React-bundle rig.
+- COMPETITION_SCRAPING_VERIFICATION_BACKLOG new "Deploy session #15 — P-29 Slice #3 DEPLOYED + FULL VERIFY 2026-05-15-f" section at top + Slice #3 SHIPPED-AT-CODE-LEVEL section's pending-verification table flipped DEFERRED → ✅ PASS for all 12 rows.
+- NEXT_SESSION.md rewritten 2026-05-15-f for P-30 build session.
+
+---
+
 END OF DOCUMENT
