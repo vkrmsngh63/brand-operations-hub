@@ -1920,4 +1920,61 @@ This is the **first session to apply the CORRECTIONS_LOG 2026-05-10-c entry #1 p
 
 ---
 
+### 2026-05-15 — session_2026-05-15_w2-p29-design-session (Claude Code, on `workflow-2-competition-scraping`)
+
+**Session purpose:** P-29 DESIGN session — settle the 5 open design questions captured in `COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` lines 1834-1839 via Rule 14f forced-pickers, then propose a build slice + Rule 27 verification picker. Per launch prompt: no code change in this session — design + sequencing approval only.
+
+**Director's directives this session (5 forced-picker outcomes + 1 verification-approach pick):**
+
+- **Q3 — `source` audit-trail column.** Picked "All 3 tables (recommended)." Decision: add `source: 'extension' | 'manual'` column to `CompetitorUrl`, `CapturedText`, and `CapturedImage`. Default existing rows to `'extension'`. One `prisma db push` migration runs in Slice #1's session. Most thorough — covers the cross-source case (manual text/image added to an extension-captured URL). Reversible.
+
+- **Q4 — Permission model.** Picked "Symmetric with extension (recommended)." Decision: modal's "+ Manually add" button visible to anyone with project-workflow access. Phase 1 admin-only by virtue of admin-solo; Phase 2 workers see it when they have assignment to (project, competition-scraping, [platform]). Server-side gate `verifyProjectWorkflowAuth` is authoritative; no client-side admin-only override.
+
+- **Q5 — Manual-add UI form location.** Picked "Modal popup (recommended)." Decision: modal opens from "+ Manually add URL" button on `UrlTable.tsx` (URL form) and "+ Manually add captured text" / "+ Manually add captured image" buttons on `url/[urlId]/page.tsx` (text + image forms). Modal pattern used for all three sub-features uniformly.
+
+- **Q1 — Image upload mechanics.** Picked "All three (recommended)." Decision: image modal exposes three input shapes — drag-and-drop area + paste-from-clipboard listener (Ctrl+V/Cmd+V) + text field labeled "or paste an image URL." URL-of-image path is gated server-side with allowlist of public web hostnames (blocking internal/loopback/cloud-metadata IPs per SSRF guidance), strict content-type check (must be `image/*`), size limit ≤10 MB.
+
+- **Q2-reframing (Stage 0) — "Other" platform handling.** Q2 COLLAPSED after Rule-3 code-truth check. `independent-website` is already a supported platform value end-to-end (`prisma/schema.prisma:257` `platform String`; `src/lib/shared-types/competition-scraping.ts:20-29` `PLATFORMS` 7-value array; `extensions/competition-scraping/src/lib/platforms.ts:19` extension popup picker). No schema change for "Other" handling. Modal's platform dropdown labels this option "Independent Website" to match extension (Rule 15 autonomous; UI-consistency principle). The yesterday-captured framing in `COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` line 1832 ("Current platform enum is `walmart | ebay | etsy | amazon`. Adding 'other' requires a schema add") was INCORRECT against current code — captured to CORRECTIONS_LOG today as INFORMATIONAL (root cause = Rule 24 pre-capture search yesterday found the higher-level lineage on DESIGN doc line 489 but didn't grep the actual schema).
+
+- **Rule 27 — verification approach for Slice #1.** Picked "Hybrid (recommended)." Decision: Playwright covers the mechanical/regression-prone parts (button → modal → form submit → row appears → `source='manual'` → auth gate); director manual walkthrough covers visual-judgment + end-to-end smoke on a real independent website.
+
+**Alternatives considered (per pick) — comprehensive forced-pickers per Rule 14f.** Notable rejected options:
+- Q3 Option B (URL-only `source` column) — fails the cross-source case (manual text/image on an extension-captured URL).
+- Q3 Option C (defer to Phase 3 AuditEvent table) — no visibility for years; Phase 3 far off.
+- Q4 Option B (admin-only forever) — breaks extension symmetry; reduces worker autonomy.
+- Q5 Option B (inline expansion) — multi-field URL form + image-upload area both crowd a single table row.
+- Q1 Option C (URL-only) — forces user to host image somewhere first; loses drag-drop convenience.
+- Rule 27 Option A (Playwright only) — visual-judgment portions need director's eye.
+
+**Build sequencing (three slices, three sessions):**
+- **Slice #1 (next session)** = manual-add URL modal on `UrlTable.tsx` + one-shot `source` schema migration covering all 3 W#2 tables. Schema-change-in-flight flag in ROADMAP Current Active Tools flips to "Yes" at Slice #1's session start. Smallest; validates pattern.
+- **Slice #2** = manual-add captured-text modal on URL-detail page. No schema change (Slice #1 covered).
+- **Slice #3** = manual-add captured-image modal with all three input modalities + new server-side URL-fetch endpoint with SSRF allowlist + content-type + size guardrails. Largest.
+
+Each slice its own session per `PROJECT_CONTEXT.md §13` discover-as-you-build.
+
+**Director-approved end-of-session pick:** Path A — wrap design session here; start Slice #1 in a fresh session via `./resume`. Rationale per session-management lucidity preference (`feedback_session_management.md`).
+
+**Decision:** all 5 design questions settled + sequencing approved + Rule 27 verification approach picked. Slice #1 set as next session via `NEXT_SESSION.md` rewrite. No code changed this session.
+
+**Affected sections:**
+- §A.7 (Module 1 URL-add UX) — now also serviced by a vklf.com modal in addition to the extension's "+ Add" gesture.
+- §A.10 (Audit trail) — adds explicit `source` column to W#2 tables (Q3 outcome).
+- §A.13 (Data persistence) — schema columns added (Slice #1 migration).
+- §A.18 (Recommended next-session sequence) — adds the three P-29 build slices.
+
+**Cross-references:**
+- `prisma/schema.prisma:257` (Slice #1 adds `source` column to CompetitorUrl + CapturedText + CapturedImage)
+- `src/lib/shared-types/competition-scraping.ts:20-29` (PLATFORMS already includes `independent-website`; Slice #1 will add `source` field to URL/text/image DTOs)
+- `src/app/projects/[projectId]/competition-scraping/components/UrlTable.tsx` (Slice #1's modal mount point)
+- `src/app/projects/[projectId]/competition-scraping/url/[urlId]/page.tsx` (Slices #2 + #3's modal mount points)
+- `extensions/competition-scraping/src/lib/platforms.ts:19` (existing "Independent Website" label match for UI consistency)
+- `COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` lines 1814-1853 (P-29 polish-backlog entry; status flip to design-DONE in this end-of-session batch)
+- `PLATFORM_REQUIREMENTS.md §5` (audit-trail policy informs Q3 decision)
+- `CORRECTIONS_LOG.md` — new 2026-05-15 INFORMATIONAL entry on Q2 code-vs-doc drift
+- `NEXT_SESSION.md` rewritten for Slice #1 build session
+- `ROADMAP.md` W#2 row updates + new (a.30) RECOMMENDED-NEXT Slice #1 + polish backlog P-29 entry status flip
+
+---
+
 END OF DOCUMENT

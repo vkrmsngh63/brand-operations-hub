@@ -315,7 +315,7 @@ Entries will be added during each workflow's Tool Graduation Ritual:
 - **FIELDS (provisional):**
   - `id` — UUID, primary key (client-generated for idempotency)
   - `projectId` — FK to Project
-  - `platform` — Enum: `"amazon" | "ebay" | "etsy" | "walmart" | "google_shopping" | "google_ads" | "independent_website"`
+  - `platform` — String column (NOT a Prisma enum): `"amazon" | "ebay" | "etsy" | "walmart" | "google-shopping" | "google-ads" | "independent-website"` — per `prisma/schema.prisma:257` comment + `src/lib/shared-types/competition-scraping.ts` `PLATFORMS` const (canonical). DRIFT-FIXED 2026-05-15 (was incorrectly framed as a Prisma enum with underscored values; corrected to match code per Rule 3).
   - `url` — String, the competitor URL (editable)
   - `competitionCategory` — String, FK to vocabulary (e.g., "device", "topical product", "supplement")
   - `productName` — String, FK to vocabulary
