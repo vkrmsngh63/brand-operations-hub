@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>P-30 stub page — W#2 P-29 captured-text modal</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 16px;
+      background: #0d1117;
+      color: #e6edf3;
+      font-family: system-ui, -apple-system, sans-serif;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+<h1 style="font-size: 14px; color: #8b949e;">P-30 stub page — CapturedTextAddModal regression rig</h1>
+<div id="mount"></div>
+<script type="module">
+  window.__fakeSupabaseState = {
+    initialToken: 'stub-test-token',
+    refreshResult: 'success',
+    refreshedToken: 'refreshed-stub-token',
+    refreshCalls: 0,
+  };
+  await import('/dist/p29-text-modal.bundle.js');
+  window.__pageReady = true;
+</script>
+</body>
+</html>

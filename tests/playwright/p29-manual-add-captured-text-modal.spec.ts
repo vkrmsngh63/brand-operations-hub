@@ -1,167 +1,252 @@
 // W#2 P-29 Slice #2 — manual-add captured-text modal regression spec.
 //
 // Spec target: src/app/projects/[projectId]/competition-scraping/components/
-//   CapturedTextAddModal.tsx + UrlDetailContent.tsx wire-in (the
-//   "+ Manually add captured text" button + clientId-dedup callback).
-// API target: POST /api/projects/[projectId]/competition-scraping/urls/
-//   [urlId]/text with `source: 'manual'` body field.
+//   CapturedTextAddModal.tsx. Real production component rendered inside
+//   the P-30 stub-page rig (tests/playwright/mounts/p29-text-modal.mount.tsx
+//   + pages/p29-text-modal.html). Each test intercepts the modal's POST
+//   .../urls/[urlId]/text call via page.route() to capture body shape +
+//   shape the response. The wrapper component owns a captured-text list
+//   that mirrors UrlDetailContent.handleTextAdded — including the
+//   clientId-dedup path the last test exercises.
 //
-// Verification approach picked 2026-05-15 per Rule 27 (forced-picker for
-// the P-29 family): Hybrid — Playwright covers mechanical regression-
-// prone parts; director manual walkthrough covers visual-judgment +
-// real-independent-website end-to-end smoke. Slice #2 reuses the same
-// Hybrid pick (no fresh picker needed — same component class as Slice #1).
-//
-// SCOPE OF THIS FILE — what's tested here vs. covered elsewhere:
-//
-//   ✅ Tested here (when the stub-page rig lands):
-//     - "+ Manually add captured text" button renders at the right end of
-//       the Captured Text section's h2 row.
-//     - Clicking the button opens the modal.
-//     - Empty Text submit shows the inline validation error.
-//     - Filling required field + submit serializes the POST body with
-//       `source: 'manual'` AND a `clientId` matching UUIDv4 shape AND
-//       (when set) `contentCategory` AND (when set) `tags` parsed from
-//       comma-separated input.
-//     - Modal closes on a 201/200 response; the new row appears in the
-//       captured-text table (via the parent's handleTextAdded prepend).
-//     - Modal stays open + shows error on a 4xx/5xx response.
-//     - Escape key + backdrop click + Cancel button + X button all close
-//       the modal (only when not submitting).
-//     - clientId-dedup — a duplicate POST returning 200 with the same
-//       clientId replaces the existing row in-place rather than
-//       prepending a second copy.
-//
-//   ⏸ Tracked as DEFERRED — needs the React-bundle stub-page rig that
-//      this spec file will reuse (the same P-30 work that unblocks
-//      Slice #1's spec also unblocks Slice #2):
-//      - All test cases in this file are currently `test.skip()` because
-//        the bundling rig (esbuild ES module of React + ReactDOM +
-//        CapturedTextAddModal + the relevant section wrapper + stubbed
-//        authFetch + mount script + static test-page.html) does not yet
-//        exist. P-30 will add a second bundle entrypoint + test-page +
-//        wire this spec file to its stub page.
-//      - Tracked at: docs/COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md
-//        P-30 polish-backlog entry (added 2026-05-15-b).
-//
-//   ⏸ Tracked as DEFERRED — needs route-handler DI refactor:
-//      - API-layer regression of `source` field persistence + auth gate
-//        (unauthenticated submit → 401) + validation (400 for invalid
-//        source value, missing text, malformed tags). Slice #1 already
-//        captured this as P-31 for `urls/route.ts`; P-31's pattern
-//        extends to `urls/[urlId]/text/route.ts` (the route this slice
-//        touched) per the P-31 entry's "reuse for sibling routes" note.
-//      - Tracked at: docs/COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md
-//        P-31 polish-backlog entry.
-//
-//   ✅ Covered today by other means:
-//     - `isSource` type-guard regression — still covered by
-//       src/lib/shared-types/competition-scraping.test.ts (the same
-//       guard the new text-POST validation branch calls).
-//     - End-to-end smoke (real auth + real DB + a manually-added
-//       captured-text row appearing in the URL-detail page's table) —
-//       director manual walkthrough on vklf.com post-deploy.
-//     - TypeScript compile catches any future shape drift between modal
-//       form payload and CreateCapturedTextRequest.
-//
-// Why this file exists today even with everything skipped: making the
-// regression intent visible in the repo NOW means the future P-30 rig
-// session has a known target (this file's skipped tests are the spec).
-// Without this file the future work has only memory + handoff docs to
-// pull from.
+// What this file covers:
+//   1. Button renders in section header.
+//   2. Click opens the modal + autofocuses Text textarea.
+//   3. Empty Text submit shows inline validation error + no POST.
+//   4. Submit with required field posts source:'manual' + UUID4 clientId
+//      + text; modal closes; new row prepended to the list.
+//   5. Submit with optional fields serializes contentCategory + parsed
+//      tags (comma-split + whitespace-trim + empty-drop).
+//   6. Modal stays open + shows error on 4xx response.
+//   7. Escape / backdrop / Cancel / X all close the modal.
+//   8. clientId-dedup: duplicate-create 200 response replaces existing
+//      row in place rather than prepending a second copy.
 
-import { test } from '@playwright/test';
+import { test, expect, type Request, type Route } from '@playwright/test';
+
+const PAGE_URL = '/p29-text-modal';
+const POST_TEXT_PATTERN = /\/api\/projects\/[^/]+\/competition-scraping\/urls\/[^/]+\/text(?:\?|$)/;
+const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const fakeTextRow = (overrides: Record<string, unknown> = {}) => ({
+  id: 'fake-text-id',
+  urlId: 'test-url-id',
+  clientId: 'fake-client-id',
+  text: 'fake text',
+  source: 'manual',
+  contentCategory: null,
+  tags: [],
+  createdAt: new Date('2026-05-15T00:00:00Z').toISOString(),
+  ...overrides,
+});
 
 test.describe('W#2 P-29 Slice #2 — manual-add captured-text modal (UI mechanical)', () => {
-  test.skip(true, 'P-30 — React-bundle stub-page rig not yet built; see file header for DEFERRED tracking.');
-
-  test('"+ Manually add captured text" button renders in section header', async () => {
-    // Stub-page test (deferred):
-    //   1. Goto /p29-manual-add-captured-text-modal.test.html (stub page
-    //      mounting the CapturedTextSubsection wrapper with a static
-    //      captured-text row set + CapturedTextAddModal).
-    //   2. Assert button [data-testid="manual-add-captured-text-button"]
-    //      is visible and is rendered to the right of the "Captured Text"
-    //      h2 in the section header row.
+  test('"+ Manually add captured text" button renders in section header', async ({ page }) => {
+    await page.goto(PAGE_URL);
+    await page.waitForFunction(() => window.__pageReady === true);
+    await expect(page.getByTestId('manual-add-captured-text-button')).toBeVisible();
   });
 
-  test('Clicking the button opens the modal', async () => {
-    // Stub-page test (deferred):
-    //   1. Goto stub page.
-    //   2. Click [data-testid="manual-add-captured-text-button"].
-    //   3. Assert [role="dialog"][aria-labelledby=
-    //      "captured-text-add-modal-title"] becomes visible.
-    //   4. Assert the Text textarea has focus (autofocus on open).
+  test('Clicking the button opens the modal + autofocuses Text', async ({ page }) => {
+    await page.goto(PAGE_URL);
+    await page.waitForFunction(() => window.__pageReady === true);
+    await page.getByTestId('manual-add-captured-text-button').click();
+    await expect(page.getByRole('dialog', { name: /manually add captured text/i })).toBeVisible();
+    await expect(page.getByLabel('Text', { exact: true })).toBeFocused();
   });
 
-  test('Empty Text submit shows inline validation error', async () => {
-    // Stub-page test (deferred):
-    //   1. Open the modal.
-    //   2. Click Save captured text without entering any text.
-    //   3. Assert [role="alert"] becomes visible with text matching
-    //      /Text is required/.
-    //   4. Assert the modal stays open.
-    //   5. Assert no POST was issued (interception count = 0).
+  test('Empty Text submit shows inline validation error', async ({ page }) => {
+    let postCount = 0;
+    await page.route(POST_TEXT_PATTERN, (route: Route) => {
+      postCount += 1;
+      void route.fulfill({ status: 201, body: JSON.stringify(fakeTextRow()) });
+    });
+
+    await page.goto(PAGE_URL);
+    await page.waitForFunction(() => window.__pageReady === true);
+    await page.getByTestId('manual-add-captured-text-button').click();
+
+    // Bypass disabled-button + required-textarea by dispatching submit.
+    await page.evaluate(() => {
+      const form = document.querySelector('form');
+      form?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+    });
+
+    await expect(page.getByRole('alert')).toHaveText(/Text is required/i);
+    await expect(page.getByRole('dialog', { name: /manually add captured text/i })).toBeVisible();
+    expect(postCount).toBe(0);
   });
 
-  test('Submit with required field posts source=manual + clientId + text', async () => {
-    // Stub-page test (deferred):
-    //   1. Open the modal.
-    //   2. Fill Text = "This is a benchmark headline I captured manually."
-    //   3. Intercept fetch to .../urls/[urlId]/text with a route handler
-    //      that captures the request body + fulfills with 201 + a fake
-    //      CapturedText response (source: 'manual').
-    //   4. Click Save captured text.
-    //   5. Assert captured body.source === 'manual' AND
-    //      body.text === 'This is a benchmark headline I captured manually.'
-    //      AND body.clientId matches /^[0-9a-f-]{36}$/i (UUIDv4 shape).
-    //   6. Assert modal closes after success.
-    //   7. Assert the captured-text table has a new row whose text matches
-    //      the submitted value (prepend path via handleTextAdded).
+  test('Submit with required field posts source=manual + clientId + text', async ({ page }) => {
+    let capturedBody: Record<string, unknown> | null = null;
+    await page.route(POST_TEXT_PATTERN, async (route: Route, request: Request) => {
+      capturedBody = request.postDataJSON();
+      const body = capturedBody as { clientId: string; text: string };
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify(
+          fakeTextRow({ clientId: body.clientId, text: body.text }),
+        ),
+      });
+    });
+
+    await page.goto(PAGE_URL);
+    await page.waitForFunction(() => window.__pageReady === true);
+    await page.getByTestId('manual-add-captured-text-button').click();
+
+    const sample = 'This is a benchmark headline I captured manually.';
+    await page.getByLabel('Text', { exact: true }).fill(sample);
+    await page.getByRole('button', { name: 'Save captured text' }).click();
+
+    await expect(page.getByRole('dialog', { name: /manually add captured text/i })).not.toBeVisible();
+
+    expect(capturedBody).toMatchObject({
+      source: 'manual',
+      text: sample,
+    });
+    const body = capturedBody as { clientId: string } | null;
+    expect(body?.clientId).toMatch(UUID_V4_REGEX);
+
+    // List prepended with the new row.
+    const rowText = await page.getByTestId('captured-text-row').first().textContent();
+    expect(rowText).toContain(sample);
+    expect(await page.evaluate(() => window.__testText.getSuccessCount())).toBe(1);
   });
 
-  test('Submit with optional fields serializes contentCategory + parsed tags', async () => {
-    // Stub-page test (deferred):
-    //   1. Open the modal.
-    //   2. Fill Text = "Bullet copy", Content Category = "bullet",
-    //      Tags = "headline, bullet, review-quote".
-    //   3. Intercept POST; capture body.
-    //   4. Submit.
-    //   5. Assert body.contentCategory === 'bullet' AND
-    //      body.tags is exactly ['headline', 'bullet', 'review-quote']
-    //      (whitespace trimmed, empty entries dropped).
+  test('Submit with optional fields serializes contentCategory + parsed tags', async ({ page }) => {
+    let capturedBody: Record<string, unknown> | null = null;
+    await page.route(POST_TEXT_PATTERN, async (route: Route, request: Request) => {
+      capturedBody = request.postDataJSON();
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify(fakeTextRow({ text: 'Bullet copy' })),
+      });
+    });
+
+    await page.goto(PAGE_URL);
+    await page.waitForFunction(() => window.__pageReady === true);
+    await page.getByTestId('manual-add-captured-text-button').click();
+
+    await page.getByLabel('Text', { exact: true }).fill('Bullet copy');
+    // Content Category is the VocabularyPicker; its input doesn't have a
+    // distinct aria-label but the wrapping <label> text matches.
+    await page.locator('label:has-text("Content Category") input').fill('bullet');
+    await page.getByLabel('Tags').fill('headline, bullet, review-quote, ');
+    await page.getByRole('button', { name: 'Save captured text' }).click();
+
+    await expect(page.getByRole('dialog', { name: /manually add captured text/i })).not.toBeVisible();
+
+    expect(capturedBody).toMatchObject({
+      contentCategory: 'bullet',
+      tags: ['headline', 'bullet', 'review-quote'],
+    });
   });
 
-  test('Modal stays open + shows error on 4xx response', async () => {
-    // Stub-page test (deferred):
-    //   1. Open the modal.
-    //   2. Fill required field.
-    //   3. Intercept POST with route handler that fulfills 400 +
-    //      {"error": "source must be one of: extension, manual"}.
-    //   4. Click Save captured text.
-    //   5. Assert [role="alert"] shows the server's error message.
-    //   6. Assert modal stays open.
+  test('Modal stays open + shows error on 4xx response', async ({ page }) => {
+    await page.route(POST_TEXT_PATTERN, (route: Route) => {
+      void route.fulfill({
+        status: 400,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'source must be one of: extension, manual' }),
+      });
+    });
+
+    await page.goto(PAGE_URL);
+    await page.waitForFunction(() => window.__pageReady === true);
+    await page.getByTestId('manual-add-captured-text-button').click();
+    await page.getByLabel('Text', { exact: true }).fill('Test text');
+    await page.getByRole('button', { name: 'Save captured text' }).click();
+
+    await expect(page.getByRole('alert')).toHaveText(/source must be one of: extension, manual/i);
+    await expect(page.getByRole('dialog', { name: /manually add captured text/i })).toBeVisible();
   });
 
-  test('Escape key + backdrop click + Cancel + X button all close the modal', async () => {
-    // Stub-page test (deferred): exercise each dismiss path in turn,
-    // re-opening the modal between cases. Confirm the modal closes only
-    // when not in the submitting state (submit-in-flight should ignore
-    // dismiss attempts to avoid orphan POSTs).
+  test('Escape / backdrop / Cancel / X all close the modal', async ({ page }) => {
+    await page.goto(PAGE_URL);
+    await page.waitForFunction(() => window.__pageReady === true);
+    const dialog = page.getByRole('dialog', { name: /manually add captured text/i });
+
+    // Escape
+    await page.getByTestId('manual-add-captured-text-button').click();
+    await expect(dialog).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(dialog).not.toBeVisible();
+
+    // Cancel
+    await page.getByTestId('manual-add-captured-text-button').click();
+    await expect(dialog).toBeVisible();
+    await page.getByRole('button', { name: 'Cancel' }).click();
+    await expect(dialog).not.toBeVisible();
+
+    // X
+    await page.getByTestId('manual-add-captured-text-button').click();
+    await expect(dialog).toBeVisible();
+    await page.getByRole('button', { name: 'Close' }).click();
+    await expect(dialog).not.toBeVisible();
+
+    // Backdrop
+    await page.getByTestId('manual-add-captured-text-button').click();
+    await expect(dialog).toBeVisible();
+    await page.locator('div[role="presentation"]').dispatchEvent('mousedown');
+    await expect(dialog).not.toBeVisible();
   });
 
-  test('clientId-dedup — duplicate-create 200 response replaces existing row in-place', async () => {
-    // Stub-page test (deferred):
-    //   1. Seed the stub page with a captured-text row whose clientId =
-    //      'fixed-uuid-for-test'.
-    //   2. Stub crypto.randomUUID() to return 'fixed-uuid-for-test' so the
-    //      modal's submit uses the same clientId.
-    //   3. Open the modal; fill required field.
-    //   4. Intercept POST; fulfill with 200 + the existing row's shape
-    //      (per the route's idempotent path).
-    //   5. Submit.
-    //   6. Assert the table still has exactly one row with clientId =
-    //      'fixed-uuid-for-test' (no double-listing). handleTextAdded's
-    //      clientId-dedup is load-bearing here.
+  test('clientId-dedup — duplicate-create 200 response replaces existing row in-place', async ({ page }) => {
+    const FIXED_CLIENT_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+
+    // Seed the wrapper with a row sharing the fixed clientId.
+    await page.addInitScript((cid) => {
+      window.__testTextParams = {
+        seedRows: [
+          {
+            id: 'seeded-row-id',
+            urlId: 'test-url-id',
+            clientId: cid,
+            text: 'OLD seeded value',
+            source: 'manual',
+            contentCategory: null,
+            tags: [],
+            createdAt: '2026-05-14T00:00:00Z',
+          },
+        ],
+      } as Window['__testTextParams'];
+      // Pin crypto.randomUUID() so the modal submits with the fixed clientId.
+      const orig = window.crypto.randomUUID.bind(window.crypto);
+      window.crypto.randomUUID = (() => cid) as typeof orig;
+    }, FIXED_CLIENT_ID);
+
+    await page.route(POST_TEXT_PATTERN, async (route: Route) => {
+      // Server returns the existing row (idempotent duplicate-create path).
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(
+          fakeTextRow({
+            id: 'seeded-row-id',
+            clientId: FIXED_CLIENT_ID,
+            text: 'NEW submitted value',
+          }),
+        ),
+      });
+    });
+
+    await page.goto(PAGE_URL);
+    await page.waitForFunction(() => window.__pageReady === true);
+    // Pre-check: list shows one row with the seeded text.
+    await expect(page.getByTestId('captured-text-row')).toHaveCount(1);
+
+    await page.getByTestId('manual-add-captured-text-button').click();
+    await page.getByLabel('Text', { exact: true }).fill('NEW submitted value');
+    await page.getByRole('button', { name: 'Save captured text' }).click();
+
+    await expect(page.getByRole('dialog', { name: /manually add captured text/i })).not.toBeVisible();
+
+    // Still exactly one row, in-place replaced with the new text.
+    const rows = page.getByTestId('captured-text-row');
+    await expect(rows).toHaveCount(1);
+    await expect(rows.first()).toContainText('NEW submitted value');
+    await expect(rows.first()).toHaveAttribute('data-client-id', FIXED_CLIENT_ID);
   });
 });
