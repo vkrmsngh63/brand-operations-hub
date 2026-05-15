@@ -37,6 +37,7 @@ function toWireShape(
     numSellerReviews: row.numSellerReviews,
     isSponsoredAd: row.isSponsoredAd,
     customFields: (row.customFields ?? {}) as Record<string, unknown>,
+    source: row.source as CompetitorUrl['source'],
     addedBy: row.addedBy,
     addedAt: row.addedAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),

@@ -35,6 +35,7 @@ function toWireShape(
     text: row.text,
     tags: (row.tags ?? []) as string[],
     sortOrder: row.sortOrder,
+    source: row.source as CapturedText['source'],
     addedBy: row.addedBy,
     addedAt: row.addedAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),

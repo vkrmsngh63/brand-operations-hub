@@ -45,6 +45,7 @@ function toWireShape(
     width: row.width,
     height: row.height,
     sortOrder: row.sortOrder,
+    source: row.source as CapturedImage['source'],
     addedBy: row.addedBy,
     addedAt: row.addedAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),

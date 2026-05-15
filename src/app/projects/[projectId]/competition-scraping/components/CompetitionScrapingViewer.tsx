@@ -201,6 +201,23 @@ export function CompetitionScrapingViewer({ projectId }: Props) {
     router.push(`/projects/${projectId}/competition-scraping/url/${urlId}`);
   };
 
+  // P-29 Slice #1 — manual-add modal calls this with the newly-created row
+  // so the table updates without a refetch round-trip. POST is idempotent
+  // on (workflow, platform, url) so a duplicate-create returns the existing
+  // row; we dedup here to avoid double-listing.
+  const handleUrlAdded = (row: CompetitorUrl): void => {
+    setUrls((prev) => {
+      if (!prev) return [row];
+      const existing = prev.findIndex((u) => u.id === row.id);
+      if (existing >= 0) {
+        const next = [...prev];
+        next[existing] = row;
+        return next;
+      }
+      return [row, ...prev];
+    });
+  };
+
   const scopedTotal = counts === null ? 0 : counts[selectedPlatform];
 
   return (
@@ -247,6 +264,8 @@ export function CompetitionScrapingViewer({ projectId }: Props) {
             filters={filters}
             onFiltersChange={handleFiltersChange}
             onRowOpen={handleRowOpen}
+            projectId={projectId}
+            onUrlAdded={handleUrlAdded}
           />
         )}
       </div>

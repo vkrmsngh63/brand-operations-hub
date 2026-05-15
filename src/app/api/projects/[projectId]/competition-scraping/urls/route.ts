@@ -8,6 +8,7 @@ import { withRetry } from '@/lib/prisma-retry';
 import { corsPreflightResponse, withCors } from '@/lib/cors-response';
 import {
   isPlatform,
+  isSource,
   type CompetitorUrl,
   type CreateCompetitorUrlRequest,
 } from '@/lib/shared-types/competition-scraping';
@@ -56,6 +57,7 @@ function toWireShape(
     numSellerReviews: row.numSellerReviews,
     isSponsoredAd: row.isSponsoredAd,
     customFields: (row.customFields ?? {}) as Record<string, unknown>,
+    source: row.source as CompetitorUrl['source'],
     addedBy: row.addedBy,
     addedAt: row.addedAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -156,6 +158,18 @@ export async function POST(
       )
     );
   }
+  // P-29 Slice #1 — `source` is optional; if present, must be a valid Source
+  // value. If absent, the schema-level @default("extension") applies, which
+  // preserves the Chrome extension's existing POST traffic semantics.
+  if (body.source !== undefined && !isSource(body.source)) {
+    return withCors(
+      req,
+      NextResponse.json(
+        { error: 'source must be "extension" or "manual" when provided' },
+        { status: 400 }
+      )
+    );
+  }
   const platform = body.platform;
 
   // Build the create payload. Trim string fields. Pass undefined through
@@ -194,6 +208,10 @@ export async function POST(
       body.customFields && typeof body.customFields === 'object'
         ? (body.customFields as Prisma.InputJsonValue)
         : Prisma.JsonNull,
+    // P-29 Slice #1 — accept Source value when present; omit so schema
+    // default 'extension' applies otherwise. Misshapen `source` values are
+    // rejected with 400 BEFORE reaching create — see validation above.
+    ...(body.source !== undefined ? { source: body.source } : {}),
     addedBy: userId,
   };
 

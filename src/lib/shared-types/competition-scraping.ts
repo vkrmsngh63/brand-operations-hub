@@ -13,6 +13,21 @@
 // string and the receiver parses it as string. Decimal fields (none in the
 // session-1 surface area) would similarly serialize to string.
 
+// ─── Source vocabulary (P-29 Slice #1) ──────────────────────────────────
+// Audit-trail of which client created a CompetitorUrl / CapturedText /
+// CapturedImage row. `extension` = Chrome extension capture; `manual` =
+// vklf.com modal entry. Default for unset rows is `extension` (preserves
+// pre-P-29 extension-only world). Backward-compatible additive change —
+// existing readers ignore the field; new readers opt in.
+export const SOURCES = ['extension', 'manual'] as const;
+export type Source = (typeof SOURCES)[number];
+
+export function isSource(value: unknown): value is Source {
+  return (
+    typeof value === 'string' && (SOURCES as readonly string[]).includes(value)
+  );
+}
+
 // ─── Platform vocabulary ────────────────────────────────────────────────
 // Source: prisma/schema.prisma CompetitorUrl.platform comment + W#2 design
 // doc §A.7. Fixed at the platform layer; new platforms are an additive
@@ -80,6 +95,11 @@ export interface CompetitorUrl {
   // checks for Amazon SSPA-detected URLs (P-4 synergy).
   isSponsoredAd: boolean;
   customFields: Record<string, unknown>;
+  // P-29 Slice #1 — `extension` = Chrome extension capture; `manual` =
+  // vklf.com modal entry. Defaults to `extension` server-side when the
+  // wire omits it, so the extension's existing POST traffic stays
+  // unchanged. Always present on the wire (schema-level @default).
+  source: Source;
   addedBy: string;
   addedAt: string;
   updatedAt: string;
@@ -103,6 +123,10 @@ export interface CreateCompetitorUrlRequest {
   // schema-level @default(false) when omitted.
   isSponsoredAd?: boolean;
   customFields?: Record<string, unknown>;
+  // P-29 Slice #1 — optional; defaults to `extension` server-side when
+  // omitted so the Chrome extension's existing POST traffic stays
+  // unchanged. vklf.com's manual-add modal sends `manual` explicitly.
+  source?: Source;
 }
 
 // PATCH /api/projects/[projectId]/competition-scraping/urls/[urlId] —
@@ -227,6 +251,8 @@ export interface CapturedText {
   text: string;
   tags: string[];
   sortOrder: number;
+  // P-29 Slice #1 — see CompetitorUrl.source.
+  source: Source;
   addedBy: string;
   addedAt: string;
   updatedAt: string;
@@ -241,6 +267,11 @@ export interface CreateCapturedTextRequest {
   text: string;
   tags?: string[];
   sortOrder?: number;
+  // P-29 Slice #1 — see CreateCompetitorUrlRequest.source. Slice #2 wires
+  // this to vklf.com's manual-add text modal; Slice #1 only adds the
+  // field shape so the extension's existing POSTs continue to default to
+  // `extension` server-side.
+  source?: Source;
 }
 
 // PATCH .../text/[textId] — clientId is immutable; cannot be re-targeted.
@@ -313,6 +344,10 @@ export interface CapturedImage {
   width: number | null;
   height: number | null;
   sortOrder: number;
+  // P-29 Slice #1 — see CompetitorUrl.source. Distinct from sourceType
+  // (which describes the image's content shape — regular vs. region-
+  // screenshot); source describes which CLIENT created the row.
+  source: Source;
   addedBy: string;
   addedAt: string;
   updatedAt: string;
@@ -364,6 +399,9 @@ export interface FinalizeImageUploadRequest {
   width?: number;
   height?: number;
   sortOrder?: number;
+  // P-29 Slice #1 — see CreateCompetitorUrlRequest.source. Slice #3 wires
+  // this to vklf.com's manual-add image modal.
+  source?: Source;
 }
 
 export type FinalizeImageUploadResponse = CapturedImage;

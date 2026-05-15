@@ -266,6 +266,7 @@ model CompetitorUrl {
   numSellerReviews    Int?
   isSponsoredAd       Boolean  @default(false) // P-6 — manual checkbox in URL-add form; auto-pre-checks for Amazon SSPA-detected URLs (P-4 synergy)
   customFields        Json     @default("{}") // { fieldName: value } user-defined product-scoped fields
+  source              String   @default("extension") // P-29 Slice #1 — "extension" | "manual"; audit-trail of which client created the row.
   addedBy             String // userId
   addedAt             DateTime @default(now())
   updatedAt           DateTime @updatedAt
@@ -305,6 +306,7 @@ model CapturedText {
   text            String   @db.Text
   tags            Json     @default("[]") // string[]
   sortOrder       Int      @default(0)
+  source          String   @default("extension") // P-29 Slice #1 — "extension" | "manual"; audit-trail of which client created the row.
   addedBy         String // userId
   addedAt         DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -332,6 +334,7 @@ model CapturedImage {
   width           Int? // pixels
   height          Int?
   sortOrder       Int      @default(0)
+  source          String   @default("extension") // P-29 Slice #1 — "extension" | "manual"; audit-trail of which client created the row (distinct from sourceType which describes the image's content shape).
   addedBy         String
   addedAt         DateTime @default(now())
   updatedAt       DateTime @updatedAt

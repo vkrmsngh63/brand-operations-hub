@@ -24,6 +24,7 @@
 
 import { useMemo, useState } from 'react';
 import type { CompetitorUrl } from '@/lib/shared-types/competition-scraping';
+import { UrlAddModal } from './UrlAddModal';
 import {
   applyColumnFilters,
   BooleanFilter,
@@ -68,6 +69,10 @@ interface Props {
   // Click-row handler. The parent owns router + projectId knowledge so
   // this component stays decoupled from Next.js routing concerns.
   onRowOpen: (urlId: string) => void;
+  // P-29 Slice #1 — passed through to UrlAddModal which is mounted inside
+  // this component but POSTs back to the parent's URL list state.
+  projectId: string;
+  onUrlAdded: (row: CompetitorUrl) => void;
 }
 
 interface ColumnDef {
@@ -138,9 +143,13 @@ export function UrlTable({
   filters,
   onFiltersChange,
   onRowOpen,
+  projectId,
+  onUrlAdded,
 }: Props) {
   const [sortKey, setSortKey] = useState<SortKey>('addedAt');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  // P-29 Slice #1 — modal-open state for the "+ Manually add URL" button.
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   // Distinct values for the multi-select dropdowns are derived from the
   // platform-scoped set — NOT from `rows` (which has already been narrowed
@@ -265,7 +274,23 @@ export function UrlTable({
         >
           Showing {sorted.length} of {scopedTotal}
         </span>
+        <button
+          type="button"
+          onClick={() => setIsAddModalOpen(true)}
+          style={addUrlButtonStyle}
+          aria-label="Manually add URL"
+          data-testid="manual-add-url-button"
+        >
+          + Manually add URL
+        </button>
       </div>
+
+      <UrlAddModal
+        projectId={projectId}
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        onSuccess={onUrlAdded}
+      />
 
       {showFilterEmpty ? (
         <div
@@ -531,6 +556,22 @@ const clearAllButtonStyle: React.CSSProperties = {
   fontSize: '12px',
   fontFamily: 'inherit',
   padding: '4px 10px',
+  cursor: 'pointer',
+  whiteSpace: 'nowrap',
+};
+
+// P-29 Slice #1 — primary action button in the table toolbar. GitHub-green
+// fill matches the modal's Save button so the entry+confirm color story
+// stays consistent.
+const addUrlButtonStyle: React.CSSProperties = {
+  background: '#238636',
+  border: '1px solid rgba(240, 246, 252, 0.10)',
+  borderRadius: '6px',
+  color: '#ffffff',
+  fontSize: '12px',
+  fontFamily: 'inherit',
+  fontWeight: 600,
+  padding: '5px 12px',
   cursor: 'pointer',
   whiteSpace: 'nowrap',
 };
