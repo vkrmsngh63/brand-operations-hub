@@ -4,7 +4,9 @@
 **Workflow:** W#2 Competition Scraping & Deep Analysis.
 **Branch:** `workflow-2-competition-scraping`.
 **Created:** 2026-05-07 in `session_2026-05-07_w2-plos-side-viewer-detail-page-slice` (Claude Code).
-**Last updated:** 2026-05-15-f (**W#2 → main deploy session #15 — P-29 Slice #3 DEPLOYED to vklf.com + REAL-INDEPENDENT-WEBSITE FULL VERIFY across all five parts in a single batched pass; zero walkthrough-found polish items.** One-hundred-and-second Claude Code session — `session_2026-05-15-f_w2-main-deploy-session-15-p29-slice-3-DEPLOYED-FULL-VERIFY` (dual-branch — pre-deploy scoreboard on `workflow-2-competition-scraping`, ff-merge + deploy push on `main`, workflow-2 fast-forwarded after the main push). Closes (a.34) RECOMMENDED-NEXT. Pre-deploy scoreboard all GREEN. Clean ff-merge of single bundled commit `8018294` onto main (`1607933..8018294`). Vercel auto-redeployed cleanly. Director walkthrough on real Independent Website URL — Part A drag-drop ✅ / Part B clipboard paste ✅ / Part C URL-of-image via SSRF-guarded `fetch-by-url` endpoint ✅ / Part D SSRF defensive spot-check (localhost / private-IP refusal) ✅ / Part E extension regression spot-check ✅ — all green in a single pass. **The P-29 three-slice manual-add arc is now complete + live end-to-end on vklf.com.** **P-29 Slice #3 SHIPPED section's pending-verification table flipped DEFERRED → ✅ PASS for all 12 rows.** New "## Deploy session #15 — P-29 Slice #3 DEPLOYED + FULL VERIFY 2026-05-15-f" section appended at end. (a.35) RECOMMENDED-NEXT = P-30 Playwright React-bundle stub-page rig.)
+**Last updated:** 2026-05-15-g (**W#2 P-30 BUILD session — Playwright React-bundle stub-page rig SHIPPED at code level on `workflow-2-competition-scraping` in commit `0548da7`.** One-hundred-and-third Claude Code session — `session_2026-05-15-g_w2-p30-playwright-react-bundle-rig`. Closes (a.35) RECOMMENDED-NEXT. **Pre-build drift check clean** at session start (branch on `workflow-2-competition-scraping`; 0 commits ahead of `origin/main` per deploy #15's ping-pong sync). Rule 14f forced-picker (rig shape — esbuild stub-page vs. Next.js __playwright__ route vs. @playwright/experimental-ct-react vs. question-first): director picked Option A (esbuild stub-page) — extends the proven P-17 authFetch pattern; zero new tooling. **Code shipped (11 files +1418/-512 in commit `0548da7`):** `tests/playwright/build-bundle.mjs` extended with `buildP29ModalBundles()` (3 React entrypoints; automatic JSX runtime; `@/` → `src/` alias; fake-supabase alias); 3 NEW mount entrypoints under `tests/playwright/mounts/` (URL / text / image — each renders production modal in thin wrapper with `window.__test*` hooks; text + image wrappers own captured-row list mirroring UrlDetailContent's handleTextAdded + refreshImages); 3 NEW static stub pages under `tests/playwright/pages/`; `tests/playwright/test-server.mjs` extended with new page + `/dist/*.bundle.js` routes (traversal-guarded); all 3 P-29 spec files (URL / text / image) flipped from describe-level `test.skip(true, ...)` to live test bodies. **Verification scoreboard — all GREEN on `workflow-2-competition-scraping`:** `npx tsc --noEmit` clean; extension `npm run compile` clean; `npm run build` compiled successfully (52 routes — same baseline; no new src/ routes); `node --test` 447/447 (unchanged — P-30 test-infra only); extension `npm test` 334/334 (unchanged); `npx playwright test` 63/64 pass + 1 skipped. **HEADLINE P-30 DELTA: P-29 Playwright cases went from 31 skipped → 30 pass + 1 P-32-deferred-skip in a single session.** (Slice #1 URL: 6/6; Slice #2 captured-text: 8/8; Slice #3 captured-image: 16/17 — 1 deferred to P-32 below.) **NEW polish item P-32 captured per Rule 14e + Rule 26** when the multi-file-drop test surfaced a real production bug in `CapturedImageAddModal.tsx`: `onDrop` sets `setWarningMessage('N files dropped — only the first will be used')` then awaits `tryLoadFile` which calls `setWarningMessage(null)` — both updates batch into the same React commit and the warning UI never appears. One-line fix deferred to keep P-30 strictly test-infra-only per launch-prompt scope; corresponding Playwright test marked `test.skip()` with pointer to P-32 entry below. **Per Rule 27:** Playwright UI-mechanical regression run-time coverage now LIVE for all three Slice modals — closes the run-time coverage gap from Slice #1 + #2 + #3 build sessions where the cases were authored as structural placeholders. API-layer regression coverage still pending P-31 (route-handler DI refactor — director picked this as (a.36) RECOMMENDED-NEXT via §4 Step 1c forced-picker). **Multi-Workflow per Rule 25:** session ran on `workflow-2-competition-scraping`; schema-change-in-flight flag stays No (P-30 is test-infra only — zero schema / src/ runtime changes); pull-rebase no-op at start. **TaskList sweep per Rule 26:** 7 session tasks tracked + completed; 1 DEFERRED item (P-32) captured both in TaskCreate AND in this verification-backlog new P-32 entry below. **Cross-references:** ROADMAP W#2 row Last Session 2026-05-15-g prepended + (a.35) flipped ✅ SHIPPED-AT-CODE-LEVEL + new (a.36) RECOMMENDED-NEXT P-31 + polish backlog P-30 entry flipped ✅ SHIPPED-AT-CODE-LEVEL + new P-32 entry; CHAT_REGISTRY new top entry; DOCUMENT_MANIFEST per-doc flags; COMPETITION_SCRAPING_DESIGN.md §B new 2026-05-15-g entry covering the rig design + implementation outcome; NEXT_SESSION.md rewritten for P-31. The three P-29 spec sections below had their "all N currently `test.skip()`" lines flipped to "all N now live" inline; a new "## P-30 SHIPPED at code level" section + new "## P-32 NEW POLISH ITEM" section appended at end before the EOF marker.)
+
+**Previously updated:** 2026-05-15-f (**W#2 → main deploy session #15 — P-29 Slice #3 DEPLOYED to vklf.com + REAL-INDEPENDENT-WEBSITE FULL VERIFY across all five parts in a single batched pass; zero walkthrough-found polish items.** One-hundred-and-second Claude Code session — `session_2026-05-15-f_w2-main-deploy-session-15-p29-slice-3-DEPLOYED-FULL-VERIFY` (dual-branch — pre-deploy scoreboard on `workflow-2-competition-scraping`, ff-merge + deploy push on `main`, workflow-2 fast-forwarded after the main push). Closes (a.34) RECOMMENDED-NEXT. Pre-deploy scoreboard all GREEN. Clean ff-merge of single bundled commit `8018294` onto main (`1607933..8018294`). Vercel auto-redeployed cleanly. Director walkthrough on real Independent Website URL — Part A drag-drop ✅ / Part B clipboard paste ✅ / Part C URL-of-image via SSRF-guarded `fetch-by-url` endpoint ✅ / Part D SSRF defensive spot-check (localhost / private-IP refusal) ✅ / Part E extension regression spot-check ✅ — all green in a single pass. **The P-29 three-slice manual-add arc is now complete + live end-to-end on vklf.com.** **P-29 Slice #3 SHIPPED section's pending-verification table flipped DEFERRED → ✅ PASS for all 12 rows.** New "## Deploy session #15 — P-29 Slice #3 DEPLOYED + FULL VERIFY 2026-05-15-f" section appended at end. (a.35) RECOMMENDED-NEXT = P-30 Playwright React-bundle stub-page rig.)
 
 **Previously updated:** 2026-05-15-e (**W#2 P-29 Slice #3 BUILD session — manual-add captured-image modal + NEW SSRF-guarded `fetch-by-url` endpoint + NEW `ssrf-guard.ts` module + 37 security-class tests SHIPPED at code level on `workflow-2-competition-scraping`.** One-hundred-and-first Claude Code session — `session_2026-05-15-e_w2-p29-slice-3-build-session`. Closes (a.33) RECOMMENDED-NEXT. SSRF design picked Option A (manual DNS + connect-by-IP + override Host/SNI; closes DNS-rebind window; zero new dependencies). Verification scoreboard all GREEN. P-29 section status updated to "Slices #1+#2 DEPLOYED + Slice #3 SHIPPED AT CODE LEVEL" + new "## P-29 Slice #3 SHIPPED" section appended below. (a.34) RECOMMENDED-NEXT = W#2 → main deploy session #15 brings Slice #3 to vklf.com.)
 
@@ -1883,7 +1885,7 @@ P-27, P-28, P-29 captured in their own sections below per the same Rule 24 + Rul
 
 - **`src/lib/shared-types/competition-scraping.test.ts` (new)** — 10 node:test cases covering `isSource` (positive + negative + non-string), `SOURCES` vocabulary stability, `isPlatform` (incl. the Q2-reframing regression that `independent-website` is supported), `isVocabularyType`, `isImageSourceType` distinct-from-Source (catches the naming-collision slip class), `isAcceptedImageMimeType` (SVG-rejection regression). All 10 pass.
 
-- **`tests/playwright/p29-manual-add-url-modal.spec.ts` (new)** — 6 UI-mechanical test cases at the launch-prompt-named path: button renders / modal opens on click / empty URL submit shows validation error / submit serializes `source: 'manual'` + selected platform + url / modal stays open on 4xx response / Escape + backdrop + Cancel + X all close. **All 6 currently `test.skip()`** with header-level rationale + per-test pseudocode. Unblocked when **P-30** (React-bundle stub-page rig) lands.
+- **`tests/playwright/p29-manual-add-url-modal.spec.ts` (new)** — 6 UI-mechanical test cases at the launch-prompt-named path: button renders / modal opens on click / empty URL submit shows validation error / submit serializes `source: 'manual'` + selected platform + url / modal stays open on 4xx response / Escape + backdrop + Cancel + X all close. **All 6 originally `test.skip()`; flipped to live coverage 2026-05-15-g — 6/6 now pass.** P-30 (React-bundle stub-page rig) shipped via commit `0548da7`.
 
 **Deferred items captured per Rule 14e + Rule 26:**
 
@@ -1913,7 +1915,7 @@ P-27, P-28, P-29 captured in their own sections below per the same Rule 24 + Rul
 
 - **URL-detail page wire-in** (`src/app/projects/[projectId]/competition-scraping/url/[urlId]/components/UrlDetailContent.tsx`): `CapturedTextSubsection` now accepts `projectId` + `urlId` + `onTextAdded` props; owns internal `modalOpen` state; renders a flex row containing the h2 + count on the left and the green "+ Manually add captured text" button on the right (per director's session-start Rule 14f pick — "Right end of 'Captured Text' h2 row"); mounts the modal at the bottom of the section. Parent `UrlDetailContent` owns `handleTextAdded` callback that prepends the new row to `textSlot.data` with `clientId`-dedup (existing-row match → replace in place; no match → prepend at index 0) — mirrors `CompetitionScrapingViewer.handleUrlAdded`'s id-dedup pattern from Slice #1 but switches dedup key to `clientId` since text rows are idempotent-on-clientId per the API contract.
 
-- **NEW Playwright spec** `tests/playwright/p29-manual-add-captured-text-modal.spec.ts` (~155 LOC) — 8 UI-mechanical test cases at the director-picked path (session-start Rule 14f pick — "new file" over "append to Slice #1 spec"); all `test.skip()` pending P-30 React-bundle stub-page rig. Cases mirror Slice #1's 6 cases + add 2 specific to Slice #2: "Submit with optional fields serializes contentCategory + parsed tags" (comma-parse logic) + "clientId-dedup — duplicate-create 200 response replaces existing row in-place" (`handleTextAdded`'s clientId-dedup).
+- **NEW Playwright spec** `tests/playwright/p29-manual-add-captured-text-modal.spec.ts` (~155 LOC) — 8 UI-mechanical test cases at the director-picked path (session-start Rule 14f pick — "new file" over "append to Slice #1 spec"); originally all `test.skip()` pending P-30 React-bundle stub-page rig — **flipped to live coverage 2026-05-15-g — 8/8 now pass.** Cases mirror Slice #1's 6 cases + add 2 specific to Slice #2: "Submit with optional fields serializes contentCategory + parsed tags" (comma-parse logic) + "clientId-dedup — duplicate-create 200 response replaces existing row in-place" (`handleTextAdded`'s clientId-dedup).
 
 - **No new node:test cases needed**: Slice #1's `src/lib/shared-types/competition-scraping.test.ts` `isSource` regression already covers Slice #2's new POST-handler validation branch (same guard, same vocabulary). 10/10 still pass.
 
@@ -1940,9 +1942,11 @@ P-27, P-28, P-29 captured in their own sections below per the same Rule 24 + Rul
 
 ---
 
-## P-30 NEW POLISH ITEM — Playwright React-bundle stub-page rig for W#2 modals (NEW 2026-05-15-b — unblocks Slice #1 + Slice #2 + Slice #3 UI regression coverage)
+## P-30 ~~NEW POLISH ITEM~~ ✅ SHIPPED AT CODE LEVEL — Playwright React-bundle stub-page rig for W#2 modals (NEW 2026-05-15-b; SHIPPED 2026-05-15-g — unblocks Slice #1 + Slice #2 + Slice #3 UI regression coverage)
 
-**Status:** ⏳ NOT STARTED. Captured 2026-05-15-b during Slice #1 build session when the existing thin Playwright rig (authFetch-regression stub-page only) was inadequate to exercise the new React-based `UrlAddModal.tsx`. Director picked Hybrid Rule 27 verification at design session; Slice #1's Playwright spec is shipped today with 6 `test.skip()` cases pre-authored at the structural level (the test bodies will fill in once the rig lands).
+**Status:** ✅ SHIPPED AT CODE LEVEL 2026-05-15-g on `workflow-2-competition-scraping` in commit `0548da7`. See the new "## P-30 SHIPPED at code level (W#2 build session 2026-05-15-g)" section appended at end of file for the full ship narrative + verification scoreboard. The original capture below stays preserved verbatim as the design + intent record.
+
+**Original status (preserved):** ⏳ NOT STARTED. Captured 2026-05-15-b during Slice #1 build session when the existing thin Playwright rig (authFetch-regression stub-page only) was inadequate to exercise the new React-based `UrlAddModal.tsx`. Director picked Hybrid Rule 27 verification at design session; Slice #1's Playwright spec is shipped today with 6 `test.skip()` cases pre-authored at the structural level (the test bodies will fill in once the rig lands).
 
 **Severity:** MEDIUM. The skipped test cases preserve regression intent + give the rig session a known target; without the rig built, the Slice #1+#2+#3 modal UX cannot be regression-tested mechanically. Director manual walkthrough covers end-to-end smoke but not regression — a future commit that breaks (say) the Escape-dismiss path won't be caught until a deploy + manual re-check.
 
@@ -2213,7 +2217,7 @@ Walkthrough outcome:
 
 - **NEW `src/app/projects/[projectId]/competition-scraping/components/CapturedImageAddModal.tsx`** (~640 LOC) — three input modalities (drag-drop zone with dragover highlight + clipboard-paste listener active while modal open + URL-of-image text field with client-side scheme check). Image preview thumbnail. Optional metadata: Image Category via VocabularyPicker (type `image-category`), Composition, Embedded Text, Tags. Submit converges drag-drop + paste paths through Phase 1 (requestUpload) + Phase 2 (signed-URL PUT) + Phase 3 (finalize) while URL path skips Phase 1+2 (bytes already uploaded server-side) and goes straight to finalize. Mirrors `UrlAddModal` / `CapturedTextAddModal` shape exactly (Escape / Cancel / X / backdrop dismiss / submit-in-flight lock / `crypto.randomUUID()` clientId / POSTs `source: 'manual'`).
 
-- **NEW `tests/playwright/p29-manual-add-captured-image-modal.spec.ts`** (~290 LOC, **17 UI-mechanical cases all `test.skip()`**) — pending P-30 React-bundle rig. Coverage scope: button render in section header, modal open, submit-disabled-when-no-image, each modality (drag-drop validation + oversize + wrong-type + multi-file; paste listener; URL fetch happy + 403 SSRF block + client-side scheme reject), submit-path-A (Phase 1+2+3) + submit-path-B (URL → Phase 3 only), refreshImages firing after success, finalize 4xx error display, all four dismiss paths, "Replace…" idle-return.
+- **NEW `tests/playwright/p29-manual-add-captured-image-modal.spec.ts`** (~290 LOC, **17 UI-mechanical cases originally all `test.skip()`**) — pending P-30 React-bundle rig. Coverage scope: button render in section header, modal open, submit-disabled-when-no-image, each modality (drag-drop validation + oversize + wrong-type + multi-file; paste listener; URL fetch happy + 403 SSRF block + client-side scheme reject), submit-path-A (Phase 1+2+3) + submit-path-B (URL → Phase 3 only), refreshImages firing after success, finalize 4xx error display, all four dismiss paths, "Replace…" idle-return. **Flipped to live coverage 2026-05-15-g — 16/17 pass; 1 deferred to P-32 (multi-file-drop warning bug surfaced by the rig — see P-32 section below).**
 
 - **Modified shared-types**: adds `FetchImageByUrlRequest` + `FetchImageByUrlResponse` interfaces (the latter includes `previewUrl` for client-side thumbnail display).
 
@@ -2313,6 +2317,124 @@ Walkthrough outcome:
 - COMPETITION_SCRAPING_DESIGN §B 2026-05-15-f (this session's design refinement entry — deploy outcome + walkthrough verification + arc completion).
 - The P-29 Slice #3 SHIPPED section above had its pending-verification table flipped DEFERRED → ✅ PASS for all 12 rows.
 - NEXT_SESSION.md rewritten 2026-05-15-f for P-30 build session.
+
+---
+
+## P-30 SHIPPED at code level (W#2 build session 2026-05-15-g — closes (a.35) RECOMMENDED-NEXT)
+
+**Status:** ✅ SHIPPED AT CODE LEVEL 2026-05-15-g on `workflow-2-competition-scraping` in commit `0548da7`. **Headline scoreboard delta: P-29 Playwright cases went from 31 skipped → 30 pass + 1 P-32-deferred-skip in a single session.** W#2 → main deploy for P-30 itself is not needed as a standalone — P-30 is test-infrastructure-only with zero `src/` runtime changes (the live site behavior is unchanged). The rig will flow into `main` automatically as part of the next W#2 → main deploy session whenever it's run.
+
+**Rig shape picked via Rule 14f forced-picker at session start:** Option A — extend the existing P-17 authFetch esbuild stub-page rig. Picked over Option B (Next.js test-only route under `src/app/__playwright__/`) + Option C (`@playwright/experimental-ct-react`) + Option D (JSDOM unit tests; auto-eliminated as it conflicts with Rule 27's real-browser-context intent). Option A is most thorough/reliable because: (i) extends a PROVEN pattern (P-17 already works in this repo); (ii) real Chromium render in real DOM — catches the real-DOM-specific bugs the modals can hit (drag-drop / clipboard paste / DataTransfer event handling specifically — which the captured-image modal exercises); (iii) zero new tooling surface (React 19 + esbuild 0.28 + `@playwright/test` 1.60 already present in `package.json`); (iv) reversible — if scaling becomes painful at modal #10, can pivot to Option C without losing the spec files.
+
+**What shipped (11 files +1418/-512 in commit `0548da7`):**
+
+- **`tests/playwright/build-bundle.mjs` (modified)** — `buildAuthFetchBundle()` preserved + factored shared `define`/`alias` into module constants + NEW `buildP29ModalBundles()` that bundles three React entrypoints. esbuild handles JSX via the automatic runtime; `@/` is aliased to `src/`; `@supabase/supabase-js` is aliased to the existing `fake-supabase.ts` so authFetch's real production wiring runs without a real Supabase client.
+
+- **`tests/playwright/mounts/p29-url-modal.mount.tsx` (NEW)** — bundles `UrlAddModal` inside a thin wrapper that owns `isOpen` state, renders the trigger button at `[data-testid="manual-add-url-button"]`, and exposes `window.__test` hooks (`openModal` / `closeModal` / `getLastRow` / `getSuccessCount`). Reads `window.__testParams` for per-test overrides (`projectId`, `defaultPlatform`).
+
+- **`tests/playwright/mounts/p29-text-modal.mount.tsx` (NEW)** — bundles `CapturedTextAddModal` inside a wrapper that owns a captured-text list mirroring `UrlDetailContent.handleTextAdded`'s clientId-dedup prepend (existing clientId → replace in place; no match → prepend). Reads `window.__testTextParams` for seedRows so the clientId-dedup test can seed an existing row. Exposes `window.__testText` hooks.
+
+- **`tests/playwright/mounts/p29-image-modal.mount.tsx` (NEW)** — bundles `CapturedImageAddModal` inside a wrapper that owns a captured-image list + a `refreshImages` callback mirroring `UrlDetailContent.refreshImages`. The wrapper fires `refreshImages` after every successful `onSuccess` so the "refreshImages-after-save ordering" spec can assert the GET happens AFTER the finalize 201. Exposes `window.__testImage` hooks.
+
+- **`tests/playwright/pages/p29-url-modal.html` (NEW)** + `p29-text-modal.html` (NEW) + `p29-image-modal.html` (NEW) — static stub pages that seed `window.__fakeSupabaseState` (so authFetch passes the auth check) and load the corresponding bundle module.
+
+- **`tests/playwright/test-server.mjs` (modified)** — extended with a `HTML_PAGES` map for the 3 new pages, a `/dist/<name>.bundle.js` route prefix (path traversal-guarded — rejects bundle names containing `/` or `..`), and a `await Promise.all([buildAuthFetchBundle(), buildP29ModalBundles()])` boot step.
+
+- **`tests/playwright/p29-manual-add-url-modal.spec.ts` (modified)** — describe-level `test.skip(true, ...)` removed; 6 test bodies filled in. Each test navigates to `/p29-url-modal`, waits for `window.__pageReady`, uses `page.route()` to intercept the modal's `POST .../urls` and capture body shape / shape response, drives the UI via `getByTestId` + `getByLabel` + `getByRole`, asserts on DOM state + captured request data.
+
+- **`tests/playwright/p29-manual-add-captured-text-modal.spec.ts` (modified)** — describe-level `test.skip(true, ...)` removed; 8 test bodies filled in including the clientId-dedup test which uses `page.addInitScript()` to pin `crypto.randomUUID()` to a fixed UUID + seed an existing row with the same clientId.
+
+- **`tests/playwright/p29-manual-add-captured-image-modal.spec.ts` (modified)** — describe-level `test.skip(true, ...)` removed; 17 test bodies filled in. The drag-drop tests use `page.evaluateHandle()` to construct a `DataTransfer` containing synthetic `File` objects of the desired (mimeType, size, name) shape, then `dispatchEvent('drop', { dataTransfer })`. The paste test dispatches a `ClipboardEvent('paste')` on `document` with `clipboardData` populated similarly. Test 7 (multi-file warning) marked `test.skip()` with header note pointing at P-32.
+
+**Verification scoreboard — all GREEN on `workflow-2-competition-scraping`:**
+
+- `npx tsc --noEmit`: clean
+- `cd extensions/competition-scraping && npm run compile`: clean
+- `npm run build`: compiled successfully (52 routes — same baseline; no new routes since P-30 is `tests/`-only)
+- `find src/lib -name "*.test.ts" | xargs node --test`: **447/447 pass** (unchanged baseline)
+- `cd extensions/competition-scraping && npm test`: **334/334 pass** (unchanged baseline)
+- `npx playwright test --project=chromium tests/playwright/p29-manual-add-url-modal.spec.ts`: **6/6 PASS** (was 6 skipped)
+- `npx playwright test --project=chromium tests/playwright/p29-manual-add-captured-text-modal.spec.ts`: **8/8 PASS** (was 8 skipped)
+- `npx playwright test --project=chromium tests/playwright/p29-manual-add-captured-image-modal.spec.ts`: **16/17 PASS + 1 skipped (P-32)** (was 17 skipped)
+- `npx playwright test` (full suite — chromium + extension projects): **63 passed + 1 skipped** in 1.8m
+
+**Per Rule 23 Change Impact Audit — Additive (safe):** new files only under `tests/` + minor extensions to `tests/playwright/test-server.mjs` + `tests/playwright/build-bundle.mjs`. Zero `src/` runtime impact; zero schema changes; zero shared-types changes; zero API surface changes. No downstream consumers affected.
+
+**P-32 polish item surfaced + captured per Rule 14e + Rule 26:** Test 7 (multi-file drop warning) failed on first run, revealing a real production bug in `CapturedImageAddModal.tsx` — `onDrop` calls `setWarningMessage('N files dropped — only the first will be used')` and then `await tryLoadFile(files[0], files[0].name)`. `tryLoadFile`'s first line is `setWarningMessage(null)`. Both updates batch into the same React commit (because everything between `setWarningMessage('...')` and `setWarningMessage(null)` is synchronous up to the first `await URL.createObjectURL(...)` — but `URL.createObjectURL` is synchronous too, so all state updates queue before React commits). The later `setWarningMessage(null)` wins. The warning UI never appears on multi-file drop. P-30's whole purpose is regression coverage — the rig caught it on first authoring. The fix is a one-liner (move `setWarningMessage(null)` out of `tryLoadFile`, OR set warning AFTER tryLoadFile resolves, OR pass the warning text in as a tryLoadFile arg). Deferred to keep P-30 strictly test-infra-only per launch-prompt scope. Captured below as a new P-32 polish-backlog entry. The Playwright test stays in the file marked `test.skip()` with a header note pointing at P-32 — the test re-enables when the modal is fixed.
+
+**Director manual smoke of the rig's developer-loop feel:** N/A this session — the rig itself is non-interactive (runs from `npx playwright test`); developer-loop is the standard Playwright loop (`--headed` / `--debug` / `--ui` all available); test failures display tight stack traces with file:line pointers; the rig boots in ~2 seconds. No polish items found in the rig itself.
+
+**Cross-references:**
+
+- Commit `0548da7` on `workflow-2-competition-scraping`
+- `tests/playwright/build-bundle.mjs` + `tests/playwright/test-server.mjs`
+- `tests/playwright/mounts/p29-{url,text,image}-modal.mount.tsx`
+- `tests/playwright/pages/p29-{url,text,image}-modal.html`
+- `tests/playwright/p29-manual-add-{url,captured-text,captured-image}-modal.spec.ts`
+- The P-30 polish-backlog entry above (now flipped ✅ SHIPPED AT CODE LEVEL with cross-reference)
+- The three "P-29 Slice #{N} SHIPPED at code level" sections (URL / text / image) had their "all N currently `test.skip()`" lines flipped inline to reflect the live-coverage status
+- ROADMAP W#2 row (a.35) flipped ✅ SHIPPED-AT-CODE-LEVEL + new (a.36) RECOMMENDED-NEXT P-31 (route-handler DI refactor — director picked via §4 Step 1c forced-picker)
+- `COMPETITION_SCRAPING_DESIGN.md` §B 2026-05-15-g entry (full ship narrative)
+- `NEXT_SESSION.md` rewritten 2026-05-15-g for P-31 build session
+
+---
+
+## P-32 NEW POLISH ITEM — `CapturedImageAddModal` multi-file drop warning silently cleared (NEW 2026-05-15-g — surfaced by P-30 Playwright spec on first run)
+
+**Status:** ⏳ NOT STARTED. Captured 2026-05-15-g during P-30 build session when the multi-file-drop Playwright test (one of the 17 cases in the captured-image spec) failed on first run, revealing a real production bug in `CapturedImageAddModal.tsx`.
+
+**Severity:** LOW-MEDIUM. The bug only surfaces in the multi-file-drop edge case (which is rare — the typical capture flow is a single image at a time). When it does fire, the user gets the desired behavior (first file loaded; rest ignored) but misses the explanatory warning. Not a data-loss bug; not a security bug; not a regression-test-class bug. Just a missed user feedback hint.
+
+**Reproduction:**
+
+1. Open the captured-image add modal on any URL detail page.
+2. Drag two or more image files onto the drop zone.
+3. **Expected:** preview appears with the first file's filename AND a `<div role="status">` warning that "N files dropped — only the first will be used."
+4. **Actual:** preview appears with the first file's filename. **The warning never appears.**
+
+**Root cause:**
+
+```tsx
+// In onDrop callback in CapturedImageAddModal.tsx:
+if (files.length > 1) {
+  setWarningMessage(
+    `${files.length} files dropped — only the first will be used.`
+  );
+}
+await tryLoadFile(files[0], files[0].name);
+```
+
+```tsx
+// In tryLoadFile callback (same file):
+const tryLoadFile = useCallback(async (file: File | Blob, filename?: string) => {
+  setErrorMessage(null);
+  setWarningMessage(null);  // ← clobbers the warning set in onDrop
+  // ... rest of the function
+});
+```
+
+`setWarningMessage('...')` in `onDrop` and `setWarningMessage(null)` inside `tryLoadFile` queue into the same React commit cycle. The later one wins. The warning UI never appears.
+
+**Fix shape (~1 line):**
+
+Three viable shapes — director picks at session start:
+
+- **(A)** Move `setWarningMessage(null)` out of `tryLoadFile` and into the call sites where clearing is wanted (paste path + URL fetch path + file-input fallback — but NOT multi-file drop). Most local; preserves the existing function's clear-on-entry semantics for the cases that need it.
+
+- **(B)** Re-set the warning AFTER `await tryLoadFile(...)` resolves in `onDrop`. Simpler diff; trade-off is the warning briefly disappears and reappears (likely imperceptible).
+
+- **(C)** Pass the warning message text into `tryLoadFile` as an optional second arg and have it propagate to state after the validation. Cleanest API; slightly larger diff.
+
+**Estimated scope:** ~10-15 min including re-enabling the Playwright `test.skip()` annotation in `tests/playwright/p29-manual-add-captured-image-modal.spec.ts` and a verification scoreboard re-run.
+
+**Cross-references:**
+
+- `tests/playwright/p29-manual-add-captured-image-modal.spec.ts` (the currently-skipped test at the "Multi-file drop loads the first + shows warning" describe block — header note already points at this P-32 entry)
+- `src/app/projects/[projectId]/competition-scraping/components/CapturedImageAddModal.tsx` (the `onDrop` + `tryLoadFile` callbacks above)
+- `COMPETITION_SCRAPING_DESIGN.md` §B 2026-05-15-g entry (P-30 build session narrative)
+- The P-30 SHIPPED section above (which surfaced this bug)
+
+**Estimated session fit:** would naturally fold into the start of the P-31 session (route-handler DI refactor — (a.36) RECOMMENDED-NEXT) since it's also `CapturedImageAddModal`-area work AND the one-line nature makes it a clean session-opener that demonstrates the new Playwright regression coverage flipping a skip → pass in real time.
 
 ---
 

@@ -6,7 +6,11 @@
 **Branch:** `workflow-2-competition-scraping`
 **Created:** May 4, 2026
 **Created in session:** session_2026-05-04_w2-workflow-requirements-interview (Claude Code)
-**Last updated:** May 15, 2026-e (W#2 P-29 Slice #3 BUILD session — manual-add captured-image modal + new SSRF-guarded `fetch-by-url` route + new pure-function `ssrf-guard.ts` module + 37 security-class node:test cases all SHIPPED at code level on `workflow-2-competition-scraping`. §B 2026-05-15-e entry appended below. §A unchanged per Rule 18. Schema-change-in-flight stays "No".)
+**Last updated:** May 15, 2026-g (W#2 P-30 BUILD session — Playwright React-bundle stub-page rig SHIPPED at code level on `workflow-2-competition-scraping` in commit `0548da7`. §B 2026-05-15-g entry appended below covering the Rule 14f forced-picker outcome (Option A — extend P-17 authFetch esbuild stub-page pattern), the rig architecture, and the headline scoreboard delta (P-29 Playwright cases went from 31 skipped → 30 pass + 1 P-32-deferred-skip). §A unchanged per Rule 18. Schema-change-in-flight stays "No".)
+
+**Previously updated:** May 15, 2026-f (W#2 → main deploy session #15 — P-29 Slice #3 DEPLOYED to vklf.com + REAL-INDEPENDENT-WEBSITE FULL VERIFY across all five parts in a single batched pass; zero walkthrough-found polish items. §B 2026-05-15-f entry appended below covering the deploy outcome + walkthrough verification + P-29 three-slice arc completion. §A unchanged. Schema-change-in-flight stays "No".)
+
+**Previously updated:** May 15, 2026-e (W#2 P-29 Slice #3 BUILD session — manual-add captured-image modal + new SSRF-guarded `fetch-by-url` route + new pure-function `ssrf-guard.ts` module + 37 security-class node:test cases all SHIPPED at code level on `workflow-2-competition-scraping`. §B 2026-05-15-e entry appended below. §A unchanged per Rule 18. Schema-change-in-flight stays "No".)
 
 **Previously updated:** May 15, 2026 (W#2 polish session #11 — P-12 SHIPPED at code level on `workflow-2-competition-scraping` (commit `414efe6`) — extension 401-retry / silent-refresh analog to P-1. `extensions/competition-scraping/src/lib/api-client.ts` `authedFetch` refactored to factory `makeAuthedFetch({ supabase, fetchFn })` + 9 new unit tests; 261/261 ext tests pass; deploy pending per ROADMAP W#2 row (a.15). §B 2026-05-15 entry appended below; §A remains frozen per Rule 18; schema-change-in-flight stays "No".)
 **Previously updated:** May 7, 2026-h (W#2 Chrome extension build — session 3 — §B 2026-05-07-h entry appended covering Module 1 URL-capture content script for the 4 shopping platforms (Amazon, Ebay, Etsy, Walmart) + the 3 URL-recognition specs from the §B 2026-05-07-g end-of-session addendum + URL-add overlay form; §A remains frozen per Rule 18; schema-change-in-flight stays "No"; per-platform DOM-pattern modules + URL-normalization helper + recognition cache + 36 walked-through tests appended to verification backlog targeting Waypoint #1.)
@@ -2309,6 +2313,93 @@ The manual-add feature is now end-to-end on vklf.com. Admins can add URLs (Slice
 - ROADMAP W#2 row (a.34) ✅ DONE + new (a.35) RECOMMENDED-NEXT P-30 Playwright React-bundle rig.
 - COMPETITION_SCRAPING_VERIFICATION_BACKLOG new "Deploy session #15 — P-29 Slice #3 DEPLOYED + FULL VERIFY 2026-05-15-f" section at top + Slice #3 SHIPPED-AT-CODE-LEVEL section's pending-verification table flipped DEFERRED → ✅ PASS for all 12 rows.
 - NEXT_SESSION.md rewritten 2026-05-15-f for P-30 build session.
+
+---
+
+### §B 2026-05-15-g — P-30 Playwright React-bundle stub-page rig SHIPPED at code level
+
+**Session:** `session_2026-05-15-g_w2-p30-playwright-react-bundle-rig` (Claude Code, on `workflow-2-competition-scraping`).
+**Commit:** `0548da7` on `workflow-2-competition-scraping`.
+**Closes:** (a.35) RECOMMENDED-NEXT.
+**Director-approved next pick (§4 Step 1c forced-picker):** (a.36) — **P-31** route-handler DI refactor for testability (closes the API-layer regression-coverage gap that P-30 deliberately left out of scope; completes the P-29 area's regression-coverage trifecta — modal UI mechanical via P-30 + route-handler integration via P-31 + real-website smoke via director walkthrough).
+
+**Rule 14f forced-picker at session start — rig shape (4 candidates):**
+
+- **(A) Extend existing P-17 authFetch esbuild stub-page rig — director-recommended + director-picked.** Reuses `tests/playwright/build-bundle.mjs` + `test-server.mjs` + the static-HTML + esbuild bundle pattern. Add a React-aware esbuild bundle entrypoint per modal, mount each modal in a tiny stub HTML page with `window.__test*` hooks, serve via the existing node http server, drive with Playwright. Real Chromium render + real DOM (faithful drag-drop / paste / DataTransfer event handling — load-bearing for Slice #3's three modalities). Zero new tooling (React 19 + esbuild 0.28 + `@playwright/test` 1.60 already in `package.json`). Reversible — if scaling becomes painful at modal #10, can pivot to Option C without losing the spec files.
+- **(B) Next.js test-only route under `src/app/__playwright__/`.** Closest to production environment; reuses Next.js dev server. Cons: ships test-code paths in the route table (gating discipline required to prevent production leakage); slower test loop because Next.js dev-server boot dominates per-test time. Less thorough than A because of the production-leakage risk + slower loop discourages running locally.
+- **(C) `@playwright/experimental-ct-react`.** Playwright's first-party Component Testing runner — purpose-built for this. Cons: EXPERIMENTAL label (API can break between releases); requires a parallel config file + new build pipeline + new mount() conventions; new tooling surface to learn + maintain; locks us into a less-stable API for the entire P-29 + future modal coverage. Less reliable than A specifically because of the experimental label.
+- **(D) JSDOM unit tests.** Auto-eliminated from the picker because it conflicts with Rule 27's real-browser-context intent — Slice #3's drag-drop + clipboard-paste + DataTransfer handling can't be faithfully exercised in JSDOM.
+
+**Why Option A is most thorough/reliable per `feedback_recommendation_style.md`:** PROVEN pattern in this repo (P-17 already works); real Chromium → catches the real-DOM-specific bugs the modals can hit (drag-drop / clipboard paste / DataTransfer specifically); zero new tooling surface; director already invested in this pattern via P-17 ship; reuse vs. invent. Director picked Option A.
+
+**Rig architecture shipped:**
+
+The rig is a layered extension of the existing P-17 pattern:
+
+1. **`tests/playwright/build-bundle.mjs` (modified)** — `buildAuthFetchBundle()` preserved + factored shared `define`/`alias` into module constants + NEW `buildP29ModalBundles()` that bundles three React entrypoints. esbuild handles JSX via the automatic runtime (`jsx: 'automatic'`); the `@/` path alias maps to `src/` so the modals' imports resolve identically to production; `@supabase/supabase-js` aliases to the existing `fake-supabase.ts` so authFetch's real production wiring runs without a real Supabase client.
+
+2. **`tests/playwright/mounts/*.tsx` (NEW)** — three React mount entrypoints (URL / text / image). Each:
+   - Imports React + ReactDOM (`createRoot`) + the production modal.
+   - Renders a thin `<Wrapper>` that owns `isOpen` state, renders the trigger button at the test-id the corresponding spec asserts on (`manual-add-url-button` / `manual-add-captured-text-button` / `manual-add-captured-image-button`), and renders the production modal with the right prop wiring.
+   - For text + image: also owns a captured-row list mirroring `UrlDetailContent.handleTextAdded` (clientId-dedup prepend) / `refreshImages` (re-fetch the gallery list after a successful save so the GET ordering can be asserted).
+   - Exposes test hooks on `window` (`window.__test` / `window.__testText` / `window.__testImage`) and reads `window.__testParams` / `__testTextParams` / `__testImageParams` for per-test overrides set via `page.addInitScript()`.
+
+3. **`tests/playwright/pages/*.html` (NEW)** — three static stub HTML pages. Each seeds `window.__fakeSupabaseState` (so authFetch passes the auth check), then `await import('/dist/<bundle-name>.bundle.js')` to side-effect-mount the wrapper, then sets `window.__pageReady = true`.
+
+4. **`tests/playwright/test-server.mjs` (modified)** — extended with a `HTML_PAGES` map for the 3 new pages and a `/dist/<name>.bundle.js` route prefix (path-traversal-guarded: rejects bundle names containing `/` or `..`). Boot step `await Promise.all([buildAuthFetchBundle(), buildP29ModalBundles()])` builds all four bundles before listening.
+
+**Spec authoring pattern (applied to all three P-29 specs):**
+
+- `await page.goto(PAGE_URL); await page.waitForFunction(() => window.__pageReady === true);` to ensure the bundle has finished mounting.
+- `page.route(POST_PATTERN, ...)` to intercept the modal's fetch + capture body shape (via `request.postDataJSON()`) and shape the response. Since authFetch's real production code calls `window.fetch`, the route handler fires at the browser network layer before the request leaves Chromium.
+- Drive the UI via `getByTestId` (for the trigger button) + `getByLabel` (for form fields) + `getByRole('dialog' | 'button' | 'alert' | 'status')` for assertions.
+- For drag-drop tests: `page.evaluateHandle()` constructs a `DataTransfer` containing synthetic `File` objects of the desired `(name, mimeType, size)` shape, then `locator.dispatchEvent('drop', { dataTransfer })`.
+- For clipboard-paste tests: `page.evaluate()` constructs a `ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true })` and dispatches on `document` (matching where the modal listens).
+- For UUID-shape assertions on `clientId`: a small regex `^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$` matched against the captured body. Real `crypto.randomUUID()` is used in the modal — secure-context rules are satisfied because the test server runs on `127.0.0.1` which Chromium treats as secure.
+- For the captured-text clientId-dedup test: `page.addInitScript()` pins `window.crypto.randomUUID` to a fixed UUID AND seeds `window.__testTextParams = { seedRows: [...] }` with an existing row sharing that UUID. The modal submits with the pinned UUID; the route fulfills 200 with the existing row's shape; the wrapper's clientId-dedup replaces in-place.
+
+**Headline scoreboard delta (the load-bearing P-30 outcome):**
+
+| Spec | Before P-30 | After P-30 | Delta |
+|---|---|---|---|
+| `p29-manual-add-url-modal.spec.ts` | 6 skipped | 6/6 PASS | +6 net new passing |
+| `p29-manual-add-captured-text-modal.spec.ts` | 8 skipped | 8/8 PASS | +8 net new passing |
+| `p29-manual-add-captured-image-modal.spec.ts` | 17 skipped | 16 PASS + 1 skipped (P-32) | +16 net new passing; 1 deferred |
+| **Total** | **31 skipped** | **30 PASS + 1 P-32-deferred** | **+30 net new passing in one session** |
+
+Every future P-29-area polish/walkthrough now has automated regression coverage at zero director-time cost. The rig architecture extends straightforwardly to additional W#2 modals (e.g., the future P-27/P-28 delete-confirm dialogs) — each new modal = one bundle entrypoint + one mount script + one stub HTML page + one spec file; the rig itself doesn't need re-architecting.
+
+**P-32 polish item surfaced + captured per Rule 14e + Rule 26:**
+
+The multi-file-drop test failed on first run, revealing a real production bug in `CapturedImageAddModal.tsx`. `onDrop` sets `setWarningMessage('N files dropped — only the first will be used')` and then `await tryLoadFile(files[0], files[0].name)`. `tryLoadFile`'s first lines are `setErrorMessage(null)` + `setWarningMessage(null)`. Both updates batch into the same React commit cycle. The later `setWarningMessage(null)` wins. The warning UI never appears on multi-file drop. P-30's whole purpose IS regression coverage — the rig caught it on first authoring. The fix is a one-liner; deferred to keep P-30 strictly test-infra-only per launch-prompt scope. P-32 capture in `COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` (new polish-backlog entry); the corresponding Playwright test is marked `test.skip()` with a header note pointing at P-32. Will fold naturally into the start of the P-31 session — it's a `CapturedImageAddModal`-area one-line fix that demonstrates the new Playwright regression coverage flipping a skip → pass in real time.
+
+**Verification scoreboard — all GREEN on `workflow-2-competition-scraping`:**
+
+- `npx tsc --noEmit`: clean
+- `cd extensions/competition-scraping && npm run compile`: clean
+- `npm run build`: compiled successfully (52 routes — same baseline as deploy #15; no new routes since P-30 is `tests/`-only)
+- `find src/lib -name "*.test.ts" | xargs node --test`: **447/447 pass** (unchanged baseline)
+- `cd extensions/competition-scraping && npm test`: **334/334 pass** (unchanged baseline)
+- `npx playwright test`: **63 passed + 1 skipped (P-32 deferred)** in 1.8m
+
+**Per Rule 23 Change Impact Audit — Additive (safe):** new files only under `tests/` + minor extensions to `tests/playwright/test-server.mjs` + `tests/playwright/build-bundle.mjs`. Zero `src/` runtime impact; zero schema changes; zero shared-types changes; zero API surface changes. No downstream consumers affected.
+
+**Affected sections:**
+- §A.13 (Data persistence) — unchanged; the rig exercises the existing API contract, not the storage layer.
+- §A.18 (Recommended next-session sequence) — P-30 closed; next pick is P-31 (route-handler DI refactor; (a.36) RECOMMENDED-NEXT).
+
+**Multi-Workflow per Rule 25:** session ran on `workflow-2-competition-scraping`; schema-change-in-flight flag stays No (P-30 is test-infra-only); pull-rebase no-op at start; W#1 row untouched per Rule 3 ownership. **TaskList sweep per Rule 26:** 8 session tasks tracked + completed (Read modal components / Build rig slice 1 / Port URL spec / Port text spec / Port image spec / Verification scoreboard / End-of-session doc batch / Track P-32 deferral); 1 DEFERRED item (P-32) captured both in TaskCreate AND in the COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md new P-32 entry below; closed after the doc entry was written.
+
+**Cross-references:**
+
+- Commit `0548da7` on `workflow-2-competition-scraping`
+- `tests/playwright/build-bundle.mjs` + `tests/playwright/test-server.mjs`
+- `tests/playwright/mounts/p29-{url,text,image}-modal.mount.tsx`
+- `tests/playwright/pages/p29-{url,text,image}-modal.html`
+- `tests/playwright/p29-manual-add-{url,captured-text,captured-image}-modal.spec.ts`
+- `COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` new P-30 SHIPPED section + new P-32 polish entry + the three Slice #N SHIPPED sections' "all N currently `test.skip()`" lines flipped inline
+- ROADMAP W#2 row (a.35) flipped ✅ SHIPPED-AT-CODE-LEVEL + new (a.36) RECOMMENDED-NEXT P-31 + polish backlog P-30 entry flipped ✅ SHIPPED-AT-CODE-LEVEL + new P-32 polish entry
+- `NEXT_SESSION.md` rewritten 2026-05-15-g for P-31 build session
 
 ---
 
