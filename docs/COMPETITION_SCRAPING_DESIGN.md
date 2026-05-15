@@ -1977,4 +1977,73 @@ Each slice its own session per `PROJECT_CONTEXT.md §13` discover-as-you-build.
 
 ---
 
+### 2026-05-15-b — session_2026-05-15-b_w2-p29-slice-1-build-session (Claude Code, on `workflow-2-competition-scraping`)
+
+**Session purpose:** P-29 Slice #1 BUILD session — ship the manual-add URL modal + one-shot `source` schema migration covering all 3 W#2 tables, per the 2026-05-15 design pass's frozen decisions. Closes (a.30) RECOMMENDED-NEXT.
+
+**What shipped at code level (commit `070820a` on `workflow-2-competition-scraping`):**
+
+- **Schema migration** (Q3 outcome): `prisma db push` against the live DB added `source String @default("extension")` column to `CompetitorUrl` + `CapturedText` + `CapturedImage`. Verified post-migration: 25 + 8 + 10 = 43 existing rows backfilled to `'extension'` via the column default; counts unchanged. `prisma/schema.prisma:269,309,337`.
+
+- **Shared types update**: new `SOURCES` vocabulary + `isSource` type guard added to `src/lib/shared-types/competition-scraping.ts`; `source: Source` field added to `CompetitorUrl` / `CapturedText` / `CapturedImage` response interfaces; `source?: Source` added to `CreateCompetitorUrlRequest` / `CreateCapturedTextRequest` / `FinalizeImageUploadRequest`. Slice #2 + Slice #3 won't need to re-touch shared types.
+
+- **API route update** (collection POST): `src/app/api/projects/[projectId]/competition-scraping/urls/route.ts` POST handler accepts optional `source`; validates via `isSource`; rejects misshapen values with 400 + explicit error message; default `'extension'` applies server-side when omitted (preserves Chrome extension's existing POST traffic semantics — extension's existing `CreateCompetitorUrlRequest` payload doesn't carry `source`, so backward-compatible).
+
+- **Wire-shape echo** (6 toWireShape serializers updated): `urls/route.ts`, `urls/[urlId]/route.ts`, `text/[textId]/route.ts`, `urls/[urlId]/text/route.ts`, `urls/[urlId]/images/route.ts`, `urls/[urlId]/images/finalize/route.ts`, `images/[imageId]/route.ts`. Each now returns `source` on every read path. TypeScript would have caught any miss because the shared-types interfaces now require the field on the response shapes — `npx tsc --noEmit` clean confirmed.
+
+- **UI: `UrlAddModal.tsx`** (new ~470 LOC component at `src/app/projects/[projectId]/competition-scraping/components/UrlAddModal.tsx`): full URL-add form mirroring the Chrome extension's overlay shape — URL + Platform (7-value dropdown with extension-matched labels like "Independent Website") + Brand + Product + Category + Product Stars (0-5, step 0.1) + # Reviews + Results Page Rank + Sponsored toggle. Autofocus on URL field; Escape / Cancel / X / backdrop dismiss (only when not submitting); inline validation surface; submit-in-flight lock disables all controls + dismiss paths to prevent orphan POSTs. POSTs with `source: 'manual'` explicitly.
+
+- **UrlTable.tsx wire-in** (Q5 outcome — modal pattern; director-picked button location: top-right of search toolbar): new "+ Manually add URL" button rendered at top-right of the existing search/clear-filters/count toolbar; click opens the modal; on success, modal closes + parent `CompetitionScrapingViewer.handleUrlAdded` prepends the new row to the URL list state with `id`-dedup against the POST's idempotent return path.
+
+- **Tests**: 10 node:test cases for `isSource` + cross-vocabulary type guards at `src/lib/shared-types/competition-scraping.test.ts` (all GREEN); 6 Playwright UI-mechanical test cases at `tests/playwright/p29-manual-add-url-modal.spec.ts` — all `test.skip()` today pending the React-bundle stub-page rig captured as **P-30** in the polish backlog.
+
+**Deferred items captured per Rule 14e + Rule 26:**
+
+- **P-30** — Playwright React-bundle stub-page rig that bundles React + ReactDOM + Slice #1+#2+#3 modal components via esbuild, served by `tests/playwright/test-server.mjs`. Unblocks the 6 skipped Slice #1 spec cases and pre-empts the same gap for Slice #2 + Slice #3. Tracked in W#2 polish backlog (`COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md`). ETA: 60-90 min in its own session.
+
+- **P-31** — Route-handler DI refactor for testability. Today the POST handler at `urls/route.ts` wires `prisma`, `verifyProjectWorkflowAuth`, `markWorkflowActive`, `recordFlake`, `withRetry` inline; pure-function tests can't exercise it. Refactor extracts validation + Prisma-create into an injectable shape so node:test can hit it without bundling Next.js. Tracked in W#2 polish backlog. ETA: 30-45 min in its own session.
+
+- **Empty-URL-list-locks-out-manual-add** — when a Project's W#2 URL list is empty, `CompetitionScrapingViewer`'s EmptyState renders before `UrlTable`, so the new "+ Manually add URL" button is hidden behind the "install Chrome extension" empty-state copy. Director-manual-walkthrough verification will hit this only if a Project starts at zero URLs. Captured as DEFERRED — likely lifts into a small follow-up that renders the manual-add button in the empty state too OR moves the empty-state into UrlTable so the toolbar always renders. Tracked in W#2 polish backlog as the in-text DEFERRED note inside `CompetitionScrapingViewer.tsx`'s `handleUrlAdded` JSDoc + this §B entry.
+
+**Multi-Workflow per Rule 25:**
+
+- Session ran on `workflow-2-competition-scraping` per `MULTI_WORKFLOW_PROTOCOL §11`.
+- Schema-change-in-flight flag flipped Yes during build (per launch prompt Rule 4 handshake); flips back to No at end-of-session in this batch.
+- Pull-rebase clean at session start (workflow branch up to date with origin); pull-rebase clean again before push.
+- W#1 row untouched per Rule 3 ownership.
+- TaskList sweep per Rule 26: 11 session tasks tracked; 2 DEFERRED items (P-30 + P-31) captured both in TaskCreate AND in this §B entry above.
+
+**Rule 23 Change Impact Audit outcome:** Additive (safe) — confirmed at session start; proceeded. No coordinated downstream-consumer update required. Future workflows that consume W#2 data via `DATA_CATALOG.md §7` will see the new `source` field on every read path; opt-in for filtering / display / audit.
+
+**Verification scoreboard:**
+
+- `npx tsc --noEmit`: clean.
+- `npm run build`: clean (all routes compile; no warnings).
+- `node --test src/lib/shared-types/competition-scraping.test.ts`: 10/10 pass.
+- `npx playwright test --project=chromium tests/playwright/p29-manual-add-url-modal.spec.ts`: 6/6 skipped as designed (P-30 + P-31 cover the run-time coverage gaps).
+- Director manual walkthrough on real-independent-website end-to-end: **DEFERRED** to the next W#2 → main deploy session that brings this code to vklf.com (workflow branch isn't deployed).
+
+**Director-approved end-of-session pick:** standard 2-commit W#2 session shape — code commit (`070820a`) pushed mid-session with Rule 9 ask; end-of-session doc batch is this commit + push.
+
+**Affected sections:**
+- §A.7 (Module 1 URL-add UX) — now also serviced by vklf.com's UrlAddModal in addition to the Chrome extension's "+ Add" gesture.
+- §A.10 (Audit trail) — `source` column now load-bearing for distinguishing extension vs. manual rows.
+- §A.13 (Data persistence) — schema columns landed.
+- §A.18 (Recommended next-session sequence) — Slice #2 (captured-text modal) is the next pick; Slice #3 (image modal) follows.
+
+**Cross-references:**
+- Commit `070820a` (Slice #1 code; 15 files +908/-1)
+- `src/app/projects/[projectId]/competition-scraping/components/UrlAddModal.tsx` (NEW; ~470 LOC)
+- `src/app/projects/[projectId]/competition-scraping/components/UrlTable.tsx` (toolbar button + modal mount)
+- `src/app/projects/[projectId]/competition-scraping/components/CompetitionScrapingViewer.tsx` (`handleUrlAdded` callback with `id`-dedup)
+- `src/lib/shared-types/competition-scraping.ts` (`SOURCES` vocabulary + `isSource` guard + `source` on URL/text/image DTOs)
+- `src/lib/shared-types/competition-scraping.test.ts` (10 node:test cases)
+- `tests/playwright/p29-manual-add-url-modal.spec.ts` (6 skipped UI-mechanical cases; structural placeholder for the P-30 bundle-rig session)
+- `prisma/schema.prisma:269,309,337` (the three `source` column additions)
+- `ROADMAP.md` W#2 row Last Session prepended + (a.30) flipped ✅ SHIPPED-AT-CODE-LEVEL + new (a.31) RECOMMENDED-NEXT Slice #2; schema-change-in-flight flag flipped back to No.
+- `COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` — P-29 section flipped Slice #1 ✅ SHIPPED-AT-CODE-LEVEL; new P-30 + P-31 polish entries appended.
+- `NEXT_SESSION.md` rewritten for Slice #2.
+
+---
+
 END OF DOCUMENT

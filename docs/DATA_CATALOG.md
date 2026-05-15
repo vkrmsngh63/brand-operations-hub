@@ -1,7 +1,9 @@
 # DATA CATALOG
 ## Master index of all data captured across the PLOS platform, with Human Reference Language
 
-**Last updated:** May 12, 2026 (**W#1 Tool Graduation — Data Capture Interview executed.** §5 header retired the "all PROVISIONAL" framing; 11 entries (§5.1, §5.2, §5.2a, §5.3, §5.4, §5.5, §5.6, §5.7, §5.9, §5.11, §5.12) had Human Reference Language finalized in the live Data Capture Interview; entries §5.8 + §5.10 were already locked in earlier sessions. Every §5.x entry now carries a `CONTRACT DOC` pointer to `KEYWORD_CLUSTERING_DATA_CONTRACT.md` §2. §7.2.1 (W#1 Cross-Tool Data Flow Map row) updated from PROVISIONAL → FINAL with the 12 data items + downstream consumer table. §7.1 summary table updated to point at the finalized contract. Three NEW client-side-to-server-side migration items surfaced mid-interview (Main Terms, Terms In Focus, Auto-Analyze checkpoint) per director's standing 2026-05-08-c "pick up where you left off" principle; captured in `KEYWORD_CLUSTERING_POLISH_BACKLOG.md` §"Pending server-side migrations" — Data Contract v1 locks current localStorage technical names; future v2 ships when migrations complete per Rule 23 versioned-contract pattern.)
+**Last updated:** 2026-05-15-b (W#2 P-29 Slice #1 BUILD session — `source` String column added to §6.1.1 + §6.1.3 + §6.1.4 wire-shape FIELDS lists; default `"extension"` so existing rows backfill via column default; closed-vocabulary `"extension" | "manual"` validated via `isSource` from shared-types. Captures the new audit-trail dimension that distinguishes Chrome-extension capture from vklf.com manual-add modal entry — per `COMPETITION_SCRAPING_DESIGN.md` §B 2026-05-15 design entry Q3 outcome.)
+
+**Previously updated:** May 12, 2026 (**W#1 Tool Graduation — Data Capture Interview executed.** §5 header retired the "all PROVISIONAL" framing; 11 entries (§5.1, §5.2, §5.2a, §5.3, §5.4, §5.5, §5.6, §5.7, §5.9, §5.11, §5.12) had Human Reference Language finalized in the live Data Capture Interview; entries §5.8 + §5.10 were already locked in earlier sessions. Every §5.x entry now carries a `CONTRACT DOC` pointer to `KEYWORD_CLUSTERING_DATA_CONTRACT.md` §2. §7.2.1 (W#1 Cross-Tool Data Flow Map row) updated from PROVISIONAL → FINAL with the 12 data items + downstream consumer table. §7.1 summary table updated to point at the finalized contract. Three NEW client-side-to-server-side migration items surfaced mid-interview (Main Terms, Terms In Focus, Auto-Analyze checkpoint) per director's standing 2026-05-08-c "pick up where you left off" principle; captured in `KEYWORD_CLUSTERING_POLISH_BACKLOG.md` §"Pending server-side migrations" — Data Contract v1 locks current localStorage technical names; future v2 ships when migrations complete per Rule 23 versioned-contract pattern.)
 **Last updated in session:** session_2026-05-12_w1-graduation-ritual (Claude Code)
 **Previously updated:** May 4, 2026 (W#2 Workflow Requirements Interview — provisional W#2 entries added to §6.1 (7 sub-sections covering competitor URL records, sizes/options, captured text, captured images, platform-shared vocabularies, highlight terms, worker assignments with platform sub-scope) + §7.2.2 W#2 row in Cross-Tool Data Flow Map filled in with reciprocal output declarations per Rule 18 + W#1-as-W#2-input speculation rejected. All entries provisional pending W#2 Tool Graduation; finalized HRL authored per Doc Architecture §5 at graduation time. Modified on `workflow-2-competition-scraping` feature branch per MULTI_WORKFLOW_PROTOCOL Rule 3 — only W#2-relevant additions, no W#1 sections touched.)
 **Previously updated in session:** session_2026-05-04_w2-workflow-requirements-interview (Claude Code)
@@ -326,6 +328,7 @@ Entries will be added during each workflow's Tool Graduation Ritual:
   - `productReviewsCount` — Integer, nullable
   - `sellerReviewsCount` — Integer, nullable
   - `customFields` — JSON, nullable (for "Add new product-associated category" custom fields like "Country of Manufacturing")
+  - `source` — String, NOT NULL, default `"extension"`. Closed vocabulary `"extension" | "manual"` enforced at the wire boundary via `isSource` (per `src/lib/shared-types/competition-scraping.ts`). Distinguishes Chrome-extension capture from vklf.com manual-add modal entry. NEW 2026-05-15-b — P-29 Slice #1.
   - `createdByUserId`, `createdAt`, `updatedAt` — provenance + timestamps
   - **Constraint:** unique on `(projectId, platform, url)` — prevents duplicate captures
 - **SHARED WITH (provisional):** W#3, W#5, W#6, W#9, W#11
@@ -357,6 +360,7 @@ Entries will be added during each workflow's Tool Graduation Ritual:
   - `text` — String (long; the captured text)
   - `tags` — String[] (arbitrary text tags)
   - `displayOrder` — Integer (user-reorderable)
+  - `source` — String, NOT NULL, default `"extension"`. Closed vocabulary `"extension" | "manual"`. NEW 2026-05-15-b — P-29 Slice #1 (Slice #2 wires the vklf.com manual-add text modal that emits `source="manual"`).
   - timestamps + provenance
 - **VOLUME EXPECTATION:** ~5,000 rows per Project (per A.3 estimate)
 - **SHARED WITH (provisional):** W#3, W#5, W#6, W#9, W#10
@@ -377,6 +381,7 @@ Entries will be added during each workflow's Tool Graduation Ritual:
   - `tags` — String[]
   - `displayOrder` — Integer
   - `widthPx`, `heightPx`, `sizeBytes` — Integer (for storage analytics)
+  - `source` — String, NOT NULL, default `"extension"`. Closed vocabulary `"extension" | "manual"`. NEW 2026-05-15-b — P-29 Slice #1 (Slice #3 wires the vklf.com manual-add image modal with drag-drop + paste + URL-of-image input modalities). DISTINCT from `imageType` (`"regular" | "region_screenshot"`) which describes the IMAGE's content shape; `source` describes WHICH CLIENT created the row.
   - timestamps + provenance
 - **VOLUME EXPECTATION:** ~300 images per Project (per A.3); ~500 KB average → ~500 GB/yr Phase 3, ~1 TB/yr Phase 4
 - **SHARED WITH (provisional):** W#4, W#6, W#7

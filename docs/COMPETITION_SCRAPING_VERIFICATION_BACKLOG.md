@@ -4,7 +4,9 @@
 **Workflow:** W#2 Competition Scraping & Deep Analysis.
 **Branch:** `workflow-2-competition-scraping`.
 **Created:** 2026-05-07 in `session_2026-05-07_w2-plos-side-viewer-detail-page-slice` (Claude Code).
-**Last updated:** 2026-05-14 (W#2 → main deploy session #13 — **P-23 Amazon main-image right-click context-menu fix DEPLOYED to vklf.com + REAL-AMAZON FULL VERIFY.** Ninety-sixth Claude Code session — `session_2026-05-14_w2-main-deploy-session-13-p23-amazon-context-menu-DEPLOYED-FULL-VERIFY` (rebase phase on `workflow-2-competition-scraping`; ff-merge + deploy push on `main`). Closes (a.28) RECOMMENDED-NEXT. **Cleanest possible deploy shape achieved** — workflow-2 was exactly 1 commit ahead (`6461c2a` — yesterday's polish-#18 ship + doc batch in a single commit); main was 0 commits ahead (no parallel main activity since deploy-#12). Rebase a strict no-op fast-forward; pushed origin/workflow-2 (`6f6e69f..6461c2a`); ff-merged into main (13 files +1033/-63); pushed origin/main (`6f6e69f..6461c2a`); Vercel auto-redeploy fired but no-op for web bundle (zero `src/` changes — extension-only fix). Fresh extension build packaged: `plos-extension-2026-05-14-w2-deploy-13.zip` (188,102 bytes; 9 files; content.js 63,038 bytes exact target match). **Pre-deploy verification scoreboard — all GREEN:** ext tsc clean; ext `npm test` 334/334 in 3.5s; root Playwright extension project 31/31 in 1.6 min (includes both new P-23 specs — positive overlay-shield + negative plain-text bail); ext build clean in 1.1s. **Real-Amazon browser verification — director-reported "Everything worked perfectly. No need to check the database." All 9 walkthrough steps PASSED** (sideload → popup setup → navigate `/dp/B0CTTF514L` → right-click main image fires "Add to PLOS — Image" menu directly on main image → form opens with correct image preview → fill + Save → form closes cleanly; cross-platform spot-check on Walmart + eBay + Etsy PASSED with zero behavior change; UX-noise spot-check confirmed widened-menu behaves as designed — menu appears on non-image right-click, bails silently with no visible action on click). **Three NEW polish items captured this session per Rule 24 + Rule 14a Read-It-Back** based on director's end-of-session ask to expand W#2 roadmap: **P-27** (delete individual captured texts and images from a URL detail page on vklf.com) + **P-28** (delete saved URLs from a project on vklf.com with cascade disclosure) + **P-29** (manually add URLs/texts/images on vklf.com — any platform, including "Other" for independent websites; REVERSES the 2026-05-07 deliberate deferral). Rule 24 pre-capture search confirmed all three were ALREADY specified in original W#2 Workflow Requirements Interview at `COMPETITION_SCRAPING_DESIGN.md` lines 487/489/506 but never built; captured shape is "three polish-backlog entries P-27/P-28/P-29 with cross-refs to design doc" per director-picked option (A) via Rule 14f forced-picker. **Director picked next session via §4 Step 1c interview (expanded candidate list P-29 / P-28 / P-27 / pre-existing P-21 / P-19 / P-13):** P-29 design session (manual-add UI on vklf.com) — (a.29) RECOMMENDED-NEXT. New "Deploy session #13 — P-23 DEPLOYED + REAL-AMAZON FULL VERIFY" section appended below; new "P-27 NEW POLISH ITEM" + "P-28 NEW POLISH ITEM" + "P-29 NEW POLISH ITEM" sections appended after that.)
+**Last updated:** 2026-05-15-b (**W#2 P-29 Slice #1 BUILD session — manual-add URL modal + `source` schema migration SHIPPED at code level on `workflow-2-competition-scraping` in commit `070820a`.** Ninety-eighth Claude Code session — `session_2026-05-15-b_w2-p29-slice-1-build-session`. Closes (a.30) RECOMMENDED-NEXT. **Pre-build checklist + drift check clean** at session start (branch on `workflow-2-competition-scraping`; 1 commit ahead of `origin/main` = yesterday's design batch `948a1a9`; pull-rebase no-op). **Schema migration applied to live DB** with Rule 8 confirmation — `prisma db push` added `source String @default("extension")` to `CompetitorUrl` + `CapturedText` + `CapturedImage`; pre-migration counts 25 + 8 + 10 = 43 rows unchanged post-migration; all 43 rows have `source='extension'` via column default. **Code shipped (15 files +908/-1 in commit `070820a`):** schema (3 column adds); `src/lib/shared-types/competition-scraping.ts` (new `SOURCES` vocabulary + `isSource` type guard + `source` field on URL/text/image DTOs); `urls/route.ts` POST handler accepts optional `source` validated via `isSource` (400 on misshapen value; default 'extension' server-side when omitted — extension's existing POST traffic unchanged); 6 `toWireShape` serializers across `urls/route.ts`, `urls/[urlId]/route.ts`, `text/[textId]/route.ts`, `urls/[urlId]/text/route.ts`, `urls/[urlId]/images/route.ts`, `urls/[urlId]/images/finalize/route.ts`, `images/[imageId]/route.ts` echo `source` on every read path; NEW `UrlAddModal.tsx` (~470 LOC) with autofocus + Escape/Cancel/X/backdrop dismiss + submit-in-flight lock + 9-field form mirroring extension's URL-add overlay (URL + Platform 7-value dropdown + Brand + Product + Category + Stars + Reviews + Page Rank + Sponsored); `UrlTable.tsx` toolbar mount of "+ Manually add URL" button (top-right per director's pick) + modal mount with `projectId` + `onUrlAdded` prop threading; `CompetitionScrapingViewer.tsx` `handleUrlAdded` callback prepends new row with `id`-dedup. **Verification scoreboard — all GREEN:** `npx tsc --noEmit` clean; `npm run build` clean; **10/10 node:test type-guard cases pass** (new `src/lib/shared-types/competition-scraping.test.ts` covering `isSource` + cross-vocabulary guards + the Q2-reframing regression that `independent-website` is supported); **6/6 Playwright UI-mechanical cases skipped as designed** (new `tests/playwright/p29-manual-add-url-modal.spec.ts` — skip markers pending P-30 React-bundle stub-page rig). **Director manual walkthrough DEFERRED to W#2 → main deploy session** that brings Slice #1 to vklf.com — workflow branch isn't deployed; can't run real-independent-website smoke there. **Two NEW polish items captured this session per Rule 14e + Rule 26:** **P-30** (Playwright React-bundle stub-page rig — unblocks Slice #1+#2+#3 modal mechanical-UX regression coverage; new `tests/playwright/p29-manual-add-url-modal.spec.ts` is the structural placeholder with 6 skipped test cases ready for the rig) + **P-31** (route-handler DI refactor for testability — extracts validation + Prisma-create from route.ts into pure-function shape so node:test can hit it without bundling Next.js). **Per Rule 27 Hybrid (today's verification approach):** Playwright UI-mechanical cases STRUCTURE shipped today (concrete asserts captured in skip-annotated tests) + Node `isSource` regression test shipped + node-level Source vocabulary regression coverage shipped; API-layer regression coverage + UI-mechanical regression run-time coverage = DEFERRED to P-30 + P-31. **Director manual walkthrough** covers end-to-end smoke when Slice #1 reaches vklf.com. **Multi-Workflow per Rule 25:** session ran on `workflow-2-competition-scraping`; schema-change-in-flight flag flipped Yes during build (per launch prompt Rule 4) + flipped back to No at end-of-session (this batch); pull-rebase clean at both checkpoints; W#1 row untouched per Rule 3. **TaskList sweep per Rule 26:** 11 session tasks tracked + completed; 2 DEFERRED items (P-30 + P-31) captured both in TaskCreate AND in this verification-backlog + COMPETITION_SCRAPING_DESIGN.md §B 2026-05-15-b entry. **Cross-references:** ROADMAP W#2 row Last Session 2026-05-15-b prepended + (a.30) flipped ✅ SHIPPED-AT-CODE-LEVEL + new (a.31) RECOMMENDED-NEXT Slice #2 + W#2 row schema flag back to No; new "## P-29 Slice #1 SHIPPED at code level (W#2 build session 2026-05-15-b)" + "## P-30 NEW POLISH ITEM" + "## P-31 NEW POLISH ITEM" sections appended below; CHAT_REGISTRY new top entry; DOCUMENT_MANIFEST per-doc flags; COMPETITION_SCRAPING_DESIGN.md §B new in-flight refinement entry 2026-05-15-b covering Slice #1 ship; NEXT_SESSION.md rewritten for Slice #2.)
+
+**Previously updated:** 2026-05-14 (W#2 → main deploy session #13 — **P-23 Amazon main-image right-click context-menu fix DEPLOYED to vklf.com + REAL-AMAZON FULL VERIFY.** Ninety-sixth Claude Code session — `session_2026-05-14_w2-main-deploy-session-13-p23-amazon-context-menu-DEPLOYED-FULL-VERIFY` (rebase phase on `workflow-2-competition-scraping`; ff-merge + deploy push on `main`). Closes (a.28) RECOMMENDED-NEXT. **Cleanest possible deploy shape achieved** — workflow-2 was exactly 1 commit ahead (`6461c2a` — yesterday's polish-#18 ship + doc batch in a single commit); main was 0 commits ahead (no parallel main activity since deploy-#12). Rebase a strict no-op fast-forward; pushed origin/workflow-2 (`6f6e69f..6461c2a`); ff-merged into main (13 files +1033/-63); pushed origin/main (`6f6e69f..6461c2a`); Vercel auto-redeploy fired but no-op for web bundle (zero `src/` changes — extension-only fix). Fresh extension build packaged: `plos-extension-2026-05-14-w2-deploy-13.zip` (188,102 bytes; 9 files; content.js 63,038 bytes exact target match). **Pre-deploy verification scoreboard — all GREEN:** ext tsc clean; ext `npm test` 334/334 in 3.5s; root Playwright extension project 31/31 in 1.6 min (includes both new P-23 specs — positive overlay-shield + negative plain-text bail); ext build clean in 1.1s. **Real-Amazon browser verification — director-reported "Everything worked perfectly. No need to check the database." All 9 walkthrough steps PASSED** (sideload → popup setup → navigate `/dp/B0CTTF514L` → right-click main image fires "Add to PLOS — Image" menu directly on main image → form opens with correct image preview → fill + Save → form closes cleanly; cross-platform spot-check on Walmart + eBay + Etsy PASSED with zero behavior change; UX-noise spot-check confirmed widened-menu behaves as designed — menu appears on non-image right-click, bails silently with no visible action on click). **Three NEW polish items captured this session per Rule 24 + Rule 14a Read-It-Back** based on director's end-of-session ask to expand W#2 roadmap: **P-27** (delete individual captured texts and images from a URL detail page on vklf.com) + **P-28** (delete saved URLs from a project on vklf.com with cascade disclosure) + **P-29** (manually add URLs/texts/images on vklf.com — any platform, including "Other" for independent websites; REVERSES the 2026-05-07 deliberate deferral). Rule 24 pre-capture search confirmed all three were ALREADY specified in original W#2 Workflow Requirements Interview at `COMPETITION_SCRAPING_DESIGN.md` lines 487/489/506 but never built; captured shape is "three polish-backlog entries P-27/P-28/P-29 with cross-refs to design doc" per director-picked option (A) via Rule 14f forced-picker. **Director picked next session via §4 Step 1c interview (expanded candidate list P-29 / P-28 / P-27 / pre-existing P-21 / P-19 / P-13):** P-29 design session (manual-add UI on vklf.com) — (a.29) RECOMMENDED-NEXT. New "Deploy session #13 — P-23 DEPLOYED + REAL-AMAZON FULL VERIFY" section appended below; new "P-27 NEW POLISH ITEM" + "P-28 NEW POLISH ITEM" + "P-29 NEW POLISH ITEM" sections appended after that.)
 
 **Previously updated:** 2026-05-14 (W#2 polish session #18 — **P-23 Amazon main-image right-click context-menu fix SHIPPED at code level on `workflow-2-competition-scraping`.** Ninety-fifth Claude Code session — `session_2026-05-14_w2-polish-session-18-p23-amazon-right-click-context-menu-SHIP`. Closes (a.27) RECOMMENDED-NEXT. **Bug + fix shape:** Amazon's product-listing page wraps the main `<img>` in zoom/overlay elements intercepting `contextmenu` before Chrome recognizes the target as `contexts: ['image']`. Picked refined Option (A) per launch-prompt recommendation — `background.ts` widens `contexts: ['image']` → `contexts: ['all']`; NEW helper `find-underlying-image.ts` walks up from the right-click target (depth ≤ 10) and scans each ancestor's immediate descendants for an `<img>` with non-empty `currentSrc`/`src` (the sibling-img walk is what unlocks Amazon's overlay-shield pattern); orchestrator attaches a capture-phase `contextmenu` listener at the TOP of `runOrchestrator` BEFORE any awaits and updates `lastRightClickImageSrc`; `open-image-capture-form` handler falls back to the cache when `msg.srcUrl` is empty; both-empty → silent bail. Walmart/eBay/Etsy unaffected. UX cost: the "Add to PLOS — Image" menu now appears on right-click of any element (slight noisiness; bail-silently semantics keep it functionally correct). **Pre-ship verification scoreboard — all GREEN:** ext tsc clean; ext `npm test` 334/334 in 3.6s (was 323; +10 new `findUnderlyingImage` unit tests + 1 refactor); root Playwright extension project 31/31 in 1.3 min (was 29; +2 new specs — positive overlay-shield + negative plain-text); ext build clean in 1.42s; content.js 62,437 → 63,038 bytes (+601 bytes within target). **Real-Amazon browser verification DEFERRED to W#2 → main deploy session #13** per standard ship-then-deploy pattern (the load-bearing logic — empty-srcUrl content-script fallback path — is covered by the Playwright overlay-wrapped fixture; the deploy session also confirms widened-menu UX in real browser). New "Polish session #18 — P-23 SHIPPED at code level" section appended below; the original P-23 capture lives in ROADMAP polish backlog (now flipped to ✅ SHIPPED-AT-CODE-LEVEL). **One INFORMATIONAL CORRECTIONS_LOG entry this batch:** Playwright capture-phase listener-attach race caught + fixed before commit — initial draft placed the listener after async init; Playwright's `dispatchEvent('contextmenu')` ran before the listener was attached → false-negative test failure → re-architected to hoist listener attach to top of `runOrchestrator`. **Cross-references:** ROADMAP W#2 row Last Session 2026-05-14 + (a.27) flipped ✅ DONE + new (a.28) RECOMMENDED-NEXT W#2 → main deploy session #13 + polish backlog P-23 entry flipped to ✅ SHIPPED-AT-CODE-LEVEL; CHAT_REGISTRY new top entry; DOCUMENT_MANIFEST per-doc flags; CORRECTIONS_LOG 1 NEW INFORMATIONAL entry; COMPETITION_SCRAPING_DESIGN.md §B new in-flight refinement entry 2026-05-14 for the P-23 fix shape; NEXT_SESSION.md rewritten for (a.28).)
 
@@ -1813,7 +1815,7 @@ P-27, P-28, P-29 captured in their own sections below per the same Rule 24 + Rul
 
 ## P-29 NEW POLISH ITEM — Manually add URLs / captured texts / captured images on vklf.com (any platform, including "Other" for independent websites) (NEW 2026-05-14 — REVERSES 2026-05-07 deliberate deferral)
 
-**Status:** ⏳ NOT STARTED — **next session's pick per §4 Step 1c interview 2026-05-14**, (a.29) RECOMMENDED-NEXT. Captured 2026-05-14 same session as P-27 + P-28.
+**Status:** 🛠 **DESIGN COMPLETE 2026-05-15 + Slice #1 ✅ SHIPPED AT CODE LEVEL 2026-05-15-b** on `workflow-2-competition-scraping` in commit `070820a`. Slice #2 = next session's pick per §4 Step 1c (a.31) RECOMMENDED-NEXT. Slice #3 follows. **All 5 design questions** in the "Open design questions" section below have been settled in the 2026-05-15 design session; the captured framings of Q2 + Q3 below were partially incorrect against actual code (the schema's `platform` column is already `String` and accepts all 7 PLATFORMS values including `independent-website`; no schema-add needed for "Other") — see `COMPETITION_SCRAPING_DESIGN.md` §B 2026-05-15 entry for the corrected framings and the `CORRECTIONS_LOG.md` 2026-05-15 INFORMATIONAL entry on the Q2 code-vs-doc drift. Captured 2026-05-14 same session as P-27 + P-28.
 
 **Severity:** MEDIUM. **This feature explicitly REVERSES the 2026-05-07 deliberate deferral** captured in this same doc earlier (line 965): *"every PLOS-side viewer slice is structurally untestable against real captured data because there is no manual-URL-add affordance on the PLOS side yet (deliberately deferred per the director's 2026-05-07 call — the alternative seed paths were declared not worth the friction vs. just waiting)."* Director 2026-05-14 explicitly asked for this feature alongside P-27 + P-28; reversal of prior deferral is captured here explicitly so future sessions don't re-defer based on the older 2026-05-07 framing.
 
@@ -1852,5 +1854,143 @@ P-27, P-28, P-29 captured in their own sections below per the same Rule 24 + Rul
 - `NEXT_SESSION.md` rewritten 2026-05-14 to launch the P-29 design session
 
 ---
+
+## P-29 Slice #1 SHIPPED at code level (W#2 build session 2026-05-15-b — closes (a.30) RECOMMENDED-NEXT)
+
+**Status:** ✅ SHIPPED at code level on `workflow-2-competition-scraping` commit `070820a` + this end-of-session doc batch. **Director manual walkthrough DEFERRED** to the W#2 → main deploy session that brings this code to vklf.com (workflow branch isn't deployed; can't run real-independent-website end-to-end smoke there).
+
+**What shipped (15 files +908/-1 in commit `070820a`):**
+
+- **Schema migration applied to live DB:** `prisma db push` added `source String @default("extension")` column to `CompetitorUrl` + `CapturedText` + `CapturedImage`. Pre-migration row counts: 25 + 8 + 10 = 43. Post-migration: same counts, all 43 rows have `source='extension'` via column default. Verified via PrismaClient count + sample-row spot-check.
+
+- **Shared types updated** (`src/lib/shared-types/competition-scraping.ts`): new `SOURCES` vocabulary + `isSource` type guard + `source: Source` field added to `CompetitorUrl` / `CapturedText` / `CapturedImage` response interfaces + `source?: Source` field added to `CreateCompetitorUrlRequest` / `CreateCapturedTextRequest` / `FinalizeImageUploadRequest` (Slice #2 + Slice #3 won't need to re-touch shared types).
+
+- **POST `urls/route.ts`**: accepts optional `source` field in body; validates via `isSource` (400 + explicit error message on misshapen value); default `'extension'` applies server-side when omitted — extension's existing POST traffic semantics unchanged.
+
+- **6 `toWireShape` serializers updated**: `urls/route.ts`, `urls/[urlId]/route.ts`, `text/[textId]/route.ts`, `urls/[urlId]/text/route.ts`, `urls/[urlId]/images/route.ts`, `urls/[urlId]/images/finalize/route.ts`, `images/[imageId]/route.ts` — each returns `source` on every read path; TypeScript would have caught any miss because the shared-types interfaces now require the field.
+
+- **UI: `UrlAddModal.tsx` (~470 LOC, new file)** at `src/app/projects/[projectId]/competition-scraping/components/UrlAddModal.tsx`. Form fields: URL (required) + Platform (required 7-value dropdown labeled "Amazon.com" / "Ebay.com" / "Etsy.com" / "Walmart.com" / "Google Shopping" / "Google Ads" / "Independent Website" — matches the Chrome extension's `extensions/competition-scraping/src/lib/platforms.ts` labels exactly for UI consistency) + Brand + Product + Category + Product Stars (0-5, step 0.1) + # Reviews + Results Page Rank + Sponsored checkbox. Autofocus on URL field. Escape / Cancel / X / backdrop dismiss (only when not submitting). Inline error surface on validation failures + 4xx/5xx responses. Submit-in-flight lock disables all controls + dismiss paths to prevent orphan POSTs.
+
+- **`UrlTable.tsx` wire-in**: new "+ Manually add URL" button rendered top-right of the existing search/clear-filters/count toolbar (director's pick at session start). Click opens the modal; success closes it + calls parent `onUrlAdded` callback. Modal mount keeps the toolbar UI cohesive; modal state owned by UrlTable (single component owns the open/close shape).
+
+- **`CompetitionScrapingViewer.tsx`**: new `handleUrlAdded` callback prepends the new row to the URL list state with `id`-dedup. Idempotent POST returns the existing row on duplicate-create so dedup is correct.
+
+**Tests shipped:**
+
+- **`src/lib/shared-types/competition-scraping.test.ts` (new)** — 10 node:test cases covering `isSource` (positive + negative + non-string), `SOURCES` vocabulary stability, `isPlatform` (incl. the Q2-reframing regression that `independent-website` is supported), `isVocabularyType`, `isImageSourceType` distinct-from-Source (catches the naming-collision slip class), `isAcceptedImageMimeType` (SVG-rejection regression). All 10 pass.
+
+- **`tests/playwright/p29-manual-add-url-modal.spec.ts` (new)** — 6 UI-mechanical test cases at the launch-prompt-named path: button renders / modal opens on click / empty URL submit shows validation error / submit serializes `source: 'manual'` + selected platform + url / modal stays open on 4xx response / Escape + backdrop + Cancel + X all close. **All 6 currently `test.skip()`** with header-level rationale + per-test pseudocode. Unblocked when **P-30** (React-bundle stub-page rig) lands.
+
+**Deferred items captured per Rule 14e + Rule 26:**
+
+- **P-30** — Playwright React-bundle stub-page rig. See P-30 section below.
+- **P-31** — Route-handler DI refactor for testability. See P-31 section below.
+- **Empty-URL-list-locks-out-manual-add**: when a Project's W#2 URL list is empty, `CompetitionScrapingViewer`'s `EmptyState` renders before `UrlTable`, hiding the new "+ Manually add URL" button. Captured inline in `CompetitionScrapingViewer.tsx`'s `handleUrlAdded` JSDoc + this entry. Likely lifts into a small follow-up; ETA ~20 min.
+
+**Verification scoreboard — all GREEN:** `npx tsc --noEmit` clean; `npm run build` clean; `node --test src/lib/shared-types/competition-scraping.test.ts` 10/10 pass; `npx playwright test --project=chromium tests/playwright/p29-manual-add-url-modal.spec.ts` 6/6 skipped as designed.
+
+**Cross-references:**
+- Commit `070820a` on `workflow-2-competition-scraping`
+- `COMPETITION_SCRAPING_DESIGN.md` §B 2026-05-15-b entry (full ship narrative)
+- `NEXT_SESSION.md` rewritten 2026-05-15-b for Slice #2 build session
+- `ROADMAP.md` W#2 row Last Session + (a.30) flipped ✅ SHIPPED-AT-CODE-LEVEL + new (a.31) Slice #2 RECOMMENDED-NEXT + schema-change-in-flight flag back to No
+
+---
+
+## P-30 NEW POLISH ITEM — Playwright React-bundle stub-page rig for W#2 modals (NEW 2026-05-15-b — unblocks Slice #1 + Slice #2 + Slice #3 UI regression coverage)
+
+**Status:** ⏳ NOT STARTED. Captured 2026-05-15-b during Slice #1 build session when the existing thin Playwright rig (authFetch-regression stub-page only) was inadequate to exercise the new React-based `UrlAddModal.tsx`. Director picked Hybrid Rule 27 verification at design session; Slice #1's Playwright spec is shipped today with 6 `test.skip()` cases pre-authored at the structural level (the test bodies will fill in once the rig lands).
+
+**Severity:** MEDIUM. The skipped test cases preserve regression intent + give the rig session a known target; without the rig built, the Slice #1+#2+#3 modal UX cannot be regression-tested mechanically. Director manual walkthrough covers end-to-end smoke but not regression — a future commit that breaks (say) the Escape-dismiss path won't be caught until a deploy + manual re-check.
+
+**What the rig is:**
+
+A small esbuild-based bundle similar to the existing `tests/playwright/build-bundle.mjs` for authFetch, scaled up to handle React + ReactDOM + the W#2 modal components (`UrlAddModal.tsx`; later `CapturedTextAddModal.tsx` + image modal). Bundle is served by the existing `tests/playwright/test-server.mjs` (extend its file-serve map). New static HTML test pages mount each modal with a stubbed `authFetch` that captures POST bodies + fulfills responses Playwright can assert against.
+
+**Scope (~60-90 min):**
+1. Extend `build-bundle.mjs` with a second entrypoint that bundles UrlAddModal + a small `mount.tsx` that exposes `__openModal()` / `__getLastPostBody()` test hooks on `window`. Use esbuild's JSX support; React + ReactDOM as bundled deps.
+2. New static HTML page `tests/playwright/p29-modal-test-page.html` that loads the bundle + provides a "+ Manually add URL" button DOM hook.
+3. Extend `test-server.mjs` with the new file routes + a `/__post-capture` endpoint the stubbed authFetch routes calls to so test bodies are observable from Playwright.
+4. Fill in the 6 skipped test bodies in `tests/playwright/p29-manual-add-url-modal.spec.ts`.
+
+**Coverage unlocked:**
+- Button renders + click opens modal.
+- Empty-URL submit shows inline validation error + modal stays open.
+- Submit with required fields posts `source: 'manual'` + selected platform (incl. `independent-website` regression) + url.
+- Modal stays open + shows error on 4xx response.
+- Escape + backdrop click + Cancel + X all close the modal (only when not submitting).
+
+**Reuse for Slices #2 + #3:** the bundle entrypoint pattern + test-page convention extend straightforwardly to `CapturedTextAddModal` (Slice #2) + image-upload modal (Slice #3) — each new modal adds a bundle entrypoint + a test-page + a spec file; the rig itself doesn't need re-architecting.
+
+**Cross-references:**
+- `tests/playwright/p29-manual-add-url-modal.spec.ts` (the 6 skipped specs awaiting this rig)
+- `tests/playwright/build-bundle.mjs` (the existing single-entrypoint pattern to extend)
+- `tests/playwright/test-server.mjs` (the file-serve map to extend)
+- `src/app/projects/[projectId]/competition-scraping/components/UrlAddModal.tsx` (the component to bundle)
+- `package.json` (add `react` + `react-dom` to `bundledDependencies` if needed for esbuild deduping, or rely on the existing Next.js installation)
+
+**Estimated scope:** ~60-90 min in its own session. Yields lasting regression coverage for all three Slice modals + future W#2 modal-style polish items (e.g., a P-30-built follow-up to the P-27/P-28 delete-confirm dialogs).
+
+---
+
+## P-31 NEW POLISH ITEM — Route-handler DI refactor for testability (NEW 2026-05-15-b — unblocks API-layer regression coverage for W#2 routes)
+
+**Status:** ⏳ NOT STARTED. Captured 2026-05-15-b during Slice #1 build session when the route-handler-in-isolation testing strategy turned out to need a module-level dependency seam that `urls/route.ts` (and siblings) don't have today.
+
+**Severity:** MEDIUM. Without this refactor, the API-layer regression for `source` field persistence + 401 auth gate + 400 validation cases is covered today only by director manual walkthrough — a future commit that breaks (say) the `isSource` check or the 401 path won't be caught until a deploy + manual re-check.
+
+**What the refactor is:**
+
+Extract the POST handler's pure validation + Prisma-call shape into an injectable function:
+
+```ts
+// Pure function: takes resolved auth + deps; returns response shape.
+export async function createCompetitorUrl(args: {
+  projectWorkflowId: string;
+  userId: string;
+  body: unknown;
+  prismaClient: PrismaClient;
+  markWorkflowActive: (projectId: string, workflow: string) => Promise<void>;
+  recordFlake: (op: string, err: unknown, ctx: object) => void;
+  withRetry: <T>(fn: () => Promise<T>) => Promise<T>;
+}): Promise<{ status: number; body: unknown }>;
+
+// Route shim: resolves auth + wires real deps + delegates.
+export async function POST(req: NextRequest, ...) {
+  const auth = await verifyProjectWorkflowAuth(req, projectId, WORKFLOW);
+  if (auth.error) return withCors(req, auth.error);
+  const body = await req.json();
+  const { status, body: respBody } = await createCompetitorUrl({
+    projectWorkflowId: auth.projectWorkflowId,
+    userId: auth.userId,
+    body,
+    prismaClient: prisma,
+    markWorkflowActive,
+    recordFlake,
+    withRetry,
+  });
+  return withCors(req, NextResponse.json(respBody, { status }));
+}
+```
+
+**Coverage unlocked:**
+- `createCompetitorUrl({ body: { /* no source */ }, prismaClient: fakePrisma, ... })` → asserts Prisma.create called with no explicit source (schema default applies); response wire shape includes `source: 'extension'` echo.
+- `createCompetitorUrl({ body: { source: 'manual', ... } })` → asserts Prisma.create called with `source: 'manual'`; response echoes `source: 'manual'`.
+- `createCompetitorUrl({ body: { source: 'invalid', ... } })` → asserts response status 400 + error message includes "source".
+- `createCompetitorUrl({ body: { /* no platform */ }, ... })` → asserts 400.
+- `createCompetitorUrl({ body: { platform: 'amazon', /* no url */ }, ... })` → asserts 400.
+- Auth-layer 401 covered by a separate test of the route shim with a `verifyProjectWorkflowAuth` mock returning `{ error: { status: 401 } }`.
+
+**Reuse for sibling routes:** the same DI shape lifts cleanly onto `text/route.ts` (Slice #2 reuses), `urls/[urlId]/text/route.ts` POST, `urls/[urlId]/images/finalize/route.ts` POST. Each route handler becomes a thin shim around a testable pure function. Future Phase 2 workflow-status side-effect changes (e.g., audit-trail events) become a single test surface.
+
+**Estimated scope:** ~30-45 min for the urls/route.ts refactor + new node:test file. Sibling route refactors land alongside their slice ship sessions (P-31's pattern, not P-31's session scope).
+
+**Cross-references:**
+- `src/app/api/projects/[projectId]/competition-scraping/urls/route.ts` (refactor target)
+- `src/lib/shared-types/competition-scraping.test.ts` (existing node:test pattern to extend)
+- `src/lib/authFetch.test.ts` (canonical DI-with-mocks shape to mirror)
+
+---
+
 END OF DOCUMENT
 
