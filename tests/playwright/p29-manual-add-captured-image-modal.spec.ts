@@ -153,15 +153,6 @@ test.describe('W#2 P-29 Slice #3 — manual-add captured-image modal (UI mechani
   });
 
   test('Multi-file drop loads the first + shows warning', async ({ page }) => {
-    // DEFERRED — P-32 polish item: onDrop calls setWarningMessage(...)
-    // and then awaits tryLoadFile, which itself calls setWarningMessage(null)
-    // before React commits. The warning UI is therefore never shown on
-    // multi-file drop. Caught by this test on first authoring (P-30 build
-    // session 2026-05-15). One-line fix deferred to keep P-30 strictly
-    // test-infra-only per the launch prompt's scope. See
-    // COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md P-32 entry.
-    test.skip(true, 'P-32 — production bug: multi-file warning cleared by tryLoadFile before React commit. Test re-enabled when the modal is fixed.');
-
     await page.goto(PAGE_URL);
     await page.waitForFunction(() => window.__pageReady === true);
     await page.getByTestId('manual-add-captured-image-button').click();

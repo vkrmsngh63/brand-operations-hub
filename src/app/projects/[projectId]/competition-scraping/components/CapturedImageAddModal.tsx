@@ -135,9 +135,13 @@ export function CapturedImageAddModal({
 
   // Convert a File / Blob into our `local` LoadedImage state after
   // running MIME + size validation. Used by both drop + paste paths.
+  //
+  // Note: this function does NOT clear warningMessage. onDrop sets a
+  // multi-file warning before calling tryLoadFile and that warning must
+  // survive the call. Callers that need a warning-clear (paste path,
+  // file-input fallback) clear it themselves before invoking.
   const tryLoadFile = useCallback(async (file: File | Blob, filename?: string) => {
     setErrorMessage(null);
-    setWarningMessage(null);
     const mimeType = file.type.toLowerCase();
     if (!(ACCEPTED_IMAGE_MIME_TYPES as readonly string[]).includes(mimeType)) {
       setErrorMessage(
@@ -223,6 +227,7 @@ export function CapturedImageAddModal({
         const file = item.getAsFile();
         if (file && (ACCEPTED_IMAGE_MIME_TYPES as readonly string[]).includes(file.type.toLowerCase())) {
           e.preventDefault();
+          setWarningMessage(null);
           void tryLoadFile(file);
           return;
         }
@@ -240,6 +245,7 @@ export function CapturedImageAddModal({
       // Reset the input value so re-picking the same file fires onChange.
       e.target.value = '';
       if (!file) return;
+      setWarningMessage(null);
       await tryLoadFile(file, file.name);
     },
     [tryLoadFile]
