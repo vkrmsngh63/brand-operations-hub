@@ -1815,7 +1815,7 @@ P-27, P-28, P-29 captured in their own sections below per the same Rule 24 + Rul
 
 ## P-29 NEW POLISH ITEM — Manually add URLs / captured texts / captured images on vklf.com (any platform, including "Other" for independent websites) (NEW 2026-05-14 — REVERSES 2026-05-07 deliberate deferral)
 
-**Status:** 🛠 **DESIGN COMPLETE 2026-05-15 + Slice #1 ✅ SHIPPED AT CODE LEVEL 2026-05-15-b** on `workflow-2-competition-scraping` in commit `070820a`. Slice #2 = next session's pick per §4 Step 1c (a.31) RECOMMENDED-NEXT. Slice #3 follows. **All 5 design questions** in the "Open design questions" section below have been settled in the 2026-05-15 design session; the captured framings of Q2 + Q3 below were partially incorrect against actual code (the schema's `platform` column is already `String` and accepts all 7 PLATFORMS values including `independent-website`; no schema-add needed for "Other") — see `COMPETITION_SCRAPING_DESIGN.md` §B 2026-05-15 entry for the corrected framings and the `CORRECTIONS_LOG.md` 2026-05-15 INFORMATIONAL entry on the Q2 code-vs-doc drift. Captured 2026-05-14 same session as P-27 + P-28.
+**Status:** 🛠 **DESIGN COMPLETE 2026-05-15 + Slice #1 ✅ SHIPPED AT CODE LEVEL 2026-05-15-b + Slice #2 ✅ SHIPPED AT CODE LEVEL 2026-05-15-c** on `workflow-2-competition-scraping` in commits `070820a` (Slice #1) and `a9e2bf5` (Slice #2). W#2 → main deploy session #14 for Slices #1+#2 = next session's pick per §4 Step 1c (a.32) RECOMMENDED-NEXT. Slice #3 (image modal — biggest of the three) follows the deploy. **All 5 design questions** in the "Open design questions" section below have been settled in the 2026-05-15 design session; the captured framings of Q2 + Q3 below were partially incorrect against actual code (the schema's `platform` column is already `String` and accepts all 7 PLATFORMS values including `independent-website`; no schema-add needed for "Other") — see `COMPETITION_SCRAPING_DESIGN.md` §B 2026-05-15 entry for the corrected framings and the `CORRECTIONS_LOG.md` 2026-05-15 INFORMATIONAL entry on the Q2 code-vs-doc drift. Captured 2026-05-14 same session as P-27 + P-28.
 
 **Severity:** MEDIUM. **This feature explicitly REVERSES the 2026-05-07 deliberate deferral** captured in this same doc earlier (line 965): *"every PLOS-side viewer slice is structurally untestable against real captured data because there is no manual-URL-add affordance on the PLOS side yet (deliberately deferred per the director's 2026-05-07 call — the alternative seed paths were declared not worth the friction vs. just waiting)."* Director 2026-05-14 explicitly asked for this feature alongside P-27 + P-28; reversal of prior deferral is captured here explicitly so future sessions don't re-defer based on the older 2026-05-07 framing.
 
@@ -1894,6 +1894,45 @@ P-27, P-28, P-29 captured in their own sections below per the same Rule 24 + Rul
 - `COMPETITION_SCRAPING_DESIGN.md` §B 2026-05-15-b entry (full ship narrative)
 - `NEXT_SESSION.md` rewritten 2026-05-15-b for Slice #2 build session
 - `ROADMAP.md` W#2 row Last Session + (a.30) flipped ✅ SHIPPED-AT-CODE-LEVEL + new (a.31) Slice #2 RECOMMENDED-NEXT + schema-change-in-flight flag back to No
+
+---
+
+## P-29 Slice #2 SHIPPED at code level (W#2 build session 2026-05-15-c — closes (a.31) RECOMMENDED-NEXT)
+
+**Commit:** `a9e2bf5` on `workflow-2-competition-scraping` (pushed origin mid-session with Rule 9 approval). **4 files +682/-21.** No schema change — Slice #1 covered all 3 W#2 tables.
+
+**What shipped:**
+
+- **API route update** (`src/app/api/projects/[projectId]/competition-scraping/urls/[urlId]/text/route.ts`): POST handler now accepts optional `source` in the request body; validates via `isSource` from `shared-types/competition-scraping.ts` (Slice #1's export); 400 + explicit error message on misshapen value; default `'extension'` server-side when omitted (preserves Chrome extension's existing POST traffic byte-for-byte — backward-compatible). Persists on `createData` via the new `source` column Slice #1 added.
+
+- **NEW component** `src/app/projects/[projectId]/competition-scraping/components/CapturedTextAddModal.tsx` (~370 LOC): 3-field form mirroring the Chrome extension's right-click text-capture flow — Text (required, multi-line textarea) + Content Category (optional plain text; vocabulary autocomplete deferred to a future polish item) + Tags (optional comma-separated input parsed to `string[]` with whitespace-trim + empty-drop). Autofocus on Text textarea; Escape / Cancel / X / backdrop dismiss (only when not submitting); submit-in-flight lock; `crypto.randomUUID()` clientId for POST idempotency (matches extension's WAL semantics — retries hit the route's `clientId`-dedup path). POSTs `source: 'manual'` explicitly. Mirrors `UrlAddModal.tsx` shape + dismiss UX + style; smaller form (3 fields vs. 9) drops platform picker + numeric validators.
+
+- **URL-detail page wire-in** (`src/app/projects/[projectId]/competition-scraping/url/[urlId]/components/UrlDetailContent.tsx`): `CapturedTextSubsection` now accepts `projectId` + `urlId` + `onTextAdded` props; owns internal `modalOpen` state; renders a flex row containing the h2 + count on the left and the green "+ Manually add captured text" button on the right (per director's session-start Rule 14f pick — "Right end of 'Captured Text' h2 row"); mounts the modal at the bottom of the section. Parent `UrlDetailContent` owns `handleTextAdded` callback that prepends the new row to `textSlot.data` with `clientId`-dedup (existing-row match → replace in place; no match → prepend at index 0) — mirrors `CompetitionScrapingViewer.handleUrlAdded`'s id-dedup pattern from Slice #1 but switches dedup key to `clientId` since text rows are idempotent-on-clientId per the API contract.
+
+- **NEW Playwright spec** `tests/playwright/p29-manual-add-captured-text-modal.spec.ts` (~155 LOC) — 8 UI-mechanical test cases at the director-picked path (session-start Rule 14f pick — "new file" over "append to Slice #1 spec"); all `test.skip()` pending P-30 React-bundle stub-page rig. Cases mirror Slice #1's 6 cases + add 2 specific to Slice #2: "Submit with optional fields serializes contentCategory + parsed tags" (comma-parse logic) + "clientId-dedup — duplicate-create 200 response replaces existing row in-place" (`handleTextAdded`'s clientId-dedup).
+
+- **No new node:test cases needed**: Slice #1's `src/lib/shared-types/competition-scraping.test.ts` `isSource` regression already covers Slice #2's new POST-handler validation branch (same guard, same vocabulary). 10/10 still pass.
+
+**Verification scoreboard — all GREEN:**
+
+- `npx tsc --noEmit`: clean (one path-fix during build: `../../components` → `../../../components` for the modal import — caught immediately by the type-check; not a CORRECTIONS_LOG-tier slip).
+- `npm run build`: clean (49 routes; no warnings).
+- `node --test src/lib/shared-types/competition-scraping.test.ts`: 10/10 pass (unchanged from Slice #1).
+- `npx playwright test --project=chromium tests/playwright/p29-manual-add-captured-text-modal.spec.ts`: 8/8 skipped as designed.
+- Project-wide eslint: +1 error of the same `react-hooks/set-state-in-effect` class Slice #1's `UrlAddModal.tsx` already shipped with (same accepted pattern; baseline parity by class).
+
+**Director manual walkthrough on real-Independent-Website URL DEFERRED to W#2 → main deploy session #14** that brings Slices #1+#2 to vklf.com — workflow branch isn't deployed; deferral count for the director manual walkthrough now stands at TWO across Slices #1+#2. Combined deploy session will exercise BOTH new modals end-to-end.
+
+**No new polish items captured this session** — P-30 + P-31 from Slice #1 still cover all three slices' regression-coverage gaps; nothing new surfaced.
+
+**Director picked next session via §4 Step 1c interview:** Option A — **W#2 → main deploy session #14 for Slices #1+#2** (recommended per `feedback_recommendation_style.md`: most thorough; exercises both new modals on real-website data BEFORE Slice #3 piles more code on top; catches deploy-time / live-DB integration issues earlier; releases twice-deferred walkthrough debt in a single deploy session).
+
+**Cross-references:**
+
+- Commit `a9e2bf5` on `workflow-2-competition-scraping`
+- `COMPETITION_SCRAPING_DESIGN.md` §B 2026-05-15-c entry (full ship narrative)
+- `NEXT_SESSION.md` rewritten 2026-05-15-c for W#2 → main deploy session #14
+- `ROADMAP.md` W#2 row (a.31) flipped ✅ SHIPPED-AT-CODE-LEVEL + new (a.32) RECOMMENDED-NEXT W#2 → main deploy session #14 (header + W#2 row Last Session — both updated this batch)
 
 ---
 

@@ -2046,4 +2046,69 @@ Each slice its own session per `PROJECT_CONTEXT.md §13` discover-as-you-build.
 
 ---
 
+### 2026-05-15-c — session_2026-05-15-c_w2-p29-slice-2-build-session (Claude Code, on `workflow-2-competition-scraping`)
+
+**Session purpose:** P-29 Slice #2 BUILD session — ship the manual-add captured-text modal on the URL-detail page, per the 2026-05-15 design pass's frozen decisions + the Slice #1 ship's already-plumbed `source` end-to-end work. Closes (a.31) RECOMMENDED-NEXT.
+
+**What shipped at code level (commit `a9e2bf5` on `workflow-2-competition-scraping`, pushed origin mid-session with Rule 9 approval):**
+
+- **API route update** (`src/app/api/projects/[projectId]/competition-scraping/urls/[urlId]/text/route.ts`): POST handler accepts optional `source` in the request body; validates via `isSource` from `src/lib/shared-types/competition-scraping.ts` (Slice #1's export); rejects misshapen values with 400 + explicit error message; default `'extension'` server-side when omitted (preserves Chrome extension's existing POST traffic byte-for-byte — extension's `CreateCapturedTextRequest` payload doesn't carry `source`, so backward-compatible). Persists on `createData` via the new `source` column Slice #1 already added to the `CapturedText` table.
+
+- **UI: `CapturedTextAddModal.tsx`** (new ~370 LOC component at `src/app/projects/[projectId]/competition-scraping/components/CapturedTextAddModal.tsx`): 3-field form mirroring the extension's right-click text-capture flow — Text (required, multi-line textarea — typical paste target) + Content Category (optional plain text input; vocabulary autocomplete deferred to a future polish item per design hint) + Tags (optional comma-separated input parsed to `string[]` with whitespace-trim + empty-drop). Autofocus on the Text textarea; Escape / Cancel / X / backdrop dismiss (only when not submitting); inline validation surface; submit-in-flight lock disables all controls + dismiss paths to prevent orphan POSTs. POSTs `source: 'manual'` + `clientId: crypto.randomUUID()` so retries hit the route's idempotent path. Mirrors UrlAddModal exactly in shape + dismiss UX + style; the smaller form (3 fields vs. 9) drops the platform picker + numeric validators.
+
+- **URL-detail page wire-in** (Q5 outcome — modal pattern; director-picked button location: **right end of "Captured Text" section h2 row**, per the session-start Rule 14f forced-picker): `CapturedTextSubsection` in `UrlDetailContent.tsx` now accepts `projectId` + `urlId` + `onTextAdded` props; owns internal `modalOpen` state; renders a flex row containing the h2 + count on the left and the green "+ Manually add captured text" button (`data-testid="manual-add-captured-text-button"`) on the right; mounts the modal at the bottom of the section. Parent `UrlDetailContent` owns `handleTextAdded` callback that prepends the newly-created row to `textSlot.data` with `clientId`-dedup (existing-row match → replace in place; no match → prepend at index 0) — mirrors `CompetitionScrapingViewer.handleUrlAdded`'s id-dedup pattern from Slice #1 but switches the dedup key to `clientId` since text rows are idempotent-on-clientId per the API route's contract.
+
+- **Tests**: NEW `tests/playwright/p29-manual-add-captured-text-modal.spec.ts` (~155 LOC) — 8 UI-mechanical test cases at the launch-prompt-picked path (director picked "new file" via the session-start Rule 14f forced-picker; alternative was "append to existing Slice #1 spec"); all `test.skip()` today pending P-30 React-bundle stub-page rig. Cases mirror the Slice #1 spec's 6 cases + add 2 new ones specific to Slice #2: (a) "Submit with optional fields serializes contentCategory + parsed tags" — covers the comma-parse logic; (b) "clientId-dedup — duplicate-create 200 response replaces existing row in-place" — covers `handleTextAdded`'s clientId-dedup behavior.
+
+- **No new node:test cases needed**: Slice #1's `src/lib/shared-types/competition-scraping.test.ts` `isSource` regression already covers Slice #2's new POST-handler validation branch (same guard, same vocabulary). 10/10 cases still pass.
+
+**Deferred items captured per Rule 14e + Rule 26:**
+
+- **Director manual walkthrough on real-Independent-Website URL on vklf.com — DEFERRED to W#2 → main deploy session #14**. Workflow branch isn't deployed; deferral count now stands at TWO (Slice #1's walkthrough also deferred to the same session). The combined deploy session will exercise both new modals end-to-end. Captured as (a.32) RECOMMENDED-NEXT in ROADMAP W#2 row.
+
+**No new polish items captured this session** (P-30 + P-31 from Slice #1 still cover all three slices' regression-coverage gaps; nothing new surfaced).
+
+**Multi-Workflow per Rule 25:**
+
+- Session ran on `workflow-2-competition-scraping` per `MULTI_WORKFLOW_PROTOCOL §11`.
+- Schema-change-in-flight flag stays "No" entire session (no schema work this slice — Slice #1 covered all 3 W#2 tables).
+- Pull-rebase clean at session start (workflow-2 3 commits ahead of `origin/main` — 2026-05-15 design batch `948a1a9` + Slice #1 code `070820a` + Slice #1 doc batch `b5711e1`); no fetch-during-session.
+- W#1 row untouched per Rule 3 ownership.
+- TaskList sweep per Rule 26: 7 session tasks tracked; all 7 closed; zero `DEFERRED:` items at session end.
+
+**Rule 23 Change Impact Audit outcome:** Additive (safe) — confirmed at session start. The new POST `source` field is optional + defaulted server-side; existing extension POST traffic is byte-for-byte unchanged; no coordinated downstream-consumer update required. Future workflows that consume W#2 captured-text data via `DATA_CATALOG.md §7` will see the `source` field on every read path (Slice #1 already plumbed it); opt-in for filtering / display / audit.
+
+**Verification scoreboard:**
+
+- `npx tsc --noEmit`: clean (one path-fix during build: `../../components` → `../../../components` for the modal import — caught immediately by the type-check; not a CORRECTIONS_LOG-tier slip).
+- `npm run build`: clean (all 49 routes compile; no warnings).
+- `node --test src/lib/shared-types/competition-scraping.test.ts`: 10/10 pass (unchanged from Slice #1).
+- `npx playwright test --project=chromium tests/playwright/p29-manual-add-captured-text-modal.spec.ts`: 8/8 skipped as designed (P-30 + P-31 still cover the run-time coverage gaps).
+- Project-wide eslint: +1 error of the same `react-hooks/set-state-in-effect` class Slice #1's `UrlAddModal.tsx` already shipped with (same accepted pattern, baseline parity by class — the reset-on-close effect mirrors Slice #1's shape verbatim).
+- Director manual walkthrough on real-Independent-Website end-to-end: **DEFERRED** to W#2 → main deploy session #14 (workflow branch isn't deployed).
+
+**Director-approved end-of-session pick (§4 Step 1c interview):** **W#2 → main deploy session #14 for Slices #1 + #2** (Option A, recommended). Rationale per `feedback_recommendation_style.md`: most thorough — exercises both new modals on real-website data BEFORE Slice #3 piles more code on top; catches deploy-time / live-DB integration issues earlier; releases the twice-deferred walkthrough debt in a single deploy session. Slice #3 (image modal — biggest) picks up build sequence on a clean branch state after deploy #14 lands.
+
+**Director-approved end-of-session pick (Rule 9 push approval):** standard W#2 build-session shape — code commit `a9e2bf5` pushed mid-session with explicit Rule 9 approval; end-of-session doc-batch commit + push covered by the same approval per `feedback_approval_scope_per_decision_unit.md` (approval-scope-per-decision-unit).
+
+**Affected sections:**
+- §A.7 (Module 1 URL-add UX + Module 2 captured-text UX) — captured-text is now also serviced by vklf.com's `CapturedTextAddModal` in addition to the Chrome extension's right-click highlight-and-add gesture.
+- §A.10 (Audit trail) — `source` column now load-bearing for distinguishing extension vs. manual rows across both URL + captured-text scopes after Slice #2.
+- §A.13 (Data persistence) — no schema change (Slice #1 covered).
+- §A.18 (Recommended next-session sequence) — deploy #14 for Slices #1+#2 is the next pick; Slice #3 follows after the deploy.
+
+**Cross-references:**
+- Commit `a9e2bf5` (Slice #2 code; 4 files +682/-21)
+- `src/app/projects/[projectId]/competition-scraping/components/CapturedTextAddModal.tsx` (NEW; ~370 LOC)
+- `src/app/projects/[projectId]/competition-scraping/url/[urlId]/components/UrlDetailContent.tsx` (handleTextAdded with `clientId`-dedup + CapturedTextSubsection prop expansion + section-header row + button + modal mount)
+- `src/app/api/projects/[projectId]/competition-scraping/urls/[urlId]/text/route.ts` (POST `source` acceptance + `isSource` validation + default `'extension'` + persist on createData)
+- `tests/playwright/p29-manual-add-captured-text-modal.spec.ts` (8 skipped UI-mechanical cases; structural placeholder for the P-30 bundle-rig session)
+- `src/lib/shared-types/competition-scraping.ts` — `CreateCapturedTextRequest.source?: Source` field (Slice #1's plumbing; load-bearing this slice on the write path)
+- `src/lib/shared-types/competition-scraping.test.ts` — 10 node:test cases (unchanged; `isSource` regression now also covers Slice #2's POST validation branch)
+- `ROADMAP.md` W#2 row Last Session unchanged this session per existing convention (header line carries session-by-session delta); W#2 row Next Session column updated: (a.31) flipped ✅ SHIPPED-AT-CODE-LEVEL + new (a.32) RECOMMENDED-NEXT W#2 → main deploy session #14; schema-change-in-flight stays No.
+- `COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` — P-29 section status updated to "DESIGN COMPLETE + Slice #1 SHIPPED + Slice #2 SHIPPED AT CODE LEVEL" + new "P-29 Slice #2 SHIPPED" section appended.
+- `NEXT_SESSION.md` rewritten 2026-05-15-c for W#2 → main deploy session #14.
+
+---
+
 END OF DOCUMENT
