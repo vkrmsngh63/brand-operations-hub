@@ -1,90 +1,94 @@
 # Next session
 
-**Written:** 2026-05-15-c — session_2026-05-15-c_w2-p29-slice-2-build-session (Claude Code, on `workflow-2-competition-scraping`).
+**Written:** 2026-05-15-d — session_2026-05-15-d_w2-main-deploy-session-14-p29-slices-1-and-2-plus-six-walkthrough-polish-fixes (Claude Code, dual-branch — main for deploy + fixes; workflow-2 fast-forwarded each cycle).
 
 **For:** the next Claude Code session.
 
-**Status of P-29 Slice #2:** ✅ **SHIPPED AT CODE LEVEL on `workflow-2-competition-scraping` in commit `a9e2bf5` + end-of-session doc batch.** Pushed origin mid-session with Rule 9 approval. 4 files +682/-21: POST `urls/[urlId]/text/route.ts` accepts optional `source` validated via `isSource` (defaults `'extension'` server-side when omitted — Chrome extension's POST traffic byte-for-byte unchanged); NEW `CapturedTextAddModal.tsx` (~370 LOC); `UrlDetailContent.tsx` wire-in with `+ Manually add captured text` button at right end of section h2 row + `handleTextAdded` `clientId`-dedup callback; NEW `tests/playwright/p29-manual-add-captured-text-modal.spec.ts` with 8 test.skip() cases. Verification: tsc clean + `npm run build` clean (49 routes) + 10/10 node:test cases pass (no test change — Slice #1's `isSource` guard also covers Slice #2's new POST validation branch) + 8/8 Playwright cases skipped as designed. **Director manual walkthrough DEFERRED twice now** (Slice #1 + Slice #2) — combined verification target for deploy session #14.
+**Status of P-29 deploy session #14:** ✅ **DEPLOYED + FULLY VERIFIED on vklf.com.** P-29 Slices #1+#2 + six director-found walkthrough polish items P-32/P-33/P-34/P-35/P-36/P-37 all live on `vklf.com` (and the extension Fix #5 sideloaded by director). All 4 director walkthrough checkpoints across three deploy cycles came back green. Closes (a.32) RECOMMENDED-NEXT.
 
-**The recommended next pick (director picked via §4 Step 1c forced-picker at end of Slice #2):** W#2 → main deploy session #14 for Slices #1+#2 + director manual walkthrough end-to-end smoke on a real Independent Website URL on vklf.com. Most thorough per `feedback_recommendation_style.md`: exercises BOTH new modals on real-website data BEFORE Slice #3 piles more code on top; catches deploy-time / live-DB integration issues earlier; releases the twice-deferred walkthrough debt. Slice #3 (image modal — biggest of the three; drag-drop + paste-from-clipboard + URL-of-image text field + new SSRF-guarded URL-fetch endpoint with content-type + size guardrails) picks up the build sequence on a clean branch state after this deploy lands.
+**The recommended next pick:** **W#2 P-29 Slice #3 BUILD session** = manual-add captured-image modal with three input modalities (drag-drop + clipboard paste + URL-of-image text field) + new server-side URL-fetch endpoint with SSRF allowlist + content-type + size guardrails. Largest of the three slices. Per the 2026-05-15 design pass's Q1 outcome (frozen in `COMPETITION_SCRAPING_DESIGN.md` §B 2026-05-15). Closes (a.33) RECOMMENDED-NEXT.
 
 ---
 
 ## Branch
-workflow-2-competition-scraping (start here; switch to `main` during the deploy per the cheat-sheet)
+workflow-2-competition-scraping (start here; already in lockstep with `main` after deploy session #14's three ping-pong sync cycles)
 
 ## Launch prompt
 
 Read docs/CLAUDE_CODE_STARTER.md and follow every rule in it. Today's task:
-**W#2 → main deploy session #14 — bring P-29 Slices #1 + #2 to vklf.com + director manual walkthrough end-to-end smoke on a real Independent Website URL.** Closes (a.32) RECOMMENDED-NEXT.
+**W#2 P-29 Slice #3 BUILD session — manual-add captured-image modal with three input modalities (drag-drop + clipboard paste + URL-of-image text field) + new server-side URL-fetch endpoint with SSRF allowlist + content-type + size guardrails.** Closes (a.33) RECOMMENDED-NEXT.
 
-This is a **DEPLOY session** — no new code changes; the work is the standard W#2 → main cheat-sheet flow (rebase + ff-merge + push to main + Vercel auto-redeploy) plus the long-deferred director manual walkthrough that exercises BOTH new modals on a real Independent Website URL.
+Verify branch state with `git branch --show-current` before any doc reads — should be on `workflow-2-competition-scraping` (`./resume` switched you; verify). Start by running the mandatory start-of-session sequence.
 
-**Schema-change-in-flight flag stays "No"** at session start. Slice #1's `prisma db push` already applied the `source` column to all 3 W#2 tables in the live DB (2026-05-15-b); no schema work this session.
+**Schema-change-in-flight flag stays "No"** at session start. Slice #1 already added the `source` column to the `CapturedImage` table; no schema work this slice.
 
-**Deploy session #14 scope:**
+**Slice #3 scope:**
 
-1. **Pre-deploy verification on `workflow-2-competition-scraping`:**
-   - `git branch --show-current` confirms `workflow-2-competition-scraping`.
-   - `git log origin/main..workflow-2-competition-scraping --oneline` expects 4 commits ready to merge: `948a1a9` (2026-05-15 design doc batch) + `070820a` (Slice #1 code) + `b5711e1` (Slice #1 doc batch) + `a9e2bf5` (Slice #2 code) + plus today's Slice #2 doc-batch commit landing as a fifth commit at end-of-session — so by Slice #2's end-of-session the branch is 5 commits ahead of `origin/main`.
-   - `git log workflow-2-competition-scraping..origin/main --oneline` expects 0 commits.
-   - Re-run verification scoreboard on this branch's HEAD before the merge (mostly a sanity check — these all passed at Slice #2 ship time): `npx tsc --noEmit` clean; `npm run build` clean (49 routes); `node --test src/lib/shared-types/competition-scraping.test.ts` 10/10 pass; `npx playwright test --project=chromium tests/playwright/p29-manual-add-url-modal.spec.ts tests/playwright/p29-manual-add-captured-text-modal.spec.ts` 14/14 skipped as designed.
+1. **NEW `<CapturedImageAddModal />` component** (~500-700 LOC) mounted on the URL detail page's Captured Images section. Mirror the existing `<UrlAddModal>` / `<CapturedTextAddModal>` modal shape (autofocus / Escape / Cancel / X / backdrop dismiss / submit-in-flight lock / `crypto.randomUUID()` clientId / POSTs `source: 'manual'` explicitly).
 
-2. **W#2 → main deploy cheat-sheet flow (standard pattern; see prior deploy sessions #11, #12, #13 for canonical refs):**
-   - `git fetch origin && git checkout workflow-2-competition-scraping && git pull --rebase origin workflow-2-competition-scraping` (sanity, no-op expected).
-   - `git checkout main && git pull --rebase origin main`.
-   - `git merge --ff-only workflow-2-competition-scraping` — should be a clean ff-merge (no parallel main activity since Slice #1; this is the standard "workflow branch ff onto main" shape).
-   - Re-run verification scoreboard on `main` post-merge before pushing — confirms what's about to land on vklf.com matches what was verified on the workflow branch.
-   - **Rule 9 STOP + describe-before-push:** describe what's deploying (Slices #1+#2 code, schema migration already applied to live DB during Slice #1's session, doc batches, Playwright spec scaffolding) + ask for explicit deploy approval before `git push origin main`. Push triggers Vercel auto-redeploy.
-   - Post-push: confirm Vercel redeploy completes green (`vercel ls` or director-side check of vklf.com); fresh URL-add modal + manual-add captured-text button visible on the deployed site.
+2. **Three input modalities in the modal:**
+   - **(a) Drag-and-drop area** — a clearly-bordered drop zone; on `dragover` shows a highlighted state; on `drop` accepts a single image file (multiple files = drop the rest with a warning). Validate `file.type` matches the accepted MIME types; validate `file.size` is ≤10 MB.
+   - **(b) Paste-from-clipboard listener** — `document.addEventListener('paste', ...)` while the modal is open; reads `clipboardData.items` for image MIME types; extracts the blob; same validation as (a).
+   - **(c) "or paste an image URL" text field** — POSTs to the NEW server-side fetch endpoint (described below) which downloads the image bytes server-side under SSRF guards, then proceeds as if the user had drag-dropped the resulting bytes.
 
-3. **Director manual walkthrough on a real Independent Website URL (Rule 27 Hybrid — judgment parts; long-deferred TWICE so today's the integration target):**
+   Show a preview thumbnail once an image is acquired via any modality.
 
-   This is the long-deferred verification. Recommended walkthrough shape — director navigates a real Project on vklf.com and exercises BOTH new modals end-to-end:
+3. **NEW server-side URL-fetch endpoint** — likely `POST /api/projects/[projectId]/competition-scraping/urls/[urlId]/images/fetch-by-url` (or similar). Body: `{ imageUrl: string }`. Server-side:
+   - **SSRF allowlist**: only allow public web hostnames. Reject IPs in private ranges (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16), loopback (127.0.0.0/8, ::1), link-local (169.254.0.0/16), and cloud-metadata endpoints (169.254.169.254 for AWS / 169.254.169.253 / `metadata.google.internal` / Azure equivalents). Do DNS resolution + post-resolution IP check (not just hostname pattern check) to catch DNS rebinding.
+   - **Content-type check** — reject if not `image/png` / `image/jpeg` / `image/gif` / `image/webp` (whichever set we settle on; verify against existing shared-types `ACCEPTED_IMAGE_MIME_TYPES`).
+   - **Size cap** — read up to 10 MB; abort + reject if more.
+   - **Timeout** — 10s hard cap on the fetch.
+   - On success, returns the bytes (likely as a presigned-upload URL handshake to match Slices #1+#2's existing image upload finalization pattern at `images/finalize/route.ts`).
 
-   **A. Manual-add URL modal (Slice #1):**
-   1. Sign into vklf.com → pick a real Project → land on `/projects/[id]/competition-scraping`.
-   2. Click "+ Manually add URL" button (top-right of UrlTable toolbar per Slice #1's director pick).
-   3. Modal opens with autofocus on URL field. Fill: URL = a real Independent Website URL (e.g., a competitor's product page on their own domain, not Amazon/eBay/Etsy/Walmart). Platform = "Independent Website". Optional fields: Brand / Product / Category / etc.
-   4. Submit. Modal closes; new row appears in the URL list with platform "Independent Website" + `source='manual'` flag distinguishable from extension-captured rows.
-   5. Exercise dismiss paths on at least one re-open: Escape / Cancel / X / backdrop click — each should close the modal cleanly.
+4. **Existing image-upload flow integration** — the existing 2-step Phase 1/2/3 image upload pattern at `urls/[urlId]/images/route.ts` (requestUpload → signed-URL PUT → finalize) is the canonical pattern. Slice #3's drag-drop and clipboard-paste paths should use the same Phase 1/2/3 flow. The URL-of-image path uses the new fetch-by-url endpoint as a Phase 0 that bridges into the Phase 1 handshake.
 
-   **B. Manual-add captured-text modal (Slice #2):**
-   1. From the URL list, click into the URL you just created (or any existing URL row) to navigate to `/projects/[id]/competition-scraping/url/[urlId]`.
-   2. Scroll to the "Captured Text" section.
-   3. Click "+ Manually add captured text" button at the right end of the section's h2 row.
-   4. Modal opens with autofocus on Text textarea. Fill: Text = some real captured copy (a paste of a competitor's product description or marketing claim). Optional: Content Category + Tags (comma-separated).
-   5. Submit. Modal closes; new row appears in the captured-text table.
-   6. (Optional) Re-submit the same text by re-opening the modal + re-pasting — should create a new row (different `clientId` each time).
+5. **POST `source: 'manual'`** explicitly on the finalize call (Slice #1 already added the column + plumbed the field through the request DTO; just need to send it).
 
-   **C. Lightweight spot-check on the existing extension-side flow** to confirm no regression: open the Chrome extension popup on a real Amazon/Walmart/eBay/Etsy URL + use the existing right-click captured-text gesture once + confirm it still writes a row to the URL-detail page's text section (extension's POST goes through the same route as Slice #2's modal but without `source`, so it should default to `'extension'`).
+6. **Tests:**
+   - Extend `src/lib/shared-types/competition-scraping.test.ts` if any new type guards are added.
+   - NEW Playwright spec `tests/playwright/p29-manual-add-captured-image-modal.spec.ts` mirroring the existing P-29 specs' shape (UI-mechanical cases all `test.skip()` pending P-30 React-bundle rig — same as Slice #1+#2 specs).
+   - NEW node:test coverage for the SSRF-guard logic (pure-function tests around the allowlist + IP-classification + DNS-rebind catches). This is the FIRST piece of server-side route logic in P-29 that has hard correctness requirements (security-class) — push hard for thorough unit coverage here even if the rest of the slice's regression coverage is structurally placeholder'd.
 
-4. **Post-walkthrough doc batch (standard W#2 → main deploy doc batch shape):**
-   - ROADMAP W#2 row: (a.32) flipped ✅ DONE; new (a.33) RECOMMENDED-NEXT = Slice #3 (image modal — biggest of the three).
-   - CHAT_REGISTRY new top entry; DOCUMENT_MANIFEST header + per-doc flags.
-   - VERIFICATION_BACKLOG: new "Deploy session #14 — P-29 Slices #1+#2 DEPLOYED + FULL VERIFY" section appended.
-   - COMPETITION_SCRAPING_DESIGN §B 2026-05-15-d (or later date suffix) entry for the deploy outcome.
-   - CORRECTIONS_LOG: header bump only if no slips; one + INFORMATIONAL §Entry per slip if any surfaced during the walkthrough.
-   - NEXT_SESSION.md rewritten for Slice #3 build session.
+**Verification scoreboard for Slice #3 ship:**
+- `npx tsc --noEmit` clean
+- `cd extensions/competition-scraping && npm run compile` clean (per the 2026-05-15-d operational lesson — shared-types-touching slices must include extension tsc going forward)
+- `npm run build` clean
+- `node --test src/lib/shared-types/competition-scraping.test.ts` 10/10 still pass (or more if guards added)
+- NEW node:test pass for SSRF-guard logic
+- NEW Playwright spec skipped as designed
+- Director manual walkthrough DEFERRED to W#2 → main deploy session #15
 
 **Pre-build checklist at session start:**
 - `git branch --show-current` confirms `workflow-2-competition-scraping`.
-- `git log origin/main..workflow-2-competition-scraping --oneline` expects 5 commits (Slice #1+Slice #2 code + 3 doc batches incl. design + Slice #1 + Slice #2 doc batches).
-- Read `COMPETITION_SCRAPING_DESIGN.md` §B 2026-05-15 + §B 2026-05-15-b + §B 2026-05-15-c entries (design pass + Slice #1 ship + Slice #2 ship — the full P-29 narrative through deploy time).
-- Read `ROADMAP.md` W#2 row Current Active Tools + (a.30) ✅ SHIPPED + (a.31) ✅ SHIPPED + (a.32) RECOMMENDED-NEXT entries.
+- `git log origin/main..workflow-2-competition-scraping --oneline` expects 0 commits (workflow-2 was fully synced to main at end of deploy session #14).
+- `git log workflow-2-competition-scraping..origin/main --oneline` expects 0 commits.
+- Read `COMPETITION_SCRAPING_DESIGN.md` §B 2026-05-15 (P-29 design pass — Q1 outcome on image input modalities + SSRF guidance) + §B 2026-05-15-b + §B 2026-05-15-c + §B 2026-05-15-d (deploy outcome + Slice #2.5 polish-batch + Fix #5 extension).
+- Read `ROADMAP.md` W#2 row Current Active Tools + (a.30)/(a.31) ✅ SHIPPED + (a.32) ✅ DONE + (a.33) RECOMMENDED-NEXT entries.
+- Read `COMPETITION_SCRAPING_STACK_DECISIONS.md` §3 if it covers image-handling specifically (it has guidance on the server-side fetch path per the 2026-05-08 captures).
+- Per Rule 23, run Change Impact Audit before coding — the new SSRF-guarded endpoint is the most consequential new piece (security-class) so audit thoroughly.
 
-**Rule 23 Change Impact Audit (no schema change this slice; no audit needed beyond confirming the `source` field's downstream-consumer story per DATA_CATALOG §7 — still TBD per Slice #1's design-session note).**
+**Rule 23 expected outcome:** Additive for the modal + the new endpoint (new optional input shape; no existing endpoint changes). The image upload finalize call gains `source: 'manual'` write — additive (Slice #1's plumbing already accepts it).
 
 ## Pre-session notes (optional, offline steps to do between sessions)
 
-Nothing required. If the director wants to pre-stage the walkthrough:
-- Pick a real Independent Website competitor URL ahead of time (a product page on a competitor's own e-commerce domain). Having the URL ready means the manual-add walkthrough flows without context-switching mid-session.
-- (Optional) Have a paste-ready snippet of real captured text on hand — a marketing claim, headline, or product description from a real competitor — to use in Slice #2's manual-add captured-text walkthrough.
+Nothing required. If director wants to pre-stage the future walkthrough (for the deploy session AFTER Slice #3):
+- Pick a real Independent Website (or any platform) product page with a clearly identifiable competitor image to test the URL-of-image input modality.
+- Have a clipboard-paste-ready image (a screenshot, copied from any source) on hand to test the paste modality.
+- Have a small image file (~1-2 MB, well under the 10 MB cap) for the drag-drop modality.
 
 ## Why this pointer was written this way (debug aid)
 
-Slice #2 shipped cleanly at code level today. The recommended next step is W#2 → main deploy session #14 for Slices #1+#2 because the director manual walkthrough has been deferred TWICE now (once at Slice #1's end-of-session, once at Slice #2's). Letting that debt accumulate is risk — Slice #3 piles more new code on top of two unverified-in-production modals; deploying #1+#2 first catches deploy-time / live-DB integration issues before they compound with Slice #3.
+Slice #3 is the largest of the three P-29 slices and the last one before the manual-add P-29 feature is complete end-to-end. The 2026-05-15 design pass already settled the input modalities (all three) and SSRF guardrails (allowlist + content-type + size cap). The session's main work is implementing all of it cleanly.
 
-The director picked this path via Rule 14f forced-picker at the end of Slice #2, choosing it over the alternative "continue to Slice #3 without deploying" path. The picker rationale: most thorough per `feedback_recommendation_style.md` (always pick the most-thorough-and-reliable option, not the fastest/cheapest); fits the standard W#2 → main deploy pattern that prior deploy sessions #11–#13 have proven reliable.
+The director picked Slice #3 next via §4 Step 1c interview at the end of deploy session #14 — most thorough per `feedback_recommendation_style.md` (finish the P-29 three-slice arc before starting any other workstream).
 
-If the director's priorities shift before the next session: alternate candidates are Slice #3 build directly (skips deploy; Slice #3 is the biggest of the three and the largest unverified-state surface to add) / P-28 (delete URLs with cascade) / P-27 (delete captured texts/images) / P-30 (Playwright React-bundle rig — unblocks Slice #1+#2+#3 UI regression coverage in one place — would convert the 14 currently-skipped UI-mechanical cases into running cases) / P-31 (route-handler DI refactor — unblocks API-layer regression coverage for both `urls/route.ts` and `urls/[urlId]/text/route.ts`) / older polish items P-21 / P-19 / P-13. Check `ROADMAP.md` W#2 row Current Active Tools for the canonical state.
+**Alternate next-session candidates if director shifts priorities:**
+- P-30 (Playwright React-bundle rig — unblocks UI regression coverage for all three modals + Slice #3's future spec)
+- P-31 (route-handler DI refactor — unblocks API-layer regression coverage for `urls/route.ts` + `urls/[urlId]/text/route.ts` + the upcoming `images/finalize/route.ts`)
+- P-28 (delete URLs cascade)
+- P-27 (delete captured texts/images)
+- Older polish items P-21 / P-19 / P-13
+
+Check `ROADMAP.md` W#2 row for the canonical state.
+
+**After Slice #3:** W#2 → main deploy session #15 to bring Slice #3 to vklf.com — by then the three-slice manual-add P-29 feature is complete.

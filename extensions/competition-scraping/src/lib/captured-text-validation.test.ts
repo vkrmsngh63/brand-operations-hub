@@ -28,6 +28,11 @@ const ROW_A: CompetitorUrl = {
   numSellerReviews: null,
   isSponsoredAd: false,
   customFields: {},
+  // 2026-05-15-d Slice #2.5 follow-up: source field was added by Slice #1
+  // 2026-05-15-b but this test fixture missed the update because the
+  // session's verification scoreboard only ran root-level tsc, not the
+  // extension's own tsc. Logged in CORRECTIONS_LOG 2026-05-15-d.
+  source: 'extension',
   addedBy: 'user-1',
   addedAt: '2026-05-11T00:00:00.000Z',
   updatedAt: '2026-05-11T00:00:00.000Z',

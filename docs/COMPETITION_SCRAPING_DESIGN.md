@@ -2111,4 +2111,65 @@ Each slice its own session per `PROJECT_CONTEXT.md §13` discover-as-you-build.
 
 ---
 
+### 2026-05-15-d — session_2026-05-15-d_w2-main-deploy-session-14-p29-slices-1-and-2-plus-six-walkthrough-polish-fixes (Claude Code, dual-branch — main for deploy + fixes; workflow-2 fast-forwarded each cycle)
+
+**Session purpose:** W#2 → main deploy session #14 — bring P-29 Slices #1 + #2 to vklf.com + director manual walkthrough end-to-end smoke on a real Independent Website URL. Closes (a.32) RECOMMENDED-NEXT.
+
+**Deploy execution:** Pre-deploy verification scoreboard on `workflow-2-competition-scraping` all GREEN (tsc + build + 10/10 node:test + 14/14 Playwright skipped). 5 commits ahead of `origin/main`, 0 behind. `git checkout main && git pull --rebase origin main` no-op. `git merge --ff-only workflow-2-competition-scraping` clean ff. Re-ran scoreboard on `main` post-merge — all GREEN. Rule 9 deploy-gate ask with full describe-before-push (commits / user-visible changes / reversibility). Director approved Option A "Yes, push." `git push origin main 2d3e2a7..66ee6ff`. Vercel auto-redeploy fired; director confirmed green.
+
+**Director walkthrough on real Independent Website URL `diverticleanse.com`:** Hybrid Rule 27 verification — director-batched checklist (all parts at once, then "all green" or 🔴 + which step failed) per director's preferred style this session. Part A (URL modal) ✅ green; Part B (captured-text modal) ✅ green; Part C (Chrome extension regression spot-check — extension's existing right-click captured-text gesture writes default `source='extension'` row) ✅ green.
+
+**Four NEW polish items found during walkthrough — all fixed + deployed + verified in same session (Slice #2.5 polish-batch):**
+
+- **P-32** — Competition Category field in manual-add URL modal swapped from plain text input to `<VocabularyPicker>` dropdown. Reuses the same VocabularyPicker component the URL detail page's inline-edit fields use. Added two new optional props (`autoFocus` default `true`; `inputStyleOverride`) so the picker is reusable inside a modal without stealing focus from the URL input or diverging visually. Existing inline-edit callers unchanged.
+
+- **P-33** — URL field in manual-add URL modal accepts schemeless input. `type="url"` → `type="text"`; `handleSubmit` auto-prepends `https://` if the input doesn't already start with `http://` or `https://`. Director picker pick: option (i) auto-prepend over option (ii) save-as-typed.
+
+- **P-34** — Manual-add URL modal pre-selects Platform when opened from a platform-filtered view. New optional `defaultPlatform?: Platform` prop on `UrlAddModal`; threaded from `CompetitionScrapingViewer` (which reads `?platform=` URL query param) through `UrlTable` to `UrlAddModal`. "All" view → `defaultPlatform` is `undefined` → fallback to existing first-platform default; specific filter → modal pre-selects that platform.
+
+- **P-35** — Content Category field in manual-add captured-text modal swapped from plain text input to `<VocabularyPicker>` dropdown (vocabulary type `content-category`). Same fix shape as P-32.
+
+All four shipped in commit `cd215bb` (5 files +66/-22). Pushed origin/main + workflow-2 fast-forwarded. Director re-walkthrough — "all green."
+
+**Two MORE NEW polish items found during re-walkthrough — both fixed + deployed + verified in same session:**
+
+- **P-36** — Extension's in-page URL-add overlay (content-script context — `extensions/competition-scraping/src/lib/content-script/url-add-form.ts`) Competition Category swapped from plain text input to sentinel-based `<select>` mirroring the popup `CapturedTextPasteForm.tsx`'s content-category dropdown pattern. New `makeCategoryField()` helper builds the `<select>` + hidden free-text input revealed when sentinel picked + load-error inline note. Async-loads existing entries via `listVocabularyEntries(projectId, 'competition-category')` from the existing api-bridge (routed through background to vklf.com). `handleSave` upserts the new vocabulary entry FIRST via `createVocabularyEntry` if sentinel picked + non-empty input, then proceeds with the URL POST. Fresh extension build packaged: `plos-extension-2026-05-15-d-w2-deploy-14-fix-5.zip` (187 KB) at repo root for director sideload.
+
+- **P-37** — VocabularyPicker dropdown popover background lifted for contrast against modal bg. Popover was `#161b22` (matching modal dialog `#161b22` exactly — invisible blend). Changed to `#21262d` (clearly lighter) + stronger border `#484f58` + deeper shadow `0 8px 24px rgba(0,0,0,0.7)` + visible row divider `#373d44` + brighter text `#e6edf3`. Single-file change in `VocabularyPicker.tsx`. Affects both new modal callers AND existing inline-edit callers (free contrast improvement everywhere).
+
+P-37 shipped in commit `d3a44a0`; P-36 shipped in commit `688f310`. Each pushed origin/main + workflow-2 fast-forwarded. Director re-walkthrough — "all green" web + "extension all green" extension sideload verification.
+
+**Two CORRECTIONS_LOG INFORMATIONAL entries this session:**
+
+- Extension tsc test-fixture slip carried from Slice #1 (`captured-text-validation.test.ts` CompetitorUrl fixture missing `source: 'extension'` field). Slice #1's verification scoreboard ran only root tsc, not extension's own `npm run compile`. Caught when Fix #5 needed `npm run compile`; fixed inline this session (test fixture updated to include `source: 'extension'`). Operational note: shared-types-touching slice sessions should include extension tsc in verification scoreboard going forward.
+
+- CWD-drift Bash slip recurrence — second observation of this slip class (first was 2026-05-12-c). Caught + recovered same-session via absolute paths. Codified into operational practice: prefer absolute paths over `cd <subdir>` in Bash invocations; when `cd` is unavoidable (workspace-local commands), explicitly reset before next conceptual unit of work.
+
+**Director-approved end-of-session pick** (§4 Step 1c interview): **Slice #3 BUILD session** (manual-add captured-image modal with three input modalities — drag-drop + clipboard paste + URL-of-image text field — plus new server-side URL-fetch endpoint with SSRF allowlist + content-type + size guardrails per the 2026-05-15 design pass's Q1 outcome). (a.33) RECOMMENDED-NEXT. NEXT_SESSION.md rewritten.
+
+**Multi-Workflow per Rule 25:** Dual-branch session — initial pre-deploy verification on `workflow-2-competition-scraping`, ff-merge + deploy on `main`, three ping-pong sync cycles (commit on main + push + fast-forward workflow-2 to keep slice #3 base clean). Pull-rebase clean at all checkpoints. Schema-change-in-flight stays "No" entire session. W#1 row untouched per Rule 3 ownership.
+
+**Rule 23 Change Impact Audit outcome:** Additive (safe) for all six fixes — VocabularyPicker's two new props are optional with defaults preserving prior behavior; UrlAddModal's new `defaultPlatform` prop is optional; the extension Competition Category dropdown writes to the same `competitionCategory` field on `CompetitorUrl` via the same POST endpoint; the schema-level `competitionCategory` column was already a nullable `String`. No coordinated downstream-consumer update required.
+
+**Affected sections:**
+- §A.7 (Module 1 URL-add UX) — now also serviced by vklf.com's UrlAddModal with VocabularyPicker for Competition Category + schemeless-URL tolerance + platform pre-select from filtered view; extension's URL-add overlay also gained a Competition Category dropdown (sentinel-based <select> mirroring popup).
+- §A.7 (Module 2 captured-text UX) — vklf.com's CapturedTextAddModal now uses VocabularyPicker for Content Category.
+- §A.18 (Recommended next-session sequence) — Slice #3 image modal is the next pick (a.33).
+
+**Cross-references:**
+- Commits `cd215bb` (Slice #2.5 web — 5 files +66/-22) + `d3a44a0` (Fix #6 contrast — 1 file +12/-6) + `688f310` (Fix #5 extension — 1 file +189/-10) + doc-batch commit (this session's wrap)
+- `plos-extension-2026-05-15-d-w2-deploy-14-fix-5.zip` (187 KB) at repo root
+- `src/app/projects/[projectId]/competition-scraping/url/[urlId]/components/VocabularyPicker.tsx` (new optional props + contrast lift)
+- `src/app/projects/[projectId]/competition-scraping/components/UrlAddModal.tsx` (Fixes #1-#3 web)
+- `src/app/projects/[projectId]/competition-scraping/components/CapturedTextAddModal.tsx` (Fix #4 web)
+- `src/app/projects/[projectId]/competition-scraping/components/UrlTable.tsx` (Fix #3 prop threading)
+- `src/app/projects/[projectId]/competition-scraping/components/CompetitionScrapingViewer.tsx` (Fix #3 prop threading)
+- `extensions/competition-scraping/src/lib/content-script/url-add-form.ts` (Fix #5 extension)
+- `extensions/competition-scraping/src/lib/captured-text-validation.test.ts` (pre-existing Slice #1 slip fix)
+- ROADMAP W#2 row (a.32) ✅ DONE + new (a.33) RECOMMENDED-NEXT Slice #3
+- COMPETITION_SCRAPING_VERIFICATION_BACKLOG — new "Deploy session #14 — P-29 Slices #1+#2 DEPLOYED + FULL VERIFY 2026-05-15-d" section + new P-32 through P-37 entries
+- CORRECTIONS_LOG 2026-05-15-d — two new INFORMATIONAL entries
+
+---
+
 END OF DOCUMENT

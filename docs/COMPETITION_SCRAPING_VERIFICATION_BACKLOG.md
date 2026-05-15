@@ -2031,5 +2031,169 @@ export async function POST(req: NextRequest, ...) {
 
 ---
 
+## Deploy session #14 — P-29 Slices #1+#2 DEPLOYED + FULL VERIFY 2026-05-15-d + SIX walkthrough polish items SHIPPED + VERIFIED in same session
+
+**Closes (a.32) RECOMMENDED-NEXT.** One-hundredth Claude Code session — `session_2026-05-15-d_w2-main-deploy-session-14-p29-slices-1-and-2-plus-six-walkthrough-polish-fixes`.
+
+**Deploy execution:**
+
+- Pre-deploy verification scoreboard on `workflow-2-competition-scraping`: tsc clean / `npm run build` clean (49 routes; compiled 16.0s) / `node --test src/lib/shared-types/competition-scraping.test.ts` 10/10 pass / Playwright p29-manual-add-url-modal + p29-manual-add-captured-text-modal 14/14 skipped as designed. 5 commits ahead of `origin/main` (design `948a1a9` + Slice #1 code `070820a` + Slice #1 doc batch `b5711e1` + Slice #2 code `a9e2bf5` + Slice #2 doc batch `66ee6ff`); 0 behind.
+- `git checkout main && git pull --rebase origin main` no-op (clean). `git merge --ff-only workflow-2-competition-scraping` clean ff. Re-ran verification scoreboard on `main` post-merge — all GREEN. Rule 9 deploy-gate ask described commits + user-visible changes + reversibility; director approved Option A "Yes, push." `git push origin main 2d3e2a7..66ee6ff` clean.
+- Vercel auto-redeploy fired; director confirmed green.
+
+**Director walkthrough on real Independent Website URL `diverticleanse.com`:**
+
+Director ran a hybrid walkthrough (Rule 27) of both new modals + extension regression spot-check. Per the director's preferred batched-checklist style: *"Just give me all the things to test at once and what I should see."* (One observation of this style preference; capture-on-recurrence candidate for `feedback_walkthrough_batching_style.md`.)
+
+Walkthrough outcome:
+
+- **Part A — manual-add URL modal (Slice #1):** ✅ button present, modal opens, autofocus on URL, save successful, source='manual' badge as expected, all 4 dismiss paths green.
+- **Part B — manual-add captured-text modal (Slice #2):** ✅ button present at right end of section h2 row, modal opens, autofocus on Text textarea, save successful, source='manual' badge as expected, dismiss paths green.
+- **Part C — extension regression spot-check (Slice #1 source-default for backward compat):** ✅ Chrome extension's right-click captured-text gesture on real Amazon URL still writes a row with default source='extension'.
+
+**Four NEW polish items found during walkthrough — all fixed + deployed + verified in same session:**
+
+- **P-32** (Competition Category in URL modal → VocabularyPicker dropdown)
+- **P-33** (URL field accepts schemeless input + auto-prepend https://)
+- **P-34** (Platform pre-select in URL modal when opened from a filtered view)
+- **P-35** (Content Category in text modal → VocabularyPicker dropdown)
+
+→ All four shipped batched in commit `cd215bb` (5 files +66/-22; pushed origin/main + workflow-2 fast-forwarded). Re-deployed. Director re-walkthrough — **"all green"** report.
+
+**Two MORE NEW polish items found during re-walkthrough — both fixed + deployed + verified in same session:**
+
+- **P-36** (extension URL-add overlay Competition Category → sentinel-based `<select>`)
+- **P-37** (VocabularyPicker dropdown contrast against modal bg)
+
+→ P-37 shipped in commit `d3a44a0` (1 file +12/-6); P-36 shipped in commit `688f310` (1 file +189/-10) with fresh `plos-extension-2026-05-15-d-w2-deploy-14-fix-5.zip` (187 KB) at repo root. Each pushed origin/main + workflow-2 fast-forwarded. Director re-walkthrough — **"all green" web + "extension all green"** extension sideload verification.
+
+**Pre-existing extension tsc slip from Slice #1 caught + fixed inline** (`captured-text-validation.test.ts` CompetitorUrl fixture missing `source: 'extension'`). Logged CORRECTIONS_LOG 2026-05-15-d INFORMATIONAL.
+
+**CWD-drift Bash slip recurrence** caught + recovered same-session via absolute paths. Logged CORRECTIONS_LOG 2026-05-15-d INFORMATIONAL — second observation; codified into operational practice.
+
+**Director picked next session via §4 Step 1c interview:** Slice #3 build session (manual-add captured-image modal with three input modalities + new SSRF-guarded URL-fetch endpoint). (a.33) RECOMMENDED-NEXT. NEXT_SESSION.md rewritten.
+
+**Cross-references:**
+- ROADMAP W#2 row (a.32) ✅ DONE + new (a.33) RECOMMENDED-NEXT Slice #3
+- COMPETITION_SCRAPING_DESIGN §B new 2026-05-15-d entry
+- CORRECTIONS_LOG 2026-05-15-d two INFORMATIONAL entries
+- Commits `cd215bb` + `d3a44a0` + `688f310` + doc-batch commit
+- `plos-extension-2026-05-15-d-w2-deploy-14-fix-5.zip` (187 KB) at repo root
+
+---
+
+## P-32 POLISH ITEM SHIPPED AND VERIFIED — Competition Category in manual-add URL modal swapped to VocabularyPicker dropdown (NEW 2026-05-15-d — found in walkthrough; SHIPPED in commit `cd215bb`; VERIFIED in walkthrough re-pass)
+
+**What director found.** Manual-add URL modal's "Competition Category" was a plain text input. Director wanted it to mirror the existing inline-edit VocabularyPicker dropdown on the URL detail page (typeahead + create-new) — same vocabulary type (`competition-category`).
+
+**What shipped** (in commit `cd215bb`, file `src/app/projects/[projectId]/competition-scraping/components/UrlAddModal.tsx`):
+
+- Swapped `<input type="text">` for `<VocabularyPicker vocabularyType="competition-category" ... />`.
+- VocabularyPicker reused unchanged shape — same component already serving the URL detail page's inline-edit fields — plus two new optional props added (in `src/app/projects/[projectId]/competition-scraping/url/[urlId]/components/VocabularyPicker.tsx`): `autoFocus` (default `true`; passed `false` from modal so the URL input keeps autofocus) + `inputStyleOverride` (passed the modal's `textInputStyle` so the picker visually matches surrounding fields). Existing inline-edit callers unchanged (omit both new props → defaults preserve original behavior).
+- Loads existing competition-category entries on first focus via existing `GET /api/projects/[projectId]/vocabulary?type=competition-category` endpoint; creates new entries via existing `POST /api/projects/[projectId]/vocabulary` (idempotent — server returns existing row on dedup hit).
+
+**How verified.** Re-walkthrough: opened modal → clicked Competition Category field → dropdown panel appeared → typed value → "+ Create '<value>'" row visible → clicked it → value committed + dropdown closed; saved URL with new category attached. Director reported "all green."
+
+---
+
+## P-33 POLISH ITEM SHIPPED AND VERIFIED — Manual-add URL modal accepts schemeless input + auto-prepends `https://` (NEW 2026-05-15-d — found in walkthrough; SHIPPED in commit `cd215bb`; VERIFIED in walkthrough re-pass)
+
+**What director found.** URL field rejected schemeless input like `diverticleanse.com` because of HTML5 `<input type="url">` browser-side RFC 3986 enforcement. Director's framing: *"The url field does not take a url if it doesn't have a http:// or https:// in the beginning, which shouldn't be the case."*
+
+**Director's picker pick:** option (i) auto-prepend `https://` over option (ii) save-as-typed.
+
+**What shipped** (in commit `cd215bb`, file `src/app/projects/[projectId]/competition-scraping/components/UrlAddModal.tsx`):
+
+- Changed `type="url"` to `type="text"` so the browser stops enforcing RFC 3986.
+- Updated placeholder from `"https://www.amazon.com/dp/..."` to `"competitor-brand.com or https://www.amazon.com/dp/..."` to telegraph the looser acceptance.
+- Added scheme-normalization step in `handleSubmit`: `const normalizedUrl = /^https?:\/\//i.test(trimmedUrl) ? trimmedUrl : 'https://' + trimmedUrl;` Applied before the POST body assembly.
+- `required` attribute preserved (still blocks empty submit).
+
+**How verified.** Re-walkthrough: typed `diverticleanse.com` (no scheme) in URL field → Save → modal closed cleanly → new row appeared in the URL list with URL stored as `https://diverticleanse.com`. Director reported "all green."
+
+---
+
+## P-34 POLISH ITEM SHIPPED AND VERIFIED — Manual-add URL modal pre-selects Platform when opened from a platform-filtered view (NEW 2026-05-15-d — found in walkthrough; SHIPPED in commit `cd215bb`; VERIFIED in walkthrough re-pass)
+
+**What director found.** Clicking "+ Manually add URL" from a platform-filtered view (e.g., user clicked "Google Shopping" in the left sidebar) opened the modal with Platform defaulted to "Amazon.com" — ignoring the active filter. Director wanted the modal to inherit the current filter as the default Platform. When opened from the "All" view, the modal should fall back to the existing "Amazon.com" default.
+
+**What shipped** (in commit `cd215bb`):
+
+- `UrlAddModal.tsx` — new optional `defaultPlatform?: Platform` prop. When provided + not `undefined`, the modal's `platform` state initializes to it; on close-and-reopen the reset effect resets to the current `defaultPlatform` (not the static `'amazon'`).
+- `UrlTable.tsx` — new `selectedPlatform: Platform | 'all'` prop (required); threaded down to `<UrlAddModal defaultPlatform={selectedPlatform === 'all' ? undefined : selectedPlatform} />`.
+- `CompetitionScrapingViewer.tsx` — passes `selectedPlatform={selectedPlatform}` to `UrlTable`. The viewer already had the `selectedPlatform` derived state from the `?platform=` URL query param (slice (a.4) shipped 2026-05-07).
+
+**How verified.** Re-walkthrough: clicked "Google Shopping" in left sidebar → list filtered to Google Shopping URLs → clicked "+ Manually add URL" → modal opened with Platform pre-set to "Google Shopping". Cancelled. Clicked "All" in left sidebar → clicked "+ Manually add URL" → modal opened with Platform back to default "Amazon.com" (the first platform in the dropdown order). Director reported "all green."
+
+---
+
+## P-35 POLISH ITEM SHIPPED AND VERIFIED — Content Category in manual-add captured-text modal swapped to VocabularyPicker dropdown (NEW 2026-05-15-d — found in walkthrough; SHIPPED in commit `cd215bb`; VERIFIED in walkthrough re-pass)
+
+**What director found.** Same shape as P-32 but for the captured-text modal's "Content Category" field. Plain text input; should be the same dropdown UX.
+
+**What shipped** (in commit `cd215bb`, file `src/app/projects/[projectId]/competition-scraping/components/CapturedTextAddModal.tsx`):
+
+- Swapped `<input type="text">` for `<VocabularyPicker vocabularyType="content-category" ... />`.
+- Same `autoFocus={false}` + `inputStyleOverride={textInputStyle}` props as P-32's use, so the Text textarea keeps autofocus + visual style matches the modal.
+
+**How verified.** Re-walkthrough: opened captured-text modal → clicked Content Category field → dropdown panel appeared with existing entries + "+ Create" row when typing a new value. Director reported "all green."
+
+---
+
+## P-36 POLISH ITEM SHIPPED AND VERIFIED — Extension URL-add overlay Competition Category swapped to sentinel-based dropdown (NEW 2026-05-15-d — found in re-walkthrough; SHIPPED in commit `688f310`; VERIFIED in extension sideload verification)
+
+**What director found.** The Chrome extension's in-page URL-add overlay (content-script context — appears on Amazon/eBay/Etsy/Walmart product pages when user clicks the floating "+ Add" button) rendered Competition Category as a plain text input. Director wanted the same dropdown UX as the existing content-category dropdown in the extension's popup CapturedTextPasteForm. Initial clarification needed: director said "even in the extension pop up" which I read as the toolbar popup, but the toolbar popup has no URL-add form. The actual location is the in-page overlay at `extensions/competition-scraping/src/lib/content-script/url-add-form.ts` (verified via grep + popup-component-inventory check).
+
+**Pattern choice.** Different surface than vklf.com: extension content-script context is plain DOM (no React framework), so cannot reuse the React `VocabularyPicker` component. Mirrored the popup `CapturedTextPasteForm.tsx`'s sentinel-based `<select>` pattern instead: a `<select>` with placeholder + existing-entry options + "+ Add new…" sentinel; when sentinel selected, a free-text `<input>` appears below.
+
+**What shipped** (in commit `688f310`, file `extensions/competition-scraping/src/lib/content-script/url-add-form.ts`):
+
+- New `ADD_NEW_CATEGORY_VALUE = '__plos_add_new_competition_category__'` constant.
+- New imports: `listVocabularyEntries` + `createVocabularyEntry` from `./api-bridge.ts` (already exposed via the existing background-script message proxy).
+- New imports: `VocabularyEntry` type from shared-types.
+- New `makeCategoryField()` helper (alongside the existing `makeField()` text-field factory) that builds the `<select>` + hidden free-text input + load-error note, plus a small API: `wrap` (DOM), `getValue()` (returns selected value OR free-text value if sentinel picked), `isAddingNew()` (sentinel-state predicate), `setDisabled(boolean)`, `populateEntries(VocabularyEntry[])` (inserts sorted options between placeholder and sentinel), `setLoadError(message | null)` (inline error note), `absorbNewEntry(VocabularyEntry)` (after successful POST, ensures the entry is an option + sets `<select>` value to it).
+- Replaced the `categoryField = makeField(...)` call with `categoryField = makeCategoryField()`.
+- After form mount, async-load: `listVocabularyEntries(projectId, 'competition-category').then(populateEntries).catch(setLoadError(message))`. Form is usable before the load completes — the placeholder + "+ Add new…" still let the user type a new category immediately. On load failure: inline warning note that load failed but "+ Add new…" still works.
+- `handleSave` now resolves the category via `categoryField.getValue()` + `categoryField.isAddingNew()`. If sentinel + empty input → inline error + early return. If sentinel + non-empty input → upsert vocabulary entry FIRST via `createVocabularyEntry(projectId, { vocabularyType: 'competition-category', value, addedByWorkflow: 'competition-scraping' })`, then proceed to the URL POST. On vocabulary POST failure → abort save + show error.
+- `setSaving(boolean)` updated to call `categoryField.setDisabled(boolean)` (since the field is no longer a single `<input>` — it's a select + conditional input that need to be disabled together).
+
+**Extension rebuild + packaging.** Ran `npx wxt build` (clean — output `.output/chrome-mv3/` populated; manifest correct; 207 KB background.js + content-scripts + popup) + `npx wxt zip` (produced `competition-scraping-extension-0.1.0-chrome.zip`). Copied to repo root with conventional naming as `plos-extension-2026-05-15-d-w2-deploy-14-fix-5.zip` (187 KB). Director downloaded + sideloaded.
+
+**How verified.** Director sideloaded the fresh `.zip` → signed in → tested on a real Amazon product page: clicked floating "+ Add" → URL-add form opened → Competition Category field is now a dropdown ("Pick or add a category…" placeholder + existing entries + "+ Add new…" sentinel). Picked "+ Add new…" → free-text input appeared → typed new category → Save → URL saved successfully + new category created via the vocabulary endpoint. Reopened the form on a different page → new category appeared in the dropdown as expected. Regression spot-check: opened the form without picking a category → save succeeded (Competition Category stayed null on the URL). Right-click "save selection" captured-text gesture still works (untouched by Fix #5). Director reported "extension all green."
+
+**Cross-references:**
+- `extensions/competition-scraping/src/lib/content-script/url-add-form.ts` (the fix)
+- `extensions/competition-scraping/src/entrypoints/popup/components/CapturedTextPasteForm.tsx` (the popup pattern we mirrored)
+- `extensions/competition-scraping/src/lib/content-script/api-bridge.ts:132,147` (existing `listVocabularyEntries` + `createVocabularyEntry` exports, content-script-context, routed through background)
+- `src/app/api/projects/[projectId]/vocabulary` (server endpoint — idempotent POST returns existing on dedup hit)
+
+---
+
+## P-37 POLISH ITEM SHIPPED AND VERIFIED — VocabularyPicker dropdown popover background + border + shadow + text contrast (NEW 2026-05-15-d — found in re-walkthrough; SHIPPED in commit `d3a44a0`; VERIFIED in walkthrough re-pass)
+
+**What director found.** Dropdown popover blended into the modal background — both used `#161b22` (GitHub-dark code-background color). Director's framing: *"the content category dropdown or even the content category dropdown that opens currently has a black background that blends into the page background (which isn't ideal). Please make the dropdowns have a contrasting background than the page background so that it stands out and make sure the dropdown menu's text font color is in contrast with the dropdown background."*
+
+**Root cause.** Modal dialog uses `dialogStyle.background: '#161b22'`. VocabularyPicker's `popoverStyle.background` was also `#161b22`. Identical → invisible popover-against-modal overlap. (Outside the modal, on the URL detail page, the page bg is `#0d1117` so the popover at `#161b22` was at least visible against THAT bg — but director's primary concern was the modal context where the issue was severe.)
+
+**What shipped** (in commit `d3a44a0`, file `src/app/projects/[projectId]/competition-scraping/url/[urlId]/components/VocabularyPicker.tsx`):
+
+- `popoverStyle.background`: `#161b22` → `#21262d` (clearly lighter than the modal bg).
+- `popoverStyle.border`: `1px solid #30363d` → `1px solid #484f58` (more visible border).
+- `popoverStyle.borderRadius`: `4px` → `6px` (matches modal corner radius for visual consistency).
+- `popoverStyle.boxShadow`: `0 4px 12px rgba(0,0,0,0.4)` → `0 8px 24px rgba(0,0,0,0.7)` (deeper float effect).
+- `popoverRowStyle.borderBottom`: `1px solid #21262d` → `1px solid #373d44` (row dividers visible on new `#21262d` bg — the old `#21262d` divider would now match the new bg and disappear).
+- `popoverRowStyle.color`: `#c9d1d9` → `#e6edf3` (slightly brighter text for better contrast on `#21262d`).
+- Selected-row bg (`#1f3a5f`), placeholder text (`#8b949e`), and "+ Create" link color (`#58a6ff`) unchanged — all already had good contrast against `#21262d`.
+
+**Single-file change.** Affects BOTH the new modal callers (P-32 + P-35) AND the existing inline-edit callers on the URL detail page (which inherited the contrast improvements as a free benefit — the page bg is even darker so the lift is also visible there).
+
+**How verified.** Director re-walkthrough — "all green" web. Cross-verified the inline-edit picker on the detail page still works (which it does — same component, same callers, just better-looking).
+
+**Cross-references:**
+- P-32, P-35 (the two new modal callers that motivated the visibility lift)
+- VocabularyPicker.tsx (the single-file fix)
+
+---
+
 END OF DOCUMENT
 
