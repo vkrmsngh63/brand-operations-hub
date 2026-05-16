@@ -6,7 +6,9 @@
 **Branch:** `workflow-2-competition-scraping`
 **Created:** May 4, 2026
 **Created in session:** session_2026-05-04_w2-workflow-requirements-interview (Claude Code)
-**Last updated:** May 15, 2026-h (W#2 P-31 BUILD session — route-handler DI refactor SHIPPED at code level on `workflow-2-competition-scraping` + P-32 multi-file-drop warning fix SHIPPED + 62 new node:test cases all passing. §B 2026-05-15-h entry appended below covering the Option A → A' DI seam fork (per-route closure factory adapted to RequestLike contract after mid-flight probe revealed `next/server` cannot load under `node --test --experimental-strip-types`), the factory architecture across all 4 W#2 routes, and the headline scoreboard delta (src/lib node:test 447 → 509). §A unchanged per Rule 18. Schema-change-in-flight stays "No".)
+**Last updated:** May 16, 2026 (W#2 → main deploy session #16 — P-30 + P-31 + P-32 ALL DEPLOYED to vklf.com + REAL-INDEPENDENT-WEBSITE FULL VERIFY across P-32 multi-file-drop case + 4 P-29 area spot-checks. §B 2026-05-16 entry appended at end covering deploy outcome + walkthrough verification + the P-29 manual-add area's end-to-end regression coverage achievement (UI mechanical via P-30 Playwright + API route-handler integration via P-31 node:test +62 cases + real-website director walkthrough). §A unchanged per Rule 18. Schema-change-in-flight stays "No".)
+
+**Previously updated:** May 15, 2026-h (W#2 P-31 BUILD session — route-handler DI refactor SHIPPED at code level on `workflow-2-competition-scraping` + P-32 multi-file-drop warning fix SHIPPED + 62 new node:test cases all passing. §B 2026-05-15-h entry appended below covering the Option A → A' DI seam fork (per-route closure factory adapted to RequestLike contract after mid-flight probe revealed `next/server` cannot load under `node --test --experimental-strip-types`), the factory architecture across all 4 W#2 routes, and the headline scoreboard delta (src/lib node:test 447 → 509). §A unchanged per Rule 18. Schema-change-in-flight stays "No".)
 
 **Previously updated:** May 15, 2026-g (W#2 P-30 BUILD session — Playwright React-bundle stub-page rig SHIPPED at code level on `workflow-2-competition-scraping` in commit `0548da7`. §B 2026-05-15-g entry appended below covering the Rule 14f forced-picker outcome (Option A — extend P-17 authFetch esbuild stub-page pattern), the rig architecture, and the headline scoreboard delta (P-29 Playwright cases went from 31 skipped → 30 pass + 1 P-32-deferred-skip). §A unchanged per Rule 18. Schema-change-in-flight stays "No".)
 
@@ -2478,6 +2480,60 @@ Each `src/app/api/projects/[projectId]/competition-scraping/.../route.ts` shim i
 - ROADMAP W#2 row (a.36) flipped ✅ SHIPPED-AT-CODE-LEVEL + new (a.37) RECOMMENDED-NEXT deploy session #16
 - CORRECTIONS_LOG 2026-05-15-h INFORMATIONAL entry — original Rule 14f picker shown without first verifying the test-runner constraint
 - `NEXT_SESSION.md` rewritten 2026-05-15-h for deploy session #16
+
+---
+
+### 2026-05-16 — W#2 → main deploy session #16 — P-30 + P-31 + P-32 ALL DEPLOYED to vklf.com + REAL-INDEPENDENT-WEBSITE FULL VERIFY across P-32 multi-file-drop case + 4 P-29 area spot-checks
+
+**Session:** `session_2026-05-16_w2-main-deploy-session-16-p30-p31-p32-DEPLOYED-FULL-VERIFY` (Claude Code, dual-branch — pre-deploy scoreboard on `workflow-2-competition-scraping`; ff-merge + deploy push on `main`; workflow-2 fast-forwarded after the main push). One-hundred-and-fifth Claude Code session. Closes (a.37) RECOMMENDED-NEXT.
+
+**Director's directive:** verbatim from launch prompt — *"W#2 → main deploy session #16 — bring P-30 (Playwright React-bundle stub-page rig) + P-31 (route-handler DI refactor + 62 new node:test cases) + P-32 (CapturedImageAddModal multi-file-drop warning fix) to vklf.com in one combined deploy. Closes (a.37) RECOMMENDED-NEXT."*
+
+**Alternatives considered for the deploy approach:** standard W#2 → main deploy cheat-sheet (rebase + ff-merge + Rule 9 ask + push origin/main + Vercel auto-redeploy + ping-pong sync) was the only natural option — workflow-2 was 4 commits linearly ahead of main since deploy #15's ping-pong sync; clean fast-forward shape; no merge commits to worry about. Considered but ruled out: splitting into 3 separate deploys (P-30 alone, then P-31 alone, then P-32 alone) — rejected as wasteful since all 3 were tightly bundled and verified together on workflow-2.
+
+**Decision — Additive (safe) deploy classification per Rule 23 Change Impact Audit:**
+- P-30 — test-infra only (zero `src/` runtime changes; tests-only modifications under `tests/playwright/`). Invisible to users.
+- P-31 — route-handler DI refactor with zero behavior change (same status codes, same error messages, same persistence semantics, same side-effects). Invisible to users; production behavior byte-for-byte identical.
+- P-32 — production bug fix surfacing an existing-intended-but-unreachable warning UI. ONE user-visible change: the multi-file-drop warning "N files dropped — only the first will be used" now appears when a user drags 2+ image files onto the captured-image manual-add modal's drop zone (previously coded but unreachable due to a React-state-batching bug; P-32 fixed by moving `setWarningMessage(null)` out of `tryLoadFile`).
+- No schema; no shared-types changes; no Chrome extension or PLOS-side UI sees any API contract difference.
+
+**Deploy mechanics — single clean cycle:**
+1. **Pre-deploy scoreboard on `workflow-2-competition-scraping` — all 6 GREEN:** tsc clean; extension tsc clean; `npm run build` clean (52 routes); src/lib node:test **509/509**; extension `npm test` 334/334; `npx playwright test` **64/64** in 2.2 min.
+2. **Rebase + ff-merge:** `git checkout main && git pull --rebase origin main` (0 ahead); `git checkout workflow-2-competition-scraping && git pull --rebase origin workflow-2-competition-scraping` (2 ahead origin/workflow-2, 4 ahead origin/main); `git rebase main` no-op fast-forward; `git checkout main && git merge --ff-only workflow-2-competition-scraping` → clean ff-merge `3443971..f18e146` (32 files +4704/-1711 — 10 production source + 22 doc/test/infra); re-run scoreboard on `main` post-merge — all GREEN.
+3. **Rule 9 deploy-gate via AskUserQuestion forced-picker:** described 4 commits in plain language with user-visible effects (P-30 invisible, P-31 invisible, P-32 visible multi-file-drop warning, doc commits zero impact); director picked Yes.
+4. **Deploy push + Vercel auto-redeploy:** `git push origin main 3443971..f18e146` → Vercel auto-redeployed cleanly in ~1-2 min; `git push origin workflow-2-competition-scraping a1b99d2..f18e146` for ping-pong sync.
+5. **Director walkthrough on real Independent Website URL** (Rule 27 scope-exception — one-off post-deploy smoke check):
+   - P-32 multi-file-drop test ✅ — director dragged 2+ image files onto drop zone; warning text "2 files dropped — only the first will be used" appeared; first image previewed; modal stayed open. **P-32 user-visible fix verified live.**
+   - P-29 area spot-checks (zero behavior change from P-31's DI refactor) — all 4 saved cleanly: Add URL (exercises `urls` factory); Add captured text (exercises `url-text` factory); Add captured image via drag (exercises `images-finalize` factory); Add captured image via URL fetch (exercises `images-fetch-by-url` factory). **P-31 DI refactor verified zero-regression in production.**
+
+**Headline outcome — the P-29 manual-add area is now fully complete + live on vklf.com with end-to-end automated regression coverage:**
+
+| Coverage layer | Status | Mechanism |
+|---|---|---|
+| UI mechanical (Playwright) | ✅ LIVE | P-30 — esbuild React-bundle stub-page rig; 64/64 cases pass (was 30 pass + 1 P-32-deferred-skip; P-32 fix flipped) |
+| API route-handler integration (node:test) | ✅ LIVE | P-31 — per-route closure factory `makeXxxHandlers(deps)` with RequestLike contract; 62 new cases (16 urls + 15 url-text + 16 images-finalize + 15 fetch-by-url); 509/509 src/lib total |
+| Real-website director walkthrough | ✅ DONE | P-32 multi-file-drop + 4 P-29 area spot-checks; zero polish items found this session |
+
+Director's role this session was Rule 9 deploy-gate approval + post-deploy walkthrough verification. Zero director-time cost going forward for P-29 area regression coverage (P-30 + P-31 catch the same bug classes automatically on every future code change).
+
+**§4 Step 1c forced-picker fired** at end-of-session — deploy session wrapped cleanly; the P-29 area arc is now complete + live + end-to-end-regression-covered; no obvious continuation from THIS session itself. Director picked **(a.38) RECOMMENDED-NEXT = W#2 P-28 + P-27 paired build session on `workflow-2-competition-scraping`** — build BOTH delete features in one session (P-28 delete URLs with cascade disclosure + P-27 delete captured texts/images). Rationale per `feedback_recommendation_style.md`: pairing keeps overlapping design questions (Q1 soft-vs-hard delete / Q2 image storage cleanup / Q3 audit-trail event shape / Q4 permission model / Q5 confirm-dialog component placement) consistent; P-29 area is fresh in memory; P-30 + P-31 regression coverage de-risks the build session.
+
+**One CORRECTIONS_LOG INFORMATIONAL entry this session:** cwd-leak Bash slip recurred TWICE (pre-deploy scoreboard + post-merge scoreboard). 4th-or-5th recurrence of the 2026-05-12-c slip class. Pattern STRENGTHENING — see CORRECTIONS_LOG 2026-05-16 entry for the strengthened operational rule (when running parallel Bash calls where ANY uses `cd`, EVERY command must explicitly prefix with desired absolute cwd; preference: avoid `cd` entirely via absolute paths + `npm --prefix`).
+
+**Affected sections:**
+- §A.13 (Data persistence) — unchanged.
+- §A.18 (Recommended next-session sequence) — P-30 + P-31 + P-32 deploy closed; next pick is **W#2 P-28 + P-27 paired build session** ((a.38) RECOMMENDED-NEXT).
+
+**Multi-Workflow per Rule 25:** dual-branch session — pre-deploy verification on `workflow-2-competition-scraping`, ff-merge + deploy phases on `main`, one ping-pong sync after the main push (both branches now at `f18e146`). Pull-rebase clean at all checkpoints. Schema-change-in-flight stays "No" entire session. W#1 row untouched per Rule 3 ownership. **TaskList sweep per Rule 26:** 6 session tasks tracked + all 6 closed; zero `DEFERRED:` items at session end (clean walkthrough — no new polish items captured this session).
+
+**Cross-references:**
+
+- ROADMAP 2026-05-16 header bump + W#2 row Last Session 2026-05-16 prepended + (a.37) flipped ✅ DONE + new (a.38) RECOMMENDED-NEXT P-28 + P-27 paired
+- CHAT_REGISTRY new top entry 2026-05-16
+- DOCUMENT_MANIFEST header + per-doc flags
+- CORRECTIONS_LOG 2026-05-16 INFORMATIONAL entry — cwd-leak twice recurrence + pattern strengthening
+- COMPETITION_SCRAPING_VERIFICATION_BACKLOG 2026-05-16 header + P-30/P-31/P-32 statuses flipped to ✅ DEPLOYED + new "## Deploy session #16 — P-30+P-31+P-32 DEPLOYED + FULL VERIFY 2026-05-16" section appended at end before EOF
+- `docs/NEXT_SESSION.md` rewritten 2026-05-16 for P-28 + P-27 paired build session with full design-picker spec (Q1-Q5 forced-pickers + back-end DELETE handlers via P-31 DI pattern + UI trash buttons + new ConfirmDeleteDialog component + 20-30 new node:test cases + extended Playwright rig)
 
 ---
 
