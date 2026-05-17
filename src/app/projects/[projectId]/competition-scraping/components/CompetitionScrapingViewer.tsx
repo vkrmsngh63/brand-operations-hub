@@ -218,6 +218,13 @@ export function CompetitionScrapingViewer({ projectId }: Props) {
     });
   };
 
+  // P-28 — optimistic remove for the trash button on each URL row. UrlTable
+  // calls this BEFORE the DELETE network call and re-adds via handleUrlAdded
+  // if the network call fails (idempotent re-add via id-dedup above).
+  const handleUrlDeleted = (urlId: string): void => {
+    setUrls((prev) => (prev ? prev.filter((u) => u.id !== urlId) : prev));
+  };
+
   const scopedTotal = counts === null ? 0 : counts[selectedPlatform];
 
   return (
@@ -266,6 +273,7 @@ export function CompetitionScrapingViewer({ projectId }: Props) {
             onRowOpen={handleRowOpen}
             projectId={projectId}
             onUrlAdded={handleUrlAdded}
+            onUrlDeleted={handleUrlDeleted}
             selectedPlatform={selectedPlatform}
           />
         )}

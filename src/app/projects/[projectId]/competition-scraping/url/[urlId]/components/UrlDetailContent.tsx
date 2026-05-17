@@ -18,6 +18,7 @@
 // from another project returns 404, not the row's data.
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { authFetch } from '@/lib/authFetch';
 import { WorkflowTopbar } from '@/lib/workflow-components';
@@ -42,6 +43,10 @@ import {
 import { CustomFieldsEditor } from './CustomFieldsEditor';
 import { CapturedTextAddModal } from '../../../components/CapturedTextAddModal';
 import { CapturedImageAddModal } from '../../../components/CapturedImageAddModal';
+import {
+  ConfirmDeleteDialog,
+  type CascadeCounts,
+} from '../../../components/ConfirmDeleteDialog';
 
 interface Props {
   project: { id: string; name: string };
@@ -70,6 +75,7 @@ const PLATFORM_LABELS: Record<Platform, string> = {
 };
 
 export function UrlDetailContent({ project, urlId }: Props) {
+  const router = useRouter();
   const [urlSlot, setUrlSlot] = useState<FetchSlot<CompetitorUrl>>({
     data: null,
     error: null,
@@ -86,6 +92,136 @@ export function UrlDetailContent({ project, urlId }: Props) {
     data: null,
     error: null,
   });
+  // P-28 — URL-delete dialog state lives at the top-level component because
+  // the trash button is in UrlMetadataCard but on success the whole page
+  // navigates away. Cascade counts lazy-fetch on dialog open.
+  const [urlDeleteOpen, setUrlDeleteOpen] = useState(false);
+  const [cascadeCounts, setCascadeCounts] = useState<CascadeCounts | null>(null);
+  const [cascadeError, setCascadeError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!urlDeleteOpen) return;
+    let cancelled = false;
+    setCascadeCounts(null);
+    setCascadeError(null);
+    (async () => {
+      try {
+        const res = await authFetch(
+          `/api/projects/${project.id}/competition-scraping/urls/${urlId}/cascade-counts`
+        );
+        if (cancelled) return;
+        if (!res.ok) {
+          setCascadeError(`HTTP ${res.status}`);
+          return;
+        }
+        const data = (await res.json()) as CascadeCounts;
+        if (cancelled) return;
+        setCascadeCounts(data);
+      } catch (err) {
+        if (cancelled) return;
+        setCascadeError(err instanceof Error ? err.message : 'Network error');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [urlDeleteOpen, project.id, urlId]);
+
+  const handleUrlDeleteConfirm = useCallback(async (): Promise<void> => {
+    const res = await authFetch(
+      `/api/projects/${project.id}/competition-scraping/urls/${urlId}`,
+      { method: 'DELETE' }
+    );
+    if (!res.ok) {
+      const detail = await readErrorMessage(res, 'Could not delete URL');
+      throw new Error(detail);
+    }
+    // Navigate back to the workflow main page after the row is gone.
+    setUrlDeleteOpen(false);
+    router.push(`/projects/${project.id}/competition-scraping`);
+  }, [project.id, urlId, router]);
+
+  // P-27 — captured-text delete. The captured text subsection owns its own
+  // dialog state; the parent owns the text-list state because the optimistic
+  // remove + rollback both run against it.
+  const handleTextDeleted = useCallback(
+    async (textId: string): Promise<void> => {
+      // Snapshot for rollback.
+      const prevList = textSlot.data;
+      if (!prevList) {
+        // Nothing to remove from — let the DELETE through anyway so the
+        // server-side row (if any) is cleaned up; on success we don't need
+        // to update state.
+        const res = await authFetch(
+          `/api/projects/${project.id}/competition-scraping/text/${textId}`,
+          { method: 'DELETE' }
+        );
+        if (!res.ok) {
+          const detail = await readErrorMessage(res, 'Could not delete captured text');
+          throw new Error(detail);
+        }
+        return;
+      }
+      // Optimistic remove from list.
+      setTextSlot({
+        data: prevList.filter((t) => t.id !== textId),
+        error: textSlot.error,
+      });
+      try {
+        const res = await authFetch(
+          `/api/projects/${project.id}/competition-scraping/text/${textId}`,
+          { method: 'DELETE' }
+        );
+        if (!res.ok) {
+          // Rollback.
+          setTextSlot({ data: prevList, error: textSlot.error });
+          const detail = await readErrorMessage(res, 'Could not delete captured text');
+          throw new Error(detail);
+        }
+      } catch (err) {
+        setTextSlot({ data: prevList, error: textSlot.error });
+        throw err instanceof Error ? err : new Error('Network error');
+      }
+    },
+    [project.id, textSlot.data, textSlot.error]
+  );
+
+  // P-27 — captured-image delete. Same optimistic-remove + rollback shape.
+  const handleImageDeleted = useCallback(
+    async (imageId: string): Promise<void> => {
+      const prevList = imagesSlot.data;
+      if (!prevList) {
+        const res = await authFetch(
+          `/api/projects/${project.id}/competition-scraping/images/${imageId}`,
+          { method: 'DELETE' }
+        );
+        if (!res.ok) {
+          const detail = await readErrorMessage(res, 'Could not delete captured image');
+          throw new Error(detail);
+        }
+        return;
+      }
+      setImagesSlot({
+        data: prevList.filter((img) => img.id !== imageId),
+        error: imagesSlot.error,
+      });
+      try {
+        const res = await authFetch(
+          `/api/projects/${project.id}/competition-scraping/images/${imageId}`,
+          { method: 'DELETE' }
+        );
+        if (!res.ok) {
+          setImagesSlot({ data: prevList, error: imagesSlot.error });
+          const detail = await readErrorMessage(res, 'Could not delete captured image');
+          throw new Error(detail);
+        }
+      } catch (err) {
+        setImagesSlot({ data: prevList, error: imagesSlot.error });
+        throw err instanceof Error ? err : new Error('Network error');
+      }
+    },
+    [project.id, imagesSlot.data, imagesSlot.error]
+  );
 
   useEffect(() => {
     // No synchronous setState resets here — the lint rule
@@ -262,6 +398,7 @@ export function UrlDetailContent({ project, urlId }: Props) {
               row={urlSlot.data}
               projectId={project.id}
               onPatch={patchUrl}
+              onDeleteClick={() => setUrlDeleteOpen(true)}
             />
             <SizesSubsection slot={sizesSlot} />
             <CapturedTextSubsection
@@ -269,18 +406,48 @@ export function UrlDetailContent({ project, urlId }: Props) {
               projectId={project.id}
               urlId={urlId}
               onTextAdded={handleTextAdded}
+              onTextDeleted={handleTextDeleted}
             />
             <CapturedImagesGallery
               slot={imagesSlot}
               projectId={project.id}
               urlId={urlId}
               onImageAdded={refreshImages}
+              onImageDeleted={handleImageDeleted}
             />
           </>
         )}
       </main>
+
+      <ConfirmDeleteDialog
+        isOpen={urlDeleteOpen}
+        title="Delete this URL?"
+        message={
+          urlSlot.data
+            ? `${shortenUrl(urlSlot.data.url, 60)} — this cannot be undone.`
+            : 'This cannot be undone.'
+        }
+        confirmLabel="Delete URL"
+        onClose={() => setUrlDeleteOpen(false)}
+        onConfirm={handleUrlDeleteConfirm}
+        variant={{
+          kind: 'cascade',
+          counts: cascadeCounts,
+          countsError: cascadeError,
+        }}
+      />
     </div>
   );
+}
+
+async function readErrorMessage(res: Response, fallback: string): Promise<string> {
+  try {
+    const data = (await res.json()) as { error?: string };
+    if (data && typeof data.error === 'string') return data.error;
+  } catch {
+    // fall through
+  }
+  return `${fallback} (HTTP ${res.status}).`;
 }
 
 // ─── Sub-components ─────────────────────────────────────────────────────
@@ -345,10 +512,12 @@ function UrlMetadataCard({
   row,
   projectId,
   onPatch,
+  onDeleteClick,
 }: {
   row: CompetitorUrl;
   projectId: string;
   onPatch: (patch: UpdateCompetitorUrlRequest) => Promise<void>;
+  onDeleteClick: () => void;
 }) {
   return (
     <section
@@ -385,25 +554,47 @@ function UrlMetadataCard({
             {row.url}
           </div>
         </div>
-        <a
-          href={row.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            flex: 'none',
-            padding: '6px 12px',
-            background: '#1f6feb',
-            border: '1px solid #1f6feb',
-            borderRadius: '6px',
-            color: '#fff',
-            fontSize: '12px',
-            fontWeight: 500,
-            textDecoration: 'none',
-            whiteSpace: 'nowrap',
-          }}
+        <div
+          style={{ flex: 'none', display: 'flex', gap: '8px', alignItems: 'center' }}
         >
-          Open original URL ↗
-        </a>
+          <a
+            href={row.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              padding: '6px 12px',
+              background: '#1f6feb',
+              border: '1px solid #1f6feb',
+              borderRadius: '6px',
+              color: '#fff',
+              fontSize: '12px',
+              fontWeight: 500,
+              textDecoration: 'none',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Open original URL ↗
+          </a>
+          <button
+            type="button"
+            onClick={onDeleteClick}
+            data-testid="url-detail-delete-button"
+            aria-label="Delete URL"
+            style={{
+              padding: '6px 12px',
+              background: 'transparent',
+              border: '1px solid #da3633',
+              borderRadius: '6px',
+              color: '#f85149',
+              fontSize: '12px',
+              fontWeight: 500,
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Delete URL
+          </button>
+        </div>
       </div>
 
       <div
@@ -575,15 +766,27 @@ function CapturedTextSubsection({
   projectId,
   urlId,
   onTextAdded,
+  onTextDeleted,
 }: {
   slot: FetchSlot<CapturedText[]>;
   projectId: string;
   urlId: string;
   onTextAdded: (row: CapturedText) => void;
+  onTextDeleted: (textId: string) => Promise<void>;
 }) {
   const [sortKey, setSortKey] = useState<TextSortKey>('addedAt');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [modalOpen, setModalOpen] = useState(false);
+  // P-27 — per-row delete dialog. pendingDelete !== null means the dialog
+  // is open for that row.
+  const [pendingDelete, setPendingDelete] = useState<CapturedText | null>(null);
+
+  const handleConfirmTextDelete = async (): Promise<void> => {
+    if (!pendingDelete) return;
+    const row = pendingDelete;
+    await onTextDeleted(row.id);
+    setPendingDelete(null);
+  };
 
   const sorted = useMemo(() => {
     if (!slot.data) return [];
@@ -675,6 +878,19 @@ function CapturedTextSubsection({
                   dir={sortDir}
                   onClick={() => onHeader('addedAt', 'desc')}
                 />
+                <th
+                  style={{
+                    textAlign: 'right',
+                    padding: '8px 10px',
+                    borderBottom: '1px solid #30363d',
+                    color: '#8b949e',
+                    fontWeight: 600,
+                    width: '48px',
+                  }}
+                  aria-label="Row actions"
+                >
+                  {/* P-27 — text-row delete column */}
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -686,6 +902,18 @@ function CapturedTextSubsection({
                     {t.tags.length === 0 ? '—' : t.tags.join(', ')}
                   </td>
                   <td style={cellStyle('right')}>{formatDate(t.addedAt)}</td>
+                  <td style={{ textAlign: 'right', padding: '4px 6px', width: '48px' }}>
+                    <button
+                      type="button"
+                      onClick={() => setPendingDelete(t)}
+                      aria-label="Delete captured text"
+                      title="Delete captured text"
+                      data-testid="captured-text-delete-button"
+                      style={rowTrashButtonStyle}
+                    >
+                      🗑
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -699,6 +927,19 @@ function CapturedTextSubsection({
         onClose={() => setModalOpen(false)}
         onSuccess={onTextAdded}
       />
+      <ConfirmDeleteDialog
+        isOpen={pendingDelete !== null}
+        title="Delete this captured text row?"
+        message={
+          pendingDelete
+            ? truncate(pendingDelete.text, 120) + ' — this cannot be undone.'
+            : 'This cannot be undone.'
+        }
+        confirmLabel="Delete text"
+        onClose={() => setPendingDelete(null)}
+        onConfirm={handleConfirmTextDelete}
+        variant={{ kind: 'plain' }}
+      />
     </section>
   );
 }
@@ -708,14 +949,26 @@ function CapturedImagesGallery({
   projectId,
   urlId,
   onImageAdded,
+  onImageDeleted,
 }: {
   slot: FetchSlot<CapturedImageWithUrls[]>;
   projectId: string;
   urlId: string;
   onImageAdded: () => Promise<void> | void;
+  onImageDeleted: (imageId: string) => Promise<void>;
 }) {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  // P-27 — per-image delete dialog.
+  const [pendingDelete, setPendingDelete] = useState<CapturedImageWithUrls | null>(
+    null
+  );
+
+  const handleConfirmImageDelete = async (): Promise<void> => {
+    if (!pendingDelete) return;
+    await onImageDeleted(pendingDelete.id);
+    setPendingDelete(null);
+  };
 
   const images = slot.data;
 
@@ -777,11 +1030,25 @@ function CapturedImagesGallery({
           }}
         >
           {images.map((img, idx) => (
-            <ThumbnailButton
-              key={img.id}
-              image={img}
-              onOpen={() => setOpenIndex(idx)}
-            />
+            <div key={img.id} style={{ position: 'relative' }}>
+              <ThumbnailButton
+                image={img}
+                onOpen={() => setOpenIndex(idx)}
+              />
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPendingDelete(img);
+                }}
+                aria-label="Delete captured image"
+                title="Delete captured image"
+                data-testid="captured-image-delete-button"
+                style={thumbnailTrashButtonStyle}
+              >
+                🗑
+              </button>
+            </div>
           ))}
         </div>
       )}
@@ -804,6 +1071,20 @@ function CapturedImagesGallery({
         onSuccess={() => {
           void onImageAdded();
         }}
+      />
+      <ConfirmDeleteDialog
+        isOpen={pendingDelete !== null}
+        title="Delete this captured image?"
+        message={
+          pendingDelete
+            ? (pendingDelete.imageCategory ?? 'This image') +
+              ' — this cannot be undone.'
+            : 'This cannot be undone.'
+        }
+        confirmLabel="Delete image"
+        onClose={() => setPendingDelete(null)}
+        onConfirm={handleConfirmImageDelete}
+        variant={{ kind: 'plain' }}
       />
     </section>
   );
@@ -1009,6 +1290,36 @@ const manualAddButtonStyle: React.CSSProperties = {
   whiteSpace: 'nowrap',
 };
 
+// P-27 — per-row trash button in the captured-text table.
+const rowTrashButtonStyle: React.CSSProperties = {
+  background: 'transparent',
+  border: '1px solid transparent',
+  borderRadius: '4px',
+  color: '#8b949e',
+  fontSize: '14px',
+  lineHeight: '14px',
+  cursor: 'pointer',
+  padding: '4px 8px',
+};
+
+// P-27 — overlay trash button on each thumbnail in the image gallery.
+// Sits in the top-right corner of the thumbnail square so the thumbnail
+// click target stays the full image area.
+const thumbnailTrashButtonStyle: React.CSSProperties = {
+  position: 'absolute',
+  top: '4px',
+  right: '4px',
+  background: 'rgba(13, 17, 23, 0.85)',
+  border: '1px solid #30363d',
+  borderRadius: '4px',
+  color: '#c9d1d9',
+  fontSize: '12px',
+  lineHeight: '12px',
+  cursor: 'pointer',
+  padding: '4px 6px',
+  zIndex: 2,
+};
+
 const tableStyle: React.CSSProperties = {
   width: '100%',
   borderCollapse: 'collapse',
@@ -1082,4 +1393,10 @@ function formatMoney(decimalString: string | null): string {
 function shortenUrl(url: string, max = 80): string {
   const trimmed = url.replace(/^https?:\/\//, '').replace(/^www\./, '');
   return trimmed.length > max ? `${trimmed.slice(0, max - 3)}…` : trimmed;
+}
+
+// P-27 — short-form preview of a captured text row for the confirm dialog.
+function truncate(text: string, max: number): string {
+  const single = text.replace(/\s+/g, ' ').trim();
+  return single.length > max ? `${single.slice(0, max - 1)}…` : single;
 }

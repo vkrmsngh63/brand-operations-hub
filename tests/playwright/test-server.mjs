@@ -28,6 +28,9 @@ const HTML_PAGES = {
   '/p29-text-modal.html': 'pages/p29-text-modal.html',
   '/p29-image-modal': 'pages/p29-image-modal.html',
   '/p29-image-modal.html': 'pages/p29-image-modal.html',
+  // P-28 — ConfirmDeleteDialog isolated regression rig.
+  '/p28-confirm-delete-dialog': 'pages/p28-confirm-delete-dialog.html',
+  '/p28-confirm-delete-dialog.html': 'pages/p28-confirm-delete-dialog.html',
 };
 
 const BUNDLE_PREFIX = '/dist/';

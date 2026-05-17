@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>P-28 stub page — ConfirmDeleteDialog regression</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 16px;
+      background: #0d1117;
+      color: #e6edf3;
+      font-family: system-ui, -apple-system, sans-serif;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+<h1 style="font-size: 14px; color: #8b949e;">P-28 stub page — ConfirmDeleteDialog regression rig</h1>
+<div id="mount"></div>
+<script type="module">
+  // Seed fake-supabase session in case the bundle imports authFetch
+  // transitively. The dialog itself doesn't fetch, but the import graph
+  // pulls in modules that read these symbols.
+  window.__fakeSupabaseState = {
+    initialToken: 'stub-test-token',
+    refreshResult: 'success',
+    refreshedToken: 'refreshed-stub-token',
+    refreshCalls: 0,
+  };
+
+  await import('/dist/p28-confirm-delete-dialog.bundle.js');
+  window.__pageReady = true;
+</script>
+</body>
+</html>

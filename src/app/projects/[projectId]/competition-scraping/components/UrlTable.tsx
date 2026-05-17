@@ -22,9 +22,14 @@
 //
 // Click a row → navigate to that URL's per-URL detail page (in-app).
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { authFetch } from '@/lib/authFetch';
 import type { CompetitorUrl, Platform } from '@/lib/shared-types/competition-scraping';
 import { UrlAddModal } from './UrlAddModal';
+import {
+  ConfirmDeleteDialog,
+  type CascadeCounts,
+} from './ConfirmDeleteDialog';
 import {
   applyColumnFilters,
   BooleanFilter,
@@ -73,6 +78,10 @@ interface Props {
   // this component but POSTs back to the parent's URL list state.
   projectId: string;
   onUrlAdded: (row: CompetitorUrl) => void;
+  // P-28 — trash button per row. Parent removes the URL from list state
+  // when the DELETE succeeds; UrlTable handles optimistic-remove + rollback
+  // on error by calling onUrlDeleted (optimistic) and onUrlAdded (rollback).
+  onUrlDeleted: (urlId: string) => void;
   // 2026-05-15-d Slice #2.5 — current platform filter from the URL query
   // (?platform=<value>). Passed through to UrlAddModal as `defaultPlatform`
   // when not 'all' so a click on "+ Manually add URL" from a filtered view
@@ -150,12 +159,90 @@ export function UrlTable({
   onRowOpen,
   projectId,
   onUrlAdded,
+  onUrlDeleted,
   selectedPlatform,
 }: Props) {
   const [sortKey, setSortKey] = useState<SortKey>('addedAt');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   // P-29 Slice #1 — modal-open state for the "+ Manually add URL" button.
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  // P-28 — trash-button confirm-delete dialog state. pendingDeleteRow !== null
+  // means the dialog is open for that row; cascadeCounts + cascadeError
+  // populate as the lazy GET cascade-counts fetch resolves.
+  const [pendingDeleteRow, setPendingDeleteRow] = useState<CompetitorUrl | null>(
+    null
+  );
+  const [cascadeCounts, setCascadeCounts] = useState<CascadeCounts | null>(null);
+  const [cascadeError, setCascadeError] = useState<string | null>(null);
+
+  // Lazy-fetch the cascade counts when the dialog opens. A new pendingDeleteRow
+  // resets counts to null/null (loading state) and kicks off the GET. The
+  // cancelled flag guards against a row-switch race (rare — user closes one
+  // dialog and opens another before the first fetch resolves).
+  useEffect(() => {
+    if (pendingDeleteRow === null) return;
+    let cancelled = false;
+    setCascadeCounts(null);
+    setCascadeError(null);
+    (async () => {
+      try {
+        const res = await authFetch(
+          `/api/projects/${projectId}/competition-scraping/urls/${pendingDeleteRow.id}/cascade-counts`
+        );
+        if (cancelled) return;
+        if (!res.ok) {
+          setCascadeError(`HTTP ${res.status}`);
+          return;
+        }
+        const data = (await res.json()) as CascadeCounts;
+        if (cancelled) return;
+        setCascadeCounts(data);
+      } catch (err) {
+        if (cancelled) return;
+        setCascadeError(err instanceof Error ? err.message : 'Network error');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingDeleteRow, projectId]);
+
+  const handleTrashClick = (row: CompetitorUrl, e: React.MouseEvent): void => {
+    e.stopPropagation();
+    setPendingDeleteRow(row);
+  };
+
+  const handleDialogClose = (): void => {
+    setPendingDeleteRow(null);
+  };
+
+  const handleConfirmDelete = async (): Promise<void> => {
+    if (!pendingDeleteRow) return;
+    const row = pendingDeleteRow;
+    // Optimistic remove — parent drops the row from list state immediately.
+    onUrlDeleted(row.id);
+    try {
+      const res = await authFetch(
+        `/api/projects/${projectId}/competition-scraping/urls/${row.id}`,
+        { method: 'DELETE' }
+      );
+      if (!res.ok) {
+        // Rollback — re-add the row via onUrlAdded which dedups by id.
+        onUrlAdded(row);
+        const detail = await readErrorMessage(res);
+        throw new Error(detail);
+      }
+      // Success path — close the dialog. The parent's optimistic-remove
+      // already updated the visible row set.
+      setPendingDeleteRow(null);
+    } catch (err) {
+      // Network error or non-ok response above. Make sure the row is back
+      // (idempotent re-add if it's already there) and re-throw so the
+      // dialog renders the error message inline.
+      onUrlAdded(row);
+      throw err instanceof Error ? err : new Error('Network error');
+    }
+  };
 
   // Distinct values for the multi-select dropdowns are derived from the
   // platform-scoped set — NOT from `rows` (which has already been narrowed
@@ -384,6 +471,20 @@ export function UrlTable({
                     </th>
                   );
                 })}
+                <th
+                  style={{
+                    textAlign: 'right',
+                    padding: '8px 10px',
+                    borderBottom: '1px solid #30363d',
+                    color: '#8b949e',
+                    fontWeight: 600,
+                    whiteSpace: 'nowrap',
+                    width: '48px',
+                  }}
+                  aria-label="Row actions"
+                >
+                  {/* P-28 — actions column header; trash button per row */}
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -429,15 +530,79 @@ export function UrlTable({
                       : row.numProductReviews.toLocaleString()}
                   </td>
                   <td style={cellStyle('right')}>{formatDate(row.addedAt)}</td>
+                  <td
+                    style={{
+                      textAlign: 'right',
+                      padding: '4px 6px',
+                      width: '48px',
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={(e) => handleTrashClick(row, e)}
+                      onKeyDown={(e) => {
+                        // Stop the row's onKeyDown (Enter/Space → navigate)
+                        // from firing when the trash button has focus.
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.stopPropagation();
+                        }
+                      }}
+                      aria-label={`Delete URL ${row.url}`}
+                      title="Delete URL"
+                      data-testid="url-row-delete-button"
+                      style={rowTrashButtonStyle}
+                    >
+                      🗑
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
+
+      <ConfirmDeleteDialog
+        isOpen={pendingDeleteRow !== null}
+        title="Delete this URL?"
+        message={
+          pendingDeleteRow
+            ? `${shortenUrl(pendingDeleteRow.url)} — this cannot be undone.`
+            : ''
+        }
+        confirmLabel="Delete URL"
+        onClose={handleDialogClose}
+        onConfirm={handleConfirmDelete}
+        variant={{
+          kind: 'cascade',
+          counts: cascadeCounts,
+          countsError: cascadeError,
+        }}
+      />
     </div>
   );
 }
+
+async function readErrorMessage(res: Response): Promise<string> {
+  try {
+    const data = (await res.json()) as { error?: string };
+    if (data && typeof data.error === 'string') return data.error;
+  } catch {
+    // fall through
+  }
+  return `Could not delete URL (HTTP ${res.status}).`;
+}
+
+const rowTrashButtonStyle: React.CSSProperties = {
+  background: 'transparent',
+  border: '1px solid transparent',
+  borderRadius: '4px',
+  color: '#8b949e',
+  fontSize: '14px',
+  lineHeight: '14px',
+  cursor: 'pointer',
+  padding: '4px 8px',
+};
 
 function renderFilterBody(
   key: ColumnFilterKey,

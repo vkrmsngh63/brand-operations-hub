@@ -55,6 +55,11 @@ export async function buildP29ModalBundles() {
     { name: 'p29-url-modal', file: 'p29-url-modal.mount.tsx' },
     { name: 'p29-text-modal', file: 'p29-text-modal.mount.tsx' },
     { name: 'p29-image-modal', file: 'p29-image-modal.mount.tsx' },
+    // P-28 — ConfirmDeleteDialog isolated regression rig.
+    {
+      name: 'p28-confirm-delete-dialog',
+      file: 'p28-confirm-delete-dialog.mount.tsx',
+    },
   ];
 
   for (const entry of entries) {
