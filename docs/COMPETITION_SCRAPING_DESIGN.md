@@ -2537,4 +2537,87 @@ Director's role this session was Rule 9 deploy-gate approval + post-deploy walkt
 
 ---
 
+### 2026-05-17 — W#2 P-28 + P-27 PAIRED BUILD session — delete URLs (with cascade disclosure) + delete captured texts/images SHIPPED at code level
+
+**Session:** `session_2026-05-17_w2-p28-p27-paired-build` (Claude Code, on `workflow-2-competition-scraping`). One-hundred-and-sixth Claude Code session. Closes (a.38) RECOMMENDED-NEXT.
+
+**Director directive setting up this session (Read-It-Back per Rule 18 mid-build):** "Build BOTH delete features in one session because their design questions overlap" (per 2026-05-16 §4 Step 1c forced-picker that set up (a.38)). Today's session honored that — P-28 + P-27 ship together; the shared ConfirmDeleteDialog component composes plain (text + image) + cascade (URL) variants from a single source; the cascade-counts endpoint exists to serve only the URL-delete disclosure path; optimistic-update + rollback shapes mirror across all four delete surfaces.
+
+#### Load-bearing finding surfaced at start-of-session (Rule 3 — code wins over doc)
+
+`NEXT_SESSION.md` pre-build read list + `COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` P-27 polish-backlog section both framed the back-end DELETE handlers for captured-text + captured-image as missing — claims like "Back-end `text/route.ts` exposes GET + POST only — no DELETE handler. Need to build a new DELETE handler" + "Back-end `images/route.ts` exposes GET only — no DELETE handler. Need to build a new DELETE handler." Code verification at session start showed all three DELETE handlers ALREADY EXIST:
+
+- **URL DELETE** at `urls/[urlId]/route.ts:273` — cascades to `CompetitorSize` + `CapturedText` + `CapturedImage` rows via Prisma `onDelete: Cascade` in `schema.prisma`. Storage objects NOT deleted at cascade time (daily janitor cron handles orphans per §3 stack decisions).
+- **Text DELETE** at `text/[textId]/route.ts:171` — production-quality, idempotent on P2025, ownership-scoped via `competitorUrl: { projectWorkflowId }` relation filter.
+- **Image DELETE** at `images/[imageId]/route.ts:209` — DB row + best-effort Supabase storage cleanup via `deleteImage(storagePath)`; storage failure does NOT abort DB delete (orphan goes to janitor); idempotent on P2025.
+
+The handlers shipped during the original session-1 API-routes work. The 2026-05-14 P-27 capture's "What's shipped today" sub-section was wrong against code reality at the time of capture — root cause hypothesized as a collection-vs-per-row route conflation (the collection routes `urls/[urlId]/text/route.ts` + `urls/[urlId]/images/route.ts` ARE GET + POST only; the per-row routes one folder shallower at `text/[textId]/route.ts` + `images/[imageId]/route.ts` carry PATCH + DELETE). See `CORRECTIONS_LOG.md` 2026-05-17 INFORMATIONAL entry for the full slip + prevention.
+
+**Consequence (avoided):** the originally-planned 5-question forced-picker set in `NEXT_SESSION.md` (Q1 soft-vs-hard / Q2 image storage / Q3 audit-trail / Q4 permission model / Q5 confirm-dialog placement) assumed Q1-Q4 were genuinely-open back-end design choices. They weren't — the answers were already encoded in the existing code. Surfaced to director with full diff against doc claims BEFORE any picker fired; reframed scope from "back-end + UI build" → "UI-only build + new cascade-counts endpoint"; collapsed picker set to Q5 + Q6 (cascade-count mechanism, newly emerged from simplified scope).
+
+#### Two genuinely-open Rule 14f forced-pickers fired via AskUserQuestion
+
+**Q5 — confirm-delete dialog shape:**
+- Option A (recommended) — Shared `ConfirmDeleteDialog.tsx` with plain + cascade variants. Composable across all four surfaces; one place to evolve design; matches W#2 pattern of per-feature modals built on a shared shape.
+- Option B — Inline AlertDialog per use site. Faster but risks drift.
+- Option C — Browser-native `window.confirm()`. Zero design but ugly + can't render cascade disclosure.
+
+✅ **Director picked Option A.**
+
+**Q6 — cascade-count mechanism for P-28 disclosure:**
+- Option A (recommended) — New `GET cascade-counts` lazy-fetch endpoint. Brief loading state in dialog (~50-200ms); fresh counts; consistent on both URL-delete surfaces (URL list + URL detail).
+- Option B — Inline counts in existing URL list GET response. Single round-trip but expands shared-types surface.
+- Option C — Client-side count on URL detail (already-loaded arrays) + new endpoint for URL list. Hybrid; two code paths.
+
+✅ **Director picked Option A.**
+
+**Q3 audit-trail event granularity** — explicitly kept at the existing coarse `markWorkflowActive()` shape (no scope-add for per-row audit events). If multi-worker Phase 2 audit needs require per-row events later, that's a future polish item.
+
+#### Code shipped (~12 new/modified files)
+
+**Back-end (3 new files, all under `src/lib/competition-scraping/handlers/` + `src/app/api/`):**
+- NEW `src/lib/competition-scraping/handlers/cascade-counts.ts` (DI factory + handler). Returns `CascadeCountsResponse = { texts: number; images: number }`. Parallel `prisma.capturedText.count` + `prisma.capturedImage.count` via `Promise.all` (both filter `where: { competitorUrlId: urlId }`); URL ownership check via `findFirst({ where: { id: urlId, projectWorkflowId }, select: { id: true } })`; 404 short-circuits count queries; 500 with `recordFlake` + `withRetry` passthrough.
+- NEW `src/lib/competition-scraping/handlers/cascade-counts.test.ts` — 18 node:test cases.
+- NEW `src/app/api/projects/[projectId]/competition-scraping/urls/[urlId]/cascade-counts/route.ts` — thin shim adapting to NextRequest + CORS + NextResponse; production wiring of `verifyProjectWorkflowAuth` → `VerifyAuthFn` adapter mirroring P-31's pattern.
+
+**UI (1 new shared component + 3 modified pages):**
+- NEW `ConfirmDeleteDialog.tsx` (~280 LOC) — shared dialog. Two variants: `{ kind: 'plain' }` (single message line) + `{ kind: 'cascade'; counts: CascadeCounts | null; countsError: string | null }` (3-state disclosure: loading / ready / error). Disclosure pluralization (`1 captured text` vs `N captured texts`). 0/0 counts → softer phrasing ("URL has no captured texts or captured images attached"). Submit-in-flight lock disables Cancel + X + Escape. Error-on-throw inline `<div role="alert">` surface, dialog stays open, Confirm + Cancel re-enable. Internal state resets on re-open. Test hooks via `data-testid`.
+- Modified `UrlTable.tsx` — new "actions" column added after "Added On"; trash button per row with `e.stopPropagation()` so the row-click navigate doesn't fire; lazy cascade-counts fetch via `useEffect` keyed on pendingDeleteRow; 4-state dialog mount; optimistic-remove via `onUrlDeleted(row.id)` BEFORE DELETE call; rollback via `onUrlAdded(row)` (parent's existing id-dedup handles re-insertion) on non-ok response or network error.
+- Modified `CompetitionScrapingViewer.tsx` — new `handleUrlDeleted(urlId)` callback removes the URL from `urls` state via `setUrls(prev => prev?.filter(u => u.id !== urlId))`; passed through as `onUrlDeleted` prop.
+- Modified `UrlDetailContent.tsx` — Delete URL header button in UrlMetadataCard next to "Open original URL ↗" (red destructive style); top-level URL-delete dialog state + cascade-counts lazy fetch + handleUrlDeleteConfirm navigates back to workflow main page on success (via `useRouter().push`); `handleTextDeleted(textId)` optimistic-remove for captured-text rows with rollback via setState reset; `handleImageDeleted(imageId)` same shape for captured-image rows; CapturedTextSubsection owns its own per-row delete dialog state + trash button in new actions column on each text row; CapturedImagesGallery owns its own per-thumbnail delete dialog state + trash overlay (positioned absolute top-right of each thumbnail tile, `e.stopPropagation()` so it doesn't trigger the thumbnail's image-viewer open); 3 dialog mounts at appropriate scope levels.
+
+**Test rig + spec (3 new files + 2 modified rig scripts):**
+- NEW `tests/playwright/mounts/p28-confirm-delete-dialog.mount.tsx` — React mount with `window.__test` hooks (openDialog / closeDialog / setVariant / setOnConfirmShape / getConfirmCount / getCloseCount).
+- NEW `tests/playwright/pages/p28-confirm-delete-dialog.html` — static stub page; seeds fake-supabase per the P-30 rig convention.
+- NEW `tests/playwright/p28-confirm-delete-dialog.spec.ts` — 11 UI-mechanical regression cases.
+- Modified `tests/playwright/build-bundle.mjs` — added p28 mount to `buildP29ModalBundles()` entries.
+- Modified `tests/playwright/test-server.mjs` — added p28 page route.
+
+#### Verification scoreboard — all GREEN
+
+| Check | Result | Δ vs baseline |
+|---|---|---|
+| `npx tsc --noEmit` (PLOS) | clean | — |
+| `cd extensions/competition-scraping && npx tsc --noEmit` | clean | — |
+| `npm run build` | clean, 53 routes | +1 (cascade-counts) |
+| `node --test` src/lib | **527/527** | +18 (cascade-counts.test.ts) |
+| Extension `npm test` | 334/334 | unchanged |
+| Full Playwright suite | **75/75** | +11 (p28-confirm-delete-dialog.spec.ts) |
+
+#### What deferred or kept narrow
+
+- **Director walkthrough on real Independent Website URL** DEFERRED to W#2 → main deploy session #17 — workflow-2 not live on vklf.com.
+- **No node:test for the existing per-row text + image DELETE handlers** — they aren't DI-refactored. Adding coverage would have required a P-31-style refactor out of scope. Captured as observation, not a polish item — current production handlers are stable + the cascade behavior is the only new wire concern (covered by the new cascade-counts handler's 18 cases).
+- **Per-row audit events** — Q3 stayed at coarse `markWorkflowActive()`. Future polish if Phase 2 multi-worker audit needs require it.
+
+#### Cross-references
+
+- `CORRECTIONS_LOG.md` 2026-05-17 INFORMATIONAL entry — doc-vs-code drift on P-27 back-end status (the framing slip surfaced + corrected this session).
+- `COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` 2026-05-17 — P-27 + P-28 polish-backlog entries flipped ✅ SHIPPED-AT-CODE-LEVEL + new "## P-28 + P-27 SHIPPED at code level (paired build session 2026-05-17)" section appended at end.
+- `ROADMAP.md` 2026-05-17 header — full session narrative + W#2 row update.
+- `NEXT_SESSION.md` rewritten 2026-05-17 for W#2 → main deploy session #17 with standard cheat-sheet (b) + 4-part director walkthrough script.
+- `feedback_recommendation_style.md` — the "(recommended)" markers on Q5 + Q6 were placed on the most-thorough-and-reliable options (shared component + new endpoint) per the standing operational behavior.
+
+---
+
 END OF DOCUMENT
