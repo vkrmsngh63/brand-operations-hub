@@ -6,7 +6,9 @@
 **Branch:** `workflow-2-competition-scraping`
 **Created:** May 4, 2026
 **Created in session:** session_2026-05-04_w2-workflow-requirements-interview (Claude Code)
-**Last updated:** 2026-05-18 (W#2 → main deploy session #17 — P-28 + P-27 ALL DEPLOYED to vklf.com + REAL-INDEPENDENT-WEBSITE FULL VERIFY across Parts A-E + IN-SESSION SCOPE-ADD P-33 row hover-highlight SHIPPED + paint-bug HOT-FIXED + DEPLOYED + VERIFIED in same session. §B 2026-05-18 entry appended at end covering: (1) deploy session #17 standard cheat-sheet (b) execution + 5-part director walkthrough verification on real Independent Website URL (4 delete surfaces + rollback path); (2) HEADLINE — W#2 admin data-management surface (add + manual-add + edit + delete) now complete + live on vklf.com; (3) P-33 in-session scope-add — Rule 11 forced-picker → Ship-as-tack-on; first-attempt `<tr>`-background-paint slip + hot-fix to `querySelectorAll<HTMLTableCellElement>('td')` + bumped color `#161b22` → `#21262d`; (4) pattern lesson captured in CORRECTIONS_LOG — grep `tr:hover` against `*.css` in `src/` BEFORE inline-on-`<tr>` approach; (5) (a.40) RECOMMENDED-NEXT = W#2 polish P-34 propagate hover-highlight to captured-text rows + image thumbnails on URL detail page. §A unchanged per Rule 18. Schema-change-in-flight stays "No".)
+**Last updated:** 2026-05-18-b (W#2 → main deploy session #18 — P-34 (propagate row hover-highlight to captured-text rows + image thumbnails on URL detail page) DEPLOYED to vklf.com + REAL-INDEPENDENT-WEBSITE VERIFY. §B 2026-05-18-b entry appended at end covering: (1) deploy session #18 standard cheat-sheet (b) execution + brief director re-verify on captured-text rows + image thumbnails ("all green, hover works on both"); (2) HEADLINE — W#2 admin data-management surface now COMPLETE + LIVE on vklf.com with hover-highlight UX consistency across URL list + captured-text rows + image thumbnails; (3) implementation subtlety captured — captured-text rows reuse P-33's `querySelectorAll('td')` pattern verbatim, BUT image thumbnails use `querySelector('button')` on outer wrapper to target first descendant button (ThumbnailButton; trash-overlay sits second in DOM order) AND explicitly restore `#0d1117` on leave rather than clearing to `''` because the card has an explicit base background; (4) zero new polish items captured this session; (5) (a.41) RECOMMENDED-NEXT = W#2 polish P-21 — symmetric-canonicalize `pickInitialUrl` + `buildRecognitionSet` (MEDIUM defensive). §A unchanged per Rule 18. Schema-change-in-flight stays "No".)
+
+**Previously updated:** 2026-05-18 (W#2 → main deploy session #17 — P-28 + P-27 ALL DEPLOYED to vklf.com + REAL-INDEPENDENT-WEBSITE FULL VERIFY across Parts A-E + IN-SESSION SCOPE-ADD P-33 row hover-highlight SHIPPED + paint-bug HOT-FIXED + DEPLOYED + VERIFIED in same session. §B 2026-05-18 entry appended at end covering: (1) deploy session #17 standard cheat-sheet (b) execution + 5-part director walkthrough verification on real Independent Website URL (4 delete surfaces + rollback path); (2) HEADLINE — W#2 admin data-management surface (add + manual-add + edit + delete) now complete + live on vklf.com; (3) P-33 in-session scope-add — Rule 11 forced-picker → Ship-as-tack-on; first-attempt `<tr>`-background-paint slip + hot-fix to `querySelectorAll<HTMLTableCellElement>('td')` + bumped color `#161b22` → `#21262d`; (4) pattern lesson captured in CORRECTIONS_LOG — grep `tr:hover` against `*.css` in `src/` BEFORE inline-on-`<tr>` approach; (5) (a.40) RECOMMENDED-NEXT = W#2 polish P-34 propagate hover-highlight to captured-text rows + image thumbnails on URL detail page. §A unchanged per Rule 18. Schema-change-in-flight stays "No".)
 
 **Previously updated:** May 16, 2026 (W#2 → main deploy session #16 — P-30 + P-31 + P-32 ALL DEPLOYED to vklf.com + REAL-INDEPENDENT-WEBSITE FULL VERIFY across P-32 multi-file-drop case + 4 P-29 area spot-checks. §B 2026-05-16 entry appended at end covering deploy outcome + walkthrough verification + the P-29 manual-add area's end-to-end regression coverage achievement (UI mechanical via P-30 Playwright + API route-handler integration via P-31 node:test +62 cases + real-website director walkthrough). §A unchanged per Rule 18. Schema-change-in-flight stays "No".)
 
@@ -2671,6 +2673,59 @@ Deploy session #17 wrapped cleanly + W#2 admin data-management surface complete 
 - `COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` 2026-05-18 — P-27 + P-28 polish-backlog entries flipped ✅ SHIPPED-AT-CODE-LEVEL → ✅ DEPLOYED + new "## Deploy session #17 + P-33 hover tack-on" section appended at end + new P-33 entry ✅ SHIPPED + DEPLOYED + VERIFIED + new P-34 entry ⏳ RECOMMENDED-NEXT.
 - `NEXT_SESSION.md` rewritten 2026-05-18 for P-34 with same-pattern launch prompt + abbreviated scoreboard targets.
 - `feedback_approval_scope_per_decision_unit.md` — the P-33 tack-on + hot-fix deploy cycles were covered by Rule 11 scope-add approval scope (one decision unit) per standing operational behavior.
+
+---
+
+### 2026-05-18-b — W#2 → main deploy session #18 — P-34 hover-propagation to captured-text rows + image thumbnails on URL detail page DEPLOYED + REAL-INDEPENDENT-WEBSITE VERIFIED
+
+**Session:** `session_2026-05-18-b_w2-main-deploy-session-18-p34-hover-propagation-DEPLOYED-FULL-VERIFY` (Claude Code, dual-branch — pre-deploy scoreboard on `workflow-2-competition-scraping`, ff-merge + deploy push on `main`, ping-pong sync after main push). One-hundred-and-eighth Claude Code session. Closes (a.40) RECOMMENDED-NEXT.
+
+**Outcome:** ✅ **P-34 hover-propagation SHIPPED + DEPLOYED + REAL-INDEPENDENT-WEBSITE VERIFIED in single session.** Commit `b5cf7ea` (1 file +33/-2 in `UrlDetailContent.tsx`). Director re-verify on real Independent Website URL detail page: *"all green, hover works on both"*. Pre-deploy + post-merge scoreboards all GREEN (tsc / ext tsc / `npm run build` 53 routes / src/lib node:test 527/527 / ext `npm test` 334/334 / Playwright 75/75).
+
+**HEADLINE:** the W#2 admin data-management surface (add via extension + manual-add via P-29 + edit via inline-edit + delete via P-28/P-27 + hover-consistency via P-33+P-34) is now **COMPLETE + LIVE on vklf.com end-to-end with UX consistency across URL list + captured-text rows + image thumbnails.**
+
+**Implementation subtlety — captured-text rows vs. image thumbnails:**
+
+Captured-text rows live as `<tr>` rows inside a `<table>`, identical DOM shape to the URL list table that P-33 hover-highlighted. So they reuse the P-33 pattern verbatim:
+
+```ts
+onMouseEnter={(e) => {
+  const cells = e.currentTarget.querySelectorAll<HTMLTableCellElement>('td');
+  cells.forEach((cell) => { cell.style.background = '#21262d'; });
+}}
+onMouseLeave={(e) => {
+  const cells = e.currentTarget.querySelectorAll<HTMLTableCellElement>('td');
+  cells.forEach((cell) => { cell.style.background = ''; });
+}}
+```
+
+Clearing each cell's `background` to empty string on leave is safe because the `<td>` cells have no explicit inline background — they inherit transparency from the parent table.
+
+Image thumbnails are a different DOM shape: each thumbnail lives in a wrapping `<div style={{ position: 'relative' }}>` containing a `<ThumbnailButton>` (which renders as a `<button>` with explicit `background: '#0d1117'`) AND a trash-overlay button. Two implementation challenges:
+
+1. **Which descendant element receives the hover-color swap?** The wrapping `<div>` has no visible background (it's `position: relative` with no `background` style), so swapping its background would be invisible behind the ThumbnailButton's `#0d1117`. The natural target is the ThumbnailButton itself — the visible card. Using `e.currentTarget.querySelector<HTMLButtonElement>('button')` picks the **first descendant button**, which is the ThumbnailButton (the trash-overlay button sits AFTER it in DOM order).
+2. **What value to restore on leave?** The naive P-33 pattern clears `background` to `''` on leave. But the ThumbnailButton has an explicit `background: '#0d1117'` set inline by its React render. Clearing the inline `background` to empty string would leave the card transparent until React re-renders. Fix: explicitly restore `'#0d1117'` on leave:
+
+```ts
+onMouseEnter={(e) => {
+  const card = e.currentTarget.querySelector<HTMLButtonElement>('button');
+  if (card) card.style.background = '#21262d';
+}}
+onMouseLeave={(e) => {
+  const card = e.currentTarget.querySelector<HTMLButtonElement>('button');
+  if (card) card.style.background = '#0d1117';
+}}
+```
+
+Same `#21262d` hover color as captured-text rows + URL list table for visual consistency across all three surfaces.
+
+**Operational lesson worth carrying forward:** when porting an inline-style hover pattern from one element shape to another, check whether the target element has an explicit inline base style for the property being swapped. If yes, the leave-handler must restore the explicit base value (not clear to empty string).
+
+**Deploy mechanics (cheat-sheet b):** rebase no-op (workflow-2 0 ahead of main pre-this-commit per deploy #17 ping-pong); ff-merge `d551443..b5cf7ea` clean; post-merge scoreboard re-run on main all GREEN (full Playwright 75/75 re-run on main for thoroughness per `feedback_recommendation_style.md` — pure DOM event-handler change has no Playwright coverage, but re-running validates the build artifact); Rule 9 deploy gate via AskUserQuestion picker → director picked "Deploy now (Rule 9-approved)"; pushed origin/main `d551443..b5cf7ea` (Vercel auto-redeployed cleanly ~1-2 min); ping-pong sync no-op (workflow-2 already at same SHA as main post-merge).
+
+**Next session pick (§4 Step 1c forced-picker):** deploy session #18 wrapped cleanly + W#2 admin data-management surface complete + hover-consistent across all three surfaces; no inherent continuation. Director picked **(a.41) RECOMMENDED-NEXT = W#2 polish P-21** — symmetric-canonicalize `pickInitialUrl` (`captured-text-validation.ts:128`) + `buildRecognitionSet` (`url-normalization.ts:63`); MEDIUM defensive; closes the slug-variant asymmetry that previously caused the P-15 Amazon FAIL in deploy session #9 (left-side canonicalized via `platformModule.canonicalProductUrl`, right-side raw). Rationale per `feedback_recommendation_style.md`: most thorough/reliable next pick — closes a known asymmetry with actual node:test coverage (~4 new cases per function, 8 total) rather than smaller UX-only polish. ~30 min code session + standard scoreboard + W#2 → main deploy session #19 + brief director re-verify (optional, defensive fix).
+
+**Smooth session — zero CORRECTIONS_LOG-tier slips on Claude's side.**
 
 ---
 
