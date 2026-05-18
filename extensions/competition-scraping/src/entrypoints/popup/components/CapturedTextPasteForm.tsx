@@ -33,10 +33,6 @@ import type {
   VocabularyEntry,
 } from '../../../../../../src/lib/shared-types/competition-scraping.ts';
 import { getPlatformLabel } from '../../../lib/platforms.ts';
-import {
-  getStickyPreselectedUrlId,
-  makeStickyUrlPreselectKey,
-} from '../../../lib/sticky-url-preselect.ts';
 
 const ADD_NEW_CATEGORY_VALUE = '__plos_add_new_category__';
 
@@ -66,30 +62,22 @@ export function CapturedTextPasteForm(props: Props) {
   const [error, setError] = useState<string>('');
   const [success, setSuccess] = useState<string>('');
 
-  // Load URLs + categories + sticky URL preference whenever projectId /
-  // platform changes. P-39: chrome.storage.local read runs in parallel
-  // with the API calls; falls back to P-38's length===1 rule if no
-  // stored preference matches an existing URL.
+  // Load URLs + categories whenever projectId / platform changes.
   useEffect(() => {
     let cancelled = false;
     setLoadState('loading');
     setLoadError('');
-    const stickyKey = makeStickyUrlPreselectKey(
-      props.projectId,
-      props.platform,
-    );
     Promise.all([
       listCompetitorUrls(props.projectId, props.platform),
       listVocabularyEntries(props.projectId, 'content-category'),
-      chrome.storage.local.get(stickyKey),
     ])
-      .then(([urlRows, vocab, stored]) => {
+      .then(([urlRows, vocab]) => {
         if (cancelled) return;
         setUrls(urlRows);
-        const storedPref = stored[stickyKey];
-        const storedPrefString =
-          typeof storedPref === 'string' ? storedPref : undefined;
-        setSelectedUrlId(getStickyPreselectedUrlId(urlRows, storedPrefString));
+        const onlyUrl = urlRows[0];
+        if (urlRows.length === 1 && onlyUrl) {
+          setSelectedUrlId(onlyUrl.id);
+        }
         setCategories(vocab);
         setLoadState('loaded');
       })
@@ -121,11 +109,8 @@ export function CapturedTextPasteForm(props: Props) {
 
   function resetForm(): void {
     setText('');
-    // P-39: keep selectedUrlId unchanged across post-save reset. User just
-    // saved AT that URL, so re-pre-selecting it for the next capture is the
-    // zero-friction default. The sticky preference is already written to
-    // chrome.storage.local at onChange-time, so cross-popup-open behavior is
-    // covered by the useEffect ladder.
+    const onlyUrl = urls[0];
+    setSelectedUrlId(urls.length === 1 && onlyUrl ? onlyUrl.id : '');
     setSelectedCategory('');
     setNewCategoryInput('');
     setTags([]);
@@ -243,21 +228,7 @@ export function CapturedTextPasteForm(props: Props) {
           <select
             id="paste-url"
             value={selectedUrlId}
-            onChange={(e) => {
-              const next = e.target.value;
-              setSelectedUrlId(next);
-              // P-39: persist the pick to chrome.storage.local so next popup
-              // open for the same (project, platform) restores it. Only write
-              // when a real URL is picked (not the placeholder); writing the
-              // placeholder would clobber a valid prior preference.
-              if (next) {
-                const stickyKey = makeStickyUrlPreselectKey(
-                  props.projectId,
-                  props.platform,
-                );
-                void chrome.storage.local.set({ [stickyKey]: next });
-              }
-            }}
+            onChange={(e) => setSelectedUrlId(e.target.value)}
             disabled={submitting}
           >
             <option value="">Pick a saved URL…</option>
