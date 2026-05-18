@@ -74,6 +74,10 @@ export function CapturedTextPasteForm(props: Props) {
       .then(([urlRows, vocab]) => {
         if (cancelled) return;
         setUrls(urlRows);
+        const onlyUrl = urlRows[0];
+        if (urlRows.length === 1 && onlyUrl) {
+          setSelectedUrlId(onlyUrl.id);
+        }
         setCategories(vocab);
         setLoadState('loaded');
       })
@@ -105,7 +109,8 @@ export function CapturedTextPasteForm(props: Props) {
 
   function resetForm(): void {
     setText('');
-    setSelectedUrlId('');
+    const onlyUrl = urls[0];
+    setSelectedUrlId(urls.length === 1 && onlyUrl ? onlyUrl.id : '');
     setSelectedCategory('');
     setNewCategoryInput('');
     setTags([]);
