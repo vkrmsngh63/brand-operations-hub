@@ -25,8 +25,10 @@ import {
 } from '../../../lib/api-client.ts';
 import {
   normalizeTags,
+  pickInitialUrl,
   validateCapturedTextDraft,
 } from '../../../lib/captured-text-validation.ts';
+import { getModuleByPlatform } from '../../../lib/platform-modules/registry.ts';
 import type {
   CompetitorUrl,
   Platform,
@@ -62,7 +64,13 @@ export function CapturedTextPasteForm(props: Props) {
   const [error, setError] = useState<string>('');
   const [success, setSuccess] = useState<string>('');
 
-  // Load URLs + categories whenever projectId / platform changes.
+  // Load URLs + categories + active tab URL whenever projectId / platform
+  // changes. P-40: if the active tab's URL matches a saved row (via
+  // pickInitialUrl + platform-module canonicalize — same pattern as the
+  // content-script overlay's text-capture-form at text-capture-form.ts:466),
+  // pre-select that row. Mirrors right-click overlay behavior in the popup
+  // surface so opening the popup on a saved page lands directly on that page's
+  // saved-URL row.
   useEffect(() => {
     let cancelled = false;
     setLoadState('loading');
@@ -70,10 +78,25 @@ export function CapturedTextPasteForm(props: Props) {
     Promise.all([
       listCompetitorUrls(props.projectId, props.platform),
       listVocabularyEntries(props.projectId, 'content-category'),
+      chrome.tabs.query({ active: true, currentWindow: true }),
     ])
-      .then(([urlRows, vocab]) => {
+      .then(([urlRows, vocab, tabs]) => {
         if (cancelled) return;
         setUrls(urlRows);
+        const activeTabUrl = tabs[0]?.url;
+        if (activeTabUrl) {
+          const platformModule = getModuleByPlatform(props.platform);
+          const matched = pickInitialUrl(
+            activeTabUrl,
+            urlRows,
+            platformModule
+              ? (href) => platformModule.canonicalProductUrl(href)
+              : undefined,
+          );
+          if (matched) {
+            setSelectedUrlId(matched.id);
+          }
+        }
         setCategories(vocab);
         setLoadState('loaded');
       })
