@@ -4,7 +4,9 @@
 **Workflow:** W#2 Competition Scraping & Deep Analysis.
 **Branch:** `workflow-2-competition-scraping`.
 **Created:** 2026-05-07 in `session_2026-05-07_w2-plos-side-viewer-detail-page-slice` (Claude Code).
-**Last updated:** 2026-05-18-b (**W#2 → main deploy session #18 — P-34 (propagate row hover-highlight to captured-text rows + image thumbnails on URL detail page) DEPLOYED to vklf.com + REAL-INDEPENDENT-WEBSITE VERIFY.** One-hundred-and-eighth Claude Code session — `session_2026-05-18-b_w2-main-deploy-session-18-p34-hover-propagation-DEPLOYED-FULL-VERIFY` (dual-branch — pre-deploy on `workflow-2-competition-scraping`, ff-merge + deploy on `main`, ping-pong sync after main push). Closes (a.40) RECOMMENDED-NEXT. **Standard W#2 → main deploy cheat-sheet (b) executed cleanly:** pre-deploy scoreboard all GREEN on workflow-2 (tsc / ext tsc / `npm run build` **53 routes** / src/lib node:test **527/527** / ext `npm test` 334/334 / Playwright **75/75**); rebase no-op (workflow-2 0 commits ahead of main pre-this-commit per deploy #17 ping-pong); ff-merge `d551443..b5cf7ea` clean (1 file +33/-2 in `UrlDetailContent.tsx`); post-merge scoreboard re-run on main all GREEN (full Playwright 75/75 re-run on main for thoroughness per `feedback_recommendation_style.md`); Rule 9 deploy gate via AskUserQuestion picker → director picked "Deploy now"; pushed origin/main (Vercel auto-redeployed cleanly ~1-2 min); ping-pong sync no-op. **Director re-verify on real Independent Website URL detail page:** captured-text row hover-highlight ✅ + captured-image thumbnail hover-highlight ✅ — *"all green, hover works on both"*. **HEADLINE OUTCOME: the W#2 admin data-management surface (add via extension + manual-add via P-29 + edit via inline-edit + delete via P-28/P-27 + hover-consistency via P-33+P-34) is now COMPLETE + LIVE on vklf.com with UX consistency across URL list + captured-text rows + image thumbnails.** **Implementation note:** captured-text rows reuse P-33's `querySelectorAll<HTMLTableCellElement>('td')` pattern verbatim (clean clear-to-empty-string on leave); image thumbnails use `querySelector<HTMLButtonElement>('button')` on outer wrapper to target first descendant button (ThumbnailButton; trash-overlay sits second in DOM order) and **explicitly restore `#0d1117` on leave** rather than clearing to `''` because the card has an explicit base background. Same `#21262d` hover color across all three surfaces for consistency. **P-34 polish-backlog entry flipped ⏳ RECOMMENDED-NEXT → ✅ SHIPPED + DEPLOYED + VERIFIED 2026-05-18-b** + **new "## Deploy session #18 — P-34 hover-propagation" section appended at end** before the EOF marker. **Zero new polish items captured this session — smooth W#2 → main deploy cycle.** (a.41) RECOMMENDED-NEXT = W#2 polish P-21 — symmetric-canonicalize `pickInitialUrl` + `buildRecognitionSet`.)
+**Last updated:** 2026-05-18-c (**W#2 → main deploy session #19 — P-21 symmetric-canonicalize `pickInitialUrl` + `buildRecognitionSet` SHIPPED + DEPLOYED to vklf.com.** One-hundred-and-ninth Claude Code session — `session_2026-05-18-c_w2-main-deploy-session-19-p21-symmetric-canonicalize-DEPLOYED` (dual-branch — pre-deploy on `workflow-2-competition-scraping`, ff-merge + deploy on `main`, ping-pong sync after main push). Closes (a.41) RECOMMENDED-NEXT. **Single-commit build-and-deploy session — symmetric canonicalization landed in both pure-function lib helpers AND orchestrator call sites that consume them.** Pre-deploy scoreboard all GREEN on workflow-2 (tsc / ext tsc / `npm run build` **53 routes** / src/lib node:test **527/527** / ext `npm test` **348/348** — was 334; **+14 new P-21 cases** (6 `pickInitialUrl` symmetric + 8 `buildRecognitionSet` with canonicalize) / Playwright **75/75**); rebase no-op (workflow-2 0 commits ahead of main pre-this-commit per deploy #18 ping-pong); ff-merge `f41aac6..c3e69af` clean (5 files +318/-16 — all in `extensions/competition-scraping/src/lib/`); post-merge scoreboard re-run on main all GREEN (full Playwright re-run for thoroughness per `feedback_recommendation_style.md`); Rule 9 deploy gate via AskUserQuestion picker → director picked "Deploy now"; pushed origin/main (Vercel auto-redeployed cleanly); ping-pong sync clean (workflow-2 fast-forwarded then pushed). **HEADLINE OUTCOME: the slug-variant asymmetry that caused the P-15 Amazon FAIL in deploy session #9 is now closed defensively at the unit + orchestrator wiring levels.** Future-defensive fix; director-side walkthrough deliberately skipped per Rule 27 picker — the 14 new node:test cases ARE the regression coverage and the 2026-05-12-h controlled-repro already validated the LEFT-side fix on real Amazon. **P-21 polish-backlog entry flipped ⏳ MEDIUM-defensive → ✅ SHIPPED + DEPLOYED 2026-05-18-c** + **new "## Deploy session #19 — P-21 symmetric-canonicalize" section appended at end** before the EOF marker. **One INFORMATIONAL CORRECTIONS_LOG entry this session:** doc-path drift — NEXT_SESSION.md launch prompt + 2026-05-12-g root-cause analysis cited target files as `src/lib/captured-text-validation.ts` etc. — actual paths are `extensions/competition-scraping/src/lib/...`. Per Rule 3 code wins; paths silently corrected in this session's diff. (a.42) RECOMMENDED-NEXT = (a.13) P-17 authFetch real-fetch integration test on `main` (pivot off W#2 polish to platform-wide via §4 Step 1c picker).)
+
+**Previously updated:** 2026-05-18-b (**W#2 → main deploy session #18 — P-34 (propagate row hover-highlight to captured-text rows + image thumbnails on URL detail page) DEPLOYED to vklf.com + REAL-INDEPENDENT-WEBSITE VERIFY.** One-hundred-and-eighth Claude Code session — `session_2026-05-18-b_w2-main-deploy-session-18-p34-hover-propagation-DEPLOYED-FULL-VERIFY` (dual-branch — pre-deploy on `workflow-2-competition-scraping`, ff-merge + deploy on `main`, ping-pong sync after main push). Closes (a.40) RECOMMENDED-NEXT. **Standard W#2 → main deploy cheat-sheet (b) executed cleanly:** pre-deploy scoreboard all GREEN on workflow-2 (tsc / ext tsc / `npm run build` **53 routes** / src/lib node:test **527/527** / ext `npm test` 334/334 / Playwright **75/75**); rebase no-op (workflow-2 0 commits ahead of main pre-this-commit per deploy #17 ping-pong); ff-merge `d551443..b5cf7ea` clean (1 file +33/-2 in `UrlDetailContent.tsx`); post-merge scoreboard re-run on main all GREEN (full Playwright 75/75 re-run on main for thoroughness per `feedback_recommendation_style.md`); Rule 9 deploy gate via AskUserQuestion picker → director picked "Deploy now"; pushed origin/main (Vercel auto-redeployed cleanly ~1-2 min); ping-pong sync no-op. **Director re-verify on real Independent Website URL detail page:** captured-text row hover-highlight ✅ + captured-image thumbnail hover-highlight ✅ — *"all green, hover works on both"*. **HEADLINE OUTCOME: the W#2 admin data-management surface (add via extension + manual-add via P-29 + edit via inline-edit + delete via P-28/P-27 + hover-consistency via P-33+P-34) is now COMPLETE + LIVE on vklf.com with UX consistency across URL list + captured-text rows + image thumbnails.** **Implementation note:** captured-text rows reuse P-33's `querySelectorAll<HTMLTableCellElement>('td')` pattern verbatim (clean clear-to-empty-string on leave); image thumbnails use `querySelector<HTMLButtonElement>('button')` on outer wrapper to target first descendant button (ThumbnailButton; trash-overlay sits second in DOM order) and **explicitly restore `#0d1117` on leave** rather than clearing to `''` because the card has an explicit base background. Same `#21262d` hover color across all three surfaces for consistency. **P-34 polish-backlog entry flipped ⏳ RECOMMENDED-NEXT → ✅ SHIPPED + DEPLOYED + VERIFIED 2026-05-18-b** + **new "## Deploy session #18 — P-34 hover-propagation" section appended at end** before the EOF marker. **Zero new polish items captured this session — smooth W#2 → main deploy cycle.** (a.41) RECOMMENDED-NEXT = W#2 polish P-21 — symmetric-canonicalize `pickInitialUrl` + `buildRecognitionSet`.)
 
 **Previously updated:** 2026-05-18 (**W#2 → main deploy session #17 — P-28 (delete URLs with cascade disclosure) + P-27 (delete captured texts/images) ALL DEPLOYED to vklf.com + REAL-INDEPENDENT-WEBSITE FULL VERIFY across Parts A-E + IN-SESSION SCOPE-ADD P-33 row hover-highlight SHIPPED + paint-bug HOT-FIXED + DEPLOYED + VERIFIED.** One-hundred-and-seventh Claude Code session — `session_2026-05-18_w2-main-deploy-session-17-p28-p27-DEPLOYED-FULL-VERIFY-plus-P-33-hover-tackon` (dual-branch — pre-deploy on `workflow-2-competition-scraping`, ff-merge + deploy on `main`, ping-pong after each push). Closes (a.39) RECOMMENDED-NEXT. **Standard W#2 → main deploy cheat-sheet (b) executed cleanly:** pre-deploy scoreboard all GREEN on workflow-2 (tsc / ext tsc / `npm run build` **53 routes** / src/lib node:test **527/527** / ext `npm test` 334/334 / Playwright **75/75**); rebase no-op; ff-merge `62d215c..f58ca8c` clean (19 files +1989/-94); post-merge scoreboard re-run on main all GREEN; Rule 9 deploy gate via AskUserQuestion 4-option picker → director picked "Deploy now"; pushed origin/main; Vercel auto-redeployed cleanly (~1-2 min); ping-pong sync no-op. **Director walkthrough on real Independent Website URL — single batched pass across all 5 parts ALL GREEN:** Part A captured-text row trash ✅ / Part B captured-image thumbnail trash ✅ / Part C URL detail Delete URL header button with cascade disclosure ✅ (loading state visible + correct counts + navigation back) / Part D URL list row trash with cascade disclosure ✅ / Part E rollback path spot-check via DevTools Offline throttle ✅ (dialog stayed open + inline error + row re-appeared after optimistic-update rollback). **HEADLINE OUTCOME: the W#2 admin data-management surface (add via extension + manual-add via P-29 + edit via inline-edit + delete via P-28/P-27) is now COMPLETE + LIVE on vklf.com end-to-end.** **In-session scope-add P-33 (Rule 11 forced-picker):** director surfaced post-walkthrough natural-use feedback for row hover-highlight on URL list table. Director picked Ship-as-tack-on. **First attempt** (`1794eef`, `#161b22` bg on `<tr>` via `e.currentTarget.style.background`) shipped + deployed but invisible on production — `<tr>` background hidden by `<td>` cells. **Hot-fix** (`507f7d6`): swapped to `querySelectorAll<HTMLTableCellElement>('td')` + bumped color to `#21262d`. Director re-verified post-hot-fix-deploy: hover-highlight visible + working. **P-27 + P-28 polish-backlog entries flipped ✅ SHIPPED AT CODE LEVEL → ✅ DEPLOYED 2026-05-18** + **new "## Deploy session #17 + P-33 hover tack-on" section appended at end** + **new P-33 polish entry (✅ SHIPPED + DEPLOYED + VERIFIED 2026-05-18)** + **new P-34 polish entry (⏳ RECOMMENDED-NEXT — propagate hover-highlight to captured-text rows + image thumbnails)**. **One INFORMATIONAL CORRECTIONS_LOG entry this session:** P-33 first-attempt `<tr>`-background-paint slip — pattern lesson: grep `tr:hover` against `*.css` in `src/` BEFORE inline-on-`<tr>` approach. (a.40) RECOMMENDED-NEXT = W#2 polish P-34.)
 
@@ -2878,6 +2880,107 @@ Director walked through the URL detail page on a project that had ≥1 captured 
 - `CORRECTIONS_LOG.md` 2026-05-18-b header bump only — no new entries (clean session).
 - `COMPETITION_SCRAPING_DESIGN.md` §B 2026-05-18-b entry — covers the propagation outcome + the implementation subtlety on background-restore-on-leave for the thumbnail card.
 - `NEXT_SESSION.md` rewritten 2026-05-18-b for P-21 with same-pattern launch prompt + abbreviated scoreboard targets.
+
+---
+
+## Deploy session #19 — P-21 symmetric-canonicalize `pickInitialUrl` + `buildRecognitionSet` SHIPPED + DEPLOYED (NEW 2026-05-18-c — W#2 → main deploy session #19, closes (a.41) RECOMMENDED-NEXT)
+
+### The bug + the fix
+
+The 2026-05-12-g deploy session #9 verification surfaced P-15 as a PARTIAL success — the LEFT-side fix (canonicalize the page URL before comparing) worked on Walmart/eBay/Etsy but FAILED on Amazon. Root-cause analysis in `session_2026-05-12-h_w2-polish-session-16-amazon-controlled-repro` traced the FAIL to an **asymmetric canonicalization** in the URL recognition path:
+
+- `extensions/competition-scraping/src/lib/captured-text-validation.ts:128` — `pickInitialUrl` canonicalized `pageUrl` (LEFT) via the optional `canonicalize` fn passed by `text-capture-form.ts:459`, but iterated each `row.url` (RIGHT) RAW.
+- `extensions/competition-scraping/src/lib/url-normalization.ts:63` — `buildRecognitionSet` had no `canonicalize` parameter at all; rows were stored in the Set in whatever form they were saved.
+- `extensions/competition-scraping/src/lib/content-script/orchestrator.ts:143` (init) + `:226-227` (onSaved) — called `buildRecognitionSet(rows)` with no canonicalize, then later canonicalized the LEFT side at `:210` / `:254` / `:263` / `:307` — guaranteed false-negative whenever a row was saved as a slug-variant `/Product-Name/dp/{ASIN}/ref=…`, `/gp/product/{ASIN}`, or trailing-slash form.
+
+P-21 closes the asymmetry by applying `platformModule.canonicalProductUrl(...)` to BOTH sides of the comparison + Set, so canonical-vs-slug-variant and slug-variant-vs-canonical and slug-variant-vs-slug-variant all collapse to the same canonical `/dp/{ASIN}` form before comparison.
+
+### What was shipped
+
+5 files changed, +318/-16 — all in `extensions/competition-scraping/src/lib/`:
+
+1. **`captured-text-validation.ts` `pickInitialUrl`** — canonicalize each `row.url` on the RIGHT side before normalizing + comparing. Idempotent for already-canonical rows (additive, not breaking). Docstring updated to reflect symmetric behavior.
+
+2. **`url-normalization.ts` `buildRecognitionSet`** — added optional `canonicalize?: (href: string) => string | null` parameter, applied to each row's URL before normalizing + adding to the Set. Omitting the parameter preserves pre-P-21 behavior (backward-compatible). Docstring explains the symmetry rationale + cross-references the orchestrator call sites.
+
+3. **`content-script/orchestrator.ts`** — passes `platformModule.canonicalProductUrl` to `buildRecognitionSet(rows, ...)` at init (line 143) so the Set is built symmetric with the hover-time + overlay lookups at `:210` / `:254` / `:263` / `:307`. Also canonicalizes the new row's URL in the `onSaved` callback (line 233-244) so future hover lookups match against newly-saved rows in canonical form.
+
+### Tests added (+14 total)
+
+- **`captured-text-validation.test.ts`** — 6 new cases for `pickInitialUrl` symmetric in a new `describe('pickInitialUrl — symmetric canonicalize on RIGHT side (P-21)')` block:
+  - canonical pageUrl vs. slug-variant saved ROW (the original P-21 bug regression)
+  - slug-variant pageUrl vs. slug-variant saved ROW (both sides canonicalized; pre-P-21 was a double miss)
+  - canonical pageUrl vs. `/gp/product/{ASIN}` saved ROW (the legacy `/gp/product/` shape collapses to `/dp/`)
+  - canonical pageUrl vs. trailing-slash saved ROW
+  - idempotent on already-canonical fixture (proves additive, not breaking)
+  - canonicalize-returns-null fallback for non-product ROW (e.g. saved search-results URL)
+- **`url-normalization.test.ts`** — 8 new cases for `buildRecognitionSet` with canonicalize in a new `describe('buildRecognitionSet — symmetric canonicalize on rows (P-21)')` block:
+  - slug-variant collapse
+  - `/gp/product/{ASIN}` collapse
+  - trailing-slash collapse
+  - multi-variant dedupe (4 different variants of same ASIN collapse to 1 Set entry)
+  - canonicalize-returns-null fallback (non-product row added with raw URL normalized)
+  - backward-compat (omit `canonicalize` keeps pre-P-21 behavior — slug stays in Set)
+  - alwaysNull canonicalize fn (defensive caller; same outcome as omitting)
+  - non-string `row.url` defensiveness preserved when canonicalize provided
+
+### Pre-deploy verification scoreboard — all GREEN on `workflow-2-competition-scraping`
+
+| Check | Target | Actual |
+|---|---|---|
+| `npx tsc --noEmit` | clean | ✅ clean |
+| `cd extensions/competition-scraping && npx tsc --noEmit` | clean | ✅ clean |
+| `npm run build` | 53 routes | ✅ 53 routes (unchanged) |
+| `src/lib` node:test | 527/527 | ✅ 527/527 (unchanged — change is extension-only) |
+| extension `npm test` | 334 → ~342 | ✅ **348/348** (was 334; **+14 new P-21 cases**) |
+| Playwright | 75/75 | ✅ 75/75 (unchanged — pure-function lib change) |
+
+### Deploy mechanics (cheat-sheet b applied)
+
+1. Pre-deploy scoreboard on `workflow-2-competition-scraping` — all GREEN (table above).
+2. `git fetch origin main && git rebase origin/main` — no-op (workflow-2 was 1 commit ahead of main with no parallel main activity post-deploy-#18 ping-pong).
+3. `git checkout main && git pull --rebase origin main` — no-op.
+4. `git merge --ff-only workflow-2-competition-scraping` — clean ff-merge `f41aac6..c3e69af` (5 files +318/-16).
+5. Post-merge scoreboard re-run on `main` — all GREEN (full Playwright re-run for thoroughness per `feedback_recommendation_style.md`).
+6. Rule 9 deploy-gate via AskUserQuestion 4-option picker → director picked "Deploy now (Rule 9-approved)".
+7. `git push origin main f41aac6..c3e69af` — Vercel auto-redeployed cleanly (~1-2 min).
+8. Ping-pong sync: `git checkout workflow-2-competition-scraping && git merge --ff-only main && git push origin workflow-2-competition-scraping f41aac6..c3e69af` — clean (workflow-2 fast-forwarded then pushed).
+
+### Browser verification — Rule 27 forced-picker outcome
+
+Director picked **Option A — Skip director walkthrough; 14 new node:test cases are the regression coverage** (recommended per `feedback_recommendation_style.md`).
+
+Rationale (surfaced in the picker prose at session mid-point + accepted):
+
+- The new tests directly exercise the pre-P-21 bug fixture (`/Product-Name/dp/B0CTTF514L/ref=sr_1_3` saved ROW vs. canonical `/dp/B0CTTF514L` pageUrl) and confirm the symmetric fix.
+- Per the launch prompt: *"P-21 is a defensive fix that previously surfaced only on Amazon slug-variant URLs in deploy session #9. The most credible re-verify path is automated."*
+- The 2026-05-12-h controlled-repro session already PASSED on real Amazon for the LEFT-side fix (P-15), meaning the RIGHT-side fix is now defensive coverage for an edge case the user hasn't actually hit since current code paths store canonical rows.
+
+Director-side verification is OPTIONAL going forward — would involve manually constructing a slug-variant Amazon URL → saving via the extension → confirming the URL picker pre-selects it on the canonical product page. Skipped this session.
+
+### CORRECTIONS_LOG entries this session
+
+**One INFORMATIONAL §Entry** — doc-path drift in NEXT_SESSION.md launch prompt + 2026-05-12-g root-cause-analysis prose: target files cited as `src/lib/captured-text-validation.ts` etc.; actual paths are `extensions/competition-scraping/src/lib/...`. Per Rule 3 (code is source of truth) the paths were silently corrected in this session's diff. Full entry in `CORRECTIONS_LOG.md §Entry 2026-05-18-c` with the pattern lesson (write full paths from repo root in doc captures; future sessions re-grep before assuming any prefix).
+
+### Headline outcome
+
+- **The slug-variant asymmetry that caused the P-15 Amazon FAIL in deploy session #9 is now closed defensively at the unit + orchestrator wiring levels.**
+- **+14 new node:test cases provide permanent regression coverage** at the most stable layer (pure-function `node:test`).
+- **W#2 polish backlog reduces** to older items P-19 (LOW-MEDIUM overlay-dismiss) and P-13 (LOW autofocus).
+- **Zero new polish items captured this session — smooth W#2 → main deploy cycle.**
+
+### Next session pick
+
+§4 Step 1c forced-picker fired at end-of-session (P-21 wrapped cleanly; W#2 polish backlog still has older items P-19 / P-13 but no inherent continuation from THIS session). Director picked **(a.42) RECOMMENDED-NEXT = (a.13) P-17 authFetch real-fetch integration test on `main`** — pivot off W#2 polish to platform-wide work on `main`. Rationale per `feedback_recommendation_style.md`: most thorough/reliable next pick — closes a known production hotfix (vklf.com `Illegal invocation` 2026-05-12) with permanent regression coverage at the most stable layer (Playwright real-browser); higher-priority than W#2 polish P-19/P-13 which are low-frequency UX items.
+
+### Cross-references for next session
+
+- `ROADMAP.md` 2026-05-18-c header bump + W#2 row Last Session 2026-05-18-c prepended + (a.41) flipped ✅ DONE + new (a.42) RECOMMENDED-NEXT P-17 on main.
+- `CHAT_REGISTRY.md` 2026-05-18-c new top entry.
+- `DOCUMENT_MANIFEST.md` 2026-05-18-c header bump + per-doc flags.
+- `CORRECTIONS_LOG.md` 2026-05-18-c header bump + 1 INFORMATIONAL §Entry (doc-path drift).
+- `COMPETITION_SCRAPING_DESIGN.md` §B 2026-05-18-c entry — covers the P-21 symmetric-canonicalize ship outcome + orchestrator wiring beyond launch-prompt sketch + 14 test cases.
+- `NEXT_SESSION.md` rewritten 2026-05-18-c for (a.13) P-17 authFetch real-fetch integration test on `main` (platform-wide on main; not W#2; branch switch in Step 1).
 
 ---
 

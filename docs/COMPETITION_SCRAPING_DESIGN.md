@@ -2729,4 +2729,58 @@ Same `#21262d` hover color as captured-text rows + URL list table for visual con
 
 ---
 
+### 2026-05-18-c — W#2 → main deploy session #19 — P-21 symmetric-canonicalize `pickInitialUrl` + `buildRecognitionSet` SHIPPED + DEPLOYED to vklf.com
+
+**Session:** `session_2026-05-18-c_w2-main-deploy-session-19-p21-symmetric-canonicalize-DEPLOYED` (Claude Code, dual-branch — pre-deploy on `workflow-2-competition-scraping`, ff-merge + deploy phases on `main`, ping-pong sync after main push). Closes (a.41) RECOMMENDED-NEXT from deploy session #18.
+
+**Outcome:** ✅ **P-21 SHIPPED + DEPLOYED in single session.** Commit `c3e69af` (5 files +318/-16 — all in `extensions/competition-scraping/src/lib/`). No director walkthrough this session — Rule 27 picker chose "skip walkthrough; 14 new node:test cases are the regression coverage" (the most thorough/reliable path per `feedback_recommendation_style.md` for this defensive-fix shape; controlled-repro session 2026-05-12-h already validated the LEFT-side fix on real Amazon).
+
+**HEADLINE:** the slug-variant asymmetry that caused the P-15 Amazon FAIL in deploy session #9 is now closed defensively at the unit + orchestrator wiring levels. Future-defensive coverage for user-pasted slug-variant URLs at the URL-add form; +14 new `node:test` cases provide permanent regression coverage at the most stable layer.
+
+**The asymmetry (recap from 2026-05-12-h root-cause analysis):**
+
+- LEFT side of URL recognition comparison was canonicalized via `platformModule.canonicalProductUrl(...)`:
+  - `pickInitialUrl` at `captured-text-validation.ts:128` — applied to `pageUrl` via the optional 3rd-arg `canonicalize` fn passed by `text-capture-form.ts:459`.
+  - `orchestrator.ts` `handleAddRequest` at `:210`, `scanLinks` icon-dedup at `:254` + `:263`, `maybeShowDetailOverlay` at `:307` — all canonicalized `href` / `location.href` before `normalizeUrlForRecognition`.
+- RIGHT side was iterated RAW:
+  - `pickInitialUrl` `for (const row of rows)` at `:140-145` — `normalizeUrlForRecognition(row.url)` with no canonicalize.
+  - `buildRecognitionSet` at `url-normalization.ts:63` — had no `canonicalize` parameter; rows added to Set in their saved form.
+  - `orchestrator.ts:143` (init) + `:226-227` (onSaved) — passed `buildRecognitionSet(rows)` with no fn; called `normalizeUrlForRecognition(row.url)` directly in onSaved.
+- Result: a row saved as `/Product-Name-Slug/dp/{ASIN}/ref=sr_1_3` or `/gp/product/{ASIN}` or `/dp/{ASIN}/` was never recognized by hover-time / overlay / pre-select lookups even though the user was on the canonical `/dp/{ASIN}` page (and vice versa).
+
+**The fix — symmetric canonicalization:**
+
+1. **`captured-text-validation.ts` `pickInitialUrl`** — apply `canonicalize` to each `row.url` on the RIGHT side before normalizing + comparing. Idempotent for already-canonical rows (canonical → canonical is a no-op via the canonicalize fn). Updated docstring to reflect symmetric behavior; cross-referenced `orchestrator.ts:307-309` as the parallel canonicalize-LEFT path.
+2. **`url-normalization.ts` `buildRecognitionSet`** — added optional `canonicalize?: (href: string) => string | null` parameter. When provided, applied to each row's URL before normalizing + adding to the Set. When omitted (or when it returns null for a row), row URL is used raw — preserves backward-compat for callers that don't have access to a platform module and for non-product rows (e.g. manually-added search-results URLs).
+3. **`content-script/orchestrator.ts`** — wired the lib improvement into production:
+   - **Line 143 (init):** `buildRecognitionSet(rows, (href) => platformModule.canonicalProductUrl(href))` — Set is now built symmetric with the hover-time + overlay lookups at `:210` / `:254` / `:263` / `:307`.
+   - **Line 233-244 (onSaved callback):** `const canonical = platformModule.canonicalProductUrl(row.url) ?? row.url; const normalized = normalizeUrlForRecognition(canonical); if (normalized) recognitionSet.add(normalized);` — newly-saved rows land in the Set in canonical form so future hover lookups match.
+
+**Scope expansion beyond the launch-prompt sketch (mid-drift-check, surfaced before any code):**
+
+The launch prompt sketched "~2 LOC per function (4 LOC total) + ~4 new node:test cases per function (8 total)" — covering only the pure-function changes. Mid-drift-check I surfaced that without ALSO wiring the orchestrator call sites at `:143` and `:226-227`, the `buildRecognitionSet` parameter change would ship as dead code (production still wouldn't pass a canonicalize fn). Director picked **"Proceed with full scope (lib + orchestrator + tests) (recommended)"** via AskUserQuestion. Actual diff: +318/-16 across 5 files. The "+318" is dominated by:
+
+- 14 new `node:test` cases (6 in `captured-text-validation.test.ts` + 8 in `url-normalization.test.ts`) with full fixture setup + descriptive `describe('... — symmetric canonicalize on ... (P-21)')` blocks.
+- Updated docstrings on both `pickInitialUrl` + `buildRecognitionSet` documenting the symmetric behavior + cross-referencing each other + the orchestrator call sites.
+- The orchestrator wires include explanatory comments tying back to P-21 + the pre-fix asymmetry.
+
+Per `feedback_recommendation_style.md` (most thorough/reliable): the full scope ensures the fix actually takes effect in production, with regression coverage at both unit + integration-via-real-orchestrator-wire levels.
+
+**Test coverage shipped (+14 new node:test cases):**
+
+- `captured-text-validation.test.ts` — new `describe('pickInitialUrl — symmetric canonicalize on RIGHT side (P-21)')` block (6 cases): canonical-vs-slug-variant ROW; slug-variant-vs-slug-variant ROW; canonical-vs-`/gp/product` ROW; canonical-vs-trailing-slash ROW; idempotent on already-canonical; canonicalize-returns-null fallback for non-product ROW.
+- `url-normalization.test.ts` — new `describe('buildRecognitionSet — symmetric canonicalize on rows (P-21)')` block (8 cases): slug-variant / `/gp/product` / trailing-slash collapse; multi-variant dedupe; null fallback; backward-compat (omit canonicalize); alwaysNull defensive; non-string row.url defensiveness.
+
+**Pre-deploy verification scoreboard — all GREEN on `workflow-2-competition-scraping`:** tsc clean; ext tsc clean; `npm run build` clean (**53 routes** unchanged); src/lib node:test **527/527** (unchanged — change is extension-only); extension `npm test` **348/348** (was 334; **+14 new P-21 cases**); Playwright **75/75** (unchanged — pure-function lib change).
+
+**Deploy mechanics (cheat-sheet b):** rebase no-op; ff-merge `f41aac6..c3e69af` clean; post-merge scoreboard re-run on main all GREEN (full Playwright re-run on main for thoroughness per `feedback_recommendation_style.md`); Rule 9 deploy-gate via AskUserQuestion picker → director picked "Deploy now (Rule 9-approved)"; pushed origin/main (Vercel auto-redeployed cleanly ~1-2 min); ping-pong sync clean.
+
+**One INFORMATIONAL CORRECTIONS_LOG entry this session:** doc-path drift between NEXT_SESSION.md launch prompt + 2026-05-12-g root-cause analysis prose (cited `src/lib/captured-text-validation.ts` etc.) and actual file paths (`extensions/competition-scraping/src/lib/...`). Per Rule 3 code wins; paths silently corrected in this session's diff. Full lesson in `CORRECTIONS_LOG.md §Entry 2026-05-18-c` — write full paths from repo root in future doc captures; never assume `src/lib/` as default prefix because extension code lives elsewhere.
+
+**Next session pick (§4 Step 1c forced-picker):** P-21 wrapped cleanly; W#2 polish backlog still has older items P-19 (LOW-MEDIUM overlay-dismiss) and P-13 (LOW autofocus), but no inherent continuation from THIS session. Director picked **(a.42) RECOMMENDED-NEXT = (a.13) P-17 authFetch real-fetch integration test on `main`** — pivot off W#2 polish to platform-wide work. Rationale per `feedback_recommendation_style.md`: most thorough/reliable next pick — closes a known production hotfix with permanent regression coverage at the most stable layer (Playwright real-browser); higher-priority than W#2 polish P-19/P-13 which are low-frequency UX items.
+
+**Smooth session — one INFORMATIONAL CORRECTIONS_LOG entry (doc-path drift inherited from prior sessions, not introduced by this one); zero CORRECTIONS_LOG-tier Claude-side slips.**
+
+---
+
 END OF DOCUMENT

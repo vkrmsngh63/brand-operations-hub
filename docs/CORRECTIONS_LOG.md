@@ -2,7 +2,10 @@
 ## Append-only record of mistakes made during chats and lessons learned
 
 **Started:** April 16, 2026
-**Last updated:** 2026-05-18-b (One-hundred-and-eighth Claude Code session — **W#2 → main deploy session #18 — P-34 (propagate row hover-highlight to captured-text rows + image thumbnails on URL detail page) DEPLOYED to vklf.com + REAL-INDEPENDENT-WEBSITE VERIFY.** `session_2026-05-18-b_w2-main-deploy-session-18-p34-hover-propagation-DEPLOYED-FULL-VERIFY`. Closes (a.40) RECOMMENDED-NEXT. **No new entries this session — smooth W#2 → main deploy cycle with single director re-verify pass on captured-text rows + image thumbnails ("all green, hover works on both"); zero CORRECTIONS_LOG-tier slips on Claude's side.** Pre-deploy scoreboard all GREEN on workflow-2 (tsc / ext tsc / `npm run build` 53 routes / src/lib node:test 527/527 / ext `npm test` 334/334 / Playwright 75/75); rebase no-op; ff-merge `d551443..b5cf7ea` clean (1 file +33/-2); post-merge scoreboard re-run on main all GREEN (full Playwright 75/75 re-run on main for thoroughness per `feedback_recommendation_style.md`); Rule 9 deploy gate → director picked "Deploy now"; pushed origin/main (Vercel auto-redeployed); ping-pong sync no-op. **(a.41) RECOMMENDED-NEXT = W#2 polish P-21** (symmetric-canonicalize `pickInitialUrl` + `buildRecognitionSet`). **Multi-Workflow per Rule 25:** dual-branch session; schema-change-in-flight stays "No"; pull-rebase clean; W#1 untouched. **TaskList sweep per Rule 26:** 5 session tasks tracked + all 5 closed; zero `DEFERRED:` items. **End-of-session:** doc-batch commit + push.)
+**Last updated:** 2026-05-18-c (One-hundred-and-ninth Claude Code session — **W#2 → main deploy session #19 — P-21 symmetric-canonicalize `pickInitialUrl` + `buildRecognitionSet` SHIPPED + DEPLOYED to vklf.com.** `session_2026-05-18-c_w2-main-deploy-session-19-p21-symmetric-canonicalize-DEPLOYED`. Closes (a.41) RECOMMENDED-NEXT. **One new INFORMATIONAL entry this session** — doc-path drift in NEXT_SESSION.md launch prompt + 2026-05-12-g root-cause-analysis prose: target files cited as `src/lib/captured-text-validation.ts` etc. — actual paths are `extensions/competition-scraping/src/lib/...`. Per Rule 3 code wins; paths silently corrected in this session's diff + the entry serves as the formal capture (see new §Entry at end). Single-commit build-and-deploy session — symmetric canonicalization landed in both pure-function lib helpers AND orchestrator call sites that consume them; **+14 new node:test cases** (extension `npm test` 334 → 348/348); deploy + ping-pong clean. **(a.42) RECOMMENDED-NEXT = (a.13) P-17 authFetch real-fetch integration test on `main`** via §4 Step 1c forced-picker — pivot off W#2 polish to platform-wide work. **Multi-Workflow per Rule 25:** dual-branch session; schema-change-in-flight stays "No"; pull-rebase clean; W#1 untouched. **TaskList sweep per Rule 26:** 10 session tasks tracked + all 10 closed; zero `DEFERRED:` items at session end. **End-of-session:** doc-batch commit + push.)
+**Last updated in session:** session_2026-05-18-c_w2-main-deploy-session-19-p21-symmetric-canonicalize-DEPLOYED (Claude Code, dual-branch — main for deploy + workflow-2 fast-forwarded after the main push)
+
+**Previously updated:** 2026-05-18-b (One-hundred-and-eighth Claude Code session — **W#2 → main deploy session #18 — P-34 (propagate row hover-highlight to captured-text rows + image thumbnails on URL detail page) DEPLOYED to vklf.com + REAL-INDEPENDENT-WEBSITE VERIFY.** `session_2026-05-18-b_w2-main-deploy-session-18-p34-hover-propagation-DEPLOYED-FULL-VERIFY`. Closes (a.40) RECOMMENDED-NEXT. **No new entries this session — smooth W#2 → main deploy cycle with single director re-verify pass on captured-text rows + image thumbnails ("all green, hover works on both"); zero CORRECTIONS_LOG-tier slips on Claude's side.** Pre-deploy scoreboard all GREEN on workflow-2 (tsc / ext tsc / `npm run build` 53 routes / src/lib node:test 527/527 / ext `npm test` 334/334 / Playwright 75/75); rebase no-op; ff-merge `d551443..b5cf7ea` clean (1 file +33/-2); post-merge scoreboard re-run on main all GREEN (full Playwright 75/75 re-run on main for thoroughness per `feedback_recommendation_style.md`); Rule 9 deploy gate → director picked "Deploy now"; pushed origin/main (Vercel auto-redeployed); ping-pong sync no-op. **(a.41) RECOMMENDED-NEXT = W#2 polish P-21** (symmetric-canonicalize `pickInitialUrl` + `buildRecognitionSet`). **Multi-Workflow per Rule 25:** dual-branch session; schema-change-in-flight stays "No"; pull-rebase clean; W#1 untouched. **TaskList sweep per Rule 26:** 5 session tasks tracked + all 5 closed; zero `DEFERRED:` items. **End-of-session:** doc-batch commit + push.)
 **Last updated in session:** session_2026-05-18-b_w2-main-deploy-session-18-p34-hover-propagation-DEPLOYED-FULL-VERIFY (Claude Code, dual-branch — main for deploy + workflow-2 fast-forwarded after the main push)
 
 **Previously updated:** 2026-05-18 (One-hundred-and-seventh Claude Code session — **W#2 → main deploy session #17 — P-28 (delete URLs with cascade disclosure) + P-27 (delete captured texts/images) ALL DEPLOYED to vklf.com + REAL-INDEPENDENT-WEBSITE FULL VERIFY across Parts A-E + IN-SESSION SCOPE-ADD P-33 row hover-highlight SHIPPED + paint-bug HOT-FIXED + DEPLOYED + VERIFIED.** `session_2026-05-18_w2-main-deploy-session-17-p28-p27-DEPLOYED-FULL-VERIFY-plus-P-33-hover-tackon`. Closes (a.39) RECOMMENDED-NEXT. **ONE NEW INFORMATIONAL §Entry added below this batch** — P-33 first-attempt `<tr>`-background-paint slip. Adding hover effects to a table by setting inline `background` on the `<tr>` is unreliable when `<td>` cells render on top (the `<td>` cells' transparency is sometimes painted-over). The codebase already had the established convention of applying hover background to `<td>` cells via CSS (`mt-tbl tbody tr:hover td { ... }` in `mt-table.css`; same pattern in `ast-table.css` + `canvas-table-mode.css`). Original Rule 14e pre-capture grep should have surfaced this prior treatment but the first attempt jumped to inline-on-`<tr>` without checking. First attempt commit `1794eef` shipped + deployed but invisible on production. Hot-fix commit `507f7d6` swapped to `querySelectorAll<HTMLTableCellElement>('td')` to set background on each cell + bumped color to `#21262d`. Pattern lesson: when adding hover effects to a table, **grep `tr:hover` against `*.css` in `src/` FIRST** — if the codebase has an established pattern, follow it. Net cost ~5 min (one extra deploy cycle). Zero production impact (invisible-hover state was harmless; clicks + navigation still worked). **Multi-Workflow per Rule 25:** dual-branch session — pre-deploy + first tack-on scoreboard on workflow-2; ff-merge + deploy + hot-fix on main; ping-pong sync after each main push (two cycles). Schema-change-in-flight stays "No" entire session. **TaskList sweep per Rule 26:** 12 session tasks tracked + all 12 closed; zero `DEFERRED:` items. **End-of-session:** doc-batch commit + push.)
@@ -2769,6 +2772,49 @@ Described in the 2026-04-18 "Pattern 11 recurrence #5" entry.
 **Trigger condition:** Pattern 13 is engaged every end-of-session in Claude Code. Not conditional.
 
 **Related patterns:** Pattern 11 (visibility-under-load for non-programmer users), Rule 14a / Rule 9 (Read-It-Back test for imperatives), Pattern 12 (sandbox-path leaks).
+
+---
+
+## §Entry 2026-05-18-c — INFORMATIONAL — Doc-path drift between NEXT_SESSION.md launch prompt and actual file paths (P-21 session)
+
+**Session:** `session_2026-05-18-c_w2-main-deploy-session-19-p21-symmetric-canonicalize-DEPLOYED` (Claude Code, dual-branch).
+
+**Severity:** INFORMATIONAL. No production impact. Drift caught at start-of-session per Rule 3; paths silently corrected as the work proceeded. The original source of the drift was inherited from the 2026-05-12-g deploy-session-#9 root-cause analysis (which originally surfaced P-21 as a polish item), not introduced by this session.
+
+**What happened.** The 2026-05-18-c launch prompt (written end-of-session 2026-05-18-b) cited the target files as:
+
+- `src/lib/captured-text-validation.ts` (around line 128) — `pickInitialUrl` definition.
+- `src/lib/url-normalization.ts` (around line 63) — `buildRecognitionSet`.
+- `src/lib/platform-modules/amazon.ts` — `canonicalProductUrl` implementation.
+
+**Actual paths in the codebase:**
+
+- `extensions/competition-scraping/src/lib/captured-text-validation.ts:128`
+- `extensions/competition-scraping/src/lib/url-normalization.ts:63`
+- `extensions/competition-scraping/src/lib/platform-modules/amazon.ts:68`
+
+These files live inside the Chrome extension's source tree, not under the PLOS-side `src/lib/` (which contains `authFetch.ts`, `competition-scraping/handlers/`, etc.). At session start the `find` confirmed the actual locations; I proceeded with the actual paths per Rule 3 (code is source of truth).
+
+**Where the drift originated.** Tracing back: the 2026-05-12-g ROADMAP narrative said *"`pickInitialUrl` (captured-text-validation.ts:128) canonicalizes pageUrl (LEFT side of comparison) but NOT row.url (RIGHT side); when saved Amazon row is in non-canonical form ... the comparison string-fails. Same asymmetry in `buildRecognitionSet` (url-normalization.ts:63)..."* — bare filenames without path prefix. Subsequent doc updates (P-21 polish-backlog entries, the 2026-05-18-b NEXT_SESSION.md rewrite, the various Group A header narratives) inherited the bare-filename framing and a subsequent author added an implied `src/lib/` prefix that didn't reflect reality.
+
+**Pattern lesson.** When a doc references a code path by filename without a full path, future sessions should NOT assume `src/lib/` as the default prefix — extension code lives in `extensions/competition-scraping/src/lib/`, and there are also `src/components/` / `src/app/.../components/` trees. A `find <reponame> -name "<file>"` at start-of-session resolves the ambiguity in ~1 second.
+
+**Pattern strengthening for future doc capture (no new rule — operational discipline).** When ROADMAP / NEXT_SESSION / DESIGN docs cite code locations:
+
+- ✅ DO write full paths from the repo root: `extensions/competition-scraping/src/lib/captured-text-validation.ts:128`.
+- ❌ DON'T write bare filenames: ~~`captured-text-validation.ts:128`~~ (ambiguous; future sessions assume default prefix that may be wrong).
+- ❌ DON'T add an implied prefix that wasn't in the source: a doc that says `captured-text-validation.ts:128` should be transcribed faithfully; future sessions should re-grep to confirm rather than guess the path.
+
+This applies to ROADMAP polish-backlog entries, NEXT_SESSION.md launch prompts, `<TOOL>_DESIGN.md` §B entries, CORRECTIONS_LOG entries, and any inline code-pointer in chat-side handoff prose.
+
+**Fix shipped in this session.** Doc-path inheritance: my session's NEXT_SESSION.md rewrite for the next session uses full paths for any new code citations. The historical references in the 2026-05-12-g ROADMAP narrative + the 2026-05-18-b NEXT_SESSION.md are left as-is (append-only / historical preservation); this entry documents the drift so future sessions reading those docs know to re-grep before acting.
+
+**Cross-references.**
+
+- The launch prompt this session inherited the drift from: `docs/NEXT_SESSION.md` 2026-05-18-b (written by `session_2026-05-18-b_w2-main-deploy-session-18-p34-hover-propagation-DEPLOYED-FULL-VERIFY`).
+- The original drift source: `docs/ROADMAP.md` W#2 row narrative line ~776 of the 2026-05-12-g entry (and subsequent inheritances in headers + polish-backlog summaries).
+- The actual code locations now permanently captured by this session's diff (commit `c3e69af`).
+- Related operational discipline: `HANDOFF_PROTOCOL.md` Rule 3 (Code is source of truth) + Rule 24 (Pre-capture search before adding ROADMAP item — directly applies; if I'd run Rule 24 sub-step (d) "verify against actual code" on the original 2026-05-12-g P-21 capture, the path drift wouldn't have started).
 
 ---
 
