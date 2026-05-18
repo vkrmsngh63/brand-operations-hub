@@ -260,6 +260,7 @@ export function CapturedTextPasteForm(props: Props) {
           {selectedCategory === ADD_NEW_CATEGORY_VALUE && (
             <input
               type="text"
+              autoFocus
               value={newCategoryInput}
               onChange={(e) => setNewCategoryInput(e.target.value)}
               placeholder="Type new category name"
