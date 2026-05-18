@@ -2783,4 +2783,24 @@ Per `feedback_recommendation_style.md` (most thorough/reliable): the full scope 
 
 ---
 
+## §B 2026-05-19-c — W#2 → main deploy sessions #21 + #22 — P-13 popup autofocus + P-38 popup URL pre-select (1-URL rule) BOTH SHIPPED + DEPLOYED to vklf.com; P-39 sticky URL preference captured as next session's pick
+
+`session_2026-05-19-c_w2-main-deploy-sessions-21-22-p13-p27-paired-DEPLOYED` (Claude Code, dual-branch — pre-deploy on `workflow-2-competition-scraping`, two ff-merge + deploy cycles on `main`, ping-pong syncs after each push). Closes (a.44) RECOMMENDED-NEXT.
+
+**Headline.** Two paired build-and-deploy cycles in one session. Deploy #21 P-13 (1 LOC `autoFocus` prop on popup React `<input>`; commit `e217eb9`); Deploy #22 P-38 (Rule 11 in-session scope-add; 4 LOC `urls.length === 1` pre-select rule in useEffect + resetForm; commit `a0d5c8a` stacked on `e217eb9`). Both scoreboards GREEN at exact baselines. Vercel auto-redeploys no-op (web bundle unchanged — fixes live in extension code only). P-13 verified PASS first try; P-38 verified PASS only after director set up a TRUE 1-URL test scenario.
+
+**ROADMAP P-13 "Where" drift caught at session start (Rule 3).** Original P-13 capture 2026-05-12 listed both popup + content-script overlay surfaces, but the 3 content-script overlays already had `.focus()` calls — popup React was the only true gap. Scope reduced before any code. CORRECTIONS_LOG 2026-05-19-c §Entry captures the slip + prevention rule.
+
+**Rule 11 in-session scope-add P-38 (the popup URL pre-select fix).** Director surfaced natural-use feedback during P-13 verification: popup didn't auto-select the URL for "Attach to which saved URL?". Rule 14f forced-picker with 3 options (defer / simple rule / sticky preference); director picked simple rule. Multi-URL case deferred as new P-39 per separation-of-scope.
+
+**Polish-item numbering collision (Rule 24 sub-step a slip).** Today's commits labeled "P-27" + "P-28" collide with existing deployed items; renumbered to P-38 + P-39 in doc layer; commit messages frozen per Rule 8. CORRECTIONS_LOG 2026-05-19-c-2 §Entry captures the slip + prevention rule (mechanical grep at every P-NN naming moment).
+
+**P-39 design pre-capture for next session.** Sticky most-recently-used URL preference per (project, platform) tuple in `chrome.storage.local`. Key shape: `plos-cs-popup-url-pref-{projectId}-{platform}`. Fall-back ladder: stored-pref-matches → P-38's `length === 1` → placeholder. Write on every URL onChange. Edge case: stored URL id no longer matches → fallback. Test coverage Option A (pure-function node:test): extract `getStickyPreselectedUrlId(urls, storedPref)` for ~6-10 cases. Estimated ~20-30 LOC total. Standard W#2 → main deploy cycle expected as session #23. (a.45) RECOMMENDED-NEXT set via §4 Step 1c forced-picker over alternatives (P-16 service-worker MV3 diagnostics; W#3 first session; W#1 graduated-tool re-entry) per `feedback_recommendation_style.md` (most thorough/reliable: closes director's actual real-world friction; well-scoped single-session ship).
+
+**Implementation note for next session author.** P-39's pure-function helper boundary is the cleanest design. The lookup logic (decide what selectedUrlId should be given urls + storedPref) is pure; the read from chrome.storage.local is mechanical wire-up at the useEffect site; the write to chrome.storage.local is mechanical wire-up at the onChange handler. The component-side handlers should be ~3-5 LOC each (await `chrome.storage.local.get(key)` → call `getStickyPreselectedUrlId(urls, storedPref?.[key])` → setSelectedUrlId; analog for write). The node:test cases test only the pure function. Skip the storage I/O test surface — testing chrome.storage in node:test would require mocks that exceed the fix's scope; Playwright extension popup spec is heavier than the fix's risk warrants.
+
+**Group A modified this session:** ROADMAP / CHAT_REGISTRY / DOCUMENT_MANIFEST / CORRECTIONS_LOG / NEXT_SESSION. **Group B modified:** this DESIGN; VERIFICATION_BACKLOG.
+
+---
+
 END OF DOCUMENT
