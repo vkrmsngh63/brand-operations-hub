@@ -499,10 +499,16 @@ export function UrlTable({
                     }
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.background = '#161b22';
+                    const cells = e.currentTarget.querySelectorAll<HTMLTableCellElement>('td');
+                    cells.forEach((cell) => {
+                      cell.style.background = '#21262d';
+                    });
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'transparent';
+                    const cells = e.currentTarget.querySelectorAll<HTMLTableCellElement>('td');
+                    cells.forEach((cell) => {
+                      cell.style.background = '';
+                    });
                   }}
                   role="link"
                   tabIndex={0}
@@ -510,7 +516,6 @@ export function UrlTable({
                   style={{
                     cursor: 'pointer',
                     borderBottom: '1px solid #21262d',
-                    transition: 'background 120ms ease',
                   }}
                 >
                   <td style={cellStyle('left')}>
