@@ -498,12 +498,19 @@ export function UrlTable({
                       handleRowOpen(row.id);
                     }
                   }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = '#161b22';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'transparent';
+                  }}
                   role="link"
                   tabIndex={0}
                   title="Open URL detail page"
                   style={{
                     cursor: 'pointer',
                     borderBottom: '1px solid #21262d',
+                    transition: 'background 120ms ease',
                   }}
                 >
                   <td style={cellStyle('left')}>
