@@ -895,7 +895,22 @@ function CapturedTextSubsection({
             </thead>
             <tbody>
               {sorted.map((t) => (
-                <tr key={t.id} style={{ borderBottom: '1px solid #21262d' }}>
+                <tr
+                  key={t.id}
+                  onMouseEnter={(e) => {
+                    const cells = e.currentTarget.querySelectorAll<HTMLTableCellElement>('td');
+                    cells.forEach((cell) => {
+                      cell.style.background = '#21262d';
+                    });
+                  }}
+                  onMouseLeave={(e) => {
+                    const cells = e.currentTarget.querySelectorAll<HTMLTableCellElement>('td');
+                    cells.forEach((cell) => {
+                      cell.style.background = '';
+                    });
+                  }}
+                  style={{ borderBottom: '1px solid #21262d' }}
+                >
                   <td style={cellStyle('left')}>{t.contentCategory ?? '—'}</td>
                   <td style={textCellStyle}>{t.text}</td>
                   <td style={cellStyle('left')}>
@@ -1030,7 +1045,23 @@ function CapturedImagesGallery({
           }}
         >
           {images.map((img, idx) => (
-            <div key={img.id} style={{ position: 'relative' }}>
+            <div
+              key={img.id}
+              onMouseEnter={(e) => {
+                // P-34 — first descendant <button> is the ThumbnailButton
+                // (the trash overlay sits after it in DOM order). The
+                // ThumbnailButton has an explicit background of #0d1117, so
+                // onMouseLeave must restore that value rather than clearing
+                // to empty string (which would leave the card transparent).
+                const card = e.currentTarget.querySelector<HTMLButtonElement>('button');
+                if (card) card.style.background = '#21262d';
+              }}
+              onMouseLeave={(e) => {
+                const card = e.currentTarget.querySelector<HTMLButtonElement>('button');
+                if (card) card.style.background = '#0d1117';
+              }}
+              style={{ position: 'relative' }}
+            >
               <ThumbnailButton
                 image={img}
                 onOpen={() => setOpenIndex(idx)}
