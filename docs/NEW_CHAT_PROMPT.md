@@ -1,7 +1,9 @@
 # NEW CHAT PROMPT
 ## Paste this at the start of every new chat to brief Claude
 
-**Last updated:** May 14, 2026 (timestamp-only touch per HANDOFF_PROTOCOL §4 Step 1 item #11 from W#2 → main deploy session #13 — this file remains historical/post-Phase-M; new work sessions launch via `docs/NEXT_SESSION.md` + `docs/CLAUDE_CODE_STARTER.md`. No content changes this session.)
+**Last updated:** 2026-05-19-b (timestamp-only touch per HANDOFF_PROTOCOL §4 Step 1 item #11 from W#2 → main deploy session #20 — P-19 green status overlay auto-dismiss → one-time selection collapse fix SHIPPED + DEPLOYED to vklf.com. This file remains historical/post-Phase-M; new work sessions launch via `docs/NEXT_SESSION.md` + `docs/CLAUDE_CODE_STARTER.md`. No content changes this session.)
+
+**Previously updated:** May 14, 2026 (timestamp-only touch per HANDOFF_PROTOCOL §4 Step 1 item #11 from W#2 → main deploy session #13 — this file remains historical/post-Phase-M; new work sessions launch via `docs/NEXT_SESSION.md` + `docs/CLAUDE_CODE_STARTER.md`. No content changes this session.)
 **Previously updated:** April 17, 2026 (Phase M COMPLETE — final claude.ai chat for this project; next session is in Claude Code)
 **Last updated in chat:** https://claude.ai/chat/75cc8985-b70a-49f4-8b64-444c34ef541f
 

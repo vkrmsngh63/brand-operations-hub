@@ -4,7 +4,9 @@
 **Workflow:** W#2 Competition Scraping & Deep Analysis.
 **Branch:** `workflow-2-competition-scraping`.
 **Created:** 2026-05-07 in `session_2026-05-07_w2-plos-side-viewer-detail-page-slice` (Claude Code).
-**Last updated:** 2026-05-18-c (**W#2 → main deploy session #19 — P-21 symmetric-canonicalize `pickInitialUrl` + `buildRecognitionSet` SHIPPED + DEPLOYED to vklf.com.** One-hundred-and-ninth Claude Code session — `session_2026-05-18-c_w2-main-deploy-session-19-p21-symmetric-canonicalize-DEPLOYED` (dual-branch — pre-deploy on `workflow-2-competition-scraping`, ff-merge + deploy on `main`, ping-pong sync after main push). Closes (a.41) RECOMMENDED-NEXT. **Single-commit build-and-deploy session — symmetric canonicalization landed in both pure-function lib helpers AND orchestrator call sites that consume them.** Pre-deploy scoreboard all GREEN on workflow-2 (tsc / ext tsc / `npm run build` **53 routes** / src/lib node:test **527/527** / ext `npm test` **348/348** — was 334; **+14 new P-21 cases** (6 `pickInitialUrl` symmetric + 8 `buildRecognitionSet` with canonicalize) / Playwright **75/75**); rebase no-op (workflow-2 0 commits ahead of main pre-this-commit per deploy #18 ping-pong); ff-merge `f41aac6..c3e69af` clean (5 files +318/-16 — all in `extensions/competition-scraping/src/lib/`); post-merge scoreboard re-run on main all GREEN (full Playwright re-run for thoroughness per `feedback_recommendation_style.md`); Rule 9 deploy gate via AskUserQuestion picker → director picked "Deploy now"; pushed origin/main (Vercel auto-redeployed cleanly); ping-pong sync clean (workflow-2 fast-forwarded then pushed). **HEADLINE OUTCOME: the slug-variant asymmetry that caused the P-15 Amazon FAIL in deploy session #9 is now closed defensively at the unit + orchestrator wiring levels.** Future-defensive fix; director-side walkthrough deliberately skipped per Rule 27 picker — the 14 new node:test cases ARE the regression coverage and the 2026-05-12-h controlled-repro already validated the LEFT-side fix on real Amazon. **P-21 polish-backlog entry flipped ⏳ MEDIUM-defensive → ✅ SHIPPED + DEPLOYED 2026-05-18-c** + **new "## Deploy session #19 — P-21 symmetric-canonicalize" section appended at end** before the EOF marker. **One INFORMATIONAL CORRECTIONS_LOG entry this session:** doc-path drift — NEXT_SESSION.md launch prompt + 2026-05-12-g root-cause analysis cited target files as `src/lib/captured-text-validation.ts` etc. — actual paths are `extensions/competition-scraping/src/lib/...`. Per Rule 3 code wins; paths silently corrected in this session's diff. (a.42) RECOMMENDED-NEXT = (a.13) P-17 authFetch real-fetch integration test on `main` (pivot off W#2 polish to platform-wide via §4 Step 1c picker).)
+**Last updated:** 2026-05-19-b (**W#2 → main deploy session #20 — P-19 green status overlay auto-dismiss → one-time selection collapse fix SHIPPED + DEPLOYED to vklf.com.** One-hundred-and-eleventh Claude Code session — `session_2026-05-19-b_w2-main-deploy-session-20-p19-overlay-dismiss-DEPLOYED`. Closes (a.43) RECOMMENDED-NEXT. Symmetric mute-discipline fix in `already-saved-overlay.ts` `destroy()` (wraps `banner.remove()` in optional `muteMutationObserver` wrapper) + orchestrator overlay call-site wiring (passes existing closure-scope wrapper, same as `startLiveHighlighting` per P-14). Both dismiss paths (5s auto-dismiss timer + close-button click) inherit the mute. Build commit `7e0e4ec` on workflow-2 rebased onto main as `7e111a8` after clean reconciliation with the 2026-05-19-a P-17 verify-and-close commit `27bf4cb` (non-overlapping changesets — extension code vs. docs only). Pre-deploy + post-merge scoreboards all GREEN: tsc / ext tsc / `npm run build` 53 routes / src/lib node:test 527/527 / extension `npm test` **352/352** (was 348; **+4 new P-19 cases**) / Playwright 75/75. Rule 9 deploy gate → "Deploy now"; pushed `origin/main 27bf4cb..7e111a8` (Vercel web bundle unchanged — fix lives in extension code only); ping-pong sync clean. **HEADLINE: cross-platform UX papercut from 2026-05-12-g closed via existing P-14 mute-discipline infrastructure.** §4 Step 1c forced-picker fired → director picked **(a.44) RECOMMENDED-NEXT = W#2 polish P-13 LOW autofocus on `workflow-2-competition-scraping`** — closes the W#2 polish backlog completely before any pivot.)
+
+**Previously updated:** 2026-05-18-c (**W#2 → main deploy session #19 — P-21 symmetric-canonicalize `pickInitialUrl` + `buildRecognitionSet` SHIPPED + DEPLOYED to vklf.com.** One-hundred-and-ninth Claude Code session — `session_2026-05-18-c_w2-main-deploy-session-19-p21-symmetric-canonicalize-DEPLOYED` (dual-branch — pre-deploy on `workflow-2-competition-scraping`, ff-merge + deploy on `main`, ping-pong sync after main push). Closes (a.41) RECOMMENDED-NEXT. **Single-commit build-and-deploy session — symmetric canonicalization landed in both pure-function lib helpers AND orchestrator call sites that consume them.** Pre-deploy scoreboard all GREEN on workflow-2 (tsc / ext tsc / `npm run build` **53 routes** / src/lib node:test **527/527** / ext `npm test` **348/348** — was 334; **+14 new P-21 cases** (6 `pickInitialUrl` symmetric + 8 `buildRecognitionSet` with canonicalize) / Playwright **75/75**); rebase no-op (workflow-2 0 commits ahead of main pre-this-commit per deploy #18 ping-pong); ff-merge `f41aac6..c3e69af` clean (5 files +318/-16 — all in `extensions/competition-scraping/src/lib/`); post-merge scoreboard re-run on main all GREEN (full Playwright re-run for thoroughness per `feedback_recommendation_style.md`); Rule 9 deploy gate via AskUserQuestion picker → director picked "Deploy now"; pushed origin/main (Vercel auto-redeployed cleanly); ping-pong sync clean (workflow-2 fast-forwarded then pushed). **HEADLINE OUTCOME: the slug-variant asymmetry that caused the P-15 Amazon FAIL in deploy session #9 is now closed defensively at the unit + orchestrator wiring levels.** Future-defensive fix; director-side walkthrough deliberately skipped per Rule 27 picker — the 14 new node:test cases ARE the regression coverage and the 2026-05-12-h controlled-repro already validated the LEFT-side fix on real Amazon. **P-21 polish-backlog entry flipped ⏳ MEDIUM-defensive → ✅ SHIPPED + DEPLOYED 2026-05-18-c** + **new "## Deploy session #19 — P-21 symmetric-canonicalize" section appended at end** before the EOF marker. **One INFORMATIONAL CORRECTIONS_LOG entry this session:** doc-path drift — NEXT_SESSION.md launch prompt + 2026-05-12-g root-cause analysis cited target files as `src/lib/captured-text-validation.ts` etc. — actual paths are `extensions/competition-scraping/src/lib/...`. Per Rule 3 code wins; paths silently corrected in this session's diff. (a.42) RECOMMENDED-NEXT = (a.13) P-17 authFetch real-fetch integration test on `main` (pivot off W#2 polish to platform-wide via §4 Step 1c picker).)
 
 **Previously updated:** 2026-05-18-b (**W#2 → main deploy session #18 — P-34 (propagate row hover-highlight to captured-text rows + image thumbnails on URL detail page) DEPLOYED to vklf.com + REAL-INDEPENDENT-WEBSITE VERIFY.** One-hundred-and-eighth Claude Code session — `session_2026-05-18-b_w2-main-deploy-session-18-p34-hover-propagation-DEPLOYED-FULL-VERIFY` (dual-branch — pre-deploy on `workflow-2-competition-scraping`, ff-merge + deploy on `main`, ping-pong sync after main push). Closes (a.40) RECOMMENDED-NEXT. **Standard W#2 → main deploy cheat-sheet (b) executed cleanly:** pre-deploy scoreboard all GREEN on workflow-2 (tsc / ext tsc / `npm run build` **53 routes** / src/lib node:test **527/527** / ext `npm test` 334/334 / Playwright **75/75**); rebase no-op (workflow-2 0 commits ahead of main pre-this-commit per deploy #17 ping-pong); ff-merge `d551443..b5cf7ea` clean (1 file +33/-2 in `UrlDetailContent.tsx`); post-merge scoreboard re-run on main all GREEN (full Playwright 75/75 re-run on main for thoroughness per `feedback_recommendation_style.md`); Rule 9 deploy gate via AskUserQuestion picker → director picked "Deploy now"; pushed origin/main (Vercel auto-redeployed cleanly ~1-2 min); ping-pong sync no-op. **Director re-verify on real Independent Website URL detail page:** captured-text row hover-highlight ✅ + captured-image thumbnail hover-highlight ✅ — *"all green, hover works on both"*. **HEADLINE OUTCOME: the W#2 admin data-management surface (add via extension + manual-add via P-29 + edit via inline-edit + delete via P-28/P-27 + hover-consistency via P-33+P-34) is now COMPLETE + LIVE on vklf.com with UX consistency across URL list + captured-text rows + image thumbnails.** **Implementation note:** captured-text rows reuse P-33's `querySelectorAll<HTMLTableCellElement>('td')` pattern verbatim (clean clear-to-empty-string on leave); image thumbnails use `querySelector<HTMLButtonElement>('button')` on outer wrapper to target first descendant button (ThumbnailButton; trash-overlay sits second in DOM order) and **explicitly restore `#0d1117` on leave** rather than clearing to `''` because the card has an explicit base background. Same `#21262d` hover color across all three surfaces for consistency. **P-34 polish-backlog entry flipped ⏳ RECOMMENDED-NEXT → ✅ SHIPPED + DEPLOYED + VERIFIED 2026-05-18-b** + **new "## Deploy session #18 — P-34 hover-propagation" section appended at end** before the EOF marker. **Zero new polish items captured this session — smooth W#2 → main deploy cycle.** (a.41) RECOMMENDED-NEXT = W#2 polish P-21 — symmetric-canonicalize `pickInitialUrl` + `buildRecognitionSet`.)
 
@@ -2981,6 +2983,103 @@ Director-side verification is OPTIONAL going forward — would involve manually 
 - `CORRECTIONS_LOG.md` 2026-05-18-c header bump + 1 INFORMATIONAL §Entry (doc-path drift).
 - `COMPETITION_SCRAPING_DESIGN.md` §B 2026-05-18-c entry — covers the P-21 symmetric-canonicalize ship outcome + orchestrator wiring beyond launch-prompt sketch + 14 test cases.
 - `NEXT_SESSION.md` rewritten 2026-05-18-c for (a.13) P-17 authFetch real-fetch integration test on `main` (platform-wide on main; not W#2; branch switch in Step 1).
+
+---
+
+## Deploy session #20 — P-19 green status overlay auto-dismiss → one-time selection collapse fix SHIPPED + DEPLOYED
+
+**Date:** 2026-05-19-b
+**Session:** `session_2026-05-19-b_w2-main-deploy-session-20-p19-overlay-dismiss-DEPLOYED`
+**Branch arc:** workflow-2-competition-scraping (build) → main (rebase + ff-merge + deploy) → workflow-2-competition-scraping (ping-pong sync)
+**Closes:** ROADMAP (a.43) RECOMMENDED-NEXT — W#2 polish P-19.
+
+### Headline outcome
+
+The cross-platform UX papercut director surfaced 2026-05-12-g during W#2 → main deploy session #9 browser verification — *"in the platforms where the highlighted words don't keep flickering, the selected text is unselected one time if the text is selected soon after the page loads. I think this happens when the green overlay goes away on its own."* — is now closed defensively via existing P-14 mute-discipline infrastructure. The fix re-uses the `muteMutationObserver` wrapper that P-14 (2026-05-12-e) shipped for the highlight-terms refresh path; symmetric application to the overlay-teardown path closes the trigger.
+
+### Root cause (verified by code reading at session start, then by passing tests)
+
+1. `already-saved-overlay.ts:75` schedules `setTimeout(() => handle.destroy(), AUTO_DISMISS_MS)` — 5s after the overlay banner is shown, `destroy()` fires and calls `banner.remove()` (DOM mutation).
+2. `orchestrator.ts:373` MutationObserver observes `document.body` with `childList: true, subtree: true` — sees the overlay's element removal.
+3. 250ms debounced rescan → `scanLinks() + highlighter.refresh()`.
+4. `highlighter.refresh()` is itself wrapped in `muteMutationObserver` (P-14 fix 2026-05-12-e), AND has P-20's fingerprint short-circuit (2026-05-15) — BUT the overlay's text was part of the page's matchable-text fingerprint while it was visible, so removing it changes the fingerprint → P-20's short-circuit does NOT fire → strip-and-reapply `<mark>` elements runs.
+5. The strip-and-reapply detaches text nodes that the user's `Range` spans → browser collapses the selection.
+
+Same fundamental mechanism as P-14 (strip-and-reapply collapses selection); different trigger (overlay-dismiss vs. self-feedback loop). The P-14 mute fix wraps the refresh body but doesn't prevent the MO from triggering when ELSE intentionally mutates the DOM around the overlay teardown.
+
+### Fix shape — Option (a) symmetric mute discipline (recommended in ROADMAP P-19 entry, director-confirmed at session start)
+
+1. New `ShowAlreadySavedOverlayOptions` interface in `already-saved-overlay.ts` with optional `muteMutationObserver?: <T>(work: () => Promise<T>) => Promise<T>` prop (signature identical to `StartLiveHighlightingOptions.muteMutationObserver` per P-14).
+2. `showAlreadySavedOverlay(projectName, options = {})` accepts the options arg; default `muteMutationObserver = async (work) => work()` (no-op pass-through, identical to highlight-terms.ts:441-442 pattern).
+3. `destroy()` wraps `banner.remove()` in `void muteMutationObserver(async () => { banner.remove(); })`. Fire-and-forget — the wrapper opens the mute window synchronously, banner.remove() runs inside, mute window closes on the microtask. Both dismiss paths flow through the single `destroy()` function and therefore both inherit the mute discipline: auto-dismiss `setTimeout` + close-button click + `hideAlreadySavedOverlay()` public helper + replacement-destroy when a second overlay is shown while one is active.
+4. `orchestrator.ts:333` passes `{ muteMutationObserver }` to `showAlreadySavedOverlay` — the same closure-scope wrapper already passed to `startLiveHighlighting` at line 201-203. Zero new closure needed.
+
+### Test coverage shipped — 4 new node:test cases in `already-saved-overlay.test.ts` (NEW FILE)
+
+Per Rule 27 default (and director's standing preference for permanent regression coverage per `feedback_recommendation_style.md`):
+
+1. `explicit handle.destroy() invokes the muteMutationObserver wrapper exactly once` — pass spy wrapper, call `destroy()`, assert spy call count = 1.
+2. `hideAlreadySavedOverlay() routes through destroy() and invokes the wrapper` — pass spy wrapper, call public hide helper, assert spy call count = 1.
+3. `replacement-destroy (showing a new overlay while one is active) invokes the prior overlay's wrapper` — show overlay #1 with spy A, then show overlay #2 with spy B, assert A.callCount = 1 (the replacement triggered destroy on #1) and B.callCount = 0 (no destroy yet on #2).
+4. `works without a muteMutationObserver option (default no-op wrapper)` — show + destroy without options; assert no throw.
+
+Test pattern follows `api-bridge.test.ts` for global mocks: installs a minimal `globalThis.document` stub with hand-built fake elements (DIV stand-ins) in `beforeEach`, restores in `afterEach`. Same hand-built-stub style as `find-underlying-image.test.ts` to avoid bringing in jsdom for one small test file.
+
+Extension `npm test` went from 348 → 352 (4 new cases all pass). Per Rule 27 — node:test cases ARE the regression coverage; no new Playwright spec needed because the fix is mechanical mute-wiring already exercised at the production call site via the rest of the existing test suite. Director-side manual verification is the user-visible smoke check after sideloading the new extension build.
+
+### Pre-deploy scoreboard on `workflow-2-competition-scraping` (all GREEN)
+
+| Check | Result | Delta |
+|---|---|---|
+| `npx tsc --noEmit` (main) | clean | unchanged |
+| `cd extensions/competition-scraping && npx tsc --noEmit` | clean | unchanged |
+| `npm run build` | 53 routes | unchanged |
+| `src/lib` node:test | 527/527 | unchanged (P-19 doesn't touch src/lib) |
+| Extension `npm test` | **352/352** | **+4 new P-19 cases** (was 348) |
+| Playwright | 75/75 | unchanged |
+
+### Deploy mechanics (cheat-sheet b — with drift recovery at merge time)
+
+1. Build commit on workflow-2: `7e0e4ec` "W#2 (a.43) P-19 — green status overlay auto-dismiss → selection collapse fix (symmetric mute discipline)" — 3 files +230/-2.
+2. Switch to main; `git pull --rebase origin main` no-op (main even with origin/main).
+3. **Drift caught:** `git merge --ff-only workflow-2-competition-scraping` failed with "Not possible to fast-forward, aborting." Cause: main had advanced today via the 2026-05-19-a P-17 verify-and-close session (commit `27bf4cb`), but workflow-2's pull-rebase at session start was branch-specific and didn't reveal the main advance.
+4. **Recovery:** switched back to workflow-2; `git rebase main` clean (workflow-2's only commit was `7e0e4ec` touching extension files; `27bf4cb` touched docs only — zero overlap). Rebased commit became `7e111a8`.
+5. Switched to main; `git merge --ff-only workflow-2-competition-scraping` now successful — `27bf4cb..7e111a8` clean (3 files +230/-2, all in `extensions/competition-scraping/src/lib/content-script/`).
+6. Post-merge scoreboard re-run on main — all GREEN (re-ran full Playwright 75/75 for thoroughness per `feedback_recommendation_style.md`).
+7. Rule 9 deploy gate via AskUserQuestion 4-option picker → director picked "Deploy now (Rule 9-approved)".
+8. `git push origin main 27bf4cb..7e111a8` — Vercel auto-redeployed (~1-2 min; web bundle unchanged — fix lives in extension code only, so the redeploy is a no-op for the live vklf.com web app).
+9. Ping-pong sync: switched to workflow-2; `git push origin workflow-2-competition-scraping 046e6b4..7e111a8` clean.
+10. End state: both branches at SHA `7e111a8` on origin.
+
+### Director-side re-verify on real Independent Website URL
+
+Deferred to standard "install fresh extension build" workflow. The fix lives in extension code only; vklf.com's live web app is unchanged. Director sideloads a fresh extension build, navigates to any 4-platform recognized page, waits for the green overlay to appear (status: "✓ This URL is already in your project"), selects a piece of text on the page (especially a text region that includes a highlighted `<mark>` from highlight-terms), holds the selection through the 5s auto-dismiss, observes that selection survives. Pre-fix behavior: selection collapses to caret at the moment the overlay disappears. Post-fix expected: selection survives.
+
+Per Rule 27 the 4 new node:test cases ARE the canonical regression coverage; this manual verification is optional smoke-check at deploy time.
+
+### CORRECTIONS_LOG entries this session
+
+**Zero new entries** — header bump only. The merge-time drift was caught and self-corrected cleanly; no work was lost; zero process slips. The drift detection AT MERGE TIME (vs. start-of-session) is an operational opportunity for improvement — at session start, fetching origin and comparing workflow-2 to origin/main would have surfaced the divergence earlier — but the recovery was clean.
+
+### Headline outcomes
+
+- **The cross-platform UX papercut from 2026-05-12-g is closed via existing P-14 mute-discipline infrastructure.**
+- **+4 new node:test cases provide permanent regression coverage** for the wrapper-invocation contract on every destroy path.
+- **W#2 polish backlog reduces** to a single open item — P-13 (LOW autofocus). After P-13 ships, the W#2 polish backlog is EMPTY and W#2 is ready for graduation or director's next W#2 feature direction.
+- **Zero new polish items captured this session — smooth W#2 → main deploy cycle with one drift-and-recover at merge time.**
+
+### Next session pick
+
+§4 Step 1c forced-picker fired at end-of-session (P-19 wrapped cleanly; W#2 polish backlog reduces to one open item). Director picked **(a.44) RECOMMENDED-NEXT = W#2 polish P-13 LOW autofocus on `workflow-2-competition-scraping`** — closes the W#2 polish backlog completely before any pivot to W#1 re-entry / W#3 first session / W#2 graduation. Rationale per `feedback_recommendation_style.md`: most thorough/reliable next pick — lowest risk + smallest scope of remaining options; W#2 graduation requires the backlog to be empty.
+
+### Cross-references for next session
+
+- `ROADMAP.md` 2026-05-19-b header bump + (a.43) flipped ✅ DONE + new (a.44) RECOMMENDED-NEXT = P-13 on workflow-2.
+- `CHAT_REGISTRY.md` 2026-05-19-b new top entry.
+- `DOCUMENT_MANIFEST.md` 2026-05-19-b header bump + per-doc flags.
+- `CORRECTIONS_LOG.md` 2026-05-19-b header bump (zero new entries — smooth session).
+- this `COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` 2026-05-19-b header bump + this Deploy session #20 section.
+- `NEXT_SESSION.md` rewritten 2026-05-19-b for P-13 LOW autofocus on `workflow-2-competition-scraping`.
 
 ---
 
