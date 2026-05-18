@@ -210,4 +210,133 @@ describe('buildRecognitionSet', () => {
     const set = buildRecognitionSet([null, undefined, { url: 'https://x.y/z' }]);
     assert.equal(set.size, 1);
   });
+
+  // P-21 fix 2026-05-18-c — symmetric canonicalize coverage. Before P-21,
+  // buildRecognitionSet stored rows in the Set in whatever form they were
+  // saved (slug-variant, /gp/product, trailing-slash, etc.) but the
+  // orchestrator's hover-time + overlay lookups canonicalized the LEFT
+  // side via platformModule.canonicalProductUrl — producing a string-
+  // compare miss when the row was saved in non-canonical form. The new
+  // optional `canonicalize` parameter applies the same extractor to each
+  // row's URL before normalizing, making the Set's contents symmetric
+  // with the lookup path.
+  describe('buildRecognitionSet — symmetric canonicalize on rows (P-21)', () => {
+    // Stand-in for amazon.canonicalProductUrl — extracts ASIN from /dp/{ASIN}
+    // or /gp/product/{ASIN}, collapses both into `https://www.amazon.com/dp/{ASIN}`.
+    const fakeAmazonCanonical = (href: string): string | null => {
+      const m = href.match(/\/(?:dp|gp\/product)\/([A-Z0-9]{10})(?=\/|$|\?|#)/);
+      if (!m) return null;
+      try {
+        const u = new URL(href);
+        return `${u.protocol}//${u.host}/dp/${m[1]}`;
+      } catch {
+        return null;
+      }
+    };
+
+    it('canonicalizes a slug-variant row into its /dp/{ASIN} form before adding', () => {
+      const set = buildRecognitionSet(
+        [
+          {
+            url: 'https://www.amazon.com/Product-Name-Slug/dp/B0CTTF514L/ref=sr_1_3',
+          },
+        ],
+        fakeAmazonCanonical,
+      );
+      assert.equal(set.size, 1);
+      assert.ok(set.has('https://www.amazon.com/dp/B0CTTF514L'));
+    });
+
+    it('canonicalizes a /gp/product/{ASIN} row into /dp/{ASIN} before adding', () => {
+      const set = buildRecognitionSet(
+        [{ url: 'https://www.amazon.com/gp/product/B07XJ8C8F5' }],
+        fakeAmazonCanonical,
+      );
+      assert.equal(set.size, 1);
+      assert.ok(set.has('https://www.amazon.com/dp/B07XJ8C8F5'));
+    });
+
+    it('canonicalizes a trailing-slash row into its no-trailing-slash form', () => {
+      const set = buildRecognitionSet(
+        [{ url: 'https://www.amazon.com/dp/B0716F3NFG/' }],
+        fakeAmazonCanonical,
+      );
+      assert.equal(set.size, 1);
+      assert.ok(set.has('https://www.amazon.com/dp/B0716F3NFG'));
+    });
+
+    it('dedupes multiple slug-variants of the same ASIN', () => {
+      const set = buildRecognitionSet(
+        [
+          { url: 'https://www.amazon.com/Slug-A/dp/B07XJ8C8F5/ref=sr_1_1' },
+          { url: 'https://www.amazon.com/gp/product/B07XJ8C8F5' },
+          { url: 'https://www.amazon.com/dp/B07XJ8C8F5/' },
+          { url: 'https://www.amazon.com/dp/B07XJ8C8F5?tag=foo' },
+        ],
+        fakeAmazonCanonical,
+      );
+      assert.equal(set.size, 1);
+      assert.ok(set.has('https://www.amazon.com/dp/B07XJ8C8F5'));
+    });
+
+    it('falls back to raw row.url when canonicalize returns null (e.g. non-product row)', () => {
+      // A user might have manually-added a search-results page URL via the
+      // PLOS-side manual-add form. canonicalize returns null for it; the
+      // raw URL gets normalized + added (query-string stripped by
+      // normalizeUrlForRecognition).
+      const set = buildRecognitionSet(
+        [
+          { url: 'https://www.amazon.com/dp/B07XJ8C8F5' },
+          { url: 'https://www.amazon.com/s?k=cat+scratcher' },
+        ],
+        fakeAmazonCanonical,
+      );
+      assert.equal(set.size, 2);
+      assert.ok(set.has('https://www.amazon.com/dp/B07XJ8C8F5'));
+      assert.ok(set.has('https://www.amazon.com/s'));
+    });
+
+    it('is backward-compatible — omitting canonicalize preserves pre-P-21 behavior', () => {
+      // Same fixture as the "builds a Set of normalized URLs from row
+      // objects" test above. Without canonicalize, the slug-variant lands
+      // in the Set with its slug intact — proves the parameter is strictly
+      // additive.
+      const set = buildRecognitionSet([
+        {
+          url: 'https://www.amazon.com/Product-Name/dp/B0CTTF514L/ref=sr_1_3',
+        },
+      ]);
+      assert.equal(set.size, 1);
+      assert.ok(
+        set.has(
+          'https://www.amazon.com/Product-Name/dp/B0CTTF514L/ref=sr_1_3',
+        ),
+      );
+    });
+
+    it('handles a canonicalize fn that always returns null (platform module absent)', () => {
+      // A defensive caller could pass a no-op fn instead of undefined — same
+      // outcome as omitting the parameter (rows added in their raw normalized
+      // form).
+      const alwaysNull = () => null;
+      const set = buildRecognitionSet(
+        [{ url: 'https://www.amazon.com/dp/B07XJ8C8F5?tag=foo' }],
+        alwaysNull,
+      );
+      assert.equal(set.size, 1);
+      assert.ok(set.has('https://www.amazon.com/dp/B07XJ8C8F5'));
+    });
+
+    it('still drops non-string row.url entries when canonicalize is provided', () => {
+      const set = buildRecognitionSet(
+        [
+          { url: 'https://www.amazon.com/dp/B07XJ8C8F5' },
+          { url: null } as unknown as { url: string },
+          { url: 42 } as unknown as { url: string },
+        ],
+        fakeAmazonCanonical,
+      );
+      assert.equal(set.size, 1);
+    });
+  });
 });

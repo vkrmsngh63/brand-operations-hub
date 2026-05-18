@@ -140,7 +140,15 @@ export async function runOrchestrator(): Promise<() => void> {
   let recognitionSet: Set<string> = new Set();
   try {
     const rows = await listCompetitorUrls(projectId, platform as never);
-    recognitionSet = buildRecognitionSet(rows);
+    // P-21 (2026-05-18-c): symmetric canonicalize. Pass the active platform
+    // module's canonicalProductUrl so each saved row's URL is collapsed to its
+    // canonical product form BEFORE normalization. Without this, a row saved
+    // as a slug-variant (e.g. user pasted `/Product-Name/dp/{ASIN}/ref=…`
+    // into the URL-add form) would fail to match the hover-time + overlay
+    // lookups below, which already canonicalize the LEFT side.
+    recognitionSet = buildRecognitionSet(rows, (href) =>
+      platformModule.canonicalProductUrl(href),
+    );
   } catch (err) {
     console.warn('[PLOS] could not load saved URLs for recognition', err);
   }
@@ -223,7 +231,14 @@ export async function runOrchestrator(): Promise<() => void> {
       triggerRect,
       defaultIsSponsoredAd: sponsoredDetected,
       onSaved(row) {
-        const normalized = normalizeUrlForRecognition(row.url);
+        // P-21 (2026-05-18-c): symmetric canonicalize. Apply canonicalProductUrl
+        // to the newly-saved row's URL before normalizing + adding to the Set,
+        // matching the init-time buildRecognitionSet path above. Without this,
+        // a row saved as a slug-variant would land in the Set in non-canonical
+        // form and miss subsequent hover-time canonical lookups.
+        const canonical =
+          platformModule.canonicalProductUrl(row.url) ?? row.url;
+        const normalized = normalizeUrlForRecognition(canonical);
         if (normalized) recognitionSet.add(normalized);
         // Re-scan so the just-saved link's "+ Add" button gets paired
         // with the new "already saved" icon. The existing per-link

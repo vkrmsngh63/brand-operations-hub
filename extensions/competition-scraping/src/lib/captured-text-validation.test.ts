@@ -292,4 +292,131 @@ describe('pickInitialUrl', () => {
       assert.equal(picked?.id, 'urlid-a');
     });
   });
+
+  // P-21 fix 2026-05-18-c — symmetric canonicalize regression coverage.
+  // The P-15 fix (2026-05-12) only canonicalized the LEFT side (pageUrl)
+  // before comparing. If the saved row's URL was itself stored as a slug-
+  // variant (e.g. a user pasted `/Product-Name/dp/{ASIN}/ref=…` into the
+  // URL-add form), the comparison still string-failed because the RIGHT
+  // side (row.url) wasn't canonicalized. P-21 applies canonicalProductUrl
+  // symmetrically to both sides. These tests confirm the fix.
+  describe('pickInitialUrl — symmetric canonicalize on RIGHT side (P-21)', () => {
+    // Same stand-in as the P-15 block above.
+    const fakeAmazonCanonical = (href: string): string | null => {
+      const m = href.match(/\/(?:dp|gp\/product)\/([A-Z0-9]{10})(?=\/|$|\?|#)/);
+      if (!m) return null;
+      try {
+        const u = new URL(href);
+        return `${u.protocol}//${u.host}/dp/${m[1]}`;
+      } catch {
+        return null;
+      }
+    };
+
+    // A row saved as a slug-variant (user pasted from a search-result click).
+    const ROW_SLUG_VARIANT: CompetitorUrl = {
+      ...ROW_A,
+      id: 'urlid-slug-variant',
+      url: 'https://www.amazon.com/Some-Product-Name/dp/B0CTTF514L/ref=sr_1_3',
+    };
+
+    // A row saved with the legacy `/gp/product/{ASIN}` shape.
+    const ROW_GP_PRODUCT: CompetitorUrl = {
+      ...ROW_A,
+      id: 'urlid-gp-product',
+      url: 'https://www.amazon.com/gp/product/B07XJ8C8F5',
+    };
+
+    // A row saved with a trailing slash after the ASIN.
+    const ROW_TRAILING_SLASH: CompetitorUrl = {
+      ...ROW_A,
+      id: 'urlid-trailing-slash',
+      url: 'https://www.amazon.com/dp/B0716F3NFG/',
+    };
+
+    it('matches a canonical pageUrl against a slug-variant saved row (the P-21 bug)', () => {
+      // Before P-21: this returned null because row.url was iterated raw
+      // and `/Some-Product-Name/dp/B0CTTF514L/ref=sr_1_3` !== `/dp/B0CTTF514L`.
+      const picked = pickInitialUrl(
+        'https://www.amazon.com/dp/B0CTTF514L',
+        [ROW_A, ROW_SLUG_VARIANT],
+        fakeAmazonCanonical,
+      );
+      assert.equal(picked?.id, 'urlid-slug-variant');
+    });
+
+    it('matches a slug-variant pageUrl against a slug-variant saved row (both sides canonicalized)', () => {
+      // Different slug + different ref — only matches because both sides
+      // collapse to /dp/{ASIN}. Pre-P-21 this would have been a double miss.
+      const picked = pickInitialUrl(
+        'https://www.amazon.com/Different-Slug/dp/B0CTTF514L/ref=sr_1_99',
+        [ROW_A, ROW_SLUG_VARIANT],
+        fakeAmazonCanonical,
+      );
+      assert.equal(picked?.id, 'urlid-slug-variant');
+    });
+
+    it('matches a /dp/{ASIN} pageUrl against a /gp/product/{ASIN} saved row', () => {
+      // canonicalProductUrl folds both `/dp/{ASIN}` and `/gp/product/{ASIN}`
+      // into the same `/dp/{ASIN}` form. The RIGHT-side canonicalization is
+      // what makes the gp/product row reachable.
+      const picked = pickInitialUrl(
+        'https://www.amazon.com/dp/B07XJ8C8F5',
+        [ROW_A, ROW_GP_PRODUCT],
+        fakeAmazonCanonical,
+      );
+      assert.equal(picked?.id, 'urlid-gp-product');
+    });
+
+    it('matches a /dp/{ASIN} pageUrl against a /dp/{ASIN}/ trailing-slash saved row', () => {
+      // canonicalProductUrl strips the trailing slash via the URL parser.
+      // RIGHT-side canonicalization is what lets the trailing-slash row match.
+      const picked = pickInitialUrl(
+        'https://www.amazon.com/dp/B0716F3NFG',
+        [ROW_A, ROW_TRAILING_SLASH],
+        fakeAmazonCanonical,
+      );
+      assert.equal(picked?.id, 'urlid-trailing-slash');
+    });
+
+    it('idempotent on already-canonical rows (P-21 is additive, not breaking)', () => {
+      // ROW_A is canonical (`/dp/B0DWJTLNYT`); ROW_B is canonical (`/dp/B0716F3NFG`).
+      // Canonicalizing canonical → canonical is a no-op, so pre-P-21 behavior
+      // is preserved for all-canonical fixtures.
+      assert.equal(
+        pickInitialUrl(
+          'https://www.amazon.com/dp/B0DWJTLNYT',
+          [ROW_A, ROW_B],
+          fakeAmazonCanonical,
+        )?.id,
+        'urlid-a',
+      );
+      assert.equal(
+        pickInitialUrl(
+          'https://www.amazon.com/dp/B0716F3NFG',
+          [ROW_A, ROW_B],
+          fakeAmazonCanonical,
+        )?.id,
+        'urlid-b',
+      );
+    });
+
+    it('falls back to raw row.url when canonicalize returns null for that row', () => {
+      // A row whose URL doesn't match the /dp/{ASIN} pattern (e.g. a saved
+      // search-results page URL). canonicalize returns null → row.url is
+      // used raw. The pageUrl can still match if it's also a non-product URL.
+      const ROW_SEARCH: CompetitorUrl = {
+        ...ROW_A,
+        id: 'urlid-search',
+        url: 'https://www.amazon.com/s?k=cat+scratcher',
+      };
+      // The query-string gets stripped by normalizeUrlForRecognition.
+      const picked = pickInitialUrl(
+        'https://www.amazon.com/s?k=different+terms',
+        [ROW_A, ROW_SEARCH],
+        fakeAmazonCanonical,
+      );
+      assert.equal(picked?.id, 'urlid-search');
+    });
+  });
 });

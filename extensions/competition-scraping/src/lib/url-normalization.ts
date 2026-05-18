@@ -59,13 +59,31 @@ export function urlsMatchAfterNormalization(
  *
  * Drops entries that don't have a string `.url` — defends against future
  * server-shape changes without crashing the content script.
+ *
+ * P-21 (2026-05-18-c): optional `canonicalize` parameter — when provided,
+ * each row's URL is collapsed to its canonical product form (e.g. Amazon's
+ * slug-variant `/Product-Name/dp/{ASIN}/ref=…` → `/dp/{ASIN}`) BEFORE
+ * normalization. This makes the Set's contents symmetric with the orchestrator's
+ * hover-time lookup path at `orchestrator.ts:307-309` and `:263` which already
+ * canonicalize the LEFT side of the lookup. Without symmetric canonicalization,
+ * a saved row stored as a slug-variant would fail to match a hover-time
+ * canonical lookup (and vice versa). When `canonicalize` is omitted, OR when
+ * it returns null for a given row's URL, the row's URL is used as-is —
+ * preserves backward-compatible behavior for callers that don't have access
+ * to a platform module + for non-product rows like search/listing page URLs.
  */
 export function buildRecognitionSet(
   rows: ReadonlyArray<{ readonly url?: unknown }>,
+  canonicalize?: (href: string) => string | null,
 ): Set<string> {
   const out = new Set<string>();
   for (const row of rows) {
-    const normalized = normalizeUrlForRecognition(row?.url);
+    const rawUrl = row?.url;
+    const canonicalRowUrl =
+      typeof rawUrl === 'string' && canonicalize
+        ? canonicalize(rawUrl) ?? rawUrl
+        : rawUrl;
+    const normalized = normalizeUrlForRecognition(canonicalRowUrl);
     if (normalized !== '') out.add(normalized);
   }
   return out;

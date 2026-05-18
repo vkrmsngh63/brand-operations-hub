@@ -108,18 +108,27 @@ export function normalizeTags(input: readonly string[]): string[] {
  * right-click happens may differ on query-string noise (tracking params,
  * `?ref=...`, etc.). The url-normalization helper strips those uniformly.
  *
- * Optional `canonicalize` (P-15 fix 2026-05-12): when a platform's
- * `canonicalProductUrl` extractor is available, the caller may pass it so
- * that slug-variant URLs (e.g. Amazon's `/Product-Name-Slug/dp/{ASIN}/ref=sr_1_3`)
- * collapse to their canonical form BEFORE normalization. Without this step,
- * a saved row stored as `/dp/{ASIN}` would fail to pre-select when the user
- * right-clicks on a slug-variant page URL, because `normalizeUrlForRecognition`
- * only strips `?…` (query) — not path-level noise like `/Product-Name-Slug/`
- * or `/ref=sr_1_3`. Mirrors the working "already saved" overlay path at
- * `orchestrator.ts:280-282`. When omitted or when `canonicalize` returns null
- * for a given URL, the function falls back to the pre-canonicalization URL
- * (preserves backward-compatible behavior for callers that don't have access
- * to a platform module + for non-product pages like search/listing pages).
+ * Optional `canonicalize` (P-15 fix 2026-05-12; P-21 fix 2026-05-18-c made
+ * symmetric): when a platform's `canonicalProductUrl` extractor is available,
+ * the caller may pass it so that slug-variant URLs (e.g. Amazon's
+ * `/Product-Name-Slug/dp/{ASIN}/ref=sr_1_3`) collapse to their canonical form
+ * BEFORE normalization. Without this step, a saved row stored as `/dp/{ASIN}`
+ * would fail to pre-select when the user right-clicks on a slug-variant page
+ * URL, because `normalizeUrlForRecognition` only strips `?…` (query) — not
+ * path-level noise like `/Product-Name-Slug/` or `/ref=sr_1_3`. Mirrors the
+ * working "already saved" overlay path at `orchestrator.ts:307-309`.
+ *
+ * P-21 (2026-05-18-c): canonicalization is now applied symmetrically to BOTH
+ * sides of the comparison — the page URL (LEFT) AND each row's stored URL
+ * (RIGHT). The pre-P-21 implementation only canonicalized the LEFT side,
+ * which produced a false-negative when the saved row was stored as a slug-
+ * variant (e.g. a user pasted `/Product-Name/dp/{ASIN}/ref=…` into the URL-
+ * add form). Symmetric canonicalization is idempotent for already-canonical
+ * inputs, so backward compatibility is preserved. When `canonicalize` is
+ * omitted, OR when it returns null for either side, the function falls back
+ * to the pre-canonicalization URL on that side (preserves backward-compatible
+ * behavior for callers without a platform module + for non-product rows like
+ * search/listing page URLs that the user might have pasted).
  *
  * Returns null when the rows list is empty OR no row matches. The caller
  * decides how to render that state (the form shows a "Pick a URL"
@@ -138,7 +147,11 @@ export function pickInitialUrl(
   const targetNormalized = normalizeUrlForRecognition(canonicalPageUrl);
   if (!targetNormalized) return null;
   for (const row of rows) {
-    const rowNormalized = normalizeUrlForRecognition(row.url);
+    const canonicalRowUrl =
+      typeof row.url === 'string' && canonicalize
+        ? canonicalize(row.url) ?? row.url
+        : row.url;
+    const rowNormalized = normalizeUrlForRecognition(canonicalRowUrl);
     if (rowNormalized && rowNormalized === targetNormalized) {
       return row;
     }
