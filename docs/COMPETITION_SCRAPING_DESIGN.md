@@ -2803,4 +2803,43 @@ Per `feedback_recommendation_style.md` (most thorough/reliable): the full scope 
 
 ---
 
+## §B 2026-05-19-c-2 (ADDENDUM to §B 2026-05-19-c above) — W#2 → main deploy sessions #23 + #24 — P-39 sticky URL preference SHIPPED then REVERTED as wrong-feature + P-40 popup auto-pre-select URL matching active tab SHIPPED + DEPLOYED + REAL-INDEPENDENT-WEBSITE VERIFIED on vklf.com
+
+Same Claude session as §B 2026-05-19-c above (`session_2026-05-19-c_w2-main-deploy-sessions-21-22-23-24-p13-then-p38-p39-reverted-p40-shipped`); session expanded from the originally-scoped 2 deploy cycles (#21 P-13 + #22 P-38) → 4 deploy cycles (+#23 P-39 + #24 reverts + P-40) after director repeatedly clarified actual UX intent. Closes (a.44) + (a.45) RECOMMENDED-NEXT loops — (a.45) closed as P-40 (the actually-correct fix), NOT as P-39 (the reverted wrong-feature originally captured at (a.45)).
+
+**Headline.** After deploy #22's P-38 verification revealed real-world combos have 2+ URLs (P-38's 1-URL rule never fires), director pushed back. I shipped P-39 sticky most-recently-used URL preference as a third deploy cycle. P-39 verified PASS on synthetic multi-URL test setup. Then director's third pushback: *"All of these tests passed but this was not the issue we were trying to fix. The 'Pick a saved url' dropdown should be prechosen if the url page is already added to vklf.com (which isn't the case currently)."* That clarified the actual session-start ask: the popup dropdown should pre-select the saved URL matching the page currently open — same pattern the right-click content-script overlay uses via `pickInitialUrl` + platform-module `canonicalProductUrl`. Reverted P-38 + P-39 via `git revert`; shipped P-40 in deploy session #24 as the actually-correct fix; verified PASS on director's real workflow.
+
+**Design rationale for the revert vs. layered-fallback choice.** Director picked at the in-session forced-picker between:
+- (A) Revert P-38 + P-39 + ship clean P-40 (Recommended) — cleanest codebase; P-38/P-39 commits stay in git history as documented mistakes; no leftover dead code.
+- (B) Keep P-38 + P-39 as low-priority fallbacks, stack P-40 as primary in a layered ladder — preserves work; complex multi-tier fall-back; surprising UX in edge cases.
+- (C) Stop session, P-40 in next session — defers the right fix one session.
+
+Director picked (A). Per `feedback_recommendation_style.md` (most thorough/reliable): the rolled-back state is honest about today's mistake and gives the next session a clean baseline. Layered fallbacks would have preserved low-value complexity (P-38's `length === 1` is a trivial case rarely hit; P-39's sticky preference is a different feature than active-tab-match) for marginal benefit.
+
+**P-40 implementation pattern (15 LOC reusing existing helpers; no new files; no new tests).**
+
+- Imports added to `CapturedTextPasteForm.tsx`: `pickInitialUrl` from `../../../lib/captured-text-validation.ts` (which we were already importing for other reasons) + `getModuleByPlatform` from `../../../lib/platform-modules/registry.ts`.
+- useEffect's Promise.all extended from 2-tuple → 3-tuple: adds `chrome.tabs.query({ active: true, currentWindow: true })`.
+- After `setUrls(urlRows)`: look up active tab's URL via `tabs[0]?.url`; if set, get the platform module via `getModuleByPlatform(props.platform)` + call `pickInitialUrl(activeTabUrl, urlRows, canonicalize)` with the same `(href) => platformModule.canonicalProductUrl(href)` shape as content-script overlay's `text-capture-form.ts:466`. If matched, `setSelectedUrlId(matched.id)`. If no match, selectedUrlId stays at default `''` (placeholder).
+- resetForm unchanged from P-13 post-state: `setSelectedUrlId('')` after a save. Next popup open re-runs the useEffect and re-matches the active tab URL.
+- `activeTab` manifest permission already in place (`wxt.config.ts` confirmed at session start) — grants temporary URL access on popup-open user gesture.
+
+**Edge cases handled by reusing `pickInitialUrl`:**
+- Active tab URL undefined (chrome.tabs permission edge case) → no match → placeholder.
+- Active tab URL doesn't match any saved row → no match → placeholder.
+- Active tab URL is on a different domain than `props.platform` suggests → `pickInitialUrl` returns null since saved rows are on the current platform's domain.
+- Slug-variant Amazon URL → `canonicalProductUrl` strips slug + normalizes to `/dp/{ASIN}` per P-15 + P-21 — matches saved canonical row.
+
+**Test coverage decision (Rule 27 forced-picker, Option A).** No new tests this commit — `pickInitialUrl` is already covered by 6 cases in `captured-text-validation.test.ts` (P-15 + P-21 added the canonicalize coverage); the popup-side `chrome.tabs.query` + `getModuleByPlatform` wire-up is mechanical single-call integration that director's sideload manual verification at deploy time on the REAL workflow is sufficient regression coverage for. Pre-deploy + post-merge scoreboards on both #23 + #24 all GREEN at expected baselines.
+
+**Director verification on real workflow.** Three test cases all PASS: (1) open popup on saved competitor page → that page's URL pre-selected; (2) open popup on non-saved page → placeholder; (3) slug-variant Amazon URL → still matches via canonicalProductUrl per P-15.
+
+**The wrong-feature-shipped-twice slip captured as CORRECTIONS_LOG 2026-05-19-c-3 §Entry.** Real-tier slip (not just informational). Root cause: I (Claude) jumped from a one-line natural-use feedback ("popup did not autoselect the url") → drafting Rule 14f picker options without first asking director the specific behavior they wanted. Prevention rule: when director surfaces feedback with natural-language ambiguity (e.g., "the url" — which URL?), FIRST ask director to clarify the specific behavior intended via a feature-definition Read-It-Back picker (each option is a possible INTERPRETATION of the feedback, not a possible IMPLEMENTATION), THEN run the implementation-shape Rule 14f picker for HOW to fix it. Concrete shape captured in the §Entry.
+
+**§4 Step 1c forced-picker fired at end-of-session.** Director picked **(a.46) RECOMMENDED-NEXT = W#2 polish P-16 SW MV3 crash diagnostics on `workflow-2-competition-scraping`** over alternatives (W#3 Therapeutic Strategy first session per Rule 18 at ~90-150 min; W#2 Tool Graduation per HANDOFF_PROTOCOL §4 Step 2 Scenario B — heavy multi-step ritual). Rationale per `feedback_recommendation_style.md`: closes the only remaining open W#2 polish item with concrete code-level work; well-scoped diagnostic session; lowest risk vs. heavier alternatives.
+
+**Cross-references:** P-15 + P-21 (the `pickInitialUrl` + canonicalize helpers P-40 reuses); CORRECTIONS_LOG 2026-05-19-c-3 §Entry (the wrong-feature-shipped-twice slip); commits `b635ae7` (revert P-39) + `f0cef37` (revert P-38) + `182da37` (P-40 ship); `text-capture-form.ts:466` (the content-script overlay reference implementation for the same pattern).
+
+---
+
 END OF DOCUMENT
