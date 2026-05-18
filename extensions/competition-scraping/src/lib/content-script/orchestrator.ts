@@ -324,7 +324,13 @@ export async function runOrchestrator(): Promise<() => void> {
     const normalized = normalizeUrlForRecognition(canonical);
     if (!normalized) return;
     if (!recognitionSet.has(normalized)) return;
-    showAlreadySavedOverlay(projectName);
+    // P-19 fix 2026-05-18-d: pass the same muteMutationObserver wrapper
+    // used for the highlighter (P-14). Overlay teardown (auto-dismiss at
+    // 5s OR close-button click) removes the banner from the DOM; without
+    // the mute, that removal triggers this orchestrator's MutationObserver
+    // → debounced highlighter.refresh() → strip-and-reapply <mark>
+    // elements → collapse the user's active text selection on the page.
+    showAlreadySavedOverlay(projectName, { muteMutationObserver });
   }
 
   // P-10 fix 2026-05-10: debounce overlay checks across rapid-fire

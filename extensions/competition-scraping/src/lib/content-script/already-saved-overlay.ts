@@ -18,6 +18,20 @@ export interface AlreadySavedOverlay {
   destroy(): void;
 }
 
+export interface ShowAlreadySavedOverlayOptions {
+  /**
+   * P-19 fix 2026-05-18-d: optional wrapper invoked around the banner-remove
+   * DOM mutation in destroy(). The orchestrator passes a wrapper that
+   * disconnects + reconnects its own MutationObserver around the work, so
+   * the overlay teardown's DOM mutation doesn't feed back into that MO and
+   * trigger a highlight-terms refresh — whose strip-and-reapply pass would
+   * collapse the user's active text selection. Symmetric with the same
+   * option on startLiveHighlighting (P-14 fix 2026-05-12-e). No-op default
+   * keeps standalone use (tests, future non-orchestrator callers) working.
+   */
+  muteMutationObserver?: <T>(work: () => Promise<T>) => Promise<T>;
+}
+
 let activeOverlay: AlreadySavedOverlay | null = null;
 
 /**
@@ -28,7 +42,11 @@ let activeOverlay: AlreadySavedOverlay | null = null;
  */
 export function showAlreadySavedOverlay(
   projectName: string | null,
+  options: ShowAlreadySavedOverlayOptions = {},
 ): AlreadySavedOverlay {
+  const muteMutationObserver =
+    options.muteMutationObserver ?? (async (work) => work());
+
   if (activeOverlay !== null) {
     activeOverlay.destroy();
     activeOverlay = null;
@@ -64,7 +82,16 @@ export function showAlreadySavedOverlay(
         clearTimeout(timer);
         timer = null;
       }
-      banner.remove();
+      // P-19 fix 2026-05-18-d: wrap banner.remove() in the caller's mute
+      // wrapper so the DOM removal doesn't trigger the orchestrator's
+      // MutationObserver — whose follow-on highlight-terms refresh would
+      // strip-and-reapply <mark> elements and collapse the user's active
+      // text selection. Both dismiss paths (auto-dismiss timer + close-
+      // button click) flow through this single destroy() function and
+      // therefore both inherit the mute discipline.
+      void muteMutationObserver(async () => {
+        banner.remove();
+      });
       if (activeOverlay === handle) activeOverlay = null;
     },
   };
