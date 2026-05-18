@@ -6,7 +6,9 @@
 **Branch:** `workflow-2-competition-scraping`
 **Created:** May 4, 2026
 **Created in session:** session_2026-05-04_w2-workflow-requirements-interview (Claude Code)
-**Last updated:** May 16, 2026 (W#2 → main deploy session #16 — P-30 + P-31 + P-32 ALL DEPLOYED to vklf.com + REAL-INDEPENDENT-WEBSITE FULL VERIFY across P-32 multi-file-drop case + 4 P-29 area spot-checks. §B 2026-05-16 entry appended at end covering deploy outcome + walkthrough verification + the P-29 manual-add area's end-to-end regression coverage achievement (UI mechanical via P-30 Playwright + API route-handler integration via P-31 node:test +62 cases + real-website director walkthrough). §A unchanged per Rule 18. Schema-change-in-flight stays "No".)
+**Last updated:** 2026-05-18 (W#2 → main deploy session #17 — P-28 + P-27 ALL DEPLOYED to vklf.com + REAL-INDEPENDENT-WEBSITE FULL VERIFY across Parts A-E + IN-SESSION SCOPE-ADD P-33 row hover-highlight SHIPPED + paint-bug HOT-FIXED + DEPLOYED + VERIFIED in same session. §B 2026-05-18 entry appended at end covering: (1) deploy session #17 standard cheat-sheet (b) execution + 5-part director walkthrough verification on real Independent Website URL (4 delete surfaces + rollback path); (2) HEADLINE — W#2 admin data-management surface (add + manual-add + edit + delete) now complete + live on vklf.com; (3) P-33 in-session scope-add — Rule 11 forced-picker → Ship-as-tack-on; first-attempt `<tr>`-background-paint slip + hot-fix to `querySelectorAll<HTMLTableCellElement>('td')` + bumped color `#161b22` → `#21262d`; (4) pattern lesson captured in CORRECTIONS_LOG — grep `tr:hover` against `*.css` in `src/` BEFORE inline-on-`<tr>` approach; (5) (a.40) RECOMMENDED-NEXT = W#2 polish P-34 propagate hover-highlight to captured-text rows + image thumbnails on URL detail page. §A unchanged per Rule 18. Schema-change-in-flight stays "No".)
+
+**Previously updated:** May 16, 2026 (W#2 → main deploy session #16 — P-30 + P-31 + P-32 ALL DEPLOYED to vklf.com + REAL-INDEPENDENT-WEBSITE FULL VERIFY across P-32 multi-file-drop case + 4 P-29 area spot-checks. §B 2026-05-16 entry appended at end covering deploy outcome + walkthrough verification + the P-29 manual-add area's end-to-end regression coverage achievement (UI mechanical via P-30 Playwright + API route-handler integration via P-31 node:test +62 cases + real-website director walkthrough). §A unchanged per Rule 18. Schema-change-in-flight stays "No".)
 
 **Previously updated:** May 15, 2026-h (W#2 P-31 BUILD session — route-handler DI refactor SHIPPED at code level on `workflow-2-competition-scraping` + P-32 multi-file-drop warning fix SHIPPED + 62 new node:test cases all passing. §B 2026-05-15-h entry appended below covering the Option A → A' DI seam fork (per-route closure factory adapted to RequestLike contract after mid-flight probe revealed `next/server` cannot load under `node --test --experimental-strip-types`), the factory architecture across all 4 W#2 routes, and the headline scoreboard delta (src/lib node:test 447 → 509). §A unchanged per Rule 18. Schema-change-in-flight stays "No".)
 
@@ -2617,6 +2619,58 @@ The handlers shipped during the original session-1 API-routes work. The 2026-05-
 - `ROADMAP.md` 2026-05-17 header — full session narrative + W#2 row update.
 - `NEXT_SESSION.md` rewritten 2026-05-17 for W#2 → main deploy session #17 with standard cheat-sheet (b) + 4-part director walkthrough script.
 - `feedback_recommendation_style.md` — the "(recommended)" markers on Q5 + Q6 were placed on the most-thorough-and-reliable options (shared component + new endpoint) per the standing operational behavior.
+
+---
+
+### 2026-05-18 — W#2 → main deploy session #17 — P-28 + P-27 ALL DEPLOYED to vklf.com + REAL-INDEPENDENT-WEBSITE FULL VERIFY across Parts A-E + IN-SESSION SCOPE-ADD P-33 row hover-highlight SHIPPED + paint-bug HOT-FIXED + DEPLOYED + VERIFIED
+
+**Session:** `session_2026-05-18_w2-main-deploy-session-17-p28-p27-DEPLOYED-FULL-VERIFY-plus-P-33-hover-tackon` (Claude Code, dual-branch — pre-deploy scoreboard on `workflow-2-competition-scraping`; ff-merge + deploy push + hot-fix deploy on `main`; ping-pong sync after each main push). One-hundred-and-seventh Claude Code session. Closes (a.39) RECOMMENDED-NEXT.
+
+**Standard W#2 → main deploy cheat-sheet (b) executed cleanly** for the primary P-28 + P-27 deploy. Pre-deploy scoreboard on workflow-2 all GREEN: tsc clean (root + extension); `npm run build` clean (**53 routes** — unchanged from 2026-05-17 build); src/lib node:test **527/527 pass**; extension `npm test` 334/334 unchanged; Playwright full suite **75/75 pass** (~2 min). Rebase no-op (workflow-2 linearly 2 commits ahead of main since deploy #16 ping-pong — `a226ea1` P-28+P-27 code + `f58ca8c` end-of-session doc batch). FF-merge `62d215c..f58ca8c` clean (19 files +1989/-94). Post-merge scoreboard re-run on main — all GREEN. Rule 9 deploy gate via AskUserQuestion 4-option picker → director picked **"Deploy now (Rule 9-approved)"**. Push `origin/main 62d215c..f58ca8c` → Vercel auto-redeployed cleanly (~1-2 min). Ping-pong sync `workflow-2-competition-scraping` was already at the same SHA as `main` post-merge so it was a no-op.
+
+**Director walkthrough on real Independent Website URL — single batched pass across all 5 parts ALL GREEN:**
+
+| Part | Surface | Outcome |
+|---|---|---|
+| A | Captured-text row trash icon → dialog with text preview → confirm → row removes + persisted after reload | ✅ PASS |
+| B | Captured-image thumbnail trash overlay → dialog with image preview + category → confirm → image removes + persisted after reload | ✅ PASS |
+| C | URL detail "Delete URL" header button → cascade-disclosure dialog (loading state → resolves to "This will also delete N captured texts and M captured images") → confirm → navigation back → URL row gone from list | ✅ PASS |
+| D | URL list row trash icon (right-most "actions" column) → cascade-disclosure dialog same shape → confirm → row vanishes + persisted after reload | ✅ PASS |
+| E | Rollback path via DevTools Offline throttle → confirm with network offline → dialog stayed open + inline error + row re-appeared after optimistic-update rollback | ✅ PASS |
+
+**HEADLINE OUTCOME:** the W#2 admin data-management surface (add via Chrome extension + manual-add via P-29 + edit via inline-edit + delete via P-28/P-27) is now **COMPLETE + LIVE** on vklf.com end-to-end. The entire CRUD surface for the Independent Website project's Competition Scraping workflow is production-ready.
+
+**In-session scope-add — P-33 row hover-highlight tack-on (Rule 11 forced-picker):**
+
+Director surfaced natural-use feedback post-walkthrough: *"When the user puts their mouseover a row in the table in competition workflow, that row should get highlighted in a different color."* Rule 11 scope-add forced-picker fired with 3 options (defer-to-polish-backlog recommended / ship-as-tack-on / question-first) + escape hatch. Director picked **ship-as-tack-on**.
+
+**First attempt — commit `1794eef`:**
+
+Edit at `UrlTable.tsx:498-510` — `onMouseEnter={(e) => { e.currentTarget.style.background = '#161b22'; }}` + `onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}` + `transition: 'background 120ms ease'` on the `<tr>` style. Full scoreboard re-run on workflow-2 — all GREEN. Committed + ff-merged + pushed origin/main + ping-pong sync. Vercel auto-redeployed cleanly. **Director reported on vklf.com after Vercel green + hard refresh: hover-highlight NOT visible.**
+
+**Diagnosis:** `<tr>` background paint is unreliable when `<td>` cells render on top — the `<td>` cells' transparent default paint sometimes paints OVER the `<tr>` background in modern browsers. The codebase already had the established convention of applying hover background to `<td>` cells via CSS — `mt-tbl tbody tr:hover td { background: ... }` in `mt-table.css`; same pattern in `ast-table.css` + `canvas-table-mode.css`. The Rule 14e pre-capture grep against `*.css` in `src/` would have surfaced this prior treatment but the first attempt jumped to inline-on-`<tr>` without checking.
+
+**Hot-fix — commit `507f7d6`:**
+
+Edit at `UrlTable.tsx:501-513` — swapped to `onMouseEnter={(e) => { const cells = e.currentTarget.querySelectorAll<HTMLTableCellElement>('td'); cells.forEach((cell) => { cell.style.background = '#21262d'; }); }}` + matching `onMouseLeave` that clears each cell's background back to `''`. Dropped the 120ms ease transition on `<tr>` (was useless once we stopped setting `<tr>` background). Color bumped `#161b22` → `#21262d` (`--ph-bg` / `--border-dark` palette range — clearly elevated above `#0d1117` page bg; matches existing row-separator color for visual harmony). Abbreviated re-scoreboard (tsc + build clean; full Playwright not re-run since change is purely DOM event handler). Committed + ff-merged + pushed origin/main + ping-pong sync. **Director re-verified post-hot-fix-deploy on vklf.com: hover-highlight VISIBLE + working.**
+
+**P-33 final status:** ✅ **SHIPPED + DEPLOYED + REAL-INDEPENDENT-WEBSITE VERIFIED 2026-05-18** in this same session.
+
+**Pattern lesson captured in CORRECTIONS_LOG.md 2026-05-18:** when adding hover effects to a table, **grep `tr:hover` against `*.css` in `src/` FIRST** — if the codebase has an established pattern, follow it. Net cost ~5 min (one extra deploy cycle). Zero production impact (invisible-hover state was harmless; clicks + navigation still worked).
+
+**§4 Step 1c forced-picker fired at end-of-session:**
+
+Deploy session #17 wrapped cleanly + W#2 admin data-management surface complete + live; no inherent continuation. Director picked **(a.40) RECOMMENDED-NEXT = W#2 polish P-34** — propagate row hover-highlight from URL list table to captured-text rows + image thumbnails on URL detail page. Closes UX consistency gap from today's P-33 tack-on. Rationale per `feedback_recommendation_style.md` (most thorough/reliable): keeps director in W#2 context which is fresh; small focused session (~30 min code work) using same `querySelectorAll` pattern; brings UX consistency to entire admin data-management surface.
+
+**Cross-references:**
+
+- `ROADMAP.md` 2026-05-18 header bump + W#2 row Last Session 2026-05-18 prepended + (a.38) flipped ✅ DONE + (a.39) ✅ DONE + new (a.40) RECOMMENDED-NEXT P-34.
+- `CHAT_REGISTRY.md` 2026-05-18 new top entry.
+- `DOCUMENT_MANIFEST.md` 2026-05-18 header bump + per-doc flags.
+- `CORRECTIONS_LOG.md` 2026-05-18 INFORMATIONAL §Entry — P-33 first-attempt `<tr>`-paint slip.
+- `COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` 2026-05-18 — P-27 + P-28 polish-backlog entries flipped ✅ SHIPPED-AT-CODE-LEVEL → ✅ DEPLOYED + new "## Deploy session #17 + P-33 hover tack-on" section appended at end + new P-33 entry ✅ SHIPPED + DEPLOYED + VERIFIED + new P-34 entry ⏳ RECOMMENDED-NEXT.
+- `NEXT_SESSION.md` rewritten 2026-05-18 for P-34 with same-pattern launch prompt + abbreviated scoreboard targets.
+- `feedback_approval_scope_per_decision_unit.md` — the P-33 tack-on + hot-fix deploy cycles were covered by Rule 11 scope-add approval scope (one decision unit) per standing operational behavior.
 
 ---
 

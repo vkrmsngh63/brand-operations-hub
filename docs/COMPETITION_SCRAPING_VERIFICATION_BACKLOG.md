@@ -4,7 +4,9 @@
 **Workflow:** W#2 Competition Scraping & Deep Analysis.
 **Branch:** `workflow-2-competition-scraping`.
 **Created:** 2026-05-07 in `session_2026-05-07_w2-plos-side-viewer-detail-page-slice` (Claude Code).
-**Last updated:** 2026-05-17 (**W#2 P-28 + P-27 PAIRED BUILD session — delete URLs (with cascade disclosure) + delete captured texts/images SHIPPED at code level on `workflow-2-competition-scraping`.** One-hundred-and-sixth Claude Code session — `session_2026-05-17_w2-p28-p27-paired-build`. Closes (a.38) RECOMMENDED-NEXT. **Load-bearing finding surfaced at start-of-session per Rule 3:** doc claims about back-end DELETE handlers being missing were wrong against code reality — all three handlers (URL + text + image) already shipped during session-1 API-routes work. **Q1-Q4 of the originally-planned 5-question picker set collapsed** — answers already encoded in existing code. **Two Rule 14f forced-pickers fired** via AskUserQuestion: Q5 dialog placement → shared `ConfirmDeleteDialog.tsx`; Q6 cascade-count mechanism → new `GET cascade-counts` endpoint. **Code shipped (~9 new files + 3 modified):** new `cascade-counts.ts` DI handler + 18 node:test cases + thin route shim; new shared `ConfirmDeleteDialog.tsx` (~280 LOC, plain + cascade variants); `UrlTable.tsx` trash button per row with cascade disclosure + optimistic-remove with rollback; `UrlDetailContent.tsx` Delete URL header button + trash per captured-text row + trash overlay per captured-image thumbnail (3 dialog mounts at component level + 3 optimistic-remove handlers); new Playwright stub-page rig for the dialog (mount + page + spec); 11 new P-28 dialog UI-mechanical regression cases. **Verification scoreboard — all GREEN:** tsc clean; extension tsc clean; `npm run build` clean (**53 routes** — +1 cascade-counts); src/lib node:test **527/527** (+18 cascade-counts cases); extension `npm test` 334/334 unchanged; Playwright **75/75** (+11 P-28 dialog cases). **P-27 + P-28 polish-backlog entries flipped ⏳ NOT STARTED → ✅ SHIPPED AT CODE LEVEL 2026-05-17** + **new "## P-28 + P-27 SHIPPED at code level (paired build session 2026-05-17)" section appended at end** before the EOF marker. Director walkthrough on real Independent Website URL DEFERRED to W#2 → main deploy session #17. **One INFORMATIONAL CORRECTIONS_LOG entry this session:** doc-vs-code drift on P-27 back-end status — the 2026-05-14 P-27 capture wrongly framed the per-row text + image DELETE handlers as missing; root cause likely a collection-vs-per-row route conflation in the original verify-against-code step. (a.39) RECOMMENDED-NEXT = W#2 → main deploy session #17 for P-28 + P-27.)
+**Last updated:** 2026-05-18 (**W#2 → main deploy session #17 — P-28 (delete URLs with cascade disclosure) + P-27 (delete captured texts/images) ALL DEPLOYED to vklf.com + REAL-INDEPENDENT-WEBSITE FULL VERIFY across Parts A-E + IN-SESSION SCOPE-ADD P-33 row hover-highlight SHIPPED + paint-bug HOT-FIXED + DEPLOYED + VERIFIED.** One-hundred-and-seventh Claude Code session — `session_2026-05-18_w2-main-deploy-session-17-p28-p27-DEPLOYED-FULL-VERIFY-plus-P-33-hover-tackon` (dual-branch — pre-deploy on `workflow-2-competition-scraping`, ff-merge + deploy on `main`, ping-pong after each push). Closes (a.39) RECOMMENDED-NEXT. **Standard W#2 → main deploy cheat-sheet (b) executed cleanly:** pre-deploy scoreboard all GREEN on workflow-2 (tsc / ext tsc / `npm run build` **53 routes** / src/lib node:test **527/527** / ext `npm test` 334/334 / Playwright **75/75**); rebase no-op; ff-merge `62d215c..f58ca8c` clean (19 files +1989/-94); post-merge scoreboard re-run on main all GREEN; Rule 9 deploy gate via AskUserQuestion 4-option picker → director picked "Deploy now"; pushed origin/main; Vercel auto-redeployed cleanly (~1-2 min); ping-pong sync no-op. **Director walkthrough on real Independent Website URL — single batched pass across all 5 parts ALL GREEN:** Part A captured-text row trash ✅ / Part B captured-image thumbnail trash ✅ / Part C URL detail Delete URL header button with cascade disclosure ✅ (loading state visible + correct counts + navigation back) / Part D URL list row trash with cascade disclosure ✅ / Part E rollback path spot-check via DevTools Offline throttle ✅ (dialog stayed open + inline error + row re-appeared after optimistic-update rollback). **HEADLINE OUTCOME: the W#2 admin data-management surface (add via extension + manual-add via P-29 + edit via inline-edit + delete via P-28/P-27) is now COMPLETE + LIVE on vklf.com end-to-end.** **In-session scope-add P-33 (Rule 11 forced-picker):** director surfaced post-walkthrough natural-use feedback for row hover-highlight on URL list table. Director picked Ship-as-tack-on. **First attempt** (`1794eef`, `#161b22` bg on `<tr>` via `e.currentTarget.style.background`) shipped + deployed but invisible on production — `<tr>` background hidden by `<td>` cells. **Hot-fix** (`507f7d6`): swapped to `querySelectorAll<HTMLTableCellElement>('td')` + bumped color to `#21262d`. Director re-verified post-hot-fix-deploy: hover-highlight visible + working. **P-27 + P-28 polish-backlog entries flipped ✅ SHIPPED AT CODE LEVEL → ✅ DEPLOYED 2026-05-18** + **new "## Deploy session #17 + P-33 hover tack-on" section appended at end** + **new P-33 polish entry (✅ SHIPPED + DEPLOYED + VERIFIED 2026-05-18)** + **new P-34 polish entry (⏳ RECOMMENDED-NEXT — propagate hover-highlight to captured-text rows + image thumbnails)**. **One INFORMATIONAL CORRECTIONS_LOG entry this session:** P-33 first-attempt `<tr>`-background-paint slip — pattern lesson: grep `tr:hover` against `*.css` in `src/` BEFORE inline-on-`<tr>` approach. (a.40) RECOMMENDED-NEXT = W#2 polish P-34.)
+
+**Previously updated:** 2026-05-17 (**W#2 P-28 + P-27 PAIRED BUILD session — delete URLs (with cascade disclosure) + delete captured texts/images SHIPPED at code level on `workflow-2-competition-scraping`.** One-hundred-and-sixth Claude Code session — `session_2026-05-17_w2-p28-p27-paired-build`. Closes (a.38) RECOMMENDED-NEXT. **Load-bearing finding surfaced at start-of-session per Rule 3:** doc claims about back-end DELETE handlers being missing were wrong against code reality — all three handlers (URL + text + image) already shipped during session-1 API-routes work. **Q1-Q4 of the originally-planned 5-question picker set collapsed** — answers already encoded in existing code. **Two Rule 14f forced-pickers fired** via AskUserQuestion: Q5 dialog placement → shared `ConfirmDeleteDialog.tsx`; Q6 cascade-count mechanism → new `GET cascade-counts` endpoint. **Code shipped (~9 new files + 3 modified):** new `cascade-counts.ts` DI handler + 18 node:test cases + thin route shim; new shared `ConfirmDeleteDialog.tsx` (~280 LOC, plain + cascade variants); `UrlTable.tsx` trash button per row with cascade disclosure + optimistic-remove with rollback; `UrlDetailContent.tsx` Delete URL header button + trash per captured-text row + trash overlay per captured-image thumbnail (3 dialog mounts at component level + 3 optimistic-remove handlers); new Playwright stub-page rig for the dialog (mount + page + spec); 11 new P-28 dialog UI-mechanical regression cases. **Verification scoreboard — all GREEN:** tsc clean; extension tsc clean; `npm run build` clean (**53 routes** — +1 cascade-counts); src/lib node:test **527/527** (+18 cascade-counts cases); extension `npm test` 334/334 unchanged; Playwright **75/75** (+11 P-28 dialog cases). **P-27 + P-28 polish-backlog entries flipped ⏳ NOT STARTED → ✅ SHIPPED AT CODE LEVEL 2026-05-17** + **new "## P-28 + P-27 SHIPPED at code level (paired build session 2026-05-17)" section appended at end** before the EOF marker. Director walkthrough on real Independent Website URL DEFERRED to W#2 → main deploy session #17. **One INFORMATIONAL CORRECTIONS_LOG entry this session:** doc-vs-code drift on P-27 back-end status — the 2026-05-14 P-27 capture wrongly framed the per-row text + image DELETE handlers as missing; root cause likely a collection-vs-per-row route conflation in the original verify-against-code step. (a.39) RECOMMENDED-NEXT = W#2 → main deploy session #17 for P-28 + P-27.)
 
 **Previously updated:** 2026-05-16 (**W#2 → main deploy session #16 — P-30 (Playwright React-bundle stub-page rig) + P-31 (route-handler DI refactor + 62 new node:test cases) + P-32 (`CapturedImageAddModal` multi-file-drop warning fix) ALL DEPLOYED to vklf.com + REAL-INDEPENDENT-WEBSITE FULL VERIFY across P-32 multi-file-drop case + 4 P-29 area spot-checks; zero walkthrough-found polish items.** One-hundred-and-fifth Claude Code session — `session_2026-05-16_w2-main-deploy-session-16-p30-p31-p32-DEPLOYED-FULL-VERIFY` (dual-branch — pre-deploy scoreboard on `workflow-2-competition-scraping`, ff-merge + deploy push on `main`, workflow-2 fast-forwarded after the main push). Closes (a.37) RECOMMENDED-NEXT. **Single clean deploy cycle this session:** pre-deploy scoreboard all GREEN on workflow-2 (tsc / extension tsc / `npm run build` 52 routes / src/lib node:test **509/509** / extension `npm test` 334/334 / Playwright **64/64**); rebase no-op (workflow-2 4 commits linearly ahead of main since deploy #15's ping-pong sync — `0548da7` P-30 code + `a1b99d2` P-30 doc batch + `611aa52` P-31/P-32 code + `f18e146` P-31/P-32 doc batch); ff-merge `3443971..f18e146` clean (32 files +4704/-1711 — 10 production source + 22 doc/test/infra); post-merge scoreboard re-run on `main` all GREEN; Rule 9 deploy-gate via AskUserQuestion picker → director picked Yes; pushed `origin/main 3443971..f18e146` (Vercel auto-redeployed cleanly within ~1-2 min); pushed `origin/workflow-2-competition-scraping a1b99d2..f18e146` (ping-pong sync). **Director walkthrough on real Independent Website URL exercised the P-32 user-visible delta + four P-29 area spot-checks in a single batched pass:** P-32 multi-file-drop case re-exercised ✅ (drag 2+ image files → warning text "2 files dropped — only the first will be used" appeared + first image previewed — this was P-32's user-visible fix); P-29 area spot-checks ✅ — URL add (urls route) / captured-text add (url-text route) / single-image drag (images-finalize route) / image fetch-by-URL (images-fetch-by-url route) all saved cleanly, zero regression from P-31's DI refactor. **HEADLINE OUTCOME: the P-29 manual-add area is now fully live on vklf.com + end-to-end automated regression coverage across BOTH UI mechanical (P-30 Playwright) AND API route-handler integration (P-31 node:test +62 cases) layers + real-website director walkthrough verification.** **P-30 entry status flipped ✅ SHIPPED AT CODE LEVEL → ✅ DEPLOYED 2026-05-16; P-31 entry status flipped ✅ SHIPPED AT CODE LEVEL → ✅ DEPLOYED 2026-05-16; P-32 entry status flipped ✅ FIXED → ✅ DEPLOYED 2026-05-16** (all in existing polish-backlog sections below); **new "## Deploy session #16 — P-30+P-31+P-32 DEPLOYED + FULL VERIFY 2026-05-16" section appended at end** before the EOF marker. **§4 Step 1c forced-picker fired** at end-of-session — director picked **(a.38) RECOMMENDED-NEXT = W#2 P-28 + P-27 paired build session** (delete URLs with cascade + delete captured texts/images). **One INFORMATIONAL CORRECTIONS_LOG entry this session:** cwd-leak Bash slip recurred TWICE this session (pre-deploy scoreboard + post-merge scoreboard) — pattern STRENGTHENING from prior recurrence captures.)
 
@@ -1749,9 +1751,9 @@ P-27, P-28, P-29 captured in their own sections below per the same Rule 24 + Rul
 
 ---
 
-## P-27 NEW POLISH ITEM — Delete individual captured texts and images from a URL detail page on vklf.com (NEW 2026-05-14 — surfaced by director end-of-session expand-roadmap ask)
+## P-27 ~~NEW POLISH ITEM~~ ✅ DEPLOYED — Delete individual captured texts and images from a URL detail page on vklf.com (NEW 2026-05-14; SHIPPED-AT-CODE-LEVEL 2026-05-17; DEPLOYED + REAL-INDEPENDENT-WEBSITE VERIFIED 2026-05-18 in W#2 → main deploy session #17)
 
-**Status:** ✅ **SHIPPED AT CODE LEVEL 2026-05-17** on `workflow-2-competition-scraping` in the W#2 P-28 + P-27 paired build session — `session_2026-05-17_w2-p28-p27-paired-build`. See "## P-28 + P-27 SHIPPED at code level (paired build session 2026-05-17)" section appended at end of file for the full ship narrative + verification scoreboard. Director walkthrough on real Independent Website URL DEFERRED to W#2 → main deploy session #17. **IMPORTANT 2026-05-17 framing correction (Rule 3 — code wins over doc):** the "What's shipped today" sub-section below was wrong against code reality at the time of original capture — the per-row DELETE handlers for both captured-text + captured-image ALREADY EXISTED at `text/[textId]/route.ts:171` + `images/[imageId]/route.ts:209` from the original session-1 API-routes work. The 2026-05-17 build session's verification at session start surfaced + corrected this drift; see `CORRECTIONS_LOG.md` 2026-05-17 entry for the full diff. The build work this session was UI-only + 1 new cascade-counts endpoint, not new back-end DELETE handlers. The original capture's framing is preserved below for historical record; the code-reality-aligned framing lives in the appended ship section.
+**Status:** ✅ **DEPLOYED + REAL-INDEPENDENT-WEBSITE VERIFIED 2026-05-18** on vklf.com in W#2 → main deploy session #17 — `session_2026-05-18_w2-main-deploy-session-17-p28-p27-DEPLOYED-FULL-VERIFY-plus-P-33-hover-tackon`. Director walkthrough Parts A (captured-text row trash with dialog preview + confirm + persisted-after-reload) + B (captured-image thumbnail trash with overlay + dialog + persisted-after-reload) + E (rollback path spot-check via DevTools Offline throttle — dialog stayed open + inline error + row re-appeared after optimistic-update rollback) ALL GREEN. See "## Deploy session #17 + P-33 hover tack-on" section appended at end of file for the full deploy + walkthrough verification narrative. Previously ✅ **SHIPPED AT CODE LEVEL 2026-05-17** on `workflow-2-competition-scraping` in the W#2 P-28 + P-27 paired build session — `session_2026-05-17_w2-p28-p27-paired-build`. See "## P-28 + P-27 SHIPPED at code level (paired build session 2026-05-17)" section for the full ship narrative + scoreboard. **IMPORTANT 2026-05-17 framing correction (Rule 3 — code wins over doc):** the "What's shipped today" sub-section below was wrong against code reality at the time of original capture — the per-row DELETE handlers for both captured-text + captured-image ALREADY EXISTED at `text/[textId]/route.ts:171` + `images/[imageId]/route.ts:209` from the original session-1 API-routes work. The 2026-05-17 build session's verification at session start surfaced + corrected this drift; see `CORRECTIONS_LOG.md` 2026-05-17 entry for the full diff. The build work this session was UI-only + 1 new cascade-counts endpoint, not new back-end DELETE handlers. The original capture's framing is preserved below for historical record; the code-reality-aligned framing lives in the appended ship section.
 
 **Original status (preserved 2026-05-14):** ⏳ NOT STARTED. Captured 2026-05-14 in `session_2026-05-14_w2-main-deploy-session-13-p23-amazon-context-menu-DEPLOYED-FULL-VERIFY`.
 
@@ -1789,9 +1791,9 @@ P-27, P-28, P-29 captured in their own sections below per the same Rule 24 + Rul
 
 ---
 
-## P-28 NEW POLISH ITEM — Delete saved URLs from a project on vklf.com (with cascade disclosure) (NEW 2026-05-14)
+## P-28 ~~NEW POLISH ITEM~~ ✅ DEPLOYED — Delete saved URLs from a project on vklf.com (with cascade disclosure) (NEW 2026-05-14; SHIPPED-AT-CODE-LEVEL 2026-05-17; DEPLOYED + REAL-INDEPENDENT-WEBSITE VERIFIED 2026-05-18 in W#2 → main deploy session #17)
 
-**Status:** ✅ **SHIPPED AT CODE LEVEL 2026-05-17** on `workflow-2-competition-scraping` in the W#2 P-28 + P-27 paired build session — `session_2026-05-17_w2-p28-p27-paired-build`. See "## P-28 + P-27 SHIPPED at code level (paired build session 2026-05-17)" section appended at end of file for the full ship narrative + verification scoreboard. Director walkthrough on real Independent Website URL DEFERRED to W#2 → main deploy session #17. The original capture below correctly noted that the URL DELETE handler already existed at `urls/[urlId]/route.ts:272` — the 2026-05-17 verification confirmed it cascades to children via Prisma `onDelete: Cascade`; storage objects for captured images are NOT deleted at URL-cascade time (the daily janitor cron sweeps orphans per `COMPETITION_SCRAPING_STACK_DECISIONS.md §3`). The build work this session added the cascade-disclosure UI + new `cascade-counts` lazy-fetch endpoint + trash button on each row + Delete URL header button on URL detail page.
+**Status:** ✅ **DEPLOYED + REAL-INDEPENDENT-WEBSITE VERIFIED 2026-05-18** on vklf.com in W#2 → main deploy session #17 — `session_2026-05-18_w2-main-deploy-session-17-p28-p27-DEPLOYED-FULL-VERIFY-plus-P-33-hover-tackon`. Director walkthrough Parts C (URL detail Delete URL header button — cascade-disclosure dialog opens with "Loading cascade counts…" briefly + resolves to correct N + M counts + confirm + navigate back + row gone from list) + D (URL list row trash with same cascade-disclosure shape — row vanishes + persisted-after-reload) ALL GREEN. See "## Deploy session #17 + P-33 hover tack-on" section appended at end of file for the full deploy + walkthrough verification narrative. Previously ✅ **SHIPPED AT CODE LEVEL 2026-05-17** on `workflow-2-competition-scraping` in the W#2 P-28 + P-27 paired build session — `session_2026-05-17_w2-p28-p27-paired-build`. See "## P-28 + P-27 SHIPPED at code level (paired build session 2026-05-17)" section for the full ship narrative + scoreboard. The original capture below correctly noted that the URL DELETE handler already existed at `urls/[urlId]/route.ts:272` — the 2026-05-17 verification confirmed it cascades to children via Prisma `onDelete: Cascade`; storage objects for captured images are NOT deleted at URL-cascade time (the daily janitor cron sweeps orphans per `COMPETITION_SCRAPING_STACK_DECISIONS.md §3`). The build work this session added the cascade-disclosure UI + new `cascade-counts` lazy-fetch endpoint + trash button on each row + Delete URL header button on URL detail page.
 
 **Original status (preserved 2026-05-14):** ⏳ NOT STARTED. Captured 2026-05-14 same session as P-27.
 
@@ -2679,6 +2681,132 @@ This collapsed Q1-Q4 of the originally-planned 5-question forced-picker set in `
 - `COMPETITION_SCRAPING_DESIGN.md` §B 2026-05-17 entry (full session narrative)
 - `CORRECTIONS_LOG.md` 2026-05-17 entry (doc-vs-code drift on P-27 back-end status)
 - `NEXT_SESSION.md` rewritten 2026-05-17 for deploy session #17
+
+---
+
+## Deploy session #17 — P-28 + P-27 DEPLOYED + REAL-INDEPENDENT-WEBSITE FULL VERIFY + P-33 row hover-highlight in-session SCOPE-ADD SHIPPED + paint-bug HOT-FIXED + DEPLOYED + VERIFIED (NEW 2026-05-18 — W#2 → main deploy session #17, closes (a.39) RECOMMENDED-NEXT)
+
+**Branch:** dual-branch session — pre-deploy scoreboard on `workflow-2-competition-scraping`; ff-merge + both deploy cycles + ping-pong sync on `main`.
+**Session:** `session_2026-05-18_w2-main-deploy-session-17-p28-p27-DEPLOYED-FULL-VERIFY-plus-P-33-hover-tackon` (one-hundred-and-seventh Claude Code session).
+
+### Pre-deploy scoreboard on workflow-2-competition-scraping — all GREEN
+
+| Check | Result |
+|---|---|
+| `npx tsc --noEmit` (root) | ✅ clean |
+| `cd extensions/competition-scraping && npx tsc --noEmit` | ✅ clean |
+| `npm run build` | ✅ clean — **53 routes** (unchanged from 2026-05-17 build) |
+| `node --test --experimental-strip-types $(find src -name '*.test.ts')` | ✅ **527/527 pass** |
+| Extension `npm test` | ✅ **334/334 pass** |
+| `npm run test:e2e:all` (Playwright full) | ✅ **75/75 pass** (2.0 min) |
+
+### Deploy mechanics
+
+1. Pre-deploy scoreboard on workflow-2 — all GREEN ✅
+2. `git fetch origin main && git rebase origin/main` → no-op (workflow-2 linearly 2 commits ahead of main since deploy #16 ping-pong sync — `a226ea1` P-28+P-27 code + `f58ca8c` end-of-session doc batch).
+3. `git checkout main && git pull --rebase origin main` → "Already up to date."
+4. `git merge --ff-only workflow-2-competition-scraping` → fast-forward `62d215c..f58ca8c` clean (19 files +1989/-94).
+5. Post-merge scoreboard on main — all GREEN (re-ran all 6 checks; identical results) ✅
+6. Rule 9 deploy gate via AskUserQuestion 4-option picker → director picked **"Deploy now (Rule 9-approved)"**.
+7. `git push origin main 62d215c..f58ca8c` → Vercel auto-redeployed cleanly (~1-2 min).
+8. Ping-pong sync: `git checkout workflow-2 && git merge --ff-only main && git push origin workflow-2` → no-op (workflow-2 already at same SHA as main post-merge).
+
+### Director walkthrough on real Independent Website URL — single batched pass across all 5 parts ALL GREEN
+
+| Part | Surface | Result |
+|---|---|---|
+| A | Captured-text row trash icon → dialog with text preview + "this cannot be undone" → confirm → row disappears + persisted after reload | ✅ PASS |
+| B | Captured-image thumbnail trash overlay (top-right) → dialog with image preview + category → confirm → image disappears + persisted after reload | ✅ PASS |
+| C | URL detail "Delete URL" header button → cascade-disclosure dialog opens with "Loading cascade counts…" briefly → resolves to "This will also delete N captured texts and M captured images" → confirm → navigation back to workflow main page → URL row gone from list | ✅ PASS (cascade counts matched what was on the URL; loading state visible) |
+| D | URL list row trash icon (right-most "actions" column) → cascade-disclosure dialog with same shape → confirm → row vanishes from list + persisted after reload | ✅ PASS |
+| E | Rollback path spot-check via DevTools Offline throttle → click trash → confirm with network offline → expected: dialog stays open + inline error + row re-appears after optimistic-update rollback | ✅ PASS (dialog stayed open + inline error surfaced + row re-appeared in list; throttle back to "No throttling" + dismiss dialog → row still present) |
+
+**HEADLINE OUTCOME: the W#2 admin data-management surface (add via Chrome extension + manual-add via P-29 + edit via inline-edit + delete via P-28/P-27) is now COMPLETE + LIVE on vklf.com end-to-end.** The entire CRUD surface for the Independent Website project's Competition Scraping workflow is production-ready.
+
+### In-session scope-add — P-33 row hover-highlight tack-on (Rule 11 forced-picker)
+
+Director surfaced natural-use feedback post-walkthrough: *"When the user puts their mouseover a row in the table in competition workflow, that row should get highlighted in a different color."* Rule 11 scope-add forced-picker fired with 3 options + escape hatch:
+
+| Option | Picked? | Notes |
+|---|---|---|
+| Defer to polish backlog as new P-33 | — | Most thorough/reliable RECOMMENDED option (full design pass + scoped properly + batched with other UX polish) |
+| Ship it as a tack-on this session | ✅ Picked | Director's choice. Extends scope; another deploy cycle; design questions answered on the fly. |
+| Question first | — | — |
+
+**First attempt — commit `1794eef`:**
+
+Edit at `UrlTable.tsx:498-510` — `onMouseEnter={(e) => { e.currentTarget.style.background = '#161b22'; }}` + `onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}` + `transition: 'background 120ms ease'` on the `<tr>` style. Full scoreboard re-run on workflow-2 — all GREEN (tsc / build 53 routes / src/lib 527/527 / ext 334/334 / Playwright 75/75). Committed + ff-merged + pushed origin/main + ping-pong sync. Vercel auto-redeployed cleanly. **Director reported on vklf.com after Vercel green + hard refresh: hover-highlight NOT visible.**
+
+**Diagnosis:** `<tr>` background paint is unreliable when `<td>` cells render on top — the `<td>` cells' transparent default paint sometimes paints OVER the `<tr>` background in modern browsers under `border-collapse: separate`. The codebase already had the established convention of applying hover background to `<td>` cells via CSS — `mt-tbl tbody tr:hover td { background: ... }` in `mt-table.css`; same pattern in `ast-table.css` + `canvas-table-mode.css`. The Rule 14e pre-capture grep should have surfaced this prior treatment but the first attempt jumped to inline-on-`<tr>` without checking.
+
+**Hot-fix — commit `507f7d6`:**
+
+Edit at `UrlTable.tsx:501-513` — swapped to `onMouseEnter={(e) => { const cells = e.currentTarget.querySelectorAll<HTMLTableCellElement>('td'); cells.forEach((cell) => { cell.style.background = '#21262d'; }); }}` + matching `onMouseLeave` that clears each cell's background back to `''`. Dropped the `transition: 120ms ease` on `<tr>` (was useless once we stopped setting `<tr>` background); instant on/off matches the existing GitHub-dark hover feel. Color bumped `#161b22` → `#21262d` (`--ph-bg` / `--border-dark` palette range — clearly elevated above `#0d1117` page bg). Abbreviated re-scoreboard (tsc + build clean; full Playwright not re-run since change is purely DOM event handler). Committed + ff-merged + pushed origin/main + ping-pong sync. **Director re-verified post-hot-fix-deploy on vklf.com: hover-highlight VISIBLE + working.**
+
+### P-33 final status
+
+✅ **SHIPPED + DEPLOYED + REAL-INDEPENDENT-WEBSITE VERIFIED 2026-05-18** in this same session. See P-33 entry below.
+
+### CORRECTIONS_LOG entry this session
+
+**One INFORMATIONAL §Entry** — P-33 first-attempt `<tr>`-background-paint slip. Pattern lesson: when adding hover effects to a table, **grep `tr:hover` against `*.css` in `src/` FIRST** — if the codebase has an established pattern, follow it. Net cost ~5 min (one extra deploy cycle). Zero production impact (invisible-hover state was harmless; clicks + navigation still worked). Recovered same-session via the hot-fix.
+
+### §4 Step 1c forced-picker fired at end-of-session
+
+Deploy session #17 wrapped cleanly + W#2 admin data-management surface complete + live; no inherent continuation. Director picked **(a.40) RECOMMENDED-NEXT = W#2 polish P-34** — propagate row hover-highlight from URL list table to captured-text rows + image thumbnails on URL detail page. Rationale per `feedback_recommendation_style.md` (most thorough/reliable): closes UX consistency gap from today's P-33 tack-on while pattern is fresh; small focused session (~30 min code work) using same `querySelectorAll` pattern; brings UX consistency to entire admin data-management surface.
+
+### Cross-references
+
+- ROADMAP W#2 row Last Session 2026-05-18 prepended + (a.38)/(a.39) flipped ✅ DONE + new (a.40) RECOMMENDED-NEXT P-34
+- CHAT_REGISTRY new top entry
+- DOCUMENT_MANIFEST header + per-doc flags
+- CORRECTIONS_LOG 2026-05-18 INFORMATIONAL entry — P-33 first-attempt `<tr>`-paint slip
+- COMPETITION_SCRAPING_DESIGN.md new §B 2026-05-18 entry covering deploy outcome + walkthrough + P-33 tack-on + paint lesson
+- NEXT_SESSION.md rewritten 2026-05-18 for P-34
+- New P-33 entry below (SHIPPED + DEPLOYED + VERIFIED in same session)
+- New P-34 entry below (RECOMMENDED-NEXT)
+
+---
+
+## P-33 ~~IN-SESSION SCOPE-ADD~~ ✅ SHIPPED + DEPLOYED + VERIFIED — URL list table row hover-highlight (NEW 2026-05-18; SHIPPED + paint-bug HOT-FIXED + DEPLOYED + REAL-INDEPENDENT-WEBSITE VERIFIED same session)
+
+**Status:** ✅ **SHIPPED + DEPLOYED + REAL-INDEPENDENT-WEBSITE VERIFIED 2026-05-18** on vklf.com in W#2 → main deploy session #17 — `session_2026-05-18_w2-main-deploy-session-17-p28-p27-DEPLOYED-FULL-VERIFY-plus-P-33-hover-tackon`. See "## Deploy session #17 + P-33 hover tack-on" section above for the full first-attempt + hot-fix + verification narrative.
+
+**Surfaced by:** Director natural-use feedback post-walkthrough on real Independent Website URL — *"When the user puts their mouseover a row in the table in competition workflow, that row should get highlighted in a different color."*
+
+**Surface affected:** URL list table on the workflow main page (`/projects/[projectId]/competition-scraping`). Captured-text rows + image thumbnails on URL detail page DID NOT get the same treatment in this session — captured as P-34 RECOMMENDED-NEXT polish entry below for the next session.
+
+**Implementation (final after hot-fix):**
+
+- File: `src/app/projects/[projectId]/competition-scraping/components/UrlTable.tsx` (lines ~498-515)
+- `onMouseEnter` queries `<td>` children via `querySelectorAll<HTMLTableCellElement>('td')` and sets each cell's inline `background` to `#21262d` (GitHub-dark `--ph-bg` / `--border-dark` palette range — clearly elevated above `#0d1117` page bg)
+- `onMouseLeave` clears each cell's inline `background` back to `''` (empty string lets the cell return to its default transparent paint)
+- No transition (instant on/off; matches the existing GitHub-dark hover feel; transitions on `<tr>` weren't doing anything once we stopped setting `<tr>` background)
+
+**Pattern reference for future similar polish:** see `mt-tbl tbody tr:hover td { ... }` in `src/app/projects/[projectId]/keyword-clustering/components/mt-table.css:241` for the CSS-based equivalent. The W#2 codebase uses inline `style={{...}}` throughout (not Tailwind/CSS modules), so the `querySelectorAll` approach matches existing convention in `UrlTable.tsx`.
+
+**Lesson captured in CORRECTIONS_LOG.md 2026-05-18:** when adding hover effects to a table, grep `tr:hover` against `*.css` in `src/` FIRST to surface the codebase's established pattern before reaching for inline-on-`<tr>`.
+
+---
+
+## P-34 NEW POLISH ITEM (RECOMMENDED-NEXT) — Propagate row hover-highlight to captured-text rows + image thumbnails on URL detail page (NEW 2026-05-18 — closes UX consistency gap from today's P-33 tack-on)
+
+**Status:** ⏳ **RECOMMENDED-NEXT** (a.40). Director picked via §4 Step 1c forced-picker at end-of-session 2026-05-18. Branch: `workflow-2-competition-scraping`. Schema-change-in-flight flag stays "No" entire session.
+
+**Why:** today's P-33 tack-on shipped hover-highlight on the URL list table only. The URL detail page (`/projects/[projectId]/competition-scraping/url/[urlId]`) has TWO additional table-like surfaces that should match the same hover treatment for UX consistency:
+
+1. **Captured-text rows** — rendered as `<tr>` rows in a table inside `UrlDetailContent.tsx`. Same pattern as URL list table: `onMouseEnter` + `onMouseLeave` swapping each `<td>` cell's background to `#21262d`.
+2. **Image thumbnails** — different element shape (not `<tr>` rows); rendered as a grid of thumbnail containers (likely `<div>` or `<figure>`). The hover treatment applies to the thumbnail container element; inline-style background swap is fine since the same color (`#21262d`) and 0-transition behavior applies. Director may want to spot-check that trash-overlay's own focus/hover interaction reads cleanly when both container + trash overlay highlight simultaneously.
+
+**Scope clarifications (no Rule 14f picker needed; pattern + colors already settled by P-33):**
+
+- Target file: `src/app/projects/[projectId]/competition-scraping/url/[urlId]/components/UrlDetailContent.tsx`
+- Reference implementation: `src/app/projects/[projectId]/competition-scraping/components/UrlTable.tsx` (P-33; lines ~498-515)
+- Color: `#21262d` (same as P-33)
+- No transition (instant on/off; same as P-33 final)
+- Per Rule 23 Change Impact Audit: ADDITIVE — pure DOM event handlers; no schema; no API; no shared-types change
+
+**Estimated session shape:** ~30 min code session + standard scoreboard + W#2 → main deploy + brief director re-verify on vklf.com (hover the captured-text row + image thumbnail; confirm trash flows from P-27 still work cleanly with hover-highlight applied).
 
 ---
 
