@@ -23,6 +23,7 @@ import type { ExtensionProject } from '../api-client.ts';
 import type {
   AcceptedImageMimeType,
   CapturedImage,
+  CapturedImageWithUrls,
   CapturedText,
   CompetitorUrl,
   CreateCapturedTextRequest,
@@ -89,6 +90,22 @@ export async function listCompetitorUrls(
     kind: 'list-competitor-urls',
     projectId,
     platform,
+  });
+}
+
+/**
+ * P-24 saved-image indicator — lists the CapturedImage rows for one
+ * CompetitorUrl. Routed through the background per the same CORS reasoning
+ * as listCompetitorUrls.
+ */
+export async function listCapturedImages(
+  projectId: string,
+  urlId: string,
+): Promise<CapturedImageWithUrls[]> {
+  return send<CapturedImageWithUrls[]>({
+    kind: 'list-captured-images',
+    projectId,
+    urlId,
   });
 }
 

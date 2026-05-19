@@ -22,7 +22,11 @@
 //   7. Listens for chrome.runtime.onMessage from the background's
 //      right-click context-menu fallback; opens the URL-add form on demand.
 
-import { listProjects, listCompetitorUrls } from './api-bridge.ts';
+import {
+  listProjects,
+  listCompetitorUrls,
+  listCapturedImages,
+} from './api-bridge.ts';
 import {
   getSelectedPlatform,
   getSelectedProjectId,
@@ -42,6 +46,12 @@ import {
   attachAlreadySavedIcon,
   detachAllAlreadySavedIcons,
 } from './already-saved-icon.ts';
+import {
+  attachAlreadySavedImageIcon,
+  detachAllAlreadySavedImageIcons,
+  type AttachedImageIcon,
+} from './already-saved-image-icon.ts';
+import type { CapturedImageWithUrls } from '../../../../../src/lib/shared-types/competition-scraping.ts';
 import { showAlreadySavedOverlay } from './already-saved-overlay.ts';
 import { openUrlAddForm } from './url-add-form.ts';
 import { openTextCaptureForm } from './text-capture-form.ts';
@@ -138,6 +148,10 @@ export async function runOrchestrator(): Promise<() => void> {
   // the +Add affordance work — just without the "already saved" hints
   // — so a transient PLOS outage doesn't break URL capture.
   let recognitionSet: Set<string> = new Set();
+  // P-24: normalized-URL → urlId map, built alongside the recognitionSet so
+  // maybeShowDetailOverlay can fetch the saved CapturedImage list for the
+  // current page when it matches a saved row.
+  const urlIdByNormalized = new Map<string, string>();
   try {
     const rows = await listCompetitorUrls(projectId, platform as never);
     // P-21 (2026-05-18-c): symmetric canonicalize. Pass the active platform
@@ -149,6 +163,14 @@ export async function runOrchestrator(): Promise<() => void> {
     recognitionSet = buildRecognitionSet(rows, (href) =>
       platformModule.canonicalProductUrl(href),
     );
+    // Populate the urlId map with the same canonicalize-then-normalize chain.
+    for (const row of rows) {
+      if (typeof row.url !== 'string' || typeof row.id !== 'string') continue;
+      const canonical =
+        platformModule.canonicalProductUrl(row.url) ?? row.url;
+      const normalized = normalizeUrlForRecognition(canonical);
+      if (normalized !== '') urlIdByNormalized.set(normalized, row.id);
+    }
   } catch (err) {
     console.warn('[PLOS] could not load saved URLs for recognition', err);
   }
@@ -304,6 +326,96 @@ export async function runOrchestrator(): Promise<() => void> {
     }
   }
 
+  // ─── P-24 saved-image indicator state ────────────────────────────────
+  //
+  // Cached saved-CapturedImage list per (project, urlId). One fetch per
+  // (urlId) per page-load is enough — the indicator is a recognition cue,
+  // not a real-time mirror. If the user saves a new image while on the
+  // page, the orchestrator's `handleAddRequest` flow doesn't currently
+  // refresh the image cache (acceptable — director will see the indicator
+  // on the next page reload). Future polish could push a cache-invalidation
+  // hook from image-capture-form's onSaved into orchestrator.
+  const capturedImagesByUrlId = new Map<string, CapturedImageWithUrls[]>();
+  let currentUrlIdForImages: string | null = null;
+  const attachedImageIcons = new Map<string, AttachedImageIcon>();
+
+  async function maybePopulateImageCache(urlId: string): Promise<void> {
+    if (capturedImagesByUrlId.has(urlId)) return;
+    try {
+      const rows = await listCapturedImages(projectId, urlId);
+      capturedImagesByUrlId.set(urlId, rows);
+    } catch (err) {
+      console.warn(
+        '[PLOS] could not load saved images for recognition',
+        err,
+      );
+      // Negative-cache the failure so we don't refetch on every rescan.
+      capturedImagesByUrlId.set(urlId, []);
+    }
+  }
+
+  function scanImages(): void {
+    if (currentUrlIdForImages === null) return;
+    const saved = capturedImagesByUrlId.get(currentUrlIdForImages);
+    if (!saved || saved.length === 0) return;
+
+    // Index saved rows by their originalSrcUrl for O(1) lookup. Rows with a
+    // null originalSrcUrl (legacy captures, region-screenshot captures) are
+    // skipped — they have no host-page-image anchor to attach to.
+    const rowsBySrc = new Map<string, CapturedImageWithUrls>();
+    for (const row of saved) {
+      if (row.originalSrcUrl) rowsBySrc.set(row.originalSrcUrl, row);
+    }
+    if (rowsBySrc.size === 0) return;
+
+    // Walk <img> elements; first match per saved id wins (host pages
+    // sometimes render the same image multiple times — only one indicator
+    // per saved row is wanted, mirroring the URL-icon dedupe rationale).
+    const activeIds = new Set<string>();
+    const imgs = document.querySelectorAll<HTMLImageElement>('img');
+    for (const img of imgs) {
+      const match =
+        rowsBySrc.get(img.currentSrc) ?? rowsBySrc.get(img.src) ?? null;
+      if (!match) continue;
+      if (activeIds.has(match.id)) continue; // already indicator-attached this rescan
+
+      const existing = attachedImageIcons.get(match.id);
+      if (existing && existing.imgEl === img) {
+        // Same img element still matched — just refresh position.
+        existing.reposition();
+      } else {
+        if (existing) {
+          existing.iconEl.remove();
+          attachedImageIcons.delete(match.id);
+        }
+        const icon = attachAlreadySavedImageIcon(img, match.id);
+        if (icon) attachedImageIcons.set(match.id, icon);
+      }
+      activeIds.add(match.id);
+    }
+
+    // Detach icons whose img no longer matches (page changed, image
+    // unmounted by SPA, lazy-load swap, etc.).
+    for (const [id, icon] of Array.from(attachedImageIcons.entries())) {
+      if (!activeIds.has(id)) {
+        icon.iconEl.remove();
+        attachedImageIcons.delete(id);
+      }
+    }
+  }
+
+  function repositionImageIcons(): void {
+    for (const icon of attachedImageIcons.values()) {
+      icon.reposition();
+    }
+  }
+
+  function clearImageIndicators(): void {
+    detachAllAlreadySavedImageIcons();
+    attachedImageIcons.clear();
+    currentUrlIdForImages = null;
+  }
+
   // P-10 fix 2026-05-10: dedupe banner-fire by location.href. Tracks the
   // LAST URL we considered (not the last URL we showed for) so the
   // navigate-away-and-back case correctly re-fires the banner:
@@ -322,8 +434,16 @@ export async function runOrchestrator(): Promise<() => void> {
       platformModule.canonicalProductUrl(location.href) ??
       location.href;
     const normalized = normalizeUrlForRecognition(canonical);
-    if (!normalized) return;
-    if (!recognitionSet.has(normalized)) return;
+    if (!normalized) {
+      // Navigated to a URL we can't even parse — drop image indicators.
+      if (attachedImageIcons.size > 0) clearImageIndicators();
+      return;
+    }
+    if (!recognitionSet.has(normalized)) {
+      // Navigated off any saved URL — drop image indicators.
+      if (attachedImageIcons.size > 0) clearImageIndicators();
+      return;
+    }
     // P-19 fix 2026-05-18-d: pass the same muteMutationObserver wrapper
     // used for the highlighter (P-14). Overlay teardown (auto-dismiss at
     // 5s OR close-button click) removes the banner from the DOM; without
@@ -331,6 +451,28 @@ export async function runOrchestrator(): Promise<() => void> {
     // → debounced highlighter.refresh() → strip-and-reapply <mark>
     // elements → collapse the user's active text selection on the page.
     showAlreadySavedOverlay(projectName, { muteMutationObserver });
+
+    // P-24: fetch saved CapturedImage rows for this URL and scan <img>
+    // elements. Fire-and-forget — if the API call is slow, the indicators
+    // appear when the response lands; the rest of the orchestrator keeps
+    // working in the meantime.
+    const urlId = urlIdByNormalized.get(normalized) ?? null;
+    if (urlId === null) {
+      if (attachedImageIcons.size > 0) clearImageIndicators();
+      return;
+    }
+    if (currentUrlIdForImages !== urlId) {
+      // URL changed (or first time on a saved page) — clear stale icons
+      // from any previous saved URL before fetching the new list.
+      detachAllAlreadySavedImageIcons();
+      attachedImageIcons.clear();
+      currentUrlIdForImages = urlId;
+    }
+    void maybePopulateImageCache(urlId).then(() => {
+      // Re-check we're still on the same urlId — fast SPA navigation can
+      // change `currentUrlIdForImages` while the fetch was in flight.
+      if (currentUrlIdForImages === urlId) scanImages();
+    });
   }
 
   // P-10 fix 2026-05-10: debounce overlay checks across rapid-fire
@@ -381,6 +523,10 @@ export async function runOrchestrator(): Promise<() => void> {
     rescanTimer = setTimeout(() => {
       rescanTimer = null;
       scanLinks();
+      // P-24: re-scan <img> elements so newly-rendered images (lazy-load,
+      // SPA tile mounts, infinite scroll) get the indicator if they match.
+      // No-op when not on a saved page.
+      scanImages();
       // P-5 fix 2026-05-08-d: re-apply highlight terms on each mutation
       // batch so newly-rendered SPA content / infinite-scroll tiles get
       // their highlights too. The highlighter does its own remove-then-
@@ -410,6 +556,21 @@ export async function runOrchestrator(): Promise<() => void> {
     scheduleDetailOverlayCheck();
   };
   window.addEventListener('popstate', onLocationChange);
+
+  // P-24: reposition image indicators on scroll/resize. Listeners are
+  // passive + capture-phase so they reach us across nested scroll containers
+  // (some platforms have scrollable inner panels that don't bubble scroll
+  // up to window). No throttling — `reposition` reads bounding rects and
+  // updates two style props per icon; cost is O(attachedImageIcons.size)
+  // which is bounded by the saved-image count for the current URL.
+  const onScrollOrResize = (): void => {
+    repositionImageIcons();
+  };
+  window.addEventListener('scroll', onScrollOrResize, {
+    passive: true,
+    capture: true,
+  });
+  window.addEventListener('resize', onScrollOrResize, { passive: true });
 
   // Listen for context-menu fallback messages from the background.
   const onMessage = (
@@ -536,10 +697,17 @@ export async function runOrchestrator(): Promise<() => void> {
     observer?.disconnect();
     observer = null;
     window.removeEventListener('popstate', onLocationChange);
+    window.removeEventListener('scroll', onScrollOrResize, {
+      capture: true,
+    } as EventListenerOptions);
+    window.removeEventListener('resize', onScrollOrResize);
     detachContextMenuListener();
     chrome.runtime.onMessage.removeListener(onMessage);
     floatingButton.destroy();
     detachAllAlreadySavedIcons();
+    // P-24: tear down all image indicators + drop cache.
+    clearImageIndicators();
+    capturedImagesByUrlId.clear();
     if (highlighter !== null) {
       highlighter.destroy();
       highlighter = null;

@@ -11,6 +11,7 @@ import { PlosApiError } from './errors.ts';
 import type {
   AcceptedImageMimeType,
   CapturedImage,
+  CapturedImageWithUrls,
   CapturedText,
   CompetitorUrl,
   CreateCapturedTextRequest,
@@ -20,6 +21,7 @@ import type {
   FinalizeImageUploadRequest,
   FinalizeImageUploadResponse,
   GetExtensionStateResponse,
+  ListCapturedImagesResponse,
   ListCompetitorUrlsResponse,
   ListHighlightTermsResponse,
   ListVocabularyEntriesResponse,
@@ -267,6 +269,34 @@ export async function listCompetitorUrls(
   // only reads `.url` for the recognition Set, so a future additive
   // server-side change won't break our parsing.
   return data as ListCompetitorUrlsResponse;
+}
+
+/**
+ * P-24 saved-image indicator — lists the CapturedImage rows for one
+ * CompetitorUrl. The orchestrator calls this when the user is on a
+ * recognized saved-URL page so it can render a green ✓ overlay on the
+ * page's <img> elements whose `currentSrc`/`src` matches a saved row's
+ * `originalSrcUrl`.
+ *
+ * Returns each row's metadata + the short-lived thumbnail/full-size signed
+ * URLs (already in the wire shape per slice (a.2)). The indicator only
+ * reads `originalSrcUrl` — the URL fields are along for the ride.
+ */
+export async function listCapturedImages(
+  projectId: string,
+  urlId: string,
+): Promise<CapturedImageWithUrls[]> {
+  const res = await authedFetch(
+    `/api/projects/${encodeURIComponent(projectId)}/competition-scraping/urls/${encodeURIComponent(urlId)}/images`,
+  );
+  const data = await readJsonOrThrow<ListCapturedImagesResponse>(res);
+  if (!Array.isArray(data)) {
+    throw new PlosApiError(
+      500,
+      'Unexpected response shape from competition-scraping/urls/[urlId]/images',
+    );
+  }
+  return data;
 }
 
 /**

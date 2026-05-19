@@ -37,6 +37,7 @@ export type CapturedImageRow = {
   imageCategory: string | null;
   storagePath: string;
   storageBucket: string;
+  originalSrcUrl: string | null;
   composition: string | null;
   embeddedText: string | null;
   tags: Prisma.JsonValue;
@@ -95,6 +96,7 @@ export function toWireShape(row: CapturedImageRow | null): CapturedImage | null 
     imageCategory: row.imageCategory,
     storagePath: row.storagePath,
     storageBucket: row.storageBucket,
+    originalSrcUrl: row.originalSrcUrl,
     composition: row.composition,
     embeddedText: row.embeddedText,
     tags: (row.tags ?? []) as string[],
@@ -221,6 +223,15 @@ export function makeImagesFinalizeHandlers(deps: ImagesFinalizeHandlerDeps) {
         },
       };
     }
+    if (
+      body.originalSrcUrl !== undefined &&
+      typeof body.originalSrcUrl !== 'string'
+    ) {
+      return {
+        status: 400,
+        body: { error: 'originalSrcUrl must be a string when provided' },
+      };
+    }
 
     const parent = await deps.withRetry(() =>
       deps.prisma.competitorUrl.findFirst({
@@ -269,6 +280,10 @@ export function makeImagesFinalizeHandlers(deps: ImagesFinalizeHandlerDeps) {
           : null,
       storagePath,
       storageBucket: deps.bucket,
+      originalSrcUrl:
+        typeof body.originalSrcUrl === 'string' && body.originalSrcUrl.trim()
+          ? body.originalSrcUrl.trim()
+          : null,
       composition:
         typeof body.composition === 'string' && body.composition.trim()
           ? body.composition.trim()

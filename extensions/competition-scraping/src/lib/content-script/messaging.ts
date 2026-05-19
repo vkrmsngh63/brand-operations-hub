@@ -31,6 +31,7 @@
 import type {
   AcceptedImageMimeType,
   CapturedImage,
+  CapturedImageWithUrls,
   CapturedText,
   CompetitorUrl,
   CreateCapturedTextRequest,
@@ -146,6 +147,17 @@ export interface ListCompetitorUrlsRequest {
   platform: Platform | null;
 }
 
+/**
+ * P-24 saved-image indicator — content script asks the background to list
+ * the CapturedImage rows for one CompetitorUrl. Background routes through
+ * the extension-origin authedFetch (avoids host-page CORS).
+ */
+export interface ListCapturedImagesRequest {
+  kind: 'list-captured-images';
+  projectId: string;
+  urlId: string;
+}
+
 export interface CreateCompetitorUrlRequestMessage {
   kind: 'create-competitor-url';
   projectId: string;
@@ -231,6 +243,7 @@ export interface CaptureVisibleTabRequest {
 export type BackgroundRequest =
   | ListProjectsRequest
   | ListCompetitorUrlsRequest
+  | ListCapturedImagesRequest
   | CreateCompetitorUrlRequestMessage
   | CreateCapturedTextRequestMessage
   | ListVocabularyRequest
@@ -251,6 +264,9 @@ export type ListProjectsResponseEnvelope = BackgroundResponse<
 >;
 export type ListCompetitorUrlsResponseEnvelope = BackgroundResponse<
   ListCompetitorUrlsResponse
+>;
+export type ListCapturedImagesResponseEnvelope = BackgroundResponse<
+  CapturedImageWithUrls[]
 >;
 export type CreateCompetitorUrlResponseEnvelope = BackgroundResponse<
   CompetitorUrl
@@ -294,6 +310,9 @@ export function isBackgroundRequest(
   if (msg.kind === 'list-projects') return true;
   if (msg.kind === 'list-competitor-urls') {
     return typeof msg.projectId === 'string';
+  }
+  if (msg.kind === 'list-captured-images') {
+    return typeof msg.projectId === 'string' && typeof msg.urlId === 'string';
   }
   if (msg.kind === 'create-competitor-url') {
     return (

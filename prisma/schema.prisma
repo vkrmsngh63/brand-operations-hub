@@ -325,6 +325,11 @@ model CapturedImage {
   imageCategory   String? // value from VocabularyEntry
   storagePath     String // e.g., "{projectId}/{competitorUrlId}/{capturedImageId}.png"
   storageBucket   String   @default("competition-scraping")
+  // Host-page <img>.src this row was captured from. Nullable because
+  // pre-existing rows have no recoverable source; new rows persist the src
+  // so the content-script can render a "saved" indicator on matching <img>
+  // elements on the live page.
+  originalSrcUrl  String?
   composition     String?  @db.Text // describes what's IN the image
   embeddedText    String?  @db.Text // text that appears INSIDE the image
   tags            Json     @default("[]")

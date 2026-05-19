@@ -23,6 +23,7 @@ function makeRow(overrides: Partial<CapturedImageRow> = {}): CapturedImageRow {
     imageCategory: null,
     storagePath: 'proj-1/url-1/img-uuid.jpg',
     storageBucket: 'competition-scraping',
+    originalSrcUrl: null,
     composition: null,
     embeddedText: null,
     tags: [],
@@ -60,6 +61,8 @@ function makeFakePrisma(opts: {
         competitorUrlId: data.competitorUrlId,
         storagePath: data.storagePath,
         storageBucket: data.storageBucket,
+        originalSrcUrl:
+          typeof data.originalSrcUrl === 'string' ? data.originalSrcUrl : null,
         mimeType: data.mimeType,
         sourceType: data.sourceType as string,
         fileSize: typeof data.fileSize === 'number' ? data.fileSize : null,
@@ -337,4 +340,66 @@ test('POST 500 on unhandled Prisma error', async () => {
   const r = await POST(makeReq({ body: validBody }), ctx);
   assert.equal(r.status, 500);
   assert.equal(deps.recordFlakeCalls.length, 1);
+});
+
+// ── P-24 originalSrcUrl persistence cases ─────────────────────────────
+
+test('POST 400 invalid originalSrcUrl type', async () => {
+  const deps = makeDeps();
+  const { POST } = makeImagesFinalizeHandlers(deps);
+  const r = await POST(
+    makeReq({ body: { ...validBody, originalSrcUrl: 42 } }),
+    ctx
+  );
+  assert.equal(r.status, 400);
+  assert.match((r.body as { error: string }).error, /originalSrcUrl/);
+});
+
+test('POST 201 persists originalSrcUrl when provided', async () => {
+  const { prisma, createCalls } = makeFakePrisma();
+  const deps = makeDeps({ prisma });
+  const { POST } = makeImagesFinalizeHandlers(deps);
+  const r = await POST(
+    makeReq({
+      body: {
+        ...validBody,
+        originalSrcUrl: 'https://m.media-amazon.com/images/I/41xy.jpg',
+      },
+    }),
+    ctx
+  );
+  assert.equal(r.status, 201);
+  assert.equal(
+    createCalls[0]?.data.originalSrcUrl,
+    'https://m.media-amazon.com/images/I/41xy.jpg'
+  );
+  assert.equal(
+    (r.body as { originalSrcUrl: string | null }).originalSrcUrl,
+    'https://m.media-amazon.com/images/I/41xy.jpg'
+  );
+});
+
+test('POST 201 stores originalSrcUrl as null when omitted', async () => {
+  const { prisma, createCalls } = makeFakePrisma();
+  const deps = makeDeps({ prisma });
+  const { POST } = makeImagesFinalizeHandlers(deps);
+  const r = await POST(makeReq({ body: validBody }), ctx);
+  assert.equal(r.status, 201);
+  assert.equal(createCalls[0]?.data.originalSrcUrl, null);
+  assert.equal(
+    (r.body as { originalSrcUrl: string | null }).originalSrcUrl,
+    null
+  );
+});
+
+test('POST 201 trims whitespace and stores null for empty-after-trim', async () => {
+  const { prisma, createCalls } = makeFakePrisma();
+  const deps = makeDeps({ prisma });
+  const { POST } = makeImagesFinalizeHandlers(deps);
+  const r = await POST(
+    makeReq({ body: { ...validBody, originalSrcUrl: '   ' } }),
+    ctx
+  );
+  assert.equal(r.status, 201);
+  assert.equal(createCalls[0]?.data.originalSrcUrl, null);
 });

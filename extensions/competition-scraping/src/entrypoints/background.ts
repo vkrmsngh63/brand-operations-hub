@@ -46,6 +46,7 @@ import {
   createVocabularyEntry,
   fetchImageBytes,
   finalizeImageUpload,
+  listCapturedImages,
   listCompetitorUrls,
   listProjects,
   listVocabularyEntries,
@@ -240,6 +241,9 @@ async function handleBackgroundRequest(
   if (req.kind === 'list-competitor-urls') {
     return listCompetitorUrls(req.projectId, req.platform);
   }
+  if (req.kind === 'list-captured-images') {
+    return listCapturedImages(req.projectId, req.urlId);
+  }
   if (req.kind === 'create-competitor-url') {
     return createCompetitorUrl(req.projectId, req.body);
   }
@@ -341,6 +345,15 @@ async function handleSubmitImageCapture(
   );
 
   // Phase 3 — finalize and create the CapturedImage row.
+  //
+  // P-24: persist the host-page <img>.src on regular captures so the
+  // content-script saved-image indicator can match. Skip on region-screenshot
+  // captures (srcUrl is a base64 data URL — never matches anything on a
+  // live page, and storing megabytes of base64 in DB is wasteful).
+  const originalSrcUrl =
+    req.request.sourceType === 'regular' && !req.srcUrl.startsWith('data:')
+      ? req.srcUrl
+      : undefined;
   const row = await finalizeImageUpload(req.projectId, req.urlId, {
     clientId: req.request.clientId,
     capturedImageId: phase1.capturedImageId,
@@ -351,6 +364,7 @@ async function handleSubmitImageCapture(
     composition: req.finalize.composition,
     embeddedText: req.finalize.embeddedText,
     tags: req.finalize.tags,
+    ...(originalSrcUrl !== undefined ? { originalSrcUrl } : {}),
   });
   return row;
 }

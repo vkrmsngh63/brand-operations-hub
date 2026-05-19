@@ -36,6 +36,7 @@ function toWireShape(
     imageCategory: row.imageCategory,
     storagePath: row.storagePath,
     storageBucket: row.storageBucket,
+    originalSrcUrl: row.originalSrcUrl,
     composition: row.composition,
     embeddedText: row.embeddedText,
     tags: (row.tags ?? []) as string[],

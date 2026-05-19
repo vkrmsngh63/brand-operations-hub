@@ -89,6 +89,28 @@ export const CONTENT_SCRIPT_CSS = `
   z-index: 999990 !important;
 }
 
+.plos-cs-saved-image-icon {
+  position: fixed !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 28px !important;
+  height: 28px !important;
+  background: #16a34a !important;
+  color: #fff !important;
+  font-size: 18px !important;
+  line-height: 1 !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif !important;
+  font-weight: 900 !important;
+  text-align: center !important;
+  border: 3px solid #fff !important;
+  border-radius: 50% !important;
+  box-shadow: 0 0 0 2px #16a34a, 0 3px 8px rgba(0, 0, 0, 0.4) !important;
+  user-select: none !important;
+  pointer-events: none !important;
+  z-index: 999990 !important;
+}
+
 .plos-cs-overlay-banner {
   position: fixed !important;
   top: 12px !important;

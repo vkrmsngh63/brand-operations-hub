@@ -335,6 +335,10 @@ export interface CapturedImage {
   imageCategory: string | null;
   storagePath: string;
   storageBucket: string;
+  // P-24: host-page <img>.src this row was captured from. Null for rows
+  // captured before P-24 (no backfill path); set for new captures so the
+  // content-script saved-image indicator can match.
+  originalSrcUrl: string | null;
   composition: string | null;
   embeddedText: string | null;
   tags: string[];
@@ -402,6 +406,11 @@ export interface FinalizeImageUploadRequest {
   // P-29 Slice #1 — see CreateCompetitorUrlRequest.source. Slice #3 wires
   // this to vklf.com's manual-add image modal.
   source?: Source;
+  // P-24: optional host-page <img>.src that produced this capture. Persisted
+  // so the content-script can later match host-page images against saved
+  // rows. Absent on manual-add captures (P-29 Slice #3) and region-screenshot
+  // captures where no source <img> exists.
+  originalSrcUrl?: string;
 }
 
 export type FinalizeImageUploadResponse = CapturedImage;
