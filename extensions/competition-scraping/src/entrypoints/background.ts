@@ -60,6 +60,7 @@ import {
   type ContentScriptMessage,
   type SubmitImageCaptureRequestMessage,
 } from '../lib/content-script/messaging';
+import { logGlobalError } from '../lib/sw-error-logging';
 import type { CapturedImage } from '../../../../src/lib/shared-types/competition-scraping';
 
 void supabase;
@@ -80,6 +81,25 @@ const CONTEXT_MENU_IMAGE_ID = 'plos-add-captured-image';
 const CONTEXT_MENU_IMAGE_TITLE = 'Add to PLOS — Image';
 
 export default defineBackground(() => {
+  // P-16 (W#2 polish, 2026-05-19): SW global error handlers. Attach BEFORE
+  // any other listener so they're live for the SW's full lifecycle —
+  // including the Supabase auto-refresh-token loop which begins as soon as
+  // the supabase module is imported (top of file). MV3 SWs treat unhandled
+  // promise rejections more strictly than persistent backgrounds; the
+  // suspected laptop-2 crash from P3B-9 came from such a rejection during
+  // a WiFi-off period. These listeners do NOT preventDefault / re-throw —
+  // they just leave a structured diagnostic trace in SW DevTools so the
+  // next crash (if any) surfaces a real stack instead of the degenerate
+  // ":0 (anonymous function)" Chrome shows when nothing caught the error.
+  self.addEventListener('unhandledrejection', (event) => {
+    const reason = (event as PromiseRejectionEvent).reason;
+    logGlobalError(reason, 'sw-unhandledrejection');
+  });
+  self.addEventListener('error', (event) => {
+    const ev = event as ErrorEvent;
+    logGlobalError(ev.error ?? ev.message, 'sw-error');
+  });
+
   // Register the context-menu entries once, on install / update. Chrome's
   // contextMenus API errors if the same id is created twice; remove-then-
   // create makes this idempotent across reloads.
@@ -339,6 +359,13 @@ function errorToEnvelope(err: unknown): {
   status: number;
   message: string;
 } {
+  // P-16: even handled errors leave a structured SW DevTools trace, so
+  // when the popup-side sees an `ok: false` response the SW console
+  // already shows the matching server-side context. This is independent of
+  // the global-rejection listener above — that one only fires for failures
+  // nothing else caught; this one fires for every background request that
+  // surfaces an error to the caller.
+  logGlobalError(err, 'sw-handled-error');
   if (err instanceof PlosApiError) {
     return { status: err.status, message: err.message };
   }
