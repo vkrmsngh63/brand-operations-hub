@@ -249,6 +249,13 @@ export interface CapturedText {
   competitorUrlId: string;
   contentCategory: string | null;
   text: string;
+  // P-25: serialized selector describing where the captured text lived in
+  // the source page DOM, so the content-script can re-locate the Range and
+  // render a light-yellow haze on later visits. Shape:
+  // JSON-encoded `{xpath, startOffset, endOffset}` resolved against
+  // document.body. Null for rows captured pre-P-25 (no recoverable
+  // selector) and for manual-add rows (no source DOM at capture time).
+  selector: string | null;
   tags: string[];
   sortOrder: number;
   // P-29 Slice #1 — see CompetitorUrl.source.
@@ -272,6 +279,10 @@ export interface CreateCapturedTextRequest {
   // field shape so the extension's existing POSTs continue to default to
   // `extension` server-side.
   source?: Source;
+  // P-25: optional serialized selector for the on-page text haze on later
+  // visits. Persisted as-is to CapturedText.selector. Absent on manual-add
+  // captures and pre-P-25 extension captures.
+  selector?: string;
 }
 
 // PATCH .../text/[textId] — clientId is immutable; cannot be re-targeted.

@@ -110,6 +110,23 @@ export async function listCapturedImages(
 }
 
 /**
+ * P-25 saved-text haze — lists the CapturedText rows for one CompetitorUrl.
+ * Routed through the background per the same CORS reasoning as
+ * listCompetitorUrls. The orchestrator filters rows with a non-null
+ * selector and re-locates each one's Range against the live DOM.
+ */
+export async function listCapturedTexts(
+  projectId: string,
+  urlId: string,
+): Promise<CapturedText[]> {
+  return send<CapturedText[]>({
+    kind: 'list-captured-texts',
+    projectId,
+    urlId,
+  });
+}
+
+/**
  * Creates a new CompetitorUrl. Idempotent server-side per §11.2. Routed
  * through the background.
  */

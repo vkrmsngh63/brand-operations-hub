@@ -22,6 +22,7 @@ function makeRow(overrides: Partial<CapturedTextRow> = {}): CapturedTextRow {
     competitorUrlId: 'url-1',
     contentCategory: null,
     text: 'sample text',
+    selector: null,
     tags: [],
     sortOrder: 0,
     source: 'extension',
@@ -59,6 +60,7 @@ function makeFakePrisma(opts: {
         clientId: data.clientId,
         competitorUrlId: data.competitorUrlId,
         text: data.text,
+        selector: (data.selector as string | null | undefined) ?? null,
         tags: (data.tags as string[]) ?? [],
         sortOrder: (data.sortOrder as number) ?? 0,
         source: (data.source as string) ?? 'extension',
@@ -301,4 +303,80 @@ test('GET 200 returns rows for the URL', async () => {
   assert.equal(body[1].id, 'b');
   const where = state.findManyCalls[0].where as { competitorUrlId: string };
   assert.equal(where.competitorUrlId, 'url-1');
+});
+
+// ─── P-25 selector tests ────────────────────────────────────────────────
+
+test('POST 400 when selector is an empty string', async () => {
+  const deps = makeDeps();
+  const { POST } = makeUrlTextHandlers(deps);
+  const r = await POST(
+    makeReq({ body: { clientId: 'c1', text: 't', selector: '' } }),
+    ctx
+  );
+  assert.equal(r.status, 400);
+  assert.match((r.body as { error: string }).error, /selector/i);
+});
+
+test('POST 400 when selector is a non-string', async () => {
+  const deps = makeDeps();
+  const { POST } = makeUrlTextHandlers(deps);
+  const r = await POST(
+    makeReq({ body: { clientId: 'c1', text: 't', selector: 42 } }),
+    ctx
+  );
+  assert.equal(r.status, 400);
+  assert.match((r.body as { error: string }).error, /selector/i);
+});
+
+test('POST 201 persists selector when provided', async () => {
+  const { prisma, state } = makeFakePrisma();
+  const deps = makeDeps({ prisma });
+  const { POST } = makeUrlTextHandlers(deps);
+  const selectorJson =
+    '{"xpath":"/HTML/BODY/DIV[1]","startOffset":3,"endOffset":42}';
+  const r = await POST(
+    makeReq({ body: { clientId: 'c1', text: 'hello', selector: selectorJson } }),
+    ctx
+  );
+  assert.equal(r.status, 201);
+  assert.equal((r.body as { selector: string | null }).selector, selectorJson);
+  assert.equal(state.createCalls.length, 1);
+  assert.equal(
+    state.createCalls[0].data.selector,
+    selectorJson,
+    'selector must be passed to Prisma create as-is'
+  );
+});
+
+test('POST 201 omits selector → null persisted on wire shape', async () => {
+  const deps = makeDeps();
+  const { POST } = makeUrlTextHandlers(deps);
+  const r = await POST(
+    makeReq({ body: { clientId: 'c1', text: 'hello' } }),
+    ctx
+  );
+  assert.equal(r.status, 201);
+  assert.equal(
+    (r.body as { selector: string | null }).selector,
+    null,
+    'selector must be null in wire shape when omitted from request'
+  );
+});
+
+test('GET 200 returns selector in wire shape (null and non-null)', async () => {
+  const selectorJson =
+    '{"xpath":"/HTML/BODY/P[2]","startOffset":0,"endOffset":10}';
+  const rows = [
+    makeRow({ id: 'with-sel', selector: selectorJson }),
+    makeRow({ id: 'without-sel', selector: null }),
+  ];
+  const { prisma } = makeFakePrisma({ findManyResult: rows });
+  const deps = makeDeps({ prisma });
+  const { GET } = makeUrlTextHandlers(deps);
+  const r = await GET(makeReq(), ctx);
+  assert.equal(r.status, 200);
+  const body = r.body as Array<{ id: string; selector: string | null }>;
+  assert.equal(body[0].selector, selectorJson);
+  assert.equal(body[1].selector, null);
 });

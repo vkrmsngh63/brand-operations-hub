@@ -52,6 +52,16 @@ export interface TextCaptureFormProps {
    * saved-URL picker to this platform — text capture without a target URL
    * for the page's platform doesn't make sense. */
   platform: Platform;
+  /** P-25: serialized selector for the user's text selection, captured by
+   * the orchestrator's contextmenu capture-phase listener BEFORE the
+   * Chrome menu fires (the Range is lost across the message round-trip
+   * to background and back). Persisted server-side as CapturedText.selector
+   * so later page visits can re-render the light-yellow haze. May be null
+   * when the user right-clicked without an active selection or when the
+   * selection spanned non-serializable DOM (e.g., shadow roots) — in
+   * which case the row saves with selector=null and shows no haze on
+   * later visits (same v1 limitation pattern as P-24's null-originalSrcUrl). */
+  selectorJson: string | null;
   /** Callback invoked after a successful save. The orchestrator currently
    * has no special post-save behavior (the next page-load's
    * listCompetitorUrls call would pick up the new text row indirectly via
@@ -371,10 +381,19 @@ export function openTextCaptureForm(
         });
       }
 
+      // P-25: append the selector (snapshotted by the orchestrator at
+      // contextmenu time) to the validated payload. Null selectorJson is
+      // omitted from the request body — the server defaults to NULL,
+      // matching pre-P-25 captures and manual-add rows.
+      const payloadWithSelector: typeof validation.payload =
+        props.selectorJson !== null
+          ? { ...validation.payload, selector: props.selectorJson }
+          : validation.payload;
+
       await createCapturedText(
         props.projectId,
         urlSelect.value,
-        validation.payload,
+        payloadWithSelector,
       );
       props.onSaved();
       close();

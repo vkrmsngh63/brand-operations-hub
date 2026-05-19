@@ -111,6 +111,17 @@ export const CONTENT_SCRIPT_CSS = `
   z-index: 999990 !important;
 }
 
+/* P-25 saved-text haze. Renders via the CSS Custom Highlight API on the
+   plos-cs-saved-text highlight registry (see saved-text-highlight.ts).
+   Light-yellow background + faint underline gives a subtle already-
+   saved cue that does not compete with the host page own text styling.
+   The pseudo-element is non-DOM-modifying so the haze sits above the
+   text without affecting layout. */
+::highlight(plos-cs-saved-text) {
+  background-color: rgba(255, 235, 59, 0.32) !important;
+  text-decoration: underline dotted rgba(120, 80, 0, 0.45) !important;
+}
+
 .plos-cs-overlay-banner {
   position: fixed !important;
   top: 12px !important;

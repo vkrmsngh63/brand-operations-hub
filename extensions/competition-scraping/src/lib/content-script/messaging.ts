@@ -158,6 +158,17 @@ export interface ListCapturedImagesRequest {
   urlId: string;
 }
 
+/**
+ * P-25 saved-text haze — content script asks the background to list the
+ * CapturedText rows for one CompetitorUrl. Same CORS-avoidance reasoning
+ * as ListCapturedImagesRequest.
+ */
+export interface ListCapturedTextsRequest {
+  kind: 'list-captured-texts';
+  projectId: string;
+  urlId: string;
+}
+
 export interface CreateCompetitorUrlRequestMessage {
   kind: 'create-competitor-url';
   projectId: string;
@@ -244,6 +255,7 @@ export type BackgroundRequest =
   | ListProjectsRequest
   | ListCompetitorUrlsRequest
   | ListCapturedImagesRequest
+  | ListCapturedTextsRequest
   | CreateCompetitorUrlRequestMessage
   | CreateCapturedTextRequestMessage
   | ListVocabularyRequest
@@ -267,6 +279,9 @@ export type ListCompetitorUrlsResponseEnvelope = BackgroundResponse<
 >;
 export type ListCapturedImagesResponseEnvelope = BackgroundResponse<
   CapturedImageWithUrls[]
+>;
+export type ListCapturedTextsResponseEnvelope = BackgroundResponse<
+  CapturedText[]
 >;
 export type CreateCompetitorUrlResponseEnvelope = BackgroundResponse<
   CompetitorUrl
@@ -312,6 +327,9 @@ export function isBackgroundRequest(
     return typeof msg.projectId === 'string';
   }
   if (msg.kind === 'list-captured-images') {
+    return typeof msg.projectId === 'string' && typeof msg.urlId === 'string';
+  }
+  if (msg.kind === 'list-captured-texts') {
     return typeof msg.projectId === 'string' && typeof msg.urlId === 'string';
   }
   if (msg.kind === 'create-competitor-url') {

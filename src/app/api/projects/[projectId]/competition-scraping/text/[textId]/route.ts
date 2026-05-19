@@ -26,6 +26,7 @@ function toWireShape(
     competitorUrlId: row.competitorUrlId,
     contentCategory: row.contentCategory,
     text: row.text,
+    selector: row.selector,
     tags: (row.tags ?? []) as string[],
     sortOrder: row.sortOrder,
     source: row.source as CapturedText['source'],

@@ -34,6 +34,7 @@ export type CapturedTextRow = {
   competitorUrlId: string;
   contentCategory: string | null;
   text: string;
+  selector: string | null;
   // Prisma returns JSON columns as JsonValue; toWireShape coerces to string[].
   tags: Prisma.JsonValue;
   sortOrder: number;
@@ -76,6 +77,7 @@ export function toWireShape(row: CapturedTextRow | null): CapturedText | null {
     competitorUrlId: row.competitorUrlId,
     contentCategory: row.contentCategory,
     text: row.text,
+    selector: row.selector,
     tags: (row.tags ?? []) as string[],
     sortOrder: row.sortOrder,
     source: row.source as CapturedText['source'],
@@ -179,6 +181,26 @@ export function makeUrlTextHandlers(deps: UrlTextHandlerDeps) {
     }
     const source = body.source ?? 'extension';
 
+    // P-25: optional selector. Validated as a non-empty string when present;
+    // null persisted when omitted. The shape (JSON-encoded {xpath,
+    // startOffset, endOffset}) is opaque to the server — the content-script
+    // owns encode + decode.
+    if (
+      body.selector !== undefined &&
+      (typeof body.selector !== 'string' || body.selector.length === 0)
+    ) {
+      return {
+        status: 400,
+        body: {
+          error: 'selector must be a non-empty string when present',
+        },
+      };
+    }
+    const selector =
+      typeof body.selector === 'string' && body.selector.length > 0
+        ? body.selector
+        : null;
+
     const parent = await deps.withRetry(() =>
       deps.prisma.competitorUrl.findFirst({
         where: { id: urlId, projectWorkflowId },
@@ -199,6 +221,7 @@ export function makeUrlTextHandlers(deps: UrlTextHandlerDeps) {
       competitorUrlId: urlId,
       contentCategory,
       text,
+      selector,
       tags: body.tags ?? [],
       sortOrder: typeof body.sortOrder === 'number' ? body.sortOrder : 0,
       source,

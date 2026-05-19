@@ -304,6 +304,15 @@ model CapturedText {
   competitorUrlId String
   contentCategory String? // value from VocabularyEntry
   text            String   @db.Text
+  // P-25 (2026-05-19-f): serialized selector describing where the captured
+  // text lived in the source page's DOM, so the content-script can re-locate
+  // the Range on later page loads and render a light-yellow haze over it.
+  // Shape: JSON-encoded {xpath: string, startOffset: number, endOffset: number}
+  // resolved against document.body. Nullable for rows captured before P-25
+  // (no recoverable selector); set for new captures via the right-click
+  // text-capture flow. See extensions/competition-scraping/src/lib/
+  // captured-text-selector.ts for the encode/decode contract.
+  selector        String?  @db.Text
   tags            Json     @default("[]") // string[]
   sortOrder       Int      @default(0)
   source          String   @default("extension") // P-29 Slice #1 — "extension" | "manual"; audit-trail of which client created the row.

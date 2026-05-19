@@ -22,6 +22,7 @@ import type {
   FinalizeImageUploadResponse,
   GetExtensionStateResponse,
   ListCapturedImagesResponse,
+  ListCapturedTextsResponse,
   ListCompetitorUrlsResponse,
   ListHighlightTermsResponse,
   ListVocabularyEntriesResponse,
@@ -294,6 +295,28 @@ export async function listCapturedImages(
     throw new PlosApiError(
       500,
       'Unexpected response shape from competition-scraping/urls/[urlId]/images',
+    );
+  }
+  return data;
+}
+
+/**
+ * P-25 — lists CapturedText rows for one CompetitorUrl. Used by the
+ * content-script orchestrator to fetch rows-with-selectors and re-render
+ * the on-page haze for previously-captured selections.
+ */
+export async function listCapturedTexts(
+  projectId: string,
+  urlId: string,
+): Promise<CapturedText[]> {
+  const res = await authedFetch(
+    `/api/projects/${encodeURIComponent(projectId)}/competition-scraping/urls/${encodeURIComponent(urlId)}/text`,
+  );
+  const data = await readJsonOrThrow<ListCapturedTextsResponse>(res);
+  if (!Array.isArray(data)) {
+    throw new PlosApiError(
+      500,
+      'Unexpected response shape from competition-scraping/urls/[urlId]/text',
     );
   }
   return data;

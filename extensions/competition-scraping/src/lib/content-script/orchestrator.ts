@@ -26,6 +26,7 @@ import {
   listProjects,
   listCompetitorUrls,
   listCapturedImages,
+  listCapturedTexts,
 } from './api-bridge.ts';
 import {
   getSelectedPlatform,
@@ -51,7 +52,21 @@ import {
   detachAllAlreadySavedImageIcons,
   type AttachedImageIcon,
 } from './already-saved-image-icon.ts';
-import type { CapturedImageWithUrls } from '../../../../../src/lib/shared-types/competition-scraping.ts';
+import {
+  attachSavedTextHaze,
+  detachAllSavedTextHazes,
+  detachSavedTextHaze,
+} from './saved-text-highlight.ts';
+import {
+  decodeSelector,
+  deserializeSelectorToRange,
+  encodeSelector,
+  serializeRangeToSelector,
+} from '../captured-text-selector.ts';
+import type {
+  CapturedImageWithUrls,
+  CapturedText,
+} from '../../../../../src/lib/shared-types/competition-scraping.ts';
 import { showAlreadySavedOverlay } from './already-saved-overlay.ts';
 import { openUrlAddForm } from './url-add-form.ts';
 import { openTextCaptureForm } from './text-capture-form.ts';
@@ -96,10 +111,38 @@ export async function runOrchestrator(): Promise<() => void> {
   // the cache. Cache is closed over by the open-image-capture-form handler
   // attached later in this function. See find-underlying-image.ts for the
   // walk semantics + cache-on-every-right-click rationale.
+  //
+  // P-25 (2026-05-19-f): the same listener also snapshots the user's
+  // current text-selection Range as a serialized selector. The Range is
+  // lost across the message round-trip to background and back (Chrome's
+  // `info.selectionText` strips it to a string), so we have to capture it
+  // synchronously here BEFORE the menu opens. The serialized selector is
+  // persisted server-side on save so later visits can re-render the haze.
   let lastRightClickImageSrc: string | null = null;
+  let lastRightClickSelectorJson: string | null = null;
   const onContextMenu = (event: MouseEvent): void => {
     const target = event.target instanceof Element ? event.target : null;
     lastRightClickImageSrc = findUnderlyingImage(target);
+    // Snapshot the active selection range. Wrapped in try/catch because
+    // pages with shadow DOM or detached selections can throw on
+    // getRangeAt — we silently treat that as "no selector available."
+    lastRightClickSelectorJson = null;
+    try {
+      const sel = window.getSelection();
+      if (
+        sel !== null &&
+        !sel.isCollapsed &&
+        sel.rangeCount > 0 &&
+        document.body !== null
+      ) {
+        const range = sel.getRangeAt(0);
+        const parsed = serializeRangeToSelector(range, document.body);
+        if (parsed !== null) lastRightClickSelectorJson = encodeSelector(parsed);
+      }
+    } catch {
+      // Defensive: silent fail — the form still works without a selector,
+      // it just doesn't get the on-page haze on later visits.
+    }
   };
   document.addEventListener('contextmenu', onContextMenu, { capture: true });
   function detachContextMenuListener(): void {
@@ -339,6 +382,20 @@ export async function runOrchestrator(): Promise<() => void> {
   let currentUrlIdForImages: string | null = null;
   const attachedImageIcons = new Map<string, AttachedImageIcon>();
 
+  // ─── P-25 saved-text haze state ──────────────────────────────────────
+  //
+  // Cached saved-CapturedText list per (project, urlId). Same one-fetch-
+  // per-page-load model as P-24's image cache — the haze is a recognition
+  // cue, not a real-time mirror. Rows with a non-null selector get
+  // re-located in the live DOM via deserializeSelectorToRange + registered
+  // with the CSS Custom Highlight API. Rows with null selector (legacy
+  // pre-P-25 captures, manual-add rows) are skipped silently.
+  const capturedTextsByUrlId = new Map<string, CapturedText[]>();
+  // Set of CapturedText ids currently attached for the active URL — used
+  // to detach hazes whose row is no longer in the latest fetch (e.g.,
+  // user deleted via PLOS-side UI between rescans).
+  const attachedTextIds = new Set<string>();
+
   async function maybePopulateImageCache(urlId: string): Promise<void> {
     if (capturedImagesByUrlId.has(urlId)) return;
     try {
@@ -416,6 +473,56 @@ export async function runOrchestrator(): Promise<() => void> {
     currentUrlIdForImages = null;
   }
 
+  async function maybePopulateTextCache(urlId: string): Promise<void> {
+    if (capturedTextsByUrlId.has(urlId)) return;
+    try {
+      const rows = await listCapturedTexts(projectId, urlId);
+      capturedTextsByUrlId.set(urlId, rows);
+    } catch (err) {
+      console.warn(
+        '[PLOS] could not load saved texts for haze',
+        err,
+      );
+      // Negative-cache the failure so we don't refetch on every rescan.
+      capturedTextsByUrlId.set(urlId, []);
+    }
+  }
+
+  function scanTextHazes(urlId: string): void {
+    const saved = capturedTextsByUrlId.get(urlId);
+    if (!saved || saved.length === 0) return;
+
+    const desiredIds = new Set<string>();
+    for (const row of saved) {
+      if (row.selector === null) continue;
+      const parsed = decodeSelector(row.selector);
+      if (parsed === null) continue;
+      // document.body is the SelectorElement root the serializer used at
+      // capture time. Best-effort: silent skip if the Range can't be
+      // re-located in the current DOM (page restructured, anchor missing).
+      const range = deserializeSelectorToRange(parsed, document.body);
+      if (range === null) continue;
+      attachSavedTextHaze(range, row.id);
+      desiredIds.add(row.id);
+    }
+
+    // Detach hazes whose row no longer exists in the latest fetch OR whose
+    // Range could no longer be re-located. The desiredIds set is the
+    // ground truth for what SHOULD be attached.
+    for (const id of Array.from(attachedTextIds)) {
+      if (!desiredIds.has(id)) {
+        detachSavedTextHaze(id);
+        attachedTextIds.delete(id);
+      }
+    }
+    for (const id of desiredIds) attachedTextIds.add(id);
+  }
+
+  function clearTextHazes(): void {
+    detachAllSavedTextHazes();
+    attachedTextIds.clear();
+  }
+
   // P-10 fix 2026-05-10: dedupe banner-fire by location.href. Tracks the
   // LAST URL we considered (not the last URL we showed for) so the
   // navigate-away-and-back case correctly re-fires the banner:
@@ -440,8 +547,9 @@ export async function runOrchestrator(): Promise<() => void> {
       return;
     }
     if (!recognitionSet.has(normalized)) {
-      // Navigated off any saved URL — drop image indicators.
+      // Navigated off any saved URL — drop image indicators + text hazes.
       if (attachedImageIcons.size > 0) clearImageIndicators();
+      if (attachedTextIds.size > 0) clearTextHazes();
       return;
     }
     // P-19 fix 2026-05-18-d: pass the same muteMutationObserver wrapper
@@ -459,19 +567,26 @@ export async function runOrchestrator(): Promise<() => void> {
     const urlId = urlIdByNormalized.get(normalized) ?? null;
     if (urlId === null) {
       if (attachedImageIcons.size > 0) clearImageIndicators();
+      if (attachedTextIds.size > 0) clearTextHazes();
       return;
     }
     if (currentUrlIdForImages !== urlId) {
-      // URL changed (or first time on a saved page) — clear stale icons
-      // from any previous saved URL before fetching the new list.
+      // URL changed (or first time on a saved page) — clear stale icons +
+      // hazes from any previous saved URL before fetching the new list.
       detachAllAlreadySavedImageIcons();
       attachedImageIcons.clear();
+      clearTextHazes();
       currentUrlIdForImages = urlId;
     }
     void maybePopulateImageCache(urlId).then(() => {
       // Re-check we're still on the same urlId — fast SPA navigation can
       // change `currentUrlIdForImages` while the fetch was in flight.
       if (currentUrlIdForImages === urlId) scanImages();
+    });
+    // P-25: fetch saved CapturedText rows in parallel with images. Same
+    // fire-and-forget pattern; haze appears when the response lands.
+    void maybePopulateTextCache(urlId).then(() => {
+      if (currentUrlIdForImages === urlId) scanTextHazes(urlId);
     });
   }
 
@@ -527,6 +642,11 @@ export async function runOrchestrator(): Promise<() => void> {
       // SPA tile mounts, infinite scroll) get the indicator if they match.
       // No-op when not on a saved page.
       scanImages();
+      // P-25: re-scan text hazes for the active saved URL. Lazy-loaded
+      // content (infinite scroll, SPA tile mounts) may now contain a
+      // previously-saved text snippet that wasn't in the DOM on first
+      // scan; rescan re-attempts the deserialize+attach for each row.
+      if (currentUrlIdForImages !== null) scanTextHazes(currentUrlIdForImages);
       // P-5 fix 2026-05-08-d: re-apply highlight terms on each mutation
       // batch so newly-rendered SPA content / infinite-scroll tiles get
       // their highlights too. The highlighter does its own remove-then-
@@ -591,12 +711,20 @@ export async function runOrchestrator(): Promise<() => void> {
       // Module 2 highlight-and-add gesture (session 4, 2026-05-11).
       // The form fetches its own saved URLs + content-category vocab via
       // the api-bridge; orchestrator just hands off the props.
+      //
+      // P-25 (2026-05-19-f): pass the selector snapshotted by the
+      // contextmenu capture-phase listener above. Reset to null right
+      // after handing off so a later right-click without a selection
+      // doesn't inherit a stale selector from this one.
+      const selectorJsonForThisSave = lastRightClickSelectorJson;
+      lastRightClickSelectorJson = null;
       openTextCaptureForm({
         initialText: msg.selectedText,
         pageUrl: msg.pageUrl,
         projectId,
         projectName,
         platform: platformModule.platform as Platform,
+        selectorJson: selectorJsonForThisSave,
         onSaved() {
           // Captured text doesn't affect the recognition Set (it's
           // attached to a CompetitorUrl, not creating one). The
@@ -708,6 +836,9 @@ export async function runOrchestrator(): Promise<() => void> {
     // P-24: tear down all image indicators + drop cache.
     clearImageIndicators();
     capturedImagesByUrlId.clear();
+    // P-25: tear down all text hazes + drop cache.
+    clearTextHazes();
+    capturedTextsByUrlId.clear();
     if (highlighter !== null) {
       highlighter.destroy();
       highlighter = null;
