@@ -116,6 +116,7 @@ Today's session shipped P-23 cleanly + verified live on real Chrome on all 3 for
 
 - P-18 devcontainer Chromium libs (LOW dev ergonomic — small fold-in; sub-1-hour session).
 - P-26 below-fold full-page-scroll capture (LOW deferred large lift — last in the queue; current workaround works; ~200-400 LOC).
+- **P-27 Captured-videos feature** (NEW — added 2026-05-19-g-2 as a post-handoff scope-add per director directive). Pre-graduation polish item; substantive feature expansion. Estimated ~6-12 sessions broken into: dedicated design interview (Session 1) + schema migration + bucket setup + API routes (Session 2) + extension content-script + popup forms + saved-video indicator + URL detail renderer (Sessions 3-5) + single-platform amazon Playwright spec (Session 6) + optional polish (Sessions 7+). Open design questions: Supabase bucket strategy + thumbnail extraction approach + schema additions + YouTube/Vimeo handling + cross-platform `<video>` detection. **The first session for P-27 is design-only (no code) — director-confirmed picks today are: URL reference + uploaded bytes BOTH stored; full UX symmetry with text/image; pre-graduation gating.** Full details: ROADMAP P-27 entry + COMPETITION_SCRAPING_DESIGN §B 2026-05-19-g-2 entry.
 - Manual-add modal originalSrcUrl tack-on (DEFERRED from 2026-05-19-e — trivial 1-line; could fold into any P-NN session).
 - Investigate the wxt-build-hang issue separately (informational item only; not on the W#2 polish backlog).
 

@@ -6,7 +6,9 @@
 **Branch:** `workflow-2-competition-scraping`
 **Created:** May 4, 2026
 **Created in session:** session_2026-05-04_w2-workflow-requirements-interview (Claude Code)
-**Last updated:** 2026-05-19-g (W#2 → main deploy session #28 — P-23 saved-URL dropdown side-by-side SHIPPED + DEPLOYED + REAL-CHROME-VERIFIED on vklf.com on all 3 caller forms — popup paste form + right-click "Add to PLOS — Captured Text" overlay + right-click "Add to PLOS — Image" overlay. §B 2026-05-19-g entry appended at end covering: (1) the launch-prompt drift catch at session-start (Rule 3 — `url-add-form.ts` had no saved-URL `<select>`; actual sites were three: `text-capture-form.ts` + `image-capture-form.ts` + `CapturedTextPasteForm.tsx`); (2) Rule 14f scope picker outcome (director chose all-3-sites scope); (3) em-dash label format choice via Rule 14f forced-picker (em-dash vs. pipe vs. two-line-via-CSS vs. aggressive-truncate); (4) truncation budget refinement (60-char when productName present, 80-char when productName absent — preserves pre-P-23 URL-only behavior exactly); (5) extraction to shared pure helper `buildSavedUrlOptionLabel` at `extensions/competition-scraping/src/lib/saved-url-option-label.ts` so all 3 caller sites share the same label-building logic; (6) Hybrid test coverage via Rule 27 forced-picker (12 node:test pure-helper cases + 1 Playwright extension-context spec on the text-capture-form rendering path — sibling sites covered by the pure-helper cases alone since the helper output is identical across all 3 callers); (7) zero new polish items captured this session; (8) (a.50) RECOMMENDED-NEXT = W#2 polish P-22 — Playwright cross-platform slices 2-4 (defensive coverage extension to ebay + etsy + walmart for the existing single-platform amazon happy-path P-23/P-24/P-25 specs). §A unchanged per Rule 18. Schema-change-in-flight stays "No".)
+**Last updated:** 2026-05-19-g-2 (ADDENDUM to 2026-05-19-g — same Claude session, post-handoff scope-add. Director added a new W#2 pre-graduation polish item P-27 — Captured-videos feature: end-to-end parity with captured-text + captured-image flows. New §B 2026-05-19-g-2 entry appended at end — mid-build directive Read-It-Back per Rule 18 — capturing the scope-add directive verbatim + director's three Rule 14f forced-picker outcomes (Q1 Source = URL reference + uploaded video bytes BOTH stored; Q2 Gestures = full symmetry with text/image right-click + embed + popup paste; Q3 Graduation timing = pre-graduation polish item) + the 7 open design questions to resolve in the dedicated design interview before any code starts (Supabase bucket strategy; thumbnail extraction approach; schema additions; YouTube/Vimeo handling; cross-platform `<video>` detection; Living Questions answers; DATA_CATALOG §7 reciprocal output declaration). §A unchanged per Rule 18. Schema-change-in-flight stays "No" for now; flips to "Yes" when P-27 implementation starts.)
+
+**Previously updated:** 2026-05-19-g (W#2 → main deploy session #28 — P-23 saved-URL dropdown side-by-side SHIPPED + DEPLOYED + REAL-CHROME-VERIFIED on vklf.com on all 3 caller forms — popup paste form + right-click "Add to PLOS — Captured Text" overlay + right-click "Add to PLOS — Image" overlay. §B 2026-05-19-g entry appended at end covering: (1) the launch-prompt drift catch at session-start (Rule 3 — `url-add-form.ts` had no saved-URL `<select>`; actual sites were three: `text-capture-form.ts` + `image-capture-form.ts` + `CapturedTextPasteForm.tsx`); (2) Rule 14f scope picker outcome (director chose all-3-sites scope); (3) em-dash label format choice via Rule 14f forced-picker (em-dash vs. pipe vs. two-line-via-CSS vs. aggressive-truncate); (4) truncation budget refinement (60-char when productName present, 80-char when productName absent — preserves pre-P-23 URL-only behavior exactly); (5) extraction to shared pure helper `buildSavedUrlOptionLabel` at `extensions/competition-scraping/src/lib/saved-url-option-label.ts` so all 3 caller sites share the same label-building logic; (6) Hybrid test coverage via Rule 27 forced-picker (12 node:test pure-helper cases + 1 Playwright extension-context spec on the text-capture-form rendering path — sibling sites covered by the pure-helper cases alone since the helper output is identical across all 3 callers); (7) zero new polish items captured this session; (8) (a.50) RECOMMENDED-NEXT = W#2 polish P-22 — Playwright cross-platform slices 2-4 (defensive coverage extension to ebay + etsy + walmart for the existing single-platform amazon happy-path P-23/P-24/P-25 specs). §A unchanged per Rule 18. Schema-change-in-flight stays "No".)
 
 **Previously updated:** 2026-05-18-b (W#2 → main deploy session #18 — P-34 (propagate row hover-highlight to captured-text rows + image thumbnails on URL detail page) DEPLOYED to vklf.com + REAL-INDEPENDENT-WEBSITE VERIFY. §B 2026-05-18-b entry appended at end covering: (1) deploy session #18 standard cheat-sheet (b) execution + brief director re-verify on captured-text rows + image thumbnails ("all green, hover works on both"); (2) HEADLINE — W#2 admin data-management surface now COMPLETE + LIVE on vklf.com with hover-highlight UX consistency across URL list + captured-text rows + image thumbnails; (3) implementation subtlety captured — captured-text rows reuse P-33's `querySelectorAll('td')` pattern verbatim, BUT image thumbnails use `querySelector('button')` on outer wrapper to target first descendant button (ThumbnailButton; trash-overlay sits second in DOM order) AND explicitly restore `#0d1117` on leave rather than clearing to `''` because the card has an explicit base background; (4) zero new polish items captured this session; (5) (a.41) RECOMMENDED-NEXT = W#2 polish P-21 — symmetric-canonicalize `pickInitialUrl` + `buildRecognitionSet` (MEDIUM defensive). §A unchanged per Rule 18. Schema-change-in-flight stays "No".)
 
@@ -3002,6 +3004,74 @@ Director picked Option A. Result: +12 node:test cases (extension test suite 416 
 - COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md "Deploy session #28" section (full pre-deploy + post-merge scoreboard + real-Chrome verification narrative)
 - CORRECTIONS_LOG 2026-05-19-g (informational entries on wxt-build-hang recurrence + launch-prompt drift as third recent Rule 3 catch)
 - deploy session #28 commit `5cb2419`; fresh zip `plos-extension-2026-05-19-w2-deploy-28.zip`
+
+---
+
+## §B 2026-05-19-g-2 — P-27 Captured-videos feature scope-add (mid-build directive Read-It-Back per Rule 18)
+
+**Session:** addendum to `session_2026-05-19-g_w2-main-deploy-session-28-p23-saved-url-dropdown-DEPLOYED` (`session_2026-05-19-g-2`). Post-handoff scope-add directive from director.
+
+**Director's verbatim directive 2026-05-19-g:** *"I want to add a new feature to the roadmap for Workflow #2. While we are able to capture text and images currently and add them under urls for all platforms and websites, I want to be able to also capture videos as well and add them to video categories under the urls."*
+
+**Read-It-Back per Rule 18 mid-build directive:** capturing as P-27 in the W#2 polish backlog with full ROADMAP entry; this §B 2026-05-19-g-2 entry is the design-side anchor for the future dedicated design session before code starts. No code is committed today; only the capture + the open design questions.
+
+### Director's three Rule 14f forced-picker outcomes (captured today)
+
+| Question | Options | Director's pick | Rationale |
+|---|---|---|---|
+| **Q1 Source — what's stored when you capture a video** | (A) URL reference only / (B) **URL + uploaded bytes both** / (C) Bytes only | **(B) URL reference + uploaded video bytes — BOTH stored** | Most thorough for archival (if competitor deletes the video, the bytes are preserved); accepts the heavier scope (new Supabase bucket + raised cap + thumbnail extraction). |
+| **Q2 Gestures — UX paths** | (A) **Full symmetry with text/image (all 3 paths)** / (B) Popup paste only / (C) Right-click only | **(A) Full symmetry — right-click on `<video>` + right-click on embed + popup paste form** | Matches director's standing pattern of UX symmetry across text/image/now-video; heaviest implementation but most thorough user-facing parity. |
+| **Q3 Graduation timing** | (A) **Pre-graduation polish item** / (B) Post-graduation expansion | **(A) Pre-graduation — joins P-22 + P-18 + P-26** | Director's standing directive *"All these things should ship before Workflow #2 is deemed complete"* (captured 2026-05-19-d-2). W#2 graduation now requires 4 remaining items, not 3. |
+
+### Two relevant CONSTRAINTS surfaced by Rule 24 pre-capture search
+
+1. **`STACK_DECISIONS.md:144` (load-bearing).** The current image-upload 5 MB size cap was chosen *specifically to prevent video uploads*: verbatim *"5 MB cap covers the heavy tail without permitting accidental video uploads or oversized PNGs."* P-27 needs to either (a) raise that cap, OR (b) introduce a new bucket with a deliberately-larger cap (preferred — keeps the image bucket's 5MB cap as the existing-uploads constraint while a separate video bucket has its own larger cap). The design session will pick which.
+
+2. **`PLATFORM_REQUIREMENTS.md:427` (already-flagged tech-debt).** Verbatim: *"Workflow-deliverable storage (videos, design files, etc.) likely needs a dedicated bucket strategy — possibly private + signed URLs (already on the tech-debt list)."* P-27's bucket design SATISFIES this tech-debt item; the design session should explicitly close (or scope) this PLATFORM_REQUIREMENTS item.
+
+### 7 open design questions to resolve in the dedicated design session before any code starts
+
+1. **New Supabase bucket strategy.** Private + signed URLs (per `PLATFORM_REQUIREMENTS.md:427` directional hint) vs. public? Size cap (candidates: 100 MB / 500 MB / per-project byte budget)? MIME-type allowlist (`video/mp4` + `video/webm` likely; `video/quicktime` for `.mov` — should we accept?)? Bucket name?
+2. **Thumbnail extraction.** Server-side FFmpeg in a Vercel serverless function (heavy infra lift; flexible) vs. client-side extension `<video>` + `<canvas>` frame-grab (lighter; relies on the extension doing the thumb-extract before upload) vs. just rely on the source URL's poster attribute / YouTube auto-thumb API (lightest; only works for embedded video platforms). Forced-picker at design-session start.
+3. **Schema additions.** New `CapturedVideo` table (chosen — symmetric with `CapturedText`/`CapturedImage`; cleaner) vs. polymorphic `CapturedAsset` with `mediaType` discriminator (rejected — less type-safe; would force refactor of existing models). New `video-category` vocabulary type — confirm this is the right shape vs. reusing `image-category` for some videos (e.g., "main product image / lifestyle / detail shot" categories vs. "demo video / unboxing video / review video / promo video" video-specific categories). Likely new type.
+4. **YouTube/Vimeo handling.** For embedded video platforms — store URL only (likely; YouTube ToS + technical extraction difficulty argue against attempting to download bytes), OR attempt URL-to-bytes download (likely rejected). Document the decision explicitly + the URL-only fallback for embeds.
+5. **Cross-platform `<video>` detection.** Empirical investigation needed in design session: which of the 7 supported platforms (Amazon / Ebay / Etsy / Walmart / Google Shopping / Google Ads / Independent Website) actually host inline `<video>` elements on PDPs vs. embed YouTube/Vimeo iframes vs. neither? Amazon's PDPs are known to host inline `<video>` for 360° spin views + product demos. Other platforms TBD.
+6. **Three Living Questions (Rule 7) — answers to record in DATA_CATALOG at design time.** (i) **Upstream data needed:** Project + Platform + CompetitorUrl (parent) + new `video-category` vocabulary type. (ii) **Read-only or editable downstream:** read-only by future W#3+ workflows; same pattern as captured text/images. (iii) **N/A** (read-only path).
+7. **DATA_CATALOG §7 Cross-Tool Data Flow Map.** Add a new "captured videos" output entry to W#2's row, per Rule 18 reciprocal output declaration. Downstream consumers initially "TBD." This pre-declared output lets future W#3+ interviews pull the output spec from W#2's row without re-asking W#2's chat.
+
+### Estimated scope
+
+**~6-12 sessions** before W#2 graduation; broken down approximately:
+- **Session 1 — Design interview + DESIGN §B entry + schema design (no code).** Resolves the 7 open questions above + finalizes the `CapturedVideo` Prisma model shape + bucket name + size cap + thumbnail approach. Director-confirmed before Session 2.
+- **Session 2 — Schema migration + bucket setup + API routes scaffolding.** `npx prisma db push` for new `CapturedVideo` table + new `video-category` enum value; new Supabase Storage bucket; new API route handlers under `/api/projects/[projectId]/competition-scraping/urls/[urlId]/videos/` (POST/GET/PATCH/DELETE following the CapturedImage pattern).
+- **Sessions 3-5 — Extension content-script + popup forms.** Right-click `<video>` capture form (`video-capture-form.ts`); right-click embed fallback (`video-embed-capture-form.ts`); popup paste form (`CapturedVideoPasteForm.tsx`); saved-video on-page indicator overlay; URL detail page renderer (`<iframe>` for embeds + `<video>` for direct sources + click-to-play thumbnail overlay).
+- **Session 6 — Single-platform amazon Playwright spec.** Following P-23/P-24/P-25 pattern: single platform first; cross-platform extension deferred to a P-22-style follow-up.
+- **Optional Sessions 7+ — Thumbnail extraction polish + size-cap tuning + YouTube-embed special handling + cross-platform Playwright extension (via P-22-style pattern).**
+
+W#2 graduation estimate revised: ~3-6 more sessions (pre-P-27 capture, items were P-22 + P-18 + P-26) → ~9-18 more sessions (post-P-27 capture, items are P-22 + P-18 + P-26 + P-27 where P-27 alone is ~6-12 sessions).
+
+### Why this is a §B entry and not a §A change
+
+§A is frozen per Rule 18 (Initial Requirements Interview answers — original spec). P-27 is an in-flight scope expansion that extends Q5 (Outputs) of the original interview — original interview captured "captured text + captured images" as W#2's outputs; today's directive adds "captured videos" as a third output. This §B entry is the canonical record of that expansion. When P-27 ships, this §B entry becomes the historical anchor; the resulting `CapturedVideo` schema + bucket strategy + UX flows will get their own §B entries at code-ship time per the standard pattern.
+
+### Affected sections (informational — §A frozen per Rule 18)
+
+- **§A.7 Module 1 (URL capture flow)** — videos do NOT affect URL capture itself; only adds a new asset type that can be attached to a captured URL post-capture.
+- **§A.7 Module 2 (highlight-and-add capture flow)** — extended with a new Module 2c (videos) parallel to existing Module 2a (text) + Module 2b (images). Specifics of Module 2c land in a future §B entry at ship time.
+- **§A.15 (image metadata fields)** — videos will have a parallel set (composition, embedded text, tags, duration_seconds NEW relative to images, sortOrder).
+
+### Cross-references
+
+- ROADMAP W#2 polish backlog P-27 entry (captured today with full fix-shape narrative + 7 open design questions)
+- `extensions/competition-scraping/src/lib/content-script/image-capture-form.ts` (sibling pattern to mirror for video right-click form)
+- `extensions/competition-scraping/src/lib/content-script/find-underlying-image.ts` (sibling DOM-walking helper to mirror for embed-fallback path)
+- `extensions/competition-scraping/src/entrypoints/popup/components/CapturedTextPasteForm.tsx` (sibling pattern to mirror for popup paste video form)
+- `prisma/schema.prisma` `CapturedImage` model (sibling table to mirror for `CapturedVideo`)
+- `STACK_DECISIONS.md:144` (5MB image cap reasoning to revisit at design session)
+- `PLATFORM_REQUIREMENTS.md:427` (already-flagged tech-debt note that P-27 satisfies/scopes)
+- `feedback_recommendation_style.md` (director's standing preference for most-thorough/reliable path; informed all three picks today)
+- CORRECTIONS_LOG 2026-05-19-g-2 header amendment (this addendum doc-batch)
+- CHAT_REGISTRY 2026-05-19-g-2 header amendment
 
 ---
 
