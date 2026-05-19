@@ -1,95 +1,99 @@
 # Next session
 
-**Written:** 2026-05-19-c — `session_2026-05-19-c_w2-main-deploy-sessions-21-22-23-24-p13-then-p38-p39-reverted-p40-shipped` (Claude Code; dual-branch — pre-deploy on `workflow-2-competition-scraping`, four ff-merge + deploy cycles on `main`, ping-pong syncs after each main push).
+**Written:** 2026-05-19-d — `session_2026-05-19-d_w2-main-deploy-session-25-p16-sw-mv3-crash-diagnostics-DEPLOYED` (Claude Code; dual-branch — pre-deploy on `workflow-2-competition-scraping`, ff-merge + deploy on `main`, ping-pong sync after main push).
 
 **For:** the next Claude Code session.
 
-**Status of today's W#2 → main deploy sessions #21 + #22 + #23 + #24:** Today's session expanded from the originally-scoped P-13 ship into a four-deploy correction sequence as the director repeatedly clarified the actual UX intent. Final landed state on main: **P-13 (autofocus on popup's inline "+ Add new…" category input) ✅ SHIPPED + DEPLOYED + VERIFIED** (commit `e217eb9`, deploy session #21). **P-40 (popup auto-pre-select URL matching the active tab — "page-on-page-match") ✅ SHIPPED + DEPLOYED + VERIFIED** (commit `182da37`, deploy session #24). Two intermediate ships **REVERTED** as wrong-feature: P-38 popup 1-URL pre-select (commit `a0d5c8a` deploy session #22, reverted in `f0cef37`) + P-39 popup sticky most-recently-used URL preference (commit `2766031` deploy session #23, reverted in `b635ae7`). Both reverts went out as part of deploy session #24's main push (3 commits — 2 reverts + P-40). Three INFORMATIONAL / one severity-bump CORRECTIONS_LOG §Entries this session: (1) ROADMAP P-13 "Where" drift; (2) polish-item numbering collision (rendered moot by reverts but pattern still worth capturing); (3) **wrong-feature-shipped-twice slip — director's "popup did not autoselect the url" feedback meant "the URL matching the page I'm currently on," not generic "some URL"; my misreading produced P-38 + P-39 before the third attempt (P-40) finally landed the right fix.** P-40 uses the same `pickInitialUrl` + platform-module `canonicalProductUrl` pattern the content-script overlay has used since P-15 + P-21 — transplanted to the popup surface via `chrome.tabs.query({ active: true, currentWindow: true })`.
+**Status of today's W#2 → main deploy session #25:** P-16 service worker MV3 crash diagnostics SHIPPED + DEPLOYED + REAL-CHROME WIRING-VERIFIED on vklf.com. Single-commit build-and-deploy session — pure defensive diagnostic instrumentation in `background.ts` + new `sw-error-logging.ts` pure helper + new `sw-error-logging.test.ts`. Build commit `07416d3` (3 files +199/-0); fast-forwarded clean onto main (`3132899..07416d3`); Vercel auto-redeploy web no-op. Doc-vs-code drift caught at session-start (ROADMAP P-16 said "wrap onMessage in try/catch" but the code already had that pattern; scope reframed BEFORE coding to the actually-load-bearing fix: global `self.addEventListener('unhandledrejection'/'error', ...)` listeners). Director real-Chrome wiring test PASS — SW DevTools console executed `Promise.reject(new Error('manual P-16 wiring test'))` → observed `[plos-cs-sw]` structured-payload line as expected. Pre-deploy + post-merge scoreboards both GREEN with extension `npm test` 358/358 (was 352; +6 new sw-error-logging cases). Fresh zip `plos-extension-2026-05-19-w2-deploy-25.zip` at repo root.
 
-**Closes ROADMAP (a.45) RECOMMENDED-NEXT** — but as P-40 (active-tab-URL match), not as the originally-captured P-39 (sticky preference; reverted today as wrong-feature).
+**Closes (a.46) RECOMMENDED-NEXT.** **HEADLINE: W#2 polish backlog is functionally complete on real Chrome.** P-16 was the last open W#2 polish item with concrete code-level work.
 
-**(a.46) RECOMMENDED-NEXT = W#2 polish P-16 — extension service worker MV3 crash diagnostics on `workflow-2-competition-scraping`** via §4 Step 1c forced-picker. Rationale per `feedback_recommendation_style.md`: closes the only remaining open W#2 polish item with concrete code-level work; well-scoped diagnostic session; lowest risk vs. heavier alternatives (W#3 Therapeutic Strategy first session at ~90-150 min; W#2 Tool Graduation as a heavy multi-step ritual).
+**(a.47) RECOMMENDED-NEXT = W#2 Tool Graduation per HANDOFF_PROTOCOL §4 Step 2 Scenario B on `main`** via §4 Step 1c forced-picker. Rationale per `feedback_recommendation_style.md` (most thorough/reliable): doc weight of W#2's polish backlog (`COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` is now ~3400 lines) blocks session-start reads for any cross-workflow work; the Data Contract is the artifact downstream W#3-#14 workflows will consume to know what W#2 produces; graduating now means future W#2 visits use lightweight Rule 22 graduated-tool re-entry instead of heavy doc-load.
 
 ---
 
 ## Branch
 
-**`workflow-2-competition-scraping`** — W#2 polish work, NOT platform-wide. The `./resume` script will switch you from `main` (where today's 2026-05-19-c sessions ended) → `workflow-2-competition-scraping`. Verify with `git branch --show-current` immediately after `./resume`; should be on `workflow-2-competition-scraping`, not `main`. If you're still on `main` after `./resume`, STOP and surface to director.
+**`main`** — graduated tools live on main; the Tool Graduation Ritual produces the canonical doc set downstream tools will reference, so main is the right branch. The `./resume` script will switch you from `workflow-2-competition-scraping` (where today's deploy session ended) → `main`. Verify with `git branch --show-current` immediately after `./resume`; should be on `main`, not `workflow-2-competition-scraping`. If you're still on the workflow-2 branch after `./resume`, STOP and surface to director.
 
-Expected branch state on entry: `workflow-2-competition-scraping` exactly even with `origin/workflow-2-competition-scraping` AND exactly even with `origin/main`. Both branches at the same SHA after today's final ping-pong sync + the end-of-session doc-batch addendum push.
+Expected branch state on entry: `main` exactly even with `origin/main` AND exactly even with `origin/workflow-2-competition-scraping`. Both branches at the same SHA after today's deploy-#25 main push + ping-pong sync + the end-of-session doc-batch push.
 
 ## Launch prompt
 
 Read docs/CLAUDE_CODE_STARTER.md and follow every rule in it. Today's task:
-**Ship P-16 — diagnose + fix extension service worker MV3 "went to a bad state unexpectedly" crash** on `workflow-2-competition-scraping` (ROADMAP W#2 polish backlog P-16 entry; new ROADMAP Active Tools (a.46) RECOMMENDED-NEXT). Goal: open the SW's own DevTools (via `chrome://extensions` → click "Inspect views: service worker" on the extension card) → find the real stack trace → wrap async `onMessage` handlers in try/catch + structured `sendResponse` on error → ensure Supabase auto-refresh failures are caught. Director observed the crash on laptop 2 during P3B-9 cross-device sign-in walkthrough — Chrome auto-restarts the SW so user-visible impact is intermittent (popup + context-menu remain functional after restart). Closes (a.46) RECOMMENDED-NEXT.
+**Run the W#2 Tool Graduation Ritual per HANDOFF_PROTOCOL §4 Step 2 Scenario B on `main`** (ROADMAP Active Tools (a.47) RECOMMENDED-NEXT). Goal: complete the outgoing-tool graduation deliverables for W#2 (Competition Scraping & Deep Analysis) — heavy multi-step ritual (~90-120 min). Closes (a.47) RECOMMENDED-NEXT.
 
-Branch is `workflow-2-competition-scraping`. Verify branch state with `git branch --show-current` before any doc reads — should be `workflow-2-competition-scraping`. If you're still on `main`, STOP and surface to director.
+Branch is `main`. Verify branch state with `git branch --show-current` before any doc reads — should be `main`. If you're still on `workflow-2-competition-scraping`, STOP and surface to director.
 
-**Fix shape (per ROADMAP W#2 polish backlog P-16 entry; ~30-60 min):**
+**Outgoing tool's graduation deliverables (steps 1-8 per HANDOFF_PROTOCOL §4 Step 2 Scenario B):**
 
-- Target file: `extensions/competition-scraping/src/entrypoints/background.ts`
-- Suspected causes (per P-16 entry):
-  1. Supabase auto-refresh-token loop fired during P3B-9's WiFi-off period + threw an unhandled promise rejection. MV3 SWs are stricter than persistent backgrounds about unhandled rejections.
-  2. `chrome.runtime.onMessage` handlers hit an unhandled error in one of the session-4 async paths (`createCapturedText`, `listVocabularyEntries`, `createVocabularyEntry`) when the network was offline.
-- Fix shape:
-  1. Wrap each async onMessage handler's body in try/catch.
-  2. On catch, send structured `sendResponse({ ok: false, error: { message: String(err) } })` so the popup-side gets a clean error rather than silence.
-  3. Ensure Supabase auto-refresh failures are caught (Supabase swallows refresh errors internally, but the MV3 SW may surface them via unhandled-rejection paths — add a global `self.addEventListener('unhandledrejection', ...)` that logs to console.error but doesn't re-throw).
+1. **Split `COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` (+ `COMPETITION_SCRAPING_DESIGN.md` § B refinements) into:**
+   - `COMPETITION_SCRAPING_ARCHIVE.md` — full history; loaded only if revisiting via Rule 22 graduated-tool re-entry. Contains all deploy-session #1 through #25 narratives + all session-by-session §B refinements + Waypoint #1 verification history + the original Workflow Requirements Interview §A from the design doc. Heavy doc (~3400+ lines from current backlog + design body). Header: link forward to Data Contract for downstream-consumer needs.
+   - NEW `COMPETITION_SCRAPING_DATA_CONTRACT.md` — small, stable, **<200 lines target**. Contains: what downstream W#3-#14 workflows need to know to consume W#2 output. Sections: §1 Tables W#2 owns (CompetitorUrl / CapturedText / CapturedImage / CapturedSize — canonical column shapes, R/W flags, Human Reference Language for each field — to be finalized in step 3 below); §2 Chrome extension's BackgroundRequest envelope shape (for any future workflow that wants to consume from the extension); §3 Vocabulary table reuse pattern (W#2's vocabulary types — content-category, image-category, composition, embedded-text-style, tags — and how downstream tools can/should reuse vs. extend); §4 Known invariants (e.g., `source` enum values, slug-variant URL canonicalization, `clientId` idempotency contract); §5 Resume Prompt (the Rule 22 canonical re-entry launch prompt — filled in per Rule 22 template).
 
-**Diagnosis steps before coding (these may change the fix shape):**
+2. **Add §Resume Prompt section to the Data Contract** per Rule 22 canonical template — fills in the workflow-specific Step 1 (branch checkout `main` + pull) + Step 3 (launch prompt naming the specific revisit reason). The Resume Prompt is what future Claude Code sessions paste when returning to W#2 via Rule 22 (graduated-tool re-entry); it tells the next Claude to load the Data Contract + DESIGN + Archive TOC + Polish Backlog rather than the full Active doc.
 
-1. Reproduce the crash if possible: on laptop 2 or any test device, sign in to extension, toggle WiFi off, click some popup button that triggers an authenticated request, toggle WiFi back on, repeat. If the SW crashes, observe the stack trace.
-2. If the crash doesn't reproduce: read all chrome.runtime.onMessage handlers in `background.ts` (and any other entrypoints under `src/entrypoints/`) and identify ones with `async (message, sender, sendResponse)` shape that lack try/catch. Those are the candidate fixes.
-3. Surface to director if the SW DevTools stack trace differs from the suspected causes above — the fix shape may need to be revised.
+3. **Conduct Data Capture Interview with director (Doc Architecture §5) — finalize Human Reference Language for every W#2 data item.** Per Rule 18 reciprocal output declaration: every data item W#2 captures should have a finalized HRL (what the director would naturally call it) + technical name. Examples: HRL "competitor product URL" vs. technical `CompetitorUrl.url`; HRL "what category of product this is (paid ad vs. organic)" vs. technical `CompetitorUrl.competitionCategory`; HRL "the product's name as displayed on the page" vs. technical `CompetitorUrl.productName`; etc. Cluster the interview in 3-5 question batches per Rule 18. The Data Contract §1 (Tables) gets these HRL fields filled in inline.
 
-**Test coverage decision (Rule 27 forced-picker at session start):**
+4. **Update `DATA_CATALOG.md`** — entries for W#2 data items move from "PROVISIONAL" to finalized HRL + Data Contract pointer. Each W#2 data item gets a finalized entry in DATA_CATALOG.md §6.W#2 (or wherever W#2's section lives).
 
-- (A) Node:test cases on the onMessage handler shape if the refactor introduces a testable seam (e.g., extract a `safeHandle(handler)` helper that wraps + catches; test that exceptions become structured error responses). Estimated +3-5 cases.
-- (B) Director's manual diagnosis-and-verify session — no automated test. Sideload after fix, exercise the suspected crash paths (offline + retry), confirm SW survives.
-- (C) Hybrid — write the safeHandle helper test cases AND have director re-verify the crash-no-longer-fires path on real laptop 2.
-- (D) Escape hatch.
+5. **Update Cross-Tool Data Flow Map in `DATA_CATALOG.md` §7** — W#2's row gets fully filled in: data items produced (per step 3), R/W flags (W = W#2 writes; downstream W#3-#14 reads), downstream consumers identified or "TBD" if not yet declared. Any downstream workflow that has already declared a reciprocal output dependency on W#2 (per Rule 18 from their interview) gets the linkage made explicit.
 
-Per `feedback_recommendation_style.md` (most thorough/reliable), Option (C) is the right pick — code-level regression coverage on the wrapper logic + director real-laptop verification on the actual crash class.
+6. **Move outstanding W#2 polish items into NEW `COMPETITION_SCRAPING_POLISH_BACKLOG.md` sidecar** — thin sidecar so the polish list doesn't lock W#2 in active state. Move ALL remaining open polish items (P-18 devcontainer Chromium libs ergonomic / P-22 Playwright cross-platform slices 2-4 / P-23 saved-URL dropdown side-by-side / P-24 saved-image indicator / P-25 captured-text haze indicator / P-26 below-fold full-page-scroll capture / any others currently OPEN in the verification backlog). The Active doc (`COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md`) is no longer needed and can be deleted from `/docs/` (its full history is preserved in `COMPETITION_SCRAPING_ARCHIVE.md`).
 
-**Pre-deploy verification scoreboard targets (expected baselines from today's deploy session #24 post-state):**
+7. **Update `ROADMAP.md`** — W#2 row moves to ✅ COMPLETE in the Current Active Tools table; the polish-backlog sidecar is referenced. (a.47) flips to ✅ DONE; new (a.48) RECOMMENDED-NEXT opens (likely W#3 Therapeutic Strategy first session per Rule 18 — separate session — settled via §4 Step 1c forced-picker at end-of-session).
 
-- `npx tsc --noEmit` clean
-- `cd extensions/competition-scraping && npx tsc --noEmit` clean
-- `npm run build` clean — **53 routes** (unchanged; no new routes)
-- `src/lib` node:test: **527/527** unchanged (P-16 is extension-only)
-- Extension `npm test`: **352/352** baseline + new safeHandle cases if Option A/C picked (~355-357 expected)
-- Playwright: **75/75** unchanged
+8. **Update `DOCUMENT_MANIFEST.md`** — Active doc archived (`COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` removed from Group B inventory); Data Contract + Archive + Polish Backlog added to Group B inventory; §Resume Prompt location documented.
 
-**Deploy mechanics (cheat-sheet b — standard W#2 → main deploy):** unchanged. Pre-deploy scoreboard → rebase if main moved → ff-merge → post-merge scoreboard → Rule 9 gate → push main → ping-pong sync → fresh extension build → director sideload + manual verification.
-
-**Per Rule 23 Change Impact Audit (pre-classify before code):** ADDITIVE — pure defensive error-handling polish; zero schema; zero API; zero shared-types. The structured error response shape may need a shared-types update if popup-side caller code expects a specific contract; surface at session start.
-
-**Group A docs to update at end-of-session:** ROADMAP (header + (a.46) → flip ✅ DONE + new (a.47) RECOMMENDED-NEXT — likely W#2 Tool Graduation per §4 Step 2 Scenario B since P-16 closes the LAST open W#2 polish item, OR W#3 Therapeutic Strategy first session per Rule 18; settle via §4 Step 1c forced-picker); CHAT_REGISTRY; DOCUMENT_MANIFEST; CORRECTIONS_LOG (header bump + any new entries); NEXT_SESSION (rewritten for the next pick).
-
-**Group B docs to update at end-of-session:** COMPETITION_SCRAPING_VERIFICATION_BACKLOG (new Deploy session #25 entry + P-16 flipped ✅ DONE); COMPETITION_SCRAPING_DESIGN may not need a §B entry (defensive polish doesn't change design intent).
-
-**Schema-change-in-flight flag:** stays "No" for this entire session.
-
-Start by running the mandatory start-of-session sequence.
+**Incoming tool's setup deliverables (steps 9-16 per HANDOFF_PROTOCOL §4 Step 2 Scenario B) — DEFER to a separate session.** Per Rule 18 the Workflow Requirements Interview for the next workflow (likely W#3 Therapeutic Strategy) is heavy in its own right (~90-150 min); don't combine with W#2 graduation. End today's session at step 8 (W#2 ✅ COMPLETE on main); §4 Step 1c forced-picker at end-of-session picks the next session's focus (most likely W#3 Therapeutic Strategy first session, but director picks).
 
 **Pre-build read list (in addition to mandatory start-of-session sequence):**
 
-- `extensions/competition-scraping/src/entrypoints/background.ts` — find all `chrome.runtime.onMessage.addListener` handlers + their async paths.
-- `extensions/competition-scraping/src/lib/supabase.ts` — review auto-refresh-token flow + check whether refresh errors are caught.
-- ROADMAP W#2 polish backlog P-16 entry — full root-cause + fix-shape narrative.
+- `docs/HANDOFF_PROTOCOL.md` §4 Step 2 Scenario B — full Tool Graduation Ritual spec.
+- `docs/HANDOFF_PROTOCOL.md` Rule 22 — Graduated-Tool Re-Entry Protocol + Resume Prompt template (step 2 above uses this).
+- `docs/HANDOFF_PROTOCOL.md` Rule 18 — Workflow Requirements Interview (informs step 3's interview shape + reciprocal output declarations).
+- `docs/HANDOFF_PROTOCOL.md` Rule 23 — Change Impact Audit (applies to any post-graduation revisits; reference for Data Contract design).
+- `docs/COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` — full read; will be split.
+- `docs/COMPETITION_SCRAPING_DESIGN.md` — full read; §B refinements may merge into Archive; §A initial requirements informs Data Contract §1.
+- `docs/COMPETITION_SCRAPING_STACK_DECISIONS.md` — confirm key invariants (e.g., per-platform host_permissions, `source` enum, two-phase upload contract) land in Data Contract §4.
+- `docs/DATA_CATALOG.md` — current state of W#2 entries (where they go from PROVISIONAL → finalized in step 4).
+- `docs/KEYWORD_CLUSTERING_DATA_CONTRACT.md` — REFERENCE SHAPE for what a Data Contract looks like (W#1 graduated; its Data Contract is the canonical template).
+- `docs/KEYWORD_CLUSTERING_ARCHIVE.md` — REFERENCE SHAPE for the Archive doc.
+- `docs/KEYWORD_CLUSTERING_POLISH_BACKLOG.md` — REFERENCE SHAPE for the Polish Backlog sidecar.
+
+**Per Rule 23 Change Impact Audit (pre-classify before code):** N/A — Tool Graduation is doc-organization work + Data Catalog updates + the Data Capture Interview, NOT code work. Zero `src/` / `extensions/` / `prisma/` / `tests/` changes expected.
+
+**Verification scoreboard at end-of-session (sanity baseline since no code changes):**
+
+- `npx tsc --noEmit` clean
+- `npm run build` clean — 53 routes (unchanged)
+- `src/lib` node:test 527/527 (unchanged)
+- Extension `npm test` 358/358 (unchanged)
+- Playwright 75/75 (unchanged)
+
+**Deploy mechanics (cheat-sheet d — platform-wide doc-only):** single-branch on `main`; pull-rebase at session start; end-of-session doc-batch commit + Rule 9-gated push to `origin/main` (Vercel re-build is harmless no-op since no `src/` changes).
+
+**Group A docs to update at end-of-session (PROJECTED — actual list depends on Data Capture Interview outcomes):** ROADMAP (header + (a.47) flipped ✅ DONE + new (a.48) RECOMMENDED-NEXT + W#2 row flipped to ✅ COMPLETE in Active Tools table); CHAT_REGISTRY; DOCUMENT_MANIFEST (Active doc out of Group B; Data Contract + Archive + Polish Backlog into Group B; §Resume Prompt location documented); CORRECTIONS_LOG (header bump + any new entries if process slips); DATA_CATALOG (W#2 PROVISIONAL → finalized entries + Cross-Tool Data Flow Map row); NEXT_SESSION (rewritten for next session — likely W#3 first session per Rule 18, settled via §4 Step 1c picker).
+
+**Group B docs created at end-of-session:** NEW `COMPETITION_SCRAPING_DATA_CONTRACT.md` + NEW `COMPETITION_SCRAPING_ARCHIVE.md` + NEW `COMPETITION_SCRAPING_POLISH_BACKLOG.md`.
+
+**Group B docs deleted at end-of-session:** `COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` (content moved into Archive); `COMPETITION_SCRAPING_DESIGN.md` (§A → Data Contract §1; §B → Archive). Old `COMPETITION_SCRAPING_STACK_DECISIONS.md` → likely retained as separate Group B doc OR rolled into Data Contract §4 invariants (director picks at session start).
+
+**Schema-change-in-flight flag:** stays "No" for this entire session (doc reorganization only).
+
+Start by running the mandatory start-of-session sequence.
 
 ## Pre-session notes (optional, offline steps to do between sessions)
 
-If you can: try reproducing the SW crash on a test device. Sign in to extension, toggle WiFi off, click around the popup. If you observe the crash, screenshot the chrome://extensions error message + stack trace for the next session. Even a partial stack trace narrows the diagnosis considerably. If you can't reproduce, that's fine — Option B/C fallback (defensive try/catch wrap + speculative fix) still works.
+Nothing to do offline. The Tool Graduation Ritual is fully in-Codespace + in-session. The Data Capture Interview (step 3) needs your input on Human Reference Language for each W#2 data item — Claude will cluster the interview in 3-5 question batches per Rule 18 so you can think through it incrementally; no preparation needed beyond being available to answer questions about how you'd naturally describe each W#2 data item.
 
 ## Why this pointer was written this way (debug aid)
 
-Today's session was complex. Originally scoped to ship P-13 (autofocus on popup's inline category input — a 1 LOC fix). During P-13 verification, director surfaced natural-use feedback about the popup's URL dropdown not auto-selecting. I (Claude) interpreted this as a generic "auto-select something" feature request and shipped P-38 (1-URL pre-select) + P-39 (sticky most-recently-used URL preference) across two additional deploy cycles before director clarified the actual intent: the dropdown should pre-select the URL matching the page currently open. Reverted P-38 + P-39 + shipped P-40 (`pickInitialUrl` + active-tab URL match — same pattern as the right-click overlay) as the actually-correct fix in deploy session #24. Captured the misreading slip as a real CORRECTIONS_LOG §Entry. After today, the W#2 polish backlog has ONE open item (P-16 — service-worker MV3 crash diagnostics) — that's the natural next pick. After P-16 ships, W#2 polish backlog is functionally complete; the next session after that opens the W#2 graduation question.
+Today's session was straightforward end-to-end. Originally scoped to ship P-16 (SW MV3 crash diagnostics) on `workflow-2-competition-scraping`. Drift caught at session start: ROADMAP P-16 narrative said "wrap onMessage async paths in try/catch" but `background.ts:191-211` already had that pattern. Scope reframed cleanly BEFORE coding to the actually-load-bearing fix: global `self.addEventListener('unhandledrejection'/'error', ...)` listeners that catch Supabase auto-refresh failures and any other top-level promise rejection. Director real-Chrome wiring test PASS via Hybrid Option C. Deploy session #25 single-commit ff-merge to main; ping-pong sync. **HEADLINE: P-16 was the LAST open W#2 polish item with concrete code-level work.** With it shipped + deployed + wiring-confirmed, W#2 (Competition Scraping) is functionally complete on the polish side. The natural next step is W#2 Tool Graduation — the heavy multi-step ritual that produces the canonical doc set (Data Contract + Archive + Polish Backlog sidecar) downstream workflows will consume.
 
 **Alternate next-session candidates if director shifts priorities at session start:**
 
-- W#3 Therapeutic Strategy first session per Rule 18 — heavy lift (~90-150 min) but advances platform arc.
-- W#2 Tool Graduation per HANDOFF_PROTOCOL §4 Step 2 Scenario B — if director declares W#2 functionally complete after P-13 + P-40 (P-16 is the only remaining polish; could be split into "graduate now and capture P-16 in the polish-backlog sidecar" or "ship P-16 first then graduate"); see HANDOFF_PROTOCOL §4 Step 2 Scenario B for the full ritual.
-- W#1 graduated-tool re-entry per Rule 22 — only if Keyword Clustering issue surfaces from natural use.
+- W#3 Therapeutic Strategy first session per Rule 18 (Workflow Requirements Interview). Heavy lift (~90-150 min) but advances platform arc onto the next workflow. Bypasses W#2 graduation — that would land in a later session. Trade-off: every cross-workflow session until then carries the heavy W#2 doc-load.
+- W#1 Keyword Clustering graduated-tool re-entry per Rule 22 — only if a Keyword Clustering issue surfaces from natural use. Light session if it's just exploration; heavier if it's a real fix or schema change.
 
 Check `ROADMAP.md` for the canonical state.

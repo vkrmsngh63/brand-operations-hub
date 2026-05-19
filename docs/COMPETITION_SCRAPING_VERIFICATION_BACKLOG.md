@@ -127,7 +127,7 @@ At S4-A-4 first save attempt, director observed `Failed to execute 'fetch' on 'W
 - **P-13** Autofocus on "+ Add new…" inline input (both popup `CapturedTextPasteForm.tsx` AND content-script `text-capture-form.ts`; director-requested at S4-A-5).
 - **P-14** Highlight-terms applicator + MutationObserver self-feedback loop causes ~250ms flashing on all platforms (PRE-EXISTING since 2026-05-08-d P-5 ship; only newly-visible today because S4-B's selection gesture surfaces it).
 - **P-15** `pickInitialUrl` missing `platformModule.canonicalProductUrl(...)` step on slug-variant URLs (session-4 bug; overlay's URL pre-fill fails on Amazon-style paths with product slug).
-- **P-16** Extension service worker "went to a bad state unexpectedly" surfaced on laptop 2 chrome://extensions (MV3 SW crash with degenerate stack trace; auto-restarted; needs SW DevTools diagnosis).
+- **P-16** ✅ DONE 2026-05-19-d — Extension service worker "went to a bad state unexpectedly" surfaced on laptop 2 chrome://extensions (MV3 SW crash with degenerate stack trace). Diagnostic instrumentation SHIPPED + DEPLOYED + REAL-CHROME WIRING-VERIFIED on vklf.com via deploy session #25 (commit `07416d3`). NEW `extensions/competition-scraping/src/lib/sw-error-logging.ts` pure helper + two `self.addEventListener('unhandledrejection'/'error', ...)` calls at the top of `defineBackground()` + `logGlobalError` call in `errorToEnvelope()`. Director SW-DevTools wiring test PASS via Hybrid Option C (`Promise.reject(...)` produced expected `[plos-cs-sw]` structured-payload line in console). Future SW crashes will surface real stack traces instead of the prior degenerate `:0 (anonymous function)`. See ROADMAP P-16 entry for full narrative + this doc's "Deploy session #25" section for deploy mechanics.
 - **P-17** Real-fetch integration test for `authFetch.ts` production export (test-coverage gap that allowed today's Illegal invocation to ship).
 
 ### Two doc drifts captured (to clean up in a future VERIFICATION_BACKLOG update)
@@ -3257,6 +3257,99 @@ Director picked Option A "Revert P-38 + P-39 + ship clean P-40 active-tab-URL-ma
 **§4 Step 1c forced-picker fired at end-of-session** — director picked **(a.46) RECOMMENDED-NEXT = W#2 polish P-16 SW MV3 crash diagnostics** over alternatives (W#3 Therapeutic Strategy first session per Rule 18 at ~90-150 min — big lift but advances platform arc; W#2 Tool Graduation per HANDOFF_PROTOCOL §4 Step 2 Scenario B — heavy multi-step ritual). Rationale per `feedback_recommendation_style.md`: closes the only remaining open W#2 polish item with concrete code-level work; well-scoped diagnostic session; lowest risk vs. heavier alternatives.
 
 **Net code change today on main vs. session-start `5b4db92`:** P-13's 1 LOC + P-40's 15 LOC in `CapturedTextPasteForm.tsx` (P-38 + P-39 commits cancel each other via the reverts). Final main state: `182da37` (P-40 ship) on top of `f0cef37` (revert P-38) on top of `b635ae7` (revert P-39) on top of `2766031` (P-39 ship) on top of `6a8c516` (today's initial doc batch — describes the pre-revert state, addressed in this end-of-session doc batch addendum) on top of `a0d5c8a` (P-38 ship) on top of `e217eb9` (P-13 ship) on top of `5b4db92` (session-start state).
+
+---
+
+## Deploy session #25 — P-16 service worker MV3 crash diagnostics SHIPPED + DEPLOYED + REAL-CHROME WIRING-VERIFIED (NEW 2026-05-19-d — W#2 → main deploy session #25, closes (a.46) RECOMMENDED-NEXT)
+
+**Session:** `session_2026-05-19-d_w2-main-deploy-session-25-p16-sw-mv3-crash-diagnostics-DEPLOYED` (Claude Code, dual-branch — pre-deploy scoreboard on `workflow-2-competition-scraping`, rebase + ff-merge + deploy on `main`, ping-pong sync after main push). One-hundred-and-thirteenth Claude Code session.
+
+**Doc-vs-code drift caught at session start (Rule 3 — code wins):**
+
+ROADMAP P-16 narrative said the fix shape was *"wrap onMessage handler's async paths in try/catch with structured sendResponse on error; ensure Supabase auto-refresh failures are caught."* Code reality at `extensions/competition-scraping/src/entrypoints/background.ts:191-211` showed the onMessage handler was ALREADY wrapped:
+
+```ts
+chrome.runtime.onMessage.addListener((rawMsg, _sender, sendResponse) => {
+  if (!isBackgroundRequest(rawMsg)) return false;
+  handleBackgroundRequest(req)
+    .then((data) => sendResponse({ ok: true, data }))
+    .catch((err) => sendResponse({ ok: false, error: errorToEnvelope(err) }));
+  return true;
+});
+```
+
+The `.catch()` IS the structured-error path. So the "wrap async onMessage in try/catch with structured sendResponse" half of the fix shape was already in place — likely refactored in since the 2026-05-12 P-3B-9 P-16 capture moment without the polish-backlog narrative being updated. The actually-load-bearing gap was the absence of any SW global error/unhandledrejection listener — failures from Supabase auto-refresh or any other top-level promise rejection bubbled out silently with no diagnostic trace, which is what made the original crash report degenerate (`:0 (anonymous function)`).
+
+Drift surfaced + scope reframed BEFORE coding to the actually-load-bearing fix: global `self.addEventListener('unhandledrejection', ...)` + `self.addEventListener('error', ...)` listeners + structured logging via a new `sw-error-logging.ts` pure helper.
+
+**Build phase on `workflow-2-competition-scraping`:**
+
+Single commit `07416d3` — 3 files +199/-0:
+
+1. NEW `extensions/competition-scraping/src/lib/sw-error-logging.ts` (~95 LOC):
+   - `buildGlobalErrorPayload(err, context)` — pure function returning a structured `{ timestamp, context, name, message, stack }` record from any input shape (Error instance / non-Error string / null/undefined / plain object with name+message+stack / plain object without message → JSON.stringify fallback with safe `[unserializable object]` catch).
+   - `logGlobalError(err, context, logger = defaultLogger)` — wraps the builder + emits via the injected logger (production default: `console.error('[plos-cs-sw]', payload)`).
+   - Injected-logger seam lets node:test assert payload shapes without touching console.
+
+2. NEW `extensions/competition-scraping/src/lib/sw-error-logging.test.ts` (~81 LOC, 6 node:test cases):
+   - Error instance: name + message + stack extracted correctly + ISO timestamp shape.
+   - Non-Error string: `name: 'NonErrorString'` + message = the string + stack = null.
+   - null + undefined: both produce `name: 'NonErrorNullish'` + message = `'null'` / `'undefined'` + stack = null.
+   - Object with name/message/stack: extracted directly.
+   - Object without message: JSON.stringify fallback for message.
+   - `logGlobalError`: invokes injected logger with built payload.
+
+3. 27 LOC additive in `extensions/competition-scraping/src/entrypoints/background.ts`:
+   - Import `logGlobalError` from `../lib/sw-error-logging`.
+   - Two `self.addEventListener(...)` calls at the TOP of `defineBackground(() => { ... })` (BEFORE any other listener, so they're alive for SW's full lifecycle — including the Supabase auto-refresh loop that begins as soon as the supabase module is imported at the top of the file):
+     - `self.addEventListener('unhandledrejection', (event) => logGlobalError(event.reason, 'sw-unhandledrejection'))` — catches Supabase auto-refresh rejections + any other `.then()`-less promise failures.
+     - `self.addEventListener('error', (event) => logGlobalError(event.error ?? event.message, 'sw-error'))` — catches sync throws from sync-scheduled callbacks.
+     - Both listeners do NOT `preventDefault` / re-throw — they just leave a SW DevTools trace. Preserves SW lifecycle (no behavior change for unhandled errors; just adds diagnostic visibility).
+   - `logGlobalError(err, 'sw-handled-error')` call inside `errorToEnvelope()` before returning the envelope — so even handled errors leave a SW DevTools trace, independent of the global-rejection listener.
+
+**Pre-deploy scoreboard (on `workflow-2-competition-scraping`) — all GREEN:**
+
+- `npx tsc --noEmit` clean (root)
+- `cd extensions/competition-scraping && npx tsc --noEmit` clean
+- `npm run build` clean — 53 routes (unchanged)
+- `src/lib` node:test 527/527 (unchanged — extension change only)
+- Extension `npm test` **358/358** (was 352; **+6 new sw-error-logging cases**)
+- Playwright `npm run test:e2e:all` 75/75 (44 chromium + 31 extension; unchanged — extension code change doesn't affect Playwright extension-project specs)
+
+**Director real-Chrome wiring test (Hybrid Option C — Rule 27 forced-picker at session start):**
+
+Per the Rule 27 forced-picker, director picked Option C: node:test cases on the pure helper + manual sideload + SW DevTools wiring verification on real Chrome.
+
+Fresh extension zip `plos-extension-2026-05-19-w2-p16-verification.zip` (188,767 bytes — +276 over deploy-24) built at session-end pre-deploy moment and copied to repo root for director sideload.
+
+Director sideload + SW DevTools transcript:
+
+1. Sideloaded fresh build on real Chrome (laptop where the P-3B-9 crash had been observed).
+2. Opened SW DevTools via `chrome://extensions` → "Inspect views: service worker" on the extension card.
+3. With WiFi OFF, exercised authenticated popup paths (open popup, change project, change platform, type text, click Save). Observation: **no `[plos-cs-sw]` lines appeared in console.** Initial interpretation: either the new code wasn't loaded OR the WiFi-off operations didn't trigger unhandled rejections.
+4. Wiring test executed in SW DevTools console to disambiguate: `Promise.reject(new Error('manual P-16 wiring test'))`.
+5. Observed in console: `background.js:24 [plos-cs-sw] { timestamp: '2026-05-19T14:08:23.867Z', context: 'sw-unhandledrejection', name: 'Error', message: 'manual P-16 wiring test', stack: 'Error: manual P-16 wiring test\n    at <anonymous>:1:16' }` followed by the standard Chrome "Uncaught (in promise) Error" line.
+6. **Wiring confirmed alive.** The initial empty-console observation was benign: those specific clicks didn't fire unhandled rejections (Supabase swallowed the network errors internally OR the popup didn't trigger failing background-request paths).
+
+The diagnostic instrumentation is now in place for the next time the SW does crash; future SW DevTools captures will show a real structured stack with name + message + stack (e.g., `{ context: 'sw-unhandledrejection', name: 'AuthRetryableFetchError', message: 'Network request failed', stack: '...' }`) instead of the prior degenerate `:0 (anonymous function)`.
+
+**Per Rule 23 Change Impact Audit (pre-classify before code):** ADDITIVE — pure defensive error-handling polish; zero schema; zero API; zero shared-types; zero downstream consumers; no behavior change in any non-error path.
+
+**Deploy mechanics (cheat-sheet b — standard W#2 → main deploy):**
+
+- `git checkout main && git pull --rebase origin main` — main unchanged since session start.
+- `git merge --ff-only workflow-2-competition-scraping` — fast-forward `3132899..07416d3` clean (3 files +199/-0).
+- Post-merge scoreboard re-run on `main` all GREEN at exact same baselines.
+- Rule 9 deploy gate via AskUserQuestion forced-picker → director picked "Deploy now (Rule 9-approved)".
+- `git push origin main` carrying `3132899..07416d3` (Vercel auto-redeployed — web bundle unchanged; extension only).
+- Ping-pong sync: `git checkout workflow-2-competition-scraping && git pull --rebase origin main && git push origin workflow-2-competition-scraping` — clean (`3132899..07416d3`).
+- Fresh deploy zip `plos-extension-2026-05-19-w2-deploy-25.zip` at repo root (188,767 bytes — identical to the pre-deploy verification zip since no code change between them).
+
+**HEADLINE OUTCOME:** W#2 polish backlog is functionally complete on real Chrome. P-16 was the last open W#2 polish item with concrete code-level work; all remaining open W#2 items (P-18 devcontainer ergonomic / P-22 Playwright cross-platform slices 2-4 / P-23 saved-URL dropdown side-by-side / P-24 saved-image indicator / P-25 captured-text haze indicator / P-26 below-fold full-page-scroll capture) are either developer-ergonomic polish, deferred test-coverage extensions, or larger UX enhancements that would naturally land in W#2's polish backlog SIDECAR after graduation rather than blocking graduation.
+
+**§4 Step 1c forced-picker fired at end-of-session** — director picked **(a.47) RECOMMENDED-NEXT = W#2 Tool Graduation per HANDOFF_PROTOCOL §4 Step 2 Scenario B on `main`** over alternatives (W#3 Therapeutic Strategy first session per Rule 18 ~90-150 min — also advances platform arc but leaves W#2 in current heavy-doc state; W#1 graduated-tool re-entry per Rule 22 — only if Keyword Clustering surfaces a real issue). Rationale per `feedback_recommendation_style.md` (most thorough/reliable): doc weight of W#2's polish backlog (this `COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` is now ~3400 lines) blocks session-start reads for cross-workflow work; the Data Contract is the artifact downstream W#3-#14 workflows will consume to know what W#2 produces; graduating now means future W#2 visits use lightweight Rule 22 re-entry instead of heavy doc-load.
+
+**Net code change this session on main vs. session-start `3132899`:** +199 LOC across 3 extension files (`background.ts` +27, NEW `sw-error-logging.ts` +95, NEW `sw-error-logging.test.ts` +81). Final main state: `07416d3` (P-16 ship) on top of `3132899` (session-start state — also today's session-start since the previous 2026-05-19-c-2 doc-batch addendum was the last main commit before this session began).
 
 ---
 
