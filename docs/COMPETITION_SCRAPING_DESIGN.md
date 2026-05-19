@@ -2842,4 +2842,46 @@ Director picked (A). Per `feedback_recommendation_style.md` (most thorough/relia
 
 ---
 
+## §B 2026-05-19-e — W#2 → main deploy session #26 — P-24 saved-image indicator on the page SHIPPED + DEPLOYED + REAL-CHROME-VERIFIED on vklf.com
+
+**Session:** `session_2026-05-19-e_w2-main-deploy-session-26-p24-saved-image-indicator-DEPLOYED` (Claude Code, dual-branch — pre-deploy scoreboard on `workflow-2-competition-scraping`, ff-merge + deploy phase on `main`, ping-pong sync after main push). Closes (a.47) RECOMMENDED-NEXT.
+
+**Outcome:** P-24 saved-image indicator overlays a green ✓ at the top-right of host-page `<img>` elements whose `currentSrc`/`src` matches a saved CapturedImage row's `originalSrcUrl`. Indicator scoped to pages whose canonical URL matches a saved CompetitorUrl (same scope as the existing detail-overlay banner). Director real-Chrome verification PASS first try.
+
+**Load-bearing finding at session start (Rule 3 — code wins).** The launch prompt + ROADMAP P-24 entry both stated *"CapturedImage table already has both `src_url` + `original_src_url`"* — the field did not exist in schema, TypeScript wire shape, finalize API, or extension save path. Drift was caught BEFORE any code via the start-of-session diagnosis steps + AskUserQuestion forced-picker. Director picked **Option 1** (add new nullable `originalSrcUrl String?` column to CapturedImage + persist forward on new captures; pre-existing rows backfill to NULL and won't show the indicator until re-captured) over Option 2 (defer P-24 until P-25 designed) + Option 3 (image-hash matching no schema change — too expensive at scan-time). Captured here so this design history isn't reconstructed from commit messages later.
+
+**Schema-change-in-flight discipline.** Schema flag flipped Yes during build. `npx prisma db push` ran against the shared dev+prod Supabase DB and landed in 1.20s (additive — no destructive change). Flag flipped back to No before deploy.
+
+**Persistence path — extension flow:** `background.ts` `handleSubmitImageCapture` now threads `req.srcUrl` into the finalize call as `originalSrcUrl` ONLY when (a) `req.request.sourceType === 'regular'` AND (b) `!req.srcUrl.startsWith('data:')`. Region-screenshot captures (whose srcUrl is a base64 data URL — sometimes megabytes) are skipped — their original src can never match a host-page `<img>` and storing the data URL in DB is wasteful.
+
+**Persistence path — manual-add modal (DEFERRED).** The web-side `CapturedImageAddModal.tsx` URL-paste path (P-29 Slice #3) is OUT OF SCOPE for P-24 ship. A trivial 1-line addition (`if (urlInput.trim()) finalizeBody.originalSrcUrl = urlInput.trim();` inside the fetch-by-url branch) folds into any future W#2 polish session. Captured in NEXT_SESSION.md alternate candidates.
+
+**API surface change.** `FinalizeImageUploadRequest` gains optional `originalSrcUrl?: string`. Server-side validation: must be a string when provided; trimmed-to-null on empty/whitespace. `CapturedImage` interface gains required `originalSrcUrl: string | null`. All three `toWireShape` sites (collection list route + per-image PATCH route + finalize handler) updated to include the field in responses. Backward compatible — older extensions that don't send the field get NULL persisted; older clients reading the new wire shape ignore unknown additive field.
+
+**Content-script architecture.** Three modules cooperate:
+
+1. **`api-bridge.ts` + new bridge function `listCapturedImages(projectId, urlId)`** — routes through background per the standard content-script CORS pattern. New `list-captured-images` request kind in `messaging.ts` + type-guard. Background dispatches to `api-client.ts`'s new `listCapturedImages` function.
+
+2. **New `already-saved-image-icon.ts` helper (~150 LOC).** Exports `attachAlreadySavedImageIcon(img, savedImageId)` + `detachAlreadySavedImageIcon(savedImageId)` + `detachAllAlreadySavedImageIcons()` + `reposition(icon, img)`. Icon is a 28×28 green ✓ overlay with `position:fixed`, white border, green halo ring, drop shadow (matching the URL ✓ icon's visibility-boost styling). Positioned via `getBoundingClientRect()` at top-right of the matched `<img>`. `position:fixed` + `pointer-events:none` means the icon doesn't intercept clicks or interact with host-page layout. Pinned to `document.body` (not the image's parent — avoids host-page layout invasion). Per-icon `data-plos-cs-image-icon-for="<savedImageId>"` for orchestrator-side lookup; per-img `data-plos-cs-image-has-icon="<savedImageId>"` flag for dedupe across rescans.
+
+3. **`orchestrator.ts` extension** — three additions:
+   - **`urlIdByNormalized: Map<string, string>`** built alongside the existing `recognitionSet` so the orchestrator can resolve the current saved URL's id when `maybeShowDetailOverlay` matches.
+   - **`capturedImagesByUrlId: Map<string, CapturedImageWithUrls[]>`** cache keyed by urlId. One fetch per urlId per page-load. Negative-cached (empty array) on API failure so rescans don't retry.
+   - **`scanImages()`** — O(M) match: builds `rowsBySrc: Map<originalSrcUrl, row>` (first-time) then walks `document.querySelectorAll<HTMLImageElement>('img')` once, checking each `img.currentSrc` + `img.src` against the map. First match per saved row wins (mirrors the URL ✓ dedupe rationale). Existing icons whose matched row is no longer active get detached. Existing icons whose img is still matched get repositioned.
+   - **Wired into** `maybeShowDetailOverlay()` (fires on saved-URL match — fetch + scan), `MutationObserver` tick (rescan after DOM mutations), and `window.scroll`/`window.resize` listeners (reposition existing icons without re-scanning).
+
+**Match strategy — v1 strict equality only.** `img.currentSrc === originalSrcUrl || img.src === originalSrcUrl`. Host pages serve different image variants at different sizes (e.g., Amazon's `_SX300_` suffix); v1 matches only the EXACT src that was captured. Pre-existing captured rows have NULL originalSrcUrl and will never match. Future polish item could add fuzzy matching (strip platform-specific size suffixes) but v1 ships clean before that complexity.
+
+**Known v1 limitation — no mid-session cache invalidation.** When the user saves a new image WHILE on a page (the most likely verification flow), the orchestrator does NOT auto-refresh the cache for that urlId — the indicator appears only after page reload. Future polish: push a cache-invalidation hook from `image-capture-form`'s `onSaved` into orchestrator's `capturedImagesByUrlId.delete(urlId) + scanImages()`. Acceptable for v1; director verification flow is "save → reload → confirm indicator."
+
+**Test coverage — Hybrid Option A per Rule 27 forced-picker at session start.**
+
+- **node:test (extension `npm test`):** 10 new cases in `already-saved-image-icon.test.ts` covering `reposition` math (top/left from getBoundingClientRect, zero-geometry hide, negative-clamp), `attachAlreadySavedImageIcon` happy path (icon created with correct class + attributes + ✓ text; positioned from rect) + idempotency (re-attach same id+img returns existing without double-create) + zero-geometry skip, `detachAlreadySavedImageIcon` (removes icon + clears recognition flag, no-op on missing id), `detachAllAlreadySavedImageIcons` (clears all + preserves imgs). 368/368 pass (was 358; +10).
+- **node:test (server-side src/lib):** 4 new cases in `images-finalize.test.ts` covering `originalSrcUrl` validation (invalid type rejected with 400) + persistence (string value flows to `data.originalSrcUrl` + appears in response) + null-on-omit + whitespace-trim-to-null. 531/531 pass (was 527; +4).
+- **Playwright extension-context spec slice:** new `tests/playwright/extension/p24-saved-image-indicator.spec.ts` (single-platform amazon happy path) — route-intercepts page + `listCompetitorUrls` + `listCapturedImages` + `/api/projects`; navigates to a saved competitor URL with `<img>` matching a saved row; waits for `data-plos-cs-active=1` orchestrator-attach signal; waits for `.plos-cs-saved-image-icon`; asserts exactly 1 icon + correct `data-plos-cs-image-icon-for` attribute + saved-img recognition flag set + non-matching-img recognition flag NOT set. 76/76 Playwright total (was 75; +1).
+
+**Cross-references:** P-24 ROADMAP polish-backlog entry (line ~141 — flipped ✅ DONE with full fix-shape narrative as part of this doc batch); CHAT_REGISTRY 2026-05-19-e top entry; CORRECTIONS_LOG 2026-05-19-e header bump (zero slips; informational observation on doc-vs-code drift caught cleanly at session start); `already-saved-icon.ts` (the URL-anchor sibling helper this module mirrors); `find-underlying-image.ts` (P-23 Amazon fallback — independent feature, no shared code path); deploy session #26 commit `6e7ffa5`; fresh zip `plos-extension-2026-05-19-w2-deploy-26.zip`.
+
+---
+
 END OF DOCUMENT
