@@ -142,62 +142,45 @@ git pull --rebase origin "$BRANCH" || {
 # ── Setup mode: generate the launch prompt for this workflow ─────────────────
 case "$SETUP_MODE" in
   rule22)
-    # W#1 path: show the polish backlog menu, ask for task reason, fill Rule 22 template.
-    # The director picks an item by ID (H-1 / M-2 / etc.) OR types a freeform task
-    # description. Either way the result gets substituted into the Rule 22 template's
-    # [your specific reason] slot and Claude expands on it once the session starts.
+    # W#1 path: read the queued-next-task pointer at docs/KEYWORD_CLUSTERING_NEXT_SESSION.md.
+    # This file is symmetric with docs/NEXT_SESSION.md for W#2 — it's auto-updated by
+    # every W#1 session's end-of-session protocol with the next-priority item per the
+    # polish backlog. Director can edit it directly to override the queued task.
+    #
+    # No interactive prompt: per director directive 2026-05-19-g-7, "I don't want to
+    # tell the session what item to work on. I want it to check the roadmap to know
+    # what the next item on the roadmap is."
 
-    BACKLOG="docs/KEYWORD_CLUSTERING_POLISH_BACKLOG.md"
+    W1_POINTER="docs/KEYWORD_CLUSTERING_NEXT_SESSION.md"
 
-    echo ""
-    echo "── W#$WORKFLOW ($WORKFLOW_NAME) polish backlog — what's currently queued ──"
-    echo ""
-    if [ -f "$BACKLOG" ]; then
-      # Show the polish backlog's priority section headings + sub-item headings so
-      # the director sees the full menu of available work at a glance.
-      grep -E "^## |^### " "$BACKLOG" | head -40 | sed 's/^### /  /; s/^## /\n/'
-      echo ""
-      echo "(Full details for each item: read docs/KEYWORD_CLUSTERING_POLISH_BACKLOG.md)"
-    else
-      echo "  (No polish backlog file found at $BACKLOG — you can still type a custom task description.)"
+    if [ ! -f "$W1_POINTER" ]; then
+      cat <<EOF
+❌ $W1_POINTER not found.
+
+This file is W#1's queued-next-task pointer (symmetric with docs/NEXT_SESSION.md
+for W#2). It should be present in the repo on main; the previous W#1 session was
+supposed to write/refresh it at end-of-session per HANDOFF_PROTOCOL.md §4 Step 1.
+
+Fix options:
+  1. Confirm you're on main with the latest pull: \`git status && git log --oneline -3\`
+  2. Tell Claude in a separate session to create/restore this file pointing at the
+     highest-priority OPEN item from KEYWORD_CLUSTERING_POLISH_BACKLOG.md.
+  3. OR use the manual 3-step escape hatch (cd + git checkout main + claude +
+     paste a custom Rule 22 launch prompt referencing the polish item you want).
+EOF
+      exit 1
     fi
+
+    # Copy the W#1 pointer into the single-use SessionStart-hook pickup file.
+    # The hook reads .claude/active-workflow-prompt.md FIRST (before falling back
+    # to docs/NEXT_SESSION.md) and deletes after read for single-use semantics.
+    mkdir -p .claude
+    cp "$W1_POINTER" .claude/active-workflow-prompt.md
+
     echo ""
-    echo "What do you want to do in W#$WORKFLOW this session?"
+    echo "── docs/KEYWORD_CLUSTERING_NEXT_SESSION.md (W#$WORKFLOW queued-next-task pointer) ──"
     echo ""
-    echo "How to answer:"
-    echo "  • Pick a polish item by ID + brief — e.g., 'M-2 cost forecasting' or 'H-1 action history'"
-    echo "  • OR type a freeform task — e.g., 'investigate slow query in canvas-state' or"
-    echo "    'export keyword clusters as CSV for a downstream tool'"
-    echo "  • OR type 'show' to print the full backlog inline before deciding"
-    echo ""
-
-    # Allow the director to peek at the full backlog before deciding.
-    while true; do
-      read -r -p "Your task: " TASK_REASON
-
-      if [ -z "$TASK_REASON" ]; then
-        echo "❌ Empty task description. Aborting — re-run ./resume-workflow 1 when you know what you want to work on."
-        exit 1
-      fi
-
-      if [ "$TASK_REASON" = "show" ] || [ "$TASK_REASON" = "Show" ]; then
-        if [ -f "$BACKLOG" ]; then
-          echo ""
-          echo "── Full polish backlog: $BACKLOG ──"
-          echo ""
-          cat "$BACKLOG"
-          echo ""
-          echo "── End of polish backlog ──"
-          echo ""
-          continue  # re-prompt
-        else
-          echo "No backlog file to show. Type a task description."
-          continue
-        fi
-      fi
-
-      break  # got a real task description
-    done
+    cat "$W1_POINTER"
 
     # Build the launch prompt by substituting into the Rule 22 template.
     # This is the canonical W#1 re-entry shape from

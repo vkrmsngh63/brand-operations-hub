@@ -60,7 +60,15 @@ Each header narrative MUST include the following sections per the canonical patt
 - Three pushes count per `feedback_approval_scope_per_decision_unit.md`
 - End-of-session: ONE doc-batch commit covering N-doc bundle
 
-### 2. NEXT_SESSION.md — full rewrite
+### 2. Next-session pointer file(s) — full rewrite per workflow touched this session
+
+PLOS has per-workflow next-session pointer files (one per workflow), each read by the corresponding `./resume` / `./resume-workflow <N>` entry point:
+
+- `docs/NEXT_SESSION.md` → W#2 (Competition Scraping; active dev); read by `./resume` and `./resume-workflow 2`
+- `docs/KEYWORD_CLUSTERING_NEXT_SESSION.md` → W#1 (Keyword Clustering; graduated); read by `./resume-workflow 1`
+- `docs/<WORKFLOW_NAME>_NEXT_SESSION.md` → W#3-W#14 future workflows (created when each kicks off)
+
+**For each workflow this session touched, rewrite that workflow's pointer file** with the next queued task. If a session worked on BOTH W#1 and W#2, BOTH pointer files must be updated (each one independently). If only W#2 was touched, only `docs/NEXT_SESSION.md` gets rewritten.
 
 `docs/NEXT_SESSION.md` is the special-purpose pointer file the `./resume` script reads. Rewrite it entirely with:
 
