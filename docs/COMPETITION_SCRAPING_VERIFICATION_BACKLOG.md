@@ -4,7 +4,9 @@
 **Workflow:** W#2 Competition Scraping & Deep Analysis.
 **Branch:** `workflow-2-competition-scraping`.
 **Created:** 2026-05-07 in `session_2026-05-07_w2-plos-side-viewer-detail-page-slice` (Claude Code).
-**Last updated:** 2026-05-19-e (**W#2 → main deploy session #26 — P-24 saved-image indicator on the page SHIPPED + DEPLOYED + REAL-CHROME-VERIFIED on vklf.com.** One-hundred-and-fourteenth Claude Code session — `session_2026-05-19-e_w2-main-deploy-session-26-p24-saved-image-indicator-DEPLOYED` (dual-branch — pre-deploy scoreboard on `workflow-2-competition-scraping`, ff-merge + deploy phase on `main`, ping-pong sync after main push). Closes (a.47) RECOMMENDED-NEXT. **Schema-change-in-flight session — flag flipped Yes during build then back to No after `npx prisma db push` succeeded in 1.20s** (additive only — new nullable `originalSrcUrl String?` column on `CapturedImage`; pre-existing rows backfill to NULL with no indicator until re-captured). **Load-bearing finding at session start (Rule 3 — code wins):** launch prompt + ROADMAP P-24 entry both stated *"CapturedImage table already has both `src_url` + `original_src_url`"* — code review confirmed the field DID NOT EXIST in schema OR TypeScript wire shape OR finalize API OR save path. Drift surfaced via AskUserQuestion forced-picker BEFORE any code; director picked Option 1 (add column + persist forward). Build commit `6e7ffa5` on workflow-2 (15 files +1067/-3); ff-merged clean onto main (`06f9ac3..6e7ffa5`); pushed origin/main → Vercel auto-redeploy → ping-pong sync (both branches at `6e7ffa5`). Fresh zip `plos-extension-2026-05-19-w2-deploy-26.zip` (190,897 bytes — +2,130 over deploy-25). Pre-deploy + post-merge scoreboards all GREEN: tsc / ext tsc / `npm run build` 53 routes / src/lib node:test **531/531** (was 527; +4 originalSrcUrl persistence cases) / extension `npm test` **368/368** (was 358; +10 already-saved-image-icon cases) / Playwright **76/76** (was 75; +1 new P-24 extension-context spec slice). Director real-Chrome verification PASS first try — sideloaded deploy-26 zip + saved fresh image + reloaded + green ✓ overlay appeared. **§4 Step 1c forced-picker fired** — director picked **(a.48) RECOMMENDED-NEXT = W#2 polish P-25 captured-text haze indicator on `workflow-2-competition-scraping`** — symmetric pair to today's P-24. **One DEFERRED item:** thread `originalSrcUrl` through manual-add `CapturedImageAddModal.tsx` URL-paste path (out-of-scope for P-24; captured in NEXT_SESSION.md alternate candidates). **P-24 ⏳ OPEN → ✅ SHIPPED + DEPLOYED + VERIFIED 2026-05-19-e** + **new "## Deploy session #26 — P-24 saved-image indicator" section appended at end** before the EOF marker.)
+**Last updated:** 2026-05-19-g (**W#2 → main deploy session #28 — P-23 saved-URL dropdown side-by-side SHIPPED + DEPLOYED + REAL-CHROME-VERIFIED on vklf.com (all 3 forms).** One-hundred-and-sixteenth Claude Code session — `session_2026-05-19-g_w2-main-deploy-session-28-p23-saved-url-dropdown-DEPLOYED`. Closes (a.49) RECOMMENDED-NEXT. **NO schema change** — pure UI tweak. Build commit `5cb2419` (6 files +461/-12); ff-merged clean onto main (`c1f1cd7..5cb2419`); fresh zip `plos-extension-2026-05-19-w2-deploy-28.zip` (191,561 bytes — +148 over deploy-27). Pre-deploy + post-merge scoreboards all GREEN: tsc / ext tsc / `npm run build` 53 routes / src/lib node:test 536/536 (unchanged) / extension `npm test` 428/428 (was 416; +12 saved-url-option-label pure-helper cases) / Playwright 79/79 (was 78; +1 new P-23 extension-context spec). **Drift caught at session-start (Rule 3 — code wins):** launch prompt named `url-add-form.ts` as second fix site but it has no saved-URL `<select>`; actual sites with the collapse pattern were three (`text-capture-form.ts` + `image-capture-form.ts` + `CapturedTextPasteForm.tsx`). Director picked all-3-sites scope via Rule 14f AskUserQuestion before coding. Director real-Chrome verification PASS on all 3 forms first try. **§4 Step 1c forced-picker fired** — director picked (a.50) RECOMMENDED-NEXT = W#2 polish P-22 Playwright cross-platform slices 2-4 on `workflow-2-competition-scraping` (defensive coverage extension to ebay + etsy + walmart). **P-23 dropdown polish backlog entry ⏳ OPEN → ✅ SHIPPED-AT-DEPLOY-LEVEL 2026-05-19-g** + **new "## Deploy session #28 — P-23 saved-URL dropdown" section appended at end** before the EOF marker.)
+
+**Previously updated:** 2026-05-19-e (**W#2 → main deploy session #26 — P-24 saved-image indicator on the page SHIPPED + DEPLOYED + REAL-CHROME-VERIFIED on vklf.com.** One-hundred-and-fourteenth Claude Code session — `session_2026-05-19-e_w2-main-deploy-session-26-p24-saved-image-indicator-DEPLOYED` (dual-branch — pre-deploy scoreboard on `workflow-2-competition-scraping`, ff-merge + deploy phase on `main`, ping-pong sync after main push). Closes (a.47) RECOMMENDED-NEXT. **Schema-change-in-flight session — flag flipped Yes during build then back to No after `npx prisma db push` succeeded in 1.20s** (additive only — new nullable `originalSrcUrl String?` column on `CapturedImage`; pre-existing rows backfill to NULL with no indicator until re-captured). **Load-bearing finding at session start (Rule 3 — code wins):** launch prompt + ROADMAP P-24 entry both stated *"CapturedImage table already has both `src_url` + `original_src_url`"* — code review confirmed the field DID NOT EXIST in schema OR TypeScript wire shape OR finalize API OR save path. Drift surfaced via AskUserQuestion forced-picker BEFORE any code; director picked Option 1 (add column + persist forward). Build commit `6e7ffa5` on workflow-2 (15 files +1067/-3); ff-merged clean onto main (`06f9ac3..6e7ffa5`); pushed origin/main → Vercel auto-redeploy → ping-pong sync (both branches at `6e7ffa5`). Fresh zip `plos-extension-2026-05-19-w2-deploy-26.zip` (190,897 bytes — +2,130 over deploy-25). Pre-deploy + post-merge scoreboards all GREEN: tsc / ext tsc / `npm run build` 53 routes / src/lib node:test **531/531** (was 527; +4 originalSrcUrl persistence cases) / extension `npm test` **368/368** (was 358; +10 already-saved-image-icon cases) / Playwright **76/76** (was 75; +1 new P-24 extension-context spec slice). Director real-Chrome verification PASS first try — sideloaded deploy-26 zip + saved fresh image + reloaded + green ✓ overlay appeared. **§4 Step 1c forced-picker fired** — director picked **(a.48) RECOMMENDED-NEXT = W#2 polish P-25 captured-text haze indicator on `workflow-2-competition-scraping`** — symmetric pair to today's P-24. **One DEFERRED item:** thread `originalSrcUrl` through manual-add `CapturedImageAddModal.tsx` URL-paste path (out-of-scope for P-24; captured in NEXT_SESSION.md alternate candidates). **P-24 ⏳ OPEN → ✅ SHIPPED + DEPLOYED + VERIFIED 2026-05-19-e** + **new "## Deploy session #26 — P-24 saved-image indicator" section appended at end** before the EOF marker.)
 
 **Previously updated:** 2026-05-19-c-2 (ADDENDUM TO 2026-05-19-c — same Claude session expanded from 2 → 4 deploy cycles after director clarified actual UX intent mid-session. **W#2 → main deploy sessions #21 + #22 + #23 + #24 — P-13 popup autofocus + P-40 popup auto-pre-select URL matching active tab SHIPPED + DEPLOYED + VERIFIED on vklf.com; P-38 + P-39 SHIPPED then REVERTED as wrong-feature.** P-40 (commit `182da37` deploy session #24; 15 LOC reusing `pickInitialUrl` + `getModuleByPlatform.canonicalProductUrl` via `chrome.tabs.query`) is the actually-correct fix director was asking for from session start. P-38 + P-39 reverted via `git revert` commits `b635ae7` + `f0cef37`. Three CORRECTIONS_LOG §Entries (2 INFORMATIONAL + 1 real-tier wrong-feature-shipped-twice slip — see CORRECTIONS_LOG 2026-05-19-c-3 §Entry). (a.46) RECOMMENDED-NEXT = W#2 polish P-16 SW MV3 crash diagnostics. **P-38 + P-39 polish-backlog entries below marked REVERTED + new P-40 ✅ DONE entry + new "## Deploy sessions #23 + #24 — P-39 ship-then-revert + P-40 ship + REAL-INDEPENDENT-WEBSITE VERIFIED" section appended at end** before the EOF marker.)
 
@@ -3503,6 +3505,79 @@ Director's verbatim confirmation: **"PASS — haze appears on new text after rel
 **§4 Step 1c forced-picker fired at end-of-session.** Picker offered (A) P-23 saved-URL dropdown side-by-side [recommended — small surface, quick UX win between heavier polish sessions] + (B) P-22 Playwright cross-platform slices 2-4 [defensive coverage] + (C) DEFERRED manual-add modal `originalSrcUrl` tack-on from 2026-05-19-e + (D) escape hatch. Director chose to wrap the session without explicitly picking from the forced-picker; Claude defaulted to (A) P-23 per `feedback_recommendation_style.md` (most thorough/reliable standing recommendation) + `feedback_session_management.md` (wrap before degrading — director's clear wrap signal). Director can override the pick by editing `docs/NEXT_SESSION.md`'s `## Launch prompt` section before next session launch.
 
 **Net code change this session on main vs. session-start `1dce84b`:** +1870 / -5 LOC across the 17 files above. Final main state: `e7c82da` (P-25 ship) on top of `1dce84b` (session-start state — yesterday's 2026-05-19-e end-of-session doc-batch).
+
+---
+
+## Deploy session #28 — P-23 saved-URL dropdown side-by-side on the 3 caller forms DEPLOYED + REAL-CHROME-VERIFIED (NEW 2026-05-19-g — closes (a.49) RECOMMENDED-NEXT)
+
+### Headline outcome
+P-23 (saved-URL dropdown collapses URL when productName present — both should show side-by-side) SHIPPED + DEPLOYED + REAL-CHROME-VERIFIED on vklf.com in **all 3 caller forms** (popup paste form + right-click "Add to PLOS — Captured Text" + right-click "Add to PLOS — Image"). Build commit `5cb2419` on `workflow-2-competition-scraping` (6 files +461/-12); ff-merged clean onto `main` (`c1f1cd7..5cb2419`). Fresh zip `plos-extension-2026-05-19-w2-deploy-28.zip` at repo root (191,561 bytes — +148 over deploy-27).
+
+### Drift caught at session-start (Rule 3 — code wins)
+Launch prompt asserted the two fix sites were `text-capture-form.ts` + `url-add-form.ts`. Grep of `productName?\.trim\(\)` across the extension confirmed:
+- `text-capture-form.ts:474-476` — collapse pattern present (✅ correct per prompt; line 474 not the prompt's ~450).
+- `image-capture-form.ts:534-536` — IDENTICAL collapse pattern. NOT NAMED in the prompt. Parallel sibling for the right-click image capture flow.
+- `CapturedTextPasteForm.tsx:255-258` — SAME pattern in JSX. NOT NAMED in the prompt. Popup-side React paste form.
+- `url-add-form.ts` — has NO saved-URL `<select>`. The `opt.textContent = entry.value` lines at 276/302 are inside the content-category vocab picker (shipped as P-36). Launch prompt was wrong on this site.
+
+Drift surfaced via AskUserQuestion picker BEFORE any code. Director picked Option A (all-3-sites scope) over Option B (just text-capture-form, prompt's narrow read) + Option C (skip the popup form). All-3-sites scope chosen to prevent discoverable inconsistency between the three forms — every saved-URL dropdown in the extension now behaves the same way.
+
+### Fix shape (refined per pre-coding Rule 14f forced-pickers)
+Factor the label logic into a new pure helper:
+```
+extensions/competition-scraping/src/lib/saved-url-option-label.ts
+  → buildSavedUrlOptionLabel(row: { productName?: string | null; url: string }): string
+```
+
+Behavior contract:
+- productName non-empty after `.trim()` → `${productName} — ${url-truncated-at-60}` (em-dash separator inside `<option>` text; URL truncated to 57 chars + `…` when longer than 60).
+- productName null / undefined / empty / all-whitespace → URL-only with the pre-P-23 80/77-char truncation (unchanged from prior behavior).
+
+Truncation budget tightened from 80 → 60 chars when productName also showing so the total option text stays scannable in native Chrome `<select>` rendering. The 80-char URL-only path is preserved exactly as pre-P-23.
+
+Director picked the em-dash separator (Option A) over pipe / two-line-via-CSS / aggressive-truncate at the pre-coding Rule 14f picker — em-dash is the canonical UX pattern, works inside `<option>` without CSS tricks, preserves both pieces of information in a scannable way.
+
+Director picked Hybrid test coverage (Option A) at the Rule 27 forced-picker — pure helper covered by node:test cases, content-script rendering covered by 1 Playwright spec.
+
+### Implementation summary (6 files +461/-12)
+**New files:**
+- `extensions/competition-scraping/src/lib/saved-url-option-label.ts` (71 LOC) — the pure helper. Module header documents the three caller sites + pre/post-P-23 contract + the 60/80-char truncation rule.
+- `extensions/competition-scraping/src/lib/saved-url-option-label.test.ts` (128 LOC) — 12 node:test cases covering productName-present/absent/null/undefined/whitespace × URL truncation at 60/61/80/81-char boundaries × pre-P-23 URL-only regression preservation. All 12 pass.
+- `tests/playwright/extension/p23-saved-url-dropdown-label.spec.ts` (250 LOC) — single-platform amazon extension-context spec asserting the rendered `<option>` text for two seeded saved URLs (one with productName, one without) in the text-capture form's `#plos-cs-text-url` `<select>`. Sibling sites covered by the pure-helper node:tests; the Playwright spec verifies the content-script rendering path end-to-end on one site (text-capture-form) — sufficient because the helper output is identical across sites.
+
+**Modified files:**
+- `extensions/competition-scraping/src/lib/content-script/text-capture-form.ts` (-5/+2) — replaces the inline `row.productName?.trim() || (row.url.length > 80 ? row.url.slice(0, 77) + '…' : row.url)` collapse pattern with `buildSavedUrlOptionLabel(row)`. Adds import.
+- `extensions/competition-scraping/src/lib/content-script/image-capture-form.ts` (-4/+2) — same replacement at the parallel call site. Adds import.
+- `extensions/competition-scraping/src/entrypoints/popup/components/CapturedTextPasteForm.tsx` (-6/+3) — same replacement in JSX. Adds import.
+
+### Pre-deploy + post-merge verification scoreboard — all GREEN
+| Check | Result | vs. baseline |
+|---|---|---|
+| `npx tsc --noEmit` (root) | clean | unchanged |
+| `npx tsc --noEmit` (extension) | clean | unchanged |
+| `npm run build` (Next.js) | 53 routes, compiled successfully | unchanged (no new route) |
+| `src/lib` node:test | **536/536** | unchanged (no server-side change) |
+| extension `npm test` | **428/428** | +12 (was 416; new saved-url-option-label cases) |
+| Playwright | **79/79** | +1 (was 78; new P-23 spec) |
+
+### Director real-Chrome verification — PASS on all 3 forms first try
+1. Sideloaded `plos-extension-2026-05-19-w2-deploy-28.zip` via Chrome `chrome://extensions` → "Load unpacked" (developer mode).
+2. **Popup paste form (`CapturedTextPasteForm.tsx`):** opened the extension popup → "Paste captured text" section → "Attach to which saved URL?" dropdown showed `${productName} — ${url}` for rows with productName, URL-only for rows without. ✅
+3. **Right-click "Add to PLOS — Captured Text" overlay (`text-capture-form.ts`):** navigated to a saved competitor page → highlighted text → right-click → "Add to PLOS — Captured Text" → on-page overlay's "Pick a saved URL…" dropdown showed the new em-dash format. ✅
+4. **Right-click "Add to PLOS — Image" overlay (`image-capture-form.ts`):** same page → right-click on a product image → "Add to PLOS — Image" → on-page overlay's "Pick a saved URL…" dropdown showed the new em-dash format. ✅
+
+### Process observation captured (informational; NOT a §Entry-tier slip)
+The wxt build hang behavior recurred (matching the 2026-05-19-f informational observation): `wxt build` writes the dist files to `.output/chrome-mv3/` correctly at the ~5-second mark but the parent node process hangs indefinitely afterward. Today's hang was ~12 minutes before I killed the process; the dist artifact was verified correct via grep for the helper's minified signature. Three concurrent build attempts also raced earlier in the session due to multiple `npm run build` invocations during my diagnosis — exited cleanly per the notification stream. Workaround: kill the wxt process after dist files appear on disk. Future-session investigation: consider a Playwright `pretest` hook that runs `wxt build` with a timeout, OR look into why wxt doesn't exit cleanly.
+
+### Cross-references
+- P-23 dropdown ROADMAP polish backlog entry (flipped ✅ DONE with full fix-shape narrative as part of this doc batch)
+- CHAT_REGISTRY 2026-05-19-g top entry
+- CORRECTIONS_LOG 2026-05-19-g header bump (zero process slips; two informational observations captured: wxt-build-hang recurrence + launch-prompt drift catch as third recent Rule 3 catch)
+- `saved-url-option-label.ts` (the pure helper this entry covers)
+- `saved-url-option-label.test.ts` (12 node:test cases)
+- `p23-saved-url-dropdown-label.spec.ts` (the new Playwright spec)
+- deploy session #28 commit `5cb2419`
+- fresh zip `plos-extension-2026-05-19-w2-deploy-28.zip`
 
 ---
 

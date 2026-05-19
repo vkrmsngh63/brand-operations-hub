@@ -6,7 +6,9 @@
 **Branch:** `workflow-2-competition-scraping`
 **Created:** May 4, 2026
 **Created in session:** session_2026-05-04_w2-workflow-requirements-interview (Claude Code)
-**Last updated:** 2026-05-18-b (W#2 → main deploy session #18 — P-34 (propagate row hover-highlight to captured-text rows + image thumbnails on URL detail page) DEPLOYED to vklf.com + REAL-INDEPENDENT-WEBSITE VERIFY. §B 2026-05-18-b entry appended at end covering: (1) deploy session #18 standard cheat-sheet (b) execution + brief director re-verify on captured-text rows + image thumbnails ("all green, hover works on both"); (2) HEADLINE — W#2 admin data-management surface now COMPLETE + LIVE on vklf.com with hover-highlight UX consistency across URL list + captured-text rows + image thumbnails; (3) implementation subtlety captured — captured-text rows reuse P-33's `querySelectorAll('td')` pattern verbatim, BUT image thumbnails use `querySelector('button')` on outer wrapper to target first descendant button (ThumbnailButton; trash-overlay sits second in DOM order) AND explicitly restore `#0d1117` on leave rather than clearing to `''` because the card has an explicit base background; (4) zero new polish items captured this session; (5) (a.41) RECOMMENDED-NEXT = W#2 polish P-21 — symmetric-canonicalize `pickInitialUrl` + `buildRecognitionSet` (MEDIUM defensive). §A unchanged per Rule 18. Schema-change-in-flight stays "No".)
+**Last updated:** 2026-05-19-g (W#2 → main deploy session #28 — P-23 saved-URL dropdown side-by-side SHIPPED + DEPLOYED + REAL-CHROME-VERIFIED on vklf.com on all 3 caller forms — popup paste form + right-click "Add to PLOS — Captured Text" overlay + right-click "Add to PLOS — Image" overlay. §B 2026-05-19-g entry appended at end covering: (1) the launch-prompt drift catch at session-start (Rule 3 — `url-add-form.ts` had no saved-URL `<select>`; actual sites were three: `text-capture-form.ts` + `image-capture-form.ts` + `CapturedTextPasteForm.tsx`); (2) Rule 14f scope picker outcome (director chose all-3-sites scope); (3) em-dash label format choice via Rule 14f forced-picker (em-dash vs. pipe vs. two-line-via-CSS vs. aggressive-truncate); (4) truncation budget refinement (60-char when productName present, 80-char when productName absent — preserves pre-P-23 URL-only behavior exactly); (5) extraction to shared pure helper `buildSavedUrlOptionLabel` at `extensions/competition-scraping/src/lib/saved-url-option-label.ts` so all 3 caller sites share the same label-building logic; (6) Hybrid test coverage via Rule 27 forced-picker (12 node:test pure-helper cases + 1 Playwright extension-context spec on the text-capture-form rendering path — sibling sites covered by the pure-helper cases alone since the helper output is identical across all 3 callers); (7) zero new polish items captured this session; (8) (a.50) RECOMMENDED-NEXT = W#2 polish P-22 — Playwright cross-platform slices 2-4 (defensive coverage extension to ebay + etsy + walmart for the existing single-platform amazon happy-path P-23/P-24/P-25 specs). §A unchanged per Rule 18. Schema-change-in-flight stays "No".)
+
+**Previously updated:** 2026-05-18-b (W#2 → main deploy session #18 — P-34 (propagate row hover-highlight to captured-text rows + image thumbnails on URL detail page) DEPLOYED to vklf.com + REAL-INDEPENDENT-WEBSITE VERIFY. §B 2026-05-18-b entry appended at end covering: (1) deploy session #18 standard cheat-sheet (b) execution + brief director re-verify on captured-text rows + image thumbnails ("all green, hover works on both"); (2) HEADLINE — W#2 admin data-management surface now COMPLETE + LIVE on vklf.com with hover-highlight UX consistency across URL list + captured-text rows + image thumbnails; (3) implementation subtlety captured — captured-text rows reuse P-33's `querySelectorAll('td')` pattern verbatim, BUT image thumbnails use `querySelector('button')` on outer wrapper to target first descendant button (ThumbnailButton; trash-overlay sits second in DOM order) AND explicitly restore `#0d1117` on leave rather than clearing to `''` because the card has an explicit base background; (4) zero new polish items captured this session; (5) (a.41) RECOMMENDED-NEXT = W#2 polish P-21 — symmetric-canonicalize `pickInitialUrl` + `buildRecognitionSet` (MEDIUM defensive). §A unchanged per Rule 18. Schema-change-in-flight stays "No".)
 
 **Previously updated:** 2026-05-18 (W#2 → main deploy session #17 — P-28 + P-27 ALL DEPLOYED to vklf.com + REAL-INDEPENDENT-WEBSITE FULL VERIFY across Parts A-E + IN-SESSION SCOPE-ADD P-33 row hover-highlight SHIPPED + paint-bug HOT-FIXED + DEPLOYED + VERIFIED in same session. §B 2026-05-18 entry appended at end covering: (1) deploy session #17 standard cheat-sheet (b) execution + 5-part director walkthrough verification on real Independent Website URL (4 delete surfaces + rollback path); (2) HEADLINE — W#2 admin data-management surface (add + manual-add + edit + delete) now complete + live on vklf.com; (3) P-33 in-session scope-add — Rule 11 forced-picker → Ship-as-tack-on; first-attempt `<tr>`-background-paint slip + hot-fix to `querySelectorAll<HTMLTableCellElement>('td')` + bumped color `#161b22` → `#21262d`; (4) pattern lesson captured in CORRECTIONS_LOG — grep `tr:hover` against `*.css` in `src/` BEFORE inline-on-`<tr>` approach; (5) (a.40) RECOMMENDED-NEXT = W#2 polish P-34 propagate hover-highlight to captured-text rows + image thumbnails on URL detail page. §A unchanged per Rule 18. Schema-change-in-flight stays "No".)
 
@@ -2938,6 +2940,68 @@ Director picked **(A)**. Rationale: matches P-24's documented v1 limitation patt
 **One informational process-observation captured in CORRECTIONS_LOG 2026-05-19-f (NOT a real-tier slip):** the first Playwright run failed because `.output/chrome-mv3/` had a stale build from before today's orchestrator + messaging + background changes. The Playwright fixture loads the built extension via `--load-extension`, so without a rebuild the test exercised yesterday's bits. Caught immediately via TimeoutError on `waitForFunction(CSS.highlights.get('plos-cs-saved-text'))`; ran `npm run build` in the extension dir; rebuilt extension verified by `background.js` mtime + size delta; re-ran Playwright → PASS on first try. Future-session prevention: when running Playwright extension-context specs after editing extension source, ALWAYS rebuild before running playwright. Consider a `pretest` Playwright config hook that runs the wxt build if `.output/` is older than any `src/` file.
 
 **Cross-references:** P-25 ROADMAP polish-backlog entry (flipped ✅ DONE with full fix-shape narrative as part of this doc batch); CHAT_REGISTRY 2026-05-19-f top entry; CORRECTIONS_LOG 2026-05-19-f header bump (zero CORRECTIONS_LOG-tier slips; one informational observation captured on stale-extension-build catch); `already-saved-image-icon.ts` (the P-24 sibling helper this module's design mirrors); `highlight-terms.ts` (the existing unrelated keyword-highlight feature — distinct registry name + class + lifecycle confirmed no-collision); deploy session #27 commit `e7c82da`; fresh zip `plos-extension-2026-05-19-w2-deploy-27.zip`.
+
+---
+
+## §B 2026-05-19-g — P-23 saved-URL dropdown side-by-side ship session
+
+**Session:** `session_2026-05-19-g_w2-main-deploy-session-28-p23-saved-url-dropdown-DEPLOYED`. W#2 → main deploy session #28.
+
+**What shipped:** Pre-P-23 behavior — the 3 caller forms that render a "Pick a saved URL…" dropdown built each `<option>` label as `row.productName?.trim() || (row.url long? truncate : row.url)` — i.e., when productName was set, the URL disappeared from the option text entirely. Director-reported impact: when multiple saved URLs shared the same product name (e.g., variant SKUs of one brand's product), the director couldn't tell WHICH saved URL they were about to attach a capture to without first opening each URL detail page.
+
+Post-P-23 behavior — same 3 caller forms render `${productName} — ${url-truncated-at-60}` (em-dash separator) when productName is non-empty after `.trim()`; URL-only path with the prior 80/77-char truncation preserved exactly when productName is null / undefined / empty / all-whitespace.
+
+**Drift caught at session-start (Rule 3 — code wins).** Launch prompt (written at the close of 2026-05-19-f) named two fix sites: `text-capture-form.ts` (correctly) and `url-add-form.ts` (incorrectly — the file has no saved-URL `<select>`; its only `opt.textContent = entry.value` lines are inside the content-category vocab picker shipped as P-36 2026-05-15). Grep of `productName?\.trim\(\)` across the extension surfaced THREE actual sites with the pre-P-23 collapse pattern: `text-capture-form.ts:474-476` + `image-capture-form.ts:534-536` (parallel sibling for image captures, NOT named in prompt) + `CapturedTextPasteForm.tsx:255-258` (popup-side React paste form, NOT named in prompt). Drift surfaced via AskUserQuestion picker BEFORE any code; director picked Option A (all-3-sites scope) over Option B (just text-capture-form — prompt's narrow read) + Option C (skip the popup form). All-3-sites scope chosen to prevent discoverable inconsistency between the three forms — every saved-URL dropdown in the extension now behaves the same way after this ship.
+
+**Label format choice — Rule 14f forced-picker before coding.** Options weighed:
+- (A) **Em-dash separator `${productName} — ${url}` (PICKED — recommended).** Plain text inside `<option>`; em-dash is the conventional UX pattern across native select UIs; no extra DOM; works in all browsers identically; visually distinct from a hyphen-in-name. Reversible — trivial to change later.
+- (B) Pipe separator `${productName} | ${url}`. Compact but `|` can look like the letter `I` or `l` in some fonts. Same DOM shape as A.
+- (C) Two-line layout via `<span>` + CSS. Richer hierarchy but `<option>` styling is highly restricted in most browsers (Chrome silently ignores most CSS on `<option>`). High risk of looking fine in code but rendering as plain concatenated text on real Chrome — the very platform PLOS ships to.
+- (D) Aggressive truncate (URL to 30 chars + concat). Risks losing the distinguishing part of the URL.
+
+Director picked Option A (em-dash) per `feedback_recommendation_style.md` (most thorough/reliable).
+
+**Truncation budget refinement.** Pre-P-23 truncation budget was URL.length > 80 → truncate to 77 + ellipsis. Post-P-23: when productName is also present in the option text, tighten the URL budget to 60 (truncate to 57 + ellipsis) so the total `${productName} — ${url}` stays scannable. When productName is absent, the 80/77 budget is preserved exactly — the URL-only path is unchanged from pre-P-23 (regression-test case included in the helper's node:test suite to lock this).
+
+**Extraction to a shared pure helper.** Rather than duplicate the new label logic across 3 caller sites, extract to a new pure helper file `extensions/competition-scraping/src/lib/saved-url-option-label.ts`:
+
+```ts
+export function buildSavedUrlOptionLabel(
+  row: { productName?: string | null; url: string }
+): string {
+  const trimmedName = typeof row.productName === 'string' ? row.productName.trim() : '';
+  if (trimmedName.length > 0) {
+    return `${trimmedName} — ${truncate(row.url, 60, 57)}`;
+  }
+  return truncate(row.url, 80, 77);
+}
+```
+
+All 3 caller sites import + call `buildSavedUrlOptionLabel(row)` — each call site replaces ~5 LOC of inline collapse logic with one function call. Helper lives at the top-level extension lib (alongside `url-normalization.ts` etc.) since it's used from both content-script context (the two right-click forms) and the popup origin (the React paste form).
+
+**Test coverage choice — Rule 27 forced-picker before coding.** Options weighed:
+- (A) **Hybrid (PICKED — recommended).** node:test on the pure helper (productName present/absent/null/undefined/whitespace × truncation at 60/61/80/81 boundaries × pre-P-23 URL-only regression) + 1 Playwright extension-context spec asserting the rendered `<option>` text shape for two seeded saved URLs (one with productName, one without) in the text-capture form. Sibling sites (image-capture-form + CapturedTextPasteForm) covered by the pure-helper cases alone — sufficient because the helper output is identical across all 3 callers; the Playwright spec verifies the content-script rendering path end-to-end on one site.
+- (B) node:test only (defer Playwright to P-22).
+- (C) Director manual walkthrough only.
+
+Director picked Option A. Result: +12 node:test cases (extension test suite 416 → 428) + 1 Playwright spec (78 → 79).
+
+**Real-Chrome verification (Rule 27 scope exception — visual judgment).** Director walkthrough on all 3 forms after deploy → PASS first try. All three dropdowns rendered the em-dash side-by-side label for rows with productName + URL-only for rows without — pre-P-23 behavior preserved on the URL-only path.
+
+**Affected §A sections (informational — §A frozen per Rule 18):**
+- §A.7 Module 1 (URL capture flow) — the saved-URL picker UX in all 3 forms now shows `${productName} — ${url}` side-by-side instead of collapsing the URL when productName is set. No spec-level change to §A.7's URL-add or text-capture flows; this is a display-only refinement at the dropdown-label layer.
+
+**Cross-references:**
+- ROADMAP W#2 polish backlog P-23 dropdown entry (flipped ✅ DONE 2026-05-19-g with full fix-shape narrative)
+- `extensions/competition-scraping/src/lib/saved-url-option-label.ts` (the new pure helper)
+- `extensions/competition-scraping/src/lib/saved-url-option-label.test.ts` (12 node:test cases)
+- `tests/playwright/extension/p23-saved-url-dropdown-label.spec.ts` (the new Playwright spec)
+- `extensions/competition-scraping/src/lib/content-script/text-capture-form.ts:474` (caller site 1)
+- `extensions/competition-scraping/src/lib/content-script/image-capture-form.ts:534` (caller site 2)
+- `extensions/competition-scraping/src/entrypoints/popup/components/CapturedTextPasteForm.tsx:255` (caller site 3)
+- COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md "Deploy session #28" section (full pre-deploy + post-merge scoreboard + real-Chrome verification narrative)
+- CORRECTIONS_LOG 2026-05-19-g (informational entries on wxt-build-hang recurrence + launch-prompt drift as third recent Rule 3 catch)
+- deploy session #28 commit `5cb2419`; fresh zip `plos-extension-2026-05-19-w2-deploy-28.zip`
 
 ---
 
