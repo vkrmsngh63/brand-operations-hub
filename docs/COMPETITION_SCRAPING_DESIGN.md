@@ -2882,6 +2882,63 @@ Director picked (A). Per `feedback_recommendation_style.md` (most thorough/relia
 
 **Cross-references:** P-24 ROADMAP polish-backlog entry (line ~141 — flipped ✅ DONE with full fix-shape narrative as part of this doc batch); CHAT_REGISTRY 2026-05-19-e top entry; CORRECTIONS_LOG 2026-05-19-e header bump (zero slips; informational observation on doc-vs-code drift caught cleanly at session start); `already-saved-icon.ts` (the URL-anchor sibling helper this module mirrors); `find-underlying-image.ts` (P-23 Amazon fallback — independent feature, no shared code path); deploy session #26 commit `6e7ffa5`; fresh zip `plos-extension-2026-05-19-w2-deploy-26.zip`.
 
+## §B 2026-05-19-f — W#2 → main deploy session #27 — P-25 captured-text haze indicator on the page SHIPPED + DEPLOYED + REAL-CHROME-VERIFIED on vklf.com
+
+**Closes (a.48) RECOMMENDED-NEXT.** Symmetric pair to P-24 saved-image-indicator shipped yesterday (2026-05-19-e); closes the second of three on-page recognition cues (URL ✓ session 3 + image ✓ yesterday + text haze today). Schema-change-in-flight session — additive nullable `selector String?` column on `CapturedText` landed via `npx prisma db push` in 940ms.
+
+**Two genuinely-open Rule 14f forced-pickers fired via AskUserQuestion at session start.**
+
+**Picker 1 — Selector serialization + rendering approach.** Three real options surfaced:
+
+- (A) CSS Custom Highlight API + XPath-based serialized selector — recommended per `feedback_recommendation_style.md` (most thorough/reliable: non-DOM-modifying haze sidesteps the P-14 MutationObserver feedback-loop concern that drove `muteMutationObserver` for `highlight-terms.ts`; manifest already enforces Chrome 105+ which has `CSS.highlights`; clean presentation via `::highlight(plos-cs-saved-text)` pseudo-element)
+- (B) `<span class="plos-cs-saved-text-haze">` DOM-wrap + selector — same XPath serialization but DOM-modifies host page; broader compat (works in older Chrome) but adds a third DOM-modifying layer alongside `highlight-terms.ts`'s `<mark>` wraps; risks MutationObserver feedback loops similar to the P-14 incident.
+- (C) Hybrid (A) + text-fallback for null-selector legacy rows — strictly more code; trades extra complexity for elimination of the v1 limitation (legacy rows would also get haze via DOM text-walker first-occurrence match); imprecise when same text appears multiple times.
+
+Director picked **(A)**. Rationale: matches P-24's documented v1 limitation pattern (legacy NULL → no haze until re-captured); cleanest co-existence with the existing `highlight-terms.ts` feature; lowest regression risk relative to (B).
+
+**Picker 2 — Test coverage approach (Rule 27 forced-picker).** Director picked **Hybrid Option A** — node:test unit tests on the selector helper + Playwright extension-context spec. Same shape as yesterday's P-24 risk profile. Matches `feedback_recommendation_style.md`: most thorough/reliable per repeatable regression coverage.
+
+**Architecture shipped — 17 files +1870/-5.**
+
+**Schema change (additive nullable):** `CapturedText.selector String?` — opaque JSON-encoded `{xpath, startOffset, endOffset}` resolved against `document.body`. Pre-P-25 rows backfill to NULL with no haze until re-captured (same v1 limitation pattern as P-24's `originalSrcUrl`). Wire shape: `CapturedText.selector: string | null` + `CreateCapturedTextRequest.selector?: string`; route handler validates non-empty string when present.
+
+**Selector helper — new `extensions/competition-scraping/src/lib/captured-text-selector.ts` (460 LOC).** Pure-logic module with NO DOM dependency at import time — testable via hand-built `SelectorElement` + `SelectorText` stubs (same pattern as `find-underlying-image.test.ts`). Surface:
+
+- `encodeSelector` / `decodeSelector` — JSON wrapper with strict validation (returns null on any malformed input so callers can silently skip bad rows rather than propagating errors).
+- `parseXPath` / `formatXPath` — tiny element-only XPath grammar (`/DIV[1]/P[2]/SPAN[1]`) with 1-based positional indexing. NO `document.evaluate` dependency so the helper works identically in node:test stubs and real Chrome content-script context.
+- `resolveXPath` / `computeXPath` — walk an xpath against a root element; compute an xpath from root to target.
+- `collectTextNodes` / `flattenedOffsetWithin` / `nodeAtFlattenedOffset` — convert (textNode, offset-in-node) coordinates to/from flattened character offset within an anchor element's textContent.
+- `deepestCommonElementAncestor` — find the deepest shared element of two nodes (anchor for the selector).
+- `serializeRangeToSelector(range, root)` — high-level: takes a real DOM Range + root Element, produces a ParsedSelector.
+- `deserializeSelectorToRange(selector, root, RangeCtor?)` — inverse; falls back to null on any mismatch.
+
+**Haze renderer — new `extensions/competition-scraping/src/lib/content-script/saved-text-highlight.ts` (214 LOC).** Wraps `CSS.highlights['plos-cs-saved-text']` with attach/detach/clear lifecycle keyed by savedTextId. Module-scope `rangesById: Map<string, Range>` for O(1) per-id lookup. Idempotent re-attach (replaces prior Range). Silent no-op when `CSS.highlights` unavailable (older Chrome / test env without DOM). Test-only `__setTestRegistry` injection hook lets the unit tests exercise the lifecycle with a fake `CSS.highlights` + `Highlight` constructor.
+
+**Orchestrator extension — `extensions/competition-scraping/src/lib/content-script/orchestrator.ts`:**
+
+- **Contextmenu capture-phase listener** extended to ALSO snapshot the user's current `window.getSelection().getRangeAt(0)` alongside the existing `lastRightClickImageSrc` snapshot. The Range is lost across the message round-trip to background and back (Chrome's `info.selectionText` strips it to a string), so it must be captured synchronously BEFORE the menu opens. The snapshot is serialized via `serializeRangeToSelector` + `encodeSelector` and cached as `lastRightClickSelectorJson`.
+- **`open-text-capture-form` message handler** passes the cached selector through to `openTextCaptureForm` via the new `selectorJson` prop, then resets the cache so a later right-click without a selection doesn't inherit a stale selector.
+- **`maybeShowDetailOverlay`** extended: after the existing `listCapturedImages` fire-and-forget, ALSO fire `listCapturedTexts(projectId, urlId)` via `maybePopulateTextCache`. On settle: `scanTextHazes(urlId)` decodes each row's selector + deserializes to a Range against `document.body` + calls `attachSavedTextHaze(range, row.id)`. Rows with NULL selector are skipped silently. Rows whose Range can't be re-located in current DOM are also skipped (best-effort match — same v1 limitation as P-24).
+- **MutationObserver tick** + **URL-change teardown** + **page teardown** all call `scanTextHazes` (rescan) or `clearTextHazes` (drop registry) per their respective phases.
+
+**Form wiring — `text-capture-form.ts`:** new `selectorJson: string | null` prop. On Save success, the form spreads `selector: selectorJson` into the `createCapturedText` request body (omitted when null so server defaults to NULL). `api-bridge.ts` + `api-client.ts` + `messaging.ts` + `background.ts` all gained matching `list-captured-texts` dispatch + the wire-shape selector field.
+
+**CSS — `styles.ts`:** new `::highlight(plos-cs-saved-text)` rule with `background-color: rgba(255, 235, 59, 0.32) !important` + `text-decoration: underline dotted rgba(120, 80, 0, 0.45) !important`. Distinct from `.plos-cs-saved-image-icon` (P-24 image indicator) and `mark.plos-cs-highlight-term` (highlight-terms feature) — zero CSS-class / Highlight-name / lifecycle collisions.
+
+**Collision avoidance with highlight-terms.ts (existing user-keyword feature):** P-25 uses a DIFFERENT CSS Custom Highlight registry name (`plos-cs-saved-text` vs. highlight-terms' `<mark>` wraps), DIFFERENT styling pseudo-element, and DIFFERENT teardown lifecycle. Both features can coexist on the same page without interference. The P-14 `muteMutationObserver` machinery is NOT needed for P-25 because CSS Custom Highlight is non-DOM-modifying — the host-page MutationObserver wouldn't see the haze, so there's no feedback-loop risk.
+
+**Test coverage — Hybrid Option A per Rule 27 forced-picker.**
+
+- **node:test (server-side src/lib):** 5 new cases in `url-text.test.ts` covering selector POST handling (400 on empty string, 400 on non-string, 201 persists when provided, 201 omitted-null-on-wire) + GET wire shape (returns selector for both null and non-null cases). 536/536 pass (was 531; +5).
+- **node:test (extension `npm test`):** 36 new cases in `captured-text-selector.test.ts` covering encode/decode JSON round-trip + xpath parse/format/resolve/compute + text-node collection + flattened-offset conversion + deepest-common-ancestor; 12 new cases in `saved-text-highlight.test.ts` covering attach/detach lifecycle + idempotent re-attach + cleanup + graceful no-op when CSS.highlights unavailable. 416/416 pass (was 368; +48).
+- **Playwright extension-context spec:** new `tests/playwright/extension/p25-saved-text-haze.spec.ts` (single-platform amazon happy path) — two tests covering: (1) `CSS.highlights['plos-cs-saved-text']` registers exactly the rows whose selector re-locates (null-selector row is correctly skipped; valid row's Range.toString() matches the expected substring); (2) haze tears down on navigation away from saved URL. 78/78 Playwright total (was 76; +2).
+
+**Director real-Chrome verification PASS first try.** Sideloaded `plos-extension-2026-05-19-w2-deploy-27.zip`; captured a new text snippet via right-click on a saved competitor URL; reloaded page; light-yellow haze visible on the matched span. Legacy NULL-selector rows correctly showed no haze (v1 limitation as documented).
+
+**One informational process-observation captured in CORRECTIONS_LOG 2026-05-19-f (NOT a real-tier slip):** the first Playwright run failed because `.output/chrome-mv3/` had a stale build from before today's orchestrator + messaging + background changes. The Playwright fixture loads the built extension via `--load-extension`, so without a rebuild the test exercised yesterday's bits. Caught immediately via TimeoutError on `waitForFunction(CSS.highlights.get('plos-cs-saved-text'))`; ran `npm run build` in the extension dir; rebuilt extension verified by `background.js` mtime + size delta; re-ran Playwright → PASS on first try. Future-session prevention: when running Playwright extension-context specs after editing extension source, ALWAYS rebuild before running playwright. Consider a `pretest` Playwright config hook that runs the wxt build if `.output/` is older than any `src/` file.
+
+**Cross-references:** P-25 ROADMAP polish-backlog entry (flipped ✅ DONE with full fix-shape narrative as part of this doc batch); CHAT_REGISTRY 2026-05-19-f top entry; CORRECTIONS_LOG 2026-05-19-f header bump (zero CORRECTIONS_LOG-tier slips; one informational observation captured on stale-extension-build catch); `already-saved-image-icon.ts` (the P-24 sibling helper this module's design mirrors); `highlight-terms.ts` (the existing unrelated keyword-highlight feature — distinct registry name + class + lifecycle confirmed no-collision); deploy session #27 commit `e7c82da`; fresh zip `plos-extension-2026-05-19-w2-deploy-27.zip`.
+
 ---
 
 END OF DOCUMENT

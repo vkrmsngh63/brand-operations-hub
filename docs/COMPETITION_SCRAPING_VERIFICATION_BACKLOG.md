@@ -3420,5 +3420,91 @@ Director's verbatim confirmation: **"Everything worked!"** — closes (a.47) REC
 
 ---
 
+## Deploy session #27 — P-25 captured-text haze indicator on the page DEPLOYED + REAL-CHROME-VERIFIED (NEW 2026-05-19-f — closes (a.48) RECOMMENDED-NEXT)
+
+**Session ID:** `session_2026-05-19-f_w2-main-deploy-session-27-p25-saved-text-haze-DEPLOYED`. One-hundred-and-fifteenth Claude Code session.
+
+**Headline outcome:** P-25 SHIPPED + DEPLOYED + REAL-CHROME-VERIFIED on vklf.com. Symmetric pair to yesterday's P-24 saved-image-indicator ship; closes the second of three on-page recognition cues (URL ✓ session 3 + image ✓ 2026-05-19-e + text haze today). 2 of 6 W#2 polish items closed this week; 4 remain (P-23 + P-22 + P-18 + P-26) before W#2 graduation.
+
+**Schema-change-in-flight session — flag flipped Yes during build then back to No after `npx prisma db push` succeeded in 940ms** (additive only — new nullable `selector String?` column on `CapturedText`; pre-existing rows backfill to NULL with no haze until re-captured; new captures persist the serialized JSON `{xpath, startOffset, endOffset}` so the haze re-renders on later page visits).
+
+**Pre-session premise check (Rule 3 — code wins; learned from yesterday's load-bearing finding):** at session start verified ALL of the launch prompt's claims about current code state against canonical implementation — Prisma schema CapturedText model + `src/lib/shared-types/competition-scraping.ts` interface + route handler at `src/lib/competition-scraping/handlers/url-text.ts` + `text-capture-form.ts` + `already-saved-image-icon.ts` reference shape + `highlight-terms.ts` collision-surface. ALL claims confirmed accurate — no drift this session. (One non-drift design clarification surfaced and handled: the user's selection Range is lost across the message round-trip to background and back; orchestrator's existing contextmenu capture-phase listener was extended to ALSO snapshot the Range alongside the existing `lastRightClickImageSrc` snapshot.)
+
+**Two genuinely-open Rule 14f forced-pickers fired at session start.**
+
+- **Picker 1 — Selector serialization + rendering approach.** Director picked (A) CSS Custom Highlight API + XPath-based serialized selector — recommended per `feedback_recommendation_style.md` (non-DOM-modifying haze sidesteps the P-14 MutationObserver feedback-loop concern; manifest already enforces Chrome 105+; cleanest co-existence with `highlight-terms.ts`). Other options considered: (B) `<span>` DOM-wrap + selector (broader compat but DOM-modifies host page; adds a third DOM-modifying layer); (C) Hybrid (A) + text-fallback for null-selector legacy rows (eliminates v1 limitation but extra ~80 LOC + imprecise on repeated text).
+- **Picker 2 — Test coverage approach (Rule 27 forced-picker).** Director picked Hybrid Option A — node:test unit tests on selector helper + Playwright extension-context spec slice. Matches yesterday's P-24 risk profile.
+
+**Code shipped (17 new/modified files, +1870/-5 in single commit `e7c82da`).**
+
+**Server-side (5 files):**
+- `prisma/schema.prisma` — additive nullable `selector String?` on `CapturedText` (with @db.Text type hint for unbounded length).
+- `src/lib/shared-types/competition-scraping.ts` — `selector: string | null` on `CapturedText` interface; `selector?: string` on `CreateCapturedTextRequest` (optional; absent on manual-add and legacy captures).
+- `src/lib/competition-scraping/handlers/url-text.ts` — POST validates selector (non-empty string when present); writes to Prisma; GET's `toWireShape` returns selector.
+- `src/app/api/projects/[projectId]/competition-scraping/text/[textId]/route.ts` — per-text PATCH route's `toWireShape` includes selector for read consistency.
+- `src/lib/competition-scraping/handlers/url-text.test.ts` — 5 new node:test cases (400 on empty/non-string + 201 persists + 201 omitted-null + GET 200 returns both null + non-null selectors).
+
+**Extension (10 files — 4 new, 6 modified):**
+- NEW `extensions/competition-scraping/src/lib/captured-text-selector.ts` (460 LOC) — pure-logic XPath + flattened-offset encode/decode helper with NO DOM import dependency.
+- NEW `extensions/competition-scraping/src/lib/captured-text-selector.test.ts` (303 LOC) — 36 node:test cases via hand-built `SelectorElement`/`SelectorText` stubs.
+- NEW `extensions/competition-scraping/src/lib/content-script/saved-text-highlight.ts` (214 LOC) — CSS Custom Highlight API wrapper with attach/detach lifecycle keyed by savedTextId + test-only `__setTestRegistry` injection hook.
+- NEW `extensions/competition-scraping/src/lib/content-script/saved-text-highlight.test.ts` (190 LOC) — 12 node:test cases covering attach/detach lifecycle + idempotent re-attach + cleanup + graceful no-op when CSS.highlights unavailable.
+- `extensions/competition-scraping/src/lib/content-script/orchestrator.ts` — +139 LOC: contextmenu capture-phase listener extended to snapshot `window.getSelection().getRangeAt(0)` alongside `lastRightClickImageSrc`; `open-text-capture-form` handler passes `selectorJson` to form; `maybeShowDetailOverlay` fires `listCapturedTexts` in parallel with `listCapturedImages` + calls `scanTextHazes` on settle; MutationObserver tick rescans hazes; cleanup paths tear down hazes.
+- `extensions/competition-scraping/src/lib/content-script/text-capture-form.ts` — new `selectorJson: string | null` prop; on Save, spreads `selector` into `createCapturedText` body (omitted when null).
+- `extensions/competition-scraping/src/lib/content-script/api-bridge.ts` — new `listCapturedTexts(projectId, urlId)` bridge function.
+- `extensions/competition-scraping/src/lib/content-script/messaging.ts` — new `ListCapturedTextsRequest` + envelope type + isBackgroundRequest type-guard clause.
+- `extensions/competition-scraping/src/lib/content-script/styles.ts` — new `::highlight(plos-cs-saved-text)` rule (light-yellow background + dotted underline).
+- `extensions/competition-scraping/src/lib/api-client.ts` — new `listCapturedTexts` API client function (mirror of yesterday's `listCapturedImages`).
+- `extensions/competition-scraping/src/entrypoints/background.ts` — new `list-captured-texts` dispatch clause.
+
+**Test (1 new file):**
+- NEW `tests/playwright/extension/p25-saved-text-haze.spec.ts` (353 LOC) — 2 Playwright extension-context specs covering haze attach on matching saved URL + haze tear-down on navigation away.
+
+**Verification scoreboard — all GREEN.**
+
+| Gate | Pre-deploy (workflow-2) | Post-merge (main) | Delta vs yesterday's baseline |
+|---|---|---|---|
+| `npx tsc --noEmit` (root) | ✅ clean | ✅ clean | unchanged |
+| `cd extensions/competition-scraping && npx tsc --noEmit` | ✅ clean | ✅ clean | unchanged |
+| `npm run build` | ✅ 53 routes | ✅ 53 routes | unchanged |
+| `src/lib` node:test | ✅ 536/536 | ✅ 536/536 | **+5** (selector POST handler cases) |
+| Extension `npm test` | ✅ 416/416 | ✅ 416/416 | **+48** (36 selector helper + 12 haze helper) |
+| Playwright (full suite) | ✅ 78/78 | ✅ 78/78 | **+2** (P-25 attach + tear-down specs) |
+
+**Deploy mechanics (cheat-sheet b — standard W#2 → main deploy):**
+
+1. **Pre-deploy scoreboard on workflow-2:** all GREEN as above.
+2. **Build commit:** `e7c82da` on workflow-2 (17 files +1870/-5).
+3. **DB push (Rule 8-gated via AskUserQuestion picker):** `npx prisma db push` in 940ms; additive nullable column on existing table; no destructive change.
+4. **Checkout main; `git pull --rebase origin main`:** clean no-op (origin/main even with `1dce84b` since yesterday's deploy-26 doc-batch).
+5. **ff-merge `1dce84b..e7c82da`:** clean linear merge (no rebase needed); 17 files +1870/-5.
+6. **Post-merge scoreboard on main:** all GREEN (full Playwright re-run for thoroughness).
+7. **Build fresh extension zip:** `cd extensions/competition-scraping && npm run zip` → produced `competition-scraping-extension-0.1.0-chrome.zip` (191,413 bytes — +516 over deploy-26); copied to repo root as `plos-extension-2026-05-19-w2-deploy-27.zip`.
+8. **Rule 9 deploy gate via AskUserQuestion picker → "Deploy now."**
+9. **`git push origin main`:** clean (`1dce84b..e7c82da`); Vercel auto-redeploy fired.
+10. **Ping-pong sync:** workflow-2 fast-forwarded to `e7c82da` then pushed to origin; both branches at same SHA.
+
+**Director real-Chrome verification PASS (Rule 27 scope exception — visual judgment + real-platform DOM):**
+
+| Step | Outcome |
+|---|---|
+| Sideload deploy-27 zip into Chrome | ✅ extension loaded; orchestrator attached on competitor URL. |
+| Visit a saved CompetitorUrl detail page | ✅ existing URL ✓ icon + green ✓ image overlay (P-24) appeared as regression checks. |
+| Right-click selected text → "Add to PLOS — Captured Text" → fill form → Save | ✅ text captured; createCapturedText POST succeeded with selector field. |
+| Reload page | ✅ light-yellow haze visible on the matched span. |
+| Other text on the page | ✅ NO haze on legacy NULL-selector rows (v1 limitation as documented). |
+
+Director's verbatim confirmation: **"PASS — haze appears on new text after reload"** — closes (a.48) RECOMMENDED-NEXT.
+
+**Known v1 limitation captured for future polish (mirrors P-24's known limitation):** rows captured before this deploy have `selector = NULL` and show no haze until re-captured. Future polish could add text-based fallback (Option C from Picker 1) to render haze on legacy rows via DOM text-walker first-occurrence match — at the cost of imprecision when the same text appears multiple times. Acceptable trade-off for v1 — director picked Option A which matches P-24's pattern.
+
+**One INFORMATIONAL process-observation captured in CORRECTIONS_LOG 2026-05-19-f (NOT a real-tier slip):** the first Playwright run failed because `.output/chrome-mv3/` had a stale extension build from before today's orchestrator + messaging + background changes. Playwright fixture loads built extension via `--load-extension`, so without a rebuild the test exercised yesterday's bits. Caught immediately via TimeoutError on `waitForFunction(CSS.highlights.get('plos-cs-saved-text'))`; ran `npm run build` in the extension dir; rebuilt extension verified by `background.js` mtime + size delta; re-ran Playwright → PASS on first try. Future-session prevention: when running Playwright extension-context specs after editing extension source, ALWAYS rebuild before running playwright.
+
+**§4 Step 1c forced-picker fired at end-of-session.** Picker offered (A) P-23 saved-URL dropdown side-by-side [recommended — small surface, quick UX win between heavier polish sessions] + (B) P-22 Playwright cross-platform slices 2-4 [defensive coverage] + (C) DEFERRED manual-add modal `originalSrcUrl` tack-on from 2026-05-19-e + (D) escape hatch. Director chose to wrap the session without explicitly picking from the forced-picker; Claude defaulted to (A) P-23 per `feedback_recommendation_style.md` (most thorough/reliable standing recommendation) + `feedback_session_management.md` (wrap before degrading — director's clear wrap signal). Director can override the pick by editing `docs/NEXT_SESSION.md`'s `## Launch prompt` section before next session launch.
+
+**Net code change this session on main vs. session-start `1dce84b`:** +1870 / -5 LOC across the 17 files above. Final main state: `e7c82da` (P-25 ship) on top of `1dce84b` (session-start state — yesterday's 2026-05-19-e end-of-session doc-batch).
+
+---
+
 END OF DOCUMENT
 
