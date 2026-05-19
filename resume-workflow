@@ -142,22 +142,62 @@ git pull --rebase origin "$BRANCH" || {
 # ── Setup mode: generate the launch prompt for this workflow ─────────────────
 case "$SETUP_MODE" in
   rule22)
-    # W#1 path: ask for task reason + fill Rule 22 template + write single-use pointer
-    echo ""
-    echo "What do you want to do in W#$WORKFLOW ($WORKFLOW_NAME) this session?"
-    echo ""
-    echo "Examples:"
-    echo "  - 'fix a bug in keyword scoring'"
-    echo "  - 'add a polish item from POLISH_BACKLOG.md M-2 cost forecasting'"
-    echo "  - 'investigate slow query in canvas-state'"
-    echo "  - 'export keyword clusters as CSV for a downstream tool'"
-    echo ""
-    read -r -p "Your task description (one line): " TASK_REASON
+    # W#1 path: show the polish backlog menu, ask for task reason, fill Rule 22 template.
+    # The director picks an item by ID (H-1 / M-2 / etc.) OR types a freeform task
+    # description. Either way the result gets substituted into the Rule 22 template's
+    # [your specific reason] slot and Claude expands on it once the session starts.
 
-    if [ -z "$TASK_REASON" ]; then
-      echo "❌ Empty task description. Aborting — re-run ./resume-workflow 1 when you know what you want to work on."
-      exit 1
+    BACKLOG="docs/KEYWORD_CLUSTERING_POLISH_BACKLOG.md"
+
+    echo ""
+    echo "── W#$WORKFLOW ($WORKFLOW_NAME) polish backlog — what's currently queued ──"
+    echo ""
+    if [ -f "$BACKLOG" ]; then
+      # Show the polish backlog's priority section headings + sub-item headings so
+      # the director sees the full menu of available work at a glance.
+      grep -E "^## |^### " "$BACKLOG" | head -40 | sed 's/^### /  /; s/^## /\n/'
+      echo ""
+      echo "(Full details for each item: read docs/KEYWORD_CLUSTERING_POLISH_BACKLOG.md)"
+    else
+      echo "  (No polish backlog file found at $BACKLOG — you can still type a custom task description.)"
     fi
+    echo ""
+    echo "What do you want to do in W#$WORKFLOW this session?"
+    echo ""
+    echo "How to answer:"
+    echo "  • Pick a polish item by ID + brief — e.g., 'M-2 cost forecasting' or 'H-1 action history'"
+    echo "  • OR type a freeform task — e.g., 'investigate slow query in canvas-state' or"
+    echo "    'export keyword clusters as CSV for a downstream tool'"
+    echo "  • OR type 'show' to print the full backlog inline before deciding"
+    echo ""
+
+    # Allow the director to peek at the full backlog before deciding.
+    while true; do
+      read -r -p "Your task: " TASK_REASON
+
+      if [ -z "$TASK_REASON" ]; then
+        echo "❌ Empty task description. Aborting — re-run ./resume-workflow 1 when you know what you want to work on."
+        exit 1
+      fi
+
+      if [ "$TASK_REASON" = "show" ] || [ "$TASK_REASON" = "Show" ]; then
+        if [ -f "$BACKLOG" ]; then
+          echo ""
+          echo "── Full polish backlog: $BACKLOG ──"
+          echo ""
+          cat "$BACKLOG"
+          echo ""
+          echo "── End of polish backlog ──"
+          echo ""
+          continue  # re-prompt
+        else
+          echo "No backlog file to show. Type a task description."
+          continue
+        fi
+      fi
+
+      break  # got a real task description
+    done
 
     # Build the launch prompt by substituting into the Rule 22 template.
     # This is the canonical W#1 re-entry shape from
