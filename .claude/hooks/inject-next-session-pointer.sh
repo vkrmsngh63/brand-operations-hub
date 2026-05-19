@@ -31,6 +31,7 @@ set -uo pipefail
 
 REPO_ROOT="${CLAUDE_PROJECT_DIR:-$(pwd)}"
 POINTER="$REPO_ROOT/docs/NEXT_SESSION.md"
+ACTIVE_WORKFLOW_POINTER="$REPO_ROOT/.claude/active-workflow-prompt.md"
 
 emit_empty() {
     printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":""}}\n'
@@ -40,20 +41,46 @@ emit_empty() {
 # Consume stdin so the hook subsystem doesn't deadlock waiting for us to read it
 cat > /dev/null 2>&1 || true
 
-if [ ! -f "$POINTER" ]; then
+# Choose the source pointer file:
+#   PRIORITY 1: .claude/active-workflow-prompt.md if present — written by
+#               ./resume-workflow <N> for workflow-switching sessions.
+#               Single-use: this hook DELETES the file after reading so the
+#               next bare `./resume` invocation correctly falls back to
+#               NEXT_SESSION.md instead.
+#   PRIORITY 2: docs/NEXT_SESSION.md — the standard end-of-session pointer
+#               for "continue the workflow the prior session was on" (the
+#               ./resume entry point).
+if [ -f "$ACTIVE_WORKFLOW_POINTER" ]; then
+    POINTER_FILE="$ACTIVE_WORKFLOW_POINTER"
+    POINTER_SOURCE_LABEL=".claude/active-workflow-prompt.md (written by ./resume-workflow; single-use)"
+    CONSUME_AFTER_READ=true
+else
+    POINTER_FILE="$POINTER"
+    POINTER_SOURCE_LABEL="docs/NEXT_SESSION.md (standard end-of-session pointer)"
+    CONSUME_AFTER_READ=false
+fi
+
+if [ ! -f "$POINTER_FILE" ]; then
     emit_empty
 fi
 
 # Read the pointer file and build the additionalContext string.
 # The context wraps the file contents in a clear marker so Claude knows
 # this is the resume-flow pointer (not just random content).
-POINTER_CONTENT=$(cat "$POINTER" 2>/dev/null || true)
+POINTER_CONTENT=$(cat "$POINTER_FILE" 2>/dev/null || true)
+
+# Consume the single-use workflow pointer if that's the one we read.
+# Delete AFTER read but BEFORE emit so a hook crash mid-emit doesn't leave
+# the file behind to confuse the next session start.
+if [ "$CONSUME_AFTER_READ" = "true" ]; then
+    rm -f "$ACTIVE_WORKFLOW_POINTER" 2>/dev/null || true
+fi
 
 if [ -z "$POINTER_CONTENT" ]; then
     emit_empty
 fi
 
-CONTEXT_PREFIX="🟢 RESUME-FLOW POINTER — docs/NEXT_SESSION.md content follows (injected by SessionStart hook .claude/hooks/inject-next-session-pointer.sh; the user is starting a session via ./resume or fresh claude launch; treat this content as the session's launch prompt and proceed with the start-of-session sequence per docs/CLAUDE_CODE_STARTER.md once the user sends any first message — even a single word like 'go' or 'proceed'):
+CONTEXT_PREFIX="🟢 RESUME-FLOW POINTER — content follows (source: $POINTER_SOURCE_LABEL; injected by SessionStart hook .claude/hooks/inject-next-session-pointer.sh; the user is starting a session via ./resume, ./resume-workflow <N>, or fresh claude launch; treat this content as the session's launch prompt and proceed with the start-of-session sequence per docs/CLAUDE_CODE_STARTER.md once the user sends any first message — even a single word like 'go' or 'proceed'):
 
 "
 

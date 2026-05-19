@@ -207,17 +207,25 @@ To see live state of installed extensions in a session: type `/agents` (interact
 
 ---
 
-### EASY PATH (recommended — NEW 2026-05-13-c)
+### EASY PATH (recommended — NEW 2026-05-13-c; EXTENDED 2026-05-19-g-5 with workflow-switching)
 
-**One command:**
+**Continue the current workflow** (whatever the prior session was working on per `docs/NEXT_SESSION.md`):
 
 ```
 cd /workspaces/brand-operations-hub && ./resume
 ```
 
-The `resume` script at repo root reads `docs/NEXT_SESSION.md` (written by the previous session's end-of-session checklist per `HANDOFF_PROTOCOL.md` §4 Step 1 row 12), switches to the branch the pointer names, pulls the latest, prints the pointer file's contents to your terminal so you see what's about to happen, then launches Claude Code with the sentinel first-message ("Resume per docs/NEXT_SESSION.md") that triggers Claude's sentinel-handling at the top of this file.
+The `resume` script reads `docs/NEXT_SESSION.md`, switches to the branch the pointer names, pulls the latest, prints the pointer file's contents to your terminal, then launches Claude Code with the SessionStart hook auto-injecting the launch prompt as context.
 
-**If `./resume` fails for any reason** (pointer file missing or malformed, branch checkout fails, pull fails, etc.), the script aborts loudly with a clear error message + the commands you'd run for the ESCAPE HATCH. The 3-step path below is always available as a known-good fallback.
+**Switch to a specific workflow** (e.g., W#1 re-entry while NEXT_SESSION.md points at W#2):
+
+```
+cd /workspaces/brand-operations-hub && ./resume-workflow <N>
+```
+
+Where `<N>` is the workflow number (1 for W#1 Keyword Clustering, 2 for W#2 Competition Scraping). The `resume-workflow` script switches to the workflow's canonical branch, pulls the latest, generates a workflow-specific launch prompt (for W#1: asks you interactively what you want to do, then fills the Rule 22 graduated-tool re-entry template; for W#2: uses NEXT_SESSION.md), writes the prompt to `.claude/active-workflow-prompt.md` (single-use; the SessionStart hook reads + deletes after), then launches Claude. Future workflows (W#3-W#14) error gracefully with the canonical "first session for a never-started workflow" procedure from `MULTI_WORKFLOW_PROTOCOL.md` §11.
+
+**If either script fails** (pointer file missing, branch checkout fails, etc.), it aborts loudly with a clear error message + the commands you'd run for the ESCAPE HATCH. The 3-step path below is always available as a known-good fallback.
 
 ---
 

@@ -51,3 +51,8 @@ next-env.d.ts
 # Session-scoped state from PostToolUse hook .claude/hooks/track-edited-docs.sh
 # (added 2026-05-19-g extension wire-up). Log accumulates per-session; not history.
 .claude/session-modified-docs.log
+
+# Single-use workflow-specific launch prompt written by ./resume-workflow <N>
+# (added 2026-05-19-g-5 alongside resume-workflow ship). Consumed + deleted by
+# the SessionStart hook on next claude launch; should never be tracked.
+.claude/active-workflow-prompt.md

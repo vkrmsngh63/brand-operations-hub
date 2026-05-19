@@ -1,0 +1,259 @@
+#!/usr/bin/env bash
+# resume-workflow — workflow-switching entry point for PLOS Claude Code sessions.
+#
+# Usage:
+#   ./resume-workflow <N>     where N is the workflow number
+#
+#   ./resume-workflow 1       → W#1 Keyword Clustering (graduated; main branch;
+#                               Rule 22 graduated-tool re-entry session).
+#                               Asks interactively for the specific task reason,
+#                               fills the Rule 22 template from
+#                               KEYWORD_CLUSTERING_DATA_CONTRACT.md §7, and
+#                               writes the filled-in launch prompt to
+#                               .claude/active-workflow-prompt.md (single-use).
+#
+#   ./resume-workflow 2       → W#2 Competition Scraping (active dev;
+#                               workflow-2-competition-scraping branch).
+#                               Same content path as ./resume — reads
+#                               docs/NEXT_SESSION.md as the launch prompt
+#                               (auto-updated by every W#2 session's
+#                               end-of-session protocol).
+#
+#   ./resume-workflow 3-14    → graceful error (workflow not yet started).
+#                               Points to MULTI_WORKFLOW_PROTOCOL.md §11 for
+#                               the canonical "first session for a never-
+#                               started workflow" procedure.
+#
+# How this differs from ./resume:
+#   ./resume reads docs/NEXT_SESSION.md to determine branch + task — used to
+#   CONTINUE the workflow the prior session was working on.
+#   ./resume-workflow <N> SWITCHES to a specific workflow — branch + task
+#   come from the workflow's canonical resume template (W#1: Data Contract
+#   §7 Rule 22 template; W#2: NEXT_SESSION.md). Useful when you want to do
+#   W#1 re-entry work while NEXT_SESSION.md points at W#2 (the common case
+#   right now since W#2 is in active polish + W#1 is graduated).
+#
+# Architecture:
+#   For W#1 (and future workflows where the launch prompt isn't in
+#   NEXT_SESSION.md), this script writes the filled-in launch prompt to
+#   `.claude/active-workflow-prompt.md`. The SessionStart hook
+#   (.claude/hooks/inject-next-session-pointer.sh) checks for this file
+#   FIRST, before falling back to docs/NEXT_SESSION.md. After the hook
+#   reads it, the file is DELETED (single-use semantics) so the next
+#   bare `./resume` invocation correctly reads NEXT_SESSION.md instead.
+#
+# Cross-references:
+#   docs/HANDOFF_PROTOCOL.md Rule 22 — Graduated-Tool Re-Entry Protocol
+#   docs/HANDOFF_PROTOCOL.md Rule 28 — Resume-flow multi-layered defense
+#   docs/MULTI_WORKFLOW_PROTOCOL.md §11 — How to start a session for any workflow
+#   docs/KEYWORD_CLUSTERING_DATA_CONTRACT.md §7 — W#1 Resume Prompt template
+#   .claude/hooks/inject-next-session-pointer.sh — SessionStart hook this script feeds
+#   ./resume — the sibling script that handles the "continue NEXT_SESSION.md" path
+
+set -euo pipefail
+
+usage() {
+  cat <<EOF
+Usage: ./resume-workflow <N>
+
+Where <N> is the workflow number:
+  1   W#1 Keyword Clustering (graduated; main branch; Rule 22 re-entry)
+  2   W#2 Competition Scraping (active dev; uses NEXT_SESSION.md)
+  3-14  Future workflows (not yet started)
+
+For W#2 continuation specifically, you can also just run \`./resume\` (no args)
+— same result, but uses NEXT_SESSION.md's branch field directly.
+EOF
+}
+
+if [ $# -ne 1 ]; then
+  usage
+  exit 1
+fi
+
+WORKFLOW="$1"
+
+# Map workflow number to branch + setup mode.
+# - rule22:        W#1 path; ask for task reason interactively + fill Rule 22 template
+# - next-session:  W#2 path; use docs/NEXT_SESSION.md as the launch prompt
+# - not-started:   future workflow; error gracefully
+case "$WORKFLOW" in
+  1)
+    BRANCH="main"
+    WORKFLOW_NAME="Keyword Clustering"
+    SETUP_MODE="rule22"
+    ;;
+  2)
+    BRANCH="workflow-2-competition-scraping"
+    WORKFLOW_NAME="Competition Scraping"
+    SETUP_MODE="next-session"
+    ;;
+  3|4|5|6|7|8|9|10|11|12|13|14)
+    cat <<EOF
+W#$WORKFLOW is not yet started.
+
+To start a never-before-started workflow, follow the canonical procedure in
+docs/MULTI_WORKFLOW_PROTOCOL.md §11. Briefly:
+
+  1. cd /workspaces/brand-operations-hub && git fetch origin
+  2. git checkout main && git pull --rebase origin main
+  3. git checkout -b workflow-$WORKFLOW-<short-slug>  (e.g., workflow-3-conversion-funnel)
+  4. claude
+  5. As your first message, paste a "Workflow Requirements Interview" launch
+     prompt per HANDOFF_PROTOCOL.md Rule 18.
+
+After the workflow's first session completes, you can add the new branch to
+this script's case statement so future sessions can use ./resume-workflow $WORKFLOW.
+EOF
+    exit 1
+    ;;
+  *)
+    echo "Unknown workflow number: '$WORKFLOW' (expected an integer 1-14)"
+    usage
+    exit 1
+    ;;
+esac
+
+# ── Git: fetch + checkout + pull the workflow's branch ───────────────────────
+echo "── resume-workflow — switching to W#$WORKFLOW ($WORKFLOW_NAME) ──"
+echo "Branch: $BRANCH"
+echo ""
+
+git fetch origin || { echo "❌ git fetch origin failed"; exit 1; }
+git checkout "$BRANCH" || {
+  cat <<EOF
+❌ git checkout $BRANCH failed.
+
+Possible causes + fixes:
+  - You have uncommitted changes. Run \`git status\` to see them. Either commit
+    them (\`git add . && git commit -m 'WIP'\`) or stash them (\`git stash\`),
+    then re-run ./resume-workflow $WORKFLOW.
+  - The branch '$BRANCH' doesn't exist locally OR on origin. For W#1 (main)
+    this should always exist; for W#k feature branches, check the branch
+    name is correct in the script's case statement.
+EOF
+  exit 1
+}
+git pull --rebase origin "$BRANCH" || {
+  echo "❌ git pull --rebase origin $BRANCH failed. Resolve any conflicts, then re-run."
+  exit 1
+}
+
+# ── Setup mode: generate the launch prompt for this workflow ─────────────────
+case "$SETUP_MODE" in
+  rule22)
+    # W#1 path: ask for task reason + fill Rule 22 template + write single-use pointer
+    echo ""
+    echo "What do you want to do in W#$WORKFLOW ($WORKFLOW_NAME) this session?"
+    echo ""
+    echo "Examples:"
+    echo "  - 'fix a bug in keyword scoring'"
+    echo "  - 'add a polish item from POLISH_BACKLOG.md M-2 cost forecasting'"
+    echo "  - 'investigate slow query in canvas-state'"
+    echo "  - 'export keyword clusters as CSV for a downstream tool'"
+    echo ""
+    read -r -p "Your task description (one line): " TASK_REASON
+
+    if [ -z "$TASK_REASON" ]; then
+      echo "❌ Empty task description. Aborting — re-run ./resume-workflow 1 when you know what you want to work on."
+      exit 1
+    fi
+
+    # Build the launch prompt by substituting into the Rule 22 template.
+    # This is the canonical W#1 re-entry shape from
+    # docs/KEYWORD_CLUSTERING_DATA_CONTRACT.md §7 with the bracketed reason filled in.
+    mkdir -p .claude
+    cat > .claude/active-workflow-prompt.md <<EOF
+# Workflow #1 (Keyword Clustering) — graduated-tool re-entry session
+
+**Branch:** $BRANCH
+
+**Director's task this session:** $TASK_REASON
+
+## Launch prompt
+
+Read docs/CLAUDE_CODE_STARTER.md and follow every rule in it.
+Today's task: return to Workflow #1 (Keyword Clustering) — $TASK_REASON.
+This is a graduated-tool re-entry session, NOT a transition session.
+Verify branch state with \`git branch --show-current\` before any doc reads — should be \`main\`.
+
+Per HANDOFF_PROTOCOL.md Rule 22 (Graduated-Tool Re-Entry Protocol):
+
+1. Run the mandatory start-of-session sequence (Group A docs + branch
+   verification per CLAUDE_CODE_STARTER.md Step 2).
+2. Additionally load these Group B docs:
+   - docs/KEYWORD_CLUSTERING_DATA_CONTRACT.md  (read fully — the canonical
+     small/stable artifact downstream consumers reference)
+   - docs/KEYWORD_CLUSTERING_ARCHIVE.md  (skim table of contents; load
+     specific STATE blocks only if the change requires them — the Archive
+     is ~4600 lines and intentionally not loaded by default)
+   - docs/KEYWORD_CLUSTERING_POLISH_BACKLOG.md  (read fully if your task
+     touches a polish item)
+3. Per Rule 21, scan ROADMAP.md + DATA_CATALOG.md for any director
+   directives addressed to W#1 captured since graduation.
+4. Per Rule 23, run a Change Impact Audit before any code change: identify
+   affected data items, look up downstream consumers in DATA_CATALOG.md
+   Cross-Tool Data Flow Map §7.2.1, classify the change
+   (Additive / Compatible-modifying / Breaking), surface the audit before
+   coding.
+5. Produce the drift check with this added context. Wait for go-ahead.
+EOF
+
+    echo ""
+    echo "── W#1 launch prompt prepared in .claude/active-workflow-prompt.md ──"
+    echo "(single-use; the SessionStart hook reads + deletes this file after Claude launches)"
+    echo ""
+    cat .claude/active-workflow-prompt.md
+    ;;
+
+  next-session)
+    # W#2 path: use docs/NEXT_SESSION.md (same as ./resume)
+    POINTER="docs/NEXT_SESSION.md"
+    if [ ! -f "$POINTER" ]; then
+      cat <<EOF
+❌ $POINTER not found.
+
+For W#$WORKFLOW the launch prompt is supposed to come from NEXT_SESSION.md,
+which the previous session writes at end-of-session per HANDOFF_PROTOCOL §4
+Step 1 row 12. The file is missing — either the previous session forgot to
+update it, or you're on a fresh checkout without the file.
+
+Fix: write docs/NEXT_SESSION.md following HANDOFF_PROTOCOL §4 Step 4b
+template, then re-run ./resume-workflow $WORKFLOW. Or use the manual
+3-step escape hatch (cd + checkout + claude + paste launch prompt).
+EOF
+      exit 1
+    fi
+
+    echo ""
+    echo "── docs/NEXT_SESSION.md (the pointer the previous W#$WORKFLOW session left) ──"
+    echo ""
+    cat "$POINTER"
+    ;;
+esac
+
+echo ""
+echo "════════════════════════════════════════════════════════════════════"
+echo "  Launching Claude Code now."
+echo ""
+echo "  📌 IMPORTANT: when Claude finishes loading, type any single word"
+echo "     (e.g., 'go' or 'proceed') and press Enter."
+echo ""
+echo "     The SessionStart hook will have already injected the launch"
+echo "     prompt above into the session as context, so Claude will"
+echo "     immediately follow the launch prompt's instructions once you"
+echo "     send your first message. NO COPY-PASTE NEEDED."
+echo ""
+echo "     If for any reason Claude doesn't act on the launch prompt after"
+echo "     your first message, fall back to pasting it manually from the"
+echo "     output above (the 3-step escape hatch is always available)."
+echo "════════════════════════════════════════════════════════════════════"
+echo ""
+
+# NOTE: We do NOT pass a positional [prompt] argument to claude here.
+# Claude Code's positional [prompt] only auto-submits in non-interactive
+# mode (`-p`). In interactive mode it pre-fills the input box silently or
+# is ignored — director would still have to manually press Enter or paste.
+# The SessionStart hook handles context injection; the director's single
+# wake-up keystroke is the minimum interaction Claude Code's CLI requires.
+exec claude
