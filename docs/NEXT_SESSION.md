@@ -4,13 +4,17 @@
 
 ---
 
-## 🟢 First action when next session starts — verify the new `.claude/` tooling works (NEW 2026-05-19-g-3)
+## 🟢 First action when next session starts — verify the new `.claude/` tooling works (NEW 2026-05-19-g-3, EXTENDED 2026-05-19-g-4 with 3 more orchestrator slash commands)
 
-This session shipped 4 new PLOS extensions in `.claude/` (commit `480d3ae`). Before doing P-22 work, verify they wired up correctly. Each is small + reversible — if any doesn't show up, the file format needs adjustment + we iterate.
+This session shipped 7 new PLOS extensions in `.claude/` total. Before doing P-22 work, verify they wired up correctly. Each is small + reversible — if any doesn't show up, the file format needs adjustment + we iterate.
+
+**The 7 extensions** (commits `480d3ae` + `c750ed4` + `<this commit>`):
+- 4 base extensions: `plos-doc-batch` subagent + `/rule-24-search` + `/scoreboard` slash commands + `track-edited-docs.sh` PostToolUse hook
+- 3 orchestrator slash commands (NEW): `/ship-polish-item P-NN` (kicks off a polish ship from scratch) + `/deploy` (wraps the Rule 9 gate + ff-merge + push pattern) + `/end-of-session` (orchestrates the doc-batch + commit + push + handoff)
 
 **Step 1 — Type `/agents`** to open the interactive Agents panel. Look for **`plos-doc-batch`** in the Library tab. If present → custom agent file format is correct. If absent → flag to director; agent file at `.claude/agents/plos-doc-batch.md` may need YAML frontmatter adjustment.
 
-**Step 2 — Type `/` (just the slash key)** to open slash command autocomplete. Look for **`/rule-24-search`** and **`/scoreboard`** in the list. If present → command file format correct. If absent → flag; command files at `.claude/commands/rule-24-search.md` + `.claude/commands/scoreboard.md` may need adjustment.
+**Step 2 — Type `/` (just the slash key)** to open slash command autocomplete. Look for ALL FIVE: **`/rule-24-search`** + **`/scoreboard`** + **`/ship-polish-item`** + **`/deploy`** + **`/end-of-session`** in the list. If all 5 present → command file format correct. If any are absent → flag; command files at `.claude/commands/<name>.md` may need YAML frontmatter adjustment.
 
 **Step 3 — Test the PostToolUse hook.** Make a tiny edit to any doc (e.g., add a trailing space to `docs/ROADMAP.md` line 1 then revert — OR genuinely edit something), then run `cat .claude/session-modified-docs.log` in Bash. Expected output: one line with timestamp + `Edit` + `docs/ROADMAP.md` relative path. If empty → hook didn't fire; check `.claude/settings.json` PostToolUse wiring + script executable bit.
 

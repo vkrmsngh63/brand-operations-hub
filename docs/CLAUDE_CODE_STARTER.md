@@ -137,6 +137,9 @@ The `.claude/` folder ships PLOS-specific Claude Code extensions that mechanize 
 
 | Extension | Path | When to use |
 |---|---|---|
+| **`/ship-polish-item P-NN`** slash command | `.claude/commands/ship-polish-item.md` | AT SESSION START when shipping a specific polish item — orchestrates the full ship pattern (branch verify → ROADMAP entry read → Rule 3 diagnosis → Rule 14f pickers → code → /scoreboard → /deploy → /end-of-session) |
+| **`/deploy`** slash command | `.claude/commands/deploy.md` | When ready to deploy a build commit — wraps pre-deploy /scoreboard → main-hasn't-moved check → Rule 9 gate (AskUserQuestion) → ff-merge → post-merge /scoreboard → push + ping-pong → fresh extension zip → director real-Chrome walkthrough |
+| **`/end-of-session`** slash command | `.claude/commands/end-of-session.md` | When ready to close a session — orchestrates TaskList sweep → spawn `plos-doc-batch` agent → commit + push + ping-pong → Personalized Handoff per §4 Step 4b |
 | **`/rule-24-search [keyword]`** slash command | `.claude/commands/rule-24-search.md` | BEFORE adding any new ROADMAP item — runs the canonical 7-grep pre-capture search per Rule 24 |
 | **`/scoreboard`** slash command | `.claude/commands/scoreboard.md` | BEFORE every deploy (pre-deploy + post-merge) — runs the 6-check verification (tsc / ext tsc / npm run build / src/lib node:test / extension npm test / Playwright) and reports green/red with deltas |
 | **`plos-doc-batch`** subagent | `.claude/agents/plos-doc-batch.md` | At end-of-session for the doc-bundle WRITING — spawn via Agent tool with `subagent_type: "plos-doc-batch"`. The parent Claude still owns the deferred-items sweep + commit + push + ping-pong + Personalized Handoff |
