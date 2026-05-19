@@ -47,3 +47,7 @@ next-env.d.ts
 
 # Backup files (added Phase M Ckpt 9) — prevents .bak, .bak2, .bak3, etc. from being tracked
 *.bak*
+
+# Session-scoped state from PostToolUse hook .claude/hooks/track-edited-docs.sh
+# (added 2026-05-19-g extension wire-up). Log accumulates per-session; not history.
+.claude/session-modified-docs.log
