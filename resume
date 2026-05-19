@@ -52,10 +52,26 @@ if [ ! -f "$POINTER" ]; then
   abort "$POINTER not found. The previous session was supposed to write this file at end-of-session (per HANDOFF_PROTOCOL.md §4 Step 1 row 12). The next session should also log this as a CORRECTIONS_LOG.md entry."
 fi
 
-BRANCH=$(awk '/^## Branch[[:space:]]*$/{getline; while ($0 ~ /^[[:space:]]*$/) getline; print; exit}' "$POINTER" | tr -d '[:space:]')
+# Extract the first non-empty line after the '## Branch' header in NEXT_SESSION.md.
+BRANCH_LINE=$(awk '/^## Branch[[:space:]]*$/{getline; while ($0 ~ /^[[:space:]]*$/) getline; print; exit}' "$POINTER")
+
+# Pull a clean branch-name token out of that line. Handles three common shapes:
+#   1. Bare name on its own line:  workflow-2-competition-scraping
+#   2. Backtick-wrapped + markdown: **`workflow-2-competition-scraping`** — W#2 polish work, ...
+#   3. Backtick-only:              `workflow-2-competition-scraping`
+#
+# Strategy: prefer a backtick-wrapped token if present (handles shape 2 + 3 cleanly,
+# avoids capturing prose words). Fallback to the first branch-name-valid sequence
+# of characters (handles shape 1; degrades safely if backticks somehow missing).
+# A branch name token is [a-zA-Z0-9/_-]+ per the refs/heads naming convention
+# PLOS uses (e.g., main, workflow-2-competition-scraping).
+BRANCH=$(printf '%s' "$BRANCH_LINE" | grep -oP '`\K[a-zA-Z0-9/_-]+(?=`)' | head -n 1 || true)
+if [ -z "$BRANCH" ]; then
+  BRANCH=$(printf '%s' "$BRANCH_LINE" | grep -oE '[a-zA-Z0-9/_-]+' | head -n 1 || true)
+fi
 
 if [ -z "$BRANCH" ]; then
-  abort "Could not read the 'Branch' field from $POINTER. The file may be malformed."
+  abort "Could not read the 'Branch' field from $POINTER. The file may be malformed (could not extract a valid branch-name token from the first line after '## Branch')."
 fi
 
 echo "── resume — session pointer ──"
