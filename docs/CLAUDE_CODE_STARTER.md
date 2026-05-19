@@ -41,6 +41,8 @@ I am the director of the PLOS (Product Launch Operating System) project. **I am 
 
 3. **Options + recommendation + reversibility, for every significant decision.** Don't leave me to pick blindly — give me Option A vs. B vs. C in "what the user sees" terms, your expert pick with reasoning, and whether the decision can be undone later. **The recommendation must (a) be the MOST THOROUGH AND RELIABLE option** — the one with highest confidence in the result and lowest risk of leaving issues unvalidated — **NOT the fastest, cheapest, or "easiest"** — AND **(b) be marked with an explicit `(recommended)` label INSIDE the option's headline**, not only in surrounding prose. Forced-picker UI may hide the surrounding prose; the marker inside the label is the canonical placement. Mark exactly one option as recommended; never zero, never two. (Full mechanical test in `HANDOFF_PROTOCOL.md` Rule 14f; canonical reasoning in operational memory `feedback_recommendation_style.md`. Director's standing preference, reinforced 2026-05-02.)
 
+3a. **Default-to-recommendation exception (NEW 2026-05-19-g-3).** Director's standing default is "yes, proceed with your recommendation." When the picker would only be re-confirming the recommended path AND the work fits pre-approved patterns (small / reversible / non-destructive), SKIP the forced-picker and proceed with the recommended option. The picker still fires for: Rule 9 destructive operations (deploys, force-pushes, rm -rf, prisma migrate reset, SQL DELETE/DROP/TRUNCATE); scope decisions with no clear "most thorough"; workflow design / Rule 18 interview clusters; anywhere director's intent is genuinely ambiguous. The TEST before firing: "is this question about clarifying the director's INTENT, OR is it asking permission to proceed on a path the director would default-approve?" If the latter — skip + proceed. Full exception in `HANDOFF_PROTOCOL.md` Rule 14f "Default-to-recommendation exception" section. Operational memory: `feedback_default_to_recommendation.md`.
+
 4. **Equal visual weight in recaps.** When summarizing a plan, features you added autonomously get the SAME visual prominence as features I explicitly decided. Never bury an autonomous addition in a one-liner.
 
 5. **Persistence decisions need explicit framing.** When data saves to local storage vs. database, explain in plain terms (syncs across devices? visible to other users? survives cache clears?). Never bury as parenthetical.
@@ -128,6 +130,21 @@ I am the director of the PLOS (Product Launch Operating System) project. **I am 
     If any of the three fails, rewrite before sending.
 
     **Scope exception:** simple yes/no/not-sure questions don't need elaborate per-option context (the options are trivially understood). But they STILL must include the escape-hatch option and the free-text invitation. "Yes / No / I have a question first / Not sure" is the shape for a simple binary with escape-hatch — never just "yes / no."
+
+### `.claude/` tooling — PLOS-specific extensions to use (NEW 2026-05-19-g-3)
+
+The `.claude/` folder ships PLOS-specific Claude Code extensions that mechanize recurring session work. Use them instead of issuing the underlying commands manually — they're mechanically consistent across sessions and save 5-15 min per use.
+
+| Extension | Path | When to use |
+|---|---|---|
+| **`/rule-24-search [keyword]`** slash command | `.claude/commands/rule-24-search.md` | BEFORE adding any new ROADMAP item — runs the canonical 7-grep pre-capture search per Rule 24 |
+| **`/scoreboard`** slash command | `.claude/commands/scoreboard.md` | BEFORE every deploy (pre-deploy + post-merge) — runs the 6-check verification (tsc / ext tsc / npm run build / src/lib node:test / extension npm test / Playwright) and reports green/red with deltas |
+| **`plos-doc-batch`** subagent | `.claude/agents/plos-doc-batch.md` | At end-of-session for the doc-bundle WRITING — spawn via Agent tool with `subagent_type: "plos-doc-batch"`. The parent Claude still owns the deferred-items sweep + commit + push + ping-pong + Personalized Handoff |
+| **`track-edited-docs.sh`** PostToolUse hook | `.claude/hooks/track-edited-docs.sh` (auto-fires) | Auto-fires on every Edit/Write — logs `docs/` edits to `.claude/session-modified-docs.log` (session-scoped, gitignored). The `plos-doc-batch` agent consumes this log |
+
+Also pre-existing (don't need to invoke; auto-fire): `SessionStart` hook (`inject-next-session-pointer.sh`) + `PreToolUse` Bash hook (`check-next-session-doc.sh`).
+
+To see live state of installed extensions in a session: type `/agents` (interactive panel listing custom + built-in subagents) or `/` (slash-command autocomplete listing available commands + skills).
 
 ### Doc access
 

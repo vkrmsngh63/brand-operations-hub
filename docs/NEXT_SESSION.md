@@ -1,12 +1,59 @@
 # Next session
 
-**Written:** 2026-05-19-g (`session_2026-05-19-g_w2-main-deploy-session-28-p23-saved-url-dropdown-DEPLOYED`).
+**Written:** 2026-05-19-g-3 (`session_2026-05-19-g_w2-main-deploy-session-28-p23-saved-url-dropdown-DEPLOYED` — extended post-handoff to capture (a) the P-27 video-feature scope-add via the 2026-05-19-g-2 addendum, (b) 4 new `.claude/` extensions for the workflow + the working-mode-change to default-to-recommendation per HANDOFF_PROTOCOL Rule 14f exception).
 
-**For:** the next Claude Code session.
+---
 
-**Status of today's W#2 → main deploy session #28:** P-23 saved-URL dropdown side-by-side SHIPPED + DEPLOYED + REAL-CHROME-VERIFIED on vklf.com on ALL 3 forms (popup paste form + right-click "Add to PLOS — Captured Text" + right-click "Add to PLOS — Image"). Build commit `5cb2419`. Pre-deploy + post-merge scoreboards both GREEN: tsc / ext tsc / `npm run build` 53 routes / src/lib node:test **536/536** (unchanged) / extension `npm test` **428/428** (was 416; +12 saved-url-option-label pure-helper cases) / Playwright **79/79** (was 78; +1 new P-23 extension-context spec). Fresh zip `plos-extension-2026-05-19-w2-deploy-28.zip` at repo root (191,561 bytes — +148 over deploy-27).
+## 🟢 First action when next session starts — verify the new `.claude/` tooling works (NEW 2026-05-19-g-3)
 
-**Closes (a.49) RECOMMENDED-NEXT.** 3 of 6 W#2 polish items shipped this week (P-24 + P-25 + P-23); **3 remain** that the director has stated must ship before W#2 graduation: P-22 (Playwright cross-platform slices 2-4) + P-18 (devcontainer Chromium libs) + P-26 (below-fold full-page-scroll capture). Estimated ~3-6 more W#2 polish sessions before graduation.
+This session shipped 4 new PLOS extensions in `.claude/` (commit `480d3ae`). Before doing P-22 work, verify they wired up correctly. Each is small + reversible — if any doesn't show up, the file format needs adjustment + we iterate.
+
+**Step 1 — Type `/agents`** to open the interactive Agents panel. Look for **`plos-doc-batch`** in the Library tab. If present → custom agent file format is correct. If absent → flag to director; agent file at `.claude/agents/plos-doc-batch.md` may need YAML frontmatter adjustment.
+
+**Step 2 — Type `/` (just the slash key)** to open slash command autocomplete. Look for **`/rule-24-search`** and **`/scoreboard`** in the list. If present → command file format correct. If absent → flag; command files at `.claude/commands/rule-24-search.md` + `.claude/commands/scoreboard.md` may need adjustment.
+
+**Step 3 — Test the PostToolUse hook.** Make a tiny edit to any doc (e.g., add a trailing space to `docs/ROADMAP.md` line 1 then revert — OR genuinely edit something), then run `cat .claude/session-modified-docs.log` in Bash. Expected output: one line with timestamp + `Edit` + `docs/ROADMAP.md` relative path. If empty → hook didn't fire; check `.claude/settings.json` PostToolUse wiring + script executable bit.
+
+If all 3 pass → tooling is live. Use it for the rest of the session per the new working mode below.
+
+---
+
+## 🟢 New working mode (NEW 2026-05-19-g-3) — read this even if you ignore everything else on this page
+
+**Director's standing default is "yes, proceed with your recommendation."** SKIP Rule 14f forced-pickers when the picker would only be re-confirming the recommended path AND the work fits pre-approved patterns (small / reversible / non-destructive).
+
+**Skip the picker when:**
+- The user has just confirmed a task — don't re-confirm "should I now do it?"
+- A doc-batch is fully drafted + reviewed — commit it
+- User said "go ahead with all" — don't re-ask between items
+- Small + reversible scope-adds (new `.claude/` file; new ROADMAP entry; new memory file)
+- Canonical patterns already executed once this session with prior approval
+
+**Picker STILL fires for:**
+- Rule 9 destructive operations: deploys, force-pushes, `rm -rf`, `prisma migrate reset`, SQL DELETE/DROP/TRUNCATE — non-negotiable
+- Scope decisions where multiple distinct paths exist with no clear "most thorough"
+- Workflow design / Rule 18 interview clusters / substantive new feature scope-adds
+- Anywhere intent is genuinely ambiguous
+
+**The test:** "is this question about clarifying the director's INTENT, OR is it asking permission to proceed on a path the director would default-approve?" If the latter → skip + proceed. Full rule in `HANDOFF_PROTOCOL.md` Rule 14f "Default-to-recommendation exception" section + operational memory `feedback_default_to_recommendation.md`.
+
+---
+
+**For:** the next Claude Code session (P-22 task; details below).
+
+---
+
+## Status of today's session (extended)
+
+**P-23 saved-URL dropdown side-by-side** SHIPPED + DEPLOYED + REAL-CHROME-VERIFIED on vklf.com on all 3 forms (popup paste form + right-click "Add to PLOS — Captured Text" + right-click "Add to PLOS — Image"). Build commit `5cb2419`. Closes (a.49) RECOMMENDED-NEXT. End-of-session doc-batch commit `c8f9c8a`.
+
+**P-27 Captured-videos feature** captured 2026-05-19-g-2 as a new W#2 pre-graduation polish item via post-handoff addendum directive. ADDENDUM doc-batch commit `16fc2e1`. Three Rule 14f forced-pickers: Source = URL + bytes both; Gestures = full symmetry; Graduation timing = pre-graduation. Open design questions for a dedicated future design session before code starts.
+
+**4 new `.claude/` extensions** shipped 2026-05-19-g-3 in commit `480d3ae` — `plos-doc-batch` subagent + `/rule-24-search` slash command + `/scoreboard` slash command + `track-edited-docs.sh` PostToolUse hook. Plus 5 doc updates 2026-05-19-g-3 (HANDOFF_PROTOCOL Rule 14f exception + cross-references; CLAUDE_CODE_STARTER tooling section + Rule 3a; this NEXT_SESSION rewrite; memory `feedback_default_to_recommendation.md`; settings.local.json permissions broadened).
+
+Pre-deploy + post-merge scoreboards both GREEN for the P-23 ship: tsc / ext tsc / `npm run build` **53 routes** / src/lib node:test **536/536** / extension `npm test` **428/428** (was 416; +12 saved-url-option-label cases) / Playwright **79/79** (was 78; +1 new P-23 spec). Fresh zip `plos-extension-2026-05-19-w2-deploy-28.zip` (191,561 bytes; +148 over deploy-27).
+
+**Closes (a.49) RECOMMENDED-NEXT.** 3 of 6 W#2 polish items shipped this week (P-24 + P-25 + P-23); **4 remain** (P-22 + P-18 + P-26 + P-27) before W#2 graduation per director's standing directive. P-27 newly captured today as the 4th. Estimated 9-18 more W#2 polish sessions before graduation.
 
 ---
 

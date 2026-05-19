@@ -1,7 +1,10 @@
 # HANDOFF PROTOCOL
 ## The rules Claude must follow at the start, during, and end of EVERY chat
 
-**Last updated:** May 13, 2026-c (Resume-script design + ship session — **NEW §4 Step 1 row 12 added: ALWAYS — Write `docs/NEXT_SESSION.md` for the next session.** Also NEW §4 Step 1c "No obvious next task" interview sub-section codifying the Rule 14f forced-picker that fires at end-of-session when today's session has no obvious continuation. Also UPDATED §4 Step 4b NEXT-SESSION INSTRUCTIONS template to show both the new EASY PATH (`./resume`) and the ESCAPE HATCH (the original 3-step path) so the director always has both options readable in every handoff. Also UPDATED §5 to add the special-purpose `docs/NEXT_SESSION.md` file (not Group A; written end-of-session; read by `./resume`). Companion change: new executable `resume` shell script at repo root + new `docs/NEXT_SESSION.md` pointer file + Rule 15 cross-reference in `docs/CLAUDE_CODE_STARTER.md` + sentinel-handling section in `docs/CLAUDE_CODE_STARTER.md` (Claude reads `docs/NEXT_SESSION.md` and follows its `## Launch prompt` section verbatim when the session's first message is the sentinel `"Resume per docs/NEXT_SESSION.md"`). Director's framing: the new mechanism collapses the 3-step session-start (cd+checkout, `claude`, paste long first-message) to one command (`./resume`); the 3-step path stays documented as the known-good escape hatch.)
+**Last updated:** 2026-05-19-g-3 (Working-mode update + .claude/ tooling integration — same Claude session as 2026-05-19-g P-23 ship + 2026-05-19-g-2 P-27 capture; post-handoff director directive captured as a new permanent operational principle. **NEW Rule 14f exception section: "Default-to-recommendation" when the picker is asking permission to proceed on a path the director would default-approve.** Director's verbatim 2026-05-19-g-3: *"I spend a lot of time asking you to proceed with the suggested plan of actions that you recommend. How do I reduce the need to give permissions? I only want you to ask me questions to clarify things and not on how to proceed because my default is to go with your suggestions. Even if something is risky, since I am a novice, I rely on your deep analysis and thoroughness to ensure the risk is mitigated with backups and minimized."* The exception establishes the test: BEFORE firing a Rule 14f forced-picker, ask "is this question about clarifying the director's INTENT (e.g., scope, naming, workflow design), OR is it asking permission to proceed on a path the director would default-approve?" If the latter, skip the picker and proceed with the recommendation. Rule 9 destructive operations (deploys, force-pushes, rm -rf, prisma migrate reset, SQL DELETE/DROP/TRUNCATE) STILL require explicit forced-picker — those gates remain non-negotiable. Scope decisions + workflow design + Rule 18 interview clusters STILL fire pickers — those are genuine intent-clarification moments. **Companion tooling integration:** §3 Rule 24 cross-references the new `/rule-24-search [keyword]` slash command at `.claude/commands/rule-24-search.md`; §4 Step 1 cross-references the new `plos-doc-batch` agent at `.claude/agents/plos-doc-batch.md` (spawn via Agent tool with `subagent_type: "plos-doc-batch"` at end-of-session); §3 Rule 23 + Rule 27 verification cross-references the new `/scoreboard` slash command at `.claude/commands/scoreboard.md`. New PostToolUse hook `track-edited-docs.sh` auto-logs every `docs/` edit to `.claude/session-modified-docs.log` (session-scoped, gitignored) so the doc-batch agent has mechanical knowledge of which docs got touched — replacing manual "I think I touched these" memory recall. Operational memory cross-reference: `feedback_default_to_recommendation.md`. **All four extensions committed in `480d3ae` on main + workflow-2 (push before this doc update).** This doc update lives at HANDOFF_PROTOCOL header bump + Rule 14f exception section + brief cross-references in §3/§4. CLAUDE_CODE_STARTER.md + NEXT_SESSION.md updated in parallel to surface the new tooling + working-mode-change to future sessions.)
+**Last updated in session:** session_2026-05-19-g_w2-main-deploy-session-28-p23-saved-url-dropdown-DEPLOYED (Claude Code, on `workflow-2-competition-scraping`; tooling-integration update applied post-handoff)
+
+**Previously updated:** May 13, 2026-c (Resume-script design + ship session — **NEW §4 Step 1 row 12 added: ALWAYS — Write `docs/NEXT_SESSION.md` for the next session.** Also NEW §4 Step 1c "No obvious next task" interview sub-section codifying the Rule 14f forced-picker that fires at end-of-session when today's session has no obvious continuation. Also UPDATED §4 Step 4b NEXT-SESSION INSTRUCTIONS template to show both the new EASY PATH (`./resume`) and the ESCAPE HATCH (the original 3-step path) so the director always has both options readable in every handoff. Also UPDATED §5 to add the special-purpose `docs/NEXT_SESSION.md` file (not Group A; written end-of-session; read by `./resume`). Companion change: new executable `resume` shell script at repo root + new `docs/NEXT_SESSION.md` pointer file + Rule 15 cross-reference in `docs/CLAUDE_CODE_STARTER.md` + sentinel-handling section in `docs/CLAUDE_CODE_STARTER.md` (Claude reads `docs/NEXT_SESSION.md` and follows its `## Launch prompt` section verbatim when the session's first message is the sentinel `"Resume per docs/NEXT_SESSION.md"`). Director's framing: the new mechanism collapses the 3-step session-start (cd+checkout, `claude`, paste long first-message) to one command (`./resume`); the 3-step path stays documented as the known-good escape hatch.)
 **Last updated in session:** session_2026-05-13-c_resume-script-design (Claude Code, on `main`)
 
 **Previously updated:** May 13, 2026 (W#2 Extension build session 6 prep — **§4 Step 1 row 12 hook-enforcement augment: `docs/NEXT_SESSION.md` always-update is now enforced by a `.claude/hooks/check-next-session-doc.sh` PreToolUse hook on Bash.** Drafted at session start after director hit the literal error `cat: docs/NEXT_SESSION.md: No such file or directory` at next-session launch — a prior session forgot to refresh it at close, and an earlier verbal "double-check before closing" instruction had failed because it relied on Claude's memory. Director's framing: *"I had given explicit instructions for your model to double check before closing a session that this file was ready for the next session and yet this redundancy failed. Can you please add a new redundancy to prevent this issue in the future?"* The hook blocks any commit whose message contains "End-of-session" unless `docs/NEXT_SESSION.md` is staged in that commit — harness-enforced, not Claude-memory-dependent. Three layers: (1) the hook (mechanical), (2) the row-12 rule edit (procedural — future sessions see NEXT_SESSION.md in the always-update list), (3) the seed file (this session writes the first canonical NEXT_SESSION.md at end-of-session per §4 Step 4b). Director-approved via Rule 14f forced-picker at session start. On rebase to main: row-12 already existed from the 2026-05-13-c resume-script ship session; this entry preserved as an augment (hook layer) on top of the procedural-rule layer; reconciled in W#2 → main deploy session for session 6 + region-screenshot ship.)
@@ -219,6 +222,42 @@ If any of the four fails, rewrite before sending.
 **Scope exception:** simple yes/no/not-sure questions don't need elaborate per-option framing, but they STILL must include both the escape-hatch option, the free-text invitation, AND the recommendation marker on the most-thorough option. "Yes (recommended) / No / I have a question first / Not sure" is the right shape for a simple binary — never just "yes / no" and never without the recommendation marker.
 
 **Why this rule exists:** Without the escape-hatch-option, a forced-picker UI in Claude Code physically blocks the user from typing questions mid-decision. Without per-option context, the user can't evaluate what they're picking. Without the free-text invitation, a user viewing the message as plain text may still feel locked into a letter answer. Rule 14f addresses all three failure modes.
+
+**Default-to-recommendation exception (NEW 2026-05-19-g-3 — operational principle, not a rule weakening):**
+
+Director's standing default is "yes, proceed with your recommendation." When Claude's recommendation is clear AND the work fits pre-approved patterns (small / reversible / non-destructive) AND the picker would only be re-confirming the recommended path, SKIP the forced-picker and proceed with the recommended option. Forced-pickers that re-confirm the recommendation add friction without adding safety — they waste director time.
+
+**The test BEFORE firing a Rule 14f forced-picker:**
+
+> Is this question about clarifying the director's INTENT (e.g., scope choice, naming, workflow design, design trade-offs with no clear "most thorough"), OR is it asking permission to proceed on a path the director would default-approve?
+
+If the former → fire the picker per Rule 14f shape (per-option context + escape-hatch + free-text invitation + recommendation marker on most-thorough option).
+
+If the latter → SKIP the picker. State the action being taken in one short sentence + proceed.
+
+**When the exception APPLIES (skip the picker; proceed with recommendation):**
+- After the user has just confirmed a task ("yes, ship P-23") — don't re-confirm "should I now ship it?"; ship it.
+- After a doc-batch is fully drafted and the user has reviewed the proposed shape — don't ask "commit now?"; commit it.
+- After the user said "go ahead with all of them" — don't re-ask between items in the sequence.
+- For small + reversible scope-adds (additive `.claude/` file; new ROADMAP entry following an existing pattern; new memory file).
+- For canonical patterns Claude has executed before this session with the user's prior approval (e.g., the standard end-of-session 3-push pattern per `feedback_approval_scope_per_decision_unit.md`).
+
+**When the exception does NOT apply (forced-picker STILL FIRES):**
+- Rule 9 destructive operations: deploys (`git push origin main` affecting the live site), force-pushes, `rm -rf`, `prisma migrate reset`, SQL DELETE/DROP/TRUNCATE — these gates remain non-negotiable per Rule 9.
+- Scope decisions where multiple distinct paths exist and no clear "most thorough" applies (which subset of N items to include; which workflow to work on next; which design approach when trade-offs are genuinely balanced).
+- Workflow design (Rule 18 interview clusters; new feature scope-add with multiple substantive open design questions).
+- Anywhere the director's INTENT is genuinely ambiguous between options with no clear "most thorough/reliable" pick — when the recommendation marker would be uncertain.
+- Rule 23 Change Impact Audit classifications when "Breaking" — still surface to director per Rule 23.
+
+**Why this exception exists:** Director-stated 2026-05-19-g-3 (verbatim): *"I spend a lot of time asking you to proceed with the suggested plan of actions that you recommend. How do I reduce the need to give permissions? I only want you to ask me questions to clarify things and not on how to proceed because my default is to go with your suggestions. Even if something is risky, since I am a novice, I rely on your deep analysis and thoroughness to ensure the risk is mitigated with backups and minimized."* The director trusts Claude's recommendation discipline (most-thorough/reliable per `feedback_recommendation_style.md`) to be safe; redundantly asking "should I proceed with my recommendation?" wastes director time without adding safety. The Rule 14f forced-picker mechanism still exists for its original purpose (per-option context + escape-hatch when director's intent IS what's being asked) — the exception narrows when it fires.
+
+**Operational memory cross-reference:** `feedback_default_to_recommendation.md` (Claude's local memory file at `/home/codespace/.claude/projects/-workspaces-brand-operations-hub/memory/`). Persists across sessions; ensures every future session applies the same picker discipline.
+
+**Cross-references:**
+- `feedback_recommendation_style.md` — the "most thorough/reliable recommendation" principle this exception composes with (the exception is safe BECAUSE recommendations are most-thorough, not fastest)
+- `feedback_approval_scope_per_decision_unit.md` — the prior "approval scope spans the standard pattern, not each command" extension this exception further generalizes
+- Rule 9 (destructive operations) — STILL fires regardless of this exception
+- Rule 23 (Change Impact Audit) — surface classification regardless; only the picker-on-proceed-decision is skipped
 
 ### Rule 14g — Trust the director's setup confirmation (NEW 2026-05-02)
 
@@ -482,9 +521,11 @@ When all consumers have migrated, `v1` can be archived.
 
 **Why this rule exists:** as the platform grows from 1 tool to 14, a change to W#1 might transitively affect 13 downstream tools. Without the audit, a developer (Claude or director) might ship a change that silently breaks downstream consumers — discovered weeks later when a downstream tool exhibits mysterious failures. The audit surfaces the cascade before code is written.
 
-### Rule 24 — Pre-capture search before adding any ROADMAP item or proposing new architectural concern (NEW 2026-04-27)
+### Rule 24 — Pre-capture search before adding any ROADMAP item or proposing new architectural concern (NEW 2026-04-27 — TOOLING-AUTOMATED 2026-05-19-g-3 via `/rule-24-search` slash command)
 
-Whenever Claude proposes capturing a new ROADMAP item — polish, architectural concern, infrastructure TODO, or any other entry — Claude MUST first perform a structured search for prior treatment of the same concern, BEFORE reading back the proposed entry to the director. This rule applies even when Claude believes confidently that the concern is novel; the cost of the search is small (one or two greps + a section-read), and the cost of operating on partial information has been demonstrated to produce ROADMAP entries that misrepresent system history and risk future re-implementation of already-evaluated-and-deleted mechanisms.
+Whenever Claude proposes capturing a new ROADMAP item — polish, architectural concern, infrastructure TODO, or any other entry — Claude MUST first perform a structured search for prior treatment of the same concern, BEFORE reading back the proposed entry to the director.
+
+**TOOLING (NEW 2026-05-19-g-3):** the canonical pre-capture search is now automated as the slash command `/rule-24-search [keyword-or-phrase]` at `.claude/commands/rule-24-search.md`. The command runs the 7 canonical searches (ROADMAP + COMPETITION_SCRAPING_* + PLATFORM_* + DATA_CATALOG + KEYWORD_CLUSTERING_* + CORRECTIONS_LOG + schema.prisma + shared-types + extension source) in parallel and reports the findings per Rule 24's "prior treatment found / not found" surfacing requirement. Use the slash command instead of issuing the 7 greps manually; the result is identical but the command is mechanically consistent + saves ~3-5 min per new ROADMAP item. This rule applies even when Claude believes confidently that the concern is novel; the cost of the search is small (one or two greps + a section-read), and the cost of operating on partial information has been demonstrated to produce ROADMAP entries that misrepresent system history and risk future re-implementation of already-evaluated-and-deleted mechanisms.
 
 **The search must cover (in order):**
 
@@ -568,7 +609,12 @@ The existing Rule 14e end-of-session sweep relied on Claude's memory of what was
 
 **Cross-references:** `CLAUDE_CODE_STARTER.md` Session Management section (Rule 26 cross-reference); operational memory file `feedback_deferred_items_registry.md` (Claude-side standing operational behavior). `CORRECTIONS_LOG.md` 2026-05-04-d entry on the Rule 14e slip that triggered codification of Rule 26.
 
-### Rule 27 — Playwright forced-picker before manual browser walkthroughs (NEW 2026-05-14)
+### Rule 27 — Playwright forced-picker before manual browser walkthroughs (NEW 2026-05-14 — VERIFICATION-AUTOMATED 2026-05-19-g-3 via `/scoreboard` slash command)
+
+**TOOLING (NEW 2026-05-19-g-3):** the canonical pre-deploy + post-merge verification scoreboard (6 checks — root tsc / extension tsc / `npm run build` route count / src/lib `node:test` / extension `npm test` / Playwright) is now automated as the slash command `/scoreboard` at `.claude/commands/scoreboard.md`. The command runs the 6 checks in the right order with the right cd'ing + reports results in a table format (Check / Result / vs. baseline). Use `/scoreboard` instead of issuing the 6 commands manually pre-deploy AND post-merge — the result is mechanically consistent across sessions + saves ~5 min per ship session. Baselines as of 2026-05-19-g: 53 routes / 536 src/lib tests / 428 extension tests / 79 Playwright; tsc + ext tsc clean.
+
+---
+
 
 When a session is about to propose a director manual browser walkthrough with 5+ steps, OR is about to verify code (new feature or bug fix) that lives in a real-browser context, Claude MUST first run a Rule 14f forced-picker that compares:
 
@@ -642,6 +688,14 @@ The `./resume` one-command session-handoff design (introduced 2026-05-13-c) is e
 ---
 
 ## 4. END-OF-CHAT PROTOCOL
+
+### Tooling — `plos-doc-batch` agent + `track-edited-docs.sh` hook (NEW 2026-05-19-g-3)
+
+For the end-of-session doc-batch updates, Claude SHOULD spawn the specialized subagent `plos-doc-batch` defined at `.claude/agents/plos-doc-batch.md` via the Agent tool with `subagent_type: "plos-doc-batch"`. The agent runs in isolated context + has access to Read/Edit/Write/Bash/Grep/Glob limited to docs work. The agent reads the session-modified-docs log (auto-populated by the `track-edited-docs.sh` PostToolUse hook at `.claude/hooks/track-edited-docs.sh` — every `docs/` edit during the session gets logged to `.claude/session-modified-docs.log` with timestamp + tool name + relative path) to mechanically determine which Group A / Group B docs got touched this session — replacing the manual "I think I touched these" recall pattern.
+
+The parent Claude still handles: the deferred-items sweep (Step 1b — driven by TaskList per Rule 26); the commit + push + ping-pong sync per `feedback_approval_scope_per_decision_unit.md`; the Personalized Handoff Message (Step 4 / 4b); the §4 Step 1c forced-picker for next-session-task selection (when no obvious continuation exists). The agent is for the doc-bundle WRITING; the parent keeps responsibility for the protocol gates.
+
+Skip the agent if the doc-batch is trivially small (e.g., a header-amendment-only ADDENDUM with no new entries — like the 2026-05-19-c-2 corrective pattern). The agent's overhead vs. inline work flips for small updates.
 
 ### Step 1 — Run the Document Update Checklist (MANDATORY)
 
