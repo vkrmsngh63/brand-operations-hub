@@ -28,6 +28,7 @@ import {
   pickInitialUrl,
   validateCapturedTextDraft,
 } from '../../../lib/captured-text-validation.ts';
+import { buildSavedUrlOptionLabel } from '../../../lib/saved-url-option-label.ts';
 import { getModuleByPlatform } from '../../../lib/platform-modules/registry.ts';
 import type {
   CompetitorUrl,
@@ -252,10 +253,7 @@ export function CapturedTextPasteForm(props: Props) {
             <option value="">Pick a saved URL…</option>
             {urls.map((row) => (
               <option key={row.id} value={row.id}>
-                {row.productName?.trim() ||
-                  (row.url.length > 60
-                    ? row.url.slice(0, 57) + '…'
-                    : row.url)}
+                {buildSavedUrlOptionLabel(row)}
               </option>
             ))}
           </select>

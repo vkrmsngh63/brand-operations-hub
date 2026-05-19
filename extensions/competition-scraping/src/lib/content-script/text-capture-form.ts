@@ -28,6 +28,7 @@ import {
   listCompetitorUrls,
   listVocabularyEntries,
 } from './api-bridge.ts';
+import { buildSavedUrlOptionLabel } from '../saved-url-option-label.ts';
 import type { Platform } from '../../../../../src/lib/shared-types/competition-scraping.ts';
 import { getPlatformLabel } from '../platforms.ts';
 import { getModuleByPlatform } from '../platform-modules/registry.ts';
@@ -469,11 +470,7 @@ export function openTextCaptureForm(
         for (const row of rows) {
           const opt = document.createElement('option');
           opt.value = row.id;
-          // Label: prefer product name; fall back to truncated URL so the
-          // dropdown stays readable even when the URL is long.
-          opt.textContent =
-            row.productName?.trim() ||
-            (row.url.length > 80 ? row.url.slice(0, 77) + '…' : row.url);
+          opt.textContent = buildSavedUrlOptionLabel(row);
           urlSelect.appendChild(opt);
         }
         // P-15 fix 2026-05-12: canonicalize the page URL through the platform
