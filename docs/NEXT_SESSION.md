@@ -1,30 +1,45 @@
 # Next session
 
-**Written:** 2026-05-20-b (`session_2026-05-20-b_p27-captured-videos-design-interview` — end-of-session handoff after the P-27 Captured-videos feature DESIGN session shipped the binding spec at `docs/CAPTURED_VIDEOS_DESIGN.md` (525 lines after corrections; §A.0–§A.18 frozen + §B empty per Rule 18 shape); 11 forced-picker outcomes logged in §A.0 audit trail; Rule 24 end-of-session catch corrected an asymmetry-claim slip in §A.3 / §A.8 / §A.18 BEFORE the doc-batch commit; ONE NEW INFORMATIONAL CORRECTIONS_LOG §Entry captures the slip + pattern strengthening. Closes (a.53) RECOMMENDED-NEXT = P-27 design session; opens **(a.54) RECOMMENDED-NEXT = P-27 implementation #1 (Build session — schema + bucket + helper) on `workflow-2-competition-scraping`** as the natural-continuation next session per design doc §A.2 implementation arc table).
+**Written:** 2026-05-20-c (`session_2026-05-20-c_p27-build-1-schema-bucket-helper` — end-of-session handoff after P-27 Captured-videos feature BUILD SESSION #1 SHIPPED at code level on `workflow-2-competition-scraping`. Commit `c8fa639` landed the schema migration (`npx prisma db push` for new `CapturedVideo` table + `VideoSourceType` enum + `video-category` added to `VocabularyEntry.vocabularyType` String column comment allowlist — NOT a Prisma enum per Build #1 mid-build refinement) + new Supabase Storage bucket `competition-scraping-videos` (private + 3-MIME allowlist `video/mp4, video/webm, video/quicktime`; bucket-level 100 MB cap REJECTED by Supabase Global File Size Limit → deferred to dashboard step; size enforcement falls to app-layer per design doc §A.11 two-layer client + server pattern) + new helper modules `src/lib/competition-video-storage.ts` + `src/lib/competition-video-storage-helpers.ts` paralleling existing `competition-storage*` siblings + 41 new node:test cases. Closes (a.54) RECOMMENDED-NEXT (partial — Build #1 lands schema + bucket + helper only; subsequent Build sessions add API routes / extension UI / Playwright spec / deploy / verify per design doc §A.2 implementation arc table). Opens **(a.55) RECOMMENDED-NEXT = P-27 implementation #2 (Build session — API routes scaffolding + shared-types extensions for route request/response shapes) on `workflow-2-competition-scraping`** as the natural-continuation next session per design doc §A.2 implementation arc table row #3.
 
-**For:** the next Claude Code session — first P-27 Build session (Session #1 of estimated ~6-9 build sessions per the design doc §A.2 implementation arc table). Schema migration via `npx prisma db push` for new `CapturedVideo` table + new `VideoSourceType` enum + new `video-category` value added to the existing `VocabularyEntry` `type` column (verify at implementation time whether the existing `type` column is an enum or a string column — design doc §A.7 schema spec is the canonical source). New Supabase Storage bucket `competition-scraping-videos` creation via the Supabase dashboard (director offline step BEFORE Claude runs the `db push` — see Pre-session notes below). New `src/lib/competition-video-storage.ts` helper wrapper paralleling existing `src/lib/competition-storage.ts` (Phase-1 `requestVideoUploadUrl` / Phase-3 `finalizeVideoUpload` / `getVideoSignedUrl` / `getVideoThumbnailUrl` / `deleteVideo` / `wipeProjectVideos`). Per Rule 23 Change Impact Audit: Additive (safe) — new optional table + new enum value; no existing data affected; no downstream-consumer breakage since no consumers exist yet. **Schema-change-in-flight flag FLIPS to "Yes" at session start.**
+**For:** the next Claude Code session — second P-27 Build session (Session #2 of estimated ~6-9 build sessions per the design doc §A.2 implementation arc table). API routes scaffolding under `/api/projects/[projectId]/competition-scraping/urls/[urlId]/videos/` + extension/shared-types extensions for the route request/response shapes — `RequestVideoUploadRequest` / `RequestVideoUploadResponse` / `FinalizeVideoUploadRequest` / `FinalizeVideoUploadResponse` / `ListCapturedVideosResponse`. Mirror the existing sibling API routes under `/api/projects/[projectId]/competition-scraping/urls/[urlId]/images/` exactly (request-upload-url + finalize-upload + list + delete + wipe). Per Rule 23 Change Impact Audit: Additive (safe) — new optional routes + new optional shared-type interfaces; no existing data affected; no downstream-consumer breakage risk (no consumers exist yet for the new routes). **Schema-change-in-flight flag stays "No"** — Build #2 is pure code; no new tables / enums / columns.
 
 ---
 
 ## Status of today's session
 
-**P-27 Captured-videos feature DESIGN SESSION shipped — DOC-ONLY (no code, no schema, no deploy).** One-hundred-and-twentieth Claude Code session. Full Workflow Requirements Interview per HANDOFF_PROTOCOL Rule 18 across 5 clusters / 14 questions resolved. NEW Group B design doc `docs/CAPTURED_VIDEOS_DESIGN.md` shipped (525 lines after corrections); §A frozen (sections A.0–A.18 covering interview meta + audit trail of 11 forced-picker outcomes + purpose + placement in W#2 graduation sequence + v1 scope + inputs + triggers + per-platform `<video>` detection + CapturedVideo schema + vocab inline-add UX + bucket + size cap + thumbnail extraction + embed save URL validation + size cap enforcement + thumbnail extraction failure fallback + test coverage approach + platform-truths audit + Living Questions + Cross-Tool Data Flow Map reciprocal output declaration + scaffold fit + deferred-items registry); §B empty append-only per Rule 18 convention.
+**P-27 Captured-videos feature BUILD SESSION #1 SHIPPED at code level on `workflow-2-competition-scraping`.** One-hundred-and-twenty-first Claude Code session. Build commit `c8fa639` landed locally + pushed via end-of-session bundle to `origin/workflow-2-competition-scraping`. The shared production Supabase DB now has the new `CapturedVideo` table + `VideoSourceType` enum live; the new `competition-scraping-videos` bucket is created (private + 3-MIME allowlist); the new `src/lib/competition-video-storage*` helpers are in place. No API routes yet wire up to the helpers; no extension UI surfaces the capture flow; Build #2 begins the API route scaffolding work.
 
-**11 forced-pickers logged this session (full detail in design doc §A.0):** (1) Doc location pick = Option A — new top-level `docs/CAPTURED_VIDEOS_DESIGN.md`. (2) Q3 v1 scope = Option B (Symmetric v1). (3) Q6+Q7 per-platform detection = Option A (platform-agnostic DOM-walker + 10-entry video-embed-hostname allowlist). (4) Q8 schema = Option A (new `CapturedVideo` table + `sourceType` enum discriminator). (5) Q9 vocab UX = Option C (inline "+ Add new category" + 0 seeded entries). (6) Q10a size cap = 100 MB per-file. (7) Q10b thumbnail extraction = Option A (client-side `<canvas>` frame-grab). (8) Q11 embed validation = Option A (URL-pattern regex only). (9) Q12 size cap enforcement = Option A (two-layer client + server). (10) Q13 thumbnail failure fallback = Option A (NULL `thumbnailStoragePath` + ▶️ icon placeholder). (11) Q14 test coverage = Option A (Hybrid per Rule 27).
+**6 new files shipped (5 production + 1 script):**
 
-**Corrections-log informational entry captured for the Rule 24 end-of-session catch on the §A.8 asymmetry-claim** (design doc wrongly claimed text + image forms force admin-page-first vocab creation; per Rule 3 code-wins, inline "+ Add new category" UX already shipped to text + image + URL surfaces per ROADMAP P-13 entry; caught + corrected before commit; demonstrates the safety value of the Rule 24 end-of-session re-check).
+- `prisma/schema.prisma` — added `CapturedVideo` model + `VideoSourceType` enum + `capturedVideos` back-relation on `CompetitorUrl` + `video-category` to `VocabularyEntry.vocabularyType` comment allowlist (additive — schema applied via `npx prisma db push`).
+- `src/lib/shared-types/competition-scraping.ts` — added `VIDEO_*` constants + `ACCEPTED_VIDEO_MIME_TYPES` + `VideoSourceType` + `isAcceptedVideoMimeType` + `isVideoSourceType` + `CapturedVideo` wire interface + `video-category` to `VOCABULARY_TYPES`.
+- `src/lib/competition-video-storage-helpers.ts` — pure helpers (MIME mapping, path composers, size validation incl. NaN+Infinity edge cases, embed platform detection across 6 hosts via 13 URL-pattern regexes).
+- `src/lib/competition-video-storage.ts` — Supabase SDK ops paralleling `competition-storage.ts`.
+- `src/lib/competition-video-storage-helpers.test.ts` — 41 node:test cases (all GREEN).
+- `scripts/create-competition-scraping-videos-bucket.mjs` — idempotent SDK bucket-creation script.
 
-**2 NEW permanent feedback memories saved** per director's 2026-05-20-b standing directives: `feedback_destructive_ops_confirmation.md` (every handoff audits this-session + next-session for Rule 8 / Rule 9 / Rule 29 triggers) + `feedback_remaining_roadmap_summary.md` (every handoff includes a "What's left in the total roadmap" summary). `MEMORY.md` index updated. The `.claude/hooks/backup-memory-dir.sh` PostToolUse hook (shipped 2026-05-20 prior session) auto-mirrored both files into `/workspaces/brand-operations-hub/.codespace-backup/memory/` — first real-world validation of the 4-layer memory-loss-prevention architecture's MECHANICAL layer.
+**3 mid-build refinements captured in `docs/CAPTURED_VIDEOS_DESIGN.md` §B 2026-05-20-c (per Rule 18 append-only):**
 
-**Schema-change-in-flight flag stayed "No"** the entire session. **Per Rule 23 Change Impact Audit:** Additive (safe) — design + docs + 2 new memories only.
+1. Schema shape matched sibling `CapturedImage` where §A.7 draft diverged — `tags` Json not String[], `id` uuid not cuid, `videoCategory` + `composition` nullability mirrors sibling.
+2. `VocabularyEntry.vocabularyType` is a `String` column NOT a Prisma enum as both the design doc and the launch prompt loosely worded — plain string-value addition + comment-list update; no enum migration.
+3. Supabase bucket created without bucket-level `fileSizeLimit=100MB` cap because the project's Global File Size Limit (Storage Settings) rejected the value below 100 MB — bucket-level cap DEFERRED to dashboard offline step; size enforcement falls to app-layer per design doc §A.11 two-layer client + server pattern (which is the documented design — the bucket-level cap was a third defense-in-depth layer that didn't make it).
+
+**ONE DEFERRED item open at end-of-session** — Task #9 "Raise Supabase Global File Size Limit to enable bucket-level 100MB cap on competition-scraping-videos." Destination: ROADMAP P-27 polish-backlog entry sub-item (captured). Director's offline dashboard step — not blocking Build #2; can happen any time.
+
+**ONE NEW INFORMATIONAL CORRECTIONS_LOG §Entry** captures a parallel Bash `cd` shell-state collision during the /scoreboard run (relative `cd extensions/competition-scraping` raced on shared CWD state across 4 parallel Bash calls; one call landed in the extension dir first, second call's relative cd errored, third call's `find src/lib` silently found the EXTENSION's `src/lib` instead of the root's and returned 428 cases instead of expected 577 — coincidentally matched the extension test baseline so looked correct). Caught + corrected before any decision was made on the wrong count; final scoreboard reported the correct 577/577. Lesson: use absolute paths for parallel Bash calls that need specific CWDs; suggested follow-up to update `.claude/commands/scoreboard.md` to use absolute paths throughout.
+
+**Pre-end-of-session scoreboard (all GREEN):** root tsc clean / extension tsc clean / `npm run build` **53 routes** (unchanged) / src/lib node:test **577/577** (+41 from baseline 536) / extension `npm test` **428/428** (unchanged) / Playwright **91/91** (unchanged).
+
+**Schema-change-in-flight flag stayed "Yes"** during the `prisma db push` window + flipped back to "No" at end-of-session AFTER Build #1 commit landed + schema verified-applied + no rollback needed. **Per Rule 23 Change Impact Audit:** Additive (safe).
 
 ---
 
 ## Branch
 
-**`workflow-2-competition-scraping`** — Build sessions stay on the feature branch; ff-merge to main only at /deploy stages (Build #1 does NOT ship to main — only the schema + bucket + helper land on the feature branch; the full P-27 Build arc ships via a future deploy session per design doc §A.2). The `./resume` script (or `./resume-workflow 2`) will switch you to `workflow-2-competition-scraping`. Verify with `git branch --show-current` immediately after `./resume`; should be on `workflow-2-competition-scraping`. If you're on `main`, STOP and surface to director.
+**`workflow-2-competition-scraping`** — Build sessions stay on the feature branch; ff-merge to main only at /deploy stages (Build #2 does NOT ship to main — only the API routes + shared-types extensions land on the feature branch; the full P-27 Build arc ships via a future deploy session per design doc §A.2). The `./resume` script (or `./resume-workflow 2`) will switch you to `workflow-2-competition-scraping`. Verify with `git branch --show-current` immediately after `./resume`; should be on `workflow-2-competition-scraping`. If you're on `main`, STOP and surface to director.
 
-**Expected branch state on entry:** `workflow-2-competition-scraping` exactly even with `origin/workflow-2-competition-scraping`; `main` at SHA `a754aee` (unchanged since 2026-05-20 deploy + doc-batch); workflow-2 ONE COMMIT AHEAD of main (this session's end-of-session doc-batch push). No ping-pong sync was needed at end of this session because main didn't move.
+**Expected branch state on entry:** `workflow-2-competition-scraping` exactly even with `origin/workflow-2-competition-scraping` at the end-of-session doc-batch commit + Build #1 commit `c8fa639`; `main` at SHA `a754aee` (unchanged since 2026-05-20 deploy + doc-batch); workflow-2 TWO COMMITS AHEAD of main (Build #1 commit `c8fa639` + this session's end-of-session doc-batch commit). No ping-pong sync was needed at end of this session because main didn't move.
 
 ---
 
@@ -32,93 +47,94 @@
 
 Read `docs/CLAUDE_CODE_STARTER.md` and follow every rule in it. Today's task:
 
-**W#2 polish P-27 implementation #1 — Build session (schema + bucket + helper) on `workflow-2-competition-scraping`.** Closes **(a.54) RECOMMENDED-NEXT** (partial close — Build #1 lands the schema + bucket + helper only; subsequent Build sessions add API routes / extension UI / Playwright spec / deploy / verify per `docs/CAPTURED_VIDEOS_DESIGN.md` §A.2 implementation arc table).
+**W#2 polish P-27 implementation #2 — Build session (API routes + shared-types extensions for route request/response shapes) on `workflow-2-competition-scraping`.** Closes **(a.55) RECOMMENDED-NEXT** (partial close — Build #2 lands the API routes + shared-types extensions only; subsequent Build sessions add extension UI / Playwright spec / deploy / verify per `docs/CAPTURED_VIDEOS_DESIGN.md` §A.2 implementation arc table).
 
 Verify branch state with `git branch --show-current` before any doc reads — should be `workflow-2-competition-scraping`. If you're still on `main`, STOP and surface to director.
 
 **Per HANDOFF_PROTOCOL Rule 21 + Rule 22 — Pre-build read list:**
 
 - `docs/CLAUDE_CODE_STARTER.md` (mandatory start-of-session).
-- `docs/ROADMAP.md` lines 1-30 (header) + the P-27 polish-backlog entry (line ~157 — annotated 2026-05-20-b with "✅ Design session 1 complete; Next stage = Build #1" + all 11 forced-picker outcomes).
-- `docs/CAPTURED_VIDEOS_DESIGN.md` fully (the Group B doc shipped 2026-05-20-b containing the binding spec for P-27 — §A.7 CapturedVideo schema spec is the canonical source for the `prisma db push` migration; §A.9 bucket + size cap + thumbnail extraction is the canonical source for the bucket configuration; §A.2 implementation arc table is the canonical source for the Build session sequencing).
+- `docs/ROADMAP.md` lines 1-30 (header) + the P-27 polish-backlog entry (annotated 2026-05-20-c with "✅ Build #1 complete 2026-05-20-c" + new DEFERRED sub-item for Supabase Global File Size Limit raise).
+- `docs/CAPTURED_VIDEOS_DESIGN.md` fully (§A.7 CapturedVideo schema spec — now also reflected in the live DB; §A.9 bucket configuration; §A.11 size-cap enforcement two-layer client + server pattern; §A.2 implementation arc table row #3 — the canonical source for Build #2's task shape; §B 2026-05-20-c entry — the 3 mid-build refinements that constrain Build #2's request/response shapes).
 - `docs/COMPETITION_SCRAPING_DESIGN.md` §B 2026-05-20-b entry (the cross-reference pointer to CAPTURED_VIDEOS_DESIGN).
-- `prisma/schema.prisma` `CapturedImage` model (the sibling table to mirror — read its shape to inform the `CapturedVideo` migration).
-- `prisma/schema.prisma` `VocabularyEntry` model (to verify whether the `type` column is an enum or a string — affects how the new `video-category` value is added).
-- `src/lib/competition-storage.ts` (the sibling helper to mirror — read its shape to inform the `competition-video-storage.ts` helper).
-- `docs/STACK_DECISIONS.md` §3 (the existing image-bucket pattern; the video bucket follows the same private + signed-URLs pattern with a larger 100 MB cap).
-- `docs/HANDOFF_PROTOCOL.md` Rule 23 (Change Impact Audit — classify the schema change BEFORE coding) + Rule 8 (Pre-flight audit for destructive operations — `prisma db push` IS a Rule 8 trigger).
-- `docs/CORRECTIONS_LOG.md` 2026-05-20-b §Entry (the INFORMATIONAL entry on the Rule 24 end-of-session catch — informational read for context on the new operational discipline).
+- `src/lib/competition-video-storage.ts` (the Supabase SDK ops helper — Build #2's API routes will call its surfaces).
+- `src/lib/competition-video-storage-helpers.ts` (the pure helpers — Build #2's API route validation will lean on its size + MIME guards).
+- `src/lib/shared-types/competition-scraping.ts` (the existing `CapturedImage` request/response shapes — Build #2's new video request/response interfaces should mirror these exactly).
+- `src/app/api/projects/[projectId]/competition-scraping/urls/[urlId]/images/` route handlers (the sibling API routes — Build #2's video routes mirror these handler shapes exactly).
+- `docs/HANDOFF_PROTOCOL.md` Rule 8 (Pre-flight audit for destructive operations — Build #2 has NO Rule 8 triggers, but verify on each tool call) + Rule 23 (Change Impact Audit — classify Build #2 as Additive (safe) BEFORE coding).
 
-**Task shape (Build session #1):**
+**Task shape (Build session #2):**
 
-1. **Pre-flight audit per Rule 8 + Rule 23.** `npx prisma db push` IS a Rule 8 destructive-operation trigger (touches the live database schema). Classify per Rule 23: ADDITIVE (safe) — new optional table + new enum value; no existing data affected; no rename / drop / type-change. Surface the Rule 8 pre-flight summary to director via AskUserQuestion BEFORE running `db push`:
-   - What changes: new `CapturedVideo` table + new `VideoSourceType` enum + new `video-category` value added to existing VocabularyEntry `type` column.
-   - What stays: all existing tables + columns + data + constraints unchanged.
-   - Reversibility: drop the new table + remove the new enum value = full rollback (no migration to undo).
-   - Risk: ZERO data loss risk (additive only); ZERO existing-consumer breakage risk (no consumers exist yet for the new table).
-   - Director's approval shape: AskUserQuestion picker — Option A "Proceed (Additive, safe per Rule 23)" / Option B "Hold — let me review the schema diff first" / Option C "Cancel — re-pick task".
+1. **Pre-flight audit per Rule 8 + Rule 23.** Build #2 is pure code — no `prisma db push`, no `git push origin main`, no destructive ops. Classify per Rule 23: ADDITIVE (safe) — new optional routes + new optional shared-type interfaces; no existing data affected; no downstream-consumer breakage risk (no consumers exist yet). Surface the Rule 23 audit to director via AskUserQuestion only if a non-additive change is discovered mid-build; otherwise proceed.
 
-2. **Schema migration.** After Rule 8 pre-flight approval, write the `CapturedVideo` model + `VideoSourceType` enum + `video-category` VocabularyEntry value into `prisma/schema.prisma` per design doc §A.7 spec. Run `npx prisma db push` to apply. Verify via `npx prisma studio` (or a small `node:test` round-trip) that the new table exists + accepts a row with the canonical field set.
+2. **Shared-types extensions.** Add new request/response interfaces in `src/lib/shared-types/competition-scraping.ts`:
+   - `RequestVideoUploadRequest` (mirror `RequestImageUploadRequest` shape — `mimeType: string` + `fileSize: number`).
+   - `RequestVideoUploadResponse` (mirror `RequestImageUploadResponse` shape — `uploadUrl: string` + `bucketPath: string` + `expiresInSeconds: number`).
+   - `FinalizeVideoUploadRequest` (mirror `FinalizeImageUploadRequest` shape — `bucketPath: string` + the metadata fields from `CapturedVideo` wire interface: `videoCategory?` + `composition?` + `embeddedText?` + `tags?` + `sourceType` + `fileSize?` + `mimeType?` + `durationSeconds?` + `width?` + `height?` + `thumbnailStoragePath?` + `originalSrcUrl?` + `source: 'extension' | 'manual'`).
+   - `FinalizeVideoUploadResponse` (mirror `FinalizeImageUploadResponse` shape — `capturedVideo: CapturedVideo`).
+   - `ListCapturedVideosResponse` (mirror `ListCapturedImagesResponse` shape — `videos: CapturedVideo[]`).
+   - Add type guards `isRequestVideoUploadRequest` / `isFinalizeVideoUploadRequest` etc. paralleling the existing image type guards.
 
-3. **Bucket verification.** Director's offline step (see Pre-session notes below) creates the `competition-scraping-videos` bucket via the Supabase dashboard BEFORE this session starts. At session start, verify the bucket exists by reading from `process.env.NEXT_PUBLIC_SUPABASE_URL` + a small `supabase.storage.getBucket('competition-scraping-videos')` round-trip in a one-off script (or surface to director via AskUserQuestion if the bucket isn't found).
+3. **API route scaffolding.** Add new route handlers under `/api/projects/[projectId]/competition-scraping/urls/[urlId]/videos/`:
+   - `request-upload-url/route.ts` — POST → validates request via type-guard → uses `requestVideoUploadUrl` helper → returns `RequestVideoUploadResponse`. Mirror the image sibling exactly. Server-side enforcement: size cap (100 MB per design doc §A.10) + MIME allowlist (`isAcceptedVideoMimeType`) per design doc §A.11 layer 2.
+   - `finalize-upload/route.ts` — POST → validates request via type-guard → uses `finalizeVideoUpload` helper → persists `CapturedVideo` row → returns `FinalizeVideoUploadResponse`. Mirror the image sibling exactly.
+   - `route.ts` (list) — GET → uses Prisma `capturedVideo.findMany` filtered by `competitorUrlId` → returns `ListCapturedVideosResponse`. Mirror the image sibling exactly.
+   - `[videoId]/route.ts` — DELETE → uses `deleteVideo` helper → removes the CapturedVideo row + the storage object → returns 204. Mirror the image sibling exactly.
 
-4. **Helper wrapper.** Write `src/lib/competition-video-storage.ts` paralleling `src/lib/competition-storage.ts`. Exports: `requestVideoUploadUrl(projectId, urlId, mimeType, sizeBytes)` (Phase 1 — returns signed upload URL + bucket path) / `finalizeVideoUpload(projectId, urlId, bucketPath, metadata)` (Phase 3 — persists the CapturedVideo row + binds it to the storage object) / `getVideoSignedUrl(bucketPath, expiresInSeconds)` / `getVideoThumbnailUrl(bucketPath, expiresInSeconds)` / `deleteVideo(bucketPath)` / `wipeProjectVideos(projectId)`. Mirror the existing image helper's error-handling + retry + signed-URL TTL conventions.
+4. **Test coverage (Rule 27 Hybrid).** Add node:test cases for the new type guards + any new pure-helper logic added during Build #2. The API route handlers themselves DO NOT get node:test coverage at Build #2 (they need a Supabase mock harness; that arrives at a later Build session per design doc §A.13 test coverage approach). Surface to director via AskUserQuestion if a Rule 27 picker is needed for any non-helper test surface added this session.
 
-5. **Test coverage (Rule 27 Hybrid).** Add node:test cases for the pure-helper portions of `competition-video-storage.ts` (URL-pattern validation; size-cap enforcement; MIME-type allowlist check). No Playwright spec this session — Playwright extension-context coverage arrives at Build session #6 per design doc §A.2.
+5. **Scoreboard:** verify `npx tsc --noEmit` clean + `cd /workspaces/brand-operations-hub/extensions/competition-scraping && npx tsc --noEmit` clean (absolute path per the 2026-05-20-c CORRECTIONS_LOG §Entry — avoid parallel-Bash relative-cd footgun) + `npm run build` clean (expect **57 routes** — was 53; +4 new route handlers from this session: request-upload-url + finalize-upload + list + delete) + src/lib node:test passes with new cases (expect **~580-590/580-590** depending on how many type-guard cases added) + extension `npm test` unchanged (**428/428** — no extension source change this session) + Playwright **91/91** unchanged.
 
-6. **Scoreboard:** verify `npx tsc --noEmit` clean + `cd extensions/competition-scraping && npx tsc --noEmit` clean + `npm run build` clean (likely **53 routes still** — no new route this session unless the helper module is auto-discovered as a route; check) + src/lib node:test passes with new cases (expect **~540/540** ish — depends on cases added) + extension `npm test` unchanged (**428/428** — no extension source change this session) + Playwright **91/91** unchanged.
+6. **Build commit on workflow-2** (no main push this session — Build #2 stays on feature branch). End-of-session doc-batch covers ROADMAP (P-27 polish-backlog annotation extended with "Build #2 complete: API routes + shared types") + CHAT_REGISTRY + DOCUMENT_MANIFEST + CORRECTIONS_LOG (likely zero new entries) + NEXT_SESSION (rewritten for Build #3) + CAPTURED_VIDEOS_DESIGN §B 2026-05-21 entry (capturing any mid-build refinements + the Rule 23 audit outcome).
 
-7. **Build commit on workflow-2** (no main push this session — Build #1 stays on feature branch). End-of-session doc-batch covers ROADMAP (P-27 polish-backlog annotation extended with "Build #1 complete: schema + bucket + helper") + CHAT_REGISTRY + DOCUMENT_MANIFEST + CORRECTIONS_LOG (likely zero new entries) + NEXT_SESSION (rewritten for Build #2) + CAPTURED_VIDEOS_DESIGN §B 2026-05-21 entry (capturing any mid-build directives + the Rule 23 audit outcome).
+**Per `feedback_recommendation_style.md` (most thorough/reliable) + `feedback_default_to_recommendation.md`:** for any mid-build forced-pickers (e.g., naming conventions on the new shared-type interfaces; whether to add a separate `embed-url` route shape for sources where there's no upload step), surface 2-4 plausible options + the recommended option + the rationale; default to the recommendation if director defers.
 
-**Per `feedback_recommendation_style.md` (most thorough/reliable) + `feedback_default_to_recommendation.md`:** for any mid-build forced-pickers (e.g., if the existing `VocabularyEntry.type` column turns out to be a string vs. enum and the design doc didn't specify which), surface 2-4 plausible options + the recommended option + the rationale; default to the recommendation if director defers.
-
-**Schema-change-in-flight flag:** FLIPS to "Yes" at session start (the `prisma db push` IS a schema change in flight). Flips back to "No" at end-of-session AFTER the Build #1 commit lands + the schema is verified-applied + no rollback is needed.
+**Schema-change-in-flight flag:** stays "No" the entire session (Build #2 is pure code — no `prisma db push`, no schema edit). Flips to "Yes" only if a mid-build refinement reveals a schema gap requiring an additive migration (unlikely — Build #1 already landed the binding schema).
 
 ---
 
 ## Pre-session notes (offline steps for director between sessions)
 
-**ONE required offline step — Supabase bucket creation BEFORE next session.**
+**NO required offline steps for Build #2** — Build #2 is pure code (API routes + shared types). No new buckets, no schema changes, no dashboard work needed before the session starts.
 
-Create the new Supabase Storage bucket `competition-scraping-videos` via the Supabase dashboard BEFORE the next Claude session starts. Step-by-step click-by-click:
+**OPTIONAL offline step (NOT blocking Build #2):** raise the Supabase Global File Size Limit to enable the bucket-level 100 MB cap on `competition-scraping-videos`. Step-by-step:
 
 1. Open the Supabase dashboard at https://app.supabase.com → sign in if needed → pick the PLOS project.
-2. **Storage** tab in the left sidebar.
-3. **"New bucket"** button (top-right).
-4. **Name:** `competition-scraping-videos` (exact spelling — hyphens not underscores; matches the design doc §A.9 canonical bucket name).
-5. **Public bucket** toggle = **OFF** (leave private — signed URLs only per design doc §A.9; no public access).
-6. **File size limit:** **100 MB** (104857600 bytes — matches design doc §A.9 / §A.10 per-file size cap pick).
-7. **Allowed MIME types:** `video/mp4, video/webm, video/quicktime` (comma-separated; no spaces inside the type names — matches design doc §A.9).
-8. **Create** button.
+2. **Storage** tab → **Settings** sub-tab.
+3. **Global File Size Limit** → raise to **≥ 100 MB**.
+4. Save.
+5. EITHER re-run `node scripts/create-competition-scraping-videos-bucket.mjs` to update the bucket's `fileSizeLimit` (the script is idempotent), OR edit the bucket directly via the Supabase Storage UI → bucket settings → file size limit → set to 100 MB.
 
-The next Claude session will read this bucket via the new `competition-video-storage.ts` helper code and won't need to create it. If the bucket isn't found at session start, the next Claude session will surface to director via AskUserQuestion (Option A "I'll create it now" / Option B "Skip the bucket step this session and pivot to a different polish item").
+This adds the defense-in-depth bucket-level cap on top of the app-layer two-layer enforcement that's already shipped. Not blocking Build #2 — can happen any time. The DEFERRED Task #9 sub-item under ROADMAP P-27 tracks this for future closure.
 
-**Optional offline reading for director:** `docs/CAPTURED_VIDEOS_DESIGN.md` §A.7 (CapturedVideo schema spec) + §A.9 (bucket configuration) + §A.2 (implementation arc table) — ~5-minute skim before the next session if director wants the full context on what Build #1 will land.
+**Optional offline reading for director:** `docs/CAPTURED_VIDEOS_DESIGN.md` §A.7 (CapturedVideo schema spec — now also reflected in the live DB) + §A.11 (size-cap enforcement two-layer pattern — Build #2's request-upload-url route's server-side enforcement) + §A.2 (implementation arc table) — ~5-minute skim before the next session if director wants the full context on what Build #2 will land.
 
 ---
 
-## 🛡️ Destructive-operation safety check for next session
+## Destructive-operation safety check for next session
 
-**`npx prisma db push` IS a Rule 8 destructive-operation trigger** (touches live DB schema). Per Rule 23 Change Impact Audit, the operation is **ADDITIVE (safe)** — new optional table + new enum value; no existing data affected; no rename / drop / type-change. Schema-change-in-flight flag flips to "Yes" at session start. Rule 8 pre-flight audit WILL fire at session start via AskUserQuestion BEFORE the `db push` runs.
+**NO Rule 8 (destructive operation) triggers planned** this session — Build #2 is pure code; no `prisma db push`, no `git push origin main`, no destructive ops.
 
-**NO Rule 29 (container-level destructive op) triggers planned** this session. NO Codespaces rebuild planned. Claude's memory directory + `.codespace-backup/memory/` mirror both remain intact (the 2 NEW memory files saved 2026-05-20-b are in both places). Critical files safe.
+**NO Rule 9 (main deploy) triggers planned** this session — Build #2 stays on workflow-2 feature branch; no main push; no Vercel redeploy; no ping-pong sync. The Build arc's first deploy lands at a future Build session per design doc §A.2.
 
-**NO Rule 9 (main deploy) trigger planned** this session — Build #1 stays on workflow-2 feature branch; no main push; no Vercel redeploy; no ping-pong sync. The Build arc's first deploy lands at a future Build session per design doc §A.2.
+**NO Rule 29 (container-level destructive op) triggers planned** this session. NO Codespaces rebuild planned. Claude's memory directory + `.codespace-backup/memory/` mirror both remain intact. Critical files safe.
 
 ---
 
 ## Why this pointer was written this way (debug aid)
 
-Today's session ran the full Workflow Requirements Interview per HANDOFF_PROTOCOL Rule 18 for P-27 Captured-videos feature — design-only, no code, no schema, no deploy. The §4 Step 1c forced-picker was NOT fired as a separate decision because the design doc §A.2 implementation arc table itself encodes the next-session pick: Build #1 (schema + bucket + helper) follows the design session directly. This is the canonical pattern for design-then-build sessions on new features per Rule 18.
+Today's session ran P-27 Build #1 (schema + bucket + helper) per the design doc §A.2 implementation arc table row #2. The §4 Step 1c forced-picker was NOT fired as a separate decision because the design doc §A.2 implementation arc table itself encodes the next-session pick: Build #2 (API routes + shared-types extensions) follows Build #1 directly per row #3. This is the canonical pattern for sequential Build sessions in a multi-session implementation arc per Rule 18.
 
-Build #1's launch prompt is shaped around (a) running the Rule 8 pre-flight audit BEFORE the `prisma db push`, (b) writing the schema migration per design doc §A.7 spec, (c) verifying the new Supabase bucket exists (director's offline step), and (d) writing the helper wrapper. No code beyond the helper + the schema landing on workflow-2 — API routes + extension UI + Playwright spec arrive at Build sessions #2 through #6.
+Build #2's launch prompt is shaped around (a) mirroring the existing sibling image API routes exactly (request-upload-url + finalize-upload + list + delete), (b) adding the new shared-type interfaces in `src/lib/shared-types/competition-scraping.ts`, and (c) leaning on the `competition-video-storage*` helpers shipped in Build #1 for the route handler implementations. No extension UI yet; no Playwright spec yet — those arrive at Build sessions #3-#6 per design doc §A.2.
 
-The 2026-05-20-b director-confirmed picks (11 forced-picker outcomes in design doc §A.0) are binding inputs to Build #1; do NOT re-litigate. The design doc §A.7 schema spec is the canonical source for the migration; Build #1 should not extend or modify the schema spec beyond what §A.7 already documents.
+The 2026-05-20-b director-confirmed picks (11 forced-picker outcomes in design doc §A.0) + the 2026-05-20-c Build #1 mid-build refinements (in design doc §B 2026-05-20-c) are binding inputs to Build #2; do NOT re-litigate. The design doc §A.7 schema spec + Build #1's actual implementation reality (mirroring `CapturedImage` exactly for `tags` / `id` / nullability) are both binding inputs; Build #2 should not extend or modify the schema or the helpers beyond what's already landed.
 
-**Alternate next-session candidates if director shifts priorities at session start (after the P-27 design session lands + before Build #1):**
+**Alternate next-session candidates if director shifts priorities at session start (after Build #1 lands + before Build #2):**
 
-- **🚨 P-42 backup-memory-dir.sh hook investigation + fix (HIGH severity — STRONGLY RECOMMENDED before Build #1).** Captured 2026-05-20-b as a HIGH-severity gap in Layer 1 (Mechanical) of the P-41 4-layer memory-loss-prevention architecture. The PostToolUse hook didn't auto-fire for this session's 3 memory writes; backup mirror went stale; manually mirrored at end-of-session. Until investigated + fixed, every future session that writes memory files (e.g., new feedback memories captured mid-session) risks creating stale-mirror gaps that defeat the architecture's safety guarantee. Estimated ~1 session; LOW LOC; HIGH operational importance because it protects the substrate ALL future Claude sessions depend on. **Recommended pre-task for next session:** spend the first 20-30 min on P-42 diagnosis (add debug log to the hook + trigger a test memory write + inspect) — if root cause is quick to fix (mis-configured matcher / env var / etc.), ship the fix + then pivot to P-27 Build #1; if diagnosis reveals deeper issue, ship a defense-in-depth mirror-staleness canary as the SessionStart hook + capture full investigation as its own session.
-- **P-26 below-fold full-page-scroll capture** (LOW-severity deferred large lift — currently the only remaining pre-graduation polish item alongside P-27's full Build arc; current workaround works; ~600-1000 LOC code-only session, no design needed). Recommended *only* if director wants to wrap the smaller-scope polish item BEFORE the design-heavy P-27 Build arc. Estimated 1-2 sessions.
+- **P-42 backup-memory-dir.sh hook investigation + fix (HIGH severity — STILL RECOMMENDED before Build #2 if not already shipped).** Captured 2026-05-20-b as a HIGH-severity gap in Layer 1 (Mechanical) of the P-41 4-layer memory-loss-prevention architecture. The PostToolUse hook didn't auto-fire for the 2026-05-20-b session's 3 memory writes; backup mirror went stale; manually mirrored at end-of-session. Until investigated + fixed, every future session that writes memory files risks creating stale-mirror gaps that defeat the architecture's safety guarantee. Estimated ~1 session; LOW LOC; HIGH operational importance.
+- **Update `.claude/commands/scoreboard.md` to use absolute paths throughout (NEW polish — captured this session in CORRECTIONS_LOG §Entry 2026-05-20-c).** Sub-1-hour polish; removes the relative-cd footgun from the canonical /scoreboard skill template so future sessions don't repeat the parallel-Bash-cd shell-state collision slip.
+- **Raise Supabase Global File Size Limit (DEFERRED Task #9 from this session).** Director's offline dashboard step — see Pre-session notes above. Not a Claude session task; can happen any time.
+- **P-26 below-fold full-page-scroll capture** (LOW-severity deferred large lift — currently the only remaining non-P-27 pre-graduation polish item; current workaround works; ~600-1000 LOC code-only session, no design needed). Recommended *only* if director wants to wrap the smaller-scope polish item BEFORE the rest of P-27's Build arc. Estimated 1-2 sessions.
 - **Investigate the wxt-zip parent-process hang behavior session-over-session.** Multiple recent sessions have observed the hang (2026-05-19-f + 2026-05-19-g + 2026-05-21) interspersed with clean runs (2026-05-20). Worth a dedicated investigation session if it keeps recurring across future deploys.
 - **Manual-add modal originalSrcUrl tack-on** (DEFERRED from 2026-05-19-e — trivial 1-line; could fold into any P-NN session or be its own sub-1-hour session).
 
