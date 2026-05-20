@@ -4,7 +4,9 @@
 **Workflow:** W#2 Competition Scraping & Deep Analysis.
 **Branch:** `workflow-2-competition-scraping`.
 **Created:** 2026-05-07 in `session_2026-05-07_w2-plos-side-viewer-detail-page-slice` (Claude Code).
-**Last updated:** 2026-05-19-g (**W#2 → main deploy session #28 — P-23 saved-URL dropdown side-by-side SHIPPED + DEPLOYED + REAL-CHROME-VERIFIED on vklf.com (all 3 forms).** One-hundred-and-sixteenth Claude Code session — `session_2026-05-19-g_w2-main-deploy-session-28-p23-saved-url-dropdown-DEPLOYED`. Closes (a.49) RECOMMENDED-NEXT. **NO schema change** — pure UI tweak. Build commit `5cb2419` (6 files +461/-12); ff-merged clean onto main (`c1f1cd7..5cb2419`); fresh zip `plos-extension-2026-05-19-w2-deploy-28.zip` (191,561 bytes — +148 over deploy-27). Pre-deploy + post-merge scoreboards all GREEN: tsc / ext tsc / `npm run build` 53 routes / src/lib node:test 536/536 (unchanged) / extension `npm test` 428/428 (was 416; +12 saved-url-option-label pure-helper cases) / Playwright 79/79 (was 78; +1 new P-23 extension-context spec). **Drift caught at session-start (Rule 3 — code wins):** launch prompt named `url-add-form.ts` as second fix site but it has no saved-URL `<select>`; actual sites with the collapse pattern were three (`text-capture-form.ts` + `image-capture-form.ts` + `CapturedTextPasteForm.tsx`). Director picked all-3-sites scope via Rule 14f AskUserQuestion before coding. Director real-Chrome verification PASS on all 3 forms first try. **§4 Step 1c forced-picker fired** — director picked (a.50) RECOMMENDED-NEXT = W#2 polish P-22 Playwright cross-platform slices 2-4 on `workflow-2-competition-scraping` (defensive coverage extension to ebay + etsy + walmart). **P-23 dropdown polish backlog entry ⏳ OPEN → ✅ SHIPPED-AT-DEPLOY-LEVEL 2026-05-19-g** + **new "## Deploy session #28 — P-23 saved-URL dropdown" section appended at end** before the EOF marker.)
+**Last updated:** 2026-05-20 (**W#2 → main deploy session #29 — P-22 Playwright cross-platform slices 2-4 SHIPPED + DEPLOYED on vklf.com.** One-hundred-and-seventeenth Claude Code session — `session_2026-05-20_w2-main-deploy-session-29-p22-cross-platform-slices-DEPLOYED`. Closes (a.50) RECOMMENDED-NEXT. **NO schema change** — pure regression coverage extension; schema-change-in-flight stayed "No" entire session. Build commit `f4e90ec` (3 test-files-only +512/-368); ff-merged clean onto main (`8cdcbe5..f4e90ec`); fresh zip `plos-extension-2026-05-20-w2-deploy-29.zip` (191,561 bytes — byte-identical to deploy-28's zip, confirming the predicted byte-identical-bundle outcome when extension source is unchanged). Pre-deploy + post-merge scoreboards both GREEN: tsc / ext tsc / `npm run build` 53 routes / src/lib node:test 536/536 (unchanged) / extension `npm test` 428/428 (unchanged — no extension source change) / Playwright 91/91 (was 79; +12 = P-23 +3 + P-24 +3 + P-25 +6). **Drift caught at session-start (Rule 3 — code wins):** the spec authors' own comments in P-24's spec lines 5-7 + P-25's spec lines 4-7 argued the content-script logic is platform-independent and per-platform recognition is already exercised by the existing 4-platform `image-capture.spec.ts` + `highlight-flashing.spec.ts` specs. Director picked Option A (defensive full extension — all 3 specs × all 4 platforms) via Rule 14f scope picker BEFORE coding. **Director real-Chrome verification SKIPPED per Rule 27 scope-exception** — pure regression coverage extension; no user-visible behavior change; Playwright suite IS the verification. **§4 Step 1c forced-picker fired** — director picked (a.51) RECOMMENDED-NEXT = W#2 polish P-18 devcontainer Chromium libs on `workflow-2-competition-scraping` (sub-1-hour session; postCreateCommand for Playwright system libs). **P-22 polish backlog entry ✅ SHIPPED-AT-DEPLOY-LEVEL 2026-05-20** + **new "## Deploy session #29 — P-22 cross-platform slices 2-4" section appended at end** before the EOF marker.)
+
+**Previously updated:** 2026-05-19-g (**W#2 → main deploy session #28 — P-23 saved-URL dropdown side-by-side SHIPPED + DEPLOYED + REAL-CHROME-VERIFIED on vklf.com (all 3 forms).** One-hundred-and-sixteenth Claude Code session — `session_2026-05-19-g_w2-main-deploy-session-28-p23-saved-url-dropdown-DEPLOYED`. Closes (a.49) RECOMMENDED-NEXT. **NO schema change** — pure UI tweak. Build commit `5cb2419` (6 files +461/-12); ff-merged clean onto main (`c1f1cd7..5cb2419`); fresh zip `plos-extension-2026-05-19-w2-deploy-28.zip` (191,561 bytes — +148 over deploy-27). Pre-deploy + post-merge scoreboards all GREEN: tsc / ext tsc / `npm run build` 53 routes / src/lib node:test 536/536 (unchanged) / extension `npm test` 428/428 (was 416; +12 saved-url-option-label pure-helper cases) / Playwright 79/79 (was 78; +1 new P-23 extension-context spec). **Drift caught at session-start (Rule 3 — code wins):** launch prompt named `url-add-form.ts` as second fix site but it has no saved-URL `<select>`; actual sites with the collapse pattern were three (`text-capture-form.ts` + `image-capture-form.ts` + `CapturedTextPasteForm.tsx`). Director picked all-3-sites scope via Rule 14f AskUserQuestion before coding. Director real-Chrome verification PASS on all 3 forms first try. **§4 Step 1c forced-picker fired** — director picked (a.50) RECOMMENDED-NEXT = W#2 polish P-22 Playwright cross-platform slices 2-4 on `workflow-2-competition-scraping` (defensive coverage extension to ebay + etsy + walmart). **P-23 dropdown polish backlog entry ⏳ OPEN → ✅ SHIPPED-AT-DEPLOY-LEVEL 2026-05-19-g** + **new "## Deploy session #28 — P-23 saved-URL dropdown" section appended at end** before the EOF marker.)
 
 **Previously updated:** 2026-05-19-e (**W#2 → main deploy session #26 — P-24 saved-image indicator on the page SHIPPED + DEPLOYED + REAL-CHROME-VERIFIED on vklf.com.** One-hundred-and-fourteenth Claude Code session — `session_2026-05-19-e_w2-main-deploy-session-26-p24-saved-image-indicator-DEPLOYED` (dual-branch — pre-deploy scoreboard on `workflow-2-competition-scraping`, ff-merge + deploy phase on `main`, ping-pong sync after main push). Closes (a.47) RECOMMENDED-NEXT. **Schema-change-in-flight session — flag flipped Yes during build then back to No after `npx prisma db push` succeeded in 1.20s** (additive only — new nullable `originalSrcUrl String?` column on `CapturedImage`; pre-existing rows backfill to NULL with no indicator until re-captured). **Load-bearing finding at session start (Rule 3 — code wins):** launch prompt + ROADMAP P-24 entry both stated *"CapturedImage table already has both `src_url` + `original_src_url`"* — code review confirmed the field DID NOT EXIST in schema OR TypeScript wire shape OR finalize API OR save path. Drift surfaced via AskUserQuestion forced-picker BEFORE any code; director picked Option 1 (add column + persist forward). Build commit `6e7ffa5` on workflow-2 (15 files +1067/-3); ff-merged clean onto main (`06f9ac3..6e7ffa5`); pushed origin/main → Vercel auto-redeploy → ping-pong sync (both branches at `6e7ffa5`). Fresh zip `plos-extension-2026-05-19-w2-deploy-26.zip` (190,897 bytes — +2,130 over deploy-25). Pre-deploy + post-merge scoreboards all GREEN: tsc / ext tsc / `npm run build` 53 routes / src/lib node:test **531/531** (was 527; +4 originalSrcUrl persistence cases) / extension `npm test` **368/368** (was 358; +10 already-saved-image-icon cases) / Playwright **76/76** (was 75; +1 new P-24 extension-context spec slice). Director real-Chrome verification PASS first try — sideloaded deploy-26 zip + saved fresh image + reloaded + green ✓ overlay appeared. **§4 Step 1c forced-picker fired** — director picked **(a.48) RECOMMENDED-NEXT = W#2 polish P-25 captured-text haze indicator on `workflow-2-competition-scraping`** — symmetric pair to today's P-24. **One DEFERRED item:** thread `originalSrcUrl` through manual-add `CapturedImageAddModal.tsx` URL-paste path (out-of-scope for P-24; captured in NEXT_SESSION.md alternate candidates). **P-24 ⏳ OPEN → ✅ SHIPPED + DEPLOYED + VERIFIED 2026-05-19-e** + **new "## Deploy session #26 — P-24 saved-image indicator" section appended at end** before the EOF marker.)
 
@@ -3578,6 +3580,67 @@ The wxt build hang behavior recurred (matching the 2026-05-19-f informational ob
 - `p23-saved-url-dropdown-label.spec.ts` (the new Playwright spec)
 - deploy session #28 commit `5cb2419`
 - fresh zip `plos-extension-2026-05-19-w2-deploy-28.zip`
+
+---
+
+## Deploy session #29 — P-22 Playwright cross-platform slices 2-4 DEPLOYED (NEW 2026-05-20 — closes (a.50) RECOMMENDED-NEXT)
+
+### Headline outcome
+P-22 (Playwright cross-platform regression coverage extension — slice 2) SHIPPED + DEPLOYED. The three existing single-platform amazon happy-path specs (P-23 + P-24 + P-25, all added 2026-05-19) now exercise all 4 platforms (amazon + ebay + etsy + walmart). Build commit `f4e90ec` on `workflow-2-competition-scraping` (3 test files +512/-368 — test-code-only; no source change; no schema change); ff-merged clean onto `main` (`8cdcbe5..f4e90ec`). Fresh zip `plos-extension-2026-05-20-w2-deploy-29.zip` at repo root (191,561 bytes — **byte-identical to deploy-28's zip**, confirming the launch prompt's prediction that with no source change the bundle would be byte-identical; in this case actually byte-identical full-stop).
+
+### Drift caught at session-start (Rule 3 — code wins)
+Launch prompt + ROADMAP P-22 entry framed slices 2-4 as defensive cross-platform regression coverage. Session-start code-read surfaced an INFORMATIONAL counter-argument from the spec authors themselves:
+- `tests/playwright/extension/p24-saved-image-indicator.spec.ts:5-7` — comment block argues the content-script logic for the saved-image indicator is platform-independent and per-platform DOM recognition is already exercised by the existing 4-platform `image-capture.spec.ts`.
+- `tests/playwright/extension/p25-saved-text-haze.spec.ts:4-7` — same argument; per-platform recognition exercised by `highlight-flashing.spec.ts`.
+
+Surfaced to director via Rule 14f scope picker BEFORE any code. Director picked **Option A (defensive full extension — all 3 specs × all 4 platforms)** per the "all polish items before W#2 graduation" standing directive + cheap insurance against future per-platform divergence. The defensive case stands even if today's spec contents would behave identically across platforms — the extended coverage protects against future per-platform DOM drift the existing 4-platform specs would NOT catch (since those are scoped to different gestures).
+
+### Fix shape (refined per the Rule 14f forced-picker outcome)
+Each of the 3 specs replaced its single-platform amazon `test()` body with a `PLATFORMS` array (4 entries: amazon + ebay + etsy + walmart with per-platform image CDN host, fixture URL, and hostname) + a `for (const pl of PLATFORMS)` loop wrapping each test, matching the canonical pattern used by:
+- `tests/playwright/extension/image-capture.spec.ts:124` (4-platform via `pl.platform` loop)
+- `tests/playwright/extension/highlight-flashing.spec.ts:97` (4-platform via PLATFORMS array)
+- `tests/playwright/extension/region-screenshot.spec.ts` (4-platform)
+
+The actual per-platform variation exercised by the extension:
+- P-24's `SAVED_IMG_SRC` uses the platform's image CDN host: `m.media-amazon.com` (amazon) vs `i.ebayimg.com` (ebay) vs `i.etsystatic.com` (etsy) vs `i5.walmartimages.com` (walmart).
+- Page-route glob intercepts the platform's host.
+- `selectedPlatform` chrome.storage seed propagates through the orchestrator attach path's hostname-vs-selectedPlatform cross-check.
+
+### Implementation summary (3 modified test files +512/-368)
+- `tests/playwright/extension/p23-saved-url-dropdown-label.spec.ts` (+143/-100; 250 → 393 LOC) — extended single-platform amazon spec to all 4 platforms.
+- `tests/playwright/extension/p24-saved-image-indicator.spec.ts` (+148/-100; 222 → 370 LOC) — same extension, with per-platform `SAVED_IMG_SRC` for the image CDN host.
+- `tests/playwright/extension/p25-saved-text-haze.spec.ts` (+117/-50; 353 → ~470 LOC) — same extension; P-25 has 2 tests (attach + tear-down), both extended.
+
+No source code change. No schema change. Per Rule 23 Change Impact Audit: **Additive (safe)** — test-only change.
+
+### Pre-deploy + post-merge verification scoreboard — all GREEN
+| Check | Result | vs. baseline |
+|---|---|---|
+| `npx tsc --noEmit` (root) | clean | unchanged |
+| `npx tsc --noEmit` (extension) | clean | unchanged |
+| `npm run build` (Next.js) | 53 routes, compiled successfully | unchanged (no new route) |
+| `src/lib` node:test | **536/536** | unchanged (no server-side change) |
+| extension `npm test` | **428/428** | unchanged (no extension source change) |
+| Playwright | **91/91** | **+12** (was 79; P-23 +3 + P-24 +3 + P-25 +6 — note P-25 has 2 tests × 4 platforms = 8, was 2; launch prompt expected ~+9 but actual +12 because P-25 has 2 tests, attach + tear-down, both extended) |
+
+### Director real-Chrome verification — SKIPPED per Rule 27 scope-exception
+Pure regression coverage extension; no user-visible behavior change. The Playwright suite IS the verification, and all 91 specs PASS on BOTH pre-deploy + post-merge scoreboards. Fresh deploy-29 zip exists at repo root for archival but no director walkthrough needed.
+
+### Process observations captured (informational; NOT §Entry-tier slips)
+1. **wxt build/zip hang did NOT recur this session** — counter-evidence to the 2026-05-19-f + 2026-05-19-g recurring-hang observations. Background `npm run zip` exited cleanly at the ~5-second mark with the dist zip on disk at 191,561 bytes (byte-identical to deploy-28's). Informational evidence the hang may not be deterministic (possibly transient process-scheduling or filesystem-write-flush interaction). Worth tracking session-over-session to see if a pattern emerges (e.g., correlation with extension source size, concurrent build attempts, codespace memory pressure). No action required; the workaround (pkill if hang >30s + use the dist anyway since it's correct on disk) remains valid.
+2. **Spec-author-comment drift catch** (Rule 3 — code wins) — informational, not a slip. The spec authors' own in-file comments argued the cross-platform extension was unnecessary; surfaced via Rule 14f scope picker; director's "ship the defensive extension anyway" pick stands on the "all polish items before W#2 graduation" standing directive. Pattern: every recent P-NN ship session has caught one Rule 3 drift — the discipline is working.
+
+### Cross-references
+- P-22 ROADMAP polish backlog entry (flipped ✅ SHIPPED-AT-DEPLOY-LEVEL 2026-05-20 as part of this doc batch — covers slice 2 of the original P-22 capture; slices 3-4 remain OPEN as future P-22 sessions if director ever prioritizes)
+- CHAT_REGISTRY 2026-05-20 top entry
+- CORRECTIONS_LOG 2026-05-20 header bump (one INFORMATIONAL entry per the wxt-hang-did-NOT-recur observation; zero process slips this session)
+- `tests/playwright/extension/p23-saved-url-dropdown-label.spec.ts` (the extended spec — first of 3)
+- `tests/playwright/extension/p24-saved-image-indicator.spec.ts` (the extended spec — second of 3)
+- `tests/playwright/extension/p25-saved-text-haze.spec.ts` (the extended spec — third of 3)
+- `tests/playwright/extension/image-capture.spec.ts` (canonical 4-platform reference pattern — NOT modified this session)
+- `tests/playwright/extension/highlight-flashing.spec.ts` (canonical 4-platform reference pattern — NOT modified this session)
+- deploy session #29 commit `f4e90ec`
+- fresh zip `plos-extension-2026-05-20-w2-deploy-29.zip`
 
 ---
 

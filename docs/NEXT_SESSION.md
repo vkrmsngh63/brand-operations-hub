@@ -1,174 +1,118 @@
 # Next session
 
-**Written:** 2026-05-19-g-3 (`session_2026-05-19-g_w2-main-deploy-session-28-p23-saved-url-dropdown-DEPLOYED` — extended post-handoff to capture (a) the P-27 video-feature scope-add via the 2026-05-19-g-2 addendum, (b) 4 new `.claude/` extensions for the workflow + the working-mode-change to default-to-recommendation per HANDOFF_PROTOCOL Rule 14f exception).
+**Written:** 2026-05-20 (`session_2026-05-20_w2-main-deploy-session-29-p22-cross-platform-slices-DEPLOYED` — end-of-session handoff after P-22 cross-platform regression coverage shipped and deployed).
+
+**For:** the next Claude Code session (P-18 task; details below).
 
 ---
 
-## 🟢 First action when next session starts — verify the new `.claude/` tooling works (NEW 2026-05-19-g-3, EXTENDED 2026-05-19-g-4 with 3 more orchestrator slash commands)
+## Status of today's session
 
-This session shipped 7 new PLOS extensions in `.claude/` total. Before doing P-22 work, verify they wired up correctly. Each is small + reversible — if any doesn't show up, the file format needs adjustment + we iterate.
+**P-22 Playwright cross-platform slices 2-4** SHIPPED + DEPLOYED on vklf.com. Build commit `f4e90ec`. Closes (a.50) RECOMMENDED-NEXT.
 
-**The 7 extensions** (commits `480d3ae` + `c750ed4` + `<this commit>`):
-- 4 base extensions: `plos-doc-batch` subagent + `/rule-24-search` + `/scoreboard` slash commands + `track-edited-docs.sh` PostToolUse hook
-- 3 orchestrator slash commands (NEW): `/ship-polish-item P-NN` (kicks off a polish ship from scratch) + `/deploy` (wraps the Rule 9 gate + ff-merge + push pattern) + `/end-of-session` (orchestrates the doc-batch + commit + push + handoff)
+Pre-deploy + post-merge scoreboards both GREEN: tsc / ext tsc / `npm run build` **53 routes** / src/lib node:test **536/536** (unchanged) / extension `npm test` **428/428** (unchanged — no extension source change) / Playwright **91/91** (was 79; **+12 new per-platform specs** = P-23 +3 + P-24 +3 + P-25 +6). Fresh zip `plos-extension-2026-05-20-w2-deploy-29.zip` (191,561 bytes; **byte-identical to deploy-28's zip** — confirms the predicted byte-identical-bundle outcome when extension source is unchanged). Director real-Chrome verification SKIPPED per Rule 27 scope-exception (pure regression coverage extension; no user-visible behavior change; Playwright suite IS the verification).
 
-**Step 1 — Type `/agents`** to open the interactive Agents panel. Look for **`plos-doc-batch`** in the Library tab. If present → custom agent file format is correct. If absent → flag to director; agent file at `.claude/agents/plos-doc-batch.md` may need YAML frontmatter adjustment.
-
-**Step 2 — Type `/` (just the slash key)** to open slash command autocomplete. Look for ALL FIVE: **`/rule-24-search`** + **`/scoreboard`** + **`/ship-polish-item`** + **`/deploy`** + **`/end-of-session`** in the list. If all 5 present → command file format correct. If any are absent → flag; command files at `.claude/commands/<name>.md` may need YAML frontmatter adjustment.
-
-**Step 3 — Test the PostToolUse hook.** Make a tiny edit to any doc (e.g., add a trailing space to `docs/ROADMAP.md` line 1 then revert — OR genuinely edit something), then run `cat .claude/session-modified-docs.log` in Bash. Expected output: one line with timestamp + `Edit` + `docs/ROADMAP.md` relative path. If empty → hook didn't fire; check `.claude/settings.json` PostToolUse wiring + script executable bit.
-
-If all 3 pass → tooling is live. Use it for the rest of the session per the new working mode below.
-
----
-
-## 🟢 New working mode (NEW 2026-05-19-g-3) — read this even if you ignore everything else on this page
-
-**Director's standing default is "yes, proceed with your recommendation."** SKIP Rule 14f forced-pickers when the picker would only be re-confirming the recommended path AND the work fits pre-approved patterns (small / reversible / non-destructive).
-
-**Skip the picker when:**
-- The user has just confirmed a task — don't re-confirm "should I now do it?"
-- A doc-batch is fully drafted + reviewed — commit it
-- User said "go ahead with all" — don't re-ask between items
-- Small + reversible scope-adds (new `.claude/` file; new ROADMAP entry; new memory file)
-- Canonical patterns already executed once this session with prior approval
-
-**Picker STILL fires for:**
-- Rule 9 destructive operations: deploys, force-pushes, `rm -rf`, `prisma migrate reset`, SQL DELETE/DROP/TRUNCATE — non-negotiable
-- Scope decisions where multiple distinct paths exist with no clear "most thorough"
-- Workflow design / Rule 18 interview clusters / substantive new feature scope-adds
-- Anywhere intent is genuinely ambiguous
-
-**The test:** "is this question about clarifying the director's INTENT, OR is it asking permission to proceed on a path the director would default-approve?" If the latter → skip + proceed. Full rule in `HANDOFF_PROTOCOL.md` Rule 14f "Default-to-recommendation exception" section + operational memory `feedback_default_to_recommendation.md`.
-
----
-
-**For:** the next Claude Code session (P-22 task; details below).
-
----
-
-## Status of today's session (extended)
-
-**P-23 saved-URL dropdown side-by-side** SHIPPED + DEPLOYED + REAL-CHROME-VERIFIED on vklf.com on all 3 forms (popup paste form + right-click "Add to PLOS — Captured Text" + right-click "Add to PLOS — Image"). Build commit `5cb2419`. Closes (a.49) RECOMMENDED-NEXT. End-of-session doc-batch commit `c8f9c8a`.
-
-**P-27 Captured-videos feature** captured 2026-05-19-g-2 as a new W#2 pre-graduation polish item via post-handoff addendum directive. ADDENDUM doc-batch commit `16fc2e1`. Three Rule 14f forced-pickers: Source = URL + bytes both; Gestures = full symmetry; Graduation timing = pre-graduation. Open design questions for a dedicated future design session before code starts.
-
-**4 new `.claude/` extensions** shipped 2026-05-19-g-3 in commit `480d3ae` — `plos-doc-batch` subagent + `/rule-24-search` slash command + `/scoreboard` slash command + `track-edited-docs.sh` PostToolUse hook. Plus 5 doc updates 2026-05-19-g-3 (HANDOFF_PROTOCOL Rule 14f exception + cross-references; CLAUDE_CODE_STARTER tooling section + Rule 3a; this NEXT_SESSION rewrite; memory `feedback_default_to_recommendation.md`; settings.local.json permissions broadened).
-
-Pre-deploy + post-merge scoreboards both GREEN for the P-23 ship: tsc / ext tsc / `npm run build` **53 routes** / src/lib node:test **536/536** / extension `npm test` **428/428** (was 416; +12 saved-url-option-label cases) / Playwright **79/79** (was 78; +1 new P-23 spec). Fresh zip `plos-extension-2026-05-19-w2-deploy-28.zip` (191,561 bytes; +148 over deploy-27).
-
-**Closes (a.49) RECOMMENDED-NEXT.** 3 of 6 W#2 polish items shipped this week (P-24 + P-25 + P-23); **4 remain** (P-22 + P-18 + P-26 + P-27) before W#2 graduation per director's standing directive. P-27 newly captured today as the 4th. Estimated 9-18 more W#2 polish sessions before graduation.
+4 of W#2 polish items SHIPPED this week (P-24 + P-25 + P-23 + P-22); **3 W#2 polish items remain** (P-18 + P-26 + P-27) before W#2 graduation per director's standing directive. Estimated ~7-15 more W#2 polish sessions before graduation (P-27 captured-videos alone is ~6-12 sessions).
 
 ---
 
 ## Branch
 
-**`workflow-2-competition-scraping`** — W#2 polish work, NOT platform-wide. The `./resume` script will switch you from wherever your shell is (probably `workflow-2-competition-scraping` already, since today's session ended there after the doc-batch push + ping-pong) → `workflow-2-competition-scraping`. Verify with `git branch --show-current` immediately after `./resume`; should be on `workflow-2-competition-scraping`. If you're on `main`, STOP and surface to director.
+**`workflow-2-competition-scraping`** — W#2 polish work, NOT platform-wide. The `./resume` script will switch you to `workflow-2-competition-scraping`. Verify with `git branch --show-current` immediately after `./resume`; should be on `workflow-2-competition-scraping`. If you're on `main`, STOP and surface to director.
 
-Expected branch state on entry: `workflow-2-competition-scraping` exactly even with `origin/workflow-2-competition-scraping` AND exactly even with `origin/main`. Both branches at the same SHA after today's deploy-#28 main push + ping-pong sync + end-of-session doc-batch push + ping-pong.
+Expected branch state on entry: `workflow-2-competition-scraping` exactly even with `origin/workflow-2-competition-scraping` AND exactly even with `origin/main`. Both branches at the same SHA after today's deploy-#29 main push + ping-pong sync + end-of-session doc-batch push + ping-pong.
 
 ## Launch prompt
 
 Read docs/CLAUDE_CODE_STARTER.md and follow every rule in it. Today's task:
-**Ship P-22 — Playwright cross-platform slices 2-4 (extend the existing single-platform amazon happy-path specs to ebay + etsy + walmart)** on `workflow-2-competition-scraping` (ROADMAP W#2 polish backlog P-22 entry; ROADMAP Active Tools (a.50) RECOMMENDED-NEXT). Goal: defensive regression-coverage extension — every existing single-platform amazon-only spec gets per-platform clones for ebay + etsy + walmart so per-platform DOM differences don't go uncaught. Closes (a.50) RECOMMENDED-NEXT.
+**Ship P-18 — devcontainer postCreateCommand for Playwright Chromium system libraries** on `workflow-2-competition-scraping` (ROADMAP W#2 polish backlog P-18 entry; ROADMAP Active Tools (a.51) RECOMMENDED-NEXT). Goal: add a `.devcontainer/devcontainer.json` (or update the existing one if present) with a `postCreateCommand` (or `onCreateCommand`) that auto-installs the Playwright Chromium system libs (libgbm1 + libnss3 + libasound2t64 + libatk-1.0-0 + libatk-bridge2.0-0 + libxfixes3 + libnspr4 + others per the README's "Running the Playwright regression tests" section workaround) so that fresh Codespaces can run `npm run test:e2e:all` zero-touch. Sub-1-hour session. Closes (a.51) RECOMMENDED-NEXT.
 
 Branch is `workflow-2-competition-scraping`. Verify branch state with `git branch --show-current` before any doc reads — should be `workflow-2-competition-scraping`. If you're still on `main`, STOP and surface to director.
 
-**Fix shape (per ROADMAP W#2 polish backlog P-22 entry + standing Rule 27 forced-picker output; ~150-250 LOC of test code; NO source code change; NO schema change):**
+**Fix shape (per ROADMAP W#2 polish backlog P-18 entry; ~30-100 LOC of config + small shell stanza; NO source code change; NO schema change; NO test change):**
 
-1. **No schema change** — pure test-coverage extension. Schema-change-in-flight flag stays "No" the entire session.
+1. **No schema change** — pure devcontainer-config work. Schema-change-in-flight flag stays "No" the entire session.
 
-2. **No source code change** — only test files are touched.
+2. **No source code change** — only `.devcontainer/devcontainer.json` (or equivalent Codespace config) touched.
 
-3. **Identify the single-platform amazon-only specs that need extension.** Today's coverage (per `tests/playwright/extension/`):
-   - `p23-saved-url-dropdown-label.spec.ts` — single-platform amazon happy path (added 2026-05-19-g).
-   - `p24-saved-image-indicator.spec.ts` — single-platform amazon happy path.
-   - `p25-saved-text-haze.spec.ts` — single-platform amazon happy path × 2 specs (attach + tear-down).
+3. **No test additions** — the verification IS rebuilding a fresh Codespace and confirming `npm run test:e2e:all` runs zero-touch (Rule 27 forced-picker fires at session start to pick between Director-walkthrough, hybrid simulation via `apt-get purge`, or pure-design-only-on-this-pass).
 
-   Specs already multi-platform across {amazon, ebay, etsy, walmart} (use `test.describe.each([...])` or per-platform `test.describe` blocks — preserved as-is, no work to do):
-   - `image-capture.spec.ts` — 4-platform via `pl.platform` loop.
-   - `region-screenshot.spec.ts` — 4-platform.
-   - `highlight-flashing.spec.ts` — 4-platform.
-   - `p23-amazon-overlay-image.spec.ts` — INTENTIONALLY amazon-only (Amazon-specific DOM concern; no platform sibling needed).
+4. **First check:** does `.devcontainer/devcontainer.json` exist today? Search the repo root and `.devcontainer/` subdirectory. The ROADMAP P-18 capture says "no `.devcontainer/` directory exists today" but verify per Rule 3 (code wins; documentation may be stale).
+   - If it exists → add/extend the `postCreateCommand` (or `onCreateCommand`) field with the lib-install stanza. Preserve any other postCreateCommand work already there by chaining (`&&` or `;` depending on idempotency needs).
+   - If it doesn't exist → create the file with the minimum-viable schema + the postCreateCommand stanza.
 
-4. **Extension shape:** for each of P-23 / P-24 / P-25 specs, replace the single `test.describe(..., () => { test(...) })` block with a `test.describe.each([{platform: 'ebay', ...}, {platform: 'etsy', ...}, {platform: 'walmart', ...}], ($pl) => { test(...) })` pattern OR add 3 sibling `test.describe` blocks if `describe.each` is unidiomatic in this repo's conventions. Reuse the existing fakedata / route-fixture / mock-page-HTML scaffolding; only the `pl.platform` / fixture URL / DOM HTML need to vary per platform.
+5. **The lib-install stanza shape:** mirror the manual workaround documented in `README.md` §"Running the Playwright regression tests" — the workaround that today involves temporarily disabling `/etc/apt/sources.list.d/yarn.list` (because of an unverifiable GPG signature blocking `apt update`), running `apt update + apt install -y libgbm1 libnss3 libasound2t64 ...`, then restoring yarn.list. Encode the same sequence as a `postCreateCommand` shell one-liner OR a small `.devcontainer/install-playwright-deps.sh` script invoked from `postCreateCommand`.
 
-5. **Per Rule 23 Change Impact Audit (pre-classify before code):** Additive (safe). Test-only change. No source code change. No schema change. No API change. Zero downstream W#1 / W#3 cross-tool impact.
+6. **Per Rule 23 Change Impact Audit (pre-classify before code):** Additive (safe). Config-only change. No source code change. No schema change. No API change. No test change. Zero downstream W#1 / W#3 cross-tool impact. The change only takes effect on **fresh Codespace builds** — existing Codespaces are unaffected.
 
 **Diagnosis steps before coding (verify the launch prompt's premises before any code):**
 
-1. Read `tests/playwright/extension/p23-saved-url-dropdown-label.spec.ts` (250 LOC; shipped today) — confirm it's single-platform amazon.
-2. Read `tests/playwright/extension/p24-saved-image-indicator.spec.ts` — confirm single-platform amazon.
-3. Read `tests/playwright/extension/p25-saved-text-haze.spec.ts` — confirm single-platform amazon × 2 specs.
-4. Read `tests/playwright/extension/image-capture.spec.ts` AND `region-screenshot.spec.ts` to see the canonical 4-platform `test.describe.each` / per-platform-describe pattern this repo uses; match that pattern in the P-22 extension.
-5. Sanity-grep for any platform-specific DOM assumptions baked into the P-23/24/25 specs (e.g., Amazon-specific selectors like `m.media-amazon.com` in P-24's `SAVED_IMG_SRC`) — these need per-platform substitutes.
-6. Surface any drift to director BEFORE coding via AskUserQuestion picker. Recurring pattern: every recent P-NN ship session has caught one Rule 3 drift catch — keep that discipline.
+1. Run `ls -la .devcontainer/ 2>/dev/null || echo "no .devcontainer dir"` to confirm the today's state.
+2. Read `README.md` §"Running the Playwright regression tests" — confirm the exact lib list director runs manually today + the yarn.list workaround.
+3. Read `package.json` to confirm `npm run test:e2e:all` is the actual canonical command (or whatever it is; just verify the script name).
+4. Look at Playwright's published `--with-deps` lib list at `node_modules/playwright/lib/server/registry/dependencies.js` (or wherever it lives in this Playwright version) — the canonical list is the ground truth.
+5. Sanity-check whether a `--with-deps` workaround actually works today (the README claims it doesn't because of the yarn.list GPG issue — verify per Rule 3).
+6. Surface any drift to director BEFORE coding via AskUserQuestion picker.
 
 **Forced-picker before coding (Rule 14f):**
 
-This is a pure test-coverage extension; the design choice is narrow but the SHAPE choice matters.
+The fix is narrow but the SHAPE choice matters:
 
-- (A) `test.describe.each([...])` with parameterized fakedata table (recommended — matches the repo's `image-capture.spec.ts` 4-platform pattern; minimal duplication; clear per-platform parameterization in one place)
-- (B) Three sibling `test.describe` blocks per spec file (more verbose; ~3× the LOC; only consider if `describe.each` proves awkward with the per-platform fixtures)
-- (C) Three sibling spec FILES (one per platform per spec) — heaviest scope; only consider if file-level parallelization is needed
+- (A) Inline `postCreateCommand` string in `devcontainer.json` (recommended if it fits on one line; ~50-80 chars; lowest config surface)
+- (B) Separate `.devcontainer/install-playwright-deps.sh` script invoked from `postCreateCommand` (cleaner separation; ~30-40 LOC bash; idempotent + commented; recommended if the install sequence has multiple steps including the yarn.list dance)
+- (C) Use Playwright's `--with-deps` flag in the script if it works (smaller surface; might not work per README) — verify with a quick test
 - (D) Escape hatch
 
-Per `feedback_recommendation_style.md` (most thorough/reliable): **Option (A)** — `describe.each` is the canonical Playwright pattern, already used in 3 existing 4-platform specs in this repo, easiest to read + extend later.
+Per `feedback_recommendation_style.md` (most thorough/reliable): likely **Option (B)** — the install sequence has multiple steps (disable yarn.list + apt update + apt install + restore yarn.list) and benefits from being in a versioned script with comments; the script can be re-run from any Codespace as a recovery tool if `postCreateCommand` didn't run.
 
-**Test coverage decision (Rule 27 forced-picker at session start):**
+**Test coverage decision (Rule 27 forced-picker at session start — directly relevant since this is dev-environment ergonomics):**
 
-This session IS the test coverage; the existing P-23/24/25 spec test for the feature, the per-platform extension extends the regression coverage. No additional test layer needed.
-
-- (A) Just run the extended Playwright suite as the verification (recommended — the new specs ARE the verification; running them on each of the 4 platforms confirms the per-platform paths work)
-- (B) Add a node:test unit-test layer on the per-platform fakedata factory if extracted (only if the factory grows non-trivial — likely not necessary)
-- (C) Director manual walkthrough on each of the 3 new platforms — unnecessary; Playwright simulates each platform's URL pattern via per-platform fakedata
+- (A) Director walkthrough on a fresh Codespace rebuild (recommended — only way to PROVE the postCreateCommand actually runs on a fresh container; cost ~10 minutes including waiting for the rebuild)
+- (B) Hybrid: simulate the fresh state via `sudo apt-get purge libgbm1 libnss3 ...` + then `bash .devcontainer/install-playwright-deps.sh` standalone + then `npm run test:e2e:all` (faster than a full rebuild; doesn't validate the `postCreateCommand` invocation itself, only the script contents)
+- (C) Pure-design-only-on-this-pass — ship the config, defer real verification to whenever the next fresh Codespace happens organically (lowest-cost; lowest-signal)
 - (D) Escape hatch
 
-Per `feedback_recommendation_style.md`: **Option (A) — Playwright suite alone is sufficient.** Rule 27 scope-exception logic: the regression coverage IS the goal; no real-world judgment call needed.
+Per `feedback_recommendation_style.md`: **Option (A) Director walkthrough on a fresh Codespace rebuild** — only this proves the wiring actually fires. Acceptable to also do (B) as a fast smoke before (A) if director time is constrained.
 
-**Pre-deploy verification scoreboard targets (expected baselines from today's deploy session #28 post-state):**
+**Pre-deploy verification scoreboard targets (expected baselines from today's deploy session #29 post-state):**
 
 - `npx tsc --noEmit` clean
 - `cd extensions/competition-scraping && npx tsc --noEmit` clean
 - `npm run build` clean — **53 routes** (unchanged — no new route)
 - `src/lib` node:test: **536/536** (unchanged — no server-side change)
-- Extension `npm test`: **428/428** (unchanged — no extension source change; only test files in `tests/playwright/extension/`)
-- Playwright: **79/79** + ~+9 new per-platform specs (3 features × 3 platforms) → ~88 total. Some specs may already cover the cross-platform path; verify with a dry-run pass before locking the +9 expectation.
+- Extension `npm test`: **428/428** (unchanged — no extension source change)
+- Playwright: **91/91** (unchanged — no test additions expected since this is a config-only ship)
 
-**Deploy mechanics (cheat-sheet b — standard W#2 → main deploy):** unchanged. Pre-deploy scoreboard → rebase if main moved → ff-merge → post-merge scoreboard → Rule 9 gate → push main → ping-pong sync → fresh extension build (no source change so the bundle is byte-identical except for the wxt-imposed build hash; cheap rebuild). The Playwright suite IS the verification — no director real-Chrome verification needed (Rule 27 scope-exception: pure regression coverage extension; no user-visible change).
+**Deploy mechanics (cheat-sheet b — standard W#2 → main deploy):** unchanged. Pre-deploy scoreboard → rebase if main moved → ff-merge → post-merge scoreboard → Rule 9 gate → push main → ping-pong sync → fresh extension build (no source change so the bundle is byte-identical except possibly for a wxt-imposed build hash; cheap rebuild). Real-Chrome verification fires per Rule 27 picker outcome above — Option (A) director walkthrough on a fresh Codespace rebuild is the gold standard; the postCreateCommand only fires on fresh-Codespace creation.
 
-**Optional: investigate the wxt build hang.** Today's session (and yesterday's 2026-05-19-f) both hit a recurring wxt-build-hang issue: `wxt build` writes the dist correctly at ~5-second mark but the parent node process hangs indefinitely afterward (~12 minutes in today's case before kill). Today's session has captured this informationally in CORRECTIONS_LOG. P-22's session has no extension source changes so should build fast — IF the hang recurs, capture the wxt version + node version + any new log output before killing; consider opening an issue or adding a Playwright `pretest` hook that runs `wxt build` with a timeout. Don't make it the primary session focus; the test-coverage extension is the primary task.
+**Group A docs to update at end-of-session:** ROADMAP (header + P-18 polish backlog entry flipped ✅ SHIPPED-AT-DEPLOY-LEVEL 2026-05-XX + (a.51) → ✅ DONE + new (a.52) RECOMMENDED-NEXT — likely P-26 or P-27 design-only via §4 Step 1c forced-picker); CHAT_REGISTRY (new top entry); DOCUMENT_MANIFEST (header bump only — no doc add/remove unless `.devcontainer/install-playwright-deps.sh` is created and listed there); CORRECTIONS_LOG (header bump + any new entries — possibly a CHROMIUM-LIB-LIST-STALENESS §Entry if the Playwright `--with-deps` lib list has drifted from the README's manually-curated list); NEXT_SESSION (rewritten for the next polish item — likely P-26 or P-27 design-only).
 
-**Group A docs to update at end-of-session:** ROADMAP (header + (a.50) → ✅ DONE + new (a.51) RECOMMENDED-NEXT — likely P-18 or P-26 via §4 Step 1c forced-picker); CHAT_REGISTRY (new top entry); DOCUMENT_MANIFEST (header); CORRECTIONS_LOG (header bump + any new entries — possibly a wxt-build-hang §Entry if escalated); NEXT_SESSION (rewritten for the next polish item).
+**Group B docs to update at end-of-session:** COMPETITION_SCRAPING_VERIFICATION_BACKLOG (new Deploy session #30 entry + P-18 flipped ✅ DONE). COMPETITION_SCRAPING_DESIGN unchanged (config-only change doesn't change design intent — no §B entry needed; mirrors the 2026-05-19-d P-16 + 2026-05-20 P-22 precedents).
 
-**Group B docs to update at end-of-session:** COMPETITION_SCRAPING_VERIFICATION_BACKLOG (new Deploy session #29 entry + P-22 flipped ✅ DONE). COMPETITION_SCRAPING_DESIGN unchanged (test-coverage extension doesn't change design intent — no §B entry needed; mirror the 2026-05-19-d P-16 precedent).
-
-**Schema-change-in-flight flag:** stays "No" entire session (pure test-coverage extension; no schema work).
+**Schema-change-in-flight flag:** stays "No" entire session (config-only change; no schema work).
 
 Start by running the mandatory start-of-session sequence.
 
 **Pre-build read list (in addition to mandatory start-of-session sequence):**
 
-- `tests/playwright/extension/p23-saved-url-dropdown-label.spec.ts` (250 LOC — today's ship; first candidate for cross-platform extension).
-- `tests/playwright/extension/p24-saved-image-indicator.spec.ts` (single-platform amazon — second candidate).
-- `tests/playwright/extension/p25-saved-text-haze.spec.ts` (single-platform amazon × 2 specs — third candidate).
-- `tests/playwright/extension/image-capture.spec.ts` (canonical 4-platform pattern this repo uses — REFERENCE for the extension shape; do NOT modify).
-- ROADMAP W#2 polish backlog P-22 entry.
+- `.devcontainer/devcontainer.json` (if it exists — verify per Rule 3).
+- `README.md` §"Running the Playwright regression tests" (the canonical manual workaround director runs today).
+- `package.json` (verify `npm run test:e2e:all` script name).
+- ROADMAP W#2 polish backlog P-18 entry.
 
 ## Pre-session notes (optional, offline steps to do between sessions)
 
-Nothing required offline. The session is fully self-contained (test-code-only extension; Playwright suite as verification).
+If director is willing to schedule a fresh Codespace rebuild during this session for verification (Option A), no offline prep needed — the rebuild happens via Codespace UI ("Rebuild Container" command). If director prefers to test the postCreateCommand in a side-Codespace or via a colleague's fresh checkout, no special prep needed either.
 
 ## Why this pointer was written this way (debug aid)
 
-Today's session shipped P-23 cleanly + verified live on real Chrome on all 3 forms (PASS first try). The §4 Step 1c forced-picker offered 4 options: (A) P-22 Playwright cross-platform slices 2-4 [recommended — defensive coverage extension], (B) P-18 devcontainer Chromium libs [smallest scope], (C) P-26 below-fold full-page-scroll capture [largest lift], (D) DEFERRED manual-add modal originalSrcUrl tack-on. Director picked (A) P-22 per `feedback_recommendation_style.md` standing preference (most thorough/reliable — extends regression coverage to the remaining 3 platforms catching per-platform DOM differences). Director can override the pick by editing this file's `## Launch prompt` section before next session start.
+Today's session shipped P-22 cleanly + scoreboards all GREEN (Playwright at 91/91, +12 over deploy-28). The §4 Step 1c forced-picker offered 4 options: (A) P-18 devcontainer Chromium libs [recommended — smallest scope; sub-1-hour; closes a recurring fresh-Codespace friction point], (B) P-26 below-fold full-page-scroll capture [largest lift; ~600-1000 LOC; documented workaround works], (C) P-27 captured-videos design session [substantive new feature; first session would be design-only; needs 6-12 sessions total], (D) escape hatch. Director picked (A) P-18 per `feedback_recommendation_style.md` standing preference (most thorough/reliable — small + reversible + closes a real ergonomics gap that affects every fresh Codespace). Director can override the pick by editing this file's `## Launch prompt` section before next session start.
 
 **Alternate next-session candidates if director shifts priorities at session start:**
 
-- P-18 devcontainer Chromium libs (LOW dev ergonomic — small fold-in; sub-1-hour session).
-- P-26 below-fold full-page-scroll capture (LOW deferred large lift — last in the queue; current workaround works; ~200-400 LOC).
-- **P-27 Captured-videos feature** (NEW — added 2026-05-19-g-2 as a post-handoff scope-add per director directive). Pre-graduation polish item; substantive feature expansion. Estimated ~6-12 sessions broken into: dedicated design interview (Session 1) + schema migration + bucket setup + API routes (Session 2) + extension content-script + popup forms + saved-video indicator + URL detail renderer (Sessions 3-5) + single-platform amazon Playwright spec (Session 6) + optional polish (Sessions 7+). Open design questions: Supabase bucket strategy + thumbnail extraction approach + schema additions + YouTube/Vimeo handling + cross-platform `<video>` detection. **The first session for P-27 is design-only (no code) — director-confirmed picks today are: URL reference + uploaded bytes BOTH stored; full UX symmetry with text/image; pre-graduation gating.** Full details: ROADMAP P-27 entry + COMPETITION_SCRAPING_DESIGN §B 2026-05-19-g-2 entry.
-- Manual-add modal originalSrcUrl tack-on (DEFERRED from 2026-05-19-e — trivial 1-line; could fold into any P-NN session).
-- Investigate the wxt-build-hang issue separately (informational item only; not on the W#2 polish backlog).
+- **P-26 below-fold full-page-scroll capture** (LOW deferred large lift — last in the queue; current workaround works; ~600-1000 LOC). Captures content below the initial viewport on long product pages via programmatic scroll-and-capture before stitching into a single full-page image.
+- **P-27 Captured-videos feature DESIGN SESSION** (substantive new feature; first session is design-only — no code; runs the full design interview that the 2026-05-19-g-2 capture punted to a dedicated session). Estimated ~6-12 sessions total post-design: schema migration + bucket setup + API routes + extension content-script + popup forms + saved-video indicator + URL detail renderer + single-platform amazon Playwright spec + optional polish. Open design questions: Supabase bucket strategy; thumbnail extraction approach; schema additions; YouTube/Vimeo handling; cross-platform `<video>` detection. **The first P-27 session is design-only (no code) — director-confirmed picks 2026-05-19-g-2: URL reference + uploaded bytes BOTH stored; full UX symmetry with text/image; pre-graduation gating.** Full details: ROADMAP P-27 entry + COMPETITION_SCRAPING_DESIGN §B 2026-05-19-g-2 entry.
+- **Manual-add modal originalSrcUrl tack-on** (DEFERRED from 2026-05-19-e — trivial 1-line; could fold into any P-NN session).
+- **Investigate the wxt-build-hang issue more deeply** if it recurs (informational item only; not on the W#2 polish backlog). 2026-05-20's session saw the hang NOT recur (counter-evidence to the prior 2026-05-19-f + 2026-05-19-g recurring-hang observations).
 
 Check `ROADMAP.md` for the canonical state.
