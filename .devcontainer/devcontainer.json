@@ -1,0 +1,4 @@
+{
+  "name": "brand-operations-hub",
+  "postCreateCommand": "bash .devcontainer/install-playwright-deps.sh"
+}
