@@ -2,7 +2,42 @@
 
 **Written:** 2026-05-20 (`session_2026-05-20_w2-main-deploy-session-29-p22-cross-platform-slices-DEPLOYED` — end-of-session handoff after P-22 cross-platform regression coverage shipped and deployed).
 
-**For:** the next Claude Code session (P-18 task; details below).
+**Amended:** 2026-05-21 (P-18 attempt — ABORTED partway due to repeated Anthropic API 529 Overloaded errors. ZERO file edits this session; working tree clean; branch unchanged at `bc60ee1`. Start-of-session reads + drift check + both pickers completed before the 529 storm. **The two pickers below have already been answered — the next session MUST skip re-firing them and proceed straight to coding the recommended Option B + Option A shapes.** See `## 2026-05-21 RESUMPTION NOTE` below for picker outcomes + environment-check results.)
+
+**For:** the next Claude Code session (P-18 task — resume from picker-outcome point; details below).
+
+---
+
+## 2026-05-21 RESUMPTION NOTE — picker outcomes already captured + diagnosis verified
+
+**Status:** Session 2026-05-21 attempted to ship P-18 but aborted partway due to repeated Anthropic API 529 Overloaded server errors. Zero file edits made. Branch unchanged. Director paused safely + asked for a wrap that preserves the picker outcomes so the next session doesn't re-litigate them.
+
+**Pickers ALREADY answered — do NOT re-fire on resume:**
+
+- **Rule 14f fix-shape picker:** Director picked **Option B — separate `.devcontainer/install-playwright-deps.sh` script invoked from `postCreateCommand`** (the recommended option per `feedback_recommendation_style.md` — most thorough/reliable; cleaner separation; idempotent; re-runnable as standalone recovery tool from any Codespace).
+- **Rule 27 verification picker:** Director picked **Option A — Director walkthrough on a fresh Codespace rebuild** (the recommended option — only path that proves the `postCreateCommand` wiring actually fires on real Codespace creation; ~10 min wait for the rebuild; tradeoff vs. faster `apt-get purge` simulation explicitly weighed and rejected because the simulation would test the script but NOT the wiring).
+
+**Environment verified at session start (Rule 3 — code wins):**
+- Codespace user is `codespace` (relevant for any `remoteUser` field in `devcontainer.json` if needed).
+- OS: Ubuntu 24.04.3 LTS Noble Numbat — matches README's "default Codespaces Ubuntu 24.04" framing.
+- `/etc/apt/sources.list.d/` contains: `conda.list`, `microsoft.list`, `ubuntu.sources`, `yarn.list` — **`yarn.list` confirmed present**, so the README workaround's disable-yarn-list-before-apt-update dance applies as-documented.
+- `.devcontainer/` directory does NOT exist today — fresh creation, no merge with existing config.
+- `npm run test:e2e:all` confirmed at `package.json:13` as `"playwright test"`.
+- README §"Running the Playwright regression tests" lines 50-74 has the **full canonical lib list** (more libs than the launch-prompt teaser):
+  - `libnss3 libatk1.0-0t64 libatk-bridge2.0-0t64 libcups2t64 libxkbcommon0 libxcomposite1 libxdamage1 libxrandr2 libgbm1 libpango-1.0-0 libcairo2 libasound2t64 libatspi2.0-0t64 libxfixes3 libxshmfence1 libxss1 libxtst6 libnspr4 libdrm2 libwayland-client0 libwayland-egl1 libwayland-cursor0 libgdk-pixbuf-2.0-0 libnotify4 libdbus-1-3 libexpat1`
+- Playwright's `--with-deps` flag is RULED OUT per README — same `yarn.list` GPG issue would block its internal `apt update`.
+
+**Next-session-on-resume should:**
+1. Skip the start-of-session reads' Rule 27 + Rule 14f pickers (already answered above — proceed straight to Option B + Option A).
+2. Code the fix per Option B:
+   - Create `.devcontainer/devcontainer.json` minimum-viable config (probably explicit `"image": "mcr.microsoft.com/devcontainers/universal:linux"` to preserve current Codespaces default + `"postCreateCommand": "bash .devcontainer/install-playwright-deps.sh"` + `"remoteUser": "codespace"`).
+   - Create `.devcontainer/install-playwright-deps.sh` (commented bash; ~30-40 LOC; idempotent — runs `apt-get install -y` which is no-op if libs already present; preserves yarn.list state by always restoring after, even on failure via a `trap`).
+3. Run `/scoreboard` pre-deploy. Expected: all 6 checks unchanged from yesterday's baseline (tsc clean / ext tsc clean / 53 routes / 536 src/lib / 428 ext / 91 Playwright) — config-only ship, no source/schema/test surface.
+4. `/deploy` per cheat-sheet (b) — Rule 9 gate via AskUserQuestion + ff-merge to main + post-merge scoreboard + push origin/main + ping-pong sync. Fresh extension zip expected byte-identical (no extension source change).
+5. Director walkthrough on fresh Codespace rebuild (Option A — the verification picker outcome). Codespaces UI → three-dot menu → "Rebuild Container" (or fully recreate via codespaces.new). ~10 min wait. Then in fresh terminal: `npm run test:e2e:all`. Should PASS without any manual lib install.
+6. `/end-of-session` doc batch — should flip ROADMAP (a.51) → ✅ DONE + open (a.52) RECOMMENDED-NEXT (likely P-26 or P-27 design-only via §4 Step 1c forced-picker).
+
+**Why this resumption-note matters:** without it, the next session would re-fire both pickers (~30 sec director time wasted) AND re-do the environment-check Bash commands. With this note, the next session skips straight to the Edit/Write calls for the two new files. Recovers ~5 min of session time + preserves the analysis-quality of the picker decisions.
 
 ---
 
