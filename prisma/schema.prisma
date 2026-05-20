@@ -275,6 +275,7 @@ model CompetitorUrl {
   sizes           CompetitorSize[]
   capturedTexts   CapturedText[]
   capturedImages  CapturedImage[]
+  capturedVideos  CapturedVideo[]
 
   @@unique([projectWorkflowId, platform, url])
   @@index([projectWorkflowId, platform])
@@ -359,12 +360,67 @@ model CapturedImage {
   @@index([competitorUrlId, imageCategory])
 }
 
+// CapturedVideo — one row per saved video (direct-bytes upload OR embed reference).
+// Added 2026-05-21 in W#2 polish P-27 Build #1. Spec: docs/CAPTURED_VIDEOS_DESIGN.md §A.7.
+// Mirrors CapturedImage with 3 video-specific additions (sourceType discriminator,
+// durationSeconds, thumbnailStoragePath) + nullable storage fields for embed rows.
+model CapturedVideo {
+  id              String @id @default(uuid())
+  clientId        String @unique // UUIDv4 from extension; idempotency key
+  competitorUrlId String
+  projectId       String // denormalized for fast Project-scope queries + cascade-on-Project-reset
+
+  // Source discrimination — EMBED rows reference a YouTube/Vimeo URL only (no bytes);
+  // DIRECT_BYTES rows have uploaded video bytes in Supabase Storage.
+  sourceType     VideoSourceType
+  originalSrcUrl String          @db.Text // ALWAYS present — embed URL OR page-host URL for direct-bytes
+
+  // Bytes-stored fields (NULL when sourceType=EMBED)
+  storagePath     String?
+  storageBucket   String? // "competition-scraping-videos" when set
+  fileSize        Int? // bytes
+  mimeType        String? // "video/mp4" | "video/webm" | "video/quicktime" when set
+  durationSeconds Float? // nullable since embed paths can't read this without download
+  width           Int? // intrinsic videoWidth
+  height          Int? // intrinsic videoHeight
+
+  // Thumbnail (nullable per §A.12 fallback — save never blocked on thumbnail failure)
+  thumbnailStoragePath String? // direct-bytes: canvas frame-grab uploaded as JPEG; embed: NULL (computed at render time)
+
+  // Categorization
+  videoCategory String? // value from VocabularyEntry (vocabularyType="video-category")
+  composition   String? @db.Text
+  embeddedText  String? @db.Text
+  tags          Json    @default("[]")
+
+  sortOrder Int @default(0)
+
+  source    String   @default("extension") // "extension" | "manual"
+  addedBy   String // userId
+  addedAt   DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  competitorUrl CompetitorUrl @relation(fields: [competitorUrlId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([competitorUrlId])
+  @@index([competitorUrlId, videoCategory])
+}
+
+// VideoSourceType — Prisma enum discriminator for CapturedVideo rows per §A.7.
+// EMBED = YouTube/Vimeo/etc. reference (URL only, no bytes).
+// DIRECT_BYTES = uploaded video file (bytes in competition-scraping-videos bucket).
+enum VideoSourceType {
+  EMBED
+  DIRECT_BYTES
+}
+
 // VocabularyEntry — platform-shared vocabularies per PLATFORM_REQUIREMENTS.md §8.4.
 // Project-scoped, NOT workflow-scoped. Any workflow on the same Project can READ + ADD.
 model VocabularyEntry {
   id              String   @id @default(uuid())
   projectId       String
-  vocabularyType  String // "competition-category" | "product-name" | "brand-name" | "content-category" | "image-category" | "custom-field-name-product" | "custom-field-name-size"
+  vocabularyType  String // "competition-category" | "product-name" | "brand-name" | "content-category" | "image-category" | "video-category" | "custom-field-name-product" | "custom-field-name-size"
   value           String
   addedByWorkflow String // which workflow originated this entry
   addedBy         String // userId

@@ -59,6 +59,7 @@ export const VOCABULARY_TYPES = [
   'brand-name',
   'content-category',
   'image-category',
+  'video-category',
   'custom-field-name-product',
   'custom-field-name-size',
 ] as const;
@@ -576,6 +577,85 @@ export type ReplaceExtensionStateRequest = ExtensionStateDto;
 // reflects the server's view, including any platform-clear that the
 // "switching project clears platform" invariant triggered).
 export type ReplaceExtensionStateResponse = ExtensionStateDto;
+
+// ─── Video MIME + size constants (P-27 Build #1) ────────────────────────
+// Per docs/CAPTURED_VIDEOS_DESIGN.md §A.9:
+//   - Accept video/mp4, video/webm, video/quicktime. Three formats commonly
+//     served by <video> elements across the supported platforms. Extensible
+//     later if a platform serves something unusual.
+//   - 100 MB per-file cap per §A.10 — comfortably covers product demos
+//     (~10-50 MB at 720p MP4), customer-review videos, A+ content videos.
+//     Larger videos go through the YouTube/Vimeo embed path instead.
+//   - Two-layer enforcement per §A.11: client-side pre-upload check +
+//     server-side requestVideoUploadUrl 413. Bucket-level cap deferred per
+//     scripts/create-competition-scraping-videos-bucket.mjs note.
+export const ACCEPTED_VIDEO_MIME_TYPES = [
+  'video/mp4',
+  'video/webm',
+  'video/quicktime',
+] as const;
+export type AcceptedVideoMimeType = (typeof ACCEPTED_VIDEO_MIME_TYPES)[number];
+
+export function isAcceptedVideoMimeType(
+  value: unknown
+): value is AcceptedVideoMimeType {
+  return (
+    typeof value === 'string' &&
+    (ACCEPTED_VIDEO_MIME_TYPES as readonly string[]).includes(value)
+  );
+}
+
+// 100 MB per §A.10 — enforced at requestVideoUploadUrl before issuing the
+// signed URL.
+export const VIDEO_UPLOAD_MAX_BYTES = 100 * 1024 * 1024;
+
+// Video source-type discriminator matching the Prisma `VideoSourceType` enum
+// at prisma/schema.prisma. EMBED rows have a YouTube/Vimeo URL only (no
+// bytes); DIRECT_BYTES rows have uploaded video bytes in Supabase Storage.
+export const VIDEO_SOURCE_TYPES = ['EMBED', 'DIRECT_BYTES'] as const;
+export type VideoSourceType = (typeof VIDEO_SOURCE_TYPES)[number];
+
+export function isVideoSourceType(value: unknown): value is VideoSourceType {
+  return (
+    typeof value === 'string' &&
+    (VIDEO_SOURCE_TYPES as readonly string[]).includes(value)
+  );
+}
+
+// ─── CapturedVideo wire shape ───────────────────────────────────────────
+// Mirrors prisma CapturedVideo with Date → ISO string and tags as string[]
+// (Prisma stores Json; the wire-format is the array shape). Nullable storage
+// + bytes fields when sourceType=EMBED (no Supabase upload for embeds).
+export interface CapturedVideo {
+  id: string;
+  clientId: string;
+  competitorUrlId: string;
+  projectId: string;
+
+  sourceType: VideoSourceType;
+  originalSrcUrl: string;
+
+  storagePath: string | null;
+  storageBucket: string | null;
+  fileSize: number | null;
+  mimeType: string | null;
+  durationSeconds: number | null;
+  width: number | null;
+  height: number | null;
+
+  thumbnailStoragePath: string | null;
+
+  videoCategory: string | null;
+  composition: string | null;
+  embeddedText: string | null;
+  tags: string[];
+
+  sortOrder: number;
+  source: Source;
+  addedBy: string;
+  addedAt: string;
+  updatedAt: string;
+}
 
 // ─── Generic error shape ────────────────────────────────────────────────
 // Returned with non-2xx status codes (consistent with the W#1 routes).
