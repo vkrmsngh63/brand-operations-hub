@@ -4,7 +4,9 @@
 **Workflow:** W#2 Competition Scraping & Deep Analysis.
 **Branch:** `workflow-2-competition-scraping`.
 **Created:** 2026-05-07 in `session_2026-05-07_w2-plos-side-viewer-detail-page-slice` (Claude Code).
-**Last updated:** 2026-05-20 (**W#2 → main deploy session #29 — P-22 Playwright cross-platform slices 2-4 SHIPPED + DEPLOYED on vklf.com.** One-hundred-and-seventeenth Claude Code session — `session_2026-05-20_w2-main-deploy-session-29-p22-cross-platform-slices-DEPLOYED`. Closes (a.50) RECOMMENDED-NEXT. **NO schema change** — pure regression coverage extension; schema-change-in-flight stayed "No" entire session. Build commit `f4e90ec` (3 test-files-only +512/-368); ff-merged clean onto main (`8cdcbe5..f4e90ec`); fresh zip `plos-extension-2026-05-20-w2-deploy-29.zip` (191,561 bytes — byte-identical to deploy-28's zip, confirming the predicted byte-identical-bundle outcome when extension source is unchanged). Pre-deploy + post-merge scoreboards both GREEN: tsc / ext tsc / `npm run build` 53 routes / src/lib node:test 536/536 (unchanged) / extension `npm test` 428/428 (unchanged — no extension source change) / Playwright 91/91 (was 79; +12 = P-23 +3 + P-24 +3 + P-25 +6). **Drift caught at session-start (Rule 3 — code wins):** the spec authors' own comments in P-24's spec lines 5-7 + P-25's spec lines 4-7 argued the content-script logic is platform-independent and per-platform recognition is already exercised by the existing 4-platform `image-capture.spec.ts` + `highlight-flashing.spec.ts` specs. Director picked Option A (defensive full extension — all 3 specs × all 4 platforms) via Rule 14f scope picker BEFORE coding. **Director real-Chrome verification SKIPPED per Rule 27 scope-exception** — pure regression coverage extension; no user-visible behavior change; Playwright suite IS the verification. **§4 Step 1c forced-picker fired** — director picked (a.51) RECOMMENDED-NEXT = W#2 polish P-18 devcontainer Chromium libs on `workflow-2-competition-scraping` (sub-1-hour session; postCreateCommand for Playwright system libs). **P-22 polish backlog entry ✅ SHIPPED-AT-DEPLOY-LEVEL 2026-05-20** + **new "## Deploy session #29 — P-22 cross-platform slices 2-4" section appended at end** before the EOF marker.)
+**Last updated:** 2026-05-21 (**W#2 → main deploy session #30 — P-18 devcontainer postCreateCommand for Playwright Chromium system libraries SHIPPED + DEPLOYED on vklf.com (functional no-op for end users — pure developer-environment ergonomics); director real-Chrome (fresh-Codespace-rebuild) verification DEFERRED to next session due to the Codespace-rebuild-kills-running-session coupling discovered mid-session.** One-hundred-and-eighteenth Claude Code session — `session_2026-05-21_w2-main-deploy-session-30-p18-devcontainer-DEPLOYED-VERIFICATION-DEFERRED`. PARTIAL CLOSE on (a.51) RECOMMENDED-NEXT P-18 (shipped + deployed but verification pending Codespace rebuild walkthrough director runs between this session and the next). **NO schema change** — config-only; schema-change-in-flight stayed "No" entire session. Build commit `49c6403` (2 new files +58 LOC config: `.devcontainer/devcontainer.json` 3 effective lines + `.devcontainer/install-playwright-deps.sh` 54 LOC mode 100755 idempotent bash with EXIT-trap yarn.list restore); ff-merged clean onto main (`bc60ee1..49c6403`); fresh zip `plos-extension-2026-05-21-w2-deploy-30.zip` (191,561 bytes — **byte-identical to deploy-29's + deploy-28's; third consecutive byte-identical extension bundle**, since no extension source has changed since the P-23 ship on 2026-05-19-g). Pre-deploy + post-merge scoreboards both GREEN at exact 2026-05-20 baselines (identical pre + post confirms the config-only nature): tsc / ext tsc / `npm run build` 53 routes / src/lib node:test 536/536 (unchanged) / extension `npm test` 428/428 (unchanged) / Playwright 91/91 in 2.0 min pre-deploy + 2.1 min post-merge (unchanged). **Director real-Chrome verification SKIPPED + DEFERRED to next session per the Codespace-rebuild coupling discovery** — rebuilding the Codespace tears down the running container and kills Claude's terminal mid-session; in-session verification is structurally impossible. Director picked "Wrap up this session now — verify after on your own time (recommended)" at the mid-session Rule 14f follow-up picker. Verification happens between sessions: director triggers "Codespaces: Rebuild Container" via command palette → ~5-10 min rebuild → fresh terminal → `npm run test:e2e:all` → records PASS/FAIL → next Claude session collects the result as its first task. **(a.52) RECOMMENDED-NEXT = P-18 verification re-entry — collect PASS/FAIL from director's Codespace-rebuild test, then close P-18 fully + fire §4 Step 1c forced-picker for the actual NEXT polish item (likely P-26 or P-27 design-only)** on `workflow-2-competition-scraping`; §4 Step 1c forced-picker for NEXT-after-P-18 explicitly NOT fired this session. **P-18 polish backlog entry ⏳ OPEN → ✅ SHIPPED-AT-DEPLOY-LEVEL 2026-05-21 — verification pending Codespace rebuild walkthrough** + **new "## Deploy session #30 — P-18 devcontainer postCreateCommand" section appended at end** before the EOF marker, including the verification PENDING line under P-18 capturing the director walkthrough steps (Codespaces command palette → "Codespaces: Rebuild Container" → wait → `npm run test:e2e:all` → PASS = 91/91; FAIL = any missing-library error). TWO INFORMATIONAL CORRECTIONS_LOG entries this session: (1) cwd-leak Bash slip recurred TWICE — pre-deploy scoreboard check 4 + post-merge scoreboard check 6 — same root cause as 2026-05-16 entry; ~60 sec cost; zero production impact; (2) Anthropic API 529 Overload storm mid-session — pause-and-resume pattern via NEXT_SESSION.md amendment commit `1e28bd1` worked cleanly; new operational pattern captured for future API outages + cp/pkill SIGUSR1 race + check-next-session-doc.sh hook substring-match observations.)
+
+**Previously updated:** 2026-05-20 (**W#2 → main deploy session #29 — P-22 Playwright cross-platform slices 2-4 SHIPPED + DEPLOYED on vklf.com.** One-hundred-and-seventeenth Claude Code session — `session_2026-05-20_w2-main-deploy-session-29-p22-cross-platform-slices-DEPLOYED`. Closes (a.50) RECOMMENDED-NEXT. **NO schema change** — pure regression coverage extension; schema-change-in-flight stayed "No" entire session. Build commit `f4e90ec` (3 test-files-only +512/-368); ff-merged clean onto main (`8cdcbe5..f4e90ec`); fresh zip `plos-extension-2026-05-20-w2-deploy-29.zip` (191,561 bytes — byte-identical to deploy-28's zip, confirming the predicted byte-identical-bundle outcome when extension source is unchanged). Pre-deploy + post-merge scoreboards both GREEN: tsc / ext tsc / `npm run build` 53 routes / src/lib node:test 536/536 (unchanged) / extension `npm test` 428/428 (unchanged — no extension source change) / Playwright 91/91 (was 79; +12 = P-23 +3 + P-24 +3 + P-25 +6). **Drift caught at session-start (Rule 3 — code wins):** the spec authors' own comments in P-24's spec lines 5-7 + P-25's spec lines 4-7 argued the content-script logic is platform-independent and per-platform recognition is already exercised by the existing 4-platform `image-capture.spec.ts` + `highlight-flashing.spec.ts` specs. Director picked Option A (defensive full extension — all 3 specs × all 4 platforms) via Rule 14f scope picker BEFORE coding. **Director real-Chrome verification SKIPPED per Rule 27 scope-exception** — pure regression coverage extension; no user-visible behavior change; Playwright suite IS the verification. **§4 Step 1c forced-picker fired** — director picked (a.51) RECOMMENDED-NEXT = W#2 polish P-18 devcontainer Chromium libs on `workflow-2-competition-scraping` (sub-1-hour session; postCreateCommand for Playwright system libs). **P-22 polish backlog entry ✅ SHIPPED-AT-DEPLOY-LEVEL 2026-05-20** + **new "## Deploy session #29 — P-22 cross-platform slices 2-4" section appended at end** before the EOF marker.)
 
 **Previously updated:** 2026-05-19-g (**W#2 → main deploy session #28 — P-23 saved-URL dropdown side-by-side SHIPPED + DEPLOYED + REAL-CHROME-VERIFIED on vklf.com (all 3 forms).** One-hundred-and-sixteenth Claude Code session — `session_2026-05-19-g_w2-main-deploy-session-28-p23-saved-url-dropdown-DEPLOYED`. Closes (a.49) RECOMMENDED-NEXT. **NO schema change** — pure UI tweak. Build commit `5cb2419` (6 files +461/-12); ff-merged clean onto main (`c1f1cd7..5cb2419`); fresh zip `plos-extension-2026-05-19-w2-deploy-28.zip` (191,561 bytes — +148 over deploy-27). Pre-deploy + post-merge scoreboards all GREEN: tsc / ext tsc / `npm run build` 53 routes / src/lib node:test 536/536 (unchanged) / extension `npm test` 428/428 (was 416; +12 saved-url-option-label pure-helper cases) / Playwright 79/79 (was 78; +1 new P-23 extension-context spec). **Drift caught at session-start (Rule 3 — code wins):** launch prompt named `url-add-form.ts` as second fix site but it has no saved-URL `<select>`; actual sites with the collapse pattern were three (`text-capture-form.ts` + `image-capture-form.ts` + `CapturedTextPasteForm.tsx`). Director picked all-3-sites scope via Rule 14f AskUserQuestion before coding. Director real-Chrome verification PASS on all 3 forms first try. **§4 Step 1c forced-picker fired** — director picked (a.50) RECOMMENDED-NEXT = W#2 polish P-22 Playwright cross-platform slices 2-4 on `workflow-2-competition-scraping` (defensive coverage extension to ebay + etsy + walmart). **P-23 dropdown polish backlog entry ⏳ OPEN → ✅ SHIPPED-AT-DEPLOY-LEVEL 2026-05-19-g** + **new "## Deploy session #28 — P-23 saved-URL dropdown" section appended at end** before the EOF marker.)
 
@@ -3641,6 +3643,115 @@ Pure regression coverage extension; no user-visible behavior change. The Playwri
 - `tests/playwright/extension/highlight-flashing.spec.ts` (canonical 4-platform reference pattern — NOT modified this session)
 - deploy session #29 commit `f4e90ec`
 - fresh zip `plos-extension-2026-05-20-w2-deploy-29.zip`
+
+---
+
+## Deploy session #30 — P-18 devcontainer postCreateCommand for Playwright Chromium system libraries (2026-05-21)
+
+**Session:** `session_2026-05-21_w2-main-deploy-session-30-p18-devcontainer-DEPLOYED-VERIFICATION-DEFERRED` (Claude Code, dual-branch — pre-deploy scoreboard on `workflow-2-competition-scraping`, ff-merge + deploy phase on `main`, ping-pong sync after main push).
+
+**Closes:** (a.51) RECOMMENDED-NEXT P-18 — **PARTIAL CLOSE** (shipped + deployed but verification pending Codespace rebuild walkthrough director runs between this session and the next).
+
+**Opens:** (a.52) RECOMMENDED-NEXT = P-18 verification re-entry — collect PASS/FAIL from director's Codespace-rebuild test, then close P-18 fully + fire §4 Step 1c forced-picker for the actual NEXT polish item (likely P-26 or P-27 design-only).
+
+**Schema-change-in-flight flag:** stayed "No" the entire session — config-only change.
+
+**Headline outcome:** the W#2 polish backlog's only fresh-Codespace-friction polish item shipped at deploy level today. The two-file config landed correctly (`.devcontainer/devcontainer.json` minimum-viable config + `.devcontainer/install-playwright-deps.sh` 54 LOC idempotent bash script with EXIT-trap yarn.list restore even on failure; mode 100755). Director real-Chrome verification (fresh-Codespace-rebuild walkthrough — the only path that proves the postCreateCommand wiring actually fires) is DEFERRED to the next session because rebuilding the Codespace kills the running Claude terminal mid-session.
+
+**Drift caught at session-start (Rule 3 — code wins):**
+- Confirmed `.devcontainer/` directory does NOT exist today (fresh creation, no merge with existing config). Matches the launch prompt's premise.
+- Confirmed README §"Running the Playwright regression tests" lines 50-74 has the **full canonical lib list** (more libs than the launch-prompt teaser — script mirrors the README's full list, not the teaser).
+- Confirmed Playwright's `--with-deps` flag is RULED OUT (the same yarn.list GPG issue would block its internal `apt update`).
+- Confirmed `npm run test:e2e:all` resolves to `playwright test` at `package.json:13` (matches launch prompt).
+
+**Fix shape (refined per pre-coding Rule 14f forced-picker fired BEFORE the 529 storm — director picked Option B = separate script over Option A = inline one-liner; recommended per `feedback_recommendation_style.md` for cleaner separation + idempotent + re-runnable as standalone recovery tool):**
+
+1. `.devcontainer/devcontainer.json` (3 effective lines) — minimum-viable config:
+   - `name` field (cosmetic only).
+   - `postCreateCommand` field pointing to `bash .devcontainer/install-playwright-deps.sh`.
+   - **Deliberately omits the `image` field** so Codespaces uses its current default `universal:linux` image — preserves today's behavior exactly without risk of pinning to a stale image version.
+
+2. `.devcontainer/install-playwright-deps.sh` (54 LOC commented bash, mode 100755, idempotent) — mirrors the manual workaround from `README.md` §"Running the Playwright regression tests" lines 50-74:
+   - Disable `/etc/apt/sources.list.d/yarn.list` (rename to `yarn.list.disabled`) to work around the unverifiable GPG signature that blocks `apt update`.
+   - Run `apt-get update` cleanly without the yarn.list interference.
+   - Run `apt-get install -y` on the full canonical lib set (25 libs — see below).
+   - **EXIT trap** that always restores yarn.list (rename back from `yarn.list.disabled` to `yarn.list`) even if any earlier step fails — so the Codespace's apt sources end up in the same state regardless of script outcome.
+   - Safe to re-run by hand from any Codespace as a recovery tool (`bash .devcontainer/install-playwright-deps.sh`).
+
+3. **Full canonical lib set installed by the script (matches README's list at lines 50-74; more libs than the launch-prompt teaser):**
+
+   `libnss3 libatk1.0-0t64 libatk-bridge2.0-0t64 libcups2t64 libxkbcommon0 libxcomposite1 libxdamage1 libxrandr2 libgbm1 libpango-1.0-0 libcairo2 libasound2t64 libatspi2.0-0t64 libxfixes3 libxshmfence1 libxss1 libxtst6 libnspr4 libdrm2 libwayland-client0 libwayland-egl1 libwayland-cursor0 libgdk-pixbuf-2.0-0 libnotify4 libdbus-1-3 libexpat1`
+
+**Per Rule 23 Change Impact Audit (pre-classified before code):** Additive (safe). Config-only. No source code, no schema, no API, no test additions. Zero downstream W#1 / W#3 cross-tool impact. Only affects fresh Codespace builds; existing Codespaces unaffected.
+
+**Implementation summary:**
+
+| File | Status | LOC | Mode |
+|---|---|---|---|
+| `.devcontainer/devcontainer.json` | NEW | 3 effective lines | regular |
+| `.devcontainer/install-playwright-deps.sh` | NEW | 54 LOC commented bash | 100755 (executable) |
+
+**Pre-deploy + post-merge scoreboard — BOTH GREEN at exact 2026-05-20 baselines (identical pre + post confirms the config-only nature of the change):**
+
+| Check | Pre-deploy | Post-merge | vs. 2026-05-20 baseline |
+|---|---|---|---|
+| root `npx tsc --noEmit` | clean | clean | unchanged |
+| extension `npx tsc --noEmit` | clean | clean | unchanged |
+| `npm run build` routes | 53 routes | 53 routes | unchanged |
+| src/lib `node:test` | 536/536 | 536/536 | unchanged |
+| extension `npm test` | 428/428 | 428/428 | unchanged |
+| Playwright (2 projects) | 91/91 in 2.0 min | 91/91 in 2.1 min | unchanged |
+
+Identical baselines pre + post confirm the config-only nature of the change.
+
+**Build + ff-merge + deploy mechanics:**
+
+- Build commit `49c6403` on `workflow-2-competition-scraping` (2 new files +58 LOC config).
+- ff-merge `bc60ee1..49c6403` clean onto `main` (main hadn't moved since yesterday's 2026-05-20 deploy-#29 + doc-batch).
+- Pushed `origin/main` → Vercel auto-redeploy (web no-op — config-only change).
+- Ping-pong sync to `origin/workflow-2-competition-scraping` (both branches at `49c6403`).
+- Rule 9 deploy gate via AskUserQuestion picker → director picked "Deploy now (recommended)".
+
+**Fresh extension zip (third consecutive byte-identical):** `plos-extension-2026-05-21-w2-deploy-30.zip` at repo root, **191,561 bytes — byte-identical to deploy-29's + deploy-28's zips**. Third consecutive byte-identical extension bundle; no extension source change since the P-23 ship on 2026-05-19-g. wxt-zip parent-process hang recurred (matching the 2026-05-19-f + 2026-05-19-g observations; counter-evidence to 2026-05-20's clean run) — hung at the ~5-15 sec mark with the artifact already correctly written; killed via `pkill -f "wxt zip"` after artifact verification. The kill-shell command itself exit-coded 144 due to a SIGUSR1 race with the background-task completion notification firing at exactly that moment (a Claude-Code-harness quirk; informational observation, not a Bash slip — see CORRECTIONS_LOG 2026-05-21 §Entry #2). Retried the `cp` standalone, succeeded. Zip identity confirmed via byte-count match.
+
+**Director real-Chrome verification — SKIPPED + DEFERRED to next session per Codespace-rebuild coupling discovery (PENDING line below):**
+
+- **Rule 27 scope exception** applies here in principle (postCreateCommand is dev-environment ergonomics, not user-visible behavior), BUT director's earlier verification-picker outcome was Option A (fresh-Codespace-rebuild walkthrough — the only path that proves the postCreateCommand wiring actually fires) per the original 2026-05-21 RESUMPTION NOTE captured before the 529 storm.
+- **Coupling discovered mid-session:** rebuilding the Codespace tears down the running container and kills all processes inside it — including the terminal where Claude Code is running. In-session verification is structurally impossible.
+- Surfaced to director via Rule 14f follow-up picker (verify-now-with-session-death vs. wrap-and-verify-after vs. skip-verification); director picked **"Wrap up this session now — verify after on your own time (recommended)"**.
+
+**P-18 VERIFICATION PENDING — director walkthrough (between this session and the next):**
+
+1. Open the Codespace's command palette (View menu → "Command Palette…" or `Ctrl+Shift+P` / `Cmd+Shift+P`).
+2. Type "Codespaces: Rebuild Container" and select it. (The simpler Dev Containers extension's "Rebuild Container" command may also work; the Codespaces-specific command is the documented one.)
+3. Confirm the rebuild prompt. The container will tear down + rebuild over ~5-10 minutes. Claude Code's terminal in the current Codespace will be killed during this — expected.
+4. After the rebuild completes, the Codespace reloads with a fresh container. **Open a fresh terminal** (Terminal menu → "New Terminal" or Ctrl+\` / Cmd+\`).
+5. Run `cd /workspaces/brand-operations-hub && npm run test:e2e:all`.
+6. Record the result:
+   - **PASS** = Playwright suite runs to completion (~2 min) and reports 91/91 passed. The postCreateCommand fired during the rebuild, installed the libs, Chromium has everything it needs.
+   - **FAIL** = error message containing `error while loading shared libraries: libXXX.so.0` or similar. Copy the full error message verbatim.
+7. Bring the PASS/FAIL + any error text to the next Claude session as input to the first task's Rule 14f forced-picker.
+
+**Time budget for the offline verification step:** ~10-15 minutes (5-10 min rebuild + 2 min test run + a few min to inspect output).
+
+**Process observations captured informationally this session (NOT process-failure-tier slips; both captured in CORRECTIONS_LOG 2026-05-21 §Entries #1 + #2):**
+
+- **§Entry #1 — cwd-leak Bash slip recurred TWICE this session** (pre-deploy scoreboard check 4 + post-merge scoreboard check 6 — same root cause as 2026-05-16 + 2026-05-15-d + 2026-05-14 + 2026-05-13 + 2026-05-12-c; 6th-or-7th recurrence; net cost ~60 sec; zero production impact).
+- **§Entry #2 — Anthropic API 529 Overload storm mid-session** — pause-and-resume pattern via NEXT_SESSION.md amendment commit `1e28bd1` (workflow-2 only, NOT main, no Rule 9 trigger) worked cleanly; new operational pattern captured for future API outages. Bonus observations: cp/pkill SIGUSR1 race during the deploy's extension-zip rename (Claude-Code-harness quirk; exit code 144 from a SIGCHLD/SIGUSR1 race with a background-task completion notification) + `check-next-session-doc.sh` PreToolUse hook substring-match observation (hook fires on the `End-of-session` substring even in negation contexts; cleaner long-term fix is to match the full `End-of-session doc batch` prefix).
+
+**HEADLINE: 5 of W#2 polish items SHIPPED this week (P-24 + P-25 + P-23 + P-22 + P-18); 2 W#2 polish items remain (P-26 + P-27) before W#2 graduation per director's standing directive. Estimated ~7-14 more W#2 polish sessions before graduation (P-27 captured-videos alone is ~6-12 sessions).**
+
+**Cross-references:**
+
+- `.devcontainer/devcontainer.json` (the new config — minimum-viable shape)
+- `.devcontainer/install-playwright-deps.sh` (the new bash script — idempotent + EXIT-trap yarn.list restore)
+- `README.md` §"Running the Playwright regression tests" lines 50-74 (canonical manual workaround that the script mirrors)
+- ROADMAP W#2 polish backlog P-18 entry — flipped ✅ SHIPPED-AT-DEPLOY-LEVEL 2026-05-21 — verification pending Codespace rebuild walkthrough this session
+- CORRECTIONS_LOG 2026-05-21 §Entry #1 (cwd-leak recurrence)
+- CORRECTIONS_LOG 2026-05-21 §Entry #2 (529 storm pause-and-resume pattern + harness quirks)
+- deploy session #30 commit `49c6403`
+- session-pause commit `1e28bd1` (workflow-2 only — encodes the picker outcomes + environment-check results captured before the 529 storm)
+- fresh zip `plos-extension-2026-05-21-w2-deploy-30.zip` (191,561 bytes — byte-identical to deploy-29's + deploy-28's; third consecutive)
 
 ---
 

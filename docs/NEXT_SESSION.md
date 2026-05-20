@@ -1,153 +1,129 @@
 # Next session
 
-**Written:** 2026-05-20 (`session_2026-05-20_w2-main-deploy-session-29-p22-cross-platform-slices-DEPLOYED` — end-of-session handoff after P-22 cross-platform regression coverage shipped and deployed).
+**Written:** 2026-05-21 (`session_2026-05-21_w2-main-deploy-session-30-p18-devcontainer-DEPLOYED-VERIFICATION-DEFERRED` — end-of-session handoff after P-18 devcontainer postCreateCommand shipped + deployed but director real-Chrome (fresh-Codespace-rebuild) verification deferred to the next session due to the Codespace-rebuild-kills-running-session coupling discovered mid-session).
 
-**Amended:** 2026-05-21 (P-18 attempt — ABORTED partway due to repeated Anthropic API 529 Overloaded errors. ZERO file edits this session; working tree clean; branch unchanged at `bc60ee1`. Start-of-session reads + drift check + both pickers completed before the 529 storm. **The two pickers below have already been answered — the next session MUST skip re-firing them and proceed straight to coding the recommended Option B + Option A shapes.** See `## 2026-05-21 RESUMPTION NOTE` below for picker outcomes + environment-check results.)
-
-**For:** the next Claude Code session (P-18 task — resume from picker-outcome point; details below).
-
----
-
-## 2026-05-21 RESUMPTION NOTE — picker outcomes already captured + diagnosis verified
-
-**Status:** Session 2026-05-21 attempted to ship P-18 but aborted partway due to repeated Anthropic API 529 Overloaded server errors. Zero file edits made. Branch unchanged. Director paused safely + asked for a wrap that preserves the picker outcomes so the next session doesn't re-litigate them.
-
-**Pickers ALREADY answered — do NOT re-fire on resume:**
-
-- **Rule 14f fix-shape picker:** Director picked **Option B — separate `.devcontainer/install-playwright-deps.sh` script invoked from `postCreateCommand`** (the recommended option per `feedback_recommendation_style.md` — most thorough/reliable; cleaner separation; idempotent; re-runnable as standalone recovery tool from any Codespace).
-- **Rule 27 verification picker:** Director picked **Option A — Director walkthrough on a fresh Codespace rebuild** (the recommended option — only path that proves the `postCreateCommand` wiring actually fires on real Codespace creation; ~10 min wait for the rebuild; tradeoff vs. faster `apt-get purge` simulation explicitly weighed and rejected because the simulation would test the script but NOT the wiring).
-
-**Environment verified at session start (Rule 3 — code wins):**
-- Codespace user is `codespace` (relevant for any `remoteUser` field in `devcontainer.json` if needed).
-- OS: Ubuntu 24.04.3 LTS Noble Numbat — matches README's "default Codespaces Ubuntu 24.04" framing.
-- `/etc/apt/sources.list.d/` contains: `conda.list`, `microsoft.list`, `ubuntu.sources`, `yarn.list` — **`yarn.list` confirmed present**, so the README workaround's disable-yarn-list-before-apt-update dance applies as-documented.
-- `.devcontainer/` directory does NOT exist today — fresh creation, no merge with existing config.
-- `npm run test:e2e:all` confirmed at `package.json:13` as `"playwright test"`.
-- README §"Running the Playwright regression tests" lines 50-74 has the **full canonical lib list** (more libs than the launch-prompt teaser):
-  - `libnss3 libatk1.0-0t64 libatk-bridge2.0-0t64 libcups2t64 libxkbcommon0 libxcomposite1 libxdamage1 libxrandr2 libgbm1 libpango-1.0-0 libcairo2 libasound2t64 libatspi2.0-0t64 libxfixes3 libxshmfence1 libxss1 libxtst6 libnspr4 libdrm2 libwayland-client0 libwayland-egl1 libwayland-cursor0 libgdk-pixbuf-2.0-0 libnotify4 libdbus-1-3 libexpat1`
-- Playwright's `--with-deps` flag is RULED OUT per README — same `yarn.list` GPG issue would block its internal `apt update`.
-
-**Next-session-on-resume should:**
-1. Skip the start-of-session reads' Rule 27 + Rule 14f pickers (already answered above — proceed straight to Option B + Option A).
-2. Code the fix per Option B:
-   - Create `.devcontainer/devcontainer.json` minimum-viable config (probably explicit `"image": "mcr.microsoft.com/devcontainers/universal:linux"` to preserve current Codespaces default + `"postCreateCommand": "bash .devcontainer/install-playwright-deps.sh"` + `"remoteUser": "codespace"`).
-   - Create `.devcontainer/install-playwright-deps.sh` (commented bash; ~30-40 LOC; idempotent — runs `apt-get install -y` which is no-op if libs already present; preserves yarn.list state by always restoring after, even on failure via a `trap`).
-3. Run `/scoreboard` pre-deploy. Expected: all 6 checks unchanged from yesterday's baseline (tsc clean / ext tsc clean / 53 routes / 536 src/lib / 428 ext / 91 Playwright) — config-only ship, no source/schema/test surface.
-4. `/deploy` per cheat-sheet (b) — Rule 9 gate via AskUserQuestion + ff-merge to main + post-merge scoreboard + push origin/main + ping-pong sync. Fresh extension zip expected byte-identical (no extension source change).
-5. Director walkthrough on fresh Codespace rebuild (Option A — the verification picker outcome). Codespaces UI → three-dot menu → "Rebuild Container" (or fully recreate via codespaces.new). ~10 min wait. Then in fresh terminal: `npm run test:e2e:all`. Should PASS without any manual lib install.
-6. `/end-of-session` doc batch — should flip ROADMAP (a.51) → ✅ DONE + open (a.52) RECOMMENDED-NEXT (likely P-26 or P-27 design-only via §4 Step 1c forced-picker).
-
-**Why this resumption-note matters:** without it, the next session would re-fire both pickers (~30 sec director time wasted) AND re-do the environment-check Bash commands. With this note, the next session skips straight to the Edit/Write calls for the two new files. Recovers ~5 min of session time + preserves the analysis-quality of the picker decisions.
+**For:** the next Claude Code session (P-18 verification re-entry — collect the PASS/FAIL result from director's Codespace-rebuild walkthrough that happens between this session and the next, then close P-18 fully + fire §4 Step 1c forced-picker for the actual NEXT polish item).
 
 ---
 
 ## Status of today's session
 
-**P-22 Playwright cross-platform slices 2-4** SHIPPED + DEPLOYED on vklf.com. Build commit `f4e90ec`. Closes (a.50) RECOMMENDED-NEXT.
+**P-18 devcontainer postCreateCommand for Playwright Chromium system libraries SHIPPED + DEPLOYED on vklf.com** (functional no-op for end users — pure developer-environment ergonomics). Build commit `49c6403` on `workflow-2-competition-scraping`; ff-merged clean onto `main` (`bc60ee1..49c6403` — main hadn't moved since yesterday's 2026-05-20 deploy-#29 + doc-batch); pushed origin/main → Vercel auto-redeploy (web no-op — config-only change) → ping-pong sync to workflow-2 (both branches at `49c6403`).
 
-Pre-deploy + post-merge scoreboards both GREEN: tsc / ext tsc / `npm run build` **53 routes** / src/lib node:test **536/536** (unchanged) / extension `npm test` **428/428** (unchanged — no extension source change) / Playwright **91/91** (was 79; **+12 new per-platform specs** = P-23 +3 + P-24 +3 + P-25 +6). Fresh zip `plos-extension-2026-05-20-w2-deploy-29.zip` (191,561 bytes; **byte-identical to deploy-28's zip** — confirms the predicted byte-identical-bundle outcome when extension source is unchanged). Director real-Chrome verification SKIPPED per Rule 27 scope-exception (pure regression coverage extension; no user-visible behavior change; Playwright suite IS the verification).
+**PARTIAL CLOSE on (a.51) RECOMMENDED-NEXT P-18.** The two-file config landed correctly (`.devcontainer/devcontainer.json` minimum-viable config + `.devcontainer/install-playwright-deps.sh` 54 LOC idempotent bash script with `EXIT trap` to always restore yarn.list even on failure; mode 100755). But **the director real-Chrome verification was DEFERRED to the next session** because the only path that proves the postCreateCommand wiring actually fires (director's earlier Rule 27 Option A pick = fresh-Codespace-rebuild walkthrough) requires tearing down the running container — which kills Claude's terminal mid-session. Director picked **"Wrap up this session now — verify after on your own time (recommended)"** at the mid-session Rule 14f follow-up picker.
 
-4 of W#2 polish items SHIPPED this week (P-24 + P-25 + P-23 + P-22); **3 W#2 polish items remain** (P-18 + P-26 + P-27) before W#2 graduation per director's standing directive. Estimated ~7-15 more W#2 polish sessions before graduation (P-27 captured-videos alone is ~6-12 sessions).
+**Pre-deploy + post-merge scoreboards both GREEN at exact 2026-05-20 baselines** (identical pre + post — confirms the config-only nature of the change): tsc / ext tsc / `npm run build` **53 routes** (unchanged) / src/lib node:test **536/536** (unchanged) / extension `npm test` **428/428** (unchanged) / Playwright **91/91** in 2.0 min pre-deploy + 2.1 min post-merge (unchanged). Fresh zip `plos-extension-2026-05-21-w2-deploy-30.zip` at repo root (191,561 bytes — **byte-identical to deploy-29's + deploy-28's; third consecutive byte-identical extension bundle**, since no extension source has changed since the P-23 ship on 2026-05-19-g).
+
+Schema-change-in-flight stayed "No" the entire session. Per Rule 23 Change Impact Audit: Additive (safe). Config-only. No source code, no schema, no API, no test additions. Zero downstream W#1 / W#3 cross-tool impact. Only affects fresh Codespace builds; existing Codespaces unaffected.
 
 ---
 
 ## Branch
 
-**`workflow-2-competition-scraping`** — W#2 polish work, NOT platform-wide. The `./resume` script will switch you to `workflow-2-competition-scraping`. Verify with `git branch --show-current` immediately after `./resume`; should be on `workflow-2-competition-scraping`. If you're on `main`, STOP and surface to director.
+**`workflow-2-competition-scraping`** — W#2 polish work. The `./resume` script will switch you to `workflow-2-competition-scraping`. Verify with `git branch --show-current` immediately after `./resume`; should be on `workflow-2-competition-scraping`. If you're on `main`, STOP and surface to director.
 
-Expected branch state on entry: `workflow-2-competition-scraping` exactly even with `origin/workflow-2-competition-scraping` AND exactly even with `origin/main`. Both branches at the same SHA after today's deploy-#29 main push + ping-pong sync + end-of-session doc-batch push + ping-pong.
+**Expected branch state on entry:** `workflow-2-competition-scraping` exactly even with `origin/workflow-2-competition-scraping` AND exactly even with `origin/main`. Both branches at the same SHA after this session's deploy-#30 main push + ping-pong sync + end-of-session doc-batch push + ping-pong (the doc-batch commit SHA becomes the new shared tip).
+
+---
 
 ## Launch prompt
 
 Read docs/CLAUDE_CODE_STARTER.md and follow every rule in it. Today's task:
-**Ship P-18 — devcontainer postCreateCommand for Playwright Chromium system libraries** on `workflow-2-competition-scraping` (ROADMAP W#2 polish backlog P-18 entry; ROADMAP Active Tools (a.51) RECOMMENDED-NEXT). Goal: add a `.devcontainer/devcontainer.json` (or update the existing one if present) with a `postCreateCommand` (or `onCreateCommand`) that auto-installs the Playwright Chromium system libs (libgbm1 + libnss3 + libasound2t64 + libatk-1.0-0 + libatk-bridge2.0-0 + libxfixes3 + libnspr4 + others per the README's "Running the Playwright regression tests" section workaround) so that fresh Codespaces can run `npm run test:e2e:all` zero-touch. Sub-1-hour session. Closes (a.51) RECOMMENDED-NEXT.
+
+**P-18 verification re-entry — collect PASS/FAIL from director's Codespace-rebuild walkthrough, then close P-18 fully + fire §4 Step 1c forced-picker for the actual NEXT polish item** on `workflow-2-competition-scraping`. Closes (a.52) RECOMMENDED-NEXT.
 
 Branch is `workflow-2-competition-scraping`. Verify branch state with `git branch --show-current` before any doc reads — should be `workflow-2-competition-scraping`. If you're still on `main`, STOP and surface to director.
 
-**Fix shape (per ROADMAP W#2 polish backlog P-18 entry; ~30-100 LOC of config + small shell stanza; NO source code change; NO schema change; NO test change):**
+**First task — Rule 14f forced-picker before any other work:**
 
-1. **No schema change** — pure devcontainer-config work. Schema-change-in-flight flag stays "No" the entire session.
+Ask director — via AskUserQuestion — whether the Codespace rebuild walkthrough has already happened between sessions:
 
-2. **No source code change** — only `.devcontainer/devcontainer.json` (or equivalent Codespace config) touched.
+- **(A) PASS — director already rebuilt + ran `npm run test:e2e:all` + it passed cleanly without manual lib install** → proceed to close P-18 fully (flip ROADMAP P-18 entry + W#2 Active Tools row + COMPETITION_SCRAPING_VERIFICATION_BACKLOG P-18 verification line to ✅ VERIFIED 2026-05-21+ + close (a.52)); then fire §4 Step 1c forced-picker for the NEXT polish item.
+- **(B) FAIL — director rebuilt but `npm run test:e2e:all` reported a missing-library error (or postCreateCommand didn't run at all)** → diagnose-and-fix mode. Likely candidates: (1) Codespaces didn't pick up the new devcontainer.json on rebuild (rare but possible — verify via `cat /proc/1/cmdline` or container metadata); (2) the install-playwright-deps.sh script failed at the apt-get step (check `~/.npm/_logs/` or postCreateCommand output if available); (3) yarn.list disable/restore dance didn't execute (check `ls /etc/apt/sources.list.d/` — yarn.list should be present after install). Surface the failure mode + a Rule 14f fix-shape picker to director before any code.
+- **(C) NOT YET — director hasn't had time to rebuild + test yet** → walk the director through the rebuild walkthrough click-by-click in this session (Codespaces command palette → "Codespaces: Rebuild Container" → wait ~5-10 min for the rebuild → open fresh terminal → `cd /workspaces/brand-operations-hub && npm run test:e2e:all` → capture PASS/FAIL). **NOTE:** if director picks (C), Claude's session terminal will be killed by the rebuild — same coupling as 2026-05-21. So (C) effectively becomes another session pause; the practical handoff is: walk director through the rebuild steps verbally, then end this session with a NEXT_SESSION.md amendment recording where we are, and the actual verify-result-collection moves to the session after.
+- **(D) Escape hatch** — director wants to skip P-18 verification entirely + accept it as ✅ SHIPPED-AT-DEPLOY-LEVEL forever, treating the postCreateCommand as documented-but-not-proven; closes (a.52) without the rebuild walkthrough.
 
-3. **No test additions** — the verification IS rebuilding a fresh Codespace and confirming `npm run test:e2e:all` runs zero-touch (Rule 27 forced-picker fires at session start to pick between Director-walkthrough, hybrid simulation via `apt-get purge`, or pure-design-only-on-this-pass).
+**Per `feedback_recommendation_style.md` (most thorough/reliable) + `feedback_default_to_recommendation.md`:** if director already has a PASS/FAIL (A or B) ready, that's the natural path. If not yet (C), walk through the rebuild verbally + end with another amendment + defer collection to the session after. (D) is available but de-emphasized — the whole point of P-18 was zero-touch Codespace bring-up; not proving it leaves the value-prop unverified.
 
-4. **First check:** does `.devcontainer/devcontainer.json` exist today? Search the repo root and `.devcontainer/` subdirectory. The ROADMAP P-18 capture says "no `.devcontainer/` directory exists today" but verify per Rule 3 (code wins; documentation may be stale).
-   - If it exists → add/extend the `postCreateCommand` (or `onCreateCommand`) field with the lib-install stanza. Preserve any other postCreateCommand work already there by chaining (`&&` or `;` depending on idempotency needs).
-   - If it doesn't exist → create the file with the minimum-viable schema + the postCreateCommand stanza.
+**Pre-build read list (in addition to mandatory start-of-session sequence):**
 
-5. **The lib-install stanza shape:** mirror the manual workaround documented in `README.md` §"Running the Playwright regression tests" — the workaround that today involves temporarily disabling `/etc/apt/sources.list.d/yarn.list` (because of an unverifiable GPG signature blocking `apt update`), running `apt update + apt install -y libgbm1 libnss3 libasound2t64 ...`, then restoring yarn.list. Encode the same sequence as a `postCreateCommand` shell one-liner OR a small `.devcontainer/install-playwright-deps.sh` script invoked from `postCreateCommand`.
+- `docs/ROADMAP.md` lines 1-30 (header) + the (a.51) + (a.52) Active Tools entries + the P-18 polish backlog entry near line 137 (after this session's flip, should show ✅ SHIPPED-AT-DEPLOY-LEVEL 2026-05-21 — verification pending Codespace rebuild walkthrough).
+- `docs/COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` lines 1-30 (header) + the new "Deploy session #30" section at the end (the verification PENDING line is captured there as the canonical entry for the rebuild walkthrough director performs offline).
+- `.devcontainer/devcontainer.json` (the file shipped this session — verify its contents on disk per Rule 3).
+- `.devcontainer/install-playwright-deps.sh` (the script shipped this session — verify mode 100755 + the EXIT trap shape).
+- `README.md` §"Running the Playwright regression tests" lines 50-74 (canonical manual workaround that the script mirrors; reference shape for what "PASS" looks like).
 
-6. **Per Rule 23 Change Impact Audit (pre-classify before code):** Additive (safe). Config-only change. No source code change. No schema change. No API change. No test change. Zero downstream W#1 / W#3 cross-tool impact. The change only takes effect on **fresh Codespace builds** — existing Codespaces are unaffected.
+**On PASS (option A or successful (C) result later) — close-out steps:**
 
-**Diagnosis steps before coding (verify the launch prompt's premises before any code):**
+1. Flip ROADMAP P-18 polish backlog entry status from "✅ SHIPPED-AT-DEPLOY-LEVEL 2026-05-21 — verification pending Codespace rebuild walkthrough" to "✅ DONE-AND-VERIFIED 2026-05-21+ (director Codespace-rebuild walkthrough PASS — fresh Codespace ran `npm run test:e2e:all` without manual lib install)".
+2. Flip ROADMAP Active Tools (a.51) entry to ✅ DONE-AND-VERIFIED (currently ✅ SHIPPED-AT-DEPLOY-LEVEL — verification deferred to (a.52)).
+3. Close (a.52) RECOMMENDED-NEXT (P-18 verification re-entry).
+4. Add a verification-PASS line to COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md's Deploy session #30 entry.
+5. Fire §4 Step 1c forced-picker for the actual NEXT polish item. Likely candidates:
+   - **(a) P-26 below-fold full-page-scroll capture** — LOW-severity UX gap; ~600-1000 LOC; large lift; documented workaround works.
+   - **(b) P-27 captured-videos feature DESIGN SESSION** — substantive new feature; first session is design-only; needs 6-12 sessions total post-design.
+   - **(c) Manual-add modal originalSrcUrl tack-on** (DEFERRED from 2026-05-19-e — trivial 1-line; could fold into any P-NN session).
+   - **(d) Escape hatch.**
+   Per `feedback_recommendation_style.md`: the recommendation depends on director's tolerance for session-count to W#2 graduation. P-26 is the smaller path (~1-2 sessions); P-27 is the larger path (~6-12 sessions); both must ship before W#2 graduation per the standing directive.
 
-1. Run `ls -la .devcontainer/ 2>/dev/null || echo "no .devcontainer dir"` to confirm the today's state.
-2. Read `README.md` §"Running the Playwright regression tests" — confirm the exact lib list director runs manually today + the yarn.list workaround.
-3. Read `package.json` to confirm `npm run test:e2e:all` is the actual canonical command (or whatever it is; just verify the script name).
-4. Look at Playwright's published `--with-deps` lib list at `node_modules/playwright/lib/server/registry/dependencies.js` (or wherever it lives in this Playwright version) — the canonical list is the ground truth.
-5. Sanity-check whether a `--with-deps` workaround actually works today (the README claims it doesn't because of the yarn.list GPG issue — verify per Rule 3).
-6. Surface any drift to director BEFORE coding via AskUserQuestion picker.
+**On FAIL (option B) — diagnose-and-fix:**
 
-**Forced-picker before coding (Rule 14f):**
+1. Capture the exact error text from `npm run test:e2e:all` (likely shape: `error while loading shared libraries: libXXX.so.0`).
+2. Compare to the canonical lib list in `.devcontainer/install-playwright-deps.sh` line ~20-30 — does the missing lib appear in the script?
+   - If YES → the script ran but the apt-get install didn't actually install it. Likely cause: yarn.list disable failed; apt update returned stale; apt install hit a 404 on the lib. Check the postCreateCommand log if Codespaces preserved it (usually under `/tmp/` or `/var/log/codespaces/`).
+   - If NO → the lib list in the script is incomplete vs. what Playwright actually needs in this Codespaces image. Add it + bump the lib list; ship a P-18 follow-up fix.
+3. After fix lands, repeat the rebuild walkthrough to re-verify.
 
-The fix is narrow but the SHAPE choice matters:
+**Schema-change-in-flight flag:** stays "No" entire session (verification re-entry; if FAIL → bug fix still config-only; no schema work either way).
 
-- (A) Inline `postCreateCommand` string in `devcontainer.json` (recommended if it fits on one line; ~50-80 chars; lowest config surface)
-- (B) Separate `.devcontainer/install-playwright-deps.sh` script invoked from `postCreateCommand` (cleaner separation; ~30-40 LOC bash; idempotent + commented; recommended if the install sequence has multiple steps including the yarn.list dance)
-- (C) Use Playwright's `--with-deps` flag in the script if it works (smaller surface; might not work per README) — verify with a quick test
-- (D) Escape hatch
-
-Per `feedback_recommendation_style.md` (most thorough/reliable): likely **Option (B)** — the install sequence has multiple steps (disable yarn.list + apt update + apt install + restore yarn.list) and benefits from being in a versioned script with comments; the script can be re-run from any Codespace as a recovery tool if `postCreateCommand` didn't run.
-
-**Test coverage decision (Rule 27 forced-picker at session start — directly relevant since this is dev-environment ergonomics):**
-
-- (A) Director walkthrough on a fresh Codespace rebuild (recommended — only way to PROVE the postCreateCommand actually runs on a fresh container; cost ~10 minutes including waiting for the rebuild)
-- (B) Hybrid: simulate the fresh state via `sudo apt-get purge libgbm1 libnss3 ...` + then `bash .devcontainer/install-playwright-deps.sh` standalone + then `npm run test:e2e:all` (faster than a full rebuild; doesn't validate the `postCreateCommand` invocation itself, only the script contents)
-- (C) Pure-design-only-on-this-pass — ship the config, defer real verification to whenever the next fresh Codespace happens organically (lowest-cost; lowest-signal)
-- (D) Escape hatch
-
-Per `feedback_recommendation_style.md`: **Option (A) Director walkthrough on a fresh Codespace rebuild** — only this proves the wiring actually fires. Acceptable to also do (B) as a fast smoke before (A) if director time is constrained.
-
-**Pre-deploy verification scoreboard targets (expected baselines from today's deploy session #29 post-state):**
+**Pre-deploy verification scoreboard targets (if any code change ships):**
 
 - `npx tsc --noEmit` clean
 - `cd extensions/competition-scraping && npx tsc --noEmit` clean
 - `npm run build` clean — **53 routes** (unchanged — no new route)
 - `src/lib` node:test: **536/536** (unchanged — no server-side change)
 - Extension `npm test`: **428/428** (unchanged — no extension source change)
-- Playwright: **91/91** (unchanged — no test additions expected since this is a config-only ship)
+- Playwright: **91/91** (unchanged — no test additions expected for verification close-out)
 
-**Deploy mechanics (cheat-sheet b — standard W#2 → main deploy):** unchanged. Pre-deploy scoreboard → rebase if main moved → ff-merge → post-merge scoreboard → Rule 9 gate → push main → ping-pong sync → fresh extension build (no source change so the bundle is byte-identical except possibly for a wxt-imposed build hash; cheap rebuild). Real-Chrome verification fires per Rule 27 picker outcome above — Option (A) director walkthrough on a fresh Codespace rebuild is the gold standard; the postCreateCommand only fires on fresh-Codespace creation.
+If the FAIL path triggers a real config fix, deploy mechanics are cheat-sheet (b) — Rule 9-gated AskUserQuestion deploy gate, ff-merge, ping-pong sync. Fresh extension zip expected byte-identical AGAIN (config-only).
 
-**Group A docs to update at end-of-session:** ROADMAP (header + P-18 polish backlog entry flipped ✅ SHIPPED-AT-DEPLOY-LEVEL 2026-05-XX + (a.51) → ✅ DONE + new (a.52) RECOMMENDED-NEXT — likely P-26 or P-27 design-only via §4 Step 1c forced-picker); CHAT_REGISTRY (new top entry); DOCUMENT_MANIFEST (header bump only — no doc add/remove unless `.devcontainer/install-playwright-deps.sh` is created and listed there); CORRECTIONS_LOG (header bump + any new entries — possibly a CHROMIUM-LIB-LIST-STALENESS §Entry if the Playwright `--with-deps` lib list has drifted from the README's manually-curated list); NEXT_SESSION (rewritten for the next polish item — likely P-26 or P-27 design-only).
+**Group A docs to update at end-of-session:** ROADMAP (header + (a.51) flipped to ✅ DONE-AND-VERIFIED if PASS or amended if FAIL + new (a.53) RECOMMENDED-NEXT for the picked next polish item + P-18 polish backlog entry annotated with the verification outcome); CHAT_REGISTRY (new top entry); DOCUMENT_MANIFEST (header bump only — no doc add/remove unless the FAIL path adds a new file); CORRECTIONS_LOG (header bump + any new entries — if the FAIL path surfaces a slip, capture it; if PASS, header-bump only); NEXT_SESSION (rewritten for the new picked next polish item).
 
-**Group B docs to update at end-of-session:** COMPETITION_SCRAPING_VERIFICATION_BACKLOG (new Deploy session #30 entry + P-18 flipped ✅ DONE). COMPETITION_SCRAPING_DESIGN unchanged (config-only change doesn't change design intent — no §B entry needed; mirrors the 2026-05-19-d P-16 + 2026-05-20 P-22 precedents).
+**Group B docs to update at end-of-session:** COMPETITION_SCRAPING_VERIFICATION_BACKLOG (new "Deploy session #30 verification close-out" addendum entry + P-18 verification PENDING → PASS or FAIL flip). COMPETITION_SCRAPING_DESIGN unchanged (verification-only close-out; no design intent change).
 
-**Schema-change-in-flight flag:** stays "No" entire session (config-only change; no schema work).
+Start by running the mandatory start-of-session sequence, then fire the first task's Rule 14f forced-picker (A/B/C/D above) before any other work.
 
-Start by running the mandatory start-of-session sequence.
+---
 
-**Pre-build read list (in addition to mandatory start-of-session sequence):**
+## Pre-session notes (offline steps for director between sessions)
 
-- `.devcontainer/devcontainer.json` (if it exists — verify per Rule 3).
-- `README.md` §"Running the Playwright regression tests" (the canonical manual workaround director runs today).
-- `package.json` (verify `npm run test:e2e:all` script name).
-- ROADMAP W#2 polish backlog P-18 entry.
+**This is the load-bearing offline step.** Between this session and the next:
 
-## Pre-session notes (optional, offline steps to do between sessions)
+1. Open the Codespace's command palette (View menu → "Command Palette…" or `Ctrl+Shift+P` / `Cmd+Shift+P`).
+2. Type "Codespaces: Rebuild Container" and select it. **Note:** the simpler "Rebuild Container" command (Dev Containers extension) may also work, but "Codespaces: Rebuild Container" is the Codespaces-specific one that picks up the new `.devcontainer/devcontainer.json` on a fresh container build.
+3. Confirm the rebuild prompt. The container will tear down + rebuild over ~5-10 minutes. Claude Code's terminal in the current Codespace will be killed during this — that's expected.
+4. After the rebuild completes, the Codespace will reload with a fresh container. **Open a fresh terminal** (Terminal menu → "New Terminal" or Ctrl+\` / Cmd+\`).
+5. Run `cd /workspaces/brand-operations-hub && npm run test:e2e:all`.
+6. Record the result:
+   - **PASS** = Playwright suite runs to completion (~2 min) and reports 91/91 passed. The postCreateCommand fired during the rebuild, installed the libs, and Chromium has everything it needs.
+   - **FAIL** = error message containing `error while loading shared libraries: libXXX.so.0` or similar. Copy the full error message verbatim.
+7. Bring the PASS/FAIL + any error text to the next Claude session as input to the first task's Rule 14f forced-picker.
 
-If director is willing to schedule a fresh Codespace rebuild during this session for verification (Option A), no offline prep needed — the rebuild happens via Codespace UI ("Rebuild Container" command). If director prefers to test the postCreateCommand in a side-Codespace or via a colleague's fresh checkout, no special prep needed either.
+**Time budget for the offline step:** ~10-15 minutes (5-10 min rebuild + 2 min test run + a few min to inspect output). Sub-15-minute task.
+
+---
 
 ## Why this pointer was written this way (debug aid)
 
-Today's session shipped P-22 cleanly + scoreboards all GREEN (Playwright at 91/91, +12 over deploy-28). The §4 Step 1c forced-picker offered 4 options: (A) P-18 devcontainer Chromium libs [recommended — smallest scope; sub-1-hour; closes a recurring fresh-Codespace friction point], (B) P-26 below-fold full-page-scroll capture [largest lift; ~600-1000 LOC; documented workaround works], (C) P-27 captured-videos design session [substantive new feature; first session would be design-only; needs 6-12 sessions total], (D) escape hatch. Director picked (A) P-18 per `feedback_recommendation_style.md` standing preference (most thorough/reliable — small + reversible + closes a real ergonomics gap that affects every fresh Codespace). Director can override the pick by editing this file's `## Launch prompt` section before next session start.
+Today's session shipped P-18 cleanly + scoreboards all GREEN at exact baselines (config-only nature of the change confirmed by identical pre + post scoreboards + third consecutive byte-identical extension zip). The intended verification path was Option A from the original Rule 27 forced-picker — director-walkthrough on a fresh Codespace rebuild — but mid-session it became clear that rebuilding the Codespace kills the running Claude terminal (since Claude IS running inside the container being rebuilt). I surfaced this coupling to director via a Rule 14f follow-up picker (verify-now-with-session-death vs. wrap-and-verify-after vs. skip-verification) and director picked the recommended "Wrap up this session now — verify after on your own time" option.
 
-**Alternate next-session candidates if director shifts priorities at session start:**
+So this NEXT_SESSION.md is written to handle the three-way A/B/C outcome of what director did between sessions. The first task is the A/B/C/D picker; everything else flows from the picker outcome. Director can override the pick by editing this file's `## Launch prompt` section before next session start.
 
-- **P-26 below-fold full-page-scroll capture** (LOW deferred large lift — last in the queue; current workaround works; ~600-1000 LOC). Captures content below the initial viewport on long product pages via programmatic scroll-and-capture before stitching into a single full-page image.
-- **P-27 Captured-videos feature DESIGN SESSION** (substantive new feature; first session is design-only — no code; runs the full design interview that the 2026-05-19-g-2 capture punted to a dedicated session). Estimated ~6-12 sessions total post-design: schema migration + bucket setup + API routes + extension content-script + popup forms + saved-video indicator + URL detail renderer + single-platform amazon Playwright spec + optional polish. Open design questions: Supabase bucket strategy; thumbnail extraction approach; schema additions; YouTube/Vimeo handling; cross-platform `<video>` detection. **The first P-27 session is design-only (no code) — director-confirmed picks 2026-05-19-g-2: URL reference + uploaded bytes BOTH stored; full UX symmetry with text/image; pre-graduation gating.** Full details: ROADMAP P-27 entry + COMPETITION_SCRAPING_DESIGN §B 2026-05-19-g-2 entry.
+**Alternate next-session candidates if director shifts priorities at session start (after P-18 verification closes):**
+
+- **P-26 below-fold full-page-scroll capture** (LOW-severity deferred large lift — last in the queue; current workaround works; ~600-1000 LOC). Captures content below the initial viewport on long product pages via programmatic scroll-and-capture before stitching into a single full-page image. **Recommended next** if director wants to wrap W#2 polish on the smaller-scope path.
+- **P-27 Captured-videos feature DESIGN SESSION** (substantive new feature; first session is design-only — no code; runs the full design interview that the 2026-05-19-g-2 capture punted to a dedicated session). Estimated ~6-12 sessions total post-design. Open design questions: Supabase bucket strategy; thumbnail extraction approach; schema additions; YouTube/Vimeo handling; cross-platform `<video>` detection. **The first P-27 session is design-only (no code) — director-confirmed picks 2026-05-19-g-2: URL reference + uploaded bytes BOTH stored; full UX symmetry with text/image; pre-graduation gating.**
 - **Manual-add modal originalSrcUrl tack-on** (DEFERRED from 2026-05-19-e — trivial 1-line; could fold into any P-NN session).
-- **Investigate the wxt-build-hang issue more deeply** if it recurs (informational item only; not on the W#2 polish backlog). 2026-05-20's session saw the hang NOT recur (counter-evidence to the prior 2026-05-19-f + 2026-05-19-g recurring-hang observations).
+- **Investigate the wxt-zip parent-process hang behavior session-over-session.** Today's session saw the hang recur (matching 2026-05-19-f + 2026-05-19-g; counter-evidence to 2026-05-20's clean run). Hang pattern: artifact correctly on disk at ~5-15 sec mark; parent process never exits; `pkill -f "wxt zip"` is the workaround. Worth a dedicated investigation session if it keeps recurring across deploys.
 
 Check `ROADMAP.md` for the canonical state.
