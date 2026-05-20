@@ -56,3 +56,11 @@ next-env.d.ts
 # (added 2026-05-19-g-5 alongside resume-workflow ship). Consumed + deleted by
 # the SessionStart hook on next claude launch; should never be tracked.
 .claude/active-workflow-prompt.md
+
+# Codespace persistent-volume backup directory (added 2026-05-20 per HANDOFF_PROTOCOL Rule 29).
+# README + .gitkeep are tracked so future sessions know the architecture exists, but actual
+# backed-up content (e.g., .codespace-backup/memory/) is local-only — backups should not
+# move between developers' Codespaces via git.
+.codespace-backup/*
+!.codespace-backup/README.md
+!.codespace-backup/.gitkeep
