@@ -1,10 +1,10 @@
 // Playwright extension-context regression spec for P-25 — saved-text
 // haze on the page.
 //
-// Coverage (single-platform amazon happy path — sufficient for v1 because
-// the content-script saved-text-haze logic is platform-independent; the
-// per-platform recognition path is exercised by the existing P-22
-// image-capture + highlight-flashing specs across all four platforms):
+// Coverage (per platform across amazon/ebay/etsy/walmart via PLATFORMS array
+// + for-loop — same shape as image-capture.spec.ts and highlight-flashing.
+// spec.ts; P-22 cross-platform extension 2026-05-20 from the original
+// single-platform amazon v1):
 //
 //   1. Extension loads on a route-intercepted product page whose URL is
 //      pre-seeded as a saved CompetitorUrl row.
@@ -16,6 +16,12 @@
 //   4. CapturedText rows with a NULL selector (legacy pre-P-25, manual-add)
 //      get NO haze — the haze count must equal the number of rows whose
 //      selector successfully re-located in the page DOM.
+//
+// Per-platform variation: PRODUCT_URL + OTHER_URL (the nav-away target for
+// the haze-teardown test) use the platform's host. The XPath selector +
+// inline HTML <div><p> structure is platform-neutral; this extension is
+// defensive against any future per-platform divergence in URL recognition
+// or selector deserialization.
 //
 // Auth seeding: same fake-Supabase-session pattern as
 // p24-saved-image-indicator.spec.ts.
@@ -30,7 +36,46 @@ const FAKE_USER_ID = '00000000-0000-4000-8000-000000000015';
 
 const SUPABASE_STORAGE_KEY = 'sb-vyehbgkvdnvsjjfqhqgo-auth-token';
 
-const PRODUCT_URL = 'https://www.amazon.com/dp/B0FAKE5678';
+interface PlatformCase {
+  platform: 'amazon' | 'ebay' | 'etsy' | 'walmart';
+  productUrl: string;
+  /** A second URL on the same platform that is NOT pre-seeded as a saved
+   *  CompetitorUrl. The haze-teardown test navigates here to exercise
+   *  clearTextHazes via the orchestrator's URL-change detection. */
+  otherUrl: string;
+  pageRouteGlob: string;
+}
+
+const PLATFORMS: readonly PlatformCase[] = [
+  {
+    platform: 'amazon',
+    productUrl: 'https://www.amazon.com/dp/B0FAKE5678',
+    otherUrl: 'https://www.amazon.com/dp/B0OTHERPAGE',
+    pageRouteGlob: '**://*.amazon.com/**',
+  },
+  {
+    platform: 'ebay',
+    productUrl: 'https://www.ebay.com/itm/123456005678',
+    otherUrl: 'https://www.ebay.com/itm/999999990000',
+    pageRouteGlob: '**://*.ebay.com/**',
+  },
+  {
+    platform: 'etsy',
+    productUrl:
+      'https://www.etsy.com/listing/123456005678/sample-product',
+    otherUrl:
+      'https://www.etsy.com/listing/999999990000/other-product',
+    pageRouteGlob: '**://*.etsy.com/**',
+  },
+  {
+    platform: 'walmart',
+    productUrl:
+      'https://www.walmart.com/ip/Sample-Product/123456005678',
+    otherUrl:
+      'https://www.walmart.com/ip/Other-Product/999999990000',
+    pageRouteGlob: '**://*.walmart.com/**',
+  },
+];
 
 // The selector targets a known <p> in MOCK_PAGE_HTML. xpath from <body>
 // is `/DIV[1]/P[2]` — first DIV's second P. flattenedOffsets pick a sub-
@@ -68,32 +113,33 @@ function buildFakeSupabaseSession(): string {
   });
 }
 
-test.describe('W#2 P-25 — saved-text haze (extension-context regression)', () => {
-  test.beforeEach(async ({ context, serviceWorker }) => {
-    const session = buildFakeSupabaseSession();
-    await serviceWorker.evaluate(
-      async ([projectId, platform, storageKey, sessionPayload]) => {
-        await chrome.storage.local.set({
-          selectedProjectId: projectId,
-          selectedPlatform: platform,
-          [storageKey]: sessionPayload,
-        });
-      },
-      [FAKE_PROJECT_ID, 'amazon', SUPABASE_STORAGE_KEY, session] as const,
-    );
+for (const pl of PLATFORMS) {
+  test.describe(`W#2 P-25 — saved-text haze — platform=${pl.platform}`, () => {
+    test.beforeEach(async ({ context, serviceWorker }) => {
+      const session = buildFakeSupabaseSession();
+      await serviceWorker.evaluate(
+        async ([projectId, platform, storageKey, sessionPayload]) => {
+          await chrome.storage.local.set({
+            selectedProjectId: projectId,
+            selectedPlatform: platform,
+            [storageKey]: sessionPayload,
+          });
+        },
+        [FAKE_PROJECT_ID, pl.platform, SUPABASE_STORAGE_KEY, session] as const,
+      );
 
-    await context.route('**://*.amazon.com/**', async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'text/html; charset=utf-8',
-        body: MOCK_PAGE_HTML,
+      await context.route(pl.pageRouteGlob, async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'text/html; charset=utf-8',
+          body: MOCK_PAGE_HTML,
+        });
       });
     });
-  });
 
-  test('CSS Custom Highlight registers exactly the rows whose selector re-locates', async ({
-    context,
-  }) => {
+    test('CSS Custom Highlight registers exactly the rows whose selector re-locates', async ({
+      context,
+    }) => {
     // Mock the PLOS API: one saved URL + two CapturedText rows. One has a
     // valid selector pointing at the second <p>; the other has a NULL
     // selector and must be skipped silently.
@@ -107,8 +153,8 @@ test.describe('W#2 P-25 — saved-text haze (extension-context regression)', () 
             {
               id: FAKE_URL_ID,
               projectWorkflowId: 'fake-pw',
-              platform: 'amazon',
-              url: PRODUCT_URL,
+              platform: pl.platform,
+              url: pl.productUrl,
               productName: null,
               source: 'extension',
               isSponsoredAd: false,
@@ -186,7 +232,7 @@ test.describe('W#2 P-25 — saved-text haze (extension-context regression)', () 
     );
 
     const page = await context.newPage();
-    await page.goto(PRODUCT_URL);
+    await page.goto(pl.productUrl);
 
     // Orchestrator attached.
     await page.waitForFunction(
@@ -249,8 +295,8 @@ test.describe('W#2 P-25 — saved-text haze (extension-context regression)', () 
             {
               id: FAKE_URL_ID,
               projectWorkflowId: 'fake-pw',
-              platform: 'amazon',
-              url: PRODUCT_URL,
+              platform: pl.platform,
+              url: pl.productUrl,
               productName: null,
               source: 'extension',
               isSponsoredAd: false,
@@ -311,7 +357,7 @@ test.describe('W#2 P-25 — saved-text haze (extension-context regression)', () 
     );
 
     const page = await context.newPage();
-    await page.goto(PRODUCT_URL);
+    await page.goto(pl.productUrl);
     await page.waitForFunction(
       () => document.body.getAttribute('data-plos-cs-active') === '1',
       undefined,
@@ -328,7 +374,7 @@ test.describe('W#2 P-25 — saved-text haze (extension-context regression)', () 
     );
 
     // Use the same Playwright route to fulfill a NEW non-saved URL.
-    await page.goto('https://www.amazon.com/dp/B0OTHERPAGE');
+    await page.goto(pl.otherUrl);
 
     // Wait for the orchestrator's overlayCheckTimer + clearTextHazes path.
     // The MutationObserver-triggered URL-change detection has a 150ms
@@ -350,4 +396,5 @@ test.describe('W#2 P-25 — saved-text haze (extension-context regression)', () 
     });
     expect(hazeSizeAfterNav).toBe(0);
   });
-});
+  });
+}
