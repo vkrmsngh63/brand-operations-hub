@@ -1,127 +1,124 @@
 # Next session
 
-**Written:** 2026-05-20 (`session_2026-05-20_codespace-rebuild-memory-loss-recovery-and-rule29-prevention-DEPLOYED` — end-of-session handoff after the HIGH-severity Codespaces-rebuild memory-loss recovery session shipped the 4-layer protective architecture + closed P-18 fully via verification PASS + fired §4 Step 1c forced-picker; director picked **(a.53) RECOMMENDED-NEXT = W#2 polish P-27 Captured-videos feature DESIGN session**).
+**Written:** 2026-05-20-b (`session_2026-05-20-b_p27-captured-videos-design-interview` — end-of-session handoff after the P-27 Captured-videos feature DESIGN session shipped the binding spec at `docs/CAPTURED_VIDEOS_DESIGN.md` (525 lines after corrections; §A.0–§A.18 frozen + §B empty per Rule 18 shape); 11 forced-picker outcomes logged in §A.0 audit trail; Rule 24 end-of-session catch corrected an asymmetry-claim slip in §A.3 / §A.8 / §A.18 BEFORE the doc-batch commit; ONE NEW INFORMATIONAL CORRECTIONS_LOG §Entry captures the slip + pattern strengthening. Closes (a.53) RECOMMENDED-NEXT = P-27 design session; opens **(a.54) RECOMMENDED-NEXT = P-27 implementation #1 (Build session — schema + bucket + helper) on `workflow-2-competition-scraping`** as the natural-continuation next session per design doc §A.2 implementation arc table).
 
-**For:** the next Claude Code session — first P-27 session is design-only (no code). Run the full Workflow Requirements Interview per HANDOFF_PROTOCOL Rule 18 in 3-5 question clusters, producing the canonical W#2-tool-specific design doc with §A (initial answers) + §B (empty, append-only). The 2026-05-19-g-2 director-confirmed scope pins (URL reference + uploaded bytes BOTH stored; full UX symmetry with text/image; pre-graduation gating) are binding inputs to Q1 (Purpose) and Q5 (Outputs) — do NOT re-litigate; carry them forward as already-settled.
+**For:** the next Claude Code session — first P-27 Build session (Session #1 of estimated ~6-9 build sessions per the design doc §A.2 implementation arc table). Schema migration via `npx prisma db push` for new `CapturedVideo` table + new `VideoSourceType` enum + new `video-category` value added to the existing `VocabularyEntry` `type` column (verify at implementation time whether the existing `type` column is an enum or a string column — design doc §A.7 schema spec is the canonical source). New Supabase Storage bucket `competition-scraping-videos` creation via the Supabase dashboard (director offline step BEFORE Claude runs the `db push` — see Pre-session notes below). New `src/lib/competition-video-storage.ts` helper wrapper paralleling existing `src/lib/competition-storage.ts` (Phase-1 `requestVideoUploadUrl` / Phase-3 `finalizeVideoUpload` / `getVideoSignedUrl` / `getVideoThumbnailUrl` / `deleteVideo` / `wipeProjectVideos`). Per Rule 23 Change Impact Audit: Additive (safe) — new optional table + new enum value; no existing data affected; no downstream-consumer breakage since no consumers exist yet. **Schema-change-in-flight flag FLIPS to "Yes" at session start.**
 
 ---
 
 ## Status of today's session
 
-**Codespaces-rebuild memory-loss recovery + Rule 29 "Pre-destructive-container-operation audit" + 4-layer protective scaffolding SHIPPED + DEPLOYED on `main`; P-18 verification PASS captured (`npm run test:e2e:all` 91/91 in 1.8 min after Codespace rebuild with ZERO manual lib install — postCreateCommand confirmed firing on rebuild); closes (a.51) + (a.52) RECOMMENDED-NEXT P-18 fully; opens (a.53) RECOMMENDED-NEXT = P-27 Captured-videos feature DESIGN session.** One-hundred-and-nineteenth Claude Code session. HIGH-severity slip recovery session — the 2026-05-21 session recommended a Codespaces "Rebuild Container" walkthrough to verify P-18 WITHOUT auditing what the rebuild would wipe. The rebuild succeeded at P-18 verification but silently wiped Claude's persistent operational memory directory (~10 cross-session operational-memory files) + the Claude Code CLI binary. No PLOS or vklf.com work was lost — all PLOS state lives in git + GitHub remote + Vercel + Supabase. The loss was Claude's own internal operational memory + dev tooling. Director caught the slip post-rebuild + requested permanent protective scaffolding. Five phases shipped: (1) memory reconstruction from `docs/HANDOFF_PROTOCOL.md` references; (2) procedural rule (HANDOFF_PROTOCOL Rule 29 + CLAUDE_CODE_STARTER Rule 8 augment); (3) hook layer (SessionStart canary + PostToolUse backup + audit script); (4) recovery infrastructure (`.codespace-backup/` persistent-volume directory + restore script); (5) P-18 verification PASS + ship. Pre-deploy scoreboard GREEN at exact 2026-05-20 baselines (post-rebuild): tsc / ext tsc / `npm run build` 53 routes / src/lib node:test 536/536 / extension `npm test` 428/428 / Playwright 91/91 in 1.8 min. Ff-merged clean onto main; pushed origin/main → Vercel auto-redeploy (web no-op — tooling/docs/procedural only); ping-pong sync to workflow-2. Schema-change-in-flight stayed "No" the entire session.
+**P-27 Captured-videos feature DESIGN SESSION shipped — DOC-ONLY (no code, no schema, no deploy).** One-hundred-and-twentieth Claude Code session. Full Workflow Requirements Interview per HANDOFF_PROTOCOL Rule 18 across 5 clusters / 14 questions resolved. NEW Group B design doc `docs/CAPTURED_VIDEOS_DESIGN.md` shipped (525 lines after corrections); §A frozen (sections A.0–A.18 covering interview meta + audit trail of 11 forced-picker outcomes + purpose + placement in W#2 graduation sequence + v1 scope + inputs + triggers + per-platform `<video>` detection + CapturedVideo schema + vocab inline-add UX + bucket + size cap + thumbnail extraction + embed save URL validation + size cap enforcement + thumbnail extraction failure fallback + test coverage approach + platform-truths audit + Living Questions + Cross-Tool Data Flow Map reciprocal output declaration + scaffold fit + deferred-items registry); §B empty append-only per Rule 18 convention.
+
+**11 forced-pickers logged this session (full detail in design doc §A.0):** (1) Doc location pick = Option A — new top-level `docs/CAPTURED_VIDEOS_DESIGN.md`. (2) Q3 v1 scope = Option B (Symmetric v1). (3) Q6+Q7 per-platform detection = Option A (platform-agnostic DOM-walker + 10-entry video-embed-hostname allowlist). (4) Q8 schema = Option A (new `CapturedVideo` table + `sourceType` enum discriminator). (5) Q9 vocab UX = Option C (inline "+ Add new category" + 0 seeded entries). (6) Q10a size cap = 100 MB per-file. (7) Q10b thumbnail extraction = Option A (client-side `<canvas>` frame-grab). (8) Q11 embed validation = Option A (URL-pattern regex only). (9) Q12 size cap enforcement = Option A (two-layer client + server). (10) Q13 thumbnail failure fallback = Option A (NULL `thumbnailStoragePath` + ▶️ icon placeholder). (11) Q14 test coverage = Option A (Hybrid per Rule 27).
+
+**Corrections-log informational entry captured for the Rule 24 end-of-session catch on the §A.8 asymmetry-claim** (design doc wrongly claimed text + image forms force admin-page-first vocab creation; per Rule 3 code-wins, inline "+ Add new category" UX already shipped to text + image + URL surfaces per ROADMAP P-13 entry; caught + corrected before commit; demonstrates the safety value of the Rule 24 end-of-session re-check).
+
+**2 NEW permanent feedback memories saved** per director's 2026-05-20-b standing directives: `feedback_destructive_ops_confirmation.md` (every handoff audits this-session + next-session for Rule 8 / Rule 9 / Rule 29 triggers) + `feedback_remaining_roadmap_summary.md` (every handoff includes a "What's left in the total roadmap" summary). `MEMORY.md` index updated. The `.claude/hooks/backup-memory-dir.sh` PostToolUse hook (shipped 2026-05-20 prior session) auto-mirrored both files into `/workspaces/brand-operations-hub/.codespace-backup/memory/` — first real-world validation of the 4-layer memory-loss-prevention architecture's MECHANICAL layer.
+
+**Schema-change-in-flight flag stayed "No"** the entire session. **Per Rule 23 Change Impact Audit:** Additive (safe) — design + docs + 2 new memories only.
 
 ---
 
 ## Branch
 
-**`workflow-2-competition-scraping`** — W#2 polish + new-feature design work. The `./resume` script (or `./resume-workflow 2`) will switch you to `workflow-2-competition-scraping`. Verify with `git branch --show-current` immediately after `./resume`; should be on `workflow-2-competition-scraping`. If you're on `main`, STOP and surface to director.
+**`workflow-2-competition-scraping`** — Build sessions stay on the feature branch; ff-merge to main only at /deploy stages (Build #1 does NOT ship to main — only the schema + bucket + helper land on the feature branch; the full P-27 Build arc ships via a future deploy session per design doc §A.2). The `./resume` script (or `./resume-workflow 2`) will switch you to `workflow-2-competition-scraping`. Verify with `git branch --show-current` immediately after `./resume`; should be on `workflow-2-competition-scraping`. If you're on `main`, STOP and surface to director.
 
-**Expected branch state on entry:** `workflow-2-competition-scraping` exactly even with `origin/workflow-2-competition-scraping` AND exactly even with `origin/main`. Both branches at the same SHA after this session's main push + ping-pong sync + end-of-session doc-batch push + ping-pong (the doc-batch commit SHA becomes the new shared tip).
+**Expected branch state on entry:** `workflow-2-competition-scraping` exactly even with `origin/workflow-2-competition-scraping`; `main` at SHA `a754aee` (unchanged since 2026-05-20 deploy + doc-batch); workflow-2 ONE COMMIT AHEAD of main (this session's end-of-session doc-batch push). No ping-pong sync was needed at end of this session because main didn't move.
 
 ---
 
 ## Launch prompt
 
-Read docs/CLAUDE_CODE_STARTER.md and follow every rule in it. Today's task:
+Read `docs/CLAUDE_CODE_STARTER.md` and follow every rule in it. Today's task:
 
-**W#2 polish P-27 — Captured-videos feature DESIGN SESSION** on `workflow-2-competition-scraping`. **First session is design-only — NO CODE.** Closes (a.53) RECOMMENDED-NEXT.
+**W#2 polish P-27 implementation #1 — Build session (schema + bucket + helper) on `workflow-2-competition-scraping`.** Closes **(a.54) RECOMMENDED-NEXT** (partial close — Build #1 lands the schema + bucket + helper only; subsequent Build sessions add API routes / extension UI / Playwright spec / deploy / verify per `docs/CAPTURED_VIDEOS_DESIGN.md` §A.2 implementation arc table).
 
-Branch is `workflow-2-competition-scraping`. Verify branch state with `git branch --show-current` before any doc reads — should be `workflow-2-competition-scraping`. If you're still on `main`, STOP and surface to director.
+Verify branch state with `git branch --show-current` before any doc reads — should be `workflow-2-competition-scraping`. If you're still on `main`, STOP and surface to director.
 
-**Task shape — Workflow Requirements Interview per HANDOFF_PROTOCOL Rule 18:**
+**Per HANDOFF_PROTOCOL Rule 21 + Rule 22 — Pre-build read list:**
 
-P-27 captured-videos is a substantive new functional surface for W#2 — end-to-end parity with the existing captured-text + captured-image flows so director can attach saved videos to CompetitorUrls alongside text + images. The 2026-05-19-g-2 addendum capture flagged P-27 as a NEW W#2 pre-graduation polish item but explicitly deferred the full design interview to a dedicated future session — THIS session. Run the canonical Workflow Requirements Interview producing the W#2-tool-specific design doc (either as a new `docs/CAPTURED_VIDEOS_DESIGN.md` Group B doc or as an append-only §B-style addendum to the existing `docs/COMPETITION_SCRAPING_DESIGN.md` — director's pick at session-start via Rule 14f forced-picker).
+- `docs/CLAUDE_CODE_STARTER.md` (mandatory start-of-session).
+- `docs/ROADMAP.md` lines 1-30 (header) + the P-27 polish-backlog entry (line ~157 — annotated 2026-05-20-b with "✅ Design session 1 complete; Next stage = Build #1" + all 11 forced-picker outcomes).
+- `docs/CAPTURED_VIDEOS_DESIGN.md` fully (the Group B doc shipped 2026-05-20-b containing the binding spec for P-27 — §A.7 CapturedVideo schema spec is the canonical source for the `prisma db push` migration; §A.9 bucket + size cap + thumbnail extraction is the canonical source for the bucket configuration; §A.2 implementation arc table is the canonical source for the Build session sequencing).
+- `docs/COMPETITION_SCRAPING_DESIGN.md` §B 2026-05-20-b entry (the cross-reference pointer to CAPTURED_VIDEOS_DESIGN).
+- `prisma/schema.prisma` `CapturedImage` model (the sibling table to mirror — read its shape to inform the `CapturedVideo` migration).
+- `prisma/schema.prisma` `VocabularyEntry` model (to verify whether the `type` column is an enum or a string — affects how the new `video-category` value is added).
+- `src/lib/competition-storage.ts` (the sibling helper to mirror — read its shape to inform the `competition-video-storage.ts` helper).
+- `docs/STACK_DECISIONS.md` §3 (the existing image-bucket pattern; the video bucket follows the same private + signed-URLs pattern with a larger 100 MB cap).
+- `docs/HANDOFF_PROTOCOL.md` Rule 23 (Change Impact Audit — classify the schema change BEFORE coding) + Rule 8 (Pre-flight audit for destructive operations — `prisma db push` IS a Rule 8 trigger).
+- `docs/CORRECTIONS_LOG.md` 2026-05-20-b §Entry (the INFORMATIONAL entry on the Rule 24 end-of-session catch — informational read for context on the new operational discipline).
 
-**Binding inputs from 2026-05-19-g-2 director-confirmed picks (do NOT re-litigate — these are settled inputs to the design):**
+**Task shape (Build session #1):**
 
-- **(Q1 Source — already settled)** URL reference + uploaded video bytes BOTH stored. The CapturedVideo table stores both: a URL field (for embedded videos on YouTube/Vimeo/etc. where bytes can't be downloaded per platform ToS) AND a storage-bucket path (for inline `<video>` elements where bytes are downloadable). When both are present, the URL is the canonical source-of-truth; the bytes are the local copy.
-- **(Q2 Gestures — already settled)** Full UX symmetry with text/image — all 3 capture paths: (a) right-click on `<video>` element in-page → opens content-script form; (b) right-click on embed (YouTube/Vimeo iframe) → walks DOM to find underlying video URL (mirrors P-23-AMAZON's `findUnderlyingImage` helper for image discovery); (c) popup paste video URL form (mirrors `CapturedTextPasteForm.tsx`).
-- **(Q3 Graduation timing — already settled)** Pre-graduation polish item — per director's standing directive *"All these things should ship before Workflow #2 is deemed complete."* P-27 joins P-26 as the 2 remaining items that must ship before W#2 graduation.
+1. **Pre-flight audit per Rule 8 + Rule 23.** `npx prisma db push` IS a Rule 8 destructive-operation trigger (touches the live database schema). Classify per Rule 23: ADDITIVE (safe) — new optional table + new enum value; no existing data affected; no rename / drop / type-change. Surface the Rule 8 pre-flight summary to director via AskUserQuestion BEFORE running `db push`:
+   - What changes: new `CapturedVideo` table + new `VideoSourceType` enum + new `video-category` value added to existing VocabularyEntry `type` column.
+   - What stays: all existing tables + columns + data + constraints unchanged.
+   - Reversibility: drop the new table + remove the new enum value = full rollback (no migration to undo).
+   - Risk: ZERO data loss risk (additive only); ZERO existing-consumer breakage risk (no consumers exist yet for the new table).
+   - Director's approval shape: AskUserQuestion picker — Option A "Proceed (Additive, safe per Rule 23)" / Option B "Hold — let me review the schema diff first" / Option C "Cancel — re-pick task".
 
-**Open design questions for this session (per the 2026-05-19-g ROADMAP P-27 entry — these are the questions to resolve via the interview):**
+2. **Schema migration.** After Rule 8 pre-flight approval, write the `CapturedVideo` model + `VideoSourceType` enum + `video-category` VocabularyEntry value into `prisma/schema.prisma` per design doc §A.7 spec. Run `npx prisma db push` to apply. Verify via `npx prisma studio` (or a small `node:test` round-trip) that the new table exists + accepts a row with the canonical field set.
 
-1. **Supabase bucket strategy** — new bucket dedicated to videos (chosen by elimination — existing image bucket has the 5MB cap that explicitly prevents video uploads per `STACK_DECISIONS.md:144`). Private vs. public; signed URLs (likely per `PLATFORM_REQUIREMENTS.md:427` already-flagged tech-debt note); size cap (candidates: 100 MB / 500 MB / per-project budget); MIME-type allowlist (`video/mp4` + `video/webm` + `video/quicktime`?).
-2. **Thumbnail extraction** — server-side FFmpeg (heavy; new Vercel function) vs. client-side `<video>`+`<canvas>` frame-grab (lighter; extension captures thumb pre-upload) vs. external source-URL poster / YouTube auto-thumb API (lightest; relies on the source URL having a poster). Pick one for v1; defer the others to future polish.
-3. **Schema additions** — new `CapturedVideo` table (parallel to `CapturedImage`; cleaner; chosen per 2026-05-19-g) vs. polymorphic `CapturedAsset` with `mediaType` discriminator (DRY-er but less type-safe; already rejected for symmetry with existing models). Confirm the field list: id + clientId + competitorUrlId + videoCategory + storagePath + storageBucket + originalSrcUrl + composition + embeddedText + tags + sourceType + fileSize + mimeType + duration_seconds (NEW relative to CapturedImage) + width + height + sortOrder + source + addedBy + addedAt + updatedAt + thumbnailUrl + fullSizeUrl.
-4. **YouTube/Vimeo handling** — store URL only for embedded platforms (likely; ToS + technical constraints argue against attempting to download bytes from YouTube) vs. attempt download. Confirm the URL-only path for v1.
-5. **Cross-platform `<video>` detection** — empirical investigation needed in this session for which of the 7 supported platforms (amazon + ebay + etsy + walmart + shopify + woocommerce + bigcommerce) host inline `<video>` elements vs. embeds vs. neither. Spot-check each platform's product page during the interview to ground the design.
-6. **Three Living Questions (Rule 7) answers** to capture in DATA_CATALOG: (i) Upstream data needed = Project + Platform + CompetitorUrl + new video-category vocabulary; (ii) Read-only by downstream W#3+; (iii) N/A.
-7. **DATA_CATALOG §7 Cross-Tool Data Flow Map** — new "captured videos" output entry to W#2's row, per Rule 18 reciprocal output declaration; downstream consumers initially "TBD."
+3. **Bucket verification.** Director's offline step (see Pre-session notes below) creates the `competition-scraping-videos` bucket via the Supabase dashboard BEFORE this session starts. At session start, verify the bucket exists by reading from `process.env.NEXT_PUBLIC_SUPABASE_URL` + a small `supabase.storage.getBucket('competition-scraping-videos')` round-trip in a one-off script (or surface to director via AskUserQuestion if the bucket isn't found).
 
-**Workflow Requirements Interview — recommended cluster structure (3-5 questions per cluster; capture answers in §A; capture any clarifying directives in §B going forward per Rule 18):**
+4. **Helper wrapper.** Write `src/lib/competition-video-storage.ts` paralleling `src/lib/competition-storage.ts`. Exports: `requestVideoUploadUrl(projectId, urlId, mimeType, sizeBytes)` (Phase 1 — returns signed upload URL + bucket path) / `finalizeVideoUpload(projectId, urlId, bucketPath, metadata)` (Phase 3 — persists the CapturedVideo row + binds it to the storage object) / `getVideoSignedUrl(bucketPath, expiresInSeconds)` / `getVideoThumbnailUrl(bucketPath, expiresInSeconds)` / `deleteVideo(bucketPath)` / `wipeProjectVideos(projectId)`. Mirror the existing image helper's error-handling + retry + signed-URL TTL conventions.
 
-- **Cluster 1 — Purpose + Scope (questions 1-3):** What is the workflow goal in plain language? Where does P-27 fit in the W#2 graduation sequence? What is explicitly OUT of scope for v1?
-- **Cluster 2 — Inputs + Triggers (questions 4-7):** What data does the capture path read? What triggers it (3 gesture surfaces — already settled)? What are the per-platform `<video>` detection patterns?
-- **Cluster 3 — Outputs + Schema (questions 8-10):** What does CapturedVideo look like? What new vocabulary type (`video-category`)? What new bucket?
-- **Cluster 4 — Edge cases + Error paths (questions 11-13):** YouTube/Vimeo URLs (no byte download); oversize videos (>cap); MIME-type rejection; CDN-not-authorized 404; thumbnail-extraction failure.
-- **Cluster 5 — Test coverage approach (question 14):** Rule 27 Hybrid likely — node:test on extracted pure helpers (e.g., video-URL-normalizer; thumbnail-extraction logic) + Playwright extension-context spec on the right-click happy path single-platform amazon first; cross-platform extension to ebay + etsy + walmart deferred to a P-22-style follow-up.
+5. **Test coverage (Rule 27 Hybrid).** Add node:test cases for the pure-helper portions of `competition-video-storage.ts` (URL-pattern validation; size-cap enforcement; MIME-type allowlist check). No Playwright spec this session — Playwright extension-context coverage arrives at Build session #6 per design doc §A.2.
 
-After all 14 questions resolved + recorded in §A of the design doc, surface the design doc to director via Read-It-Back per Rule 18 before any code starts (no code starts THIS session — this is design-only).
+6. **Scoreboard:** verify `npx tsc --noEmit` clean + `cd extensions/competition-scraping && npx tsc --noEmit` clean + `npm run build` clean (likely **53 routes still** — no new route this session unless the helper module is auto-discovered as a route; check) + src/lib node:test passes with new cases (expect **~540/540** ish — depends on cases added) + extension `npm test` unchanged (**428/428** — no extension source change this session) + Playwright **91/91** unchanged.
 
-**Per `feedback_recommendation_style.md` (most thorough/reliable) + `feedback_default_to_recommendation.md`:** for each open design question, surface 2-4 plausible options + the recommended option + the rationale; default to the recommendation if director defers. The director-confirmed picks from 2026-05-19-g-2 stand; don't re-litigate them.
+7. **Build commit on workflow-2** (no main push this session — Build #1 stays on feature branch). End-of-session doc-batch covers ROADMAP (P-27 polish-backlog annotation extended with "Build #1 complete: schema + bucket + helper") + CHAT_REGISTRY + DOCUMENT_MANIFEST + CORRECTIONS_LOG (likely zero new entries) + NEXT_SESSION (rewritten for Build #2) + CAPTURED_VIDEOS_DESIGN §B 2026-05-21 entry (capturing any mid-build directives + the Rule 23 audit outcome).
 
-**Pre-build read list (in addition to mandatory start-of-session sequence):**
+**Per `feedback_recommendation_style.md` (most thorough/reliable) + `feedback_default_to_recommendation.md`:** for any mid-build forced-pickers (e.g., if the existing `VocabularyEntry.type` column turns out to be a string vs. enum and the design doc didn't specify which), surface 2-4 plausible options + the recommended option + the rationale; default to the recommendation if director defers.
 
-- `docs/ROADMAP.md` lines 1-30 (header) + the (a.53) Active Tools entry + the P-27 polish backlog entry (line 155 — full pre-capture-search summary + 7 open design questions + scope rationale + cross-references).
-- `docs/COMPETITION_SCRAPING_DESIGN.md` — read entire §A + scan §B for any 2026-05-19-g-2 entry capturing the original scope-add directive verbatim. The new design doc (or new §B entry) extends from this base.
-- `docs/COMPETITION_SCRAPING_STACK_DECISIONS.md` line 144 — the 5MB image-cap reasoning that explicitly mentions video prevention; needs deliberate revisit in this design session.
-- `docs/PLATFORM_REQUIREMENTS.md` line 427 — already-flagged tech-debt note about workflow-deliverable storage strategy that P-27's bucket design will satisfy or scope.
-- `docs/HANDOFF_PROTOCOL.md` Rule 18 (the canonical Workflow Requirements Interview pattern — 14-question shape; §A initial / §B append-only).
-- `extensions/competition-scraping/src/lib/content-script/image-capture-form.ts` (the sibling pattern to mirror for the right-click `<video>` form — read its shape, NOT to copy code).
-- `extensions/competition-scraping/src/lib/content-script/find-underlying-image.ts` (the sibling DOM-walking helper to mirror for the embed-fallback path).
-- `extensions/competition-scraping/src/entrypoints/popup/components/CapturedTextPasteForm.tsx` (the sibling pattern to mirror for the popup paste video form).
-- `prisma/schema.prisma` `CapturedImage` model (the sibling table to mirror for `CapturedVideo`).
-- `docs/CAPTURED_VIDEOS_DESIGN.md` (NEW this session — to be created) OR `docs/COMPETITION_SCRAPING_DESIGN.md` §B 2026-05-20 entry (the alternative — director's pick at session start).
-- `docs/HANDOFF_PROTOCOL.md` Rule 29 (the NEW pre-destructive-container-operation audit rule shipped this session; informational read for context on the new operational discipline).
-
-**Rule 14f forced-picker at session start (before any other interview work):**
-
-Ask director — via AskUserQuestion — where the design doc should live:
-
-- **(A) New `docs/CAPTURED_VIDEOS_DESIGN.md` Group B doc** (recommended per `feedback_recommendation_style.md` — cleaner separation; mirrors the precedent of having tool-specific design docs as their own files; makes the design visible at the top level of `docs/` rather than buried in COMPETITION_SCRAPING_DESIGN's §B append history; future P-27 build sessions read this doc directly without grepping for §B entries).
-- **(B) New §B 2026-05-20 entry in existing `docs/COMPETITION_SCRAPING_DESIGN.md`** (the append-only path; lighter doc-add cost; keeps W#2 design in one place; consistent with 2026-05-19-g-2's existing §B entry that captured the original scope-add directive).
-- **(C) Both — new top-level doc AND a §B entry cross-referencing it** (heaviest; potentially confusing — two places to update going forward; not recommended).
-- **(D) Escape hatch — director wants a different doc structure.**
-
-**Schema-change-in-flight flag:** stays "No" entire session (design-only; no schema work this session). The flag flips to "Yes" at the future implementation session that adds the `CapturedVideo` table.
-
-**Pre-deploy verification scoreboard targets (if any code change ships — unlikely for design-only, but listed defensively):**
-
-- `npx tsc --noEmit` clean
-- `cd extensions/competition-scraping && npx tsc --noEmit` clean
-- `npm run build` clean — **53 routes** (unchanged — no new route)
-- `src/lib` node:test: **536/536** (unchanged — no server-side change)
-- Extension `npm test`: **428/428** (unchanged — no extension source change)
-- Playwright: **91/91** (unchanged — no test additions)
-
-If this session somehow ships any code (it shouldn't — design-only), deploy mechanics are cheat-sheet (b) — Rule 9-gated AskUserQuestion deploy gate, ff-merge, ping-pong sync.
-
-**Group A docs to update at end-of-session:** ROADMAP (header + P-27 polish backlog entry annotated with "design session 1 complete + design doc shipped" status + (a.53) flipped to ✅ DONE + new (a.54) RECOMMENDED-NEXT = P-27 implementation session #1); CHAT_REGISTRY (new top entry); DOCUMENT_MANIFEST (header bump + new Group B doc registered if option A picked); CORRECTIONS_LOG (header bump + any new entries — likely zero this session); NEXT_SESSION (rewritten for the next P-27 session — implementation #1 likely, but the design session's outcomes may shift the next pick).
-
-**Group B docs to update at end-of-session:** new `docs/CAPTURED_VIDEOS_DESIGN.md` (if option A picked) OR `docs/COMPETITION_SCRAPING_DESIGN.md` (new §B 2026-05-20 entry — if option B picked); COMPETITION_SCRAPING_VERIFICATION_BACKLOG (no change this session — no verification artifact yet); COMPETITION_SCRAPING_STACK_DECISIONS (potentially — if the design session revisits the 5MB cap reasoning at line 144, capture the revisit + new video-bucket cap as a new §B-style entry).
-
-Start by running the mandatory start-of-session sequence (read CLAUDE_CODE_STARTER.md + verify branch + read ROADMAP header + read this NEXT_SESSION.md), then fire the Rule 14f forced-picker (A/B/C/D above) for design-doc structure BEFORE any interview work.
+**Schema-change-in-flight flag:** FLIPS to "Yes" at session start (the `prisma db push` IS a schema change in flight). Flips back to "No" at end-of-session AFTER the Build #1 commit lands + the schema is verified-applied + no rollback is needed.
 
 ---
 
 ## Pre-session notes (offline steps for director between sessions)
 
-**No required offline steps this time.** P-27 is design-only first session — runs in a single Claude session without needing director-side setup or rebuild. The 4-layer protective architecture shipped this session means future destructive container operations (if any are recommended) will trigger the Rule 29 pre-rebuild audit + Rule 14f forced-picker BEFORE the destructive op runs.
+**ONE required offline step — Supabase bucket creation BEFORE next session.**
 
-**Optional offline reading for director:** the new HANDOFF_PROTOCOL Rule 29 + the `scripts/codespace-rebuild-audit.sh` script + the `.codespace-backup/README.md` documentation give director full visibility into the new operational discipline around destructive container operations. Worth a 5-minute skim before next session if director wants the full context.
+Create the new Supabase Storage bucket `competition-scraping-videos` via the Supabase dashboard BEFORE the next Claude session starts. Step-by-step click-by-click:
+
+1. Open the Supabase dashboard at https://app.supabase.com → sign in if needed → pick the PLOS project.
+2. **Storage** tab in the left sidebar.
+3. **"New bucket"** button (top-right).
+4. **Name:** `competition-scraping-videos` (exact spelling — hyphens not underscores; matches the design doc §A.9 canonical bucket name).
+5. **Public bucket** toggle = **OFF** (leave private — signed URLs only per design doc §A.9; no public access).
+6. **File size limit:** **100 MB** (104857600 bytes — matches design doc §A.9 / §A.10 per-file size cap pick).
+7. **Allowed MIME types:** `video/mp4, video/webm, video/quicktime` (comma-separated; no spaces inside the type names — matches design doc §A.9).
+8. **Create** button.
+
+The next Claude session will read this bucket via the new `competition-video-storage.ts` helper code and won't need to create it. If the bucket isn't found at session start, the next Claude session will surface to director via AskUserQuestion (Option A "I'll create it now" / Option B "Skip the bucket step this session and pivot to a different polish item").
+
+**Optional offline reading for director:** `docs/CAPTURED_VIDEOS_DESIGN.md` §A.7 (CapturedVideo schema spec) + §A.9 (bucket configuration) + §A.2 (implementation arc table) — ~5-minute skim before the next session if director wants the full context on what Build #1 will land.
+
+---
+
+## 🛡️ Destructive-operation safety check for next session
+
+**`npx prisma db push` IS a Rule 8 destructive-operation trigger** (touches live DB schema). Per Rule 23 Change Impact Audit, the operation is **ADDITIVE (safe)** — new optional table + new enum value; no existing data affected; no rename / drop / type-change. Schema-change-in-flight flag flips to "Yes" at session start. Rule 8 pre-flight audit WILL fire at session start via AskUserQuestion BEFORE the `db push` runs.
+
+**NO Rule 29 (container-level destructive op) triggers planned** this session. NO Codespaces rebuild planned. Claude's memory directory + `.codespace-backup/memory/` mirror both remain intact (the 2 NEW memory files saved 2026-05-20-b are in both places). Critical files safe.
+
+**NO Rule 9 (main deploy) trigger planned** this session — Build #1 stays on workflow-2 feature branch; no main push; no Vercel redeploy; no ping-pong sync. The Build arc's first deploy lands at a future Build session per design doc §A.2.
 
 ---
 
 ## Why this pointer was written this way (debug aid)
 
-Today's session was triggered by a HIGH-severity slip class — the 2026-05-21 session's recommendation to perform a Codespaces "Rebuild Container" walkthrough to verify P-18 silently wiped Claude's persistent operational memory because the recommender did not audit what the rebuild would wipe. Recovery + protective architecture shipped in 5 phases this session; the verification PASS was captured as a side effect (the rebuild that wiped the memory also proved P-18's postCreateCommand works). The §4 Step 1c forced-picker fired at end-of-session — director picked P-27 captured-videos DESIGN session as the next polish item because P-27 is the next largest pre-graduation item left in the W#2 polish backlog (P-26 below-fold + P-27 captured-videos are the 2 remaining; P-26 is small-scope code work; P-27 is large-scope and needs a design session BEFORE any code).
+Today's session ran the full Workflow Requirements Interview per HANDOFF_PROTOCOL Rule 18 for P-27 Captured-videos feature — design-only, no code, no schema, no deploy. The §4 Step 1c forced-picker was NOT fired as a separate decision because the design doc §A.2 implementation arc table itself encodes the next-session pick: Build #1 (schema + bucket + helper) follows the design session directly. This is the canonical pattern for design-then-build sessions on new features per Rule 18.
 
-This NEXT_SESSION.md is written for P-27 design-session-#1. The launch prompt is design-only — no code. The Workflow Requirements Interview pattern from Rule 18 is the canonical shape for new-feature design sessions. The 2026-05-19-g-2 director-confirmed picks (URL + bytes both stored; full gesture symmetry; pre-graduation gating) are binding inputs that the interview does NOT re-litigate.
+Build #1's launch prompt is shaped around (a) running the Rule 8 pre-flight audit BEFORE the `prisma db push`, (b) writing the schema migration per design doc §A.7 spec, (c) verifying the new Supabase bucket exists (director's offline step), and (d) writing the helper wrapper. No code beyond the helper + the schema landing on workflow-2 — API routes + extension UI + Playwright spec arrive at Build sessions #2 through #6.
 
-**Alternate next-session candidates if director shifts priorities at session start (after P-18 closes + before P-27 design):**
+The 2026-05-20-b director-confirmed picks (11 forced-picker outcomes in design doc §A.0) are binding inputs to Build #1; do NOT re-litigate. The design doc §A.7 schema spec is the canonical source for the migration; Build #1 should not extend or modify the schema spec beyond what §A.7 already documents.
 
-- **P-26 below-fold full-page-scroll capture** (LOW-severity deferred large lift — last in the queue with P-27; current workaround works; ~600-1000 LOC code-only session no design needed). Recommended *only* if director wants to wrap the smaller-scope polish item before the design-heavy P-27 path. Estimated 1-2 sessions.
+**Alternate next-session candidates if director shifts priorities at session start (after the P-27 design session lands + before Build #1):**
+
+- **P-26 below-fold full-page-scroll capture** (LOW-severity deferred large lift — currently the only remaining pre-graduation polish item alongside P-27's full Build arc; current workaround works; ~600-1000 LOC code-only session, no design needed). Recommended *only* if director wants to wrap the smaller-scope polish item BEFORE the design-heavy P-27 Build arc. Estimated 1-2 sessions.
+- **Investigate the wxt-zip parent-process hang behavior session-over-session.** Multiple recent sessions have observed the hang (2026-05-19-f + 2026-05-19-g + 2026-05-21) interspersed with clean runs (2026-05-20). Worth a dedicated investigation session if it keeps recurring across future deploys.
 - **Manual-add modal originalSrcUrl tack-on** (DEFERRED from 2026-05-19-e — trivial 1-line; could fold into any P-NN session or be its own sub-1-hour session).
-- **Investigate the wxt-zip parent-process hang behavior session-over-session.** Multiple recent sessions have observed the hang (2026-05-19-f + 2026-05-19-g + 2026-05-21) interspersed with clean runs (2026-05-20). Worth a dedicated investigation session if it keeps recurring across deploys.
 
 Check `ROADMAP.md` for the canonical state.

@@ -6,7 +6,9 @@
 **Branch:** `workflow-2-competition-scraping`
 **Created:** May 4, 2026
 **Created in session:** session_2026-05-04_w2-workflow-requirements-interview (Claude Code)
-**Last updated:** 2026-05-19-g-2 (ADDENDUM to 2026-05-19-g — same Claude session, post-handoff scope-add. Director added a new W#2 pre-graduation polish item P-27 — Captured-videos feature: end-to-end parity with captured-text + captured-image flows. New §B 2026-05-19-g-2 entry appended at end — mid-build directive Read-It-Back per Rule 18 — capturing the scope-add directive verbatim + director's three Rule 14f forced-picker outcomes (Q1 Source = URL reference + uploaded video bytes BOTH stored; Q2 Gestures = full symmetry with text/image right-click + embed + popup paste; Q3 Graduation timing = pre-graduation polish item) + the 7 open design questions to resolve in the dedicated design interview before any code starts (Supabase bucket strategy; thumbnail extraction approach; schema additions; YouTube/Vimeo handling; cross-platform `<video>` detection; Living Questions answers; DATA_CATALOG §7 reciprocal output declaration). §A unchanged per Rule 18. Schema-change-in-flight stays "No" for now; flips to "Yes" when P-27 implementation starts.)
+**Last updated:** 2026-05-20-b (P-27 Captured-videos feature DESIGN session — new §B 2026-05-20-b entry appended at end-of-doc cross-referencing the standalone `docs/CAPTURED_VIDEOS_DESIGN.md` shipped this session. §A unchanged — P-27 is a NEW polish item on top of W#2's graduated-pattern surface; §A frozen per Rule 18. The design lives in standalone `docs/CAPTURED_VIDEOS_DESIGN.md` (525 lines after corrections; §A.0–§A.18 frozen + §B empty per Rule 18 shape) per the Rule 14f forced-picker pick of Option A — new top-level doc — over Option B (§B append here) and Option C (both). Future P-27 ship sessions get §B entries in `docs/CAPTURED_VIDEOS_DESIGN.md` directly per Rule 18, NOT in this doc's §B. Rule 24 end-of-session catch on the §A.8 asymmetry-claim captured in `docs/CORRECTIONS_LOG.md` §Entry 2026-05-20-b INFORMATIONAL. Schema-change-in-flight stayed "No" this session — design-only.)
+
+**Previously updated:** 2026-05-19-g-2 (ADDENDUM to 2026-05-19-g — same Claude session, post-handoff scope-add. Director added a new W#2 pre-graduation polish item P-27 — Captured-videos feature: end-to-end parity with captured-text + captured-image flows. New §B 2026-05-19-g-2 entry appended at end — mid-build directive Read-It-Back per Rule 18 — capturing the scope-add directive verbatim + director's three Rule 14f forced-picker outcomes (Q1 Source = URL reference + uploaded video bytes BOTH stored; Q2 Gestures = full symmetry with text/image right-click + embed + popup paste; Q3 Graduation timing = pre-graduation polish item) + the 7 open design questions to resolve in the dedicated design interview before any code starts (Supabase bucket strategy; thumbnail extraction approach; schema additions; YouTube/Vimeo handling; cross-platform `<video>` detection; Living Questions answers; DATA_CATALOG §7 reciprocal output declaration). §A unchanged per Rule 18. Schema-change-in-flight stays "No" for now; flips to "Yes" when P-27 implementation starts.)
 
 **Previously updated:** 2026-05-19-g (W#2 → main deploy session #28 — P-23 saved-URL dropdown side-by-side SHIPPED + DEPLOYED + REAL-CHROME-VERIFIED on vklf.com on all 3 caller forms — popup paste form + right-click "Add to PLOS — Captured Text" overlay + right-click "Add to PLOS — Image" overlay. §B 2026-05-19-g entry appended at end covering: (1) the launch-prompt drift catch at session-start (Rule 3 — `url-add-form.ts` had no saved-URL `<select>`; actual sites were three: `text-capture-form.ts` + `image-capture-form.ts` + `CapturedTextPasteForm.tsx`); (2) Rule 14f scope picker outcome (director chose all-3-sites scope); (3) em-dash label format choice via Rule 14f forced-picker (em-dash vs. pipe vs. two-line-via-CSS vs. aggressive-truncate); (4) truncation budget refinement (60-char when productName present, 80-char when productName absent — preserves pre-P-23 URL-only behavior exactly); (5) extraction to shared pure helper `buildSavedUrlOptionLabel` at `extensions/competition-scraping/src/lib/saved-url-option-label.ts` so all 3 caller sites share the same label-building logic; (6) Hybrid test coverage via Rule 27 forced-picker (12 node:test pure-helper cases + 1 Playwright extension-context spec on the text-capture-form rendering path — sibling sites covered by the pure-helper cases alone since the helper output is identical across all 3 callers); (7) zero new polish items captured this session; (8) (a.50) RECOMMENDED-NEXT = W#2 polish P-22 — Playwright cross-platform slices 2-4 (defensive coverage extension to ebay + etsy + walmart for the existing single-platform amazon happy-path P-23/P-24/P-25 specs). §A unchanged per Rule 18. Schema-change-in-flight stays "No".)
 
@@ -3072,6 +3074,45 @@ W#2 graduation estimate revised: ~3-6 more sessions (pre-P-27 capture, items wer
 - `feedback_recommendation_style.md` (director's standing preference for most-thorough/reliable path; informed all three picks today)
 - CORRECTIONS_LOG 2026-05-19-g-2 header amendment (this addendum doc-batch)
 - CHAT_REGISTRY 2026-05-19-g-2 header amendment
+
+---
+
+## §B 2026-05-20-b — P-27 Captured-videos feature design session shipped — design lives in standalone `docs/CAPTURED_VIDEOS_DESIGN.md` (cross-reference pointer)
+
+**Session:** `session_2026-05-20-b_p27-captured-videos-design-interview` (Claude Code, on `workflow-2-competition-scraping`; DOC-ONLY — no code, no schema, no deploy).
+
+**Director's directive 2026-05-20-b (Rule 14f forced-picker at session start, before any other interview work):** the design doc structure picker fired at session start per the 2026-05-19-g-2 §B entry above (which had pre-staged the picker shape A/B/C/D). Director picked **Option A — new top-level `docs/CAPTURED_VIDEOS_DESIGN.md` Group B doc** over Option B (§B append in this doc) and Option C (both — heaviest).
+
+**Director's pick rationale.** Option A wins on three criteria: (1) cleaner separation — P-27 is a substantive new functional surface with its own ~6-9 build sessions estimated, deserving top-level visibility rather than burial in this doc's §B history; (2) top-level discoverability — future P-27 Build sessions read `docs/CAPTURED_VIDEOS_DESIGN.md` directly without grepping for §B entries; (3) clean separation of W#2's graduated-pattern §A from P-27's new-feature §A (this doc's §A is frozen at the original Workflow Requirements Interview spec; P-27 introduces new spec content that warrants its own §A frozen narrative + §B append-only history).
+
+**Alternatives considered.** Option B (§B append in this doc) — director rejected: lighter doc-add cost but would have ballooned this already-3,078-line doc + buried the design in §B append history; future Build sessions would have had to grep §B for the P-27 design entry. Option C (both — new top-level doc + §B cross-reference here) — director rejected as heaviest: two places to update going forward; potentially confusing about which is canonical. Option D (escape hatch — different doc structure) — not invoked.
+
+**Decision.** P-27 design lives in standalone `docs/CAPTURED_VIDEOS_DESIGN.md` (525 lines after corrections; §A.0–§A.18 frozen + §B empty per Rule 18 shape). This §B 2026-05-20-b entry is the cross-reference pointer from this doc to the standalone P-27 spec.
+
+**Reasoning summary (for future readers searching for P-27 design rationale in this doc):**
+
+- Look up the P-27 schema spec in `docs/CAPTURED_VIDEOS_DESIGN.md` §A.7 (CapturedVideo table fields + new `VideoSourceType` enum + new `video-category` value added to existing VocabularyEntry `type` enum).
+- Look up the bucket + size cap + thumbnail extraction picks in `docs/CAPTURED_VIDEOS_DESIGN.md` §A.9.
+- Look up the v1 scope picks in `docs/CAPTURED_VIDEOS_DESIGN.md` §A.3.
+- Look up the implementation arc table (Build session sequencing) in `docs/CAPTURED_VIDEOS_DESIGN.md` §A.2.
+- Look up the 11 forced-picker outcomes audit trail in `docs/CAPTURED_VIDEOS_DESIGN.md` §A.0.
+
+**Impact on §A of this doc (informational — §A frozen per Rule 18; this §B entry captures the impact for traceability).** §A is unchanged. P-27 is a NEW polish item on top of W#2's graduated-pattern surface; it does NOT alter the original Workflow Requirements Interview answers. The Q5 (Outputs) section of §A originally captured text + image as W#2's outputs; the 2026-05-19-g-2 §B entry above captured the scope expansion to text + image + video; this §B 2026-05-20-b entry captures the design session that resolved the open design questions for the video third-output. When P-27 ships, the resulting `CapturedVideo` schema + bucket strategy + UX flows will get their own §B entries in the standalone `docs/CAPTURED_VIDEOS_DESIGN.md` at code-ship time per the Rule 18 §B append-only pattern (NOT in this doc's §B).
+
+**Rule 24 end-of-session catch worth noting here for traceability** (full detail in `docs/CORRECTIONS_LOG.md` §Entry 2026-05-20-b INFORMATIONAL): the design doc §A.8 originally claimed text + image capture forms force admin-page-first vocab creation; per Rule 3 code-wins, inline "+ Add new category" UX already shipped to text + image + URL forms per ROADMAP P-13 (`text-capture-form.ts:305` + `image-capture-form.ts:368` + `url-add-form.ts:244` + `CapturedTextPasteForm.tsx:262`). Caught + corrected before commit. The corrected §A.3 / §A.8 / §A.18 narrative now accurately documents that P-27 Q9's pick of Option C (inline "+ Add new category" affordance) extends the EXISTING pattern to videos; it does NOT introduce a new pattern. Pattern strengthening: ALSO run Rule 24 / Rule 3 checks BEFORE making claims about existing UX in design docs, not just for ROADMAP-capture moments.
+
+### Cross-references
+
+- `docs/CAPTURED_VIDEOS_DESIGN.md` (NEW Group B doc shipped this session — 525 lines; §A frozen + §B empty per Rule 18 shape; the binding spec for the P-27 Build arc).
+- ROADMAP P-27 polish backlog entry (annotated 2026-05-20-b with "✅ Design session 1 complete; Next stage = Build #1" + all 11 forced-picker outcomes surfaced).
+- COMPETITION_SCRAPING_DESIGN §B 2026-05-19-g-2 above (the scope-add directive Read-It-Back that pre-staged today's design session — direct prior entry).
+- `docs/DATA_CATALOG.md` §7.2.2 W#2 row (extended this session with Captured video library output entry per Rule 18 reciprocal output declaration).
+- `docs/PLATFORM_REQUIREMENTS.md` §10.2 line 427 (partial-closed this session for video — the dedicated-bucket-strategy tech-debt note now affirmed in code for video) + new video-storage scale-projections paragraph.
+- `docs/CORRECTIONS_LOG.md` §Entry 2026-05-20-b INFORMATIONAL (the Rule 24 end-of-session catch on the §A.8 asymmetry-claim).
+- ROADMAP header narrative 2026-05-20-b (the canonical session narrative).
+- CHAT_REGISTRY 2026-05-20-b top entry (the canonical chronological log).
+- `feedback_recommendation_style.md` (director's standing preference for most-thorough/reliable path; informed all 11 forced-picker outcomes this session).
+- 2 NEW permanent feedback memories saved this session: `feedback_destructive_ops_confirmation.md` + `feedback_remaining_roadmap_summary.md`.
 
 ---
 
