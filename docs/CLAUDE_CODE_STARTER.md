@@ -3,6 +3,8 @@
 
 **Purpose:** Establishes the non-negotiable working rules for every Claude Code session. Read at the start of every session, before any work begins. This file is stored in the repo at `docs/CLAUDE_CODE_STARTER.md` so Claude Code can read it directly.
 
+**Last updated:** 2026-05-21 — NEW Step 7b added to the START-OF-SESSION ROUTINE: "Plain-terms session summary" — Claude produces a plain-language summary of what this session will do BEFORE the director gives go-ahead. Companion to HANDOFF_PROTOCOL Rule 30 (Session bookends — NEW 2026-05-21) + §4 Step 4b template extension. Director's verbatim 2026-05-21 directive: *"From here on, for every next session, I want you to also tell me in simple terms what we will do in the session and summarize what was done in the session and what we will do in the next session. I also want you to check and tell me what work is pending according to the roadmap in simple terms."* Operational-memory cross-reference: `feedback_session_bookends_plain_summary.md`.
+
 ---
 
 ## 🟢 Resume-flow handling (REWRITTEN 2026-05-14 — multi-layered defense replacing the prior single-mechanism design)
@@ -198,6 +200,8 @@ To see live state of installed extensions in a session: type `/agents` (interact
 6. Run `git log --oneline -10` and `git status` to understand current repo state. Run `git pull --rebase origin <current-branch>` to catch anything pushed since this branch's last activity (per HANDOFF_PROTOCOL Rule 25).
 
 7. Produce a drift check: "Here's where we are. Here's what looks off, if anything. Here's what I understand today's task to be. Ready to proceed?" If multi-workflow state is in play, note any in-flight workflows (their branches, their schema-change-in-flight flag) in the drift check.
+
+7b. **Plain-terms session summary (NEW 2026-05-21 per HANDOFF_PROTOCOL Rule 30).** Produce a plain-language summary covering: (a) what this session will do (1-3 sentences in sentence-form English; name the polish item / task; say what the director will / won't see at session-end; say whether a deploy is planned); (b) what's still left on the total roadmap in plain terms (3-8 bullets spanning the active workflow's remaining polish items + future workflows + any infrastructure TODOs / offline director steps). Avoid acronyms unless paired with a parenthetical paraphrase. Avoid file paths / commit hashes as primary nouns. This summary is the start-of-session bookend; the end-of-session bookend lives in HANDOFF_PROTOCOL §4 Step 4b template's 3 new mandatory plain-terms sections. The director should be able to read your summary and confirm scope without parsing technical narrative. Director's verbatim 2026-05-21 directive (the source of this rule): *"From here on, for every next session, I want you to also tell me in simple terms what we will do in the session and summarize what was done in the session and what we will do in the next session. I also want you to check and tell me what work is pending according to the roadmap in simple terms."*
 
 8. Wait for my explicit go-ahead before executing.
 
