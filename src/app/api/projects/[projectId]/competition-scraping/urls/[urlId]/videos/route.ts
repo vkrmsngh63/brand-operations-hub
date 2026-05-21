@@ -4,8 +4,13 @@ import { verifyProjectWorkflowAuth } from '@/lib/auth';
 import { recordFlake } from '@/lib/flake-counter';
 import { withRetry } from '@/lib/prisma-retry';
 import { corsPreflightResponse, withCors } from '@/lib/cors-response';
+import {
+  getVideoSignedUrl,
+  getVideoThumbnailUrl,
+} from '@/lib/competition-video-storage';
 import type {
   CapturedVideo,
+  CapturedVideoWithUrls,
   ListCapturedVideosResponse,
 } from '@/lib/shared-types/competition-scraping';
 
@@ -17,11 +22,14 @@ import type {
 // .../competition-scraping/images/[imageId]/route.ts, NOT nested under
 // urls/[urlId]/).
 //
-// Build #2 returns bare CapturedVideo[] rows; signed-URL minting (for
-// inline `<video>` playback + thumbnail rendering) lands in a later Build
-// session when the URL detail page renderer needs it. The image sibling's
-// CapturedImageWithUrls extension was added in slice (a.2) when the gallery
-// shipped; we follow the same staging.
+// Build #5 (this revision) extends the wire shape from bare
+// `CapturedVideo[]` to `CapturedVideoWithUrls[]`, minting per-row signed
+// URLs for the URL detail page renderer (mirrors the image sibling's slice
+// (a.2) extension). DIRECT_BYTES rows get a 1-hour-TTL signed URL for the
+// video bytes + (when thumbnailStoragePath is non-null) a 1-hour-TTL
+// signed URL for the canvas frame-grab JPEG. EMBED rows pass through with
+// both URLs null — the renderer plays them via `<iframe src=originalSrcUrl>`
+// using the platform's own player.
 
 const WORKFLOW = 'competition-scraping';
 
@@ -101,7 +109,25 @@ export async function GET(
         orderBy: [{ sortOrder: 'asc' }, { addedAt: 'asc' }],
       })
     );
-    const wire: CapturedVideo[] = rows.map((r) => toWireShape(r)!);
+    // Mint per-row signed URLs in parallel. DIRECT_BYTES rows mint a video
+    // URL + (when thumbnailStoragePath is non-null per §A.12) a thumbnail
+    // URL; EMBED rows skip both (no Supabase upload exists for embeds —
+    // the renderer plays them via <iframe src=originalSrcUrl>). At
+    // typical-page volume (~5-10 saved videos per URL) total latency is
+    // negligible; the 100 MB cap from §A.10 bounds worst-case row count.
+    const wire: CapturedVideoWithUrls[] = await Promise.all(
+      rows.map(async (r) => {
+        const base = toWireShape(r)!;
+        if (base.sourceType !== 'DIRECT_BYTES' || !base.storagePath) {
+          return { ...base, videoUrl: null, thumbnailUrl: null };
+        }
+        const [videoUrl, thumbnailUrl] = await Promise.all([
+          getVideoSignedUrl(base.storagePath),
+          getVideoThumbnailUrl(base.thumbnailStoragePath),
+        ]);
+        return { ...base, videoUrl, thumbnailUrl };
+      })
+    );
     return withCors(
       req,
       NextResponse.json(wire satisfies ListCapturedVideosResponse)

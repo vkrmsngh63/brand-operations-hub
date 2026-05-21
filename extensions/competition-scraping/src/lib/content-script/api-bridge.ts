@@ -27,6 +27,7 @@ import type {
   CapturedImageWithUrls,
   CapturedText,
   CapturedVideo,
+  CapturedVideoWithUrls,
   CompetitorUrl,
   CreateCapturedTextRequest,
   CreateCompetitorUrlRequest,
@@ -121,8 +122,8 @@ export async function listCapturedImages(
 export async function listCapturedVideos(
   projectId: string,
   urlId: string,
-): Promise<CapturedVideo[]> {
-  return send<CapturedVideo[]>({
+): Promise<CapturedVideoWithUrls[]> {
+  return send<CapturedVideoWithUrls[]>({
     kind: 'list-captured-videos',
     projectId,
     urlId,

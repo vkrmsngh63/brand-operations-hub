@@ -736,11 +736,33 @@ export interface FinalizeVideoUploadRequest {
 
 export type FinalizeVideoUploadResponse = CapturedVideo;
 
+// CapturedVideoWithUrls — list-response row shape: a CapturedVideo plus the
+// two short-lived signed URLs the PLOS-side URL detail page renderer needs
+// to play DIRECT_BYTES videos. Build #5 added the URL fields paralleling
+// CapturedImageWithUrls; the bare CapturedVideo type is preserved as the
+// DB-shaped row used by PATCH / finalize / etc.
+//
+// Both URLs are null for sourceType=EMBED — the iframe renderer reads
+// `originalSrcUrl` directly and the platform's own player serves its own
+// thumbnail. For DIRECT_BYTES:
+//   - videoUrl is a 1-hour-TTL signed URL pointing at the uploaded video
+//     bytes; the renderer feeds it to a native <video> element.
+//   - thumbnailUrl is a 1-hour-TTL signed URL pointing at the canvas
+//     frame-grab JPEG; null when the row's thumbnailStoragePath is NULL
+//     (the §A.12 fallback — canvas-taint / cross-origin / autoplay-blocked).
+//     Renderer falls back to the browser's native <video> play-icon when
+//     no thumbnail is available.
+export interface CapturedVideoWithUrls extends CapturedVideo {
+  videoUrl: string | null;
+  thumbnailUrl: string | null;
+}
+
 // GET .../urls/[urlId]/videos — list every CapturedVideo for one URL,
-// ordered by (sortOrder ASC, addedAt ASC). Bare CapturedVideo[] for Build #2;
-// signed-URL minting (for inline playback + thumbnail rendering) lands in a
-// later Build session when the URL detail page renderer needs it.
-export type ListCapturedVideosResponse = CapturedVideo[];
+// ordered by (sortOrder ASC, addedAt ASC). Build #5 upgraded the wire shape
+// from `CapturedVideo[]` to `CapturedVideoWithUrls[]` so the URL detail
+// page renderer can play DIRECT_BYTES videos in a single round-trip
+// (mirrors the image sibling's slice (a.2) extension; same pattern).
+export type ListCapturedVideosResponse = CapturedVideoWithUrls[];
 
 // PATCH .../videos/[videoId] — fields editable after capture. clientId,
 // sourceType, originalSrcUrl, storage paths, and bytes-derived metadata are

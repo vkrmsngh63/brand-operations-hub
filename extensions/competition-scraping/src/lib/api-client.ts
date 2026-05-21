@@ -15,6 +15,7 @@ import type {
   CapturedImageWithUrls,
   CapturedText,
   CapturedVideo,
+  CapturedVideoWithUrls,
   CompetitorUrl,
   CreateCapturedTextRequest,
   CreateCompetitorUrlRequest,
@@ -314,14 +315,18 @@ export async function listCapturedImages(
  * P-27 Build #4 (2026-05-21-c) — lists CapturedVideo rows for one
  * CompetitorUrl. Used by the content-script orchestrator's saved-video
  * indicator scan loop (mirror of the P-24 saved-image indicator scan).
- * Returns the bare CapturedVideo[] shape shipped in Build #2 — signed-URL
- * minting (for the URL detail page renderer's inline player) lands in a
- * later Build session.
+ *
+ * Build #5 (2026-05-22) upgraded the wire shape from `CapturedVideo[]` to
+ * `CapturedVideoWithUrls[]` so the URL detail page renderer can play
+ * DIRECT_BYTES videos in a single round-trip. The content-script scan
+ * only reads `originalSrcUrl` from each row, so the additional signed-URL
+ * fields are extra payload it ignores — but the typed shape now matches
+ * the wire contract end-to-end.
  */
 export async function listCapturedVideos(
   projectId: string,
   urlId: string,
-): Promise<CapturedVideo[]> {
+): Promise<CapturedVideoWithUrls[]> {
   const res = await authedFetch(
     `/api/projects/${encodeURIComponent(projectId)}/competition-scraping/urls/${encodeURIComponent(urlId)}/videos`,
   );

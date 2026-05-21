@@ -72,7 +72,7 @@ import {
 import type {
   CapturedImageWithUrls,
   CapturedText,
-  CapturedVideo,
+  CapturedVideoWithUrls,
 } from '../../../../../src/lib/shared-types/competition-scraping.ts';
 import { showAlreadySavedOverlay } from './already-saved-overlay.ts';
 import { openUrlAddForm } from './url-add-form.ts';
@@ -510,7 +510,7 @@ export async function runOrchestrator(): Promise<() => void> {
   // page is the same string the user right-clicked at capture time). If
   // real-world use surfaces normalization mismatches, a future polish
   // item adds a canonicalizer.
-  const capturedVideosByUrlId = new Map<string, CapturedVideo[]>();
+  const capturedVideosByUrlId = new Map<string, CapturedVideoWithUrls[]>();
   const attachedVideoIcons = new Map<string, AttachedVideoIcon>();
 
   async function maybePopulateVideoCache(urlId: string): Promise<void> {
@@ -533,7 +533,7 @@ export async function runOrchestrator(): Promise<() => void> {
     const saved = capturedVideosByUrlId.get(currentUrlIdForImages);
     if (!saved || saved.length === 0) return;
 
-    const rowsBySrc = new Map<string, CapturedVideo>();
+    const rowsBySrc = new Map<string, CapturedVideoWithUrls>();
     for (const row of saved) {
       if (row.originalSrcUrl) rowsBySrc.set(row.originalSrcUrl, row);
     }

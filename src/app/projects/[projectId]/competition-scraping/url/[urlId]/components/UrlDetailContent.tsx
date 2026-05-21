@@ -25,10 +25,12 @@ import { WorkflowTopbar } from '@/lib/workflow-components';
 import type {
   CapturedImageWithUrls,
   CapturedText,
+  CapturedVideoWithUrls,
   CompetitorSize,
   CompetitorUrl,
   ListCapturedImagesResponse,
   ListCapturedTextsResponse,
+  ListCapturedVideosResponse,
   ListCompetitorSizesResponse,
   Platform,
   ReadCompetitorUrlResponse,
@@ -89,6 +91,14 @@ export function UrlDetailContent({ project, urlId }: Props) {
     error: null,
   });
   const [imagesSlot, setImagesSlot] = useState<FetchSlot<CapturedImageWithUrls[]>>({
+    data: null,
+    error: null,
+  });
+  // P-27 Build #5 — captured-videos slot. The list endpoint mints per-row
+  // signed URLs (videoUrl + thumbnailUrl) for DIRECT_BYTES rows; EMBED rows
+  // carry null URLs and the renderer reads `originalSrcUrl` directly for
+  // the inline <iframe>.
+  const [videosSlot, setVideosSlot] = useState<FetchSlot<CapturedVideoWithUrls[]>>({
     data: null,
     error: null,
   });
@@ -258,17 +268,19 @@ export function UrlDetailContent({ project, urlId }: Props) {
     };
 
     (async () => {
-      const [urlRes, sizesRes, textRes, imagesRes] = await Promise.all([
+      const [urlRes, sizesRes, textRes, imagesRes, videosRes] = await Promise.all([
         fetchOne<ReadCompetitorUrlResponse>(base, 'this URL'),
         fetchOne<ListCompetitorSizesResponse>(`${base}/sizes`, 'sizes'),
         fetchOne<ListCapturedTextsResponse>(`${base}/text`, 'captured text'),
         fetchOne<ListCapturedImagesResponse>(`${base}/images`, 'captured images'),
+        fetchOne<ListCapturedVideosResponse>(`${base}/videos`, 'captured videos'),
       ]);
       if (cancelled) return;
       setUrlSlot(urlRes);
       setSizesSlot(sizesRes);
       setTextSlot(textRes);
       setImagesSlot(imagesRes);
+      setVideosSlot(videosRes);
     })();
 
     return () => {
@@ -415,6 +427,7 @@ export function UrlDetailContent({ project, urlId }: Props) {
               onImageAdded={refreshImages}
               onImageDeleted={handleImageDeleted}
             />
+            <CapturedVideosGallery slot={videosSlot} />
           </>
         )}
       </main>
@@ -1118,6 +1131,168 @@ function CapturedImagesGallery({
         variant={{ kind: 'plain' }}
       />
     </section>
+  );
+}
+
+// P-27 Build #5 — captured-videos gallery section on the URL detail page.
+// Mirrors the image gallery's shape (section header + count + loading/error/
+// empty + grid) but renders inline players directly instead of a thumbnail
+// modal: HTML5 <video controls> is its own click-to-play affordance for
+// DIRECT_BYTES rows, and <iframe> shows the platform's own thumbnail +
+// player for EMBED rows.
+//
+// Build #5 ships the renderer only — no manual-add modal, no per-row
+// delete dialog, no inline metadata editor (those mirror the image
+// gallery's later-slice extensions and can ship as polish items if the
+// real-Chrome verification surfaces the need).
+function CapturedVideosGallery({
+  slot,
+}: {
+  slot: FetchSlot<CapturedVideoWithUrls[]>;
+}) {
+  const videos = slot.data;
+  return (
+    <section
+      style={{
+        background: '#161b22',
+        border: '1px solid #30363d',
+        borderRadius: '8px',
+        padding: '20px',
+      }}
+    >
+      <div style={sectionHeaderRowStyle}>
+        <h2 style={sectionHeading}>
+          Captured Videos
+          {videos ? (
+            <span
+              style={{
+                marginLeft: '8px',
+                fontSize: '12px',
+                color: '#8b949e',
+                fontWeight: 400,
+              }}
+            >
+              ({videos.length})
+            </span>
+          ) : null}
+        </h2>
+      </div>
+      {slot.error ? (
+        <InlineMessage tone="error" body={slot.error} />
+      ) : videos === null ? (
+        <InlineMessage body="Loading captured videos…" />
+      ) : videos.length === 0 ? (
+        <InlineMessage body="No videos captured for this URL yet. The Chrome extension’s right-click “Save to PLOS” gesture on a video or YouTube/Vimeo embed, or the popup’s “Paste captured video” form, saves video rows here." />
+      ) : (
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+            gap: '16px',
+          }}
+        >
+          {videos.map((v) => (
+            <CapturedVideoCard key={v.id} video={v} />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+// Single video card. Renders an inline <iframe> for EMBED rows (YouTube /
+// Vimeo / etc. — the platform's own player serves the thumbnail + play
+// button) and an inline <video controls> for DIRECT_BYTES rows (the
+// browser's native player serves the click-to-play affordance; the
+// thumbnail signed URL feeds the poster attribute, with a generic ▶️
+// fallback frame when thumbnailUrl is null per §A.12).
+function CapturedVideoCard({ video }: { video: CapturedVideoWithUrls }) {
+  const caption = video.videoCategory ?? video.composition ?? null;
+  return (
+    <article
+      style={{
+        background: '#0d1117',
+        border: '1px solid #30363d',
+        borderRadius: '6px',
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
+      <div
+        style={{
+          position: 'relative',
+          width: '100%',
+          aspectRatio: '16 / 9',
+          background: '#000',
+        }}
+      >
+        {video.sourceType === 'EMBED' ? (
+          <iframe
+            src={video.originalSrcUrl}
+            title={caption ?? 'Captured video'}
+            loading="lazy"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+            style={{
+              position: 'absolute',
+              inset: 0,
+              width: '100%',
+              height: '100%',
+              border: 0,
+            }}
+          />
+        ) : video.videoUrl ? (
+          <video
+            controls
+            preload="metadata"
+            poster={video.thumbnailUrl ?? undefined}
+            style={{
+              position: 'absolute',
+              inset: 0,
+              width: '100%',
+              height: '100%',
+              objectFit: 'contain',
+              background: '#000',
+            }}
+          >
+            <source
+              src={video.videoUrl}
+              type={video.mimeType ?? undefined}
+            />
+            Your browser doesn’t support inline video playback.
+          </video>
+        ) : (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#f85149',
+              fontSize: '12px',
+              padding: '8px',
+              textAlign: 'center',
+            }}
+          >
+            Video unavailable — storage path missing.
+          </div>
+        )}
+      </div>
+      {caption ? (
+        <div
+          style={{
+            padding: '8px 12px',
+            color: '#e6edf3',
+            fontSize: '13px',
+            lineHeight: 1.4,
+          }}
+        >
+          {caption}
+        </div>
+      ) : null}
+    </article>
   );
 }
 

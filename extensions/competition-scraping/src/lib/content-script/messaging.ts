@@ -35,6 +35,7 @@ import type {
   CapturedImageWithUrls,
   CapturedText,
   CapturedVideo,
+  CapturedVideoWithUrls,
   CompetitorUrl,
   CreateCapturedTextRequest,
   CreateCompetitorUrlRequest,
@@ -397,7 +398,7 @@ export type ListCapturedTextsResponseEnvelope = BackgroundResponse<
   CapturedText[]
 >;
 export type ListCapturedVideosResponseEnvelope = BackgroundResponse<
-  CapturedVideo[]
+  CapturedVideoWithUrls[]
 >;
 export type CreateCompetitorUrlResponseEnvelope = BackgroundResponse<
   CompetitorUrl
