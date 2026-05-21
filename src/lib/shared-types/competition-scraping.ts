@@ -657,6 +657,162 @@ export interface CapturedVideo {
   updatedAt: string;
 }
 
+// ─── Video upload route shapes (P-27 Build #2) ──────────────────────────
+// Two-phase upload for DIRECT_BYTES rows (parallel to image two-phase per §3,
+// but the Phase-1 response carries TWO signed URLs per §A.9: one for the
+// video bytes, one for the thumbnail JPEG produced by the extension's canvas
+// frame-grab). EMBED rows SKIP Phase 1 — there are no bytes to upload — and
+// call finalize directly with `sourceType='EMBED'` + `originalSrcUrl` only.
+//
+// Phase 1: POST .../urls/[urlId]/videos/requestUpload — DIRECT_BYTES only.
+// Server validates MIME + size + parent URL ownership, generates a fresh
+// capturedVideoId, returns the two signed URLs the extension PUTs the video
+// bytes + thumbnail JPEG to. No DB write happens here; the CapturedVideo
+// row is created at :finalize. Mirrors the image requestUpload contract.
+export interface RequestVideoUploadRequest {
+  clientId: string;
+  mimeType: AcceptedVideoMimeType;
+  fileSize: number;
+}
+
+export interface RequestVideoUploadResponse {
+  capturedVideoId: string;
+  videoUploadUrl: string;
+  videoStoragePath: string;
+  videoToken: string;
+  thumbnailUploadUrl: string;
+  thumbnailStoragePath: string;
+  thumbnailToken: string;
+  expiresAt: string;
+}
+
+// Phase 2: POST .../urls/[urlId]/videos/finalize — handles BOTH EMBED and
+// DIRECT_BYTES branches.
+//
+//   - EMBED: client passes sourceType='EMBED' + originalSrcUrl (the YouTube /
+//     Vimeo / etc. URL); storage fields omitted; server creates the row with
+//     NULL storage paths. Skips storage-existence verification (no bytes
+//     uploaded). User-provided metadata (videoCategory / composition / tags
+//     / etc.) optional.
+//
+//   - DIRECT_BYTES: client passes sourceType='DIRECT_BYTES' + capturedVideoId
+//     (from Phase 1) + originalSrcUrl (page-host URL the bytes came from) +
+//     videoStoragePath (from Phase 1) + thumbnailStoragePath (from Phase 1
+//     when canvas frame-grab succeeded; OMITTED when frame-grab failed per
+//     §A.12 — the row stores NULL thumbnailStoragePath and the renderer
+//     falls back to the generic ▶️ icon) + bytes metadata (mimeType /
+//     fileSize / durationSeconds / width / height). Server verifies both
+//     storage objects exist via finalizeVideoUpload helper before creating
+//     the row.
+//
+// Idempotency: duplicate clientId returns the existing row with 200 instead
+// of erroring (mirrors image finalize behavior; supports extension WAL
+// retry path).
+export interface FinalizeVideoUploadRequest {
+  clientId: string;
+  sourceType: VideoSourceType;
+  originalSrcUrl: string;
+
+  // DIRECT_BYTES path — required when sourceType='DIRECT_BYTES':
+  capturedVideoId?: string;
+  videoStoragePath?: string;
+
+  // DIRECT_BYTES path — optional bytes metadata:
+  thumbnailStoragePath?: string;
+  mimeType?: AcceptedVideoMimeType;
+  fileSize?: number;
+  durationSeconds?: number;
+  width?: number;
+  height?: number;
+
+  // Both paths — user-provided metadata:
+  videoCategory?: string;
+  composition?: string;
+  embeddedText?: string;
+  tags?: string[];
+  sortOrder?: number;
+  source?: Source;
+}
+
+export type FinalizeVideoUploadResponse = CapturedVideo;
+
+// GET .../urls/[urlId]/videos — list every CapturedVideo for one URL,
+// ordered by (sortOrder ASC, addedAt ASC). Bare CapturedVideo[] for Build #2;
+// signed-URL minting (for inline playback + thumbnail rendering) lands in a
+// later Build session when the URL detail page renderer needs it.
+export type ListCapturedVideosResponse = CapturedVideo[];
+
+// PATCH .../videos/[videoId] — fields editable after capture. clientId,
+// sourceType, originalSrcUrl, storage paths, and bytes-derived metadata are
+// immutable; re-capture is the path to change them.
+export interface UpdateCapturedVideoRequest {
+  videoCategory?: string;
+  composition?: string;
+  embeddedText?: string;
+  tags?: string[];
+  sortOrder?: number;
+}
+
+export type UpdateCapturedVideoResponse = CapturedVideo;
+
+export interface DeleteCapturedVideoResponse {
+  success: true;
+}
+
+// Type guards used at the trust boundary inside the route handlers to reject
+// misshapen payloads BEFORE issuing signed URLs or writing to the DB.
+
+export function isRequestVideoUploadRequest(
+  value: unknown
+): value is RequestVideoUploadRequest {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.clientId === 'string' &&
+    v.clientId.trim().length > 0 &&
+    isAcceptedVideoMimeType(v.mimeType) &&
+    typeof v.fileSize === 'number' &&
+    Number.isFinite(v.fileSize) &&
+    v.fileSize > 0
+  );
+}
+
+export function isFinalizeVideoUploadRequest(
+  value: unknown
+): value is FinalizeVideoUploadRequest {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Record<string, unknown>;
+  if (typeof v.clientId !== 'string' || v.clientId.trim().length === 0) {
+    return false;
+  }
+  if (!isVideoSourceType(v.sourceType)) return false;
+  if (
+    typeof v.originalSrcUrl !== 'string' ||
+    v.originalSrcUrl.trim().length === 0
+  ) {
+    return false;
+  }
+  if (v.sourceType === 'DIRECT_BYTES') {
+    if (
+      typeof v.capturedVideoId !== 'string' ||
+      v.capturedVideoId.trim().length === 0
+    ) {
+      return false;
+    }
+    if (
+      typeof v.videoStoragePath !== 'string' ||
+      v.videoStoragePath.trim().length === 0
+    ) {
+      return false;
+    }
+    // thumbnailStoragePath OPTIONAL — absent when canvas frame-grab failed
+    // per §A.12; the row stores NULL and the renderer falls back to the
+    // generic icon. mimeType / fileSize / durationSeconds / width / height
+    // are all optional metadata (server tolerates missing).
+  }
+  return true;
+}
+
 // ─── Generic error shape ────────────────────────────────────────────────
 // Returned with non-2xx status codes (consistent with the W#1 routes).
 export interface ApiErrorResponse {

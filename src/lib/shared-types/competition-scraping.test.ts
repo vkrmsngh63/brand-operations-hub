@@ -20,8 +20,15 @@ import {
   isVocabularyType,
   isImageSourceType,
   isAcceptedImageMimeType,
+  isAcceptedVideoMimeType,
+  isVideoSourceType,
+  isRequestVideoUploadRequest,
+  isFinalizeVideoUploadRequest,
   PLATFORMS,
   SOURCES,
+  VIDEO_SOURCE_TYPES,
+  ACCEPTED_VIDEO_MIME_TYPES,
+  VIDEO_UPLOAD_MAX_BYTES,
 } from './competition-scraping.ts';
 
 test('isSource — P-29 Slice #1 — accepts both vocabulary values', () => {
@@ -75,13 +82,17 @@ test('isPlatform — rejects nearby misshapen values', () => {
   assert.equal(isPlatform(null), false);
 });
 
-test('isVocabularyType — accepts all 7 documented vocabulary types', () => {
+test('isVocabularyType — accepts all 8 documented vocabulary types', () => {
+  // `video-category` added 2026-05-20-c in P-27 Build #1 alongside the
+  // CapturedVideo schema. The list mirrors VOCABULARY_TYPES in
+  // competition-scraping.ts; if a new type is added, both should change.
   const expected = [
     'competition-category',
     'product-name',
     'brand-name',
     'content-category',
     'image-category',
+    'video-category',
     'custom-field-name-product',
     'custom-field-name-size',
   ];
@@ -111,4 +122,271 @@ test('isAcceptedImageMimeType — accepts the 3 stack-decided MIME types', () =>
   assert.equal(isAcceptedImageMimeType('image/svg+xml'), false);
   assert.equal(isAcceptedImageMimeType('image/heic'), false);
   assert.equal(isAcceptedImageMimeType('text/html'), false);
+});
+
+// ─── P-27 Build #2 — video type-guard coverage ──────────────────────────
+
+test('isAcceptedVideoMimeType — accepts the 3 design-doc-§A.9 MIME types', () => {
+  assert.equal(isAcceptedVideoMimeType('video/mp4'), true);
+  assert.equal(isAcceptedVideoMimeType('video/webm'), true);
+  assert.equal(isAcceptedVideoMimeType('video/quicktime'), true);
+});
+
+test('isAcceptedVideoMimeType — rejects non-accepted video MIME types', () => {
+  // video/x-msvideo (AVI) + video/ogg + video/x-matroska (MKV) are common
+  // shapes the extension might encounter on the wild web; design doc §A.9
+  // explicitly limited v1 to mp4/webm/quicktime.
+  assert.equal(isAcceptedVideoMimeType('video/x-msvideo'), false);
+  assert.equal(isAcceptedVideoMimeType('video/ogg'), false);
+  assert.equal(isAcceptedVideoMimeType('video/x-matroska'), false);
+  assert.equal(isAcceptedVideoMimeType('video/mpeg'), false);
+  // Adjacent-vocabulary rejections — would corrupt the bucket allowlist.
+  assert.equal(isAcceptedVideoMimeType('image/jpeg'), false);
+  assert.equal(isAcceptedVideoMimeType(''), false);
+  assert.equal(isAcceptedVideoMimeType(null), false);
+});
+
+test('ACCEPTED_VIDEO_MIME_TYPES — vocabulary contains exactly the 3 values, in stable order', () => {
+  assert.deepEqual(
+    [...ACCEPTED_VIDEO_MIME_TYPES],
+    ['video/mp4', 'video/webm', 'video/quicktime']
+  );
+});
+
+test('isVideoSourceType — accepts EMBED + DIRECT_BYTES', () => {
+  assert.equal(isVideoSourceType('EMBED'), true);
+  assert.equal(isVideoSourceType('DIRECT_BYTES'), true);
+});
+
+test('isVideoSourceType — rejects everything outside the closed vocabulary', () => {
+  // Lowercase variants are a common slip class — the Prisma enum is
+  // SCREAMING_SNAKE; serializing to lowercase would still feel correct
+  // to a careless reader. Make it load-bearing.
+  assert.equal(isVideoSourceType('embed'), false);
+  assert.equal(isVideoSourceType('direct_bytes'), false);
+  assert.equal(isVideoSourceType('direct-bytes'), false);
+  assert.equal(isVideoSourceType('Embed'), false);
+  // Distinct from CapturedImage.sourceType vocabulary — verify regression.
+  assert.equal(isVideoSourceType('regular'), false);
+  assert.equal(isVideoSourceType('region-screenshot'), false);
+  assert.equal(isVideoSourceType(''), false);
+  assert.equal(isVideoSourceType(null), false);
+});
+
+test('VIDEO_SOURCE_TYPES — vocabulary matches the Prisma enum order', () => {
+  assert.deepEqual([...VIDEO_SOURCE_TYPES], ['EMBED', 'DIRECT_BYTES']);
+});
+
+test('VIDEO_UPLOAD_MAX_BYTES — 100 MB per design doc §A.10', () => {
+  assert.equal(VIDEO_UPLOAD_MAX_BYTES, 100 * 1024 * 1024);
+});
+
+test('isRequestVideoUploadRequest — accepts a well-formed Phase-1 body', () => {
+  assert.equal(
+    isRequestVideoUploadRequest({
+      clientId: 'abc-123',
+      mimeType: 'video/mp4',
+      fileSize: 12345,
+    }),
+    true
+  );
+  assert.equal(
+    isRequestVideoUploadRequest({
+      clientId: 'xyz',
+      mimeType: 'video/webm',
+      fileSize: 100 * 1024 * 1024, // exactly the cap — handler checks > cap
+    }),
+    true
+  );
+});
+
+test('isRequestVideoUploadRequest — rejects misshapen Phase-1 bodies', () => {
+  // Missing clientId
+  assert.equal(
+    isRequestVideoUploadRequest({ mimeType: 'video/mp4', fileSize: 1 }),
+    false
+  );
+  // Empty / whitespace clientId
+  assert.equal(
+    isRequestVideoUploadRequest({
+      clientId: '',
+      mimeType: 'video/mp4',
+      fileSize: 1,
+    }),
+    false
+  );
+  assert.equal(
+    isRequestVideoUploadRequest({
+      clientId: '   ',
+      mimeType: 'video/mp4',
+      fileSize: 1,
+    }),
+    false
+  );
+  // Rejected MIME
+  assert.equal(
+    isRequestVideoUploadRequest({
+      clientId: 'a',
+      mimeType: 'video/ogg',
+      fileSize: 1,
+    }),
+    false
+  );
+  // Non-positive fileSize
+  assert.equal(
+    isRequestVideoUploadRequest({
+      clientId: 'a',
+      mimeType: 'video/mp4',
+      fileSize: 0,
+    }),
+    false
+  );
+  assert.equal(
+    isRequestVideoUploadRequest({
+      clientId: 'a',
+      mimeType: 'video/mp4',
+      fileSize: -1,
+    }),
+    false
+  );
+  // Non-finite fileSize (NaN / Infinity)
+  assert.equal(
+    isRequestVideoUploadRequest({
+      clientId: 'a',
+      mimeType: 'video/mp4',
+      fileSize: Number.NaN,
+    }),
+    false
+  );
+  assert.equal(
+    isRequestVideoUploadRequest({
+      clientId: 'a',
+      mimeType: 'video/mp4',
+      fileSize: Number.POSITIVE_INFINITY,
+    }),
+    false
+  );
+  // Non-object inputs
+  assert.equal(isRequestVideoUploadRequest(null), false);
+  assert.equal(isRequestVideoUploadRequest(undefined), false);
+  assert.equal(isRequestVideoUploadRequest('not an object'), false);
+  assert.equal(isRequestVideoUploadRequest(42), false);
+});
+
+test('isFinalizeVideoUploadRequest — accepts a well-formed EMBED body', () => {
+  // EMBED rows skip Phase 1 — no capturedVideoId / storage paths.
+  assert.equal(
+    isFinalizeVideoUploadRequest({
+      clientId: 'embed-1',
+      sourceType: 'EMBED',
+      originalSrcUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+    }),
+    true
+  );
+  // With optional metadata.
+  assert.equal(
+    isFinalizeVideoUploadRequest({
+      clientId: 'embed-2',
+      sourceType: 'EMBED',
+      originalSrcUrl: 'https://vimeo.com/123456',
+      videoCategory: 'product-demo',
+      composition: 'a demo of the product',
+      tags: ['demo', 'launch'],
+      source: 'manual',
+    }),
+    true
+  );
+});
+
+test('isFinalizeVideoUploadRequest — accepts a well-formed DIRECT_BYTES body', () => {
+  // DIRECT_BYTES requires capturedVideoId + videoStoragePath; thumbnail is
+  // optional (NULL when canvas frame-grab failed per §A.12).
+  assert.equal(
+    isFinalizeVideoUploadRequest({
+      clientId: 'db-1',
+      sourceType: 'DIRECT_BYTES',
+      originalSrcUrl: 'https://www.amazon.com/product/B0123',
+      capturedVideoId: 'uuid-here',
+      videoStoragePath: 'proj1/url1/video1.mp4',
+      thumbnailStoragePath: 'proj1/url1/video1.thumb.jpg',
+      mimeType: 'video/mp4',
+      fileSize: 12345,
+      durationSeconds: 42.5,
+      width: 1920,
+      height: 1080,
+    }),
+    true
+  );
+  // Without thumbnailStoragePath (canvas frame-grab failure path).
+  assert.equal(
+    isFinalizeVideoUploadRequest({
+      clientId: 'db-2',
+      sourceType: 'DIRECT_BYTES',
+      originalSrcUrl: 'https://www.amazon.com/p/B0124',
+      capturedVideoId: 'uuid-2',
+      videoStoragePath: 'proj1/url1/video2.mp4',
+    }),
+    true
+  );
+});
+
+test('isFinalizeVideoUploadRequest — rejects misshapen bodies', () => {
+  // Missing clientId
+  assert.equal(
+    isFinalizeVideoUploadRequest({
+      sourceType: 'EMBED',
+      originalSrcUrl: 'https://youtu.be/abc',
+    }),
+    false
+  );
+  // Empty originalSrcUrl
+  assert.equal(
+    isFinalizeVideoUploadRequest({
+      clientId: 'a',
+      sourceType: 'EMBED',
+      originalSrcUrl: '',
+    }),
+    false
+  );
+  // Bad sourceType
+  assert.equal(
+    isFinalizeVideoUploadRequest({
+      clientId: 'a',
+      sourceType: 'embed', // lowercase — bad
+      originalSrcUrl: 'https://x',
+    }),
+    false
+  );
+  assert.equal(
+    isFinalizeVideoUploadRequest({
+      clientId: 'a',
+      sourceType: 'OTHER',
+      originalSrcUrl: 'https://x',
+    }),
+    false
+  );
+  // DIRECT_BYTES missing capturedVideoId
+  assert.equal(
+    isFinalizeVideoUploadRequest({
+      clientId: 'a',
+      sourceType: 'DIRECT_BYTES',
+      originalSrcUrl: 'https://x',
+      videoStoragePath: 'p/u/v.mp4',
+    }),
+    false
+  );
+  // DIRECT_BYTES missing videoStoragePath
+  assert.equal(
+    isFinalizeVideoUploadRequest({
+      clientId: 'a',
+      sourceType: 'DIRECT_BYTES',
+      originalSrcUrl: 'https://x',
+      capturedVideoId: 'uuid',
+    }),
+    false
+  );
+  // Non-object inputs
+  assert.equal(isFinalizeVideoUploadRequest(null), false);
+  assert.equal(isFinalizeVideoUploadRequest(undefined), false);
+  assert.equal(isFinalizeVideoUploadRequest('embed'), false);
 });
