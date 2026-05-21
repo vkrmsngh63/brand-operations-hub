@@ -92,14 +92,67 @@ export interface ExtensionProject {
  * response received"). Non-TypeError errors are re-thrown unchanged so
  * AbortError + unknown shapes still propagate as their original type.
  *
+ * Build #8 (2026-05-23): preserve the underlying TypeError message in the
+ * surfaced error string. Bug #12 from Build #7's director verification
+ * showed only the generic "Network unreachable" text in the form, which
+ * gave no diagnostic angle on whether the cause was a CORS preflight
+ * failure ("Failed to fetch"), DNS error ("NetworkError"), or something
+ * else. Appending the underlying message keeps the user-friendly framing
+ * AND surfaces the real signal for re-walk diagnosis.
+ *
  * Exported for unit testing in isolation — avoids the alternative of
  * mocking global `fetch` to exercise this single conversion.
  */
 export function mapFetchTransportError(err: unknown): PlosApiError {
   if (err instanceof TypeError) {
-    return new PlosApiError(0, 'Network unreachable — check your connection.');
+    const detail = err.message && err.message.trim().length > 0
+      ? ` (${err.message.trim()})`
+      : '';
+    return new PlosApiError(
+      0,
+      `Network unreachable${detail} — check your connection.`,
+    );
   }
   throw err;
+}
+
+/**
+ * Build #8 (2026-05-23) — transport-failure retry helper.
+ *
+ * Runs `op()` once. If it rejects with a TypeError ("Failed to fetch" et
+ * al — the transport-layer failure mode mapFetchTransportError targets),
+ * waits `delayMs` and retries once. The second failure (whether TypeError
+ * or anything else) is passed through to mapFetchTransportError unchanged.
+ *
+ * Safe for the captured-videos save path because `videos/finalize` is
+ * server-side idempotent (deduplicates on `clientId` — see
+ * `src/app/api/projects/.../videos/finalize/route.ts` lines 131-153). The
+ * same idempotency contract holds for `images/finalize` + the texts route
+ * since all three were authored to mirror each other. The 401-refresh
+ * retry already in authedFetch makes the same idempotency assumption for
+ * other methods.
+ *
+ * Bug #12 from Build #7's director verification surfaced
+ * `mapFetchTransportError`'s "Network unreachable" string on a single
+ * Amazon EMBED save with a cross-platform category — Etsy worked for the
+ * identical body shape moments earlier. The most plausible Amazon-only
+ * cause that the codebase exposes is a transient network blip OR a
+ * one-off CORS-preflight race (the OPTIONS handler exists and Etsy fired
+ * successfully through it). Either way, a single retry catches the
+ * transient case without changing the no-retry semantics for a genuine
+ * outage (which would fail both attempts).
+ */
+export async function retryOnTransportError<T>(
+  op: () => Promise<T>,
+  delayMs = 250,
+): Promise<T> {
+  try {
+    return await op();
+  } catch (err) {
+    if (!(err instanceof TypeError)) throw err;
+    await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+    return op();
+  }
 }
 
 // ── authedFetch ────────────────────────────────────────────────
@@ -150,10 +203,18 @@ export function makeAuthedFetch(deps: AuthedFetchDeps) {
 
     let firstResponse: Response;
     try {
-      firstResponse = await deps.fetchFn(`${PLOS_API_BASE_URL}${path}`, {
-        ...init,
-        headers: buildHeaders(initialToken),
-      });
+      // Build #8 (2026-05-23): wrap the initial fetch with retryOnTransportError
+      // so a single transient TypeError ("Failed to fetch" — CORS-preflight
+      // race, brief network blip) triggers exactly one retry after a short
+      // delay before surfacing the failure. Safe for all routes today because
+      // every finalize endpoint dedupes on clientId server-side. Bug #12 from
+      // Build #7's director verification motivated this.
+      firstResponse = await retryOnTransportError(() =>
+        deps.fetchFn(`${PLOS_API_BASE_URL}${path}`, {
+          ...init,
+          headers: buildHeaders(initialToken),
+        }),
+      );
     } catch (err) {
       throw mapFetchTransportError(err);
     }

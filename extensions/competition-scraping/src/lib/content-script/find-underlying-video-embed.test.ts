@@ -32,6 +32,7 @@ interface FakeElement {
 interface FakeSource extends FakeElement {
   tagName: 'SOURCE';
   type: string | null;
+  src: string | null;
   getAttribute(name: string): string | null;
 }
 
@@ -71,13 +72,14 @@ function makeEl(opts: {
   return el;
 }
 
-function makeSource(type: string | null): FakeSource {
+function makeSource(type: string | null, src: string | null = null): FakeSource {
   return {
     tagName: 'SOURCE',
     parentElement: null,
     descendantVideo: null,
     descendantIframes: [],
     type,
+    src,
     querySelector(_selector: string): FakeVideo | null {
       return null;
     },
@@ -86,6 +88,7 @@ function makeSource(type: string | null): FakeSource {
     },
     getAttribute(name: string): string | null {
       if (name === 'type') return this.type;
+      if (name === 'src') return this.src;
       return null;
     },
   };
@@ -386,5 +389,198 @@ describe('findUnderlyingVideoEmbed', () => {
     const r = findUnderlyingVideoEmbed(iframe as unknown as Element);
     if (r.kind !== 'embed') assert.fail();
     assert.equal(r.platform, 'loom');
+  });
+
+  // ─── Build #8 (2026-05-23) — <source src> fallback (Bug #13) ──────────
+
+  it('treats <video> with empty currentSrc/src as direct when a <source src> child has a URL', () => {
+    // Native HTML5 player pattern: <video><source src="..."></video> with the
+    // browser yet to populate currentSrc (e.g. cold right-click before
+    // autoplay). Walker should still resolve a direct capture from the
+    // <source>'s src attribute.
+    const video = makeVideo({
+      currentSrc: '',
+      src: '',
+      sources: [makeSource(null, 'https://cdn/from-source.mp4')],
+    });
+    const r = findUnderlyingVideoEmbed(video as unknown as Element);
+    if (r.kind !== 'direct') {
+      assert.fail(`expected direct kind, got ${r.kind}`);
+    }
+    assert.equal(r.src, 'https://cdn/from-source.mp4');
+  });
+
+  it('picks the first <source src> with non-empty value when the video has multiple', () => {
+    const video = makeVideo({
+      currentSrc: '',
+      src: '',
+      sources: [
+        makeSource(null, ''),
+        makeSource('video/mp4', '  https://cdn/picked.mp4  '),
+        makeSource('video/webm', 'https://cdn/skipped.webm'),
+      ],
+    });
+    const r = findUnderlyingVideoEmbed(video as unknown as Element);
+    if (r.kind !== 'direct') assert.fail();
+    assert.equal(r.src, 'https://cdn/picked.mp4');
+  });
+
+  it('still returns kind=none when video has empty currentSrc/src AND all <source src> are empty', () => {
+    const video = makeVideo({
+      currentSrc: '',
+      src: '',
+      sources: [makeSource(null, ''), makeSource(null, null)],
+    });
+    assert.deepEqual(findUnderlyingVideoEmbed(video as unknown as Element), {
+      kind: 'none',
+    });
+  });
+
+  it('prefers video.currentSrc over <source src> children when both are present', () => {
+    // The fallback only fires when currentSrc + src are both empty —
+    // a partially-loaded video with currentSrc set should still resolve
+    // via the original path.
+    const video = makeVideo({
+      currentSrc: 'https://cdn/loaded-by-browser.mp4',
+      src: '',
+      sources: [makeSource(null, 'https://cdn/from-source.mp4')],
+    });
+    const r = findUnderlyingVideoEmbed(video as unknown as Element);
+    if (r.kind !== 'direct') assert.fail();
+    assert.equal(r.src, 'https://cdn/loaded-by-browser.mp4');
+  });
+
+  // ─── Build #8 (2026-05-23) — stacked-elements fallback (Bug #9 + #14a) ─
+
+  it('does not invoke getStackedElements when no clickX/clickY supplied', () => {
+    // Original-target ancestor walk fails (no video reachable). Without
+    // clickX/Y we have no way to ask "what else was under the cursor?" so
+    // we return 'none' without touching the injection point.
+    let called = false;
+    const target = makeEl({ tagName: 'DIV' });
+    const r = findUnderlyingVideoEmbed(target as unknown as Element, {
+      getStackedElements() {
+        called = true;
+        return [];
+      },
+    });
+    assert.equal(r.kind, 'none');
+    assert.equal(called, false);
+  });
+
+  it('falls back to stacked elements when the ancestor walk returns none AND clickX/Y supplied', () => {
+    // Amazon hover-preview shape: contextmenu target is a transient overlay
+    // div (no <video> reachable via its ancestor chain); the actual
+    // <video> lives in a sibling container that elementsFromPoint reveals.
+    const overlay = makeEl({ tagName: 'DIV' });
+    const video = makeVideo({ src: 'https://cdn/hover-preview.mp4' });
+    const previewContainer = makeEl({
+      tagName: 'DIV',
+      descendantVideo: video,
+    });
+    const r = findUnderlyingVideoEmbed(overlay as unknown as Element, {
+      clickX: 100,
+      clickY: 200,
+      getStackedElements(x, y) {
+        assert.equal(x, 100);
+        assert.equal(y, 200);
+        // Top-of-stack is the overlay (already walked); next is the
+        // preview container that holds the real <video>.
+        return [
+          overlay as unknown as Element,
+          previewContainer as unknown as Element,
+        ];
+      },
+    });
+    if (r.kind !== 'direct') {
+      assert.fail(`expected direct kind, got ${r.kind}`);
+    }
+    assert.equal(r.src, 'https://cdn/hover-preview.mp4');
+  });
+
+  it('skips the original target during the stacked-elements fallback to avoid re-walking it', () => {
+    // If getStackedElements returns the same target first AND nothing else,
+    // we should still return 'none' (we don't infinite-loop / re-walk).
+    const target = makeEl({ tagName: 'DIV' });
+    const r = findUnderlyingVideoEmbed(target as unknown as Element, {
+      clickX: 0,
+      clickY: 0,
+      getStackedElements() {
+        return [target as unknown as Element];
+      },
+    });
+    assert.equal(r.kind, 'none');
+  });
+
+  it('stops at the first stacked element that produces a usable match (z-order preference preserved)', () => {
+    const overlay = makeEl({ tagName: 'DIV' });
+    const topVideo = makeVideo({ src: 'https://cdn/top.mp4' });
+    const bottomVideo = makeVideo({ src: 'https://cdn/bottom.mp4' });
+    const topContainer = makeEl({
+      tagName: 'DIV',
+      descendantVideo: topVideo,
+    });
+    const bottomContainer = makeEl({
+      tagName: 'DIV',
+      descendantVideo: bottomVideo,
+    });
+    const r = findUnderlyingVideoEmbed(overlay as unknown as Element, {
+      clickX: 1,
+      clickY: 1,
+      // Order matters: top-first per document.elementsFromPoint contract.
+      getStackedElements() {
+        return [
+          overlay as unknown as Element,
+          topContainer as unknown as Element,
+          bottomContainer as unknown as Element,
+        ];
+      },
+    });
+    if (r.kind !== 'direct') assert.fail();
+    assert.equal(r.src, 'https://cdn/top.mp4');
+  });
+
+  it('falls back to embed iframes via the stacked-elements fallback too', () => {
+    const overlay = makeEl({ tagName: 'DIV' });
+    const iframe = makeIframe({
+      src: 'https://www.youtube.com/embed/sibling12345',
+    });
+    const playerWrap = makeEl({
+      tagName: 'DIV',
+      descendantIframes: [iframe],
+    });
+    const r = findUnderlyingVideoEmbed(overlay as unknown as Element, {
+      clickX: 50,
+      clickY: 50,
+      getStackedElements() {
+        return [
+          overlay as unknown as Element,
+          playerWrap as unknown as Element,
+        ];
+      },
+    });
+    if (r.kind !== 'embed') assert.fail();
+    assert.equal(r.platform, 'youtube');
+    assert.equal(r.src, 'https://www.youtube.com/embed/sibling12345');
+  });
+
+  it('returns the ancestor-walk hit even when stacked-elements would also match (primary walk wins)', () => {
+    // If the primary ancestor walk finds a video, we never invoke the
+    // stacked-elements fallback at all — that's the contract.
+    let stackedCalled = false;
+    const video = makeVideo({ src: 'https://cdn/from-ancestor.mp4' });
+    const wrap = makeEl({ tagName: 'DIV', descendantVideo: video });
+    const target = makeEl({ tagName: 'SPAN', parentElement: wrap });
+    const r = findUnderlyingVideoEmbed(target as unknown as Element, {
+      clickX: 0,
+      clickY: 0,
+      getStackedElements() {
+        stackedCalled = true;
+        return [];
+      },
+    });
+    if (r.kind !== 'direct') assert.fail();
+    assert.equal(r.src, 'https://cdn/from-ancestor.mp4');
+    assert.equal(stackedCalled, false);
   });
 });

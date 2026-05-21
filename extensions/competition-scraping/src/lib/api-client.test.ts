@@ -333,16 +333,22 @@ describe('makeAuthedFetch (P-12 silent-refresh + 401-retry)', () => {
     assert.equal(getAuthHeader(calls[1]!), 'Bearer new-tok');
   });
 
-  it('TypeError on first attempt → throws PlosApiError(0, "Network unreachable")', async () => {
+  it('TypeError on BOTH attempts → throws PlosApiError(0, "Network unreachable") after exactly 2 fetch calls', async () => {
     // P-2's mapFetchTransportError wrapping must survive the P-12 refactor.
-    // Without this test, a future edit could drop the try/catch around the
-    // first fetch call and the popup would surface "Failed to fetch" instead
-    // of "Network unreachable — check your connection.".
+    // Build #8 (2026-05-23): the initial-fetch path now retries once on
+    // TypeError before surfacing, so a sustained transport failure needs
+    // TWO TypeError responses to surface as a PlosApiError. Without this
+    // test a future edit could drop the try/catch around the first fetch
+    // call and the popup would surface "Failed to fetch" instead of the
+    // "Network unreachable …" framing.
     const { supabase, refreshCallCount } = makeFakeSupabase({
       initialAccessToken: 'old-tok',
       refresh: 'success',
     });
-    const { fetchFn } = makeFakeFetch([{ status: 0, throwTypeError: true }]);
+    const { fetchFn, calls } = makeFakeFetch([
+      { status: 0, throwTypeError: true },
+      { status: 0, throwTypeError: true },
+    ]);
 
     const af = makeAuthedFetch({ supabase, fetchFn });
 
@@ -355,8 +361,62 @@ describe('makeAuthedFetch (P-12 silent-refresh + 401-retry)', () => {
     assert.ok(caught instanceof PlosApiError);
     assert.equal((caught as PlosApiError).status, 0);
     assert.match((caught as PlosApiError).message, /network unreachable/i);
+    // Build #8: exactly 2 fetch attempts — original + one retry.
+    assert.equal(calls.length, 2);
     // Refresh wasn't reached — the TypeError fired before status-check.
     assert.equal(refreshCallCount(), 0);
+  });
+
+  it('Build #8 (2026-05-23) — TypeError on first attempt + success on retry → resolves with the retry response (silent retry)', async () => {
+    // Transient transport failures (CORS preflight race; brief blip; SW
+    // wake-up jitter on the server side) should be silently recovered by
+    // the single-shot retry layer introduced for Bug #12. The test
+    // fixtures use the existing FakeResponseSpec — the second response is
+    // a normal 200.
+    const { supabase, refreshCallCount } = makeFakeSupabase({
+      initialAccessToken: 'old-tok',
+      refresh: 'success',
+    });
+    const { fetchFn, calls } = makeFakeFetch([
+      { status: 0, throwTypeError: true },
+      { status: 200 },
+    ]);
+
+    const af = makeAuthedFetch({ supabase, fetchFn });
+    const res = await af('/api/projects');
+
+    assert.equal(res.status, 200);
+    assert.equal(calls.length, 2);
+    // Refresh path NOT reached (the retry succeeded with the same token).
+    assert.equal(refreshCallCount(), 0);
+    // Same access token used on both attempts (the retry doesn't bump auth).
+    assert.equal(getAuthHeader(calls[0]!), 'Bearer old-tok');
+    assert.equal(getAuthHeader(calls[1]!), 'Bearer old-tok');
+  });
+
+  it('Build #8 (2026-05-23) — mapFetchTransportError preserves the original TypeError message inside the surfaced text', async () => {
+    // Bug #12 from Build #7 verification surfaced only the generic
+    // "Network unreachable — check your connection." string in the form,
+    // which gave no diagnostic angle on whether the cause was a CORS-
+    // preflight failure ("Failed to fetch"), DNS error ("NetworkError"),
+    // or something else. The Build #8 enhancement appends the underlying
+    // TypeError text in parentheses so the director's re-walk error
+    // surfaces the real signal.
+    const result = mapFetchTransportError(
+      new TypeError('NetworkError when attempting to fetch resource'),
+    );
+    assert.ok(result instanceof PlosApiError);
+    assert.equal(result.status, 0);
+    assert.match(result.message, /network unreachable/i);
+    assert.match(result.message, /NetworkError when attempting to fetch resource/);
+  });
+
+  it('Build #8 (2026-05-23) — mapFetchTransportError still surfaces a clean message when the TypeError has empty message', async () => {
+    // Defensive: some runtimes throw `new TypeError('')`. The detail
+    // parenthetical should be omitted in that case, not show "( )".
+    const result = mapFetchTransportError(new TypeError(''));
+    assert.ok(result instanceof PlosApiError);
+    assert.equal(result.message, 'Network unreachable — check your connection.');
   });
 
   it('TypeError on retry (after successful refresh) → throws PlosApiError(0)', async () => {

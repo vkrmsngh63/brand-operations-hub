@@ -25,6 +25,19 @@
 // src/lib/competition-video-storage-helpers.ts — Build #1 already encodes
 // the 6-platform allowlist + 13 URL-pattern regexes there. Single source of
 // truth; the helper composes rather than re-encoding.
+//
+// Build #8 (2026-05-23) — stacked-elements fallback. The ancestor-only
+// walk misses videos rendered into a SIBLING DOM subtree under a different
+// stacking context — common on Amazon's hover-preview overlay where the
+// transient preview <video> is injected into an absolutely-positioned
+// container that does NOT live in the click target's ancestor chain.
+// document.elementsFromPoint(x, y) returns ALL elements stacked at a
+// screen-space point (in z-order, top first), including overlays AND the
+// elements they cover. After the primary ancestor walk returns 'none' we
+// run the same per-element walk against each stacked element (skipping the
+// first one — that's the original target we already walked). First match
+// wins, so we still prefer the topmost element. Covers Bug #9 + #14a from
+// Build #7 director real-Chrome verification.
 
 import { detectEmbedPlatform } from '../../../../../src/lib/competition-video-storage-helpers.ts';
 
@@ -83,13 +96,65 @@ export type FindUnderlyingVideoResult =
  * src matches an embed pattern, returns kind='embed'; otherwise the helper
  * continues climbing in case a recognized embed lives elsewhere in the
  * ancestor scan (rare in practice but harmless).
+ *
+ * Build #8 stacked-elements fallback (2026-05-23): when the ancestor-only
+ * walk returns 'none' AND the caller supplied click coordinates, run the
+ * same walk against every element returned by
+ * `document.elementsFromPoint(clickX, clickY)` (skipping the first — that
+ * IS the original target). This catches videos rendered into a sibling
+ * subtree under a different stacking context (Amazon's transient hover-
+ * preview overlay being the load-bearing motivating case). The
+ * `getStackedElements` injection point exists for unit-test access; in
+ * production it defaults to `document.elementsFromPoint`.
  */
+export interface FindUnderlyingVideoEmbedOptions {
+  /** Viewport-space click coordinates from the contextmenu event. When
+   * present, enables the stacked-elements fallback after the ancestor walk
+   * returns 'none'. */
+  clickX?: number;
+  clickY?: number;
+  /** Injection seam — production passes `document.elementsFromPoint`. Tests
+   * pass a stub. Returns the stacked elements at (x, y) in z-order, top
+   * first; the same shape as the DOM API. */
+  getStackedElements?: (x: number, y: number) => readonly Element[];
+}
+
 export function findUnderlyingVideoEmbed(
   target: Element | null,
+  options?: FindUnderlyingVideoEmbedOptions,
 ): FindUnderlyingVideoResult {
   if (!target) return { kind: 'none' };
 
-  let cursor: Element | null = target;
+  const primary = walkFromElement(target);
+  if (primary.kind !== 'none') return primary;
+
+  // Stacked-elements fallback. The ancestor walk missed; try every element
+  // that the cursor was over at right-click time. document.elementsFromPoint
+  // returns them in z-order (top first) so we still prefer the topmost
+  // match — first walkable result wins.
+  const clickX = options?.clickX;
+  const clickY = options?.clickY;
+  if (typeof clickX !== 'number' || typeof clickY !== 'number') {
+    return { kind: 'none' };
+  }
+  const getStacked =
+    options?.getStackedElements ?? defaultGetStackedElements;
+  const stacked = getStacked(clickX, clickY);
+  for (const el of stacked) {
+    if (el === target) continue; // already walked
+    const result = walkFromElement(el);
+    if (result.kind !== 'none') return result;
+  }
+
+  return { kind: 'none' };
+}
+
+/**
+ * Single-start-point walk. Climbs `start` to MAX_ANCESTOR_DEPTH, scanning
+ * each ancestor's direct + descendant video/iframe contents.
+ */
+function walkFromElement(start: Element): FindUnderlyingVideoResult {
+  let cursor: Element | null = start;
   let depth = 0;
 
   while (cursor && depth <= MAX_ANCESTOR_DEPTH) {
@@ -124,10 +189,32 @@ export function findUnderlyingVideoEmbed(
   return { kind: 'none' };
 }
 
+function defaultGetStackedElements(
+  x: number,
+  y: number,
+): readonly Element[] {
+  if (typeof document === 'undefined' || !document.elementsFromPoint) {
+    return [];
+  }
+  return Array.from(document.elementsFromPoint(x, y));
+}
+
 function isUsableVideoElement(el: Element): boolean {
   if (el.tagName !== 'VIDEO') return false;
   const v = el as HTMLVideoElement;
-  return Boolean(v.currentSrc || v.src);
+  if (v.currentSrc || v.src) return true;
+  // Build #8 (2026-05-23): also accept a <video> whose URL lives only on a
+  // <source> child. Common pattern for native HTML5 players that haven't
+  // started loading yet (currentSrc unpopulated) but have a static
+  // <source src="..."> declared in the markup — Ebay's product-listing
+  // video player follows this shape on cold right-click before autoplay.
+  // Without this branch the helper returns 'none' on those videos, which
+  // is the Bug #13 silent-fail symptom.
+  for (const sourceEl of Array.from(v.querySelectorAll('source'))) {
+    const sourceSrc = (sourceEl as HTMLSourceElement).getAttribute('src');
+    if (sourceSrc && sourceSrc.trim().length > 0) return true;
+  }
+  return false;
 }
 
 function isIframeElement(el: Element): boolean {
@@ -137,7 +224,20 @@ function isIframeElement(el: Element): boolean {
 function readDirectFromVideo(
   video: HTMLVideoElement,
 ): FindUnderlyingVideoResult | null {
-  const src = video.currentSrc || video.src || '';
+  let src = video.currentSrc || video.src || '';
+  if (!src) {
+    // Build #8 fallback (2026-05-23): pick the first <source src="..."> when
+    // the <video> itself has neither currentSrc nor src yet. Pairs with the
+    // isUsableVideoElement loosening above; both branches must move together
+    // or this returns null and the form receives an empty src.
+    for (const sourceEl of Array.from(video.querySelectorAll('source'))) {
+      const sourceSrc = (sourceEl as HTMLSourceElement).getAttribute('src');
+      if (sourceSrc && sourceSrc.trim().length > 0) {
+        src = sourceSrc.trim();
+        break;
+      }
+    }
+  }
   if (!src) return null;
   // <video><source type="video/mp4" src="..."></video> — the first matching
   // <source>'s `type` attribute is the hint we surface to the form. Browsers

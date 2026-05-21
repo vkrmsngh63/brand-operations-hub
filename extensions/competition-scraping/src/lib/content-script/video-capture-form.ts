@@ -209,6 +209,14 @@ export function openVideoCaptureForm(
     previewVideo.muted = true;
     previewVideo.preload = 'metadata';
     previewVideo.style.maxHeight = '160px';
+    // Build #8 (2026-05-23): crossOrigin='anonymous' lets the canvas frame-
+    // grab on Save run un-tainted whenever the CDN sends CORS-friendly
+    // headers (most do for videos served at user-visible product pages).
+    // Without this attribute the canvas read on Save throws SecurityError
+    // even when the CDN COULD have permitted it, so Build #7's Bug #10 +
+    // #14b "thumbnail does NOT render" symptom is partially driven by the
+    // form preview path silently picking the no-CORS load mode.
+    previewVideo.crossOrigin = 'anonymous';
     previewWrap.appendChild(previewVideo);
 
     const previewMeta = document.createElement('div');
@@ -216,7 +224,45 @@ export function openVideoCaptureForm(
     previewMeta.textContent = 'Loading preview…';
     previewWrap.appendChild(previewMeta);
 
+    // Build #8 (2026-05-23): visible-state tracking so we can swap in a
+    // bold placeholder when the load fails (or stalls indefinitely on
+    // CORS-locked CDNs that swallow the `error` event). Bug #10 + #14b
+    // surfaced as "form opens but the in-form video preview thumbnail
+    // does NOT render" — the prior code only changed a small text line
+    // beneath the empty <video>, which the director didn't register as
+    // an acknowledgment of the preview failure.
+    let resolved = false;
+
+    function showPreviewUnavailable(): void {
+      if (resolved) return;
+      resolved = true;
+      previewVideo.style.display = 'none';
+      const placeholder = document.createElement('div');
+      placeholder.className = 'plos-cs-form-video-preview-fallback';
+      Object.assign(placeholder.style, {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: '120px',
+        background: '#f3f4f6',
+        border: '1px dashed #9ca3af',
+        borderRadius: '6px',
+        color: '#374151',
+        fontSize: '13px',
+        fontWeight: '500',
+        textAlign: 'center',
+        padding: '0 16px',
+      } as Partial<CSSStyleDeclaration>);
+      placeholder.textContent =
+        '▶ Video preview unavailable — Save will still try to capture the file.';
+      previewWrap.insertBefore(placeholder, previewVideo);
+      previewMeta.className = 'plos-cs-form-image-meta-failed';
+      previewMeta.textContent =
+        "Couldn't preview the video — Save will still try the upload.";
+    }
+
     previewVideo.addEventListener('loadedmetadata', () => {
+      resolved = true;
       const w = previewVideo.videoWidth;
       const h = previewVideo.videoHeight;
       const dur = previewVideo.duration;
@@ -231,10 +277,17 @@ export function openVideoCaptureForm(
         parts.length > 0 ? parts.join(' · ') : '(no metadata)';
     });
     previewVideo.addEventListener('error', () => {
-      previewMeta.className = 'plos-cs-form-image-meta-failed';
-      previewMeta.textContent =
-        "Couldn't preview the video — Save will still try the upload.";
+      showPreviewUnavailable();
     });
+    // Build #8 timeout safety net: some CORS-locked CDNs neither fire
+    // `loadedmetadata` nor `error` for cross-origin <video> loads — the
+    // request just hangs. A 5s timeout switches to the placeholder so the
+    // form's preview area never looks indefinitely empty.
+    setTimeout(() => {
+      if (!resolved && previewVideo.readyState < 1) {
+        showPreviewUnavailable();
+      }
+    }, 5000);
   } else {
     const embedInfo = document.createElement('div');
     embedInfo.className = 'plos-cs-form-image-meta';
@@ -432,15 +485,69 @@ export function openVideoCaptureForm(
     }
   });
 
+  // Build #8 (2026-05-23) — Bug #11 defensive hardening for the "+ Add new"
+  // category input. Build #7's director verification showed the input
+  // refused typed characters on Amazon (image-capture-form's identical
+  // wiring works fine on Amazon, so the difference has to be either
+  // focus-stealing by something on the page OR a key-interceptor that
+  // happens to fire only when the video form's <video> preview is also
+  // mounted). The three defensive moves:
+  //   (1) Stop propagation of key + input events so page-level handlers
+  //       can't swallow them while the form is open;
+  //   (2) Defer focus() into a microtask + verify it landed (retry once
+  //       on a 50ms timer if the browser dropped it during display-mode
+  //       transition from none → block);
+  //   (3) Force-clear any active focus elsewhere before our focus() so a
+  //       focus-stealing handler that ran moments ago can't re-claim.
+  for (const evt of ['keydown', 'keyup', 'keypress', 'input'] as const) {
+    newCategoryInput.addEventListener(evt, (e) => {
+      // Don't block the form's own onKeyDown (handles Escape — but Escape
+      // SHOULD close the form when the input is focused, mirroring image-
+      // capture-form's behavior). Only stop bubbling to document-level
+      // upstream handlers AFTER our own.
+      e.stopPropagation();
+    });
+  }
   categorySelect.addEventListener('change', () => {
     if (categorySelect.value === ADD_NEW_VIDEO_CATEGORY_VALUE) {
       newCategoryWrap.style.display = 'block';
-      newCategoryInput.focus();
+      focusNewCategoryInput();
     } else {
       newCategoryWrap.style.display = 'none';
       newCategoryInput.value = '';
     }
   });
+  function focusNewCategoryInput(): void {
+    // Two-frame defer: first frame lets the browser apply the display:block
+    // reflow; second frame is when focus reliably lands.
+    const tryFocus = (): void => {
+      try {
+        if (
+          document.activeElement &&
+          document.activeElement !== document.body &&
+          document.activeElement !== newCategoryInput
+        ) {
+          (document.activeElement as HTMLElement).blur?.();
+        }
+      } catch {
+        // Defensive — some shadow-DOM hosts disallow blur(); ignore.
+      }
+      newCategoryInput.focus({ preventScroll: true });
+    };
+    requestAnimationFrame(() => {
+      requestAnimationFrame(tryFocus);
+    });
+    // Retry safety net: if focus was stolen back synchronously by a page
+    // handler, this catches it within one human-perceptible tick.
+    setTimeout(() => {
+      if (
+        newCategoryWrap.style.display !== 'none' &&
+        document.activeElement !== newCategoryInput
+      ) {
+        tryFocus();
+      }
+    }, 50);
+  }
 
   function setError(message: string | null): void {
     if (message === null) {

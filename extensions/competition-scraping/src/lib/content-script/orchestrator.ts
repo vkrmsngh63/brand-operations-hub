@@ -85,6 +85,7 @@ import {
   findUnderlyingVideoEmbed,
   type FindUnderlyingVideoResult,
 } from './find-underlying-video-embed.ts';
+import { showCaptureFailureToast } from './capture-failure-toast.ts';
 import { isContentScriptMessage } from './messaging.ts';
 import type { Platform } from '../../../../../src/lib/shared-types/competition-scraping.ts';
 import { startLiveHighlighting } from './highlight-terms.ts';
@@ -143,7 +144,14 @@ export async function runOrchestrator(): Promise<() => void> {
   const onContextMenu = (event: MouseEvent): void => {
     const target = event.target instanceof Element ? event.target : null;
     lastRightClickImageSrc = findUnderlyingImage(target);
-    lastRightClickVideoResult = findUnderlyingVideoEmbed(target);
+    // Build #8 (2026-05-23): pass viewport coordinates so the walker can
+    // run its stacked-elements fallback when the original target's
+    // ancestor chain misses a video in a sibling subtree (Amazon hover-
+    // preview overlay; Bug #9 + #14a).
+    lastRightClickVideoResult = findUnderlyingVideoEmbed(target, {
+      clickX: event.clientX,
+      clickY: event.clientY,
+    });
     // Snapshot the active selection range. Wrapped in try/catch because
     // pages with shadow DOM or detached selections can throw on
     // getRangeAt — we silently treat that as "no selector available."
@@ -929,6 +937,14 @@ export async function runOrchestrator(): Promise<() => void> {
       const result: FindUnderlyingVideoResult =
         snapshot ?? { kind: 'none' };
       if (result.kind === 'none') {
+        // Build #8 (2026-05-23): surface the silent-bail case to the user.
+        // Bug #9 + #13 + #14a from Build #7's verification all manifested as
+        // "nothing happens" — no form, no toast, no error. The toast tells
+        // the user the gesture WAS received but couldn't resolve a target,
+        // and points them at the corrective action.
+        showCaptureFailureToast(
+          "Couldn't find a video to capture at that spot. Try right-clicking directly on the video player.",
+        );
         sendResponse({ ok: false, reason: 'no-video-found' });
         return;
       }
