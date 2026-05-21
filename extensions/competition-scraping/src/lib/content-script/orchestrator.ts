@@ -71,8 +71,13 @@ import { showAlreadySavedOverlay } from './already-saved-overlay.ts';
 import { openUrlAddForm } from './url-add-form.ts';
 import { openTextCaptureForm } from './text-capture-form.ts';
 import { openImageCaptureForm } from './image-capture-form.ts';
+import { openVideoCaptureForm } from './video-capture-form.ts';
 import { openRegionScreenshotOverlay } from './region-screenshot-overlay.ts';
 import { findUnderlyingImage } from './find-underlying-image.ts';
+import {
+  findUnderlyingVideoEmbed,
+  type FindUnderlyingVideoResult,
+} from './find-underlying-video-embed.ts';
 import { isContentScriptMessage } from './messaging.ts';
 import type { Platform } from '../../../../../src/lib/shared-types/competition-scraping.ts';
 import { startLiveHighlighting } from './highlight-terms.ts';
@@ -120,9 +125,18 @@ export async function runOrchestrator(): Promise<() => void> {
   // persisted server-side on save so later visits can re-render the haze.
   let lastRightClickImageSrc: string | null = null;
   let lastRightClickSelectorJson: string | null = null;
+  // P-27 Build #3 (2026-05-22) — same snapshot pattern for video. The
+  // findUnderlyingVideoEmbed helper returns BOTH the URL info AND the
+  // <video> element reference (for direct kinds; the form's canvas frame-
+  // grab needs the live element). The result is consumed on the next
+  // `open-video-capture-form` message → reset after each consumption so a
+  // later right-click without a media target doesn't inherit a stale
+  // snapshot.
+  let lastRightClickVideoResult: FindUnderlyingVideoResult | null = null;
   const onContextMenu = (event: MouseEvent): void => {
     const target = event.target instanceof Element ? event.target : null;
     lastRightClickImageSrc = findUnderlyingImage(target);
+    lastRightClickVideoResult = findUnderlyingVideoEmbed(target);
     // Snapshot the active selection range. Wrapped in try/catch because
     // pages with shadow DOM or detached selections can throw on
     // getRangeAt — we silently treat that as "no selector available."
@@ -771,6 +785,68 @@ export async function runOrchestrator(): Promise<() => void> {
           // No orchestrator-side state to roll back.
         },
       });
+      sendResponse({ ok: true });
+      return;
+    }
+    if (msg.kind === 'open-video-capture-form') {
+      // P-27 Build #3 (2026-05-22) — video-capture gesture. The orchestrator's
+      // contextmenu capture-phase listener already ran findUnderlyingVideoEmbed
+      // against the right-click target and stored the result in
+      // lastRightClickVideoResult. Consume + reset so a later right-click
+      // without a media target doesn't inherit a stale snapshot. If both
+      // Chrome's info.srcUrl AND the snapshot are empty/none, bail silently
+      // (matches the image flow's no-image-found bail).
+      const snapshot = lastRightClickVideoResult;
+      lastRightClickVideoResult = null;
+      const result: FindUnderlyingVideoResult =
+        snapshot ?? { kind: 'none' };
+      if (result.kind === 'none') {
+        sendResponse({ ok: false, reason: 'no-video-found' });
+        return;
+      }
+      // Build the tagged-union props per the helper's result kind. Both
+      // branches share `platform` (the W#2 site platform); the embed branch
+      // additionally carries `embedPlatform` (the video-host name like
+      // 'youtube'). Two explicit branches keep TypeScript's discriminated-
+      // union narrowing happy without an `as` cast.
+      if (result.kind === 'direct') {
+        openVideoCaptureForm({
+          kind: 'direct',
+          src: result.src,
+          mimeTypeHint: result.mimeType,
+          element: result.element,
+          pageUrl: msg.pageUrl,
+          projectId,
+          projectName,
+          platform: platformModule.platform as Platform,
+          onSaved() {
+            // Captured video doesn't affect the recognition Set (attached
+            // to a CompetitorUrl, doesn't create one). The PLOS-side detail
+            // page reflects the new row on next load. Saved-video
+            // indicator overlay arrives at a later Build session per
+            // design doc §A.2.
+          },
+          onClose() {
+            // No orchestrator-side state to roll back.
+          },
+        });
+      } else {
+        openVideoCaptureForm({
+          kind: 'embed',
+          src: result.src,
+          embedPlatform: result.platform,
+          pageUrl: msg.pageUrl,
+          projectId,
+          projectName,
+          platform: platformModule.platform as Platform,
+          onSaved() {
+            // Same no-op as direct branch.
+          },
+          onClose() {
+            // No orchestrator-side state to roll back.
+          },
+        });
+      }
       sendResponse({ ok: true });
       return;
     }

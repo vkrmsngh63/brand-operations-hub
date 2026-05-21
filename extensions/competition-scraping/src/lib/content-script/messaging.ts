@@ -30,15 +30,18 @@
 
 import type {
   AcceptedImageMimeType,
+  AcceptedVideoMimeType,
   CapturedImage,
   CapturedImageWithUrls,
   CapturedText,
+  CapturedVideo,
   CompetitorUrl,
   CreateCapturedTextRequest,
   CreateCompetitorUrlRequest,
   CreateVocabularyEntryRequest,
   ListCompetitorUrlsResponse,
   Platform,
+  VideoSourceType,
   VocabularyEntry,
   VocabularyType,
 } from '../../../../../src/lib/shared-types/competition-scraping.ts';
@@ -62,6 +65,28 @@ export interface OpenTextCaptureFormMessage {
    * suggest a pre-selection of the saved CompetitorUrl (the form's
    * URL picker pre-selects the first saved URL whose canonical form
    * matches this page URL). */
+  pageUrl: string;
+}
+
+/**
+ * P-27 Build #3 (2026-05-22) — right-click on a <video> OR an embed iframe
+ * opens the video-capture form. Mirrors OpenImageCaptureFormMessage shape,
+ * with the same emptiness-allowed contract on srcUrl: Chrome's
+ * `info.srcUrl` is empty when the right-click target isn't a media element
+ * Chrome recognizes (recall the P-23 Amazon-overlay lesson). The
+ * orchestrator's contextmenu capture-phase listener tracks the right-click
+ * target separately + calls findUnderlyingVideoEmbed to recover the actual
+ * <video> or embed iframe, so the open-handler can fall back to that
+ * snapshot when srcUrl is empty.
+ */
+export interface OpenVideoCaptureFormMessage {
+  kind: 'open-video-capture-form';
+  /** Chrome's `info.srcUrl` for the right-click target. Often empty for
+   * embed iframes (Chrome doesn't recognize them as media); the
+   * orchestrator falls back to the helper's snapshot in that case. */
+  srcUrl: string;
+  /** Page URL where the right-click happened. Used to pre-select the
+   * matching saved CompetitorUrl in the form's picker. */
   pageUrl: string;
 }
 
@@ -105,6 +130,7 @@ export type ContentScriptMessage =
   | OpenUrlAddFormMessage
   | OpenTextCaptureFormMessage
   | OpenImageCaptureFormMessage
+  | OpenVideoCaptureFormMessage
   | EnterRegionScreenshotModeMessage;
 
 export function isContentScriptMessage(
@@ -127,6 +153,9 @@ export function isContentScriptMessage(
     );
   }
   if (msg.kind === 'open-image-capture-form') {
+    return typeof msg.srcUrl === 'string' && typeof msg.pageUrl === 'string';
+  }
+  if (msg.kind === 'open-video-capture-form') {
     return typeof msg.srcUrl === 'string' && typeof msg.pageUrl === 'string';
   }
   if (msg.kind === 'enter-region-screenshot-mode') {
@@ -235,6 +264,77 @@ export interface SubmitImageCaptureRequestMessage {
 }
 
 /**
+ * P-27 Build #3 (2026-05-22) — end-to-end video-capture submit.
+ *
+ * Two branches mirror the on-wire CapturedVideo sourceType discriminator:
+ *
+ *   - DIRECT_BYTES: content script hands the background everything it
+ *     needs to (a) fetch the video bytes from `srcUrl` (extension origin
+ *     fetch, like images), (b) Phase 1 `requestVideoUpload` to mint TWO
+ *     signed URLs (video + thumbnail per design doc §A.9), (c) PUT the
+ *     bytes + the canvas-grabbed thumbnail JPEG to those URLs, (d) Phase 3
+ *     `finalizeVideoUpload` with the user's metadata. The thumbnail data
+ *     URL is produced by the content-script's canvas frame-grab BEFORE
+ *     this message fires — the background only has a service-worker
+ *     context, no DOM, no canvas, so the JPEG has to come from the form
+ *     side. NULL thumbnail (per §A.12 fallback) is allowed — pass
+ *     `thumbnailDataUrl: null`; finalize stores NULL thumbnailStoragePath
+ *     and the renderer falls back to a generic icon.
+ *
+ *   - EMBED: content script passes ONLY the embed URL + user metadata; no
+ *     fetch, no upload, no Phase 1, no thumbnail. The background skips
+ *     straight to Phase 3 finalize with sourceType='EMBED'.
+ *
+ * Idempotency: the content-script form mints clientId once per Save click;
+ * the background reuses it across all phases. Phase 3 finalize dedupes on
+ * clientId so retries are safe per design doc §A.2 table notes.
+ */
+export type SubmitVideoCaptureRequestMessage =
+  | {
+      kind: 'submit-video-capture';
+      projectId: string;
+      urlId: string;
+      sourceType: 'DIRECT_BYTES';
+      /** Page-host URL the bytes came from. Background fetches this via
+       * extension-origin fetch (host_permissions in wxt.config.ts). */
+      srcUrl: string;
+      /** Canvas frame-grab thumbnail produced by the form, as a base64
+       * data URL (e.g. `data:image/jpeg;base64,/9j/...`). The background
+       * decodes + PUTs it to the thumbnail signed URL alongside the video
+       * bytes. Null when the frame-grab failed (§A.12 fallback). */
+      thumbnailDataUrl: string | null;
+      /** Direct-bytes pre-flight hint from the helper's <source type>
+       * attribute. The background uses Content-Type when available + falls
+       * back to this hint when the CDN doesn't set Content-Type. Optional —
+       * the background's fetchVideoBytes() resolves authoritatively. */
+      mimeTypeHint: AcceptedVideoMimeType | null;
+      /** Phase-1 + Phase-3 metadata the form gathered. */
+      clientId: string;
+      videoCategory: string;
+      composition: string | null;
+      embeddedText: string | null;
+      tags: string[];
+      durationSeconds: number | null;
+      width: number | null;
+      height: number | null;
+    }
+  | {
+      kind: 'submit-video-capture';
+      projectId: string;
+      urlId: string;
+      sourceType: 'EMBED';
+      /** The YouTube / Vimeo / etc. URL going on the row's originalSrcUrl.
+       * Server validates with detectEmbedPlatform server-side; the form
+       * also validated client-side via the same helper. */
+      originalSrcUrl: string;
+      clientId: string;
+      videoCategory: string;
+      composition: string | null;
+      embeddedText: string | null;
+      tags: string[];
+    };
+
+/**
  * Session 6 (2026-05-13) — content-script asks the background to capture
  * the visible viewport as a base64 PNG. `chrome.tabs.captureVisibleTab` is
  * a background-only API in Manifest V3 (content scripts cannot call it
@@ -261,6 +361,7 @@ export type BackgroundRequest =
   | ListVocabularyRequest
   | CreateVocabularyEntryRequestMessage
   | SubmitImageCaptureRequestMessage
+  | SubmitVideoCaptureRequestMessage
   | CaptureVisibleTabRequest;
 
 // Response envelope. Encodes both success + structured error so the
@@ -298,6 +399,10 @@ export type CreateVocabularyEntryResponseEnvelope = BackgroundResponse<
 
 export type SubmitImageCaptureResponseEnvelope = BackgroundResponse<
   CapturedImage
+>;
+
+export type SubmitVideoCaptureResponseEnvelope = BackgroundResponse<
+  CapturedVideo
 >;
 
 /**
@@ -377,6 +482,32 @@ export function isBackgroundRequest(
       typeof m.finalize === 'object' &&
       m.finalize !== null
     );
+  }
+  if (msg.kind === 'submit-video-capture') {
+    const m = msg as {
+      projectId?: unknown;
+      urlId?: unknown;
+      sourceType?: unknown;
+      srcUrl?: unknown;
+      originalSrcUrl?: unknown;
+      clientId?: unknown;
+      videoCategory?: unknown;
+    };
+    if (
+      typeof m.projectId !== 'string' ||
+      typeof m.urlId !== 'string' ||
+      typeof m.clientId !== 'string' ||
+      typeof m.videoCategory !== 'string'
+    ) {
+      return false;
+    }
+    if (m.sourceType === 'DIRECT_BYTES') {
+      return typeof m.srcUrl === 'string';
+    }
+    if (m.sourceType === 'EMBED') {
+      return typeof m.originalSrcUrl === 'string';
+    }
+    return false;
   }
   if (msg.kind === 'capture-visible-tab') {
     const m = msg as { format?: unknown };

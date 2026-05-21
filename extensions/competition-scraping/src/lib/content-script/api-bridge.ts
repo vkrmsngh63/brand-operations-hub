@@ -22,9 +22,11 @@ import { PlosApiError } from '../errors.ts';
 import type { ExtensionProject } from '../api-client.ts';
 import type {
   AcceptedImageMimeType,
+  AcceptedVideoMimeType,
   CapturedImage,
   CapturedImageWithUrls,
   CapturedText,
+  CapturedVideo,
   CompetitorUrl,
   CreateCapturedTextRequest,
   CreateCompetitorUrlRequest,
@@ -226,6 +228,79 @@ export async function submitImageCapture(args: {
     srcUrl: args.srcUrl,
     request: args.request,
     finalize: args.finalize,
+  });
+}
+
+/**
+ * P-27 Build #3 (2026-05-22) — end-to-end video capture submit. Two-branch
+ * payload: DIRECT_BYTES carries the page-host video URL + the canvas
+ * frame-grab thumbnail data URL + metadata; EMBED carries only the
+ * embed URL + metadata. The background runs the corresponding pipeline
+ * (fetch + 3-phase upload, OR straight-to-finalize) and returns the
+ * finalized CapturedVideo row. The form treats this as a single atomic
+ * Save — disables the button while in flight, surfaces a single error on
+ * any failure.
+ */
+export async function submitVideoCapture(
+  args:
+    | {
+        projectId: string;
+        urlId: string;
+        sourceType: 'DIRECT_BYTES';
+        srcUrl: string;
+        thumbnailDataUrl: string | null;
+        mimeTypeHint: AcceptedVideoMimeType | null;
+        clientId: string;
+        videoCategory: string;
+        composition: string | null;
+        embeddedText: string | null;
+        tags: string[];
+        durationSeconds: number | null;
+        width: number | null;
+        height: number | null;
+      }
+    | {
+        projectId: string;
+        urlId: string;
+        sourceType: 'EMBED';
+        originalSrcUrl: string;
+        clientId: string;
+        videoCategory: string;
+        composition: string | null;
+        embeddedText: string | null;
+        tags: string[];
+      },
+): Promise<CapturedVideo> {
+  if (args.sourceType === 'DIRECT_BYTES') {
+    return send<CapturedVideo>({
+      kind: 'submit-video-capture',
+      projectId: args.projectId,
+      urlId: args.urlId,
+      sourceType: 'DIRECT_BYTES',
+      srcUrl: args.srcUrl,
+      thumbnailDataUrl: args.thumbnailDataUrl,
+      mimeTypeHint: args.mimeTypeHint,
+      clientId: args.clientId,
+      videoCategory: args.videoCategory,
+      composition: args.composition,
+      embeddedText: args.embeddedText,
+      tags: args.tags,
+      durationSeconds: args.durationSeconds,
+      width: args.width,
+      height: args.height,
+    });
+  }
+  return send<CapturedVideo>({
+    kind: 'submit-video-capture',
+    projectId: args.projectId,
+    urlId: args.urlId,
+    sourceType: 'EMBED',
+    originalSrcUrl: args.originalSrcUrl,
+    clientId: args.clientId,
+    videoCategory: args.videoCategory,
+    composition: args.composition,
+    embeddedText: args.embeddedText,
+    tags: args.tags,
   });
 }
 

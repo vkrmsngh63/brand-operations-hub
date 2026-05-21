@@ -1,0 +1,779 @@
+// Video-capture overlay form (P-27 Build #3, 2026-05-22). Mirrors the
+// image-capture-form.ts shape, with two branches that mirror the on-wire
+// CapturedVideo sourceType discriminator per CAPTURED_VIDEOS_DESIGN.md
+// §A.7:
+//
+//   - direct  — the user right-clicked an inline <video> element (or its
+//     overlay-wrapper). The form runs a canvas frame-grab on Save to
+//     produce a thumbnail JPEG; the background uploads both the bytes
+//     and the thumbnail via the §A.9 two-signed-URL Phase 1.
+//
+//   - embed   — the user right-clicked a recognized embed iframe
+//     (YouTube / Vimeo / Wistia / etc.). The form only carries the URL +
+//     platform name; the background skips Phase 1 + 2 and finalizes with
+//     sourceType='EMBED'.
+//
+// Single form for both branches per design doc §A.7 single-table-per-
+// media-type principle + Build #3's drift-check approval: form UX is
+// symmetric (same saved-URL picker + category + composition + embedded
+// text + tags + Save button); the branch only changes what runs on Save.
+//
+// Thumbnail-extraction notes (direct branch only — §A.9 + §A.12):
+//   - Uses canvas.drawImage(<video>) at the video's current frame +
+//     canvas.toDataURL('image/jpeg', 0.85). Requires the video's
+//     readyState >= 2 (HAVE_CURRENT_DATA); if the video is mid-load, the
+//     form retries up to 3× at 200 ms intervals before giving up.
+//   - Cross-origin canvas-taint failure (SecurityError on toDataURL) is
+//     treated as the §A.12 NULL-thumbnail fallback — save proceeds; the
+//     row stores NULL thumbnailStoragePath; the renderer falls back to a
+//     generic ▶️ icon.
+//   - Frame-grab failure NEVER blocks save — per §A.12 "save never fails
+//     because of thumbnail issues."
+
+import {
+  PlosApiError,
+  createVocabularyEntry,
+  listCompetitorUrls,
+  listVocabularyEntries,
+  submitVideoCapture,
+} from './api-bridge.ts';
+import type {
+  AcceptedVideoMimeType,
+  Platform,
+} from '../../../../../src/lib/shared-types/competition-scraping.ts';
+import { isAcceptedVideoMimeType } from '../../../../../src/lib/shared-types/competition-scraping.ts';
+import { getPlatformLabel } from '../platforms.ts';
+import { getModuleByPlatform } from '../platform-modules/registry.ts';
+import { pickInitialUrl } from '../captured-text-validation.ts';
+import { buildSavedUrlOptionLabel } from '../saved-url-option-label.ts';
+import {
+  validateCapturedVideoDraft,
+  type CapturedVideoValidationReason,
+} from '../captured-video-validation.ts';
+
+/** Direct-branch props — user right-clicked a <video> (or its wrapper). */
+export interface VideoCaptureFormDirectProps {
+  kind: 'direct';
+  /** The <video>.currentSrc (or src fallback). Used both as the preview
+   * source AND as the page-host URL the background fetches video bytes
+   * from at Save time. */
+  src: string;
+  /** Pre-flight MIME hint from a <source type="..."> attribute, when the
+   * page provided one. Null when the page didn't. The background's
+   * fetchVideoBytes() resolves authoritatively from Content-Type. */
+  mimeTypeHint: string | null;
+  /** The live <video> DOM node on the host page. Used for the canvas
+   * frame-grab (canvas.drawImage requires the live element, not just a
+   * URL). Also read for dimensions + duration. */
+  element: HTMLVideoElement;
+  pageUrl: string;
+  projectId: string;
+  projectName: string | null;
+  platform: Platform;
+  onSaved(): void;
+  onClose(): void;
+}
+
+/** Embed-branch props — user right-clicked a recognized iframe. */
+export interface VideoCaptureFormEmbedProps {
+  kind: 'embed';
+  /** The iframe.src — YouTube/Vimeo/etc. URL. Goes onto the row's
+   * originalSrcUrl + is also used to render the embed-URL preview. */
+  src: string;
+  /** Short embed-platform name from detectEmbedPlatform (e.g. 'youtube',
+   * 'vimeo', 'wistia'). Surfaced in the form's source-kind banner so the
+   * user sees a confirmation of what they're saving. Distinct from the
+   * W#2 `platform` field below — `embedPlatform` describes the video host
+   * (YouTube/Vimeo/etc.), `platform` describes the competitor-site
+   * platform (amazon/ebay/etc.). */
+  embedPlatform: string;
+  pageUrl: string;
+  projectId: string;
+  projectName: string | null;
+  /** The W#2 platform (amazon / ebay / etc.) — same field name + meaning
+   * as the direct branch's `platform`. */
+  platform: Platform;
+  onSaved(): void;
+  onClose(): void;
+}
+
+// Single tagged-union props type the orchestrator passes in. Branches on
+// the helper's result kind. Both branches share `platform: Platform` (W#2
+// site platform) at the top level; the embed branch additionally carries
+// `embedPlatform: string` (video-host platform name) which is form-display
+// only.
+export type VideoCaptureFormProps =
+  | VideoCaptureFormDirectProps
+  | VideoCaptureFormEmbedProps;
+
+export interface VideoCaptureForm {
+  /** Removes the form from the DOM. Idempotent. */
+  destroy(): void;
+}
+
+let activeForm: VideoCaptureForm | null = null;
+
+// Sentinel option value for the video-category picker — same pattern as
+// the image-category sentinel in image-capture-form.ts.
+const ADD_NEW_VIDEO_CATEGORY_VALUE = '__plos_add_new_video_category__';
+
+// Canvas frame-grab timing constants.
+const FRAME_GRAB_RETRY_INTERVAL_MS = 200;
+const FRAME_GRAB_MAX_RETRIES = 3;
+const THUMBNAIL_JPEG_QUALITY = 0.85;
+
+export function openVideoCaptureForm(
+  props: VideoCaptureFormProps,
+): VideoCaptureForm {
+  if (activeForm !== null) {
+    activeForm.destroy();
+    activeForm = null;
+  }
+
+  const w2Platform: Platform = props.platform;
+
+  const backdrop = document.createElement('div');
+  backdrop.className = 'plos-cs-form-backdrop';
+  backdrop.setAttribute('role', 'dialog');
+  backdrop.setAttribute('aria-modal', 'true');
+  backdrop.setAttribute('aria-label', 'Add captured video');
+
+  const form = document.createElement('form');
+  form.className = 'plos-cs-form';
+  form.noValidate = true;
+
+  const title = document.createElement('h2');
+  title.className = 'plos-cs-form-title';
+  title.textContent = 'Add captured video to PLOS';
+  form.appendChild(title);
+
+  // Context block — Project + Platform (read-only).
+  const context = document.createElement('div');
+  context.className = 'plos-cs-form-context';
+  const projectLine = document.createElement('div');
+  const projectLabel = document.createElement('span');
+  projectLabel.textContent = 'Project: ';
+  const projectStrong = document.createElement('strong');
+  projectStrong.textContent = props.projectName ?? '(unnamed project)';
+  projectLine.appendChild(projectLabel);
+  projectLine.appendChild(projectStrong);
+  context.appendChild(projectLine);
+
+  const platformLine = document.createElement('div');
+  const platformLabel = document.createElement('span');
+  platformLabel.textContent = 'Platform: ';
+  const platformStrong = document.createElement('strong');
+  platformStrong.textContent = getPlatformLabel(w2Platform) ?? w2Platform;
+  platformLine.appendChild(platformLabel);
+  platformLine.appendChild(platformStrong);
+  context.appendChild(platformLine);
+  form.appendChild(context);
+
+  // ── Source-kind banner ───────────────────────────────────────────────
+  // Direct: "Direct video — will upload bytes + thumbnail."
+  // Embed:  "Recognized as YouTube — will store the share URL only."
+  const sourceBanner = document.createElement('div');
+  sourceBanner.className = 'plos-cs-form-status';
+  if (props.kind === 'direct') {
+    sourceBanner.textContent =
+      'Direct video — will upload the video file plus a thumbnail frame.';
+  } else {
+    const human =
+      props.embedPlatform.charAt(0).toUpperCase() +
+      props.embedPlatform.slice(1);
+    sourceBanner.textContent = `Recognized as ${human} — will save the embed link only.`;
+  }
+  form.appendChild(sourceBanner);
+
+  // ── Loading status banner — visible while saved URLs + vocab fetch ──
+  const statusBanner = document.createElement('div');
+  statusBanner.className = 'plos-cs-form-status';
+  statusBanner.textContent = 'Loading your saved URLs and video categories…';
+  form.appendChild(statusBanner);
+
+  // ── Preview area ─────────────────────────────────────────────────────
+  // Direct: a small <video> clone (no controls; just a poster-frame
+  //   preview so the user sees what they're saving without re-streaming
+  //   the whole video). For thumbnail extraction we use the LIVE element
+  //   passed in via props (not this clone — the clone may not load fast
+  //   enough on Save).
+  // Embed:  show the URL + platform name as text; no iframe (heavy +
+  //   slow + a YouTube embed in a form backdrop is jarring).
+  const previewWrap = document.createElement('div');
+  previewWrap.className = 'plos-cs-form-image-preview-wrap';
+
+  if (props.kind === 'direct') {
+    const previewVideo = document.createElement('video');
+    previewVideo.className = 'plos-cs-form-image-preview';
+    previewVideo.src = props.src;
+    previewVideo.muted = true;
+    previewVideo.preload = 'metadata';
+    previewVideo.style.maxHeight = '160px';
+    previewWrap.appendChild(previewVideo);
+
+    const previewMeta = document.createElement('div');
+    previewMeta.className = 'plos-cs-form-image-meta';
+    previewMeta.textContent = 'Loading preview…';
+    previewWrap.appendChild(previewMeta);
+
+    previewVideo.addEventListener('loadedmetadata', () => {
+      const w = previewVideo.videoWidth;
+      const h = previewVideo.videoHeight;
+      const dur = previewVideo.duration;
+      const parts: string[] = [];
+      if (w > 0 && h > 0) parts.push(`${w} × ${h} pixels`);
+      if (Number.isFinite(dur) && dur > 0) {
+        const mins = Math.floor(dur / 60);
+        const secs = Math.floor(dur % 60);
+        parts.push(`${mins}:${secs.toString().padStart(2, '0')}`);
+      }
+      previewMeta.textContent =
+        parts.length > 0 ? parts.join(' · ') : '(no metadata)';
+    });
+    previewVideo.addEventListener('error', () => {
+      previewMeta.className = 'plos-cs-form-image-meta-failed';
+      previewMeta.textContent =
+        "Couldn't preview the video — Save will still try the upload.";
+    });
+  } else {
+    const embedInfo = document.createElement('div');
+    embedInfo.className = 'plos-cs-form-image-meta';
+    embedInfo.textContent = props.src;
+    previewWrap.appendChild(embedInfo);
+  }
+  form.appendChild(previewWrap);
+
+  // ── Saved URL picker ─────────────────────────────────────────────────
+  const urlFieldWrap = document.createElement('div');
+  urlFieldWrap.className = 'plos-cs-form-field';
+  const urlFieldLabel = document.createElement('label');
+  urlFieldLabel.className = 'plos-cs-form-label';
+  urlFieldLabel.htmlFor = 'plos-cs-video-url';
+  urlFieldLabel.textContent = 'Attach to which saved URL?';
+  const urlSelect = document.createElement('select');
+  urlSelect.id = 'plos-cs-video-url';
+  urlSelect.name = 'url';
+  urlSelect.className = 'plos-cs-form-select';
+  urlSelect.disabled = true;
+  const placeholderUrlOpt = document.createElement('option');
+  placeholderUrlOpt.value = '';
+  placeholderUrlOpt.textContent = 'Loading…';
+  urlSelect.appendChild(placeholderUrlOpt);
+  urlFieldWrap.appendChild(urlFieldLabel);
+  urlFieldWrap.appendChild(urlSelect);
+  form.appendChild(urlFieldWrap);
+
+  // ── Video-category picker with inline "+ Add new" ────────────────────
+  const categoryFieldWrap = document.createElement('div');
+  categoryFieldWrap.className = 'plos-cs-form-field';
+  const categoryFieldLabel = document.createElement('label');
+  categoryFieldLabel.className = 'plos-cs-form-label';
+  categoryFieldLabel.htmlFor = 'plos-cs-video-category';
+  categoryFieldLabel.textContent = 'Video category';
+  const categorySelect = document.createElement('select');
+  categorySelect.id = 'plos-cs-video-category';
+  categorySelect.name = 'category';
+  categorySelect.className = 'plos-cs-form-select';
+  categorySelect.disabled = true;
+  const placeholderCatOpt = document.createElement('option');
+  placeholderCatOpt.value = '';
+  placeholderCatOpt.textContent = 'Loading…';
+  categorySelect.appendChild(placeholderCatOpt);
+  categoryFieldWrap.appendChild(categoryFieldLabel);
+  categoryFieldWrap.appendChild(categorySelect);
+  const newCategoryWrap = document.createElement('div');
+  newCategoryWrap.className = 'plos-cs-form-inline-add';
+  newCategoryWrap.style.display = 'none';
+  const newCategoryInput = document.createElement('input');
+  newCategoryInput.type = 'text';
+  newCategoryInput.className = 'plos-cs-form-input';
+  newCategoryInput.placeholder = 'Type new video-category name';
+  newCategoryWrap.appendChild(newCategoryInput);
+  categoryFieldWrap.appendChild(newCategoryWrap);
+  form.appendChild(categoryFieldWrap);
+
+  // ── Composition textarea (optional) ──────────────────────────────────
+  const compositionWrap = document.createElement('div');
+  compositionWrap.className = 'plos-cs-form-field';
+  const compositionLabel = document.createElement('label');
+  compositionLabel.className = 'plos-cs-form-label';
+  compositionLabel.htmlFor = 'plos-cs-video-composition';
+  compositionLabel.textContent = 'Composition (optional)';
+  const compositionArea = document.createElement('textarea');
+  compositionArea.id = 'plos-cs-video-composition';
+  compositionArea.name = 'composition';
+  compositionArea.className = 'plos-cs-form-textarea';
+  compositionArea.rows = 2;
+  compositionArea.placeholder =
+    "Describe what's in the video (e.g., '30-second product demo showing wireless setup').";
+  compositionWrap.appendChild(compositionLabel);
+  compositionWrap.appendChild(compositionArea);
+  form.appendChild(compositionWrap);
+
+  // ── Embedded text textarea (optional) ────────────────────────────────
+  const embeddedWrap = document.createElement('div');
+  embeddedWrap.className = 'plos-cs-form-field';
+  const embeddedLabel = document.createElement('label');
+  embeddedLabel.className = 'plos-cs-form-label';
+  embeddedLabel.htmlFor = 'plos-cs-video-embedded-text';
+  embeddedLabel.textContent = 'Embedded text (optional)';
+  const embeddedArea = document.createElement('textarea');
+  embeddedArea.id = 'plos-cs-video-embedded-text';
+  embeddedArea.name = 'embeddedText';
+  embeddedArea.className = 'plos-cs-form-textarea';
+  embeddedArea.rows = 2;
+  embeddedArea.placeholder =
+    'Text that appears IN the video (overlay headlines, captions).';
+  embeddedWrap.appendChild(embeddedLabel);
+  embeddedWrap.appendChild(embeddedArea);
+  form.appendChild(embeddedWrap);
+
+  // ── Tags chip-list ───────────────────────────────────────────────────
+  const tagsFieldWrap = document.createElement('div');
+  tagsFieldWrap.className = 'plos-cs-form-field';
+  const tagsFieldLabel = document.createElement('label');
+  tagsFieldLabel.className = 'plos-cs-form-label';
+  tagsFieldLabel.htmlFor = 'plos-cs-video-tags-input';
+  tagsFieldLabel.textContent = 'Tags (optional)';
+  const tagsChipRow = document.createElement('div');
+  tagsChipRow.className = 'plos-cs-chip-row';
+  const tagsInput = document.createElement('input');
+  tagsInput.type = 'text';
+  tagsInput.id = 'plos-cs-video-tags-input';
+  tagsInput.className = 'plos-cs-form-input';
+  tagsInput.placeholder = 'Type a tag and press Enter';
+  tagsFieldWrap.appendChild(tagsFieldLabel);
+  tagsFieldWrap.appendChild(tagsChipRow);
+  tagsFieldWrap.appendChild(tagsInput);
+  form.appendChild(tagsFieldWrap);
+
+  // ── Error banner ─────────────────────────────────────────────────────
+  const errorBanner = document.createElement('div');
+  errorBanner.className = 'plos-cs-form-error';
+  errorBanner.style.display = 'none';
+  form.appendChild(errorBanner);
+
+  // ── Buttons ──────────────────────────────────────────────────────────
+  const actions = document.createElement('div');
+  actions.className = 'plos-cs-form-actions';
+  const cancelBtn = document.createElement('button');
+  cancelBtn.type = 'button';
+  cancelBtn.className = 'plos-cs-form-button plos-cs-form-button-secondary';
+  cancelBtn.textContent = 'Cancel';
+  actions.appendChild(cancelBtn);
+  const saveBtn = document.createElement('button');
+  saveBtn.type = 'submit';
+  saveBtn.className = 'plos-cs-form-button plos-cs-form-button-primary';
+  saveBtn.textContent = 'Save';
+  saveBtn.disabled = true;
+  actions.appendChild(saveBtn);
+  form.appendChild(actions);
+
+  backdrop.appendChild(form);
+
+  // ── Behavior wiring ──────────────────────────────────────────────────
+  let tags: string[] = [];
+
+  function renderChips(): void {
+    tagsChipRow.innerHTML = '';
+    for (const tag of tags) {
+      const chip = document.createElement('span');
+      chip.className = 'plos-cs-chip';
+      const text = document.createElement('span');
+      text.textContent = tag;
+      chip.appendChild(text);
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'plos-cs-chip-remove';
+      remove.setAttribute('aria-label', `Remove tag ${tag}`);
+      remove.textContent = '×';
+      remove.addEventListener('click', () => {
+        tags = tags.filter((t) => t !== tag);
+        renderChips();
+      });
+      chip.appendChild(remove);
+      tagsChipRow.appendChild(chip);
+    }
+  }
+
+  function tryAddTagFromInput(): void {
+    const value = tagsInput.value;
+    const candidates = value.split(',');
+    const merged: string[] = [];
+    const seen = new Set<string>();
+    for (const raw of [...tags, ...candidates]) {
+      if (typeof raw !== 'string') continue;
+      const trimmed = raw.trim();
+      if (!trimmed) continue;
+      const key = trimmed.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push(trimmed);
+    }
+    tags = merged;
+    tagsInput.value = '';
+    renderChips();
+  }
+
+  tagsInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      tryAddTagFromInput();
+      return;
+    }
+    if (e.key === ',') {
+      e.preventDefault();
+      tryAddTagFromInput();
+    }
+  });
+  tagsInput.addEventListener('blur', () => {
+    if (tagsInput.value.trim().length > 0) {
+      tryAddTagFromInput();
+    }
+  });
+
+  categorySelect.addEventListener('change', () => {
+    if (categorySelect.value === ADD_NEW_VIDEO_CATEGORY_VALUE) {
+      newCategoryWrap.style.display = 'block';
+      newCategoryInput.focus();
+    } else {
+      newCategoryWrap.style.display = 'none';
+      newCategoryInput.value = '';
+    }
+  });
+
+  function setError(message: string | null): void {
+    if (message === null) {
+      errorBanner.style.display = 'none';
+      errorBanner.textContent = '';
+    } else {
+      errorBanner.style.display = 'block';
+      errorBanner.textContent = message;
+    }
+  }
+
+  function setSubmitting(submitting: boolean): void {
+    saveBtn.disabled = submitting;
+    cancelBtn.disabled = submitting;
+    urlSelect.disabled = submitting;
+    categorySelect.disabled = submitting;
+    newCategoryInput.disabled = submitting;
+    compositionArea.disabled = submitting;
+    embeddedArea.disabled = submitting;
+    tagsInput.disabled = submitting;
+    saveBtn.textContent = submitting ? 'Saving…' : 'Save';
+  }
+
+  async function handleSave(e: SubmitEvent): Promise<void> {
+    e.preventDefault();
+    setError(null);
+
+    let category = categorySelect.value;
+    if (category === ADD_NEW_VIDEO_CATEGORY_VALUE) {
+      category = newCategoryInput.value;
+    }
+
+    // Direct branch sees an estimated fileSize via the <video> resource;
+    // we DON'T actually read the bytes here (the background does that
+    // after the user confirms). The validator accepts a placeholder size
+    // when the form passes 1 (signals "we'll resolve at fetch time"); the
+    // background's fetchVideoBytes enforces the real 100 MB cap. The
+    // embed branch passes 0 (no bytes; validator only checks URL pattern).
+    const draftFileSize = props.kind === 'direct' ? 1 : 0;
+    const draftMimeType = props.kind === 'direct' ? props.mimeTypeHint ?? '' : '';
+    const draftOriginalSrcUrl = props.src;
+
+    const validation = validateCapturedVideoDraft({
+      competitorUrlId: urlSelect.value,
+      sourceType: props.kind === 'direct' ? 'DIRECT_BYTES' : 'EMBED',
+      originalSrcUrl: draftOriginalSrcUrl,
+      mimeType: draftMimeType,
+      fileSize: draftFileSize,
+      videoCategory: category,
+      composition: compositionArea.value,
+      embeddedText: embeddedArea.value,
+      tags,
+    });
+    if (!validation.ok) {
+      setError(messageForReason(validation.reason));
+      return;
+    }
+
+    setSubmitting(true);
+
+    try {
+      if (categorySelect.value === ADD_NEW_VIDEO_CATEGORY_VALUE) {
+        await createVocabularyEntry(props.projectId, {
+          vocabularyType: 'video-category',
+          value: validation.payload.videoCategory,
+        });
+      }
+
+      if (props.kind === 'direct') {
+        // Best-effort thumbnail capture + metadata read from the live
+        // <video> element. Both are degradable per §A.12 — save proceeds
+        // with NULL thumbnail / NULL metadata if the live element doesn't
+        // cooperate.
+        const thumb = await captureThumbnailJpegBestEffort(props.element);
+        const meta = readVideoMetadataBestEffort(props.element);
+        const mimeHint: AcceptedVideoMimeType | null = isAcceptedVideoMimeType(
+          props.mimeTypeHint,
+        )
+          ? props.mimeTypeHint
+          : null;
+
+        await submitVideoCapture({
+          projectId: props.projectId,
+          urlId: urlSelect.value,
+          sourceType: 'DIRECT_BYTES',
+          srcUrl: props.src,
+          thumbnailDataUrl: thumb,
+          mimeTypeHint: mimeHint,
+          clientId: validation.payload.clientId,
+          videoCategory: validation.payload.videoCategory,
+          composition: validation.payload.composition,
+          embeddedText: validation.payload.embeddedText,
+          tags: validation.payload.tags,
+          durationSeconds: meta.duration,
+          width: meta.width,
+          height: meta.height,
+        });
+      } else {
+        await submitVideoCapture({
+          projectId: props.projectId,
+          urlId: urlSelect.value,
+          sourceType: 'EMBED',
+          originalSrcUrl: props.src,
+          clientId: validation.payload.clientId,
+          videoCategory: validation.payload.videoCategory,
+          composition: validation.payload.composition,
+          embeddedText: validation.payload.embeddedText,
+          tags: validation.payload.tags,
+        });
+      }
+      showSavedToast();
+      props.onSaved();
+      close();
+    } catch (err) {
+      const message =
+        err instanceof PlosApiError
+          ? `Couldn’t save (${err.status || 'network'}): ${err.message}`
+          : 'Couldn’t save: unknown error.';
+      setError(message);
+      setSubmitting(false);
+    }
+  }
+
+  form.addEventListener('submit', (e) => {
+    void handleSave(e as SubmitEvent);
+  });
+  cancelBtn.addEventListener('click', () => {
+    close();
+  });
+  backdrop.addEventListener('mousedown', (e) => {
+    if (e.target === backdrop) {
+      close();
+    }
+  });
+
+  function onKeyDown(e: KeyboardEvent): void {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      close();
+    }
+  }
+  document.addEventListener('keydown', onKeyDown);
+
+  document.body.appendChild(backdrop);
+  setTimeout(() => {
+    urlSelect.focus();
+  }, 0);
+
+  // ── Fetch saved URLs + video-category vocab in parallel ──────────────
+  void (async () => {
+    try {
+      const [rows, vocab] = await Promise.all([
+        listCompetitorUrls(props.projectId, w2Platform),
+        listVocabularyEntries(props.projectId, 'video-category'),
+      ]);
+
+      urlSelect.innerHTML = '';
+      if (rows.length === 0) {
+        const empty = document.createElement('option');
+        empty.value = '';
+        empty.textContent = `No saved ${getPlatformLabel(w2Platform) ?? w2Platform} URLs yet — capture one via "+ Add" first`;
+        urlSelect.appendChild(empty);
+        urlSelect.disabled = true;
+        saveBtn.disabled = true;
+      } else {
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = 'Pick a saved URL…';
+        urlSelect.appendChild(placeholder);
+        for (const row of rows) {
+          const opt = document.createElement('option');
+          opt.value = row.id;
+          opt.textContent = buildSavedUrlOptionLabel(row);
+          urlSelect.appendChild(opt);
+        }
+        const platformModule = getModuleByPlatform(w2Platform);
+        const initial = pickInitialUrl(
+          props.pageUrl,
+          rows,
+          platformModule
+            ? (href) => platformModule.canonicalProductUrl(href)
+            : undefined,
+        );
+        if (initial) urlSelect.value = initial.id;
+        urlSelect.disabled = false;
+      }
+
+      categorySelect.innerHTML = '';
+      const placeholderCat = document.createElement('option');
+      placeholderCat.value = '';
+      placeholderCat.textContent = 'Pick a video category…';
+      categorySelect.appendChild(placeholderCat);
+      for (const entry of vocab) {
+        const opt = document.createElement('option');
+        opt.value = entry.value;
+        opt.textContent = entry.value;
+        categorySelect.appendChild(opt);
+      }
+      const addNewOpt = document.createElement('option');
+      addNewOpt.value = ADD_NEW_VIDEO_CATEGORY_VALUE;
+      addNewOpt.textContent = '+ Add new…';
+      categorySelect.appendChild(addNewOpt);
+      categorySelect.disabled = false;
+
+      statusBanner.style.display = 'none';
+      if (rows.length > 0) saveBtn.disabled = false;
+    } catch (err) {
+      const message =
+        err instanceof PlosApiError
+          ? `Couldn’t load your saved URLs or video categories (${err.status || 'network'}): ${err.message}`
+          : 'Couldn’t load your saved URLs or video categories.';
+      statusBanner.style.display = 'none';
+      setError(message);
+      saveBtn.disabled = true;
+    }
+  })();
+
+  // ── Lifecycle ────────────────────────────────────────────────────────
+  function close(): void {
+    handle.destroy();
+    props.onClose();
+  }
+
+  const handle: VideoCaptureForm = {
+    destroy() {
+      if (backdrop.parentNode) backdrop.parentNode.removeChild(backdrop);
+      document.removeEventListener('keydown', onKeyDown);
+      if (activeForm === handle) activeForm = null;
+    },
+  };
+  activeForm = handle;
+  return handle;
+}
+
+/**
+ * Best-effort canvas frame-grab. Tries up to FRAME_GRAB_MAX_RETRIES times
+ * (200 ms apart) for the video's readyState to reach HAVE_CURRENT_DATA (2)
+ * before giving up. Returns a JPEG data URL on success, OR null on:
+ *   - readyState never reaches 2 within the retry budget
+ *   - canvas-taint SecurityError on toDataURL (cross-origin video without
+ *     `crossorigin` attribute)
+ *   - any unexpected exception during drawImage
+ *
+ * Null is treated as the §A.12 fallback: save proceeds; the row stores
+ * NULL thumbnailStoragePath; the renderer shows a generic ▶️ icon.
+ */
+async function captureThumbnailJpegBestEffort(
+  video: HTMLVideoElement,
+): Promise<string | null> {
+  for (let attempt = 0; attempt < FRAME_GRAB_MAX_RETRIES; attempt++) {
+    if (video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0) {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return null;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        // toDataURL throws SecurityError when the canvas is tainted by a
+        // cross-origin video without the `crossorigin` attribute.
+        return canvas.toDataURL('image/jpeg', THUMBNAIL_JPEG_QUALITY);
+      } catch {
+        return null;
+      }
+    }
+    await sleep(FRAME_GRAB_RETRY_INTERVAL_MS);
+  }
+  return null;
+}
+
+interface VideoMetadata {
+  duration: number | null;
+  width: number | null;
+  height: number | null;
+}
+
+function readVideoMetadataBestEffort(video: HTMLVideoElement): VideoMetadata {
+  const duration =
+    Number.isFinite(video.duration) && video.duration > 0
+      ? video.duration
+      : null;
+  const width = video.videoWidth > 0 ? video.videoWidth : null;
+  const height = video.videoHeight > 0 ? video.videoHeight : null;
+  return { duration, width, height };
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Minimal "Saved!" toast. Appended to document.body (not the form's
+ * backdrop — the backdrop tears down on save success). Auto-dismisses
+ * after 1.6 s. A polished saved-video on-page indicator overlay arrives
+ * at a later Build session per design doc §A.2 row #6.
+ */
+function showSavedToast(): void {
+  const toast = document.createElement('div');
+  toast.textContent = 'Saved!';
+  toast.setAttribute('role', 'status');
+  toast.style.position = 'fixed';
+  toast.style.right = '16px';
+  toast.style.bottom = '16px';
+  toast.style.zIndex = '2147483647';
+  toast.style.padding = '10px 14px';
+  toast.style.background = '#16a34a';
+  toast.style.color = '#fff';
+  toast.style.borderRadius = '6px';
+  toast.style.font = '500 13px/1.4 system-ui, sans-serif';
+  toast.style.boxShadow = '0 4px 12px rgba(0,0,0,.25)';
+  document.body.appendChild(toast);
+  setTimeout(() => {
+    if (toast.parentNode) toast.parentNode.removeChild(toast);
+  }, 1600);
+}
+
+function messageForReason(reason: CapturedVideoValidationReason): string {
+  switch (reason) {
+    case 'url-required':
+      return 'Pick the saved URL this video belongs to.';
+    case 'source-type-invalid':
+      return 'Internal error — unrecognized video source type.';
+    case 'embed-url-required':
+      return 'No embed URL detected — close this form and right-click a YouTube/Vimeo/etc. video.';
+    case 'embed-url-unrecognized':
+      return "That URL doesn't look like a supported video embed (YouTube, Vimeo, Wistia, Brightcove, Dailymotion, or Loom).";
+    case 'bytes-required':
+      return 'No video bytes to upload — close this form and right-click a <video> again.';
+    case 'video-mime-rejected':
+      return 'Unsupported video type. PLOS accepts MP4, WebM, and QuickTime (MOV).';
+    case 'video-too-large':
+      return 'Video exceeds the 100 MB cap. Try the YouTube/Vimeo embed path instead, or upload the video to YouTube/Vimeo and paste the share URL.';
+    case 'category-required':
+      return 'Pick a video category, or add a new one via "+ Add new…".';
+  }
+}

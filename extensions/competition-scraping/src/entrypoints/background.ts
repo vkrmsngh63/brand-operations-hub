@@ -45,14 +45,19 @@ import {
   createCompetitorUrl,
   createVocabularyEntry,
   fetchImageBytes,
+  fetchVideoBytes,
   finalizeImageUpload,
+  finalizeVideoUpload,
   listCapturedImages,
   listCapturedTexts,
   listCompetitorUrls,
   listProjects,
   listVocabularyEntries,
   putImageBytesToSignedUrl,
+  putVideoBytesToSignedUrl,
+  putVideoThumbnailToSignedUrl,
   requestImageUpload,
+  requestVideoUpload,
 } from '../lib/api-client';
 import {
   isBackgroundRequest,
@@ -61,9 +66,13 @@ import {
   type CaptureVisibleTabRequest,
   type ContentScriptMessage,
   type SubmitImageCaptureRequestMessage,
+  type SubmitVideoCaptureRequestMessage,
 } from '../lib/content-script/messaging';
 import { logGlobalError } from '../lib/sw-error-logging';
-import type { CapturedImage } from '../../../../src/lib/shared-types/competition-scraping';
+import type {
+  CapturedImage,
+  CapturedVideo,
+} from '../../../../src/lib/shared-types/competition-scraping';
 
 void supabase;
 
@@ -81,6 +90,19 @@ const CONTEXT_MENU_TEXT_TITLE = 'Add to PLOS — Captured Text';
 // URL to the content-script's image-capture form.
 const CONTEXT_MENU_IMAGE_ID = 'plos-add-captured-image';
 const CONTEXT_MENU_IMAGE_TITLE = 'Add to PLOS — Image';
+
+// P-27 Build #3 (2026-05-22) — video-capture context menu. Fires on right-
+// click anywhere on a page; the content-script orchestrator's contextmenu
+// capture-phase listener walks the DOM via findUnderlyingVideoEmbed to
+// resolve either a direct <video> element or a recognized embed iframe.
+// Routes the result to the content-script's video-capture form. Uses
+// `contexts: ['all']` mirroring the P-23 image-capture lesson — Chrome's
+// `info.srcUrl` is populated only when the right-click target is itself a
+// <video> (recall: page wrappers + overlays often intercept the contextmenu
+// event before Chrome recognizes the target as media). The orchestrator's
+// snapshot covers the wrapper-and-overlay cases.
+const CONTEXT_MENU_VIDEO_ID = 'plos-add-captured-video';
+const CONTEXT_MENU_VIDEO_TITLE = 'Add to PLOS — Captured Video';
 
 export default defineBackground(() => {
   // P-16 (W#2 polish, 2026-05-19): SW global error handlers. Attach BEFORE
@@ -132,6 +154,16 @@ export default defineBackground(() => {
         // `find-underlying-image.ts` for the fallback path.
         contexts: ['all'],
       });
+      chrome.contextMenus.create({
+        id: CONTEXT_MENU_VIDEO_ID,
+        title: CONTEXT_MENU_VIDEO_TITLE,
+        // P-27 Build #3 (2026-05-22): same `contexts: ['all']` pattern as
+        // the image entry. The content-script orchestrator's contextmenu
+        // capture-phase listener resolves direct <video> + recognized
+        // embed iframes via findUnderlyingVideoEmbed; this menu is the
+        // user-visible entry-point.
+        contexts: ['all'],
+      });
     });
   });
 
@@ -167,6 +199,27 @@ export default defineBackground(() => {
       const message: ContentScriptMessage = {
         kind: 'open-text-capture-form',
         selectedText,
+        pageUrl,
+      };
+      chrome.tabs.sendMessage(tabId, message).catch(() => {
+        /* content script not present on this page; no-op */
+      });
+      return;
+    }
+
+    if (info.menuItemId === CONTEXT_MENU_VIDEO_ID) {
+      // P-27 Build #3 (2026-05-22): video-capture gesture. Chrome populates
+      // `info.srcUrl` ONLY when the right-click target is recognized media
+      // (typically a direct <video> element). For embed iframes + overlay-
+      // wrapped videos, srcUrl is empty; the content-script orchestrator
+      // falls back to its findUnderlyingVideoEmbed snapshot from the
+      // contextmenu capture-phase listener.
+      const srcUrl = typeof info.srcUrl === 'string' ? info.srcUrl : '';
+      const pageUrl =
+        typeof info.pageUrl === 'string' ? info.pageUrl : tab?.url ?? '';
+      const message: ContentScriptMessage = {
+        kind: 'open-video-capture-form',
+        srcUrl,
         pageUrl,
       };
       chrome.tabs.sendMessage(tabId, message).catch(() => {
@@ -262,6 +315,9 @@ async function handleBackgroundRequest(
   }
   if (req.kind === 'submit-image-capture') {
     return handleSubmitImageCapture(req);
+  }
+  if (req.kind === 'submit-video-capture') {
+    return handleSubmitVideoCapture(req);
   }
   if (req.kind === 'capture-visible-tab') {
     return handleCaptureVisibleTab(req);
@@ -371,6 +427,128 @@ async function handleSubmitImageCapture(
     ...(originalSrcUrl !== undefined ? { originalSrcUrl } : {}),
   });
   return row;
+}
+
+/**
+ * P-27 Build #3 (2026-05-22) — end-to-end video capture handler. Two
+ * branches mirror the on-wire CapturedVideo sourceType discriminator per
+ * CAPTURED_VIDEOS_DESIGN.md §A.7 + §A.9 + §A.11:
+ *
+ *   EMBED branch:
+ *     - Skip Phase 1 (no bytes to upload). Skip Phase 2.
+ *     - Phase 3 — finalize with sourceType='EMBED' + originalSrcUrl.
+ *
+ *   DIRECT_BYTES branch:
+ *     - Phase 0 — fetch the video bytes from the host-page srcUrl using
+ *       extension-origin fetch (covered by wxt.config.ts host_permissions).
+ *     - Phase 0b — decode the canvas-grabbed thumbnail data URL into a
+ *       Blob. If thumbnailDataUrl is null (frame-grab failed per §A.12),
+ *       skip the thumbnail PUT + omit thumbnailStoragePath from finalize so
+ *       the row stores NULL and the renderer falls back to a generic icon.
+ *     - Phase 1 — `requestVideoUpload` mints TWO signed URLs (video +
+ *       thumbnail) per §A.9.
+ *     - Phase 2 — direct PUT of the video bytes to the video signed URL,
+ *       and (when present) the thumbnail bytes to the thumbnail signed
+ *       URL. Bytes bypass Vercel.
+ *     - Phase 3 — `finalizeVideoUpload` with sourceType='DIRECT_BYTES' +
+ *       capturedVideoId + videoStoragePath + optional thumbnailStoragePath
+ *       + bytes metadata + user metadata.
+ *
+ * Idempotency: clientId is reused across all phases. Phase 3 dedupes on
+ * clientId server-side so retries hit the same row.
+ */
+async function handleSubmitVideoCapture(
+  req: SubmitVideoCaptureRequestMessage,
+): Promise<CapturedVideo> {
+  if (req.sourceType === 'EMBED') {
+    return finalizeVideoUpload(req.projectId, req.urlId, {
+      clientId: req.clientId,
+      sourceType: 'EMBED',
+      originalSrcUrl: req.originalSrcUrl,
+      videoCategory: req.videoCategory,
+      ...(req.composition !== null ? { composition: req.composition } : {}),
+      ...(req.embeddedText !== null ? { embeddedText: req.embeddedText } : {}),
+      tags: req.tags,
+    });
+  }
+
+  // DIRECT_BYTES branch.
+  // Phase 0 — fetch the video bytes; the MIME is resolved from Content-Type
+  // (the form's mimeTypeHint is a fallback for CDNs that don't set it, but
+  // fetchVideoBytes prefers Content-Type when valid).
+  const fetched = await fetchVideoBytes(req.srcUrl);
+
+  // Phase 0b — decode the thumbnail data URL into a Blob (when present).
+  // `data:image/jpeg;base64,...` → ArrayBuffer. fetch() handles the parsing
+  // natively, which works in the service-worker context.
+  let thumbnailBlob: ArrayBuffer | null = null;
+  if (req.thumbnailDataUrl) {
+    try {
+      const r = await fetch(req.thumbnailDataUrl);
+      thumbnailBlob = await r.arrayBuffer();
+    } catch {
+      // Defensive — the data URL was produced client-side, so this
+      // shouldn't fail in practice. Treat as a NULL-thumbnail fallback
+      // per §A.12 rather than failing the whole save.
+      thumbnailBlob = null;
+    }
+  }
+
+  // Phase 1 — mint signed URLs.
+  const phase1 = await requestVideoUpload(req.projectId, req.urlId, {
+    clientId: req.clientId,
+    mimeType: fetched.mimeType,
+    fileSize: fetched.fileSize,
+  });
+
+  // Phase 2 — direct PUT of the bytes. Run video + thumbnail in parallel;
+  // a thumbnail PUT failure is treated as a NULL-thumbnail fallback per
+  // §A.12 (the video bytes are the load-bearing data; degraded thumbnail
+  // is acceptable). A video-bytes PUT failure throws — that's the real
+  // save failure and should surface to the form.
+  const videoPut = putVideoBytesToSignedUrl(
+    phase1.videoUploadUrl,
+    fetched.bytes,
+    fetched.mimeType,
+  );
+  let thumbnailUploaded = false;
+  if (thumbnailBlob) {
+    try {
+      await putVideoThumbnailToSignedUrl(
+        phase1.thumbnailUploadUrl,
+        thumbnailBlob,
+      );
+      thumbnailUploaded = true;
+    } catch (err) {
+      // Log + fall through with NULL thumbnail per §A.12.
+      logGlobalError(err, 'sw-handled-error');
+    }
+  }
+  await videoPut;
+
+  // Phase 3 — finalize. Include thumbnailStoragePath only when we actually
+  // PUT the thumbnail; the server stores NULL when omitted.
+  return finalizeVideoUpload(req.projectId, req.urlId, {
+    clientId: req.clientId,
+    sourceType: 'DIRECT_BYTES',
+    originalSrcUrl: req.srcUrl,
+    capturedVideoId: phase1.capturedVideoId,
+    videoStoragePath: phase1.videoStoragePath,
+    ...(thumbnailUploaded
+      ? { thumbnailStoragePath: phase1.thumbnailStoragePath }
+      : {}),
+    mimeType: fetched.mimeType,
+    fileSize: fetched.fileSize,
+    ...(req.durationSeconds !== null
+      ? { durationSeconds: req.durationSeconds }
+      : {}),
+    ...(req.width !== null ? { width: req.width } : {}),
+    ...(req.height !== null ? { height: req.height } : {}),
+    videoCategory: req.videoCategory,
+    ...(req.composition !== null ? { composition: req.composition } : {}),
+    ...(req.embeddedText !== null ? { embeddedText: req.embeddedText } : {}),
+    tags: req.tags,
+  });
 }
 
 function errorToEnvelope(err: unknown): {

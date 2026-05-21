@@ -10,9 +10,11 @@ import { supabase as productionSupabase } from './supabase.ts';
 import { PlosApiError } from './errors.ts';
 import type {
   AcceptedImageMimeType,
+  AcceptedVideoMimeType,
   CapturedImage,
   CapturedImageWithUrls,
   CapturedText,
+  CapturedVideo,
   CompetitorUrl,
   CreateCapturedTextRequest,
   CreateCompetitorUrlRequest,
@@ -20,6 +22,8 @@ import type {
   ExtensionStateDto,
   FinalizeImageUploadRequest,
   FinalizeImageUploadResponse,
+  FinalizeVideoUploadRequest,
+  FinalizeVideoUploadResponse,
   GetExtensionStateResponse,
   ListCapturedImagesResponse,
   ListCapturedTextsResponse,
@@ -33,13 +37,18 @@ import type {
   ReplaceHighlightTermsResponse,
   RequestImageUploadRequest,
   RequestImageUploadResponse,
+  RequestVideoUploadRequest,
+  RequestVideoUploadResponse,
   VocabularyEntry,
   VocabularyType,
 } from '../../../../src/lib/shared-types/competition-scraping.ts';
 import {
   ACCEPTED_IMAGE_MIME_TYPES,
+  ACCEPTED_VIDEO_MIME_TYPES,
   IMAGE_UPLOAD_MAX_BYTES,
+  VIDEO_UPLOAD_MAX_BYTES,
   isAcceptedImageMimeType,
+  isAcceptedVideoMimeType,
 } from '../../../../src/lib/shared-types/competition-scraping.ts';
 import type { HighlightTerm } from './highlight-terms.ts';
 
@@ -717,6 +726,192 @@ export async function fetchImageBytes(
     throw new PlosApiError(
       413,
       `Image is ${bytes.byteLength} bytes — exceeds the 5 MB cap.`,
+    );
+  }
+  return { bytes, mimeType, fileSize: bytes.byteLength };
+}
+
+// ── Video upload — P-27 Build #3 (2026-05-22) ───────────────────────────
+//
+// Parallels the image upload trio (requestImageUpload + putImageBytes +
+// finalizeImageUpload + fetchImageBytes) with two structural differences:
+//
+//   1. Phase 1 (`requestVideoUpload`) returns TWO signed URLs per design
+//      doc §A.9 — one for video bytes, one for the thumbnail JPEG. The
+//      content-script's canvas frame-grab supplies the thumbnail; this
+//      module handles the PUTs to both URLs.
+//   2. Some video rows have NO bytes — the EMBED branch (sourceType=EMBED)
+//      skips Phase 1 entirely and goes straight to Phase 3 finalize. The
+//      background's handleSubmitVideoCapture is the branch point; this
+//      module just exposes the building blocks.
+//
+// MIME accept list: video/mp4, video/webm, video/quicktime per §A.9. Cap:
+// 100 MB per file per §A.10. Both enforced server-side at requestUpload
+// and pre-checked here.
+
+export async function requestVideoUpload(
+  projectId: string,
+  urlId: string,
+  body: RequestVideoUploadRequest,
+): Promise<RequestVideoUploadResponse> {
+  const res = await authedFetch(
+    `/api/projects/${encodeURIComponent(projectId)}/competition-scraping/urls/${encodeURIComponent(urlId)}/videos/requestUpload`,
+    {
+      method: 'POST',
+      body: JSON.stringify(body),
+    },
+  );
+  return readJsonOrThrow<RequestVideoUploadResponse>(res);
+}
+
+/**
+ * Phase 2 — direct PUT of the video bytes to the signed Supabase Storage
+ * URL returned by Phase 1. Mirrors putImageBytesToSignedUrl: bytes bypass
+ * Vercel; Content-Type must match the MIME the server pre-recorded; no
+ * Authorization header (signed URL embeds auth).
+ */
+export async function putVideoBytesToSignedUrl(
+  uploadUrl: string,
+  bytes: ArrayBuffer | Blob,
+  mimeType: AcceptedVideoMimeType,
+  fetchFn: FetchFn = (u, i) => fetch(u, i),
+): Promise<void> {
+  let res: Response;
+  try {
+    res = await fetchFn(uploadUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': mimeType },
+      body: bytes,
+    });
+  } catch (err) {
+    throw mapFetchTransportError(err);
+  }
+  if (!res.ok) {
+    let message = `Supabase Storage PUT (video) failed: HTTP ${res.status}`;
+    try {
+      const text = await res.text();
+      if (text) message = `${message} — ${text.slice(0, 200)}`;
+    } catch {
+      // ignore
+    }
+    throw new PlosApiError(res.status, message);
+  }
+}
+
+/**
+ * Phase 2 sibling — PUT of the thumbnail JPEG to its own signed URL. Same
+ * shape as putVideoBytesToSignedUrl but the Content-Type is locked to
+ * image/jpeg because the canvas frame-grab always exports JPEG per §A.9.
+ */
+export async function putVideoThumbnailToSignedUrl(
+  uploadUrl: string,
+  bytes: ArrayBuffer | Blob,
+  fetchFn: FetchFn = (u, i) => fetch(u, i),
+): Promise<void> {
+  let res: Response;
+  try {
+    res = await fetchFn(uploadUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'image/jpeg' },
+      body: bytes,
+    });
+  } catch (err) {
+    throw mapFetchTransportError(err);
+  }
+  if (!res.ok) {
+    let message = `Supabase Storage PUT (thumbnail) failed: HTTP ${res.status}`;
+    try {
+      const text = await res.text();
+      if (text) message = `${message} — ${text.slice(0, 200)}`;
+    } catch {
+      // ignore
+    }
+    throw new PlosApiError(res.status, message);
+  }
+}
+
+/**
+ * Phase 3 — POST finalize. Idempotent on `clientId` server-side. Body
+ * branches on sourceType: EMBED rows pass originalSrcUrl + metadata only;
+ * DIRECT_BYTES rows pass everything from Phase 1 + bytes metadata + the
+ * user's metadata.
+ */
+export async function finalizeVideoUpload(
+  projectId: string,
+  urlId: string,
+  body: FinalizeVideoUploadRequest,
+): Promise<FinalizeVideoUploadResponse> {
+  const res = await authedFetch(
+    `/api/projects/${encodeURIComponent(projectId)}/competition-scraping/urls/${encodeURIComponent(urlId)}/videos/finalize`,
+    {
+      method: 'POST',
+      body: JSON.stringify(body),
+    },
+  );
+  return readJsonOrThrow<CapturedVideo>(res);
+}
+
+export interface FetchedVideoBytes {
+  bytes: ArrayBuffer;
+  mimeType: AcceptedVideoMimeType;
+  fileSize: number;
+}
+
+/**
+ * Fetches the bytes of a host-page video given its srcUrl. Mirror of
+ * fetchImageBytes — runs from the extension origin so cross-origin CDNs
+ * covered by wxt.config.ts host_permissions are reachable.
+ *
+ * Resolves MIME from Content-Type first, then URL extension fallback
+ * (.mp4 / .webm / .mov). Rejects with PlosApiError on:
+ *   - unreachable URL (status 0)
+ *   - non-2xx HTTP (status echoed)
+ *   - MIME not in ACCEPTED_VIDEO_MIME_TYPES (415)
+ *   - bytes > VIDEO_UPLOAD_MAX_BYTES (413)
+ *
+ * The pre-check is defense-in-depth; the server route enforces both at
+ * Phase 1 regardless of what the extension claims.
+ */
+export async function fetchVideoBytes(
+  srcUrl: string,
+  fetchFn: FetchFn = (u, i) => fetch(u, i),
+): Promise<FetchedVideoBytes> {
+  let res: Response;
+  try {
+    res = await fetchFn(srcUrl, { method: 'GET' });
+  } catch (err) {
+    throw mapFetchTransportError(err);
+  }
+  if (!res.ok) {
+    throw new PlosApiError(
+      res.status,
+      `Could not fetch the video (HTTP ${res.status}). The video's CDN may not be authorized for this extension yet.`,
+    );
+  }
+  const headerType = (res.headers.get('content-type') ?? '')
+    .toLowerCase()
+    .split(';')[0]
+    ?.trim();
+  let mimeType: string | null = isAcceptedVideoMimeType(headerType)
+    ? headerType
+    : null;
+  if (!mimeType) {
+    const lower = srcUrl.toLowerCase();
+    if (lower.endsWith('.mp4')) mimeType = 'video/mp4';
+    else if (lower.endsWith('.webm')) mimeType = 'video/webm';
+    else if (lower.endsWith('.mov')) mimeType = 'video/quicktime';
+  }
+  if (!mimeType || !isAcceptedVideoMimeType(mimeType)) {
+    throw new PlosApiError(
+      415,
+      `Unsupported video type. PLOS accepts ${ACCEPTED_VIDEO_MIME_TYPES.join(', ')}.`,
+    );
+  }
+  const bytes = await res.arrayBuffer();
+  if (bytes.byteLength > VIDEO_UPLOAD_MAX_BYTES) {
+    throw new PlosApiError(
+      413,
+      `Video is ${bytes.byteLength} bytes — exceeds the ${Math.floor(VIDEO_UPLOAD_MAX_BYTES / (1024 * 1024))} MB cap.`,
     );
   }
   return { bytes, mimeType, fileSize: bytes.byteLength };
