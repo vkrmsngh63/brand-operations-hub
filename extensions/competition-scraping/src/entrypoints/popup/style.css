@@ -331,6 +331,34 @@ button + button {
   font-size: 13px;
 }
 
+/* Module 2 video-capture — popup paste flow (P-27 Build #4, 2026-05-21-c).
+   Mirrors .captured-text-paste shape exactly. */
+.captured-video-paste {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.captured-video-paste h2 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 8px;
+  color: #1f2937;
+}
+
+.captured-video-paste textarea {
+  resize: vertical;
+  min-height: 60px;
+  font-family: inherit;
+  font-size: 13px;
+}
+
+.captured-video-paste select,
+.captured-video-paste input[type='url'] {
+  font-family: inherit;
+  font-size: 13px;
+}
+
 .chip-row {
   display: flex;
   flex-wrap: wrap;

@@ -198,6 +198,17 @@ export interface ListCapturedTextsRequest {
   urlId: string;
 }
 
+/**
+ * P-27 Build #4 saved-video indicator — content script asks the background
+ * to list the CapturedVideo rows for one CompetitorUrl. Same CORS-avoidance
+ * reasoning as ListCapturedImagesRequest.
+ */
+export interface ListCapturedVideosRequest {
+  kind: 'list-captured-videos';
+  projectId: string;
+  urlId: string;
+}
+
 export interface CreateCompetitorUrlRequestMessage {
   kind: 'create-competitor-url';
   projectId: string;
@@ -356,6 +367,7 @@ export type BackgroundRequest =
   | ListCompetitorUrlsRequest
   | ListCapturedImagesRequest
   | ListCapturedTextsRequest
+  | ListCapturedVideosRequest
   | CreateCompetitorUrlRequestMessage
   | CreateCapturedTextRequestMessage
   | ListVocabularyRequest
@@ -383,6 +395,9 @@ export type ListCapturedImagesResponseEnvelope = BackgroundResponse<
 >;
 export type ListCapturedTextsResponseEnvelope = BackgroundResponse<
   CapturedText[]
+>;
+export type ListCapturedVideosResponseEnvelope = BackgroundResponse<
+  CapturedVideo[]
 >;
 export type CreateCompetitorUrlResponseEnvelope = BackgroundResponse<
   CompetitorUrl
@@ -435,6 +450,9 @@ export function isBackgroundRequest(
     return typeof msg.projectId === 'string' && typeof msg.urlId === 'string';
   }
   if (msg.kind === 'list-captured-texts') {
+    return typeof msg.projectId === 'string' && typeof msg.urlId === 'string';
+  }
+  if (msg.kind === 'list-captured-videos') {
     return typeof msg.projectId === 'string' && typeof msg.urlId === 'string';
   }
   if (msg.kind === 'create-competitor-url') {

@@ -89,7 +89,8 @@ export const CONTENT_SCRIPT_CSS = `
   z-index: 999990 !important;
 }
 
-.plos-cs-saved-image-icon {
+.plos-cs-saved-image-icon,
+.plos-cs-saved-video-icon {
   position: fixed !important;
   display: inline-flex !important;
   align-items: center !important;

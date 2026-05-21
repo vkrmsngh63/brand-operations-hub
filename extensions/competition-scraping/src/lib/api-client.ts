@@ -27,6 +27,7 @@ import type {
   GetExtensionStateResponse,
   ListCapturedImagesResponse,
   ListCapturedTextsResponse,
+  ListCapturedVideosResponse,
   ListCompetitorUrlsResponse,
   ListHighlightTermsResponse,
   ListVocabularyEntriesResponse,
@@ -304,6 +305,31 @@ export async function listCapturedImages(
     throw new PlosApiError(
       500,
       'Unexpected response shape from competition-scraping/urls/[urlId]/images',
+    );
+  }
+  return data;
+}
+
+/**
+ * P-27 Build #4 (2026-05-21-c) — lists CapturedVideo rows for one
+ * CompetitorUrl. Used by the content-script orchestrator's saved-video
+ * indicator scan loop (mirror of the P-24 saved-image indicator scan).
+ * Returns the bare CapturedVideo[] shape shipped in Build #2 — signed-URL
+ * minting (for the URL detail page renderer's inline player) lands in a
+ * later Build session.
+ */
+export async function listCapturedVideos(
+  projectId: string,
+  urlId: string,
+): Promise<CapturedVideo[]> {
+  const res = await authedFetch(
+    `/api/projects/${encodeURIComponent(projectId)}/competition-scraping/urls/${encodeURIComponent(urlId)}/videos`,
+  );
+  const data = await readJsonOrThrow<ListCapturedVideosResponse>(res);
+  if (!Array.isArray(data)) {
+    throw new PlosApiError(
+      500,
+      'Unexpected response shape from competition-scraping/urls/[urlId]/videos',
     );
   }
   return data;

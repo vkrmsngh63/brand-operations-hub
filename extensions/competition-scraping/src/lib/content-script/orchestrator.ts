@@ -27,6 +27,7 @@ import {
   listCompetitorUrls,
   listCapturedImages,
   listCapturedTexts,
+  listCapturedVideos,
 } from './api-bridge.ts';
 import {
   getSelectedPlatform,
@@ -53,6 +54,11 @@ import {
   type AttachedImageIcon,
 } from './already-saved-image-icon.ts';
 import {
+  attachAlreadySavedVideoIcon,
+  detachAllAlreadySavedVideoIcons,
+  type AttachedVideoIcon,
+} from './already-saved-video-icon.ts';
+import {
   attachSavedTextHaze,
   detachAllSavedTextHazes,
   detachSavedTextHaze,
@@ -66,6 +72,7 @@ import {
 import type {
   CapturedImageWithUrls,
   CapturedText,
+  CapturedVideo,
 } from '../../../../../src/lib/shared-types/competition-scraping.ts';
 import { showAlreadySavedOverlay } from './already-saved-overlay.ts';
 import { openUrlAddForm } from './url-add-form.ts';
@@ -487,6 +494,114 @@ export async function runOrchestrator(): Promise<() => void> {
     currentUrlIdForImages = null;
   }
 
+  // ── P-27 Build #4: saved-video indicator scan ──────────────────────────
+  //
+  // Mirrors the saved-image-icon scan loop. Two element types match a
+  // saved CapturedVideo row:
+  //   - DIRECT_BYTES rows match a host-page <video> element whose
+  //     currentSrc (or src fallback) equals the row's originalSrcUrl.
+  //   - EMBED rows match a recognized <iframe> whose src equals the row's
+  //     originalSrcUrl. The iframe is recognized at right-click time via
+  //     detectEmbedPlatform; the same hostname allowlist applies at
+  //     scan time, but the scan only needs URL equality — the
+  //     content-script-already saw the iframe at capture time, so the
+  //     iframe.src that matches the saved row is the same value.
+  // For v1 we match exact strings (the iframe src at scan time on the same
+  // page is the same string the user right-clicked at capture time). If
+  // real-world use surfaces normalization mismatches, a future polish
+  // item adds a canonicalizer.
+  const capturedVideosByUrlId = new Map<string, CapturedVideo[]>();
+  const attachedVideoIcons = new Map<string, AttachedVideoIcon>();
+
+  async function maybePopulateVideoCache(urlId: string): Promise<void> {
+    if (capturedVideosByUrlId.has(urlId)) return;
+    try {
+      const rows = await listCapturedVideos(projectId, urlId);
+      capturedVideosByUrlId.set(urlId, rows);
+    } catch (err) {
+      console.warn(
+        '[PLOS] could not load saved videos for recognition',
+        err,
+      );
+      // Negative-cache the failure so we don't refetch on every rescan.
+      capturedVideosByUrlId.set(urlId, []);
+    }
+  }
+
+  function scanVideos(): void {
+    if (currentUrlIdForImages === null) return;
+    const saved = capturedVideosByUrlId.get(currentUrlIdForImages);
+    if (!saved || saved.length === 0) return;
+
+    const rowsBySrc = new Map<string, CapturedVideo>();
+    for (const row of saved) {
+      if (row.originalSrcUrl) rowsBySrc.set(row.originalSrcUrl, row);
+    }
+    if (rowsBySrc.size === 0) return;
+
+    const activeIds = new Set<string>();
+
+    // <video> elements — match against currentSrc first, then src fallback.
+    const videos = document.querySelectorAll<HTMLVideoElement>('video');
+    for (const video of videos) {
+      const match =
+        rowsBySrc.get(video.currentSrc) ?? rowsBySrc.get(video.src) ?? null;
+      if (!match) continue;
+      if (activeIds.has(match.id)) continue;
+      const existing = attachedVideoIcons.get(match.id);
+      if (existing && existing.targetEl === video) {
+        existing.reposition();
+      } else {
+        if (existing) {
+          existing.iconEl.remove();
+          attachedVideoIcons.delete(match.id);
+        }
+        const icon = attachAlreadySavedVideoIcon(video, match.id);
+        if (icon) attachedVideoIcons.set(match.id, icon);
+      }
+      activeIds.add(match.id);
+    }
+
+    // <iframe> elements — match against src only (no currentSrc on iframes).
+    const iframes = document.querySelectorAll<HTMLIFrameElement>('iframe');
+    for (const iframe of iframes) {
+      const match = rowsBySrc.get(iframe.src) ?? null;
+      if (!match) continue;
+      if (activeIds.has(match.id)) continue;
+      const existing = attachedVideoIcons.get(match.id);
+      if (existing && existing.targetEl === iframe) {
+        existing.reposition();
+      } else {
+        if (existing) {
+          existing.iconEl.remove();
+          attachedVideoIcons.delete(match.id);
+        }
+        const icon = attachAlreadySavedVideoIcon(iframe, match.id);
+        if (icon) attachedVideoIcons.set(match.id, icon);
+      }
+      activeIds.add(match.id);
+    }
+
+    // Detach icons whose target no longer matches.
+    for (const [id, icon] of Array.from(attachedVideoIcons.entries())) {
+      if (!activeIds.has(id)) {
+        icon.iconEl.remove();
+        attachedVideoIcons.delete(id);
+      }
+    }
+  }
+
+  function repositionVideoIcons(): void {
+    for (const icon of attachedVideoIcons.values()) {
+      icon.reposition();
+    }
+  }
+
+  function clearVideoIndicators(): void {
+    detachAllAlreadySavedVideoIcons();
+    attachedVideoIcons.clear();
+  }
+
   async function maybePopulateTextCache(urlId: string): Promise<void> {
     if (capturedTextsByUrlId.has(urlId)) return;
     try {
@@ -556,13 +671,15 @@ export async function runOrchestrator(): Promise<() => void> {
       location.href;
     const normalized = normalizeUrlForRecognition(canonical);
     if (!normalized) {
-      // Navigated to a URL we can't even parse — drop image indicators.
+      // Navigated to a URL we can't even parse — drop image + video indicators.
       if (attachedImageIcons.size > 0) clearImageIndicators();
+      if (attachedVideoIcons.size > 0) clearVideoIndicators();
       return;
     }
     if (!recognitionSet.has(normalized)) {
-      // Navigated off any saved URL — drop image indicators + text hazes.
+      // Navigated off any saved URL — drop indicators + text hazes.
       if (attachedImageIcons.size > 0) clearImageIndicators();
+      if (attachedVideoIcons.size > 0) clearVideoIndicators();
       if (attachedTextIds.size > 0) clearTextHazes();
       return;
     }
@@ -581,6 +698,7 @@ export async function runOrchestrator(): Promise<() => void> {
     const urlId = urlIdByNormalized.get(normalized) ?? null;
     if (urlId === null) {
       if (attachedImageIcons.size > 0) clearImageIndicators();
+      if (attachedVideoIcons.size > 0) clearVideoIndicators();
       if (attachedTextIds.size > 0) clearTextHazes();
       return;
     }
@@ -589,6 +707,8 @@ export async function runOrchestrator(): Promise<() => void> {
       // hazes from any previous saved URL before fetching the new list.
       detachAllAlreadySavedImageIcons();
       attachedImageIcons.clear();
+      detachAllAlreadySavedVideoIcons();
+      attachedVideoIcons.clear();
       clearTextHazes();
       currentUrlIdForImages = urlId;
     }
@@ -596,6 +716,10 @@ export async function runOrchestrator(): Promise<() => void> {
       // Re-check we're still on the same urlId — fast SPA navigation can
       // change `currentUrlIdForImages` while the fetch was in flight.
       if (currentUrlIdForImages === urlId) scanImages();
+    });
+    // P-27 Build #4: fetch saved CapturedVideo rows in parallel with images.
+    void maybePopulateVideoCache(urlId).then(() => {
+      if (currentUrlIdForImages === urlId) scanVideos();
     });
     // P-25: fetch saved CapturedText rows in parallel with images. Same
     // fire-and-forget pattern; haze appears when the response lands.
@@ -656,6 +780,9 @@ export async function runOrchestrator(): Promise<() => void> {
       // SPA tile mounts, infinite scroll) get the indicator if they match.
       // No-op when not on a saved page.
       scanImages();
+      // P-27 Build #4: re-scan <video> + <iframe> elements with the same
+      // lazy-load + SPA-tile-mount reasoning. No-op when not on a saved page.
+      scanVideos();
       // P-25: re-scan text hazes for the active saved URL. Lazy-loaded
       // content (infinite scroll, SPA tile mounts) may now contain a
       // previously-saved text snippet that wasn't in the DOM on first
@@ -699,6 +826,7 @@ export async function runOrchestrator(): Promise<() => void> {
   // which is bounded by the saved-image count for the current URL.
   const onScrollOrResize = (): void => {
     repositionImageIcons();
+    repositionVideoIcons();
   };
   window.addEventListener('scroll', onScrollOrResize, {
     passive: true,
@@ -912,6 +1040,9 @@ export async function runOrchestrator(): Promise<() => void> {
     // P-24: tear down all image indicators + drop cache.
     clearImageIndicators();
     capturedImagesByUrlId.clear();
+    // P-27 Build #4: tear down all video indicators + drop cache.
+    clearVideoIndicators();
+    capturedVideosByUrlId.clear();
     // P-25: tear down all text hazes + drop cache.
     clearTextHazes();
     capturedTextsByUrlId.clear();

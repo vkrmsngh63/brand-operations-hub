@@ -112,6 +112,24 @@ export async function listCapturedImages(
 }
 
 /**
+ * P-27 Build #4 saved-video indicator — lists the CapturedVideo rows for
+ * one CompetitorUrl. Routed through the background per the same CORS
+ * reasoning as listCapturedImages. The orchestrator's saved-video scan
+ * matches each row's `originalSrcUrl` against on-page `<video>.currentSrc`
+ * and recognized `<iframe>.src` to attach the green-checkmark indicator.
+ */
+export async function listCapturedVideos(
+  projectId: string,
+  urlId: string,
+): Promise<CapturedVideo[]> {
+  return send<CapturedVideo[]>({
+    kind: 'list-captured-videos',
+    projectId,
+    urlId,
+  });
+}
+
+/**
  * P-25 saved-text haze — lists the CapturedText rows for one CompetitorUrl.
  * Routed through the background per the same CORS reasoning as
  * listCompetitorUrls. The orchestrator filters rows with a non-null

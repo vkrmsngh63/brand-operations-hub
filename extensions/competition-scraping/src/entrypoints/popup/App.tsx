@@ -17,6 +17,7 @@ import { ProjectPicker } from './components/ProjectPicker.tsx';
 import { PlatformPicker } from './components/PlatformPicker.tsx';
 import { HighlightTermsManager } from './components/HighlightTermsManager.tsx';
 import { CapturedTextPasteForm } from './components/CapturedTextPasteForm.tsx';
+import { CapturedVideoPasteForm } from './components/CapturedVideoPasteForm.tsx';
 import { RegionScreenshotModeButton } from './components/RegionScreenshotModeButton.tsx';
 import type { Platform } from '../../../../../src/lib/shared-types/competition-scraping.ts';
 
@@ -306,6 +307,10 @@ function SetupScreen({ session }: { session: Session }) {
               {platform !== null && (
                 <>
                   <CapturedTextPasteForm
+                    projectId={projectId}
+                    platform={platform as Platform}
+                  />
+                  <CapturedVideoPasteForm
                     projectId={projectId}
                     platform={platform as Platform}
                   />

@@ -50,6 +50,7 @@ import {
   finalizeVideoUpload,
   listCapturedImages,
   listCapturedTexts,
+  listCapturedVideos,
   listCompetitorUrls,
   listProjects,
   listVocabularyEntries,
@@ -300,6 +301,9 @@ async function handleBackgroundRequest(
   }
   if (req.kind === 'list-captured-texts') {
     return listCapturedTexts(req.projectId, req.urlId);
+  }
+  if (req.kind === 'list-captured-videos') {
+    return listCapturedVideos(req.projectId, req.urlId);
   }
   if (req.kind === 'create-competitor-url') {
     return createCompetitorUrl(req.projectId, req.body);
