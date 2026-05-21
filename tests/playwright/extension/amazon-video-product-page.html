@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Mock Amazon product page with video + embed (test harness)</title>
+</head>
+<body>
+<!--
+  Served by Playwright route interception for the P-27 Build #6 video-
+  capture specs:
+    - tests/playwright/extension/video-capture.spec.ts        (right-click <video>)
+    - tests/playwright/extension/video-capture-embed.spec.ts  (right-click <iframe>)
+
+  The content script attaches by matching `https://*.amazon.com/*` per
+  wxt.config.ts host_permissions; this mock page is what the route handler
+  returns when the spec navigates to a fake `/dp/{ASIN}` URL.
+
+  The <video> uses a `https://m.media-amazon.com/...` src so the background's
+  fetchVideoBytes() in handleSubmitVideoCapture goes through the amazon
+  image-CDN host_permission pattern (same allowlist serves video CDN paths).
+  The spec route-intercepts that CDN to return fake MP4 bytes.
+
+  The <iframe> uses a `https://www.youtube.com/embed/...` URL which
+  detectEmbedPlatform() recognizes as the 'youtube' embed platform per
+  CAPTURED_VIDEOS_DESIGN.md §A.6 video-embed hostname allowlist.
+-->
+<h1>Cool Heat Medicated Patches — test fixture</h1>
+<p id="p1">Product description for fixture purposes only.</p>
+
+<video id="hero-video"
+       src="https://m.media-amazon.com/videos/fake-product-demo.mp4"
+       width="640" height="360"
+       preload="metadata"
+       controls>
+  Your browser does not support the video tag.
+</video>
+
+<p id="p2">Customer review section.</p>
+
+<iframe id="youtube-embed"
+        src="https://www.youtube.com/embed/dQw4w9WgXcQ"
+        width="560" height="315"
+        title="Product demo (YouTube embed)"
+        allowfullscreen></iframe>
+
+<p id="p3">Additional description so the content-script has text to scan.</p>
+<script>
+  window.__pageReady = true;
+</script>
+</body>
+</html>
