@@ -747,4 +747,158 @@ Never edit prior entries or §A. If accumulated §B decisions supersede §A's sp
 
 ---
 
+### §B 2026-05-22 — `session_2026-05-22-c_p27-build-9-devtools-diagnosis-and-p45-screen-recording-pivot` — Build #9 DevTools-cooperative diagnosis session SHIPPED Bug #12 ROOT-CAUSE DIAGNOSIS + DESIGN PIVOT to NEW polish item P-45 screen-recording video capture
+
+- **Director said:**
+  - Approved the Rule 27 picker recommendation (manual DevTools walkthrough only — Playwright cannot reproduce blob-URL behavior on real Amazon/Ebay pages).
+  - Reported the failing-Save service-worker DevTools evidence verbatim: *"⚙ blob:https://www.amazon.com/2d3c9be4-4b14-42bb-aebc-5361f7ef2b5b (failed) net::ERR_FILE_NOT_FOUND fetch background.js:24"* — the decisive diagnostic captured live in-session.
+  - At the fix-direction picker, used the escape hatch with a question: *"Is there a way to do a screen recording of the video by first selecting the part of the screen that the recording should focus on and then play the video and then record the screen video and audio and then save that recorded part?"* — surfaced a new architectural direction that obsoletes the 3 short-term-fix options for the blob: URL class.
+  - At the sequencing picker, chose **"Skip the short-term fix — design screen recording properly NOW"** — accepting that Amazon/Ebay saves remain broken on the live site for the next 2-3 implementation sessions in exchange for not throwing away short-term-fix work.
+  - At each of the 7 P-45 design questions, chose the recommended option (region = draw rectangle; audio = always-on; duration cap = ~2-3 min with countdown; API = getDisplayMedia; trigger = right-click menu adds "Record video" item; existing fast-fetch path = kept alongside recording; flow order = record then form).
+  - At the lower-priority design batch, chose "default to your recommendations and proceed" — Claude defaults locked for codec/quality, cancel-dialog UX, in-progress indicator, tab-close handling, schema enum delta.
+
+- **Alternatives considered:**
+
+  **(1) Bug #12 fix direction — 3 short-term options + 1 architectural pivot.** The Bug #12 DevTools diagnosis revealed the root cause: Amazon (+ Ebay + Walmart + every MSE-player site) serves videos via Media Source Extensions where `<video>.currentSrc` is a `blob:` URL scoped to the page's document context. The background service worker's `fetchVideoBytes(blob:...)` always fails with `net::ERR_FILE_NOT_FOUND` because blob URLs don't resolve outside their creating context. Build #8's `retryOnTransportError` helper couldn't have cleared this in principle — both retries hit the same context-boundary failure. Options surfaced:
+    - (a) **Snapshot save** — detect `blob:` in walker → force EMBED with thumbnail + page URL + metadata; no video bytes saved but user sees something useful. Scope: ~50-100 LOC. Trade-off: not a playable video, but a save success.
+    - (b) **Real bytes via content-script fetch** — fetch bytes in content script (where blob URLs are valid) → transfer ArrayBuffer to background. Scope: ~200-300 LOC. Trade-off: works for SOME blob videos; many MSE players use chunked loading where there's no single fetchable blob; chrome.runtime message size cap ~64 MB vs our 100 MB video cap.
+    - (c) **Block with clear error** — detect blob: → short-circuit before form opens → show capture-failure-toast with explanation. Scope: ~20-30 LOC. Trade-off: cleanest code; Amazon/Ebay captures become impossible.
+    - (d) **Architectural pivot to screen recording** — director's question surfaced this as a 4th direction not in Claude's original picker. Records the visible tab region via `getDisplayMedia` + `MediaRecorder` regardless of how the source page serves video bytes. Universal solution. Scope: 2-3 implementation sessions (significantly reduced from the initial 3-5 estimate after Rule 24 search revealed existing region-screenshot infrastructure for re-use). Trade-off: bigger lift than (a)/(b)/(c) but addresses the entire blob-URL class of bugs + future MSE-player evolution.
+
+  **(2) Sequencing — ship short-term fix + design screen recording vs. design only.** With (d) on the table, the short-term fixes (a)/(b)/(c) become potentially disposable work. Options:
+    - **Ship snapshot save NOW + design screen recording as separate polish item** (recommended by Claude based on "live-site UX continuity" framing) — Amazon/Ebay saves stop showing as broken within hours; snapshot fallback may stay as a fast-capture option even after screen recording ships.
+    - **Skip the short-term fix — design screen recording properly NOW** (director-chosen) — Amazon/Ebay saves stay broken on the live site for 2-3 more implementation sessions; no disposable work; design quality not diluted by short-term fix complexity.
+    - **Hybrid — ship snapshot save + draft screen-recording design same session** — longer session, more context-switching, both progress + plan. Not chosen.
+
+  **(3) P-45 design — 7 high-priority questions + 5 lower-priority defaults.** Questions covered region selection, audio capture, duration cap, capture API, trigger gesture, existing-path coexistence, and save-flow ordering. Defaults covered codec/quality (webm VP9 720p ~2.5 Mbps), Chrome-dialog-cancel UX, in-progress visual indicator, tab-close handling, and the new SCREEN_RECORDING sourceType schema enum value. All 12 decisions locked this session.
+
+- **Decision:**
+  1. **Bug #12 → DIAGNOSED + DEFERRED.** Root cause documented; fix re-routed to NEW polish item P-45 (screen-recording video capture). The `retryOnTransportError` helper from Build #8 ships unchanged as a transient-error safety net.
+  2. **Bugs #11, #9, #15 → DEFERRED to future sessions or potentially OBSOLETED by P-45.** Bug #11 (Add new category input) is platform-agnostic and remains valid for ALL paths (fast-fetch + recording) — should be diagnosed in a future session. Bugs #9 + #15 are specific to right-click-on-video gestures and may become moot if users prefer the recording path on Amazon/Ebay.
+  3. **NEW polish item P-45** added to `ROADMAP.md` polish backlog. Status: OPEN. Severity: HIGH-MEDIUM (unblocks Amazon/Ebay/MSE-player class of captures fundamentally; universal across platforms). Estimated: 2-3 implementation sessions.
+  4. **NEW §C section** added to this design doc capturing the 12 locked decisions + implementation arc + open questions for the next session to settle before coding begins.
+  5. **No Rule 9 trigger** this session — pure design + diagnostic work; no code shipped to main; no schema changes; no deploy.
+
+- **Reasoning:**
+  - **(1) DevTools cooperation proved decisive in 1 step.** The service worker Network tab evidence (`blob:https://www.amazon.com/...` + `net::ERR_FILE_NOT_FOUND`) made the root cause unambiguous within a single director-driven inspection step. Code-reading alone (Builds #2-#8) could not have surfaced this because the failing fetch URL is constructed at runtime from `<video>.currentSrc` whose value is set by Amazon's JavaScript on page load — there's no way to see "this will be a blob: URL" without running the page. The Hybrid coverage approach (§A.13) is further-validated: automated tests can't run real Amazon pages with real MSE players; manual walkthrough surfaces the bug; DevTools cooperation surfaces the root cause; design + implementation closes the loop.
+  - **(2) Director's screen-recording question reframed the problem.** Claude's original 3 short-term-fix options were all working WITHIN the existing "fetch the video bytes" architecture. Director's question — *"Is there a way to do a screen recording of the video..."* — pointed at a fundamentally different architecture (record what's on screen instead of fetching the source). That direction is universal (works on any video player regardless of how the source page serves bytes), pays compound dividends as MSE adoption grows, and reuses ~50% of existing infrastructure (the region-screenshot overlay from P-17). The director-non-programmer framing — "do a screen recording" — is also exactly how an end user would naturally describe what they want, which is a strong UX signal.
+  - **(3) Skipping the short-term fix avoids disposable code.** Snapshot save (Option a) would have shipped ~75-100 LOC that becomes redundant once recording works on Amazon/Ebay. Even if snapshot fallback is kept as a fast-capture option later (Claude's original recommendation), it's not THIS session's load-bearing scope. Director's choice protects design quality over live-site UX continuity for the 2-3 session window.
+  - **(4) Rule 24 search revealed P-17's existing tab-capture infrastructure** — `chrome.tabs.captureVisibleTab` API in use, `activeTab` permission already in manifest, content-script ↔ background bridge proven, region-selection overlay built. That cut the P-45 scope estimate from "3-5 sessions building from scratch" to "2-3 sessions extending an existing system from single-frame to multi-frame-over-time." Significant signal that this design direction was UNDER-priced in Claude's initial framing.
+  - **(5) The 7 + 5 P-45 design decisions form a coherent design intent.** Locked in one session through structured Rule 14f pickers with recommendation markers; each decision is independently reversible. The lower-priority defaults (codec/quality, cancel UX, indicator, tab-close, schema enum) are smaller-stakes choices Claude can defend without director re-litigation; director's "default to recommendations" stance applies per `feedback_default_to_recommendation.md`.
+  - **(6) The new §C section preserves design intent for the next session** without trying to mirror §A's 19-subsection thoroughness. The full Rule 18 interview-cluster deepening happens at the start of P-45 Build #1 (the next session) before any code lands — that's the canonical pattern when a design emerges organically during bug diagnosis rather than from a dedicated design session. §C captures the locked decisions + implementation arc + open questions; Build #1 expands it.
+
+- **Impact on §A + new §C:**
+  - **§A still holds** for the existing fast-fetch path (DIRECT_BYTES + EMBED branches). That path continues to work on Etsy + Walmart + any future site with plain HTTPS video sources. Director's "keep both paths" decision means §A is preserved unchanged for those sites.
+  - **§A.2 implementation arc table row #9** (director real-Chrome verification walkthrough) PROGRESSES from "PARTIAL+" (Build #8 baseline — Etsy + Walmart full pass; Ebay + Amazon partial) to **PARTIAL+ with diagnosed unblock path** (Build #9 — Bug #12 root cause identified + design pivot to P-45 captured). The row will close fully when P-45 ships + cross-platform re-verification confirms Amazon + Ebay captures work via recording.
+  - **§A.7 schema spec gains a planned future delta** — P-45 implementation will add `SCREEN_RECORDING` as a 3rd value in the `sourceType` enum. Documented in §C.4. Not a Build #9 change.
+  - **§A.13 (Hybrid coverage)** further-validated — DevTools cooperation is now the 4th layer (automated + Playwright + manual walkthrough + DevTools cooperation) for bug classes the earlier layers can't address.
+  - **NEW §C — P-45 Screen-Recording Sub-Feature Design (NEW 2026-05-22)** appended below. Captures the 12 locked decisions, 11-step user flow, capture API + permissions, schema impact, save-flow integration, implementation arc (2-3 builds), test coverage approach, open questions for next session.
+
+---
+
+## §C — P-45 Screen-Recording Sub-Feature Design (NEW 2026-05-22)
+
+**Status:** initial design captured 2026-05-22 in `session_2026-05-22-c_p27-build-9-devtools-diagnosis-and-p45-screen-recording-pivot` (the same session that diagnosed Bug #12 + pivoted away from the short-term fix). 12 design decisions locked this session via Rule 14f pickers. The full Rule 18 interview-cluster deepening happens at the start of P-45 Build #1 (the next session) before any code lands. This §C is the canonical reference until Build #1 expands it into a full §C.0-§C.N interview-answers structure mirroring §A.
+
+**Relationship to §A:** §C is a SECOND CAPTURE PATH alongside §A's fast-fetch path, not a replacement. §A's DIRECT_BYTES + EMBED branches continue to serve sites with plain HTTPS video sources (Etsy, Walmart). §C's screen-recording branch serves sites where the source video is unreachable from the background SW (Amazon, Ebay, any MSE-player site) — the bug class Build #9 diagnosed. Both paths share the existing 3-phase save flow + video-capture form + storage schema.
+
+### §C.0 Why this exists (the gap §A doesn't cover)
+
+§A's DIRECT_BYTES branch assumes the `<video>` element's `src` / `currentSrc` is a fetchable URL (plain HTTPS .mp4 / .webm / .mov). For sites using Media Source Extensions (MSE) — where the player downloads chunked media via XHR and assembles it in memory, exposing only a `blob:` URL to the `<video>` element — the background service worker cannot fetch the bytes (blob URLs are scoped to their creating document context; `net::ERR_FILE_NOT_FOUND` outside that context). This affects Amazon product video, Ebay video, Walmart hero player partially, Instagram, TikTok, YouTube, Netflix-style players, and increasingly most modern video platforms. §A's EMBED branch handles `<iframe>`-embedded video (YouTube/Vimeo iframe) but doesn't handle MSE players that don't use iframes. §C closes the gap.
+
+### §C.1 The 12 locked design decisions
+
+| # | Decision | Chosen | Why |
+|---|---|---|---|
+| 1 | Region selection scope | Draw a rectangle (mirrors P-17 region-screenshot UX) | Familiar to user; saved file is small + focused; reuses ~80% of existing region-screenshot overlay code |
+| 2 | Audio capture | Always-on by default | Audio is half the analyzable signal for competitor video (ad copy, narration, music); free at the MediaRecorder layer; reversible per recording later if needed |
+| 3 | Max recording duration | ~2-3 minutes with visible countdown timer | At 720p + reasonable bitrate hits ~100 MB cap; predictable UX; "record multiple clips" can ship as a future enhancement |
+| 4 | Capture API | `navigator.mediaDevices.getDisplayMedia()` (web standard) | NO new manifest permission required (web standard, not extension-specific); Chrome shows its own "Choose what to share" dialog each recording (transparent permission UX); per-recording extra click is small cost vs. install-time re-permission prompt for ALL users |
+| 5 | Trigger gesture | Right-click menu adds new "Record video" item alongside existing "Add to PLOS" | Consistent with current UX; user picks save vs. record at menu level (no surprises); discoverable from where users already look |
+| 6 | Existing fast-fetch path | Kept alongside recording — both paths coexist | Zero regression for Etsy/Walmart users (they keep instant one-click captures); walker auto-routes based on what works; reversible (we can deprecate fast-fetch later if recording proves universally preferable) |
+| 7 | Save flow order | Record first, then fill in the metadata form | Matches natural cognitive flow (time-bound action first, then sit-with-metadata at leisure); minor cost if user aborts mid-recording |
+| 8 | Recording quality / file format | webm with VP9 codec at ~720p, ~2.5 Mbps target | Industry standard for Chrome screen recording; balances quality + file size to fit 2-3 min in 100 MB cap |
+| 9 | Cancel UX when user dismisses Chrome's "Choose what to share" dialog | Show a small toast: "Recording cancelled. You can try again any time." | Quiet recovery; no error/red surface; existing `capture-failure-toast.ts` shipped Build #8 covers this idiomatically |
+| 10 | In-progress visual indicator | Thin red dashed border around the recorded rectangle + small "REC ●" badge in top-right corner; disappears the moment recording stops | Clear feedback that recording is active; user can see what's being captured; standard screen-recording UX pattern |
+| 11 | Tab-close mid-recording | Auto-stop + discard the partial recording | User wasn't actively saving anyway; preserving a partial recording adds complexity without clear value |
+| 12 | Schema impact | Add `SCREEN_RECORDING` as 3rd value in `sourceType` enum on `CapturedVideo` table | Distinguishes recorded clips from fetched bytes for future analytics + UI affordances (e.g., "this was captured via screen recording" badge in detail page); minimal schema delta; `prisma db push` fires once during P-45 Build #1 |
+
+### §C.2 The user flow (11 steps)
+
+1. User right-clicks a video on a competitor page (Amazon, Ebay, etc.).
+2. Extension menu shows two items: **"Add to PLOS"** (existing fast-fetch) and **"Record video"** (new screen-recording path).
+3. User picks **"Record video"**.
+4. Existing region-screenshot rectangle overlay appears (adapted for video context).
+5. User draws the rectangle around the area to record + clicks **Start**.
+6. Chrome's built-in "Choose what to share" dialog appears → user picks their current tab → recording begins.
+7. Small floating toolbar appears at top showing **countdown timer** (caps at ~2-3 min) + **Stop** button. Thin red dashed border + "REC ●" badge appear on the recorded rectangle.
+8. User plays the Amazon/Ebay video as usual; recording captures the rectangle area + audio in real-time.
+9. User clicks Stop (or timer runs out + auto-stops).
+10. Recorded clip becomes the preview in the existing video-capture form. User fills category, tags, notes.
+11. User clicks Save → standard 3-phase upload to Supabase (Phase 1 requestVideoUpload → Phase 2 PUT bytes from MediaRecorder output + PUT thumbnail from first-frame canvas grab → Phase 3 finalizeVideoUpload with `sourceType: 'SCREEN_RECORDING'`).
+
+### §C.3 Capture API + permissions
+
+**API choice:** `navigator.mediaDevices.getDisplayMedia({ video: true, audio: true })` (locked decision #4). Returns a `MediaStream` once user picks tab in Chrome's dialog. The stream feeds `MediaRecorder` for webm encoding. Region-cropping is achieved via canvas: render stream frames to a hidden canvas → crop to user-drawn rectangle → re-record from canvas via `canvas.captureStream()` → MediaRecorder. This is the standard pattern for region-restricted screen recording in Chrome.
+
+**Permissions:** NO new manifest permission required. `getDisplayMedia` is a web standard available to extensions without manifest declaration; Chrome's per-recording "Choose what to share" dialog IS the permission UX. The existing `activeTab` permission (already in manifest for P-17 region-screenshot) covers any incidental tab access needed. **This is a major win** — no user-facing install-time re-permission prompt for the entire extension audience.
+
+### §C.4 Schema impact
+
+**Single delta:** add `SCREEN_RECORDING` as a 3rd value in the `sourceType` enum on the `CapturedVideo` Prisma model. Current enum: `'EMBED' | 'DIRECT_BYTES'`. Post-P-45: `'EMBED' | 'DIRECT_BYTES' | 'SCREEN_RECORDING'`. `prisma db push` fires once during P-45 Build #1 (Rule 9 destructive-operation trigger; director-Yes gate required).
+
+**No other schema changes.** Same `videoStoragePath` (webm bytes in Supabase Storage), same `thumbnailStoragePath` (first-frame JPEG in Supabase Storage), same `mimeType` field (will be `video/webm` for recordings), same `fileSize` / `durationSeconds` / `width` / `height` fields, same `videoCategory` + `tags` + `composition` + `embeddedText` metadata fields.
+
+### §C.5 Save flow integration
+
+Reuses the existing 3-phase save flow from §A unchanged:
+- **Phase 1** — `requestVideoUpload(projectId, urlId, { clientId, mimeType: 'video/webm', fileSize })` — mints signed Supabase URLs for video bytes + thumbnail.
+- **Phase 2** — direct PUT of webm bytes from MediaRecorder output to video signed URL + PUT of first-frame JPEG to thumbnail signed URL. Bytes bypass Vercel (same as DIRECT_BYTES).
+- **Phase 3** — `finalizeVideoUpload(projectId, urlId, { clientId, sourceType: 'SCREEN_RECORDING', capturedVideoId, videoStoragePath, thumbnailStoragePath, mimeType, fileSize, durationSeconds, ...userMetadata })` — server creates the CapturedVideo row.
+
+The only NEW code: the recording controller that produces the bytes (`MediaRecorder.start()` → `dataavailable` events → final Blob on `stop`). Everything downstream is reuse.
+
+### §C.6 Implementation arc (2-3 builds)
+
+| Build | Scope | Expected duration |
+|---|---|---|
+| **P-45 Build #1** | Rule 18 interview-cluster deepening of §C → full §C.0-§C.N structure mirroring §A. Recording controller (`record-controller.ts` — ~150 LOC: getDisplayMedia + MediaRecorder + canvas-crop loop + countdown timer + start/stop API). Region-overlay adaptation (`video-region-record-overlay.ts` — fork of existing `region-screenshot-overlay.ts`). Right-click menu addition (new "Record video" item in orchestrator's context-menu builder). In-progress visual indicator (red dashed border + REC badge — ~50 LOC). Schema migration (add SCREEN_RECORDING enum value + `prisma db push` + Rule 9 gate). Dev-time happy-path verification on Amazon (Claude + director). Node:test coverage for record-controller. Playwright extension-context spec for the recording trigger path. | ~1 session |
+| **P-45 Build #2** | Cross-platform verification (Amazon, Ebay, Walmart, Etsy — Etsy as regression check since recording path SHOULD work there too but isn't the primary path). Edge cases: user cancels Chrome's share dialog → toast; recording exceeds size cap → graceful truncate with toast + form opens with truncated clip; tab close mid-recording → auto-stop + discard; codec compatibility (webm should work everywhere; fallback path if VP9 unsupported); audio-disabled tabs (some sites disable audio capture); first-frame thumbnail extraction (canvas frame-grab from MediaRecorder output's first chunk). Director real-Chrome walkthrough across 4 platforms. Bug capture + fix-forward iteration if needed. | ~1 session |
+| **P-45 Build #3 (CONDITIONAL)** | UX polish + accessibility (keyboard shortcut for Stop?, visible recording state in popup, "you have an active recording" reminder if user switches tabs). Cross-platform Playwright extension-context specs (recording trigger + region-overlay + form-after-stop). Deploy to vklf.com via Rule 9 gate. Director cross-platform re-verification. End-of-arc verification backlog entry. | ~1 session if needed |
+
+### §C.7 Test coverage approach (Hybrid per Rule 27 + §A.13)
+
+**Node:test (unit) layer:** record-controller state machine (start/stop/canceled transitions); region-crop canvas logic given synthetic MediaStream; timer countdown + auto-stop; first-frame extraction. Mockable via fake MediaStream + fake MediaRecorder. ~15-25 new test cases at P-45 Build #1.
+
+**Playwright (extension-context integration) layer:** the right-click → "Record video" menu item dispatch path; region-overlay rendering; orchestrator's recording-state lifecycle. Cannot test actual `getDisplayMedia` because Playwright headless Chrome won't pop the user-selection dialog. Coverage stops at "the orchestrator calls getDisplayMedia"; what happens inside Chrome's dialog is OUT of automated coverage scope per the same boundary as P-17's region-screenshot tests. ~5-10 new Playwright cases at P-45 Build #1 + #2.
+
+**Manual walkthrough layer:** director-driven cross-platform verification (Amazon, Ebay, Walmart, Etsy). This is the ONLY layer that can verify the actual screen-recording end-to-end with real Chrome's screen-share dialog + real MSE players + real audio capture + real codec compatibility. **The Hybrid model (§A.13) explicitly relies on this layer** for the parts automated tests cannot fake. Build #2 walkthrough covers happy paths + the 6+ edge cases enumerated above.
+
+**DevTools cooperation layer:** kept available for any bug-class that surfaces during walkthrough that requires runtime evidence (e.g., codec-compatibility surprises on a specific platform). Build #9 proved this layer's value.
+
+### §C.8 Open questions for P-45 Build #1 to settle before coding
+
+These are the design questions Claude deliberately deferred this session by defaulting to recommendations. They need to be re-surfaced at Build #1 start before code lands, in case director's view evolves between sessions.
+
+1. **Codec fallback if VP9 unsupported.** Chrome supports VP9 widely but Safari + some embedded contexts don't. The webm + VP9 default matches Chrome screen recording's native behavior. If we ever want cross-browser playback in the URL detail page renderer, we may need a transcode step. Out of P-45 scope; flag for future polish item.
+2. **Should the recording include a watermark / "recorded via PLOS" overlay?** Privacy + provenance question. Default: NO (cleaner output). User can be told the saved file is "yours, not the source's."
+3. **Audio mute/unmute toggle during recording.** Decision #2 locked audio as always-on. Should the floating toolbar show a mute toggle the user can hit mid-recording? Default: NO (simpler UI; user can mute the saved video in PLOS later).
+4. **Region overlay vs. video element bounds — auto-snap?** When user starts drawing the rectangle, should we auto-detect the nearest `<video>` element bounds + offer to snap the rectangle to it? Reduces user effort; adds complexity. Default: NO for v1 (manual draw); polish item for future.
+5. **What if user starts recording WITHOUT first clicking the page?** Some sites disable autoplay; if user picks "Record video" → draws rectangle → starts recording → realizes the video isn't playing → has to switch context to click play → loses 2-3 seconds. Should the toolbar offer a "Click to play, then Start" affordance? Default: rely on user to play first; polish item for future.
+6. **Recovery if MediaRecorder fails mid-recording.** Browser may abort recording for memory / codec / permission reasons. Default: stop recording + show the failure toast + discard partial output. Don't attempt save with a partial blob.
+7. **Storage of `originalSrcUrl` for SCREEN_RECORDING rows.** §A's existing schema requires `originalSrcUrl`. For recordings, this would be the page URL (Amazon product listing). Same as EMBED branch's intent for blob: cases. Confirm this is the right field semantics.
+8. **Implementation language for the in-page recording toolbar.** Same TypeScript content-script pattern as the existing region-screenshot overlay? Or a more elaborate iframe-injected UI? Default: same pattern as P-17 for consistency.
+
+### §C.9 Living Questions (Rule 7) for the next session to answer
+
+- **Q1: Which data from upstream workflows does P-45 need?** Same as §A — `selectedProjectId` from extension state + `selectedPlatform` from extension state + the user's current page URL (resolved to a CompetitorUrl). No new upstream data.
+- **Q2: Is each piece of shared data read-only or editable downstream?** Same as §A — read-only at capture time; downstream workflows (analytics, editing) treat the captured video as a fixed artifact.
+- **Q3: If editable, how does the upstream tool see the edits?** Not applicable — read-only at capture time. Future polish items (clip-editing in PLOS UI) would create new derived rows.
+
+### §C.10 Cross-Tool Data Flow Map reciprocal output declaration (Rule 18)
+
+P-45 produces `CapturedVideo` rows with `sourceType='SCREEN_RECORDING'`. Same row shape as DIRECT_BYTES / EMBED rows (single table; sourceType discriminates). Downstream consumers (URL detail page renderer, future analytics workflows) read the same fields. No new shared-data registry entry required beyond the existing CapturedVideo declaration.
+
+---
+
 END OF DOCUMENT
