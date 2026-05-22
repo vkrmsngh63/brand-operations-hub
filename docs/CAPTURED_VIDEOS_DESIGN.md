@@ -2,7 +2,7 @@
 
 **Polish item:** P-27 — Captured-videos feature
 **Parent workflow:** W#2 Competition Scraping & Deep Analysis (🔍)
-**Status:** 🔄 Implementation phase — Build #1 (schema + bucket + helper) complete 2026-05-20-c (commit `c8fa639`); Build #2 (API routes + shared-types extensions) complete 2026-05-21 (commit `7093f2e`); Build #3 (extension content-script form + helper + validator + 41 new node:test cases) complete 2026-05-21-b (commit `02709c4`); Build #4 (popup paste form + saved-video indicator overlay + 13 new node:test cases) complete 2026-05-21-c (commit `ea32fa5`); Build #5 (URL detail page renderer + signed-URL list endpoint) complete 2026-05-21-d (commit `467af4c`); Build #6 (single-platform amazon Playwright extension-context specs + new Amazon-style fixture page) complete 2026-05-22 (commit `af0ed00`; Playwright 91 → 94 — 3 new cases all GREEN); Build #7 (DEPLOY session) complete 2026-05-22-b — ff-merge `cf4e233..bd7cedd` (13 commits +7890/-83 across 40 files; fresh extension zip `plos-extension-2026-05-22-w2-deploy-31.zip` 196,849 bytes); in-session director real-Chrome verification surfaced Etsy PASS + 6 failures across Amazon + Ebay + Walmart captured as TaskList DEFERRED #9-#14; **Build #8 (FIX-FORWARD POLISH + DEPLOY) complete 2026-05-21 — commit `a47a95f` lands 5 code-level fixes (`<source src>` fallback + stacked-elements walker fallback + new `capture-failure-toast.ts` defensive UX + `showPreviewUnavailable()` placeholder block + `retryOnTransportError` helper + `focusNewCategoryInput()` retry path); ff-merge `bd7cedd..a47a95f` (2 commits +645/-19 across 7 files); fresh extension zip `plos-extension-2026-05-21-w2-deploy-32.zip` 198,508 bytes — +1,659 over deploy-31; pre-deploy scoreboard 495 ext (+13) / 589 src/lib / 57 routes / 94 Playwright all GREEN; in-session director real-Chrome re-verification: ✅ Etsy still full pass + ✅ Walmart now full pass (Bug #14a + #14b cleared) + ✅ Ebay form NOW OPENS via `<source src>` fallback (Bug #13 cleared) + ✅ Amazon click-into-overlay form opens + ⚠️ Amazon hover-preview surfaces defensive toast (Bug #9 defensive UX) + ❌ Bug #11 input dead STILL UNFIXED + ❌ Bug #12 Save fails "Network unreachable" now on Amazon AND Ebay + ⚠️ NEW Bug #15 Ebay native-controls quirk captured**; §A.2 implementation arc table row #9 progresses from PARTIAL to **PARTIAL+** (3 platforms full pass + 1 platform partial — closes when Build #9 diagnoses ship). Next Build session = #9 DevTools-cooperative debugging session — Claude narrates one DevTools diagnostic step at a time + director reports what they see live; targets Bug #11 + Bug #12 + Bug #9 deeper-walk + Bug #15 UX recovery. **Decision (Build #8 close-out): debugging continuation, not revert** — 3 platforms now fully working + 1 platform partial + fresh defensive UX layer shipped; the 2 unfixed bugs need DevTools-level information that code reading alone can't surface.
+**Status:** 🔄 Implementation phase — Build #1 (schema + bucket + helper) complete 2026-05-20-c (commit `c8fa639`); Build #2 (API routes + shared-types extensions) complete 2026-05-21 (commit `7093f2e`); Build #3 (extension content-script form + helper + validator + 41 new node:test cases) complete 2026-05-21-b (commit `02709c4`); Build #4 (popup paste form + saved-video indicator overlay + 13 new node:test cases) complete 2026-05-21-c (commit `ea32fa5`); Build #5 (URL detail page renderer + signed-URL list endpoint) complete 2026-05-21-d (commit `467af4c`); Build #6 (single-platform amazon Playwright extension-context specs + new Amazon-style fixture page) complete 2026-05-22 (commit `af0ed00`; Playwright 91 → 94 — 3 new cases all GREEN); Build #7 (DEPLOY session) complete 2026-05-22-b — ff-merge `cf4e233..bd7cedd` (13 commits +7890/-83 across 40 files; fresh extension zip `plos-extension-2026-05-22-w2-deploy-31.zip` 196,849 bytes); in-session director real-Chrome verification surfaced Etsy PASS + 6 failures across Amazon + Ebay + Walmart captured as TaskList DEFERRED #9-#14; Build #8 (FIX-FORWARD POLISH + DEPLOY) complete 2026-05-21 — commit `a47a95f` lands 5 code-level fixes; ff-merge `bd7cedd..a47a95f` (2 commits +645/-19 across 7 files); fresh extension zip `plos-extension-2026-05-21-w2-deploy-32.zip` 198,508 bytes; Build #9 (DEVTOOLS-COOPERATIVE DIAGNOSIS + P-45 DESIGN PIVOT) complete 2026-05-22-c — no code commits; pure design + diagnostic; Bug #12 root cause diagnosed (blob: URLs from Media Source Extensions unreachable from background SW); director's escape-hatch question surfaced screen recording as universal solution; 12 P-45 design decisions locked through Rule 14f pickers; new §C section added; **P-45 Build #1a (FOUNDATION slice) complete 2026-05-22-d — commit `7e2eb2c` lands schema migration adding `SCREEN_RECORDING` to `VideoSourceType` enum via `npx prisma db push` (Rule 9 director-Yes gate fired; live on Supabase since 14:09 UTC) + NEW `extensions/competition-scraping/src/lib/screen-recording/record-controller.ts` (~280 LOC state machine + DI surface) + 29 NEW node:test cases mirroring §C.18 enumeration + correctness updates to `isFinalizeVideoUploadRequest` validator + finalize-route bytes-required gate + list-route signed-URL minting gate; pre-end-of-session scoreboard 57 routes / 590 src/lib (+1) / 524 ext (+29) / Playwright skipped (non-deploy) all GREEN; original "single Build #1" framing was split at session start via Rule 14f scope-pacing forced-picker into 1a [foundation, this session] + 1b [wiring + dev verify, next session]; schema-change-in-flight flag flipped to YES this session and stays YES until P-45 Build #2 deploys the new enum live on vklf.com**. §A.2 implementation arc table row #9 stays at **PARTIAL+ with diagnosed unblock path** (closes when P-45 ships + cross-platform re-verification confirms Amazon + Ebay captures work via recording). Next Build session = P-45 Build #1b (wiring slice — `video-region-record-overlay.ts` fork + `recording-indicator-overlay.ts` + `thumbnail-extraction.ts` + `recording-bytes-upload.ts` smart-client orchestrator + `messaging.ts` + `api-bridge.ts` + `background.ts` `CONTEXT_MENU_RECORD_VIDEO` registration with locked label **"Record video for PLOS"** + `orchestrator.ts` new `enter-video-region-record-mode` handler + `video-capture-form.ts` new `kind: 'screen-recording'` branch + `styles.ts` overlay CSS + dev-time happy-path walkthrough on Amazon).
 **Branch (design):** `workflow-2-competition-scraping`
 **Created:** 2026-05-20
 **Created in session:** `session_2026-05-20-b_p27-captured-videos-design-interview` (Claude Code; on `workflow-2-competition-scraping`)
@@ -898,6 +898,606 @@ These are the design questions Claude deliberately deferred this session by defa
 ### §C.10 Cross-Tool Data Flow Map reciprocal output declaration (Rule 18)
 
 P-45 produces `CapturedVideo` rows with `sourceType='SCREEN_RECORDING'`. Same row shape as DIRECT_BYTES / EMBED rows (single table; sourceType discriminates). Downstream consumers (URL detail page renderer, future analytics workflows) read the same fields. No new shared-data registry entry required beyond the existing CapturedVideo declaration.
+
+---
+
+## §C.11–§C.20 — Implementation-ready deepening (NEW 2026-05-22 P-45 Build #1)
+
+**Status:** §C.0–§C.10 above is the binding design surface — 12 decisions locked Build #9 via Rule 14f pickers; do NOT re-litigate per Rule 18. §C.11–§C.20 below is the Build #1 design-deepening pass per Rule 18 interview-cluster pattern — converts the outline into implementation-ready specs (concrete file paths, function signatures, state machine, error paths, save-flow architecture, test enumeration). Where §C.11–§C.20 makes a sub-decision §C.0–§C.10 did not lock, that sub-decision is recorded in §C.19 with its reasoning.
+
+### §C.11 File layout + module boundaries
+
+P-45 adds ONE new directory and 6 files to the extension; no files outside that directory are net-new (only edits).
+
+```
+extensions/competition-scraping/src/lib/screen-recording/
+├── record-controller.ts                          NEW (~150 LOC) — recording state machine
+├── record-controller.test.ts                     NEW (~15-25 cases) — node:test unit coverage
+├── thumbnail-extraction.ts                       NEW (~40 LOC) — first-frame canvas grab from MediaRecorder Blob
+├── thumbnail-extraction.test.ts                  NEW (~5-8 cases) — node:test
+└── recording-bytes-upload.ts                     NEW (~80 LOC) — smart-client Phase 1+2+3 orchestration
+```
+
+```
+extensions/competition-scraping/src/lib/content-script/
+├── video-region-record-overlay.ts                NEW (~120 LOC) — forked from region-screenshot-overlay.ts
+├── video-region-record-overlay.test.ts           NEW (~8-12 cases)
+├── recording-indicator-overlay.ts                NEW (~50 LOC) — red-dashed-border + REC badge + floating Stop toolbar
+├── recording-indicator-overlay.test.ts           NEW (~5 cases)
+├── orchestrator.ts                               EDIT — add `enter-video-region-record-mode` message handler
+├── video-capture-form.ts                         EDIT — add `kind: 'screen-recording'` branch + Save path
+├── messaging.ts                                  EDIT — add 2 new message types (enter-record-mode, submit-video-screen-recording)
+├── api-bridge.ts                                 EDIT — split video upload helpers for smart-client Phase 1+3
+└── styles.ts                                     EDIT — add CSS for video-region-record-overlay + recording-indicator-overlay
+```
+
+```
+extensions/competition-scraping/src/entrypoints/
+└── background.ts                                 EDIT — register CONTEXT_MENU_RECORD_VIDEO entry + dispatcher + SCREEN_RECORDING branch in handleSubmitVideoCapture
+```
+
+```
+src/lib/shared-types/
+└── competition-scraping.ts                       EDIT — add 'SCREEN_RECORDING' to VIDEO_SOURCE_TYPES tuple + extend isCapturedVideo type-guard
+```
+
+```
+prisma/
+└── schema.prisma                                 EDIT — add SCREEN_RECORDING value to VideoSourceType enum (Rule 9 trigger via `npx prisma db push`)
+```
+
+**No new src/lib/ files on the platform side** — the existing API routes (`/api/projects/[id]/urls/[urlId]/videos/requestUpload` + `.../videos/finalize`) accept the new SCREEN_RECORDING value transparently once the shared-types tuple expands. The route-handler files don't branch on sourceType for the Phase 1 request (signed URLs are minted the same way for DIRECT_BYTES + SCREEN_RECORDING); they only branch in the Phase 3 finalize for the EMBED skip-bytes case. SCREEN_RECORDING travels the same Phase 1+2+3 path as DIRECT_BYTES.
+
+### §C.12 record-controller.ts — state machine + interface
+
+The recording state machine owns the lifecycle from start to stopped-or-cancelled. Pure module — no DOM coupling beyond the MediaStream + MediaRecorder calls.
+
+**State machine:**
+
+```
+            ┌─────────┐
+   start()  │         │  pickTab error
+   ────────▶│  ASKING │──────────────────┐
+            │   TAB   │                  │
+            └────┬────┘                  │
+                 │ user picked tab       │
+                 ▼                       │
+            ┌─────────┐                  │
+            │         │  stop()/auto-cap │
+            │RECORDING│──────────┐       │
+            │         │          │       │
+            └────┬────┘          ▼       │
+            cancel()/        ┌────────┐  │
+            tab-closed       │STOPPED │  │
+                 │           │(emit   │  │
+                 ▼           │ blob)  │  │
+            ┌─────────┐      └────────┘  │
+            │CANCELED │◀────────────────┘
+            │(discard │
+            │ blob)   │
+            └─────────┘
+```
+
+**Public interface:**
+
+```typescript
+export interface RecordController {
+  /** Start the recording. Returns a Promise that resolves AFTER the user has
+   * picked a tab in Chrome's "Choose what to share" dialog AND MediaRecorder
+   * has entered the recording state. Rejects if the user dismisses the
+   * dialog (NotAllowedError) or the dialog fails for any other reason. */
+  start(opts: RecordControllerStartOpts): Promise<void>;
+
+  /** Stop the recording cleanly. Emits the final Blob via the onStopped
+   * callback. Idempotent if already stopped. */
+  stop(): void;
+
+  /** Cancel the recording — discards the partial Blob. The MediaStream is
+   * torn down + tracks stopped (so Chrome's "Sharing tab" indicator
+   * disappears). Emits onCanceled. Idempotent if already cancelled/stopped. */
+  cancel(): void;
+
+  /** Current state, for the orchestrator's lifecycle book-keeping. */
+  getState(): 'idle' | 'asking-tab' | 'recording' | 'stopped' | 'canceled';
+}
+
+export interface RecordControllerStartOpts {
+  /** User-drawn rectangle in viewport coordinates. Used for the canvas-crop
+   * loop that restricts the recorded MediaStream to the rectangle. */
+  region: Rect;
+  /** Hard cap — auto-stop fires at this duration. Default: 180 seconds (3 min)
+   * per §C.1 #3. */
+  maxDurationSeconds?: number;
+  /** Fires once per second during RECORDING with the elapsed seconds count.
+   * Drives the countdown UI in recording-indicator-overlay.ts. */
+  onTick?(elapsedSeconds: number): void;
+  /** Fires once when MediaRecorder transitions to recording. Used by the
+   * orchestrator to swap the region-overlay into the indicator-overlay. */
+  onStarted?(): void;
+  /** Fires when stop() finishes flushing the final dataavailable event.
+   * The Blob has MIME type 'video/webm;codecs=vp9,opus' by default. */
+  onStopped(result: RecordControllerStoppedResult): void;
+  /** Fires when cancel() completes OR when Chrome's dialog dismissal /
+   * tab-close / MediaRecorder error tears down the recording. */
+  onCanceled?(reason: 'user-cancel' | 'tab-closed' | 'dialog-dismissed' | 'recorder-error', detail?: string): void;
+}
+
+export interface RecordControllerStoppedResult {
+  blob: Blob;                  // video/webm; full encoded recording
+  mimeType: string;            // 'video/webm;codecs=vp9,opus' (or codec fallback)
+  durationSeconds: number;     // wall-clock duration
+  region: Rect;                // the region recorded (for width/height metadata)
+}
+
+export function createRecordController(): RecordController;
+```
+
+**Implementation outline:**
+
+1. `start()` calls `navigator.mediaDevices.getDisplayMedia({ video: true, audio: true })`. On rejection (`NotAllowedError`), emit `onCanceled('dialog-dismissed', err.message)` and transition to `canceled`.
+2. With the returned `MediaStream`, set up a hidden `<video>` element as the stream's destination; play it muted.
+3. Create a hidden `<canvas>` sized to `region.width × region.height` (rounded to even pixels for vp9 compatibility — odd dimensions trigger encoder errors).
+4. Start a `requestAnimationFrame` loop that draws `<video>` onto the canvas with `ctx.drawImage(<video>, region.x, region.y, region.width, region.height, 0, 0, region.width, region.height)`. Frame rate matches the display refresh rate (typically 60 fps).
+5. Call `canvas.captureStream(30)` to get a region-cropped MediaStream at 30 fps. Merge the original `MediaStream`'s audio tracks into this new stream via `croppedStream.addTrack(audioTrack)`.
+6. Construct `MediaRecorder(croppedStream, { mimeType: 'video/webm;codecs=vp9,opus', videoBitsPerSecond: 2_500_000 })`. If `MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')` returns false, fall back to `'video/webm;codecs=vp8,opus'` then `'video/webm'` (Chrome supports vp9+opus on every desktop platform since 2018; the fallback is defense for embedded Chromium variants).
+7. Wire `recorder.ondataavailable` to a `chunks: Blob[]` accumulator. Wire `recorder.onstop` to flush — build the final Blob via `new Blob(chunks, { type: mimeType })`, compute `durationSeconds` from a `performance.now()` delta captured at start, fire `onStopped`.
+8. Call `recorder.start(1000)` — emits a dataavailable chunk every 1 second so partial recordings survive a crash with at most 1 second lost (the chunks array holds full bytes until stop fires).
+9. Set up the duration cap as `setTimeout(() => this.stop(), maxDurationSeconds * 1000)`. Tick the countdown via `setInterval(() => onTick(elapsedSeconds), 1000)`.
+10. Watch for tab close via `document.addEventListener('visibilitychange', ...)` — if `document.visibilityState === 'hidden'` AND the recording was started by THIS tab's getDisplayMedia call, treat it as a user-initiated tab close, call `cancel('tab-closed')`.
+11. On stop/cancel: stop the rAF loop, stop ALL MediaStream tracks via `stream.getTracks().forEach(t => t.stop())` (this clears Chrome's "Sharing" indicator).
+
+**Error paths:**
+
+| Condition | Outcome |
+|---|---|
+| User dismisses Chrome's "Choose what to share" dialog | `start()` rejects with `NotAllowedError`; `onCanceled('dialog-dismissed')` fires; orchestrator shows the §C.1 #9 toast. |
+| MediaRecorder fires `onerror` mid-recording | `onCanceled('recorder-error', err.message)`; partial Blob discarded per §C.8 #6; orchestrator shows a generic capture-failure toast. |
+| User picks a non-current tab in Chrome's dialog | Recording proceeds against the picked tab. Out of scope for region cropping — the rectangle was drawn on the CURRENT tab; if the user picks a different tab, the crop region won't align. Surface as a §C.8 followup; for Build #1 the indicator-overlay just records whatever Chrome returns. |
+| Tab is closed mid-recording | `document.visibilitychange` + `unload` listeners catch it; `cancel('tab-closed')` fires; per §C.1 #11 the partial Blob is discarded. |
+| File size approaches the 100 MB Supabase bucket cap | Build #1 does NOT implement a size watchdog — at vp9 2.5 Mbps the 3-minute cap yields ~56 MB worst-case, safely under 100 MB. A size-based auto-stop is a §C.8 followup for Build #2 if real recordings exceed the projection. |
+
+### §C.13 video-region-record-overlay.ts — fork specification
+
+Fork of `region-screenshot-overlay.ts`. ~80% of the file is reused verbatim — overlay element creation, banner, dim panels, drag-rectangle drawing, Esc cancel listener. The differences are entirely in what happens on mouseup:
+
+| Behavior | region-screenshot-overlay.ts | video-region-record-overlay.ts |
+|---|---|---|
+| On mouseup with valid rect | Calls `captureAndCrop(clampedRect)` (screenshot pipeline) | Calls `onRegionPicked(clampedRect)` — the orchestrator then hands the rect to `RecordController.start()` |
+| Banner copy | "Drag a rectangle around the module — release to capture…" | "Drag a rectangle around the area to record — release to start recording. Audio + video; ~3 min max." |
+| Cursor while armed | `crosshair` | `crosshair` (same — preserves UX consistency) |
+| Processing-state UI between mouseup and onCaptured | "Capturing region…" spinner | NO spinner — overlay destroys itself immediately on valid mouseup; the RecordController handles the next-step UI (Chrome's "Choose what to share" dialog appears within ms) |
+| Esc cancel | `onCancel('escape')` | `onCancel('escape')` — same |
+| Too-small / outside-viewport | `onCancel(reason)` | `onCancel(reason)` — same |
+
+**Public interface:**
+
+```typescript
+export interface VideoRegionRecordOverlay {
+  destroy(): void;  // idempotent
+}
+
+export interface OpenVideoRegionRecordOverlayProps {
+  onRegionPicked(rect: Rect): void;
+  onCancel(reason: 'escape' | 'rect-too-small' | 'rect-outside-viewport'): void;
+}
+
+export function openVideoRegionRecordOverlay(
+  props: OpenVideoRegionRecordOverlayProps,
+): VideoRegionRecordOverlay;
+```
+
+Note the simpler interface vs. the screenshot overlay — there's no `onError` callback because the overlay doesn't own the capture pipeline (that's the RecordController's job; the overlay just hands back the rectangle).
+
+### §C.14 Right-click menu wiring (background + orchestrator)
+
+**`extensions/competition-scraping/src/entrypoints/background.ts` edits:**
+
+```typescript
+const CONTEXT_MENU_RECORD_VIDEO_ID = 'plos-add-record-video';
+const CONTEXT_MENU_RECORD_VIDEO_TITLE = 'Record video for PLOS';  // see §C.19 sub-decision #1 for the title choice
+```
+
+Inside the `onInstalled` handler, add a 5th `chrome.contextMenus.create({...})` call with `contexts: ['all']` (same pattern as the image + video entries — the recording targets the screen, not a specific DOM target, so it should fire from any right-click context).
+
+Inside the `onClicked` handler, add a new branch:
+
+```typescript
+if (info.menuItemId === CONTEXT_MENU_RECORD_VIDEO_ID) {
+  const pageUrl = typeof info.pageUrl === 'string' ? info.pageUrl : tab?.url ?? '';
+  const message: ContentScriptMessage = {
+    kind: 'enter-video-region-record-mode',
+    pageUrl,
+  };
+  chrome.tabs.sendMessage(tabId, message).catch(() => { /* no content script */ });
+  return;
+}
+```
+
+**`extensions/competition-scraping/src/lib/content-script/messaging.ts` edits:**
+
+Add the new ContentScriptMessage kinds:
+
+```typescript
+| { kind: 'enter-video-region-record-mode'; pageUrl: string }
+```
+
+And add the new background request type for the SCREEN_RECORDING save:
+
+```typescript
+| { kind: 'submit-video-screen-recording-request-upload';
+    projectId: string;
+    urlId: string;
+    clientId: string;
+    mimeType: string;
+    fileSize: number; }
+| { kind: 'submit-video-screen-recording-finalize';
+    projectId: string;
+    urlId: string;
+    clientId: string;
+    capturedVideoId: string;
+    videoStoragePath: string;
+    thumbnailStoragePath?: string;
+    mimeType: string;
+    fileSize: number;
+    durationSeconds: number;
+    width: number;
+    height: number;
+    originalSrcUrl: string;        // page URL — best fit for SCREEN_RECORDING
+    videoCategory: string;
+    composition: string | null;
+    embeddedText: string | null;
+    tags: string[]; }
+```
+
+Both background requests delegate to the existing `requestVideoUpload` + `finalizeVideoUpload` helpers; no new server-side API routes needed (the SCREEN_RECORDING enum value is accepted by `finalizeVideoUpload` once the shared-types tuple expands).
+
+**`extensions/competition-scraping/src/lib/content-script/orchestrator.ts` edits:**
+
+Add a new branch to the `onMessage` handler after the existing `enter-region-screenshot-mode` branch:
+
+```typescript
+if (msg.kind === 'enter-video-region-record-mode') {
+  const pageUrl = msg.pageUrl;
+  const overlay = openVideoRegionRecordOverlay({
+    onRegionPicked(rect) {
+      overlay.destroy();
+      const controller = createRecordController();
+      const indicator = openRecordingIndicatorOverlay({
+        region: rect,
+        onStopClicked() { controller.stop(); },
+        onCancelClicked() { controller.cancel(); },
+      });
+      void controller.start({
+        region: rect,
+        maxDurationSeconds: 180,
+        onStarted() { indicator.setRecording(); },
+        onTick(elapsed) { indicator.setElapsed(elapsed); },
+        onStopped(result) {
+          indicator.destroy();
+          openVideoCaptureForm({
+            kind: 'screen-recording',
+            blob: result.blob,
+            mimeType: result.mimeType,
+            durationSeconds: result.durationSeconds,
+            width: result.region.width,
+            height: result.region.height,
+            pageUrl,
+            projectId,
+            projectName,
+            platform: platformModule.platform as Platform,
+            onSaved() {},
+            onClose() {},
+          });
+        },
+        onCanceled(reason, _detail) {
+          indicator.destroy();
+          if (reason === 'dialog-dismissed') {
+            showCaptureFailureToast('Recording cancelled. You can try again any time.');
+          } else if (reason === 'recorder-error') {
+            showCaptureFailureToast('Recording failed mid-way and was discarded.');
+          }
+          // 'user-cancel' + 'tab-closed' get no toast — they're already user-evident.
+        },
+      });
+    },
+    onCancel(_reason) { overlay.destroy(); },
+  });
+  sendResponse({ ok: true });
+  return;
+}
+```
+
+### §C.15 In-progress visual indicator + floating toolbar
+
+`recording-indicator-overlay.ts` renders TWO synchronized UI elements:
+
+1. **The region indicator** — a thin red dashed border (`border: 2px dashed #d00`) positioned absolutely at the user-drawn rect coordinates. `pointer-events: none` so the user can interact with the page underneath. `z-index: 2147483646` (one below the max int — same scale as the existing region-screenshot-overlay styles in `styles.ts`).
+
+2. **The floating toolbar** — a small bar pinned to the top-center of the viewport with `position: fixed; top: 12px; left: 50%; transform: translateX(-50%)`. Contains a red "REC ●" badge (the dot pulses via a CSS keyframe), a live countdown display ("0:08 / 3:00"), a **Stop** button (primary, red), and a **Cancel** button (secondary, gray text-only). The toolbar's z-index is also 2147483646 — same plane as the region indicator.
+
+**Public interface:**
+
+```typescript
+export interface RecordingIndicatorOverlay {
+  setRecording(): void;          // call when MediaRecorder enters recording state
+  setElapsed(elapsedSeconds: number): void;   // updates the countdown display
+  destroy(): void;
+}
+
+export interface OpenRecordingIndicatorOverlayProps {
+  region: Rect;
+  onStopClicked(): void;
+  onCancelClicked(): void;
+  maxDurationSeconds?: number;   // default 180 — feeds the countdown denominator
+}
+```
+
+**Lifecycle:**
+
+- Renders in "PREPARING…" state with a gray border + spinner until `setRecording()` is called (covers the ~1-2 seconds between mouseup-on-region and the first MediaRecorder dataavailable event, which spans Chrome's "Choose what to share" dialog).
+- After `setRecording()`: border switches to red dashed, REC badge appears, countdown starts incrementing.
+- On `destroy()`: removes both DOM elements + clears any pending timers.
+
+### §C.16 Save flow detail — smart-client architecture
+
+Default-picked per §C.19 sub-decision #2: the content-script orchestrates Phases 1+2+3 itself, with Phase 1 + Phase 3 proxied through background (vklf.com CORS allowlist limits) and Phase 2 PUT directly to Supabase from content-script origin (Supabase signed URLs are CORS-cleared for any-origin uploads).
+
+**`recording-bytes-upload.ts` flow:**
+
+```typescript
+export async function uploadScreenRecording(input: {
+  projectId: string;
+  urlId: string;
+  blob: Blob;
+  thumbnailBlob: Blob | null;    // from thumbnail-extraction.ts; null = no thumbnail
+  pageUrl: string;
+  durationSeconds: number;
+  width: number;
+  height: number;
+  videoCategory: string;
+  composition: string | null;
+  embeddedText: string | null;
+  tags: string[];
+}): Promise<CapturedVideo> {
+  const clientId = crypto.randomUUID();
+  const mimeType = input.blob.type || 'video/webm';
+  const fileSize = input.blob.size;
+
+  // Phase 1 — proxied through background.
+  const phase1 = await submitVideoScreenRecordingRequestUpload({
+    projectId: input.projectId,
+    urlId: input.urlId,
+    clientId, mimeType, fileSize,
+  });
+  // phase1: { capturedVideoId, videoUploadUrl, videoStoragePath, thumbnailUploadUrl, thumbnailStoragePath }
+
+  // Phase 2 — direct PUT from content-script. Supabase signed URL allows any origin.
+  await fetch(phase1.videoUploadUrl, {
+    method: 'PUT', body: input.blob,
+    headers: { 'Content-Type': mimeType },
+  });
+  let thumbnailUploaded = false;
+  if (input.thumbnailBlob) {
+    try {
+      await fetch(phase1.thumbnailUploadUrl, {
+        method: 'PUT', body: input.thumbnailBlob,
+        headers: { 'Content-Type': 'image/jpeg' },
+      });
+      thumbnailUploaded = true;
+    } catch {
+      // §A.12 NULL-thumbnail fallback — never blocks save.
+    }
+  }
+
+  // Phase 3 — proxied through background.
+  return submitVideoScreenRecordingFinalize({
+    projectId: input.projectId,
+    urlId: input.urlId,
+    clientId,
+    capturedVideoId: phase1.capturedVideoId,
+    videoStoragePath: phase1.videoStoragePath,
+    ...(thumbnailUploaded ? { thumbnailStoragePath: phase1.thumbnailStoragePath } : {}),
+    mimeType, fileSize,
+    durationSeconds: input.durationSeconds,
+    width: input.width, height: input.height,
+    originalSrcUrl: input.pageUrl,
+    videoCategory: input.videoCategory,
+    composition: input.composition,
+    embeddedText: input.embeddedText,
+    tags: input.tags,
+  });
+}
+```
+
+**Why smart-client over base64-through-message:** a 100 MB Blob base64-encodes to ~133 MB. `chrome.runtime.sendMessage` passes everything through structured clone in MV3 SWs; the practical limit varies by browser version but failures around 64 MB are well-attested. The smart-client path has no such ceiling — fetch() handles a 1 GB body the same way it handles 1 KB. Tradeoff: the host-page origin makes the PUT request, but Supabase signed URLs return `Access-Control-Allow-Origin: *` so CORS is non-issue.
+
+**`originalSrcUrl` choice:** per §C.8 #7 — set to the page URL (Amazon product listing). Mirrors the EMBED branch's intent for blob:-source rows: when the underlying media has no fetchable URL, the page URL is the closest semantic equivalent. The URL detail page renderer uses this field only for analytics — playback comes from the storage path.
+
+### §C.17 Schema migration mechanics
+
+**The edit in `prisma/schema.prisma`:**
+
+```diff
+ enum VideoSourceType {
+   EMBED
+   DIRECT_BYTES
++  SCREEN_RECORDING
+ }
+```
+
+**The edit in `src/lib/shared-types/competition-scraping.ts`:**
+
+```diff
+-export const VIDEO_SOURCE_TYPES = ['EMBED', 'DIRECT_BYTES'] as const;
++export const VIDEO_SOURCE_TYPES = ['EMBED', 'DIRECT_BYTES', 'SCREEN_RECORDING'] as const;
+```
+
+**The migration command:** `npx prisma db push`. This is a Rule 9 destructive operation — director-Yes gate fires via AskUserQuestion before invocation. Schema-change-in-flight flag flips to **YES** at the moment the command runs; stays YES until the next deploy lands the new enum live on vklf.com (P-45 Build #2's expected scope).
+
+**Migration safety:** the change is purely additive (a new enum value). No existing rows are affected. The new value is accepted by all existing API routes (`finalizeVideoUpload` accepts any value matching the enum). No data backfill required.
+
+**Post-push verification (no Claude action required):** the `npx prisma db push` command prints a summary of the schema diff applied; success = the new enum value lives in `pg_enum` for the `VideoSourceType` type. Failure surfaces as a Postgres error in stdout; rollback would be `npx prisma db push` with the enum value removed (also additive-reversible — no data depends on it yet).
+
+### §C.18 Test-case enumeration
+
+**Node:test (unit) layer — record-controller.test.ts (~15-25 cases):**
+
+| # | Case |
+|---|---|
+| 1 | `start()` with valid stream resolves; state transitions idle → asking-tab → recording |
+| 2 | `start()` when getDisplayMedia rejects with NotAllowedError emits `onCanceled('dialog-dismissed')` |
+| 3 | `stop()` while recording transitions to stopped; `onStopped` fires with a Blob |
+| 4 | `stop()` is idempotent — second call no-ops |
+| 5 | `cancel()` while recording transitions to canceled; `onCanceled('user-cancel')` fires |
+| 6 | `cancel()` is idempotent |
+| 7 | `cancel()` after `stop()` is a no-op (no double-emit) |
+| 8 | Auto-stop fires at `maxDurationSeconds` |
+| 9 | `onTick` fires once per second with monotonically-increasing seconds |
+| 10 | MediaRecorder fallback to vp8 when vp9 unsupported |
+| 11 | MediaRecorder fallback to plain webm when both vp9 and vp8 unsupported |
+| 12 | `onCanceled('recorder-error', detail)` fires when MediaRecorder fires onerror |
+| 13 | All MediaStream tracks are stopped on stop |
+| 14 | All MediaStream tracks are stopped on cancel |
+| 15 | Tab visibility transition to hidden during recording triggers `cancel('tab-closed')` |
+| 16 | Region with width=0 or height=0 throws on start (invalid input) |
+| 17 | Region with odd dimensions is rounded to even before canvas sizing |
+| 18 | `durationSeconds` in `onStopped` result reflects wall-clock from start to stop |
+| 19 | `mimeType` in `onStopped` matches the picked MediaRecorder mimeType |
+| 20 | `getState()` returns correct value across all transitions |
+
+**Node:test (unit) layer — thumbnail-extraction.test.ts (~5-8 cases):**
+
+| # | Case |
+|---|---|
+| 1 | Given a valid webm Blob, returns a JPEG Blob |
+| 2 | JPEG quality is 0.85 |
+| 3 | Output dimensions match the recording's width/height |
+| 4 | Empty/zero-byte Blob returns null (no thumbnail) |
+| 5 | Decode error returns null (no thumbnail) — never throws |
+
+**Node:test (unit) layer — video-region-record-overlay.test.ts (~8-12 cases):**
+
+Largely mirrored from existing region-screenshot-overlay tests with sink swapped. Drag-rectangle math reuses `rectFromDrag` + `clampRectToViewport` from `region-screenshot.ts` — no new math to test.
+
+**Node:test (unit) layer — recording-indicator-overlay.test.ts (~5 cases):**
+
+| # | Case |
+|---|---|
+| 1 | Initial state shows PREPARING border + no countdown |
+| 2 | `setRecording()` switches to red border + REC badge + 0:00 countdown |
+| 3 | `setElapsed(seconds)` updates countdown text |
+| 4 | Stop button click fires `onStopClicked` |
+| 5 | Cancel button click fires `onCancelClicked` |
+| 6 | `destroy()` removes both DOM elements |
+
+**Playwright (extension-context integration) layer:** **DEFERRED to Build #2 or #3** per §C.6's implementation arc table. Reason: Playwright's headless Chrome can't pop the user-selection dialog for `getDisplayMedia`; meaningful integration coverage requires the dev-time happy-path walkthrough instead. The Build #1 Playwright count (94) stays unchanged.
+
+**Manual walkthrough layer:** the §C.18 dev-time happy-path walkthrough on Amazon is the integration test that Build #1 ships. Build #2 extends this to Amazon + Ebay + Walmart + Etsy.
+
+### §C.19 Sub-decisions defaulted this session
+
+These are the implementation-detail sub-decisions §C.0–§C.10 did not lock to full resolution. Per the Default-to-recommendation exception (HANDOFF_PROTOCOL Rule 14f), each was decided by Claude with the most-thorough/reliable path; recorded here for audit.
+
+| # | Sub-decision | Choice | Reasoning |
+|---|---|---|---|
+| 1 | Right-click menu title | "Record video for PLOS" | Distinct from existing "Add to PLOS — Captured Video" entry (avoids "Add to PLOS — Record Video" colliding visually). The verb-first phrasing makes the action clearer in a right-click menu. **THIS IS USER-VISIBLE** — surfaced as a Rule 14f picker at task #7 before code lands. |
+| 2 | Save-flow architecture | Smart-client (content-script orchestrates Phase 1+2+3; Phase 2 PUTs directly to Supabase) | Avoids the chrome.runtime.sendMessage size ceiling that a base64-through-message approach would hit for >50 MB recordings. Implementation detail per Rule 14d. |
+| 3 | MediaRecorder mimeType string | `'video/webm;codecs=vp9,opus'` with fallback to vp8 then plain webm | Matches §C.1 #8 locked decision; fallback covers embedded Chromium variants without breaking the happy path. |
+| 4 | Esc-key cancel listener registration | `window.addEventListener('keydown', handler, true)` (capture phase) | Mirrors region-screenshot-overlay.ts; capture phase ensures host page Esc handlers don't intercept. |
+| 5 | Visual indicator z-index | 2147483646 (one below int max) | Same scale as existing region-screenshot-overlay styles in styles.ts; guarantees we sit above any host-page modal. |
+| 6 | File-size warning toast copy | NOT NEEDED IN BUILD #1 — vp9 at 2.5 Mbps for 3 min ≤ 56 MB, safely under 100 MB cap | Defer to Build #2 if real recordings exceed projection. |
+| 7 | Recording indicator initial state during Chrome dialog | "PREPARING…" gray border + spinner | Covers the 1-2 sec gap between mouseup-on-region and MediaRecorder transitioning to recording; clearer than blank waiting. |
+| 8 | Cancel UX | Esc key + on-screen Cancel button + revoke MediaStream | §C.1 default-lock #9 confirmed: floating toolbar has a Cancel button; Esc also cancels per region-overlay precedent. |
+| 9 | Where the recording indicator + overlay live (DOM root) | `document.body.appendChild(...)` | Mirrors region-screenshot-overlay; works across all 4 supported platforms. |
+| 10 | What `originalSrcUrl` stores for SCREEN_RECORDING rows | Page URL (e.g., Amazon product listing URL) | §C.8 #7 confirmed: closest semantic equivalent to EMBED's iframe URL; analytics consumer reads this field. |
+
+### §C.20 Build #1 ship checklist
+
+Pre-flight (before any code):
+
+- [x] §C.11–§C.20 written + reviewed
+- [ ] Rule 9 director-Yes gate fires before `npx prisma db push`
+
+Code (in implementation order — each step verified independently):
+
+1. [ ] `prisma/schema.prisma` — add `SCREEN_RECORDING` value to `VideoSourceType` enum
+2. [ ] `src/lib/shared-types/competition-scraping.ts` — extend `VIDEO_SOURCE_TYPES` tuple + verify `isCapturedVideo` type-guard accepts the new value
+3. [ ] `npx prisma db push` (Rule 9 gate fires here)
+4. [ ] `extensions/competition-scraping/src/lib/screen-recording/record-controller.ts` + .test.ts
+5. [ ] `extensions/competition-scraping/src/lib/screen-recording/thumbnail-extraction.ts` + .test.ts
+6. [ ] `extensions/competition-scraping/src/lib/screen-recording/recording-bytes-upload.ts`
+7. [ ] `extensions/competition-scraping/src/lib/content-script/video-region-record-overlay.ts` + .test.ts
+8. [ ] `extensions/competition-scraping/src/lib/content-script/recording-indicator-overlay.ts` + .test.ts
+9. [ ] `extensions/competition-scraping/src/lib/content-script/messaging.ts` — add 3 new message types
+10. [ ] `extensions/competition-scraping/src/lib/content-script/api-bridge.ts` — add 2 new background-request helpers
+11. [ ] `extensions/competition-scraping/src/entrypoints/background.ts` — add menu registration + dispatch + Phase 1/3 handlers
+12. [ ] `extensions/competition-scraping/src/lib/content-script/orchestrator.ts` — add `enter-video-region-record-mode` branch
+13. [ ] `extensions/competition-scraping/src/lib/content-script/video-capture-form.ts` — add `kind: 'screen-recording'` branch + Save path
+14. [ ] `extensions/competition-scraping/src/lib/content-script/styles.ts` — add CSS for new overlays
+
+Verification:
+
+15. [ ] `npx tsc --noEmit` (root + extension)
+16. [ ] `npm test` in `extensions/competition-scraping/` — expect 495 + N new tests green
+17. [ ] `npm test` in `/workspaces/brand-operations-hub` (src/lib node:test) — expect 589 unchanged
+18. [ ] `npm run build` — expect 57 routes (no new API routes added)
+19. [ ] `npm run zip` — produces a fresh sideload zip (Rule 9 not triggered for zip; just artifact production)
+20. [ ] Dev-time happy-path verification on Amazon (director + Claude)
+
+End-of-session:
+
+21. [ ] /scoreboard (pre-end-of-session GREEN)
+22. [ ] /end-of-session — doc-batch + commit + push + Personalized Handoff (no deploy; Build #2 owns the deploy)
+
+---
+
+### §B 2026-05-22-d — `session_2026-05-22-d_p45-build-1a-screen-recording-engine-foundation` — Build #1a foundation slice mid-session decisions (scope-pacing 1a-vs-1-shot picker / menu label locked "Record video for PLOS" / §C.19 10 sub-decisions defaulted via Default-to-recommendation / save-flow smart-client architecture)
+
+- **Director said:**
+  - At the start-of-session Rule 14f menu-label picker — chose **"Record video for PLOS"** (verb-first phrasing) over the parallel-pattern option "Add to PLOS — Record Video." Reasoning explicitly accepted: verb-first is more distinct from the existing "Add to PLOS — Captured Video" entry than the parallel-pattern option, which reduces user confusion at the right-click moment between fast-fetch capture vs. screen-recording capture.
+  - At the mid-Phase-2 Rule 14f scope-pacing forced-picker (fired when the original "single Build #1" framing surfaced as risking a 4-5 hour single-shot push past Rule 13's 90-minute trigger combining a Rule 9 destructive op + >1 hour of dependent code + a director-cooperation dev-verify step), chose **Option A: split 1a foundation + 1b wiring** (recommended per most-thorough/reliable per `feedback_recommendation_style.md`) over Option B (continue as single Build #1 single-shot) and Option C (narrow MVE).
+  - At the Rule 9 destructive-op gate for `npx prisma db push`, gave director-Yes via AskUserQuestion picker. Push succeeded in 1.18s. SCREEN_RECORDING enum value is live on Supabase as of 14:09 UTC this session.
+  - At the §C.19 sub-decision batch (10 implementation-detail items: codec MIME preference list / region-validator min dimensions / countdown timer cadence / stop button position / canvas-crop strategy / first-frame timing / failure-mode toast copy / mediaStream-track-end auto-stop wiring / form pre-fill default values / floating Stop toolbar dismissal behavior), defaulted to Claude's recommendations per `feedback_default_to_recommendation.md` — each defaulted decision is reversible at any time during Build #1b or later.
+
+- **Alternatives considered:**
+
+  **(1) Scope pacing — 1a + 1b split vs. single-shot Build #1 vs. narrow MVE.** The original Build #1 framing in (a.63) listed 6 deliverables: §C deepening, record-controller, overlay fork, menu wiring, indicator overlay, schema migration, dev-time verify. Approximate session time: 4-5 hours of careful work. Rule 13's 90-minute trigger had already fired by hour 2 of Phase 1 design deepening. Options:
+    - (a) **Continue as single Build #1 single-shot** — preserves the original (a.63) framing. Risk: session would chain a Rule 9 destructive op (mid-Phase-2) + ~2-3 hours of dependent code + a director-cooperation dev-verify step in a single window. Fatigue on any of those three multiplies risk.
+    - (b) **Split 1a foundation + 1b wiring (recommended).** 1a ships the destructive op + the pure-engine foundation (record-controller + tests + validator + API route broadening). 1b ships the wiring (overlay fork + indicator + orchestrator/form/menu integration + thumbnail-extraction + smart-client recording-bytes-upload + dev-time verify). The split keeps each session within Rule 13's 90-minute window + cleanly separates the destructive-op session from the dev-cooperation session.
+    - (c) **Narrow MVE — drop the in-progress visual indicator + the floating Stop toolbar from Build #1 entirely.** Saves ~30-45 min. Trade-off: ships a Build #1 that doesn't visually confirm recording is happening, which would hurt the dev-time verify UX. Not chosen.
+
+  **(2) Menu label — "Record video for PLOS" (verb-first) vs. "Add to PLOS — Record Video" (parallel-pattern).** The existing right-click menu has "Add to PLOS — Captured Video" for the fast-fetch path. Options:
+    - **"Record video for PLOS" (chosen)** — verb-first phrasing; more distinct from the fast-fetch entry; reads as a different action at the right-click moment.
+    - "Add to PLOS — Record Video" — parallel to existing entry; consistent menu grammar; risk of users misreading at the right-click moment as "another way to add the same captured video."
+    - "PLOS: Record video" — colon-prefix variant; matches some browser-native menu conventions; rejected as less idiomatic for extension menus.
+
+  **(3) Save-flow architecture — smart-client (chosen) vs. base64-through-chrome.runtime.sendMessage vs. content-script-relay-PUT-from-background.** The recorded webm file can reach Supabase via three architectures:
+    - **Smart-client (chosen)** — content-script orchestrates Phase 1 (requestVideoUpload via background) + Phase 2 (PUT video bytes directly to Supabase signed URL from content-script origin) + Phase 3 (finalizeVideoUpload via background). No size ceiling (fetch handles 1 GB the same as 1 KB). Supabase signed URLs return `Access-Control-Allow-Origin: *` so CORS is a non-issue from a content-script origin.
+    - base64-through-chrome.runtime.sendMessage — content-script base64-encodes the Blob + sends via chrome.runtime.sendMessage to background → background PUTs to Supabase. Practical size ceiling around 64 MB on chrome.runtime.sendMessage; base64 adds ~33% overhead. Rejected as size-bound.
+    - Content-script-fetches-signed-URL-then-relays-bytes-to-background — content-script gets the signed URL from background, fetches the file, sends bytes to background. Same size ceiling problem as base64. Rejected.
+
+  **(4) §C.19 sub-decisions (10 items defaulted via Default-to-recommendation).** Each item had 2-4 plausible options surfaced + Claude's recommendation marked with the most-thorough/reliable marker per `feedback_recommendation_style.md`. Director's "default to your recommendations and proceed" stance applies per `feedback_default_to_recommendation.md`. The 10 items are listed in §C.19 with reasoning for each defaulted choice; each is reversible during Build #1b or later if real-world use surfaces a different need.
+
+- **Decision:**
+  1. **Phase 1 design deepening** — §C.11-§C.20 appended below the existing §C.0-§C.10 outline per Rule 18 append-only; original outline untouched. The deepened block carries: §C.11 file layout + module boundaries (1 new directory + 6 new files + 9 file edits per the layout table); §C.12 record-controller state machine + interface; §C.13 video-region-record-overlay fork specification; §C.14 right-click menu wiring (with the locked label "Record video for PLOS"); §C.15 in-progress visual indicator + floating Stop toolbar; §C.16 save-flow detail (smart-client architecture); §C.17 schema migration mechanics; §C.18 test-case enumeration (~5-25 cases per new file); §C.19 sub-decisions defaulted this session (10 items); §C.20 Build #1 ship checklist (split into 1a + 1b sub-checklists).
+  2. **Phase 2 (1a) foundation slice SHIPPED** — schema migration via `prisma db push` (Rule 9 director-Yes gate) + `record-controller.ts` ~280 LOC + 29 node:test cases + `isFinalizeVideoUploadRequest` validator broadening + finalize-route bytes-required gate broadening + list-route signed-URL minting gate broadening. Build commit `7e2eb2c`.
+  3. **Phase 2 (1b) wiring slice DEFERRED to next session** — captured as binding inputs in NEXT_SESSION.md, not as orphan TaskList DEFERRED items per Rule 26's intent.
+  4. **No deploy this session** — no main push; no ff-merge; no Vercel redeploy; no fresh extension zip (no orchestrator wiring landed yet, so a zip would surface a foundation-only bundle with no user-visible surface change vs. Build #8 deploy zip).
+  5. **Schema-change-in-flight flag flipped to YES** at the moment of `prisma db push`; stays YES at session end until P-45 Build #2 deploys the new enum value live on vklf.com.
+
+- **Reasoning:**
+  - **(1) The 1a/1b split is the recommended-most-thorough/reliable option.** Per `feedback_recommendation_style.md`, the recommendation should be the most-thorough/reliable option, not the fastest/cheapest. The single-shot Build #1 was fastest but risked compounded fatigue across destructive-op + wiring + dev-verify in one window. The narrow MVE was cheapest but would have shipped a Build #1 that doesn't visually confirm recording — hurting the dev-time verify UX. The split is most-thorough/reliable because (a) the destructive op happens in a session with no fatigue-risk for the gate decision, (b) the wiring happens with the foundation already validated, (c) the dev-time verify happens with a complete user-visible surface to walk, and (d) each session stays within Rule 13's 90-minute window.
+  - **(2) Verb-first menu label is the more UX-distinct option at the right-click moment.** When the user right-clicks on a video element, the menu shows multiple PLOS entries (the existing "Add to PLOS — Captured Video" + potentially others). Distinct labels reduce mis-pick risk. "Record video for PLOS" reads as a fundamentally different action than "Add to PLOS — Captured Video"; "Add to PLOS — Record Video" reads as a variant of the same action. The user can't accidentally pick the wrong path with the verb-first label.
+  - **(3) Smart-client save-flow has no size ceiling + Supabase CORS is permissive.** chrome.runtime.sendMessage has a practical size ceiling around 64 MB (varies by Chrome version). The P-45 cap is 100 MB (matches the existing CapturedVideo bucket file-size limit). Smart-client routes Phase 2 (the PUT of video bytes) directly from content-script origin to Supabase — no Chrome IPC in the critical path. Supabase signed URLs return `Access-Control-Allow-Origin: *` so CORS is a non-issue from a content-script origin. Verified at design time by reading the Supabase storage docs + the existing DIRECT_BYTES path's PUT-from-content-script architecture (which already works the same way for fast-fetch video bytes).
+  - **(4) §C.19 defaults are reversible.** Each of the 10 items defaulted this session is a small-stakes implementation detail that can be reversed during Build #1b or any subsequent session. Captured for traceability per Rule 18; not binding beyond Build #1b's first implementation pass.
+  - **(5) Test regression caught + fixed within the scoreboard pass.** The `VIDEO_SOURCE_TYPES` deepEqual assertion in `src/lib/shared-types/competition-scraping.test.ts:177` held the prior tuple verbatim — when the enum tuple was extended from `['EMBED', 'DIRECT_BYTES']` to `['EMBED', 'DIRECT_BYTES', 'SCREEN_RECORDING']`, the assertion failed at the first scoreboard run. Fix: update the deepEqual expected value + add a new `isVideoSourceType('SCREEN_RECORDING')` test case. Re-ran in <2 minutes; baseline confirmed 590/590. Normal test-update-with-schema-change, not a corrections-tier slip — the failing test caught the schema change exactly as it was supposed to.
+
+- **Impact on §A + §C:**
+  - **§A still holds** — fast-fetch DIRECT_BYTES + EMBED branches continue to serve plain-HTTPS-source sites unchanged. The shared `isFinalizeVideoUploadRequest` validator now accepts SCREEN_RECORDING as a third variant; the broadening is additive (the prior two variants still validate exactly as before).
+  - **§A.7 schema spec DELTA SHIPPED** — `VideoSourceType` enum gained `SCREEN_RECORDING` value via `npx prisma db push` this session. Schema-change-in-flight flag stays YES until P-45 Build #2 deploys the new enum live on vklf.com.
+  - **§C.0-§C.10 outline untouched** — original interview-cluster outline preserved per Rule 18 append-only.
+  - **NEW §C.11-§C.20 deepening block** appended below §C.10. The deepened block is binding spec for Build #1b; do NOT re-litigate at implementation time per Rule 18 interview-cluster pattern.
+  - **§C.20 ship checklist** split into 1a (foundation, ✅ complete this session) + 1b (wiring, opens via (a.64)) sub-checklists.
 
 ---
 
