@@ -407,12 +407,15 @@ model CapturedVideo {
   @@index([competitorUrlId, videoCategory])
 }
 
-// VideoSourceType — Prisma enum discriminator for CapturedVideo rows per §A.7.
+// VideoSourceType — Prisma enum discriminator for CapturedVideo rows per §A.7 + §C.1 #12.
 // EMBED = YouTube/Vimeo/etc. reference (URL only, no bytes).
 // DIRECT_BYTES = uploaded video file (bytes in competition-scraping-videos bucket).
+// SCREEN_RECORDING = recorded webm clip via getDisplayMedia + MediaRecorder (P-45 2026-05-22).
+//   Bytes stored in the same bucket as DIRECT_BYTES; originalSrcUrl stores the page URL.
 enum VideoSourceType {
   EMBED
   DIRECT_BYTES
+  SCREEN_RECORDING
 }
 
 // VocabularyEntry — platform-shared vocabularies per PLATFORM_REQUIREMENTS.md §8.4.

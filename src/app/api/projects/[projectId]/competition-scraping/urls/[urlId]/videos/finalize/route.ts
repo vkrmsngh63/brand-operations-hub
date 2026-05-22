@@ -152,8 +152,9 @@ export async function POST(
     );
   }
 
-  // DIRECT_BYTES branch — verify storage objects before persisting the row.
-  if (body.sourceType === 'DIRECT_BYTES') {
+  // Bytes-bearing branch (DIRECT_BYTES + SCREEN_RECORDING per P-45 2026-05-22) —
+  // verify storage objects before persisting the row.
+  if (body.sourceType === 'DIRECT_BYTES' || body.sourceType === 'SCREEN_RECORDING') {
     try {
       const verified = await finalizeVideoUpload({
         videoStoragePath: body.videoStoragePath!,
@@ -198,26 +199,27 @@ export async function POST(
     }
   }
 
-  const isDirectBytes = body.sourceType === 'DIRECT_BYTES';
+  const hasStoredBytes =
+    body.sourceType === 'DIRECT_BYTES' || body.sourceType === 'SCREEN_RECORDING';
   const data: Prisma.CapturedVideoUncheckedCreateInput = {
     clientId: body.clientId,
     competitorUrlId: urlId,
     projectId,
     sourceType: body.sourceType,
     originalSrcUrl: body.originalSrcUrl,
-    storagePath: isDirectBytes ? (body.videoStoragePath ?? null) : null,
-    storageBucket: isDirectBytes ? COMPETITION_SCRAPING_VIDEOS_BUCKET : null,
-    fileSize: isDirectBytes && typeof body.fileSize === 'number' ? body.fileSize : null,
-    mimeType: isDirectBytes && body.mimeType ? body.mimeType : null,
+    storagePath: hasStoredBytes ? (body.videoStoragePath ?? null) : null,
+    storageBucket: hasStoredBytes ? COMPETITION_SCRAPING_VIDEOS_BUCKET : null,
+    fileSize: hasStoredBytes && typeof body.fileSize === 'number' ? body.fileSize : null,
+    mimeType: hasStoredBytes && body.mimeType ? body.mimeType : null,
     durationSeconds:
-      isDirectBytes && typeof body.durationSeconds === 'number'
+      hasStoredBytes && typeof body.durationSeconds === 'number'
         ? body.durationSeconds
         : null,
-    width: isDirectBytes && typeof body.width === 'number' ? body.width : null,
+    width: hasStoredBytes && typeof body.width === 'number' ? body.width : null,
     height:
-      isDirectBytes && typeof body.height === 'number' ? body.height : null,
+      hasStoredBytes && typeof body.height === 'number' ? body.height : null,
     thumbnailStoragePath:
-      isDirectBytes && body.thumbnailStoragePath
+      hasStoredBytes && body.thumbnailStoragePath
         ? body.thumbnailStoragePath
         : null,
     videoCategory:

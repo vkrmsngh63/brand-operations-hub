@@ -118,7 +118,13 @@ export async function GET(
     const wire: CapturedVideoWithUrls[] = await Promise.all(
       rows.map(async (r) => {
         const base = toWireShape(r)!;
-        if (base.sourceType !== 'DIRECT_BYTES' || !base.storagePath) {
+        // Bytes-bearing rows (DIRECT_BYTES + SCREEN_RECORDING per P-45 2026-05-22)
+        // get a playable signed URL minted; EMBED rows skip both (renderer plays
+        // via <iframe src=originalSrcUrl>).
+        const hasStoredBytes =
+          base.sourceType === 'DIRECT_BYTES' ||
+          base.sourceType === 'SCREEN_RECORDING';
+        if (!hasStoredBytes || !base.storagePath) {
           return { ...base, videoUrl: null, thumbnailUrl: null };
         }
         const [videoUrl, thumbnailUrl] = await Promise.all([

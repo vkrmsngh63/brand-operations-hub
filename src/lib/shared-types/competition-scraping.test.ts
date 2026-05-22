@@ -174,7 +174,16 @@ test('isVideoSourceType — rejects everything outside the closed vocabulary', (
 });
 
 test('VIDEO_SOURCE_TYPES — vocabulary matches the Prisma enum order', () => {
-  assert.deepEqual([...VIDEO_SOURCE_TYPES], ['EMBED', 'DIRECT_BYTES']);
+  // SCREEN_RECORDING added 2026-05-22 for P-45 — third bytes-bearing variant
+  // alongside DIRECT_BYTES; bytes flow through the same Phase 2 upload path.
+  assert.deepEqual(
+    [...VIDEO_SOURCE_TYPES],
+    ['EMBED', 'DIRECT_BYTES', 'SCREEN_RECORDING']
+  );
+});
+
+test('isVideoSourceType — accepts SCREEN_RECORDING (P-45)', () => {
+  assert.equal(isVideoSourceType('SCREEN_RECORDING'), true);
 });
 
 test('VIDEO_UPLOAD_MAX_BYTES — 100 MB per design doc §A.10', () => {

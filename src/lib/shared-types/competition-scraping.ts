@@ -611,8 +611,12 @@ export const VIDEO_UPLOAD_MAX_BYTES = 100 * 1024 * 1024;
 
 // Video source-type discriminator matching the Prisma `VideoSourceType` enum
 // at prisma/schema.prisma. EMBED rows have a YouTube/Vimeo URL only (no
-// bytes); DIRECT_BYTES rows have uploaded video bytes in Supabase Storage.
-export const VIDEO_SOURCE_TYPES = ['EMBED', 'DIRECT_BYTES'] as const;
+// bytes); DIRECT_BYTES rows have uploaded video bytes in Supabase Storage;
+// SCREEN_RECORDING rows (P-45 2026-05-22) hold a webm clip captured via
+// getDisplayMedia + MediaRecorder, with bytes stored in the same bucket as
+// DIRECT_BYTES and `originalSrcUrl` storing the page URL (the closest
+// semantic equivalent for blob:-source recordings — see CAPTURED_VIDEOS_DESIGN.md §C.16).
+export const VIDEO_SOURCE_TYPES = ['EMBED', 'DIRECT_BYTES', 'SCREEN_RECORDING'] as const;
 export type VideoSourceType = (typeof VIDEO_SOURCE_TYPES)[number];
 
 export function isVideoSourceType(value: unknown): value is VideoSourceType {
@@ -814,7 +818,9 @@ export function isFinalizeVideoUploadRequest(
   ) {
     return false;
   }
-  if (v.sourceType === 'DIRECT_BYTES') {
+  // SCREEN_RECORDING (P-45 2026-05-22) is a third bytes-bearing variant —
+  // requires the same capturedVideoId + videoStoragePath as DIRECT_BYTES.
+  if (v.sourceType === 'DIRECT_BYTES' || v.sourceType === 'SCREEN_RECORDING') {
     if (
       typeof v.capturedVideoId !== 'string' ||
       v.capturedVideoId.trim().length === 0
@@ -827,8 +833,8 @@ export function isFinalizeVideoUploadRequest(
     ) {
       return false;
     }
-    // thumbnailStoragePath OPTIONAL — absent when canvas frame-grab failed
-    // per §A.12; the row stores NULL and the renderer falls back to the
+    // thumbnailStoragePath OPTIONAL — absent when frame-grab failed per
+    // §A.12; the row stores NULL and the renderer falls back to the
     // generic icon. mimeType / fileSize / durationSeconds / width / height
     // are all optional metadata (server tolerates missing).
   }
