@@ -10,7 +10,7 @@ Run the canonical PLOS pre-deploy + post-merge verification scoreboard. This is 
 ### Check 1: Root tsc
 
 ```bash
-npx tsc --noEmit 2>&1 | tail -5
+cd /workspaces/brand-operations-hub && npx tsc --noEmit 2>&1 | tail -5
 ```
 
 Empty output = clean. Any error output = red.
@@ -18,7 +18,7 @@ Empty output = clean. Any error output = red.
 ### Check 2: Extension tsc
 
 ```bash
-cd extensions/competition-scraping && npx tsc --noEmit 2>&1 | tail -5
+cd /workspaces/brand-operations-hub/extensions/competition-scraping && npx tsc --noEmit 2>&1 | tail -5
 ```
 
 Empty output = clean. Any error output = red.
@@ -26,7 +26,7 @@ Empty output = clean. Any error output = red.
 ### Check 3: Extension node:test suite
 
 ```bash
-cd extensions/competition-scraping && npm test 2>&1 | tail -10
+cd /workspaces/brand-operations-hub/extensions/competition-scraping && npm test 2>&1 | tail -10
 ```
 
 Look for the `ℹ tests N` + `ℹ pass N` lines. If `fail N` is non-zero, red.
@@ -34,7 +34,7 @@ Look for the `ℹ tests N` + `ℹ pass N` lines. If `fail N` is non-zero, red.
 ### Check 4: src/lib node:test suite (server-side)
 
 ```bash
-cd /workspaces/brand-operations-hub && node --test --experimental-strip-types $(find src/lib -name '*.test.ts') 2>&1 | tail -10
+cd /workspaces/brand-operations-hub && node --test --experimental-strip-types $(find /workspaces/brand-operations-hub/src/lib -name '*.test.ts') 2>&1 | tail -10
 ```
 
 Same shape as Check 3.
@@ -51,7 +51,7 @@ Look for `✓ Compiled successfully` line. Count visible routes via:
 cd /workspaces/brand-operations-hub && npm run build 2>&1 | grep -E "^[├└─].*[ƒ○]" | wc -l
 ```
 
-Expected: 53 routes (current baseline as of 2026-05-19-g). Drift up = new route added; drift down = route removed.
+Expected: 57 routes (current baseline as of 2026-05-22-g). Drift up = new route added; drift down = route removed.
 
 ### Check 6: Playwright suite (chromium + extension projects)
 
@@ -64,7 +64,7 @@ Reports per-spec results + final `N passed` count. Any `failed` line = red.
 **NOTE on the extension Playwright suite:** the fixtures in `tests/playwright/extension/fixtures.ts` load the EXTENSION dist at `extensions/competition-scraping/.output/chrome-mv3/`. If you've edited extension source since the last build, you MUST rebuild the extension before running Playwright OR you'll exercise a stale build:
 
 ```bash
-cd extensions/competition-scraping && npm run build 2>&1 | tail -5
+cd /workspaces/brand-operations-hub/extensions/competition-scraping && npm run build 2>&1 | tail -5
 ```
 
 **KNOWN ISSUE:** `wxt build` writes the dist correctly at the ~5-second mark but the parent node process can hang indefinitely afterward. If the build process hangs >30 seconds AND the dist files are visible at `.output/chrome-mv3/manifest.json`, kill the process (`pkill -f "wxt build"`) — the dist artifact is valid. Captured to CORRECTIONS_LOG 2026-05-19-f + 2026-05-19-g.
@@ -82,12 +82,12 @@ After all 6 checks complete, present results in a table:
 | extension `npm test` | **N/N** | unchanged / +Δ / -Δ |
 | Playwright | **N/N** | unchanged / +Δ / -Δ |
 
-Recent baselines (as of 2026-05-19-g):
+Recent baselines (as of 2026-05-22-g):
 - Root tsc: clean
 - Extension tsc: clean
-- npm run build: 53 routes
-- src/lib node:test: 536/536
-- extension `npm test`: 428/428
-- Playwright: 79/79
+- npm run build: 57 routes
+- src/lib node:test: 590/590
+- extension `npm test`: 558/558
+- Playwright: 94/94
 
 Flag any red. Flag any unexpected delta (e.g., test count dropped — could indicate a deleted test).

@@ -100,14 +100,14 @@ Match the existing pattern in the affected files (sibling code conventions). Reu
 Most recent polish items used Hybrid coverage (Option A from the Rule 27 forced-picker): pure-helper node:test cases + 1 Playwright extension-context spec. Match that pattern.
 
 ```bash
-cd extensions/competition-scraping && npm test 2>&1 | tail -10  # node:test
-cd /workspaces/brand-operations-hub && node --test --experimental-strip-types $(find src/lib -name '*.test.ts') 2>&1 | tail -10  # if server-side change
+cd /workspaces/brand-operations-hub/extensions/competition-scraping && npm test 2>&1 | tail -10  # node:test
+cd /workspaces/brand-operations-hub && node --test --experimental-strip-types $(find /workspaces/brand-operations-hub/src/lib -name '*.test.ts') 2>&1 | tail -10  # if server-side change
 ```
 
 Then build the extension dist + run Playwright:
 
 ```bash
-cd extensions/competition-scraping && npm run build  # then kill wxt process if it hangs after dist is on disk
+cd /workspaces/brand-operations-hub/extensions/competition-scraping && npm run build  # then kill wxt process if it hangs after dist is on disk
 cd /workspaces/brand-operations-hub && npm run test:e2e:all 2>&1 | tail -20
 ```
 

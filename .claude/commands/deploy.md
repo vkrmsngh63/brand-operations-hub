@@ -24,13 +24,13 @@ If anything's off → STOP and flag to director.
 
 Run `/scoreboard` to verify the 6-check pre-deploy state. All should be GREEN. Capture the deltas vs. baseline for the doc-batch later.
 
-Expected baselines as of 2026-05-19-g (update if you see drift):
+Expected baselines as of 2026-05-22-g (update if you see drift):
 - Root tsc: clean
 - Extension tsc: clean
-- npm run build: 53 routes
-- src/lib node:test: 536/536
-- extension `npm test`: 428/428
-- Playwright: 79/79
+- npm run build: 57 routes
+- src/lib node:test: 590/590
+- extension `npm test`: 558/558
+- Playwright: 94/94
 
 If anything is RED → STOP. Fix the failure before deploying.
 
@@ -98,7 +98,7 @@ Both branches should be at the same SHA on origin now.
 If this deploy includes Chrome extension code changes, build a fresh zip the director will sideload:
 
 ```bash
-cd extensions/competition-scraping && rm -rf .output && npm run zip
+cd /workspaces/brand-operations-hub/extensions/competition-scraping && rm -rf .output && npm run zip
 ```
 
 **Known issue:** `wxt build` / `wxt zip` writes the dist correctly at ~5-second mark but the parent process can hang indefinitely. If the process hangs >30 seconds AND `.output/competition-scraping-extension-0.1.0-chrome.zip` exists with non-zero size, kill the process — the zip artifact is valid:
