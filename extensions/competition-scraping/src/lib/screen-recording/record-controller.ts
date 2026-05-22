@@ -113,9 +113,23 @@ export interface RecordController {
 
 // ─── Dependency-injection surface ───────────────────────────────────────
 
+/** Cropped MediaStream + a teardown handle (the rAF loop + hidden video +
+ *  canvas need explicit cleanup on stop/cancel; otherwise the rAF keeps
+ *  running after the recording is finalized). */
+export interface CroppedStream {
+  stream: MediaStream;
+  teardown(): void;
+}
+
 /** The browser APIs the controller depends on. Production wires these to
  *  navigator.mediaDevices, MediaRecorder, performance.now(), window.setTimeout,
- *  etc. Tests pass fakes. */
+ *  etc. Tests pass fakes.
+ *
+ *  `cropStreamToRegion` is OPTIONAL per P-45 Build #1b: the canvas-crop
+ *  pipeline (rAF + drawImage + canvas.captureStream) needs a real DOM
+ *  context. Production provides the canvas-based implementation; tests
+ *  that don't pass it get the raw stream back (no crop). This keeps the
+ *  1a state-machine tests working unchanged after 1b adds the pipeline. */
 export interface RecordControllerDeps {
   getDisplayMedia(constraints: {
     video: boolean;
@@ -131,6 +145,12 @@ export interface RecordControllerDeps {
   clearTimeout(handle: unknown): void;
   setInterval(handler: () => void, ms: number): unknown;
   clearInterval(handle: unknown): void;
+  /** Wraps the raw screen-capture MediaStream in a canvas-crop pipeline
+   *  that reduces the recorded surface to `region`. When undefined, the
+   *  raw stream is recorded (no crop) — used by 1a state-machine tests
+   *  + by integration scenarios where the user picks a region matching
+   *  the picked tab. */
+  cropStreamToRegion?(stream: MediaStream, region: Rect): CroppedStream;
 }
 
 export function createProductionDeps(): RecordControllerDeps {
@@ -166,6 +186,81 @@ export function createProductionDeps(): RecordControllerDeps {
     },
     clearInterval(handle) {
       globalThis.clearInterval(handle as ReturnType<typeof setInterval>);
+    },
+    cropStreamToRegion: productionCropStreamToRegion,
+  };
+}
+
+/** Production canvas-crop pipeline. Per CAPTURED_VIDEOS_DESIGN.md §C.12
+ *  step 3-5: hidden <video> plays the raw screen-capture stream; an rAF
+ *  loop draws the region slice onto a canvas; canvas.captureStream(30)
+ *  gives a region-cropped MediaStream; we merge in any audio tracks from
+ *  the original stream so the recording still has sound.
+ *
+ *  Teardown stops the rAF loop + removes the hidden video element. The
+ *  caller's teardownStream() handles the underlying MediaStream tracks
+ *  separately (both the raw stream + the cropped canvas-captureStream's
+ *  video track). */
+function productionCropStreamToRegion(
+  sourceStream: MediaStream,
+  region: Rect,
+): CroppedStream {
+  const video = document.createElement('video');
+  video.muted = true;
+  video.playsInline = true;
+  video.srcObject = sourceStream;
+  // Detached from the document — no need to render; canvas reads frames
+  // straight from the video element regardless.
+  void video.play().catch(() => {
+    // Defensive — autoplay policy shouldn't fire on muted video, but if
+    // it does the rAF loop will just paint stale frames until the user
+    // gestures (which they did to invoke this in the first place).
+  });
+
+  const canvas = document.createElement('canvas');
+  canvas.width = region.width;
+  canvas.height = region.height;
+  const ctx = canvas.getContext('2d');
+
+  let rafHandle = 0;
+  function paintFrame(): void {
+    if (ctx !== null && video.readyState >= 2) {
+      ctx.drawImage(
+        video,
+        region.x,
+        region.y,
+        region.width,
+        region.height,
+        0,
+        0,
+        region.width,
+        region.height,
+      );
+    }
+    rafHandle = requestAnimationFrame(paintFrame);
+  }
+  rafHandle = requestAnimationFrame(paintFrame);
+
+  // canvas.captureStream(fps) produces a video-only MediaStream. Merge in
+  // the original stream's audio tracks so the recording has sound.
+  const croppedStream = canvas.captureStream(30);
+  for (const audioTrack of sourceStream.getAudioTracks()) {
+    croppedStream.addTrack(audioTrack);
+  }
+
+  return {
+    stream: croppedStream,
+    teardown() {
+      if (rafHandle !== 0) {
+        cancelAnimationFrame(rafHandle);
+        rafHandle = 0;
+      }
+      try {
+        video.pause();
+      } catch {
+        // Defensive.
+      }
+      video.srcObject = null;
     },
   };
 }
@@ -213,6 +308,10 @@ export function createRecordController(
 ): RecordController {
   let state: RecordControllerState = 'idle';
   let stream: MediaStream | null = null;
+  /** The cropped stream wrapper (when canvas-crop is active). Distinct
+   *  from `stream` so teardown can stop the rAF loop + the original
+   *  screen-capture tracks independently. */
+  let cropped: CroppedStream | null = null;
   let recorder: MediaRecorder | null = null;
   let chunks: Blob[] = [];
   let mimeType = '';
@@ -225,6 +324,16 @@ export function createRecordController(
   let stoppedEmitted = false;
 
   function teardownStream(): void {
+    // Tear down the cropped pipeline FIRST so its rAF loop stops before
+    // we kill the underlying video tracks (avoids one wasted frame).
+    if (cropped !== null) {
+      try {
+        cropped.teardown();
+      } catch {
+        // Defensive.
+      }
+      cropped = null;
+    }
     if (stream !== null) {
       try {
         for (const track of stream.getTracks()) track.stop();
@@ -317,9 +426,29 @@ export function createRecordController(
     }
     stream = mediaStream;
 
+    // P-45 Build #1b — apply the canvas-crop region constraint. When
+    // deps.cropStreamToRegion is provided (production), we feed
+    // MediaRecorder the region-cropped stream so the recorded video is
+    // limited to the user's drawn rectangle. When omitted (1a tests +
+    // simple integration), the raw screen-capture stream is recorded as
+    // shipped in 1a — the region metadata still threads through to
+    // onStopped for the row's width/height fields.
+    let streamToRecord: MediaStream = mediaStream;
+    if (deps.cropStreamToRegion) {
+      try {
+        cropped = deps.cropStreamToRegion(mediaStream, normalizedRegion);
+        streamToRecord = cropped.stream;
+      } catch (err) {
+        const detail =
+          err instanceof Error ? err.message : 'canvas-crop pipeline failed';
+        cancelWith('recorder-error', detail);
+        return;
+      }
+    }
+
     mimeType = pickRecordingMimeType(deps.isTypeSupported);
     try {
-      recorder = deps.createMediaRecorder(mediaStream, {
+      recorder = deps.createMediaRecorder(streamToRecord, {
         mimeType,
         videoBitsPerSecond: VIDEO_BITS_PER_SECOND_DEFAULT,
       });

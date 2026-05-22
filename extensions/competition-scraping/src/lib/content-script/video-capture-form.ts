@@ -42,6 +42,11 @@ import type {
   Platform,
 } from '../../../../../src/lib/shared-types/competition-scraping.ts';
 import { isAcceptedVideoMimeType } from '../../../../../src/lib/shared-types/competition-scraping.ts';
+import { extractFirstFrameThumbnail } from '../screen-recording/thumbnail-extraction.ts';
+import {
+  normalizeBlobMime,
+  uploadScreenRecording,
+} from '../screen-recording/recording-bytes-upload.ts';
 import { getPlatformLabel } from '../platforms.ts';
 import { getModuleByPlatform } from '../platform-modules/registry.ts';
 import { pickInitialUrl } from '../captured-text-validation.ts';
@@ -66,6 +71,33 @@ export interface VideoCaptureFormDirectProps {
    * frame-grab (canvas.drawImage requires the live element, not just a
    * URL). Also read for dimensions + duration. */
   element: HTMLVideoElement;
+  pageUrl: string;
+  projectId: string;
+  projectName: string | null;
+  platform: Platform;
+  onSaved(): void;
+  onClose(): void;
+}
+
+/** Screen-recording branch props — user invoked "Record video for PLOS"
+ *  via right-click, drew a region, recorded for ≤ 3 min, clicked Stop. The
+ *  RecordController's onStopped result fills these props. */
+export interface VideoCaptureFormScreenRecordingProps {
+  kind: 'screen-recording';
+  /** The MediaRecorder webm Blob — bytes go directly to Supabase via the
+   *  smart-client orchestrator (no Chrome IPC for the critical path). */
+  blob: Blob;
+  /** Full MIME from MediaRecorder (e.g. 'video/webm;codecs=vp9,opus'). The
+   *  smart-client orchestrator normalizes this to the base 'video/webm'
+   *  for the server-side validator. */
+  mimeType: string;
+  /** Wall-clock duration from start() to stop(). */
+  durationSeconds: number;
+  /** Validated + normalized recording region in viewport coords. */
+  width: number;
+  height: number;
+  /** Page URL where the user invoked recording — lands on the row's
+   *  originalSrcUrl per §C.16 (recordings have no fetchable URL). */
   pageUrl: string;
   projectId: string;
   projectName: string | null;
@@ -104,6 +136,7 @@ export interface VideoCaptureFormEmbedProps {
 // only.
 export type VideoCaptureFormProps =
   | VideoCaptureFormDirectProps
+  | VideoCaptureFormScreenRecordingProps
   | VideoCaptureFormEmbedProps;
 
 export interface VideoCaptureForm {
@@ -177,6 +210,10 @@ export function openVideoCaptureForm(
   if (props.kind === 'direct') {
     sourceBanner.textContent =
       'Direct video — will upload the video file plus a thumbnail frame.';
+  } else if (props.kind === 'screen-recording') {
+    const sizeMb = (props.blob.size / (1024 * 1024)).toFixed(1);
+    const durSec = Math.round(props.durationSeconds);
+    sourceBanner.textContent = `Screen recording (${String(durSec)}s, ${sizeMb} MB) — will upload the recording plus a first-frame thumbnail.`;
   } else {
     const human =
       props.embedPlatform.charAt(0).toUpperCase() +
@@ -288,6 +325,31 @@ export function openVideoCaptureForm(
         showPreviewUnavailable();
       }
     }, 5000);
+  } else if (props.kind === 'screen-recording') {
+    // Preview the recording inline with native controls so the user can
+    // confirm what they're saving + scrub through if needed. Blob is
+    // already in-memory; createObjectURL is instant. URL is revoked on
+    // form destroy.
+    const previewVideo = document.createElement('video');
+    previewVideo.className = 'plos-cs-form-image-preview';
+    previewVideo.controls = true;
+    previewVideo.muted = true;
+    previewVideo.style.maxHeight = '200px';
+    previewVideo.style.maxWidth = '100%';
+    const blobUrl = URL.createObjectURL(props.blob);
+    previewVideo.src = blobUrl;
+    // Stash the URL on the element so the form destroy handler can revoke
+    // it (avoids a small leak — Chrome eventually GCs but we shouldn't
+    // rely on that).
+    (previewVideo as unknown as { _plosBlobUrl: string })._plosBlobUrl =
+      blobUrl;
+    previewWrap.appendChild(previewVideo);
+
+    const previewMeta = document.createElement('div');
+    previewMeta.className = 'plos-cs-form-image-meta';
+    const durSec = Math.round(props.durationSeconds);
+    previewMeta.textContent = `${String(props.width)} × ${String(props.height)} pixels · ${String(durSec)}s`;
+    previewWrap.appendChild(previewMeta);
   } else {
     const embedInfo = document.createElement('div');
     embedInfo.className = 'plos-cs-form-image-meta';
@@ -584,15 +646,37 @@ export function openVideoCaptureForm(
     // we DON'T actually read the bytes here (the background does that
     // after the user confirms). The validator accepts a placeholder size
     // when the form passes 1 (signals "we'll resolve at fetch time"); the
-    // background's fetchVideoBytes enforces the real 100 MB cap. The
-    // embed branch passes 0 (no bytes; validator only checks URL pattern).
-    const draftFileSize = props.kind === 'direct' ? 1 : 0;
-    const draftMimeType = props.kind === 'direct' ? props.mimeTypeHint ?? '' : '';
-    const draftOriginalSrcUrl = props.src;
+    // background's fetchVideoBytes enforces the real 100 MB cap.
+    //
+    // Screen-recording branch has the bytes in-hand (Blob from
+    // MediaRecorder); the validator sees the real size + the normalized
+    // MIME so it can short-circuit oversize recordings before any upload.
+    //
+    // Embed branch passes 0 (no bytes; validator only checks URL pattern).
+    let draftFileSize: number;
+    let draftMimeType: string;
+    let draftOriginalSrcUrl: string;
+    let draftSourceType: 'DIRECT_BYTES' | 'SCREEN_RECORDING' | 'EMBED';
+    if (props.kind === 'direct') {
+      draftFileSize = 1;
+      draftMimeType = props.mimeTypeHint ?? '';
+      draftOriginalSrcUrl = props.src;
+      draftSourceType = 'DIRECT_BYTES';
+    } else if (props.kind === 'screen-recording') {
+      draftFileSize = props.blob.size;
+      draftMimeType = normalizeBlobMime(props.blob.type || props.mimeType);
+      draftOriginalSrcUrl = props.pageUrl;
+      draftSourceType = 'SCREEN_RECORDING';
+    } else {
+      draftFileSize = 0;
+      draftMimeType = '';
+      draftOriginalSrcUrl = props.src;
+      draftSourceType = 'EMBED';
+    }
 
     const validation = validateCapturedVideoDraft({
       competitorUrlId: urlSelect.value,
-      sourceType: props.kind === 'direct' ? 'DIRECT_BYTES' : 'EMBED',
+      sourceType: draftSourceType,
       originalSrcUrl: draftOriginalSrcUrl,
       mimeType: draftMimeType,
       fileSize: draftFileSize,
@@ -644,6 +728,30 @@ export function openVideoCaptureForm(
           durationSeconds: meta.duration,
           width: meta.width,
           height: meta.height,
+        });
+      } else if (props.kind === 'screen-recording') {
+        // Best-effort thumbnail extraction from the webm Blob. NULL is
+        // acceptable per §A.12 — the renderer falls back to the browser's
+        // native <video> play icon when thumbnailStoragePath is NULL.
+        const thumbnailBlob = await extractFirstFrameThumbnail({
+          blob: props.blob,
+          width: props.width,
+          height: props.height,
+        });
+
+        await uploadScreenRecording({
+          projectId: props.projectId,
+          urlId: urlSelect.value,
+          blob: props.blob,
+          thumbnailBlob,
+          pageUrl: props.pageUrl,
+          durationSeconds: props.durationSeconds,
+          width: props.width,
+          height: props.height,
+          videoCategory: validation.payload.videoCategory,
+          composition: validation.payload.composition,
+          embeddedText: validation.payload.embeddedText,
+          tags: validation.payload.tags,
         });
       } else {
         await submitVideoCapture({
@@ -773,6 +881,15 @@ export function openVideoCaptureForm(
 
   const handle: VideoCaptureForm = {
     destroy() {
+      // Revoke any blob: URLs we minted for the screen-recording preview
+      // so they're not held by the browser after the form closes.
+      const previewVideos = previewWrap.querySelectorAll('video');
+      previewVideos.forEach((v) => {
+        const blobUrl = (v as unknown as { _plosBlobUrl?: string })._plosBlobUrl;
+        if (typeof blobUrl === 'string' && blobUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(blobUrl);
+        }
+      });
       if (backdrop.parentNode) backdrop.parentNode.removeChild(backdrop);
       document.removeEventListener('keydown', onKeyDown);
       if (activeForm === handle) activeForm = null;

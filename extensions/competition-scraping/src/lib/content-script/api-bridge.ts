@@ -35,6 +35,7 @@ import type {
   ImageSourceType,
   ListCompetitorUrlsResponse,
   Platform,
+  RequestVideoUploadResponse,
   VocabularyEntry,
   VocabularyType,
 } from '../../../../../src/lib/shared-types/competition-scraping.ts';
@@ -339,5 +340,62 @@ export async function requestVisibleTabCapture(): Promise<{ dataUrl: string }> {
   return send<{ dataUrl: string }>({
     kind: 'capture-visible-tab',
     format: 'png',
+  });
+}
+
+/**
+ * P-45 Build #1b (2026-05-22) — Phase 1 of the smart-client SCREEN_RECORDING
+ * save path. Routes the existing requestVideoUpload call through the
+ * background so the fetch originates from extension origin (vklf.com's
+ * CORS allowlist excludes content-script origins). Returns the two signed
+ * URLs (video + thumbnail) the content-script then PUTs directly to from
+ * its host-page origin (Supabase signed URLs allow any-origin uploads).
+ * See messaging.ts SubmitVideoScreenRecordingRequestUploadRequest + §C.16.
+ */
+export async function submitVideoScreenRecordingRequestUpload(args: {
+  projectId: string;
+  urlId: string;
+  clientId: string;
+  mimeType: AcceptedVideoMimeType;
+  fileSize: number;
+}): Promise<RequestVideoUploadResponse> {
+  return send<RequestVideoUploadResponse>({
+    kind: 'submit-video-screen-recording-request-upload',
+    projectId: args.projectId,
+    urlId: args.urlId,
+    clientId: args.clientId,
+    mimeType: args.mimeType,
+    fileSize: args.fileSize,
+  });
+}
+
+/**
+ * P-45 Build #1b (2026-05-22) — Phase 3 of the smart-client SCREEN_RECORDING
+ * save path. Routes the existing finalizeVideoUpload call through the
+ * background with sourceType='SCREEN_RECORDING' baked in. The background
+ * sets sourceType + maps thumbnailStoragePath omission to NULL per §A.12.
+ * Returns the finalized CapturedVideo row.
+ */
+export async function submitVideoScreenRecordingFinalize(args: {
+  projectId: string;
+  urlId: string;
+  clientId: string;
+  capturedVideoId: string;
+  videoStoragePath: string;
+  thumbnailStoragePath?: string;
+  mimeType: AcceptedVideoMimeType;
+  fileSize: number;
+  durationSeconds: number;
+  width: number;
+  height: number;
+  originalSrcUrl: string;
+  videoCategory: string;
+  composition: string | null;
+  embeddedText: string | null;
+  tags: string[];
+}): Promise<CapturedVideo> {
+  return send<CapturedVideo>({
+    kind: 'submit-video-screen-recording-finalize',
+    ...args,
   });
 }

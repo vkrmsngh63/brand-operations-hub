@@ -551,6 +551,170 @@ export const CONTENT_SCRIPT_CSS = `
   border-radius: 6px;
   pointer-events: none;
 }
+
+/* ── P-45 Build #1b — region-record overlay (2026-05-22) ───────────────────
+   Forked from .plos-cs-region-screenshot-overlay — same layout primitives
+   (fixed full-viewport container, crosshair cursor, banner, four dim
+   panels, drag rectangle). Distinct class prefix so the two overlays can
+   coexist in the stylesheet without selector collisions. */
+.plos-cs-video-region-record-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 2147483646;
+  cursor: crosshair;
+  pointer-events: auto;
+  background: transparent;
+}
+
+.plos-cs-video-region-record-banner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 10px 14px;
+  background: rgba(20, 20, 24, 0.92);
+  color: #ffffff;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    Helvetica, Arial, sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+  text-align: center;
+  pointer-events: none;
+}
+
+.plos-cs-video-region-record-banner kbd {
+  display: inline-block;
+  padding: 1px 6px;
+  margin: 0 2px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    Helvetica, Arial, sans-serif;
+  font-size: 12px;
+}
+
+.plos-cs-video-region-record-dim {
+  position: absolute;
+  background: rgba(20, 20, 24, 0.42);
+  pointer-events: none;
+}
+
+.plos-cs-video-region-record-rect {
+  position: absolute;
+  border: 2px solid #ffffff;
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(0, 0, 0, 0.5);
+  background: transparent;
+  pointer-events: none;
+}
+
+/* ── P-45 Build #1b — recording indicator (2026-05-22) ─────────────────────
+   Two synchronized UI elements that live during the recording itself
+   (after the overlay closes + Chrome's "Choose what to share" dialog
+   resolves):
+   - .plos-cs-recording-indicator-region: an absolutely-positioned thin
+     dashed border at the user's drawn rectangle. pointer-events: none so
+     the user can still interact with the page below.
+   - .plos-cs-recording-indicator-toolbar: a top-center floating bar with
+     the REC badge, countdown, Stop button, Cancel button. */
+.plos-cs-recording-indicator-region {
+  position: absolute;
+  z-index: 2147483646;
+  pointer-events: none;
+  background: transparent;
+  box-sizing: border-box;
+}
+
+.plos-cs-recording-indicator-region--preparing {
+  border: 2px dashed #888888;
+}
+
+.plos-cs-recording-indicator-region--recording {
+  border: 2px dashed #dd0000;
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.35),
+    0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+
+.plos-cs-recording-indicator-toolbar {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2147483646;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: rgba(20, 20, 24, 0.94);
+  color: #ffffff;
+  border-radius: 8px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    Helvetica, Arial, sans-serif;
+  font-size: 13px;
+  line-height: 1.2;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+.plos-cs-recording-indicator-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  background: #dd0000;
+  color: #ffffff;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  animation: plos-cs-rec-pulse 1.4s ease-in-out infinite;
+}
+
+.plos-cs-recording-indicator-badge--preparing {
+  background: #555555;
+  animation: none;
+}
+
+@keyframes plos-cs-rec-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+.plos-cs-recording-indicator-countdown {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.3px;
+}
+
+.plos-cs-recording-indicator-stop {
+  padding: 5px 12px;
+  background: #dd0000;
+  color: #ffffff;
+  border: none;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.plos-cs-recording-indicator-stop:hover {
+  background: #b90000;
+}
+
+.plos-cs-recording-indicator-cancel {
+  padding: 5px 8px;
+  background: transparent;
+  color: #cccccc;
+  border: none;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.plos-cs-recording-indicator-cancel:hover {
+  color: #ffffff;
+}
 `;
 
 const STYLE_ELEMENT_ID = 'plos-cs-styles';

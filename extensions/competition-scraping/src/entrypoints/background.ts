@@ -68,11 +68,14 @@ import {
   type ContentScriptMessage,
   type SubmitImageCaptureRequestMessage,
   type SubmitVideoCaptureRequestMessage,
+  type SubmitVideoScreenRecordingFinalizeRequest,
+  type SubmitVideoScreenRecordingRequestUploadRequest,
 } from '../lib/content-script/messaging';
 import { logGlobalError } from '../lib/sw-error-logging';
 import type {
   CapturedImage,
   CapturedVideo,
+  RequestVideoUploadResponse,
 } from '../../../../src/lib/shared-types/competition-scraping';
 
 void supabase;
@@ -104,6 +107,16 @@ const CONTEXT_MENU_IMAGE_TITLE = 'Add to PLOS — Image';
 // snapshot covers the wrapper-and-overlay cases.
 const CONTEXT_MENU_VIDEO_ID = 'plos-add-captured-video';
 const CONTEXT_MENU_VIDEO_TITLE = 'Add to PLOS — Captured Video';
+
+// P-45 Build #1b (2026-05-22) — screen-recording context menu. Fires on
+// right-click anywhere. The content-script orchestrator arms the region-
+// record overlay; user drags a rectangle; getDisplayMedia + MediaRecorder
+// capture the screen for up to 3 min. Label "Record video for PLOS"
+// (verb-first phrasing) locked via Rule 14f at the start of the 1a
+// session — distinct from "Add to PLOS — Captured Video" at the right-
+// click moment so users don't mis-pick the fast-fetch path.
+const CONTEXT_MENU_RECORD_VIDEO_ID = 'plos-add-record-video';
+const CONTEXT_MENU_RECORD_VIDEO_TITLE = 'Record video for PLOS';
 
 export default defineBackground(() => {
   // P-16 (W#2 polish, 2026-05-19): SW global error handlers. Attach BEFORE
@@ -165,6 +178,15 @@ export default defineBackground(() => {
         // user-visible entry-point.
         contexts: ['all'],
       });
+      chrome.contextMenus.create({
+        id: CONTEXT_MENU_RECORD_VIDEO_ID,
+        title: CONTEXT_MENU_RECORD_VIDEO_TITLE,
+        // P-45 Build #1b: `contexts: ['all']` — the recording targets the
+        // screen, not a specific DOM element, so the menu fires from any
+        // right-click context. The content-script orchestrator opens the
+        // region-record overlay regardless of what was right-clicked.
+        contexts: ['all'],
+      });
     });
   });
 
@@ -200,6 +222,23 @@ export default defineBackground(() => {
       const message: ContentScriptMessage = {
         kind: 'open-text-capture-form',
         selectedText,
+        pageUrl,
+      };
+      chrome.tabs.sendMessage(tabId, message).catch(() => {
+        /* content script not present on this page; no-op */
+      });
+      return;
+    }
+
+    if (info.menuItemId === CONTEXT_MENU_RECORD_VIDEO_ID) {
+      // P-45 Build #1b (2026-05-22): screen-recording gesture. No srcUrl —
+      // the recording targets a region of the screen, not a DOM element.
+      // pageUrl threads through to the resulting CapturedVideo row's
+      // originalSrcUrl per §C.16 (recordings have no fetchable URL).
+      const pageUrl =
+        typeof info.pageUrl === 'string' ? info.pageUrl : tab?.url ?? '';
+      const message: ContentScriptMessage = {
+        kind: 'enter-video-region-record-mode',
         pageUrl,
       };
       chrome.tabs.sendMessage(tabId, message).catch(() => {
@@ -322,6 +361,12 @@ async function handleBackgroundRequest(
   }
   if (req.kind === 'submit-video-capture') {
     return handleSubmitVideoCapture(req);
+  }
+  if (req.kind === 'submit-video-screen-recording-request-upload') {
+    return handleSubmitVideoScreenRecordingRequestUpload(req);
+  }
+  if (req.kind === 'submit-video-screen-recording-finalize') {
+    return handleSubmitVideoScreenRecordingFinalize(req);
   }
   if (req.kind === 'capture-visible-tab') {
     return handleCaptureVisibleTab(req);
@@ -548,6 +593,58 @@ async function handleSubmitVideoCapture(
       : {}),
     ...(req.width !== null ? { width: req.width } : {}),
     ...(req.height !== null ? { height: req.height } : {}),
+    videoCategory: req.videoCategory,
+    ...(req.composition !== null ? { composition: req.composition } : {}),
+    ...(req.embeddedText !== null ? { embeddedText: req.embeddedText } : {}),
+    tags: req.tags,
+  });
+}
+
+/**
+ * P-45 Build #1b (2026-05-22) — Phase 1 of the smart-client SCREEN_RECORDING
+ * save path. Content-script orchestrator runs Phase 2 PUT itself from its
+ * host-page origin (Supabase signed URLs are any-origin-uploadable); the
+ * background only handles the vklf.com round-trips at Phases 1 + 3.
+ *
+ * Mirrors the DIRECT_BYTES Phase 1 call but the content-script supplies its
+ * own MIME + size (the bytes never reach the background, so there's no
+ * Content-Type sniff). The existing /requestUpload route accepts any
+ * AcceptedVideoMimeType including 'video/webm', so no route change needed.
+ */
+async function handleSubmitVideoScreenRecordingRequestUpload(
+  req: SubmitVideoScreenRecordingRequestUploadRequest,
+): Promise<RequestVideoUploadResponse> {
+  return requestVideoUpload(req.projectId, req.urlId, {
+    clientId: req.clientId,
+    mimeType: req.mimeType,
+    fileSize: req.fileSize,
+  });
+}
+
+/**
+ * P-45 Build #1b (2026-05-22) — Phase 3 of the smart-client SCREEN_RECORDING
+ * save path. Proxies finalizeVideoUpload with sourceType='SCREEN_RECORDING'
+ * baked in. The finalize route's bytes-required gate was broadened to accept
+ * SCREEN_RECORDING in the 1a session (parallels the existing DIRECT_BYTES
+ * branch — requires capturedVideoId + videoStoragePath + mimeType + fileSize).
+ */
+async function handleSubmitVideoScreenRecordingFinalize(
+  req: SubmitVideoScreenRecordingFinalizeRequest,
+): Promise<CapturedVideo> {
+  return finalizeVideoUpload(req.projectId, req.urlId, {
+    clientId: req.clientId,
+    sourceType: 'SCREEN_RECORDING',
+    originalSrcUrl: req.originalSrcUrl,
+    capturedVideoId: req.capturedVideoId,
+    videoStoragePath: req.videoStoragePath,
+    ...(req.thumbnailStoragePath !== undefined
+      ? { thumbnailStoragePath: req.thumbnailStoragePath }
+      : {}),
+    mimeType: req.mimeType,
+    fileSize: req.fileSize,
+    durationSeconds: req.durationSeconds,
+    width: req.width,
+    height: req.height,
     videoCategory: req.videoCategory,
     ...(req.composition !== null ? { composition: req.composition } : {}),
     ...(req.embeddedText !== null ? { embeddedText: req.embeddedText } : {}),

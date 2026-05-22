@@ -80,6 +80,9 @@ import { openTextCaptureForm } from './text-capture-form.ts';
 import { openImageCaptureForm } from './image-capture-form.ts';
 import { openVideoCaptureForm } from './video-capture-form.ts';
 import { openRegionScreenshotOverlay } from './region-screenshot-overlay.ts';
+import { openVideoRegionRecordOverlay } from './video-region-record-overlay.ts';
+import { openRecordingIndicatorOverlay } from './recording-indicator-overlay.ts';
+import { createRecordController } from '../screen-recording/record-controller.ts';
 import { findUnderlyingImage } from './find-underlying-image.ts';
 import {
   findUnderlyingVideoEmbed,
@@ -991,6 +994,86 @@ export async function runOrchestrator(): Promise<() => void> {
           },
         });
       }
+      sendResponse({ ok: true });
+      return;
+    }
+if (msg.kind === 'enter-video-region-record-mode') {
+      // P-45 Build #1b (2026-05-22) — screen-recording gesture. The
+      // background dispatched us here from the "Record video for PLOS"
+      // right-click. Arm the region-record overlay; on valid rect, create
+      // the RecordController + indicator overlay, then wire the
+      // RecordController callbacks to drive the indicator + open the
+      // video-capture-form (kind: 'screen-recording') on clean stop.
+      //
+      // Per §C.16 the page URL becomes the row's originalSrcUrl.
+      const pageUrl = msg.pageUrl;
+      const overlay = openVideoRegionRecordOverlay({
+        onRegionPicked(rect) {
+          overlay.destroy();
+          const controller = createRecordController();
+          const indicator = openRecordingIndicatorOverlay({
+            region: rect,
+            onStopClicked() {
+              controller.stop();
+            },
+            onCancelClicked() {
+              controller.cancel();
+            },
+          });
+          void controller.start({
+            region: rect,
+            onStarted() {
+              indicator.setRecording();
+            },
+            onTick(elapsed) {
+              indicator.setElapsed(elapsed);
+            },
+            onStopped(result) {
+              indicator.destroy();
+              openVideoCaptureForm({
+                kind: 'screen-recording',
+                blob: result.blob,
+                mimeType: result.mimeType,
+                durationSeconds: result.durationSeconds,
+                width: result.region.width,
+                height: result.region.height,
+                pageUrl,
+                projectId,
+                projectName,
+                platform: platformModule.platform as Platform,
+                onSaved() {
+                  // No orchestrator-side state to update — the new row
+                  // shows up on next page load via the saved-video
+                  // indicator scan (already-saved-video-icon.ts).
+                },
+                onClose() {
+                  // No orchestrator-side state to roll back.
+                },
+              });
+            },
+            onCanceled(reason, _detail) {
+              indicator.destroy();
+              if (reason === 'dialog-dismissed') {
+                showCaptureFailureToast(
+                  'Recording cancelled. You can try again any time.',
+                );
+              } else if (reason === 'recorder-error') {
+                showCaptureFailureToast(
+                  'Recording stopped due to an error — the partial recording was discarded.',
+                );
+              }
+              // 'user-cancel' + 'tab-closed' get no toast — they're
+              // already user-evident from the explicit click / tab close.
+            },
+          });
+        },
+        onCancel(_reason) {
+          // Silent close on Escape / too-small / outside-viewport. The
+          // user re-invokes via the right-click menu if they want to
+          // retry.
+          overlay.destroy();
+        },
+      });
       sendResponse({ ok: true });
       return;
     }

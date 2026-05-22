@@ -671,3 +671,122 @@ test('getState — returns idle before start, recording after, stopped after sto
   fakeRecorder.simulateStop();
   assert.equal(ctrl.getState(), 'stopped');
 });
+
+// ─── Controller — canvas-crop region constraint (P-45 Build #1b) ───────
+
+test('canvas-crop — cropStreamToRegion is called with the normalized region', async () => {
+  const clock = makeFakeClock();
+  const fakeRecorder = makeFakeMediaRecorder();
+  const baseDeps = makeDeps({ clock, fakeRecorder });
+  const cropCalls: Array<{
+    stream: MediaStream;
+    region: { width: number; height: number };
+  }> = [];
+  const croppedTeardown = { fired: false };
+  const deps = {
+    ...baseDeps,
+    cropStreamToRegion(stream: MediaStream, region: { width: number; height: number }) {
+      cropCalls.push({ stream, region });
+      // Return a sentinel cropped stream — the FakeMediaRecorder doesn't
+      // inspect it; we just need the controller to flow through to record().
+      return {
+        stream: makeFakeStream(),
+        teardown() {
+          croppedTeardown.fired = true;
+        },
+      };
+    },
+  };
+  const ctrl = createRecordController(deps);
+  await ctrl.start({ region: VALID_REGION, onStopped() {} });
+  assert.equal(cropCalls.length, 1);
+  assert.equal(cropCalls[0]!.region.width, VALID_REGION.width);
+  assert.equal(cropCalls[0]!.region.height, VALID_REGION.height);
+});
+
+test('canvas-crop — teardown fires on stop()', async () => {
+  const clock = makeFakeClock();
+  const fakeRecorder = makeFakeMediaRecorder();
+  const baseDeps = makeDeps({ clock, fakeRecorder });
+  let teardownFired = false;
+  const deps = {
+    ...baseDeps,
+    cropStreamToRegion() {
+      return {
+        stream: makeFakeStream(),
+        teardown() {
+          teardownFired = true;
+        },
+      };
+    },
+  };
+  const ctrl = createRecordController(deps);
+  await ctrl.start({ region: VALID_REGION, onStopped() {} });
+  ctrl.stop();
+  fakeRecorder.simulateStop();
+  assert.equal(teardownFired, true);
+});
+
+test('canvas-crop — teardown fires on cancel()', async () => {
+  const clock = makeFakeClock();
+  const fakeRecorder = makeFakeMediaRecorder();
+  const baseDeps = makeDeps({ clock, fakeRecorder });
+  let teardownFired = false;
+  const deps = {
+    ...baseDeps,
+    cropStreamToRegion() {
+      return {
+        stream: makeFakeStream(),
+        teardown() {
+          teardownFired = true;
+        },
+      };
+    },
+  };
+  const ctrl = createRecordController(deps);
+  await ctrl.start({ region: VALID_REGION, onStopped() {} });
+  ctrl.cancel();
+  assert.equal(teardownFired, true);
+});
+
+test('canvas-crop — cropStreamToRegion throws → onCanceled("recorder-error")', async () => {
+  const clock = makeFakeClock();
+  const fakeRecorder = makeFakeMediaRecorder();
+  const baseDeps = makeDeps({ clock, fakeRecorder });
+  let cancelReason: RecordControllerCancelReason | null = null;
+  const deps = {
+    ...baseDeps,
+    cropStreamToRegion() {
+      throw new Error('test-crop-failure');
+    },
+  };
+  const ctrl = createRecordController(deps);
+  await ctrl.start({
+    region: VALID_REGION,
+    onStopped() {},
+    onCanceled(reason) {
+      cancelReason = reason;
+    },
+  });
+  assert.equal(cancelReason, 'recorder-error');
+  assert.equal(ctrl.getState(), 'canceled');
+});
+
+test('canvas-crop — when cropStreamToRegion is absent, MediaRecorder gets the raw stream', async () => {
+  const clock = makeFakeClock();
+  const fakeRecorder = makeFakeMediaRecorder();
+  const fakeStream = makeFakeStream();
+  let recorderStreamReceived: MediaStream | null = null;
+  const baseDeps = makeDeps({ clock, fakeRecorder, fakeStream });
+  const deps = {
+    ...baseDeps,
+    createMediaRecorder(stream: MediaStream) {
+      recorderStreamReceived = stream;
+      return fakeRecorder;
+    },
+    // cropStreamToRegion intentionally absent
+  };
+  const ctrl = createRecordController(deps);
+  await ctrl.start({ region: VALID_REGION, onStopped() {} });
+  assert.strictEqual(recorderStreamReceived, fakeStream);
+});

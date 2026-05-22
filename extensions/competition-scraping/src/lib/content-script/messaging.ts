@@ -42,6 +42,7 @@ import type {
   CreateVocabularyEntryRequest,
   ListCompetitorUrlsResponse,
   Platform,
+  RequestVideoUploadResponse,
   VideoSourceType,
   VocabularyEntry,
   VocabularyType,
@@ -127,12 +128,30 @@ export interface EnterRegionScreenshotModeMessage {
   pageUrl: string;
 }
 
+/**
+ * P-45 Build #1b (2026-05-22) — right-click "Record video for PLOS" arms the
+ * region-record overlay. Background dispatches this on its 5th context-menu
+ * entry's onClicked. The overlay collects the drag-rectangle and hands off
+ * to the RecordController (createMediaRecorder over getDisplayMedia). No
+ * srcUrl payload — the recording targets a region of the screen, not a
+ * pre-existing DOM element. pageUrl plays the same role here as in the
+ * image-capture / region-screenshot messages: it pre-selects the saved
+ * CompetitorUrl in the form picker AND lands on the resulting CapturedVideo
+ * row's originalSrcUrl per §C.16 (since recordings have no fetchable URL,
+ * the page URL is the closest semantic equivalent).
+ */
+export interface EnterVideoRegionRecordModeMessage {
+  kind: 'enter-video-region-record-mode';
+  pageUrl: string;
+}
+
 export type ContentScriptMessage =
   | OpenUrlAddFormMessage
   | OpenTextCaptureFormMessage
   | OpenImageCaptureFormMessage
   | OpenVideoCaptureFormMessage
-  | EnterRegionScreenshotModeMessage;
+  | EnterRegionScreenshotModeMessage
+  | EnterVideoRegionRecordModeMessage;
 
 export function isContentScriptMessage(
   value: unknown,
@@ -160,6 +179,9 @@ export function isContentScriptMessage(
     return typeof msg.srcUrl === 'string' && typeof msg.pageUrl === 'string';
   }
   if (msg.kind === 'enter-region-screenshot-mode') {
+    return typeof msg.pageUrl === 'string';
+  }
+  if (msg.kind === 'enter-video-region-record-mode') {
     return typeof msg.pageUrl === 'string';
   }
   return false;
@@ -347,6 +369,63 @@ export type SubmitVideoCaptureRequestMessage =
     };
 
 /**
+ * P-45 Build #1b (2026-05-22) — Phase 1 of the smart-client SCREEN_RECORDING
+ * save path. The content-script orchestrator runs Phase 1 through the
+ * background (vklf.com CORS allowlist is `chrome-extension://*` only), then
+ * Phase 2 PUTs the webm Blob directly to the returned signed URL from the
+ * content-script origin (Supabase signed URLs are CORS-cleared for any
+ * origin), then Phase 3 finalize runs through the background again.
+ *
+ * Why smart-client over base64-through-message: a 100 MB Blob base64-encodes
+ * to ~133 MB; chrome.runtime.sendMessage hits practical size ceilings around
+ * 64 MB on MV3 SWs. The smart-client path has no such ceiling — fetch()
+ * handles a 1 GB body the same way it handles 1 KB. See §C.16.
+ *
+ * mimeType is normalized to the bare 'video/webm' (or similar) before this
+ * request — MediaRecorder produces 'video/webm;codecs=vp9,opus' but the
+ * server validator (isRequestVideoUploadRequest) does a strict tuple match.
+ */
+export interface SubmitVideoScreenRecordingRequestUploadRequest {
+  kind: 'submit-video-screen-recording-request-upload';
+  projectId: string;
+  urlId: string;
+  clientId: string;
+  mimeType: AcceptedVideoMimeType;
+  fileSize: number;
+}
+
+/**
+ * P-45 Build #1b (2026-05-22) — Phase 3 of the smart-client SCREEN_RECORDING
+ * save path. Mirrors the DIRECT_BYTES finalize body but with
+ * sourceType='SCREEN_RECORDING' baked in + originalSrcUrl = the page URL
+ * (per §C.16 — recordings have no fetchable URL; page URL is the closest
+ * semantic equivalent). Background routes to the existing finalize endpoint
+ * (broadened in 1a to accept the new enum value).
+ */
+export interface SubmitVideoScreenRecordingFinalizeRequest {
+  kind: 'submit-video-screen-recording-finalize';
+  projectId: string;
+  urlId: string;
+  clientId: string;
+  capturedVideoId: string;
+  videoStoragePath: string;
+  /** Omitted when thumbnail-extraction failed or thumbnail PUT failed — the
+   * row stores NULL thumbnailStoragePath per §A.12 NULL-thumbnail fallback. */
+  thumbnailStoragePath?: string;
+  mimeType: AcceptedVideoMimeType;
+  fileSize: number;
+  durationSeconds: number;
+  width: number;
+  height: number;
+  /** Page URL — best fit for SCREEN_RECORDING per §C.16. */
+  originalSrcUrl: string;
+  videoCategory: string;
+  composition: string | null;
+  embeddedText: string | null;
+  tags: string[];
+}
+
+/**
  * Session 6 (2026-05-13) — content-script asks the background to capture
  * the visible viewport as a base64 PNG. `chrome.tabs.captureVisibleTab` is
  * a background-only API in Manifest V3 (content scripts cannot call it
@@ -375,6 +454,8 @@ export type BackgroundRequest =
   | CreateVocabularyEntryRequestMessage
   | SubmitImageCaptureRequestMessage
   | SubmitVideoCaptureRequestMessage
+  | SubmitVideoScreenRecordingRequestUploadRequest
+  | SubmitVideoScreenRecordingFinalizeRequest
   | CaptureVisibleTabRequest;
 
 // Response envelope. Encodes both success + structured error so the
@@ -418,6 +499,23 @@ export type SubmitImageCaptureResponseEnvelope = BackgroundResponse<
 >;
 
 export type SubmitVideoCaptureResponseEnvelope = BackgroundResponse<
+  CapturedVideo
+>;
+
+/**
+ * P-45 Build #1b — Phase 1 response. Background proxies the existing
+ * requestVideoUpload endpoint and returns the same shape the server emits.
+ */
+export type SubmitVideoScreenRecordingRequestUploadResponseEnvelope = BackgroundResponse<
+  RequestVideoUploadResponse
+>;
+
+/**
+ * P-45 Build #1b — Phase 3 response. Background proxies the existing
+ * finalizeVideoUpload endpoint with sourceType='SCREEN_RECORDING' baked in
+ * + returns the finalized CapturedVideo row.
+ */
+export type SubmitVideoScreenRecordingFinalizeResponseEnvelope = BackgroundResponse<
   CapturedVideo
 >;
 
@@ -527,6 +625,52 @@ export function isBackgroundRequest(
       return typeof m.originalSrcUrl === 'string';
     }
     return false;
+  }
+  if (msg.kind === 'submit-video-screen-recording-request-upload') {
+    const m = msg as {
+      projectId?: unknown;
+      urlId?: unknown;
+      clientId?: unknown;
+      mimeType?: unknown;
+      fileSize?: unknown;
+    };
+    return (
+      typeof m.projectId === 'string' &&
+      typeof m.urlId === 'string' &&
+      typeof m.clientId === 'string' &&
+      typeof m.mimeType === 'string' &&
+      typeof m.fileSize === 'number'
+    );
+  }
+  if (msg.kind === 'submit-video-screen-recording-finalize') {
+    const m = msg as {
+      projectId?: unknown;
+      urlId?: unknown;
+      clientId?: unknown;
+      capturedVideoId?: unknown;
+      videoStoragePath?: unknown;
+      mimeType?: unknown;
+      fileSize?: unknown;
+      durationSeconds?: unknown;
+      width?: unknown;
+      height?: unknown;
+      originalSrcUrl?: unknown;
+      videoCategory?: unknown;
+    };
+    return (
+      typeof m.projectId === 'string' &&
+      typeof m.urlId === 'string' &&
+      typeof m.clientId === 'string' &&
+      typeof m.capturedVideoId === 'string' &&
+      typeof m.videoStoragePath === 'string' &&
+      typeof m.mimeType === 'string' &&
+      typeof m.fileSize === 'number' &&
+      typeof m.durationSeconds === 'number' &&
+      typeof m.width === 'number' &&
+      typeof m.height === 'number' &&
+      typeof m.originalSrcUrl === 'string' &&
+      typeof m.videoCategory === 'string'
+    );
   }
   if (msg.kind === 'capture-visible-tab') {
     const m = msg as { format?: unknown };

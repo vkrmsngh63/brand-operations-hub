@@ -5,11 +5,15 @@
 // Three concerns:
 //   1. Form-level validation — given a draft video-capture payload, return
 //      a typed result the form uses to gate the Save button. Branches on
-//      `sourceType` ('DIRECT_BYTES' vs 'EMBED'): direct-bytes drafts must
-//      have a valid MIME + a non-zero byte count under the 100 MB cap;
-//      embed drafts must have a URL matching one of the recognized
-//      video-embed patterns (delegates to detectEmbedPlatform per
-//      design doc §A.10).
+//      `sourceType` (DIRECT_BYTES / SCREEN_RECORDING / EMBED):
+//        - DIRECT_BYTES + SCREEN_RECORDING — must have a valid MIME + a
+//          non-zero byte count under the 100 MB cap. P-45 Build #1b
+//          (2026-05-22) broadened the bytes-required path to include
+//          SCREEN_RECORDING — recordings carry bytes just like fast-fetch
+//          videos do (only EMBED skips the bytes path).
+//        - EMBED — must have a URL matching one of the recognized
+//          video-embed patterns (delegates to detectEmbedPlatform per
+//          design doc §A.10).
 //   2. clientId minting — shared default with captured-image via
 //      crypto.randomUUID(); the form mints once per Save click and reuses
 //      across retries so the server's idempotency path catches duplicates.
@@ -130,7 +134,10 @@ export function validateCapturedVideoDraft(
   let mimeType: AcceptedVideoMimeType | null = null;
   let embedPlatform: string | null = null;
 
-  if (draft.sourceType === 'DIRECT_BYTES') {
+  if (
+    draft.sourceType === 'DIRECT_BYTES' ||
+    draft.sourceType === 'SCREEN_RECORDING'
+  ) {
     if (draft.fileSize <= 0) {
       return { ok: false, reason: 'bytes-required' };
     }
@@ -143,6 +150,11 @@ export function validateCapturedVideoDraft(
     // fetchVideoBytes() resolve the MIME from Content-Type (and re-validate
     // server-side). Wrong-but-non-empty MIME is rejected here so the user
     // gets a clean error before the upload starts.
+    //
+    // P-45 Build #1b: SCREEN_RECORDING follows the same MIME validation
+    // path as DIRECT_BYTES — MediaRecorder always produces a MIME from
+    // ACCEPTED_VIDEO_MIME_TYPES (after the codec-suffix is normalized off
+    // in recording-bytes-upload.ts's normalizeBlobMime helper).
     if (draft.mimeType && !isAcceptedVideoMimeType(draft.mimeType)) {
       return { ok: false, reason: 'video-mime-rejected' };
     }
