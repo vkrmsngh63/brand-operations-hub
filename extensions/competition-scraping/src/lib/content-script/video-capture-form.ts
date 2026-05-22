@@ -547,29 +547,68 @@ export function openVideoCaptureForm(
     }
   });
 
-  // Build #8 (2026-05-23) — Bug #11 defensive hardening for the "+ Add new"
-  // category input. Build #7's director verification showed the input
-  // refused typed characters on Amazon (image-capture-form's identical
-  // wiring works fine on Amazon, so the difference has to be either
-  // focus-stealing by something on the page OR a key-interceptor that
-  // happens to fire only when the video form's <video> preview is also
-  // mounted). The three defensive moves:
-  //   (1) Stop propagation of key + input events so page-level handlers
-  //       can't swallow them while the form is open;
-  //   (2) Defer focus() into a microtask + verify it landed (retry once
-  //       on a 50ms timer if the browser dropped it during display-mode
-  //       transition from none → block);
-  //   (3) Force-clear any active focus elsewhere before our focus() so a
-  //       focus-stealing handler that ran moments ago can't re-claim.
-  for (const evt of ['keydown', 'keyup', 'keypress', 'input'] as const) {
-    newCategoryInput.addEventListener(evt, (e) => {
-      // Don't block the form's own onKeyDown (handles Escape — but Escape
-      // SHOULD close the form when the input is focused, mirroring image-
-      // capture-form's behavior). Only stop bubbling to document-level
-      // upstream handlers AFTER our own.
-      e.stopPropagation();
+  // P-45 Build #2 Phase 1 director-verification 2026-05-23 — Bug #11 aggressive
+  // band-aid. Build #8's keystroke-only defense (keydown/keyup/keypress/input
+  // stopPropagation on newCategoryInput) was insufficient because the bug
+  // fires at the FOCUS level on Amazon — the inputs never receive focus in
+  // the first place, so keystroke-level defense was moot. This hardened
+  // band-aid:
+  //   (1) applies to ALL inputs (newCategoryInput + compositionArea +
+  //       embeddedArea + tagsInput) — not just newCategoryInput;
+  //   (2) isolates focus-related events (focus/focusin/focusout/blur) +
+  //       mouse + pointer + click events on top of keyboard events, so
+  //       page-level handlers that steal focus via mousedown→blur or
+  //       focusin→someOtherEl.focus() patterns are blocked;
+  //   (3) on click, immediately calls el.focus() AND schedules a microtask
+  //       retry — overriding any page-level handler that grabbed focus a
+  //       tick earlier.
+  // If this band-aid still fails on Amazon, the long-term fix is a Shadow
+  // DOM refactor (captured as a polish ROADMAP item after this session).
+  // The image-capture-form path doesn't need this defense — it never
+  // mounts a <video> in the form (which is what triggers Bug #11 on
+  // Amazon per the empirical observation in Build #7 director feedback).
+  function applyAggressiveEventIsolation(el: HTMLInputElement | HTMLTextAreaElement): void {
+    const evts = [
+      'mousedown',
+      'mouseup',
+      'click',
+      'dblclick',
+      'pointerdown',
+      'pointerup',
+      'keydown',
+      'keyup',
+      'keypress',
+      'input',
+      'change',
+      'paste',
+      'copy',
+      'cut',
+      'compositionstart',
+      'compositionupdate',
+      'compositionend',
+      'focus',
+      'focusin',
+      'focusout',
+      'blur',
+    ] as const;
+    for (const evt of evts) {
+      el.addEventListener(evt, (e) => {
+        e.stopPropagation();
+      });
+    }
+    el.addEventListener('click', () => {
+      el.focus({ preventScroll: true });
+      queueMicrotask(() => {
+        if (document.activeElement !== el) {
+          el.focus({ preventScroll: true });
+        }
+      });
     });
   }
+  applyAggressiveEventIsolation(newCategoryInput);
+  applyAggressiveEventIsolation(compositionArea);
+  applyAggressiveEventIsolation(embeddedArea);
+  applyAggressiveEventIsolation(tagsInput);
   categorySelect.addEventListener('change', () => {
     if (categorySelect.value === ADD_NEW_VIDEO_CATEGORY_VALUE) {
       newCategoryWrap.style.display = 'block';

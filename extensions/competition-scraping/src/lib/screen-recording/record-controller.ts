@@ -156,12 +156,16 @@ export interface RecordControllerDeps {
 export function createProductionDeps(): RecordControllerDeps {
   return {
     getDisplayMedia(constraints) {
-      // Cast is required because TS's MediaDevices type narrows the input
-      // shape, but DisplayMediaStreamOptions is a superset we don't need
-      // here (audio: true alone is sufficient).
-      return navigator.mediaDevices.getDisplayMedia(
-        constraints as DisplayMediaStreamOptions,
-      );
+      // selfBrowserSurface: 'include' makes the requesting tab visible in
+      // Chrome's "Choose what to share" Tab picker. The browser default is
+      // 'exclude' — without this flag the user CANNOT pick the current tab
+      // for recording and has to pick a Window or Entire Screen instead.
+      // P-45 Build #2 Phase 1 director-verified bug 2026-05-23.
+      const fullConstraints: DisplayMediaStreamOptions = {
+        ...(constraints as DisplayMediaStreamOptions),
+        selfBrowserSurface: 'include',
+      } as DisplayMediaStreamOptions;
+      return navigator.mediaDevices.getDisplayMedia(fullConstraints);
     },
     createMediaRecorder(stream, options) {
       return new MediaRecorder(stream, options);

@@ -107,12 +107,17 @@ export async function uploadScreenRecording(
   });
 
   // Phase 2a — direct PUT of the video bytes from content-script origin.
-  // Use the Blob's full MIME (with codecs) as Content-Type so the stored
-  // object preserves the codec info; the server doesn't read this value.
+  // Send the normalized base MIME ('video/webm') as Content-Type, NOT the
+  // Blob's full MIME with codec params ('video/webm;codecs=vp9,opus').
+  // Supabase Storage validates Content-Type against the bucket's
+  // allowedMimeTypes list (['video/mp4', 'video/webm', 'video/quicktime'])
+  // via strict-equal; the codec-laden full MIME doesn't match any entry and
+  // the PUT 400s. The encoded codec is still preserved in the bytes
+  // themselves; browsers + servers infer it from container metadata.
   const videoPutResp = await fetch(phase1.videoUploadUrl, {
     method: 'PUT',
     body: input.blob,
-    headers: { 'Content-Type': input.blob.type || mimeType },
+    headers: { 'Content-Type': mimeType },
   });
   if (!videoPutResp.ok) {
     throw new PlosApiError(
