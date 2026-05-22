@@ -7,10 +7,10 @@
   "scripts": {
     "dev": "wxt",
     "dev:firefox": "wxt -b firefox",
-    "build": "wxt build",
-    "build:firefox": "wxt build -b firefox",
-    "zip": "wxt zip",
-    "zip:firefox": "wxt zip -b firefox",
+    "build": "node scripts/wxt-build.mjs",
+    "build:firefox": "node scripts/wxt-build.mjs -b firefox",
+    "zip": "node scripts/wxt-zip.mjs",
+    "zip:firefox": "node scripts/wxt-zip.mjs -b firefox",
     "compile": "tsc --noEmit",
     "test": "node --test --experimental-strip-types $(find src -name '*.test.ts')",
     "postinstall": "wxt prepare"

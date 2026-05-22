@@ -67,7 +67,7 @@ Reports per-spec results + final `N passed` count. Any `failed` line = red.
 cd /workspaces/brand-operations-hub/extensions/competition-scraping && npm run build 2>&1 | tail -5
 ```
 
-**KNOWN ISSUE:** `wxt build` writes the dist correctly at the ~5-second mark but the parent node process can hang indefinitely afterward. If the build process hangs >30 seconds AND the dist files are visible at `.output/chrome-mv3/manifest.json`, kill the process (`pkill -f "wxt build"`) — the dist artifact is valid. Captured to CORRECTIONS_LOG 2026-05-19-f + 2026-05-19-g.
+**Build exits cleanly in ~3-5 seconds** since P-44 shipped 2026-05-22-h — the `npm run build` script routes through `scripts/wxt-build.mjs` (a programmatic-API wrapper around wxt's exported `build()` function that force-exits with `process.exit(0)` after the build promise resolves, bypassing the Vite 8 + Rolldown native-handle event-loop-drain bug that previously hung the process indefinitely). No `pkill -f "wxt build"` workaround needed. If you see a hang regress, check `extensions/competition-scraping/scripts/wxt-build.mjs` first.
 
 ## Report back to the user
 

@@ -101,11 +101,7 @@ If this deploy includes Chrome extension code changes, build a fresh zip the dir
 cd /workspaces/brand-operations-hub/extensions/competition-scraping && rm -rf .output && npm run zip
 ```
 
-**Known issue:** `wxt build` / `wxt zip` writes the dist correctly at ~5-second mark but the parent process can hang indefinitely. If the process hangs >30 seconds AND `.output/competition-scraping-extension-0.1.0-chrome.zip` exists with non-zero size, kill the process — the zip artifact is valid:
-
-```bash
-pkill -f "wxt zip"  # OR pkill -f "wxt build"
-```
+**`npm run zip` exits cleanly in ~3-5 seconds** since P-44 shipped 2026-05-22-h — the script routes through `extensions/competition-scraping/scripts/wxt-zip.mjs` (a programmatic-API wrapper around wxt's exported `zip()` function that force-exits with `process.exit(0)` after the zip promise resolves, bypassing the Vite 8 + Rolldown native-handle event-loop-drain bug). No `pkill -f "wxt zip"` workaround needed. If you see a hang regress, check `extensions/competition-scraping/scripts/wxt-zip.mjs` first.
 
 Rename the zip to the canonical filename:
 
@@ -115,7 +111,7 @@ cp extensions/competition-scraping/.output/competition-scraping-extension-0.1.0-
 ls -la plos-extension-<date>-w2-deploy-<N>.zip  # confirm size
 ```
 
-Captured to CORRECTIONS_LOG 2026-05-19-f + 2026-05-19-g.
+Historical context: prior workaround captured to CORRECTIONS_LOG 2026-05-19-f + 2026-05-19-g; root cause + fix in CORRECTIONS_LOG 2026-05-22-h.
 
 ## Step 9 — Director real-Chrome verification walkthrough
 
