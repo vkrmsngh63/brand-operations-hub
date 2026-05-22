@@ -14,7 +14,10 @@
 #   .claude/agents/plos-doc-batch.md — the agent that consumes this log
 #
 # Hook contract:
-#   stdin: JSON with .tool ("Edit" or "Write") + .tool_input.file_path (absolute or relative)
+#   stdin: JSON with .tool_name ("Edit" or "Write") + .tool_input.file_path (absolute or relative)
+#          (Empirically confirmed 2026-05-22-f via /tmp/plos-hook-debug.log capture
+#          alongside the sibling P-42 fix to backup-memory-dir.sh; same field-name
+#          mismatch as P-42 — this hook had the identical .tool vs .tool_name bug.)
 #   stdout: ignored (hook informational only; never blocks)
 #   exit 0: always (this hook is observational; never blocks tool execution)
 #
@@ -33,7 +36,7 @@ if ! command -v jq >/dev/null 2>&1; then
     exit 0
 fi
 
-TOOL=$(printf '%s' "$INPUT" | jq -r '.tool // empty' 2>/dev/null || printf '')
+TOOL=$(printf '%s' "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null || printf '')
 FILE_PATH=$(printf '%s' "$INPUT" | jq -r '.tool_input.file_path // empty' 2>/dev/null || printf '')
 
 # Only act on Edit + Write tools (the two that modify file contents)

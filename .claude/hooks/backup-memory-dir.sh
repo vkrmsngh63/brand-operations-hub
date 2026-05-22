@@ -20,7 +20,10 @@
 #   .codespace-backup/memory/ — the mirror destination (in /workspaces/, persistent)
 #
 # Hook contract:
-#   stdin: JSON with .tool ("Edit" or "Write") + .tool_input.file_path
+#   stdin: JSON with .tool_name ("Edit" or "Write") + .tool_input.file_path
+#          (Empirically confirmed 2026-05-22-f via /tmp/plos-hook-debug.log capture;
+#          stdin also carries .session_id, .transcript_path, .cwd, .permission_mode,
+#          .hook_event_name, .tool_use_id, .duration_ms, .tool_response.)
 #   stdout: ignored (informational only; never blocks)
 #   exit 0: always (this hook is observational; must never block tool execution)
 #
@@ -43,7 +46,13 @@ if ! command -v jq >/dev/null 2>&1; then
     exit 0
 fi
 
-TOOL=$(printf '%s' "$INPUT" | jq -r '.tool // empty' 2>/dev/null || printf '')
+# Claude Code's PostToolUse stdin shape uses .tool_name (not .tool).
+# P-42 root cause confirmed 2026-05-22-f via /tmp/plos-hook-debug.log instrumentation —
+# prior to this fix the .tool extraction always returned empty + the Edit/Write gate
+# always exited without backing up. CORRECTIONS_LOG.md 2026-05-22-f §Entry has the
+# full empirical capture. Three reproductions across 2026-05-20-b, 2026-05-20-c,
+# 2026-05-21 all stemmed from this single field-name mismatch.
+TOOL=$(printf '%s' "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null || printf '')
 FILE_PATH=$(printf '%s' "$INPUT" | jq -r '.tool_input.file_path // empty' 2>/dev/null || printf '')
 
 # Only act on Edit + Write
