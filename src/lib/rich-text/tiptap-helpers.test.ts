@@ -15,6 +15,7 @@ import {
   isEmptyTipTapDoc,
   normalizeTipTapInput,
   isValidAnalysisPayload,
+  isValidOverallAnalysesBag,
 } from './tiptap-helpers.ts';
 
 /* ── isEmptyTipTapDoc ──────────────────────────────────────────────── */
@@ -210,4 +211,91 @@ test('isValidAnalysisPayload: bigint → false', () => {
   // on bigint values — rejecting at the boundary keeps the failure mode
   // predictable (400 from the route, not a 500 mid-write).
   assert.equal(isValidAnalysisPayload(BigInt(123)), false);
+});
+
+/* ── isValidOverallAnalysesBag ─────────────────────────────────────── */
+// Trust-boundary guard for the urls/[urlId] PATCH route's `overallAnalyses`
+// field. Strict shape: rejects non-objects / null / arrays; accepts only
+// the four known categories (text / image / video / reviews) as keys;
+// each value must pass isValidAnalysisPayload.
+
+test('isValidOverallAnalysesBag: empty bag {} → true', () => {
+  // The wire shape declares every category optional, so an empty bag is a
+  // legal initial state (and the schema default for the column).
+  assert.equal(isValidOverallAnalysesBag({}), true);
+});
+
+test('isValidOverallAnalysesBag: bag with one known category + valid doc → true', () => {
+  assert.equal(
+    isValidOverallAnalysesBag({
+      text: { type: 'doc', content: [{ type: 'paragraph' }] },
+    }),
+    true
+  );
+});
+
+test('isValidOverallAnalysesBag: bag with all four categories → true', () => {
+  const doc = { type: 'doc', content: [] };
+  assert.equal(
+    isValidOverallAnalysesBag({
+      text: doc,
+      image: doc,
+      video: doc,
+      reviews: doc,
+    }),
+    true
+  );
+});
+
+test('isValidOverallAnalysesBag: null → false', () => {
+  assert.equal(isValidOverallAnalysesBag(null), false);
+});
+
+test('isValidOverallAnalysesBag: array → false', () => {
+  // Arrays are typeof 'object' but reject explicitly to catch a wire
+  // shape that flips from object to array (e.g., a client passing a list
+  // of docs instead of a keyed bag).
+  assert.equal(isValidOverallAnalysesBag([]), false);
+});
+
+test('isValidOverallAnalysesBag: primitive → false', () => {
+  assert.equal(isValidOverallAnalysesBag('text'), false);
+  assert.equal(isValidOverallAnalysesBag(42), false);
+  assert.equal(isValidOverallAnalysesBag(true), false);
+});
+
+test('isValidOverallAnalysesBag: bag with unknown key → false', () => {
+  // Strict shape: catches typos like `txet` instead of `text` at the
+  // trust boundary so the misnamed key doesn't silently survive the
+  // route's merge step + sit forever in the Json column.
+  assert.equal(
+    isValidOverallAnalysesBag({
+      txet: { type: 'doc', content: [] },
+    }),
+    false
+  );
+});
+
+test('isValidOverallAnalysesBag: bag with known key + null value → false', () => {
+  // Each category value must itself pass isValidAnalysisPayload — null is
+  // rejected there, so it's rejected here too. Prevents accidentally
+  // wiping a category by sending `null` instead of an empty doc.
+  assert.equal(
+    isValidOverallAnalysesBag({ text: null }),
+    false
+  );
+});
+
+test('isValidOverallAnalysesBag: bag with known key + array value → false', () => {
+  assert.equal(
+    isValidOverallAnalysesBag({ text: [] }),
+    false
+  );
+});
+
+test('isValidOverallAnalysesBag: bag with known key + primitive value → false', () => {
+  assert.equal(
+    isValidOverallAnalysesBag({ text: 'just a string' }),
+    false
+  );
 });

@@ -90,3 +90,40 @@ export function isValidAnalysisPayload(
     !Array.isArray(value)
   );
 }
+
+// Known categories for CompetitorUrl.overallAnalyses (P-46 Workstream 1's
+// schema-additions list per §A.11). Mirrors the `OverallAnalyses`
+// interface in src/lib/shared-types/competition-scraping.ts. Kept in this
+// file so the trust-boundary helper can validate strict bag keys without
+// pulling in the wire-types module (which has Prisma transitive deps).
+const OVERALL_ANALYSES_CATEGORIES = ['text', 'image', 'video', 'reviews'] as const;
+export type OverallAnalysesCategory = (typeof OVERALL_ANALYSES_CATEGORIES)[number];
+
+/**
+ * Trust-boundary type guard for the `overallAnalyses` PATCH field on
+ * `urls/[urlId]`. The wire shape is `Partial<OverallAnalyses>` — a bag
+ * where each known category key (text / image / video / reviews) maps to
+ * a TipTap doc JSON object.
+ *
+ * Strict shape: rejects non-objects / null / arrays, rejects unknown keys
+ * (catches typos like `txet` at the boundary), and rejects per-category
+ * values that fail `isValidAnalysisPayload`. Empty bag (`{}`) is legal —
+ * the wire shape says every category is optional.
+ */
+export function isValidOverallAnalysesBag(
+  value: unknown
+): value is Partial<Record<OverallAnalysesCategory, Record<string, unknown>>> {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    return false;
+  }
+  const bag = value as Record<string, unknown>;
+  for (const key of Object.keys(bag)) {
+    if (!(OVERALL_ANALYSES_CATEGORIES as readonly string[]).includes(key)) {
+      return false;
+    }
+    if (!isValidAnalysisPayload(bag[key])) {
+      return false;
+    }
+  }
+  return true;
+}

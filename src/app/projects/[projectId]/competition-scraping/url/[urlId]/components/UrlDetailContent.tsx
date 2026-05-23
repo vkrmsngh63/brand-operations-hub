@@ -46,6 +46,7 @@ import { CustomFieldsEditor } from './CustomFieldsEditor';
 import { CapturedTextAddModal } from '../../../components/CapturedTextAddModal';
 import { CapturedImageAddModal } from '../../../components/CapturedImageAddModal';
 import { PerItemAnalysisBox } from '../../../components/PerItemAnalysisBox';
+import { OverallAnalysisBox } from '../../../components/OverallAnalysisBox';
 import {
   ConfirmDeleteDialog,
   type CascadeCounts,
@@ -418,6 +419,7 @@ export function UrlDetailContent({ project, urlId }: Props) {
               slot={textSlot}
               projectId={project.id}
               urlId={urlId}
+              overallAnalysisInitial={urlSlot.data.overallAnalyses?.text ?? {}}
               onTextAdded={handleTextAdded}
               onTextDeleted={handleTextDeleted}
             />
@@ -425,10 +427,30 @@ export function UrlDetailContent({ project, urlId }: Props) {
               slot={imagesSlot}
               projectId={project.id}
               urlId={urlId}
+              overallAnalysisInitial={urlSlot.data.overallAnalyses?.image ?? {}}
               onImageAdded={refreshImages}
               onImageDeleted={handleImageDeleted}
             />
-            <CapturedVideosGallery slot={videosSlot} projectId={project.id} />
+            <CapturedVideosGallery
+              slot={videosSlot}
+              projectId={project.id}
+              urlId={urlId}
+              overallAnalysisInitial={urlSlot.data.overallAnalyses?.video ?? {}}
+            />
+            {/* P-46 Workstream 2 Session 3 (2026-05-27) — URL-level Overall
+                Competitor Analysis box at the bottom of the URL detail page.
+                Persists to CompetitorUrl.overallCompetitorAnalysis via the
+                urls/[urlId] PATCH route. Consumes the same RichTextEditor
+                wrapper as the per-item Analysis + per-category Overall
+                Analysis boxes. */}
+            <OverallAnalysisBox
+              apiUrl={`/api/projects/${project.id}/competition-scraping/urls/${urlId}`}
+              initialContent={urlSlot.data.overallCompetitorAnalysis ?? {}}
+              field={{ kind: 'overallCompetitorAnalysis' }}
+              label="Overall Competitor Analysis"
+              placeholder="Synthesize your overall analysis of this competitor URL across all captured items…"
+              testId="url-overall-competitor-analysis"
+            />
           </>
         )}
       </main>
@@ -779,12 +801,14 @@ function CapturedTextSubsection({
   slot,
   projectId,
   urlId,
+  overallAnalysisInitial,
   onTextAdded,
   onTextDeleted,
 }: {
   slot: FetchSlot<CapturedText[]>;
   projectId: string;
   urlId: string;
+  overallAnalysisInitial: Record<string, unknown>;
   onTextAdded: (row: CapturedText) => void;
   onTextDeleted: (textId: string) => Promise<void>;
 }) {
@@ -885,6 +909,19 @@ function CapturedTextSubsection({
           </div>
         </div>
       )}
+      {/* P-46 Workstream 2 Session 3 (2026-05-27) — per-category Overall
+          Analysis box at the bottom of the Captured Text section. Persists
+          to CompetitorUrl.overallAnalyses.text via the urls/[urlId] PATCH
+          route. The route merges so this slot doesn't wipe sibling
+          categories. */}
+      <OverallAnalysisBox
+        apiUrl={`/api/projects/${projectId}/competition-scraping/urls/${urlId}`}
+        initialContent={overallAnalysisInitial}
+        field={{ kind: 'overallAnalyses', category: 'text' }}
+        label="Overall Analysis — Captured Text"
+        placeholder="Synthesize your overall analysis across the captured text items above…"
+        testId="overall-analysis-text"
+      />
       <CapturedTextAddModal
         projectId={projectId}
         urlId={urlId}
@@ -1074,12 +1111,14 @@ function CapturedImagesGallery({
   slot,
   projectId,
   urlId,
+  overallAnalysisInitial,
   onImageAdded,
   onImageDeleted,
 }: {
   slot: FetchSlot<CapturedImageWithUrls[]>;
   projectId: string;
   urlId: string;
+  overallAnalysisInitial: Record<string, unknown>;
   onImageAdded: () => Promise<void> | void;
   onImageDeleted: (imageId: string) => Promise<void>;
 }) {
@@ -1176,6 +1215,16 @@ function CapturedImagesGallery({
           onNext={onNext}
         />
       ) : null}
+      {/* P-46 Workstream 2 Session 3 (2026-05-27) — per-category Overall
+          Analysis box at the bottom of the Captured Images section. */}
+      <OverallAnalysisBox
+        apiUrl={`/api/projects/${projectId}/competition-scraping/urls/${urlId}`}
+        initialContent={overallAnalysisInitial}
+        field={{ kind: 'overallAnalyses', category: 'image' }}
+        label="Overall Analysis — Captured Images"
+        placeholder="Synthesize your overall analysis across the captured images above…"
+        testId="overall-analysis-image"
+      />
       <CapturedImageAddModal
         projectId={projectId}
         urlId={urlId}
@@ -1325,9 +1374,13 @@ function CapturedImageCard({
 function CapturedVideosGallery({
   slot,
   projectId,
+  urlId,
+  overallAnalysisInitial,
 }: {
   slot: FetchSlot<CapturedVideoWithUrls[]>;
   projectId: string;
+  urlId: string;
+  overallAnalysisInitial: Record<string, unknown>;
 }) {
   const videos = slot.data;
   return (
@@ -1369,6 +1422,16 @@ function CapturedVideosGallery({
           ))}
         </div>
       )}
+      {/* P-46 Workstream 2 Session 3 (2026-05-27) — per-category Overall
+          Analysis box at the bottom of the Captured Videos section. */}
+      <OverallAnalysisBox
+        apiUrl={`/api/projects/${projectId}/competition-scraping/urls/${urlId}`}
+        initialContent={overallAnalysisInitial}
+        field={{ kind: 'overallAnalyses', category: 'video' }}
+        label="Overall Analysis — Captured Videos"
+        placeholder="Synthesize your overall analysis across the captured videos above…"
+        testId="overall-analysis-video"
+      />
     </section>
   );
 }

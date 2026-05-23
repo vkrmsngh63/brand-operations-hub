@@ -7,6 +7,10 @@ import { recordFlake } from '@/lib/flake-counter';
 import { withRetry } from '@/lib/prisma-retry';
 import { corsPreflightResponse, withCors } from '@/lib/cors-response';
 import {
+  isValidAnalysisPayload,
+  isValidOverallAnalysesBag,
+} from '@/lib/rich-text/tiptap-helpers';
+import {
   isPlatform,
   type CompetitorUrl,
   type OverallAnalyses,
@@ -219,6 +223,67 @@ export async function PATCH(
       body.customFields && typeof body.customFields === 'object'
         ? (body.customFields as Prisma.InputJsonValue)
         : Prisma.JsonNull;
+  }
+  // P-46 Workstream 2 Session 3 (2026-05-27) — URL-level Overall Competitor
+  // Analysis TipTap doc JSON. Same trust-boundary shape as the per-item
+  // Analysis fields on text/[textId] + images/[imageId] + videos/[videoId]:
+  // isValidAnalysisPayload rejects null / arrays / primitives so the Json
+  // column only ever sees a plain object the TipTap renderer can later
+  // consume.
+  if (body.overallCompetitorAnalysis !== undefined) {
+    if (!isValidAnalysisPayload(body.overallCompetitorAnalysis)) {
+      return withCors(
+        req,
+        NextResponse.json(
+          { error: 'overallCompetitorAnalysis must be a JSON object' },
+          { status: 400 }
+        )
+      );
+    }
+    data.overallCompetitorAnalysis =
+      body.overallCompetitorAnalysis as Prisma.InputJsonValue;
+  }
+  // Per-category Overall Analysis bag (text / image / video / reviews). The
+  // client may PATCH only a subset of categories (e.g., editing the per-
+  // category Analysis box for Captured Text emits `{ overallAnalyses: { text
+  // : <doc> } }`); the route MERGES the incoming partial bag onto the
+  // existing row's bag so saving one category doesn't wipe the others. The
+  // merge needs the current row's value, so it happens before the update().
+  let mergedOverallAnalyses: OverallAnalyses | undefined;
+  if (body.overallAnalyses !== undefined) {
+    if (!isValidOverallAnalysesBag(body.overallAnalyses)) {
+      return withCors(
+        req,
+        NextResponse.json(
+          {
+            error:
+              'overallAnalyses must be a JSON object whose keys are text / image / video / reviews and whose values are JSON objects',
+          },
+          { status: 400 }
+        )
+      );
+    }
+    const existingRow = await withRetry(() =>
+      prisma.competitorUrl.findFirst({
+        where: { id: urlId, projectWorkflowId },
+        select: { overallAnalyses: true },
+      })
+    );
+    if (!existingRow) {
+      return withCors(
+        req,
+        NextResponse.json(
+          { error: 'Competitor URL not found' },
+          { status: 404 }
+        )
+      );
+    }
+    const existingBag =
+      existingRow.overallAnalyses && typeof existingRow.overallAnalyses === 'object'
+        ? (existingRow.overallAnalyses as OverallAnalyses)
+        : ({} as OverallAnalyses);
+    mergedOverallAnalyses = { ...existingBag, ...body.overallAnalyses };
+    data.overallAnalyses = mergedOverallAnalyses as Prisma.InputJsonValue;
   }
 
   try {
