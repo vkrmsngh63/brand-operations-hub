@@ -45,6 +45,7 @@ import {
 import { CustomFieldsEditor } from './CustomFieldsEditor';
 import { CapturedTextAddModal } from '../../../components/CapturedTextAddModal';
 import { CapturedImageAddModal } from '../../../components/CapturedImageAddModal';
+import { PerItemAnalysisBox } from '../../../components/PerItemAnalysisBox';
 import {
   ConfirmDeleteDialog,
   type CascadeCounts,
@@ -816,15 +817,6 @@ function CapturedTextSubsection({
     return copy;
   }, [slot.data, sortKey, sortDir]);
 
-  const onHeader = (key: TextSortKey, defaultDir: 'asc' | 'desc') => {
-    if (key === sortKey) {
-      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-    } else {
-      setSortKey(key);
-      setSortDir(defaultDir);
-    }
-  };
-
   return (
     <section
       style={{
@@ -867,85 +859,30 @@ function CapturedTextSubsection({
       ) : slot.data.length === 0 ? (
         <InlineMessage body="No text captured for this URL yet. The Chrome extension's highlight-and-add gesture saves text rows here." />
       ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={tableStyle}>
-            <thead>
-              <tr>
-                <SortableHeader
-                  label="Content Category"
-                  active={sortKey === 'contentCategory'}
-                  dir={sortDir}
-                  onClick={() => onHeader('contentCategory', 'asc')}
-                />
-                <SortableHeader
-                  label="Text"
-                  active={sortKey === 'text'}
-                  dir={sortDir}
-                  onClick={() => onHeader('text', 'asc')}
-                />
-                <th style={thStyle('left')}>Tags</th>
-                <SortableHeader
-                  label="Added On"
-                  align="right"
-                  active={sortKey === 'addedAt'}
-                  dir={sortDir}
-                  onClick={() => onHeader('addedAt', 'desc')}
-                />
-                <th
-                  style={{
-                    textAlign: 'right',
-                    padding: '8px 10px',
-                    borderBottom: '1px solid #30363d',
-                    color: '#8b949e',
-                    fontWeight: 600,
-                    width: '48px',
-                  }}
-                  aria-label="Row actions"
-                >
-                  {/* P-27 — text-row delete column */}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {sorted.map((t) => (
-                <tr
-                  key={t.id}
-                  onMouseEnter={(e) => {
-                    const cells = e.currentTarget.querySelectorAll<HTMLTableCellElement>('td');
-                    cells.forEach((cell) => {
-                      cell.style.background = '#21262d';
-                    });
-                  }}
-                  onMouseLeave={(e) => {
-                    const cells = e.currentTarget.querySelectorAll<HTMLTableCellElement>('td');
-                    cells.forEach((cell) => {
-                      cell.style.background = '';
-                    });
-                  }}
-                  style={{ borderBottom: '1px solid #21262d' }}
-                >
-                  <td style={cellStyle('left')}>{t.contentCategory ?? '—'}</td>
-                  <td style={textCellStyle}>{t.text}</td>
-                  <td style={cellStyle('left')}>
-                    {t.tags.length === 0 ? '—' : t.tags.join(', ')}
-                  </td>
-                  <td style={cellStyle('right')}>{formatDate(t.addedAt)}</td>
-                  <td style={{ textAlign: 'right', padding: '4px 6px', width: '48px' }}>
-                    <button
-                      type="button"
-                      onClick={() => setPendingDelete(t)}
-                      aria-label="Delete captured text"
-                      title="Delete captured text"
-                      data-testid="captured-text-delete-button"
-                      style={rowTrashButtonStyle}
-                    >
-                      🗑
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div>
+          {/* P-46 Workstream 2 (2026-05-25) — card layout replaces the prior
+              tight table render. Each card carries the captured text +
+              metadata + a per-item Analysis box (PerItemAnalysisBox). Sort
+              control moves above the card list since the prior sortable
+              column headers no longer exist. Shape will repeat for Captured
+              Image / Video / Review in subsequent Workstream 2 sessions per
+              docs/COMPETITION_DATA_V2_DESIGN.md §C.2. */}
+          <CapturedTextSortControl
+            sortKey={sortKey}
+            sortDir={sortDir}
+            onSortKeyChange={setSortKey}
+            onSortDirChange={setSortDir}
+          />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {sorted.map((t) => (
+              <CapturedTextCard
+                key={t.id}
+                row={t}
+                projectId={projectId}
+                onDeleteClick={() => setPendingDelete(t)}
+              />
+            ))}
+          </div>
         </div>
       )}
       <CapturedTextAddModal
@@ -971,6 +908,167 @@ function CapturedTextSubsection({
     </section>
   );
 }
+
+// P-46 Workstream 2 (2026-05-25) — per-card render for one captured text row.
+// Holds: content-category pill (top-right) / text body / tags row / added-at /
+// trash button / PerItemAnalysisBox. Mirrors the layout pattern that
+// subsequent Workstream 2 sessions will apply to Captured Image / Video /
+// Review cards.
+function CapturedTextCard({
+  row,
+  projectId,
+  onDeleteClick,
+}: {
+  row: CapturedText;
+  projectId: string;
+  onDeleteClick: () => void;
+}) {
+  return (
+    <article
+      style={{
+        background: '#0d1117',
+        border: '1px solid #21262d',
+        borderRadius: '8px',
+        padding: '14px 16px',
+      }}
+      data-testid="captured-text-card"
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
+          gap: '12px',
+          marginBottom: '8px',
+        }}
+      >
+        <div style={{ fontSize: '11px', color: '#8b949e', fontWeight: 600 }}>
+          {row.contentCategory ? (
+            <span
+              style={{
+                background: '#21262d',
+                padding: '2px 8px',
+                borderRadius: '999px',
+                color: '#e6edf3',
+              }}
+            >
+              {row.contentCategory}
+            </span>
+          ) : (
+            <span style={{ fontStyle: 'italic', color: '#6e7681' }}>
+              (no category)
+            </span>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={onDeleteClick}
+          aria-label="Delete captured text"
+          title="Delete captured text"
+          data-testid="captured-text-delete-button"
+          style={rowTrashButtonStyle}
+        >
+          🗑
+        </button>
+      </div>
+      <div
+        style={{
+          fontSize: '14px',
+          color: '#e6edf3',
+          lineHeight: 1.5,
+          whiteSpace: 'pre-wrap',
+          wordBreak: 'break-word',
+          marginBottom: '10px',
+        }}
+      >
+        {row.text}
+      </div>
+      <div
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          gap: '12px',
+          fontSize: '12px',
+          color: '#8b949e',
+        }}
+      >
+        <span>
+          <strong style={{ color: '#6e7681', fontWeight: 600 }}>Tags:</strong>{' '}
+          {row.tags.length === 0 ? '—' : row.tags.join(', ')}
+        </span>
+        <span>
+          <strong style={{ color: '#6e7681', fontWeight: 600 }}>Added:</strong>{' '}
+          {formatDate(row.addedAt)}
+        </span>
+      </div>
+      <PerItemAnalysisBox
+        apiUrl={`/api/projects/${projectId}/competition-scraping/text/${row.id}`}
+        initialAnalysis={row.analysis}
+        testId={`captured-text-analysis-${row.id}`}
+      />
+    </article>
+  );
+}
+
+// Replaces the previous sortable column headers with a single dropdown
+// sort control above the card list (Session 1 minimum; subsequent
+// Workstream 2 sessions may refine if director wants different UX).
+function CapturedTextSortControl({
+  sortKey,
+  sortDir,
+  onSortKeyChange,
+  onSortDirChange,
+}: {
+  sortKey: TextSortKey;
+  sortDir: 'asc' | 'desc';
+  onSortKeyChange: (k: TextSortKey) => void;
+  onSortDirChange: (d: 'asc' | 'desc') => void;
+}) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        marginBottom: '12px',
+        fontSize: '12px',
+        color: '#8b949e',
+      }}
+    >
+      <span>Sort by:</span>
+      <select
+        value={sortKey}
+        onChange={(e) => onSortKeyChange(e.target.value as TextSortKey)}
+        style={sortSelectStyle}
+        data-testid="captured-text-sort-key"
+      >
+        <option value="contentCategory">Category</option>
+        <option value="text">Text</option>
+        <option value="addedAt">Added on</option>
+      </select>
+      <select
+        value={sortDir}
+        onChange={(e) => onSortDirChange(e.target.value as 'asc' | 'desc')}
+        style={sortSelectStyle}
+        data-testid="captured-text-sort-dir"
+      >
+        <option value="asc">Asc</option>
+        <option value="desc">Desc</option>
+      </select>
+    </div>
+  );
+}
+
+const sortSelectStyle: React.CSSProperties = {
+  background: '#0d1117',
+  color: '#e6edf3',
+  border: '1px solid #30363d',
+  borderRadius: '4px',
+  padding: '4px 8px',
+  fontSize: '12px',
+  cursor: 'pointer',
+};
 
 function CapturedImagesGallery({
   slot,
@@ -1378,37 +1476,6 @@ function ThumbnailButton({
   );
 }
 
-function SortableHeader({
-  label,
-  active,
-  dir,
-  onClick,
-  align,
-}: {
-  label: string;
-  active: boolean;
-  dir: 'asc' | 'desc';
-  onClick: () => void;
-  align?: 'left' | 'right';
-}) {
-  const arrow = !active ? '' : dir === 'asc' ? ' ▲' : ' ▼';
-  return (
-    <th
-      onClick={onClick}
-      aria-sort={active ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}
-      style={{
-        ...thStyle(align ?? 'left'),
-        cursor: 'pointer',
-        userSelect: 'none',
-        color: active ? '#e6edf3' : '#8b949e',
-      }}
-    >
-      {label}
-      <span style={{ color: '#1f6feb' }}>{arrow}</span>
-    </th>
-  );
-}
-
 function LoadingPanel() {
   return (
     <div
@@ -1555,18 +1622,6 @@ function cellStyle(align: 'left' | 'right'): React.CSSProperties {
     whiteSpace: 'nowrap',
   };
 }
-
-const textCellStyle: React.CSSProperties = {
-  textAlign: 'left',
-  padding: '8px 10px',
-  color: '#c9d1d9',
-  // Captured text rows can be long sentences/paragraphs — wrap them rather
-  // than truncating, so the user can read the snippet without expanding.
-  whiteSpace: 'pre-wrap',
-  wordBreak: 'break-word',
-  maxWidth: '480px',
-  lineHeight: 1.5,
-};
 
 // ─── Formatters ─────────────────────────────────────────────────────────
 

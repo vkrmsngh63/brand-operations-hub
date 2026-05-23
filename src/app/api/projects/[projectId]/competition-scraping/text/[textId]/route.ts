@@ -6,6 +6,7 @@ import { markWorkflowActive } from '@/lib/workflow-status';
 import { recordFlake } from '@/lib/flake-counter';
 import { withRetry } from '@/lib/prisma-retry';
 import { corsPreflightResponse, withCors } from '@/lib/cors-response';
+import { isValidAnalysisPayload } from '@/lib/rich-text/tiptap-helpers';
 import type {
   CapturedText,
   UpdateCapturedTextRequest,
@@ -130,6 +131,22 @@ export async function PATCH(
       );
     }
     data.sortOrder = body.sortOrder;
+  }
+  // P-46 Workstream 2 (2026-05-25) — per-item Analysis TipTap doc JSON.
+  // The wire type accepts `Record<string, unknown>`; isValidAnalysisPayload
+  // rejects null / arrays / primitives at the trust boundary so the Json
+  // column only ever sees a plain object (which TipTap can later render).
+  if (body.analysis !== undefined) {
+    if (!isValidAnalysisPayload(body.analysis)) {
+      return withCors(
+        req,
+        NextResponse.json(
+          { error: 'analysis must be a JSON object' },
+          { status: 400 }
+        )
+      );
+    }
+    data.analysis = body.analysis as Prisma.InputJsonValue;
   }
 
   try {
