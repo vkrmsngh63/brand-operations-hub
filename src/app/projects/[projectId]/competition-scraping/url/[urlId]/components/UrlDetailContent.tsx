@@ -428,7 +428,7 @@ export function UrlDetailContent({ project, urlId }: Props) {
               onImageAdded={refreshImages}
               onImageDeleted={handleImageDeleted}
             />
-            <CapturedVideosGallery slot={videosSlot} />
+            <CapturedVideosGallery slot={videosSlot} projectId={project.id} />
           </>
         )}
       </main>
@@ -1148,49 +1148,20 @@ function CapturedImagesGallery({
       ) : images.length === 0 ? (
         <InlineMessage body="No images captured for this URL yet. The Chrome extension’s right-click “Save to PLOS” or region-screenshot gesture saves image rows here." />
       ) : (
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
-            gap: '12px',
-          }}
-        >
+        // P-46 Workstream 2 (2026-05-25 Session 2) — card list replaces the
+        // prior thumbnail grid per the §C.2 card-layout precedent locked in
+        // Session 1 for Captured Text. Each card carries the image + metadata
+        // + a per-item Analysis box. Click on the thumbnail still opens the
+        // existing full-size ImageViewerModal (prev/next nav across the list).
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {images.map((img, idx) => (
-            <div
+            <CapturedImageCard
               key={img.id}
-              onMouseEnter={(e) => {
-                // P-34 — first descendant <button> is the ThumbnailButton
-                // (the trash overlay sits after it in DOM order). The
-                // ThumbnailButton has an explicit background of #0d1117, so
-                // onMouseLeave must restore that value rather than clearing
-                // to empty string (which would leave the card transparent).
-                const card = e.currentTarget.querySelector<HTMLButtonElement>('button');
-                if (card) card.style.background = '#21262d';
-              }}
-              onMouseLeave={(e) => {
-                const card = e.currentTarget.querySelector<HTMLButtonElement>('button');
-                if (card) card.style.background = '#0d1117';
-              }}
-              style={{ position: 'relative' }}
-            >
-              <ThumbnailButton
-                image={img}
-                onOpen={() => setOpenIndex(idx)}
-              />
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setPendingDelete(img);
-                }}
-                aria-label="Delete captured image"
-                title="Delete captured image"
-                data-testid="captured-image-delete-button"
-                style={thumbnailTrashButtonStyle}
-              >
-                🗑
-              </button>
-            </div>
+              image={img}
+              projectId={projectId}
+              onOpen={() => setOpenIndex(idx)}
+              onDeleteClick={() => setPendingDelete(img)}
+            />
           ))}
         </div>
       )}
@@ -1232,21 +1203,131 @@ function CapturedImagesGallery({
   );
 }
 
+// P-46 Workstream 2 (2026-05-25 Session 2) — per-card render for one captured
+// image row. Mirrors CapturedTextCard from Session 1: pill (imageCategory)
+// top-left + trash top-right + image hero (click opens existing full-size
+// modal) + metadata rows + PerItemAnalysisBox at the bottom.
+function CapturedImageCard({
+  image,
+  projectId,
+  onOpen,
+  onDeleteClick,
+}: {
+  image: CapturedImageWithUrls;
+  projectId: string;
+  onOpen: () => void;
+  onDeleteClick: () => void;
+}) {
+  return (
+    <article
+      style={{
+        background: '#0d1117',
+        border: '1px solid #21262d',
+        borderRadius: '8px',
+        padding: '14px 16px',
+      }}
+      data-testid="captured-image-card"
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
+          gap: '12px',
+          marginBottom: '10px',
+        }}
+      >
+        <div style={{ fontSize: '11px', color: '#8b949e', fontWeight: 600 }}>
+          {image.imageCategory ? (
+            <span
+              style={{
+                background: '#21262d',
+                padding: '2px 8px',
+                borderRadius: '999px',
+                color: '#e6edf3',
+              }}
+            >
+              {image.imageCategory}
+            </span>
+          ) : (
+            <span style={{ fontStyle: 'italic', color: '#6e7681' }}>
+              (no category)
+            </span>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={onDeleteClick}
+          aria-label="Delete captured image"
+          title="Delete captured image"
+          data-testid="captured-image-delete-button"
+          style={rowTrashButtonStyle}
+        >
+          🗑
+        </button>
+      </div>
+      <div style={{ maxWidth: '320px', marginBottom: '10px' }}>
+        <ThumbnailButton image={image} onOpen={onOpen} />
+      </div>
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '4px',
+          fontSize: '12px',
+          color: '#8b949e',
+          marginBottom: '4px',
+        }}
+      >
+        {image.composition ? (
+          <span>
+            <strong style={{ color: '#6e7681', fontWeight: 600 }}>
+              Composition:
+            </strong>{' '}
+            {image.composition}
+          </span>
+        ) : null}
+        {image.embeddedText ? (
+          <span>
+            <strong style={{ color: '#6e7681', fontWeight: 600 }}>
+              Embedded text:
+            </strong>{' '}
+            {image.embeddedText}
+          </span>
+        ) : null}
+        <span>
+          <strong style={{ color: '#6e7681', fontWeight: 600 }}>Tags:</strong>{' '}
+          {image.tags.length === 0 ? '—' : image.tags.join(', ')}
+        </span>
+        <span>
+          <strong style={{ color: '#6e7681', fontWeight: 600 }}>Added:</strong>{' '}
+          {formatDate(image.addedAt)}
+        </span>
+      </div>
+      <PerItemAnalysisBox
+        apiUrl={`/api/projects/${projectId}/competition-scraping/images/${image.id}`}
+        initialAnalysis={image.analysis}
+        testId={`captured-image-analysis-${image.id}`}
+      />
+    </article>
+  );
+}
+
 // P-27 Build #5 — captured-videos gallery section on the URL detail page.
 // Mirrors the image gallery's shape (section header + count + loading/error/
-// empty + grid) but renders inline players directly instead of a thumbnail
-// modal: HTML5 <video controls> is its own click-to-play affordance for
-// DIRECT_BYTES rows, and <iframe> shows the platform's own thumbnail +
-// player for EMBED rows.
+// empty + card list).
 //
-// Build #5 ships the renderer only — no manual-add modal, no per-row
-// delete dialog, no inline metadata editor (those mirror the image
-// gallery's later-slice extensions and can ship as polish items if the
-// real-Chrome verification surfaces the need).
+// P-46 Workstream 2 (2026-05-25 Session 2) — converted to the same vertical
+// card-list layout as Captured Text + Captured Image per the §C.2 precedent.
+// Each card now carries the inline player + metadata + a per-item Analysis
+// box (PerItemAnalysisBox). Per-row delete dialog still deferred (matches
+// Build #5's scope — no per-video delete in v1).
 function CapturedVideosGallery({
   slot,
+  projectId,
 }: {
   slot: FetchSlot<CapturedVideoWithUrls[]>;
+  projectId: string;
 }) {
   const videos = slot.data;
   return (
@@ -1282,15 +1363,9 @@ function CapturedVideosGallery({
       ) : videos.length === 0 ? (
         <InlineMessage body="No videos captured for this URL yet. The Chrome extension’s right-click “Save to PLOS” gesture on a video or YouTube/Vimeo embed, or the popup’s “Paste captured video” form, saves video rows here." />
       ) : (
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-            gap: '16px',
-          }}
-        >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {videos.map((v) => (
-            <CapturedVideoCard key={v.id} video={v} />
+            <CapturedVideoCard key={v.id} video={v} projectId={projectId} />
           ))}
         </div>
       )}
@@ -1298,37 +1373,77 @@ function CapturedVideosGallery({
   );
 }
 
-// Single video card. Renders an inline <iframe> for EMBED rows (YouTube /
-// Vimeo / etc. — the platform's own player serves the thumbnail + play
-// button) and an inline <video controls> for DIRECT_BYTES rows (the
-// browser's native player serves the click-to-play affordance; the
-// thumbnail signed URL feeds the poster attribute, with a generic ▶️
-// fallback frame when thumbnailUrl is null per §A.12).
-function CapturedVideoCard({ video }: { video: CapturedVideoWithUrls }) {
-  const caption = video.videoCategory ?? video.composition ?? null;
+// P-46 Workstream 2 (2026-05-25 Session 2) — per-card render for one captured
+// video row. Mirrors CapturedTextCard + CapturedImageCard: pill (videoCategory)
+// top-left + inline player + metadata rows + PerItemAnalysisBox at the bottom.
+//
+// Renders an inline <iframe> for EMBED rows (YouTube / Vimeo / etc. — the
+// platform's own player serves the thumbnail + play button) and an inline
+// <video controls> for DIRECT_BYTES / SCREEN_RECORDING rows (browser's native
+// player serves the click-to-play affordance; the thumbnail signed URL feeds
+// the poster attribute, with a generic ▶️ fallback when thumbnailUrl is null
+// per §A.12).
+function CapturedVideoCard({
+  video,
+  projectId,
+}: {
+  video: CapturedVideoWithUrls;
+  projectId: string;
+}) {
   return (
     <article
       style={{
         background: '#0d1117',
-        border: '1px solid #30363d',
-        borderRadius: '6px',
-        overflow: 'hidden',
-        display: 'flex',
-        flexDirection: 'column',
+        border: '1px solid #21262d',
+        borderRadius: '8px',
+        padding: '14px 16px',
       }}
+      data-testid="captured-video-card"
     >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
+          gap: '12px',
+          marginBottom: '10px',
+        }}
+      >
+        <div style={{ fontSize: '11px', color: '#8b949e', fontWeight: 600 }}>
+          {video.videoCategory ? (
+            <span
+              style={{
+                background: '#21262d',
+                padding: '2px 8px',
+                borderRadius: '999px',
+                color: '#e6edf3',
+              }}
+            >
+              {video.videoCategory}
+            </span>
+          ) : (
+            <span style={{ fontStyle: 'italic', color: '#6e7681' }}>
+              (no category)
+            </span>
+          )}
+        </div>
+      </div>
       <div
         style={{
           position: 'relative',
           width: '100%',
+          maxWidth: '480px',
           aspectRatio: '16 / 9',
           background: '#000',
+          borderRadius: '6px',
+          overflow: 'hidden',
+          marginBottom: '10px',
         }}
       >
         {video.sourceType === 'EMBED' ? (
           <iframe
             src={video.originalSrcUrl}
-            title={caption ?? 'Captured video'}
+            title={video.videoCategory ?? 'Captured video'}
             loading="lazy"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowFullScreen
@@ -1378,18 +1493,46 @@ function CapturedVideoCard({ video }: { video: CapturedVideoWithUrls }) {
           </div>
         )}
       </div>
-      {caption ? (
-        <div
-          style={{
-            padding: '8px 12px',
-            color: '#e6edf3',
-            fontSize: '13px',
-            lineHeight: 1.4,
-          }}
-        >
-          {caption}
-        </div>
-      ) : null}
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '4px',
+          fontSize: '12px',
+          color: '#8b949e',
+          marginBottom: '4px',
+        }}
+      >
+        {video.composition ? (
+          <span>
+            <strong style={{ color: '#6e7681', fontWeight: 600 }}>
+              Composition:
+            </strong>{' '}
+            {video.composition}
+          </span>
+        ) : null}
+        {video.embeddedText ? (
+          <span>
+            <strong style={{ color: '#6e7681', fontWeight: 600 }}>
+              Embedded text:
+            </strong>{' '}
+            {video.embeddedText}
+          </span>
+        ) : null}
+        <span>
+          <strong style={{ color: '#6e7681', fontWeight: 600 }}>Tags:</strong>{' '}
+          {video.tags.length === 0 ? '—' : video.tags.join(', ')}
+        </span>
+        <span>
+          <strong style={{ color: '#6e7681', fontWeight: 600 }}>Added:</strong>{' '}
+          {formatDate(video.addedAt)}
+        </span>
+      </div>
+      <PerItemAnalysisBox
+        apiUrl={`/api/projects/${projectId}/competition-scraping/videos/${video.id}`}
+        initialAnalysis={video.analysis}
+        testId={`captured-video-analysis-${video.id}`}
+      />
     </article>
   );
 }
@@ -1573,24 +1716,6 @@ const rowTrashButtonStyle: React.CSSProperties = {
   lineHeight: '14px',
   cursor: 'pointer',
   padding: '4px 8px',
-};
-
-// P-27 — overlay trash button on each thumbnail in the image gallery.
-// Sits in the top-right corner of the thumbnail square so the thumbnail
-// click target stays the full image area.
-const thumbnailTrashButtonStyle: React.CSSProperties = {
-  position: 'absolute',
-  top: '4px',
-  right: '4px',
-  background: 'rgba(13, 17, 23, 0.85)',
-  border: '1px solid #30363d',
-  borderRadius: '4px',
-  color: '#c9d1d9',
-  fontSize: '12px',
-  lineHeight: '12px',
-  cursor: 'pointer',
-  padding: '4px 6px',
-  zIndex: 2,
 };
 
 const tableStyle: React.CSSProperties = {

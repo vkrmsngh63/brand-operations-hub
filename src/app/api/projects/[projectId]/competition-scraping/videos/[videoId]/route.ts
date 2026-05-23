@@ -7,6 +7,7 @@ import { recordFlake } from '@/lib/flake-counter';
 import { withRetry } from '@/lib/prisma-retry';
 import { corsPreflightResponse, withCors } from '@/lib/cors-response';
 import { deleteVideo } from '@/lib/competition-video-storage';
+import { isValidAnalysisPayload } from '@/lib/rich-text/tiptap-helpers';
 import type {
   CapturedVideo,
   UpdateCapturedVideoRequest,
@@ -180,6 +181,20 @@ export async function PATCH(
       );
     }
     data.sortOrder = body.sortOrder;
+  }
+  // P-46 Workstream 2 (2026-05-25 Session 2) — per-item Analysis TipTap doc JSON.
+  // Same trust-boundary guard pattern as text/[textId] + images/[imageId].
+  if (body.analysis !== undefined) {
+    if (!isValidAnalysisPayload(body.analysis)) {
+      return withCors(
+        req,
+        NextResponse.json(
+          { error: 'analysis must be a JSON object' },
+          { status: 400 }
+        )
+      );
+    }
+    data.analysis = body.analysis as Prisma.InputJsonValue;
   }
 
   try {

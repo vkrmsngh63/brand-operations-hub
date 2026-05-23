@@ -145,3 +145,69 @@ test('isValidAnalysisPayload: number → false', () => {
 test('isValidAnalysisPayload: boolean → false', () => {
   assert.equal(isValidAnalysisPayload(true), false);
 });
+
+/* ── isValidAnalysisPayload — extended edge cases (Session 2 2026-05-25) ──
+   The two new PATCH routes (images/[imageId] + videos/[videoId]) share the
+   same trust-boundary guard as Session 1's text/[textId] route. These cases
+   pin down the guard's exact contract at the boundary so a regression here
+   would surface as a clear test failure rather than a misshapen JSON column
+   write that the renderer would later choke on. */
+
+test('isValidAnalysisPayload: nested object (object holding object) → true', () => {
+  // TipTap doc JSON nests {type, content: [...]} arbitrarily deep — the
+  // guard's job is shape-level not deep-validity, so any plain object passes.
+  assert.equal(
+    isValidAnalysisPayload({
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [{ type: 'text', text: 'hello', marks: [{ type: 'bold' }] }],
+        },
+      ],
+    }),
+    true
+  );
+});
+
+test('isValidAnalysisPayload: plain object with arbitrary keys → true', () => {
+  // The guard is intentionally NOT a TipTap schema validator — opaque JSON
+  // is fine since the editor itself validates at render time. A future
+  // schema change that adds keys must not break the trust-boundary check.
+  assert.equal(
+    isValidAnalysisPayload({ foo: 'bar', baz: 42, qux: { nested: true } }),
+    true
+  );
+});
+
+test('isValidAnalysisPayload: function → false', () => {
+  // typeof function !== 'object' — functions are not serializable to JSON
+  // and would crash the Prisma Json column writer. The guard rejects.
+  assert.equal(
+    isValidAnalysisPayload(() => 'oops'),
+    false
+  );
+});
+
+test('isValidAnalysisPayload: Object.create(null) (no prototype) → true', () => {
+  // Plain bag without Object.prototype — still a non-array non-null object;
+  // JSON.stringify handles it identically. The guard accepts.
+  const bag = Object.create(null) as Record<string, unknown>;
+  bag.type = 'doc';
+  bag.content = [];
+  assert.equal(isValidAnalysisPayload(bag), true);
+});
+
+test('isValidAnalysisPayload: TipTap doc with empty content array → true', () => {
+  // {type:'doc', content:[]} is a legal TipTap shape distinct from the
+  // canonical EMPTY_TIPTAP_DOC (which has one empty paragraph). Both pass
+  // the trust-boundary guard since both are non-array objects.
+  assert.equal(isValidAnalysisPayload({ type: 'doc', content: [] }), true);
+});
+
+test('isValidAnalysisPayload: bigint → false', () => {
+  // BigInt is a primitive (typeof === 'bigint'), and JSON.stringify throws
+  // on bigint values — rejecting at the boundary keeps the failure mode
+  // predictable (400 from the route, not a 500 mid-write).
+  assert.equal(isValidAnalysisPayload(BigInt(123)), false);
+});
