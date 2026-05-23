@@ -799,4 +799,73 @@ Each subsection captures: scope (what ships), file-level deltas (which files cha
 
 ---
 
+## §B 2026-05-23-c — `session_2026-05-23-c_p46-workstream-2-deploy-session` — Workstream 2 DEPLOY SESSION ships Workstream 1's schema-aware code + Sessions 1-5's UI/route work to vklf.com end-to-end via ff-merge `783abf4..9969427` + Phase-4 6/6 surfaces PASS; memorializes the "Multi-session workstream deploy gate timing" reusable Pattern
+
+- **Session shape:** DEPLOY session (canonical 4-phase /deploy orchestration). Pure orchestration — no new code, no new schema, no new dependencies, no fresh extension zip. The 4 phases ran cleanly with ONE Rule 9 gate fired for the deploy push.
+
+- **Headline outcome:** **P-46 Workstream 2 ✅ DONE-AND-VERIFIED 2026-05-23-c end-to-end on vklf.com.** Phase-4 director real-Chrome cross-platform verification ALL 6 SURFACES PASS clean with zero caveats — director reported "all surfaces pass" — the cleanest end-of-workstream verification in any P-46 session. **Workstream 1 ✅ DONE-AND-VERIFIED 2026-05-23-c in the same ff-merge** (schema columns shipped via 2026-05-24 `prisma db push` are now read+write-active in production after today's code deploy). Schema-change-in-flight flag FLIPPED YES → NO at deploy completion.
+
+- **Phase 1 — Pre-deploy /scoreboard:** All 5 checks GREEN at exact Session 5 baselines — root tsc clean / extension tsc clean / 558 ext UNCHANGED / 692 src/lib UNCHANGED / 61 routes UNCHANGED. Check 6 Playwright SKIPPED via Rule 27 picker — director picked SKIP (recommended; the lone `extensions/` file in the ff-merge bundle is `captured-text-validation.test.ts` +11 lines, test-only, doesn't ship in the `.crx` runtime; the Workstream 2 deploy is purely server-side + web UI).
+
+- **Phase 2 — Rule 9 director-Yes gate:** AskUserQuestion picker fired ONCE for `git push origin main`; director picked "Deploy now (recommended)".
+
+- **Phase 3 — ff-merge + push + Vercel auto-redeploy + ping-pong sync:** `git checkout main && git merge --ff-only workflow-2-competition-scraping` succeeded clean; ff-merge range `783abf4..9969427` — **49 files +7504/-477** — 13 commits ff'd as one fast-forward:
+  - `d364063` design-session doc-batch (2026-05-23)
+  - `caad82a` Workstream 1 schema build (2026-05-24)
+  - `fb19314` W1 doc-batch (2026-05-24)
+  - `b6e43fe` W2 Session 1 build (2026-05-25)
+  - `9f555d0` S1 doc-batch (2026-05-25)
+  - `9747f63` S2 build (2026-05-26)
+  - `070a7ee` S2 doc-batch (2026-05-26)
+  - `4773b62` S3 build (2026-05-27)
+  - `64084ae` S3 doc-batch (2026-05-27)
+  - `82d390a` S4 build (2026-05-28)
+  - `a8aa37b` S4 doc-batch (2026-05-28)
+  - `374f1a3` S5 build (2026-05-23-b)
+  - `9969427` S5 doc-batch (2026-05-23-b)
+
+  Post-merge /scoreboard all 5 checks GREEN on main (tree-identity preserved through ff; Playwright SKIPPED per ff-merge-is-pointer-move convention). `git push origin main 783abf4..9969427` succeeded — Vercel auto-redeploy fired. Ping-pong sync: `git checkout workflow-2-competition-scraping && git merge --ff-only main` was a NO-OP (workflow-2 was already at `9969427` from the prior session's doc-batch push); `git push origin workflow-2-competition-scraping` returned "Everything up-to-date".
+
+- **Phase 4 — Director real-Chrome cross-platform verify on vklf.com (ALL 6 SURFACES PASS):**
+  1. **Captured Text section** (vertical card list + per-item Analysis editor with Saving / ✓ Saved indicator; persists on refresh) — **PASS** (Sessions 1 + 5 combined).
+  2. **Captured Image section** (same shape) — **PASS** (Session 2).
+  3. **Captured Video section** (same shape) — **PASS** (Session 2).
+  4. **Captured Reviews section** (manual-add modal with 1-5 star picker + body + reviewer name + date + tags; per-item Analysis; Overall Reviews Analysis) — **PASS** (Session 4).
+  5. **URL-level affordances** (4 new structural text fields Type / Description-1 / Description-2 / Price + Scraping Status toggle + Overall Competitor Analysis box at page bottom; Sizes/Options UI completely removed) — **PASS** (Session 5 + Session 3).
+  6. **Competition Data table Status pill column** (second-from-left after URL; green Complete / gray Incomplete; bidirectionally mirrors the URL detail page toggle) — **PASS** (Session 5).
+
+- **Schema-change-in-flight flag FLIPPED YES → NO at deploy completion.** Workstream 1's schema (3 new tables `CapturedReview` / `ComprehensiveCompetitorAnalysis` / `UserTablePreferences` + 8 new `CompetitorUrl` columns + 1 new `analysis` JSON column on each of CapturedText/Image/Video + 1 new `ScrapingStatus` enum) — live on Supabase since 2026-05-24 — now has production code reading + writing them on vklf.com. Existing rows render with empty new-field values per §A.11 "no data backfill needed". The flag stays NO until the next schema migration (likely Workstream 3 — `UserTablePreferences` model is already in place but the user-facing settings UI hasn't been built; Workstream 3 first build session may add settings UI without a new schema delta — TBD).
+
+- **NEW reusable Pattern memorialized — "Multi-session workstream deploy gate timing":** When a workstream spans multiple build sessions (here: 1 schema + 5 UI sessions = 6 build sessions across 6 distinct calendar/session-letter dates), the deploy session should land AFTER the LAST build session that contains user-visible UI, not after the schema session. Three reasons:
+  - (a) Deploying after the schema session alone gives no user-visible value but locks the schema-change-in-flight flag YES across the entire build arc (preventing flag-clear status at every intermediate build session). Under this Pattern the flag has minimal time-in-flight footprint — one NO→YES transition at the schema build + one YES→NO transition at the end-of-workstream deploy.
+  - (b) Deploying after each build session multiplies the deploy-orchestration overhead 6x. One deploy ≈ 2 hours of pure orchestration; six deploys would be ≈ 12 hours.
+  - (c) The END-TO-END user flow is verifiable in one Phase-4 walkthrough at the END of the build arc when ALL UI is in place. Verifying after the schema build alone gives no walkthrough (schema is server-side). Verifying after each UI build session would walk through partial UI (Session 2's Captured Image works but Session 4's Captured Reviews UI doesn't exist yet at that point). The end-of-arc Phase-4 walks through the COMPLETE user flow across all 6 surfaces in one continuous session — exactly what happened today.
+
+  This Pattern pairs with the 2026-05-24 "Workstream Foundation Build Bundle" Pattern (schema + API shells + shared-types in one foundation build session) to give the full multi-session workstream deploy-cadence shape: **ONE foundation build + N UI builds + ONE end-of-workstream deploy.** Reusable by Workstreams 3-5 of P-46 + future multi-session workstreams (W#3-W#14 each likely follow this same cadence if well-specced via a frozen §A interview + §C per-workstream outlines like P-46 has).
+
+- **Informational sub-observation A — P-43 cwd-leak class re-reproduced TWICE this session:** Both pre-deploy /scoreboard Check 5 + post-merge /scoreboard Check 5 ran the EXTENSION build instead of the Next.js root build because the parallel Checks 2+3 cd'd to `extensions/competition-scraping/` and Claude's inline-typed Check 5 didn't carry the `cd /workspaces/brand-operations-hub &&` prefix. Caught immediately from grep output of `0` routes (Next.js prints a route table; the extension build prints `Built extension in N s` + zip size) and recovered cleanly both times. Same LOW informational shape as the 2026-05-22-i + 2026-05-24 + 2026-05-27 reproductions. Reinforces P-43's standing observation that template hardening protects verbatim-template-read pathways but NOT Claude's inline-typed Bash shortcuts. NOT promoted to a separate corrections-tier §Entry — captured in CORRECTIONS_LOG §Entry 2026-05-23-c as a LOW informational sub-observation embedded in the deploy-closing entry.
+
+- **Informational sub-observation B — Pointer-file off-by-one on main-tip SHA:** NEXT_SESSION.md (written by Session 5's end-of-session) said main was at `ee8c79d` (the 2026-05-22-i P-45 deploy BUILD commit) but actual main was at `783abf4` (the 2026-05-22-i DOC-BATCH which landed via the canonical 3-push pattern's post-deploy ping-pong sync — both main + workflow-2 end up at the doc-batch SHA after the prior session closes). The 13-commit ff-merge count was still correct. LOW informational; the deploy proceeded cleanly because the ff-merge from workflow-2 to main worked regardless of which SHA main was at. Pattern reminder for pointer-file writers: refer to the END SHA after the prior session's full doc-batch push (the "actual main tip"), not the build commit alone. The canonical 3-push pattern in `feedback_approval_scope_per_decision_unit.md` makes the doc-batch the LAST push of the session, so the doc-batch SHA is always the most recent SHA on both branches after a deploy session.
+
+- **Calibration data point — Workstream 2 came in at the top end of estimate:** 5 build sessions vs. 3-5 estimated per §C.2. The §C.2 plan was well-specced; no overrun. Combined with Workstream 1's UNDER-estimate (1 session vs. 2-3 planned per §C.1), the total Workstream 1+2 spend is 6 build sessions + 1 deploy session = 7 sessions vs. 4-8 estimated (4 = W1 floor 2 + W2 floor 3; 8 = W1 ceil 3 + W2 ceil 5). Right on plan. Useful data point for sizing Workstream 3 (estimated 3-4 sessions per §C.3) — if §C.3 is similarly well-specced, expect 3-4 build sessions + 1 deploy session = 4-5 total.
+
+- **Impact on §A: NONE.** §A stays frozen per Rule 18. The schema delta + 5 UI workstreams + interview answers Q1-Q10 all stayed exactly as specced in the design session 2026-05-23; no §A amendments needed during implementation. Confirms the §A frozen interview pattern produced a well-specced multi-workstream plan.
+
+- **Impact on §C:** **§C.2 (Workstream 2 implementation outline) is now 100% COMPLETE** — all sub-scopes landed across Sessions 1-5 + deployed end-to-end today; no §C.2 amendment needed. **§C.3 (Workstream 3 — Competition Data table redesign) begins next session per (a.77) RECOMMENDED-NEXT.** **§C.4 + §C.5 (Workstreams 4 + 5) remain pending per Q10's locked sequencing.**
+
+- **Cross-references:**
+  - CORRECTIONS_LOG §Entry 2026-05-23-c — the operational-log twin of this §B entry; captures the deploy-closing observations + the same Pattern memorialization at the operational-log layer.
+  - §B 2026-05-24 — Workstream Foundation Build Bundle Pattern (pairs with today's new Pattern to give the full multi-session-workstream deploy-cadence shape).
+  - §B 2026-05-25 — PerItemAnalysisBox extraction Pattern (Session 1; first of Workstream 2's four memorialized extraction-shape Patterns).
+  - §B 2026-05-27 — OverallAnalysisBox extraction Pattern (Session 3).
+  - §B 2026-05-28 — Per-record handler DI-seam precedent extension Pattern (Session 4).
+  - §B 2026-05-23-b — Field-allowlist subset extraction Pattern (Session 5; fourth + final of Workstream 2's memorialized extraction-shape Patterns).
+  - §A.11 — schema additions confirmed live on Supabase since 2026-05-24 + read+write-active on vklf.com since today's deploy.
+  - §C.2 — Workstream 2 implementation outline; 100% complete after today's deploy.
+  - §C.3 — Workstream 3 implementation outline; begins next session.
+
+- **Closing line:** Workstream 2 implementation arc complete end-to-end ✅ DONE-AND-VERIFIED on vklf.com. Workstream 1 also closes ✅ DONE-AND-VERIFIED. Next session: Workstream 3 first build session — Competition Data table redesign per §C.3.
+
+---
+
 END OF DOCUMENT
