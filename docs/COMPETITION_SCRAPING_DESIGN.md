@@ -6,7 +6,9 @@
 **Branch:** `workflow-2-competition-scraping`
 **Created:** May 4, 2026
 **Created in session:** session_2026-05-04_w2-workflow-requirements-interview (Claude Code)
-**Last updated:** 2026-05-20-b (P-27 Captured-videos feature DESIGN session — new §B 2026-05-20-b entry appended at end-of-doc cross-referencing the standalone `docs/CAPTURED_VIDEOS_DESIGN.md` shipped this session. §A unchanged — P-27 is a NEW polish item on top of W#2's graduated-pattern surface; §A frozen per Rule 18. The design lives in standalone `docs/CAPTURED_VIDEOS_DESIGN.md` (525 lines after corrections; §A.0–§A.18 frozen + §B empty per Rule 18 shape) per the Rule 14f forced-picker pick of Option A — new top-level doc — over Option B (§B append here) and Option C (both). Future P-27 ship sessions get §B entries in `docs/CAPTURED_VIDEOS_DESIGN.md` directly per Rule 18, NOT in this doc's §B. Rule 24 end-of-session catch on the §A.8 asymmetry-claim captured in `docs/CORRECTIONS_LOG.md` §Entry 2026-05-20-b INFORMATIONAL. Schema-change-in-flight stayed "No" this session — design-only.)
+**Last updated:** 2026-05-23 (P-46 W#2 Phase 2 design session — new §B 2026-05-23 entry appended at end-of-doc cross-referencing the standalone `docs/COMPETITION_DATA_V2_DESIGN.md` shipped this session (~700 lines; §A frozen 10 questions + §B empty + §C 5-workstream implementation outlines; mirrors the 2026-05-20-b CAPTURED_VIDEOS_DESIGN.md split precedent). §A unchanged per Rule 18 — P-46 is a Phase 2 expansion of W#2's graduated-pattern surface; the design lives in the standalone doc. Future P-46 build sessions get §B entries in `docs/COMPETITION_DATA_V2_DESIGN.md` directly per Rule 18, NOT in this doc's §B. The 10 locked decisions cover Reviews extraction (DEFERRED to future per-platform sessions; v1 = schema + URL-detail-page view + manual entry form) + click-to-edit cells + server-side per-user UI preferences + Comprehensive Analysis page one-per-Project + TipTap rich-text editor + Sizes/Options box hide-UI-keep-data + Competition Score number-input + Status ↔ Scraping Status bidirectional mirror + Select-preview-thumbnail DROPPED + workstream sequencing Schema → URL detail page → Competition Data table → Comprehensive Analysis page → Extension + Reviews. Schema-change-in-flight stayed "No" this session — design-only.)
+
+**Previously updated:** 2026-05-20-b (P-27 Captured-videos feature DESIGN session — new §B 2026-05-20-b entry appended at end-of-doc cross-referencing the standalone `docs/CAPTURED_VIDEOS_DESIGN.md` shipped this session. §A unchanged — P-27 is a NEW polish item on top of W#2's graduated-pattern surface; §A frozen per Rule 18. The design lives in standalone `docs/CAPTURED_VIDEOS_DESIGN.md` (525 lines after corrections; §A.0–§A.18 frozen + §B empty per Rule 18 shape) per the Rule 14f forced-picker pick of Option A — new top-level doc — over Option B (§B append here) and Option C (both). Future P-27 ship sessions get §B entries in `docs/CAPTURED_VIDEOS_DESIGN.md` directly per Rule 18, NOT in this doc's §B. Rule 24 end-of-session catch on the §A.8 asymmetry-claim captured in `docs/CORRECTIONS_LOG.md` §Entry 2026-05-20-b INFORMATIONAL. Schema-change-in-flight stayed "No" this session — design-only.)
 
 **Previously updated:** 2026-05-19-g-2 (ADDENDUM to 2026-05-19-g — same Claude session, post-handoff scope-add. Director added a new W#2 pre-graduation polish item P-27 — Captured-videos feature: end-to-end parity with captured-text + captured-image flows. New §B 2026-05-19-g-2 entry appended at end — mid-build directive Read-It-Back per Rule 18 — capturing the scope-add directive verbatim + director's three Rule 14f forced-picker outcomes (Q1 Source = URL reference + uploaded video bytes BOTH stored; Q2 Gestures = full symmetry with text/image right-click + embed + popup paste; Q3 Graduation timing = pre-graduation polish item) + the 7 open design questions to resolve in the dedicated design interview before any code starts (Supabase bucket strategy; thumbnail extraction approach; schema additions; YouTube/Vimeo handling; cross-platform `<video>` detection; Living Questions answers; DATA_CATALOG §7 reciprocal output declaration). §A unchanged per Rule 18. Schema-change-in-flight stays "No" for now; flips to "Yes" when P-27 implementation starts.)
 
@@ -3113,6 +3115,63 @@ W#2 graduation estimate revised: ~3-6 more sessions (pre-P-27 capture, items wer
 - CHAT_REGISTRY 2026-05-20-b top entry (the canonical chronological log).
 - `feedback_recommendation_style.md` (director's standing preference for most-thorough/reliable path; informed all 11 forced-picker outcomes this session).
 - 2 NEW permanent feedback memories saved this session: `feedback_destructive_ops_confirmation.md` + `feedback_remaining_roadmap_summary.md`.
+
+---
+
+## §B 2026-05-23 — P-46 W#2 Phase 2 redesign DESIGN session shipped — design lives in standalone `docs/COMPETITION_DATA_V2_DESIGN.md` (cross-reference pointer)
+
+**Session:** `session_2026-05-23_p46-w2-phase-2-design-session` (Claude Code, on `workflow-2-competition-scraping`; DOC-ONLY — no code, no schema, no deploy).
+
+**Director's directive 2026-05-23 (carry-over from 2026-05-22-i's NEXT_SESSION.md):** P-46 W#2 Phase 2 redesign design session — locked since 2026-05-22-c to start AFTER P-45 ships, which happened 2026-05-22-i. Run through the 10 deferred clarification questions captured in the P-46 ROADMAP entry via Rule 14f forced-pickers + create a new design doc capturing the locked decisions.
+
+**Design-doc shape decision (no forced-picker fired this session for the doc-structure question — pre-locked by the 2026-05-20-b CAPTURED_VIDEOS_DESIGN.md precedent + the parent session brief).** Picked **Option A — new top-level `docs/COMPETITION_DATA_V2_DESIGN.md` Group B doc** matching the 2026-05-20-b CAPTURED_VIDEOS_DESIGN.md split rationale: (1) cleaner separation — P-46 is a substantive Phase 2 expansion with 5 workstreams + 11-17 build sessions estimated, deserving top-level visibility; (2) top-level discoverability — future P-46 Workstream sessions read `docs/COMPETITION_DATA_V2_DESIGN.md` directly without grepping §B history; (3) clean separation of W#2's frozen Phase 1 §A from P-46's new Phase 2 §A (this doc's §A is frozen at the 2026-05-04 Workflow Requirements Interview spec; P-46 introduces new Phase 2 spec content that warrants its own §A frozen narrative + §B append-only history).
+
+**Decision.** P-46 design lives in standalone `docs/COMPETITION_DATA_V2_DESIGN.md` (~700 lines; §A.1-§A.10 frozen + §A.0 audit trail + §A.11 schema-additions list + §A.12 5-workstream sequencing + §A.13 verification strategy + §B empty per Rule 18 shape + §C per-workstream implementation outlines covering 5 workstreams). This §B 2026-05-23 entry is the cross-reference pointer from this doc to the standalone P-46 spec.
+
+**The 10 locked decisions (verbatim from §A.1-§A.10 of the new design doc — full rationale + alternatives there).**
+
+- **(Q1)** Reviews extraction shape — DEFERRED to future per-platform polish sessions; director said "Each platform will have different ways of capturing reviews and we will discuss those methods of capture later." Selected via "Other" option. Follow-up picker on Q1 narrowed v1 surface to schema + URL-detail-page view + vklf.com-side manual entry form; NO extension Reviews gesture in v1.
+- **(Q2)** Inline cell editing — click-to-edit on every cell (recommended); spreadsheet feel; Tab/Enter saves.
+- **(Q3)** Per-user UI preferences storage — server-side per-user (cross-device sync) via new `UserTablePreferences` Prisma model keyed by (userId, projectId) (recommended).
+- **(Q4)** Comprehensive Competitor Analysis page scope — one per Project (recommended); single rich-text doc per Project.
+- **(Q5)** Rich-text editor library — TipTap (recommended).
+- **(Q6)** Sizes/Options box — hide UI but keep data (recommended); no destructive migration.
+- **(Q7)** Competition Score input — number input only (recommended); no slider.
+- **(Q8)** Status column ↔ URL detail page Scraping Status — SKIPPED via Rule 14f Default-to-recommendation exception (permission-on-default-approved-path); locked default: bidirectional mirror through `CompetitorUrl.scrapingStatus` enum.
+- **(Q9)** Select preview thumbnail — DROPPED from P-46 entirely; director said "Ignore this feature. We don't need to add it anymore." Selected via "Other" option.
+- **(Q10)** Workstream sequencing — Schema → URL detail page → Competition Data table → Comprehensive Analysis page → Extension + Reviews (recommended); Workstream 1 (Schema) is non-negotiable first.
+
+**Scope reductions locked this session.** Q1's deferral + Q9's drop shrink P-46 from the original 15-25 sessions estimate to a revised 11-17 sessions across 5 workstreams (Schema 2-3 / URL detail page 2-3 / Competition Data table 3-4 / Comprehensive Analysis page 2-3 / Extension form additions + manual Reviews entry 2-4).
+
+**Reasoning summary (for future readers searching for P-46 design rationale in this doc).**
+
+- Look up the 10 locked decisions in `docs/COMPETITION_DATA_V2_DESIGN.md` §A.1-§A.10.
+- Look up the consolidated schema-additions list (new tables CapturedReview / ComprehensiveCompetitorAnalysis / UserTablePreferences + new CompetitorUrl columns + new analysis Json columns on CapturedText/Image/Video + new ScrapingStatus enum + new overallAnalyses Json column on CompetitorUrl) in `docs/COMPETITION_DATA_V2_DESIGN.md` §A.11.
+- Look up the 5-workstream sequencing + revised 11-17 sessions estimate in `docs/COMPETITION_DATA_V2_DESIGN.md` §A.12.
+- Look up the per-workstream verification strategy in `docs/COMPETITION_DATA_V2_DESIGN.md` §A.13.
+- Look up the per-workstream implementation outlines in `docs/COMPETITION_DATA_V2_DESIGN.md` §C (5 §C subsections).
+- Look up the 8 forced-picker outcomes audit trail + the 3 informational drift-check observations at session start in `docs/COMPETITION_DATA_V2_DESIGN.md` §A.0.
+
+**Impact on §A of this doc (informational — §A frozen per Rule 18; this §B entry captures the impact for traceability).** §A is unchanged. P-46 is a Phase 2 expansion on top of W#2's graduated-pattern surface; it does NOT alter the original Workflow Requirements Interview answers from 2026-05-04. The Q5 (Outputs) section of §A originally captured text + image as W#2's outputs; the 2026-05-19-g-2 §B entry above captured the scope expansion to text + image + video for P-27; the 2026-05-20-b §B entry above captured the design session that resolved the P-27 open design questions; this §B 2026-05-23 entry captures the P-46 Phase 2 redesign that expands the structured-data surface (new ~12 table columns + new Comprehensive Competitor Analysis page + Reviews capture surface + URL detail page restructure + vklf.com-side upload/edit/delete + extension form additions). When P-46 ships across the 5 workstreams, the resulting schema + UI + extension changes will get their own §B entries in the standalone `docs/COMPETITION_DATA_V2_DESIGN.md` at code-ship time per the Rule 18 §B append-only pattern (NOT in this doc's §B).
+
+**Three INFORMATIONAL drift-check observations captured at session start + in the new design doc §A.0 (NOT promoted to a CORRECTIONS_LOG §Entry since informational + cleanly resolved within the design doc itself).**
+
+1. P-46 ROADMAP entry's schema-additions list claimed `resultsPageRank` + `numProductReviews` + `numSellerReviews` as new fields, but all three already exist on `CompetitorUrl` (lines 262/265/266 of `prisma/schema.prisma`). Notation drift only; cleaned up in the new design doc's §A.11 consolidated schema-additions list.
+2. P-46 entry references `page.tsx` for the table redesign; actual table lives in `components/CompetitionScrapingViewer.tsx` + `UrlTable.tsx` + `ColumnFilters.tsx`. New design doc §C.3 (Competition Data table workstream) references the correct files per workstream.
+3. P-46 entry's `UrlDetailContent.tsx:740` Sizes/Options box reference confirmed correct (heading at 740; `SizesSubsection` function at 729). No drift; documented for traceability.
+
+### Cross-references
+
+- `docs/COMPETITION_DATA_V2_DESIGN.md` (NEW Group B doc shipped this session — ~700 lines; §A frozen + §B empty per Rule 18 shape; the binding spec for the P-46 5-workstream build arc).
+- ROADMAP P-46 polish backlog entry (annotated 2026-05-23 with 🟢 DESIGN COMPLETE + the 10 DECISIONS LOCKED Q→A mapping inline + revised estimate 11-17 sessions across 5 workstreams + cross-reference to the new design doc).
+- COMPETITION_SCRAPING_DESIGN §B 2026-05-20-b above (the parallel P-27 design-doc-split precedent that informed this session's doc-structure decision).
+- COMPETITION_SCRAPING_DESIGN §B 2026-05-19-g-2 above (the original P-27 scope-add directive that started the captured-videos arc — P-45 closed last session; P-46 starts here).
+- `docs/CAPTURED_VIDEOS_DESIGN.md` (the sibling design doc for P-27 + P-45; §B 2026-05-23 cross-reference entry appended this session noting P-46 design shipped).
+- `docs/DOCUMENT_MANIFEST.md` (registered new `docs/COMPETITION_DATA_V2_DESIGN.md` as Group B Workflow-2 doc; loaded for any P-46 workstream session).
+- ROADMAP header narrative 2026-05-23 (the canonical session narrative).
+- CHAT_REGISTRY 2026-05-23 top entry (the canonical chronological log).
+- `feedback_recommendation_style.md` (director's standing preference for most-thorough/reliable path; informed the 8 forced-picker outcomes this session).
+- `feedback_default_to_recommendation.md` (informed the Q8 picker-skip — single most-thorough path obvious; Q8 was permission-on-default-approved-path not intent-clarification).
 
 ---
 

@@ -1591,6 +1591,25 @@ End-of-session:
 
 - **CORRECTIONS_LOG cross-reference:** new §Entry 2026-05-22-i CLOSING P-45 with the 3-Pattern Reusable narrative + 2 embedded informational sub-observations.
 
+### §B 2026-05-23 — P-46 W#2 Phase 2 design session shipped (sibling design doc cross-reference pointer; this doc unchanged)
+
+**Session:** `session_2026-05-23_p46-w2-phase-2-design-session` (Claude Code, on `workflow-2-competition-scraping`; DOC-ONLY — no code, no schema, no deploy; no changes to this doc beyond this §B entry).
+
+**Purpose of this entry.** This §B entry exists purely as a cross-reference pointer noting that the SIBLING W#2 Phase 2 redesign design doc shipped today — `docs/COMPETITION_DATA_V2_DESIGN.md` (~700 lines; §A frozen 10 questions + §B empty + §C 5-workstream implementation outlines). The new doc mirrors this doc's §A frozen-shape pattern + parallels the 2026-05-20-b precedent where P-27's design lived in this standalone doc rather than being buried in `COMPETITION_SCRAPING_DESIGN.md`'s §B history. P-46 made the same Option A pick (new top-level doc) for the same three reasons documented in this doc's §B 2026-05-20-b parallel-doc rationale.
+
+**Why this entry lives in CAPTURED_VIDEOS_DESIGN.md (informational).** P-45's screen-recording arc closed yesterday 2026-05-22-i — Build #2 deployed + cross-platform verified. P-46 is the next major scope-drop on the W#2 graduation path; while it does NOT extend the captured-videos surface this doc covers (P-46 expands the structured-data surface — table columns + Reviews + Comprehensive Analysis page + URL detail page restructure), there is operational adjacency worth noting: (a) Q1's deferred Reviews capture is conceptually parallel to the captured-text + captured-image + captured-video Build arcs this doc tracked through 9 builds; (b) P-46's URL detail page restructure (§A.4 of the new design doc) affects the page surface where captured videos render (this doc's §A.5 + §C); future P-46 Workstream 2 (URL detail page) sessions should read this doc to understand the existing captured-video render surface before reshaping it; (c) P-46's extension form additions (Type / Description-1 / Description-2 / Price) build on the existing extension form patterns this doc's Build #3 + Build #4 + Build #5 established for captured-video metadata.
+
+**Pointer.** Look up the full P-46 design in `docs/COMPETITION_DATA_V2_DESIGN.md`. The cross-reference in `COMPETITION_SCRAPING_DESIGN.md` §B 2026-05-23 also captures the full P-46 design-session rationale + 10 locked decisions; this entry is the shorter sibling-pointer pattern.
+
+**Impact on this doc (informational — §A frozen per Rule 18; this §B entry captures the impact for traceability).** §A is unchanged. The P-45 closure 2026-05-22-i was the final §B entry on this doc's primary arc; future P-27 + P-45 polish entries continue to land here per Rule 18 (e.g., P-47's Shadow DOM refactor when it ships will get its own §B entry). P-46 work does NOT land §B entries here — P-46 §B entries land in `docs/COMPETITION_DATA_V2_DESIGN.md` per Rule 18 boundary discipline.
+
+**Cross-references.**
+
+- `docs/COMPETITION_DATA_V2_DESIGN.md` (NEW Group B doc shipped 2026-05-23 — the binding P-46 spec; sibling to this doc).
+- `docs/COMPETITION_SCRAPING_DESIGN.md` §B 2026-05-23 (the upstream W#2 cross-reference pointer for the P-46 design-session shipment — full 10-decisions narrative there).
+- ROADMAP P-46 polish-backlog entry (annotated 2026-05-23 with 🟢 DESIGN COMPLETE + 10 DECISIONS LOCKED Q→A mapping + revised estimate 11-17 sessions across 5 workstreams).
+- ROADMAP header narrative 2026-05-23 (canonical session narrative).
+
 ---
 
 END OF DOCUMENT
