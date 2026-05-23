@@ -10,27 +10,34 @@
 // the parent (so it survives a refresh via the URL query); the table just
 // renders the popovers and hands changes back via onFiltersChange.
 //
-// Columns:
-//   URL · Status · Product Name · Brand Name · Category · Product Stars
-//   · # Reviews · Added On
+// Columns (P-46 Workstream 3 Session 2 — 2026-05-23-e):
+//   URL · Status · Sponsored · Product Name · Brand Name · Category ·
+//   Product Stars · # Reviews · Added On · Type · Description 1 ·
+//   Description 2 · Price · Competition Score · Results Rank ·
+//   Seller Stars · Seller Reviews
 //
-// P-46 Workstream 2 Session 5 (2026-05-23-b) added the Status column as a
-// read-only display reflecting CompetitorUrl.scrapingStatus per §A.8 (the
-// bidirectional mirror with the URL detail page's Scraping Status toggle).
-// Click-to-edit on the column cell lands in Workstream 3 with the rest of
-// the table redesign; per-column filtering for Status also lands there.
+// Per §A.2 (click-to-edit on every cell — binding decision Q2): every
+// editable cell is read-only-looking until clicked; clicking turns the cell
+// into its appropriate inline editor (text input / number input / dropdown
+// / toggle). Tab/Enter saves; Escape cancels; blur saves. The per-row
+// click-to-open-detail behavior the table used to have moved to an
+// explicit "↗" Open button in the row-actions column so the cell-click
+// edit affordance doesn't fight with row-navigation.
 //
 // Header interaction:
 //   - Click the column LABEL → toggle sort.
 //   - Click the funnel icon next to the label → open that column's filter
 //     popover. The icon turns blue + shows a small dot when a filter is
 //     active on that column.
-//
-// Click a row → navigate to that URL's per-URL detail page (in-app).
 
 import { useEffect, useMemo, useState } from 'react';
 import { authFetch } from '@/lib/authFetch';
-import type { CompetitorUrl, Platform } from '@/lib/shared-types/competition-scraping';
+import type {
+  CompetitorUrl,
+  Platform,
+  ScrapingStatus,
+  UpdateCompetitorUrlRequest,
+} from '@/lib/shared-types/competition-scraping';
 import { UrlAddModal } from './UrlAddModal';
 import {
   ConfirmDeleteDialog,
@@ -50,6 +57,14 @@ import {
   type ColumnFilterKey,
   type ColumnFiltersState,
 } from './ColumnFilters';
+import {
+  InlineBooleanCell,
+  InlineDateCell,
+  InlineEnumCell,
+  InlineNumberCell,
+  InlineTextCell,
+  InlineUrlCell,
+} from './InlineCells';
 
 type SortKey =
   | 'url'
@@ -60,7 +75,16 @@ type SortKey =
   | 'competitionCategory'
   | 'productStarRating'
   | 'numProductReviews'
-  | 'addedAt';
+  | 'addedAt'
+  // P-46 Workstream 3 Session 2 — new column keys per §C.3 + §A.11.
+  | 'type'
+  | 'description1'
+  | 'description2'
+  | 'price'
+  | 'competitionScore'
+  | 'resultsPageRank'
+  | 'sellerStarRating'
+  | 'numSellerReviews';
 
 interface Props {
   // P-46 Workstream 3 Session 1 — per-column visibility map sourced from
@@ -84,7 +108,9 @@ interface Props {
   filters: ColumnFiltersState;
   onFiltersChange: (next: ColumnFiltersState) => void;
   // Click-row handler. The parent owns router + projectId knowledge so
-  // this component stays decoupled from Next.js routing concerns.
+  // this component stays decoupled from Next.js routing concerns. As of
+  // P-46 Workstream 3 Session 2 the row no longer triggers this on a
+  // whole-row click — only the per-row "↗" Open button does.
   onRowOpen: (urlId: string) => void;
   // P-29 Slice #1 — passed through to UrlAddModal which is mounted inside
   // this component but POSTs back to the parent's URL list state.
@@ -94,6 +120,11 @@ interface Props {
   // when the DELETE succeeds; UrlTable handles optimistic-remove + rollback
   // on error by calling onUrlDeleted (optimistic) and onUrlAdded (rollback).
   onUrlDeleted: (urlId: string) => void;
+  // P-46 Workstream 3 Session 2 — per-cell save handler. Parent PATCHes the
+  // /api/projects/[projectId]/competition-scraping/urls/[urlId] endpoint
+  // with a partial body and updates local row state from the server's
+  // response. Throws on failure so the inline cell can render its error.
+  onCellSave: (urlId: string, patch: UpdateCompetitorUrlRequest) => Promise<void>;
   // 2026-05-15-d Slice #2.5 — current platform filter from the URL query
   // (?platform=<value>). Passed through to UrlAddModal as `defaultPlatform`
   // when not 'all' so a click on "+ Manually add URL" from a filtered view
@@ -117,12 +148,7 @@ const COLUMNS: ColumnDef[] = [
   // the URL detail page's Scraping Status toggle per §A.8. Sort by status
   // works (INCOMPLETE < COMPLETE lexically); per-column filtering is
   // deferred to Workstream 3.
-  {
-    key: 'scrapingStatus',
-    label: 'Status',
-    defaultDir: 'asc',
-    filterKey: null,
-  },
+  { key: 'scrapingStatus', label: 'Status', defaultDir: 'asc', filterKey: null },
   {
     key: 'isSponsoredAd',
     label: 'Sponsored',
@@ -168,6 +194,49 @@ const COLUMNS: ColumnDef[] = [
     defaultDir: 'desc',
     filterKey: 'addedAt',
   },
+  // P-46 Workstream 3 Session 2 — new data columns per §C.3 + §A.11. No
+  // per-column filtering this session (header funnel icons land Session 3
+  // along with column resize + drag-to-reorder).
+  { key: 'type', label: 'Type', defaultDir: 'asc', filterKey: null },
+  { key: 'description1', label: 'Description 1', defaultDir: 'asc', filterKey: null },
+  { key: 'description2', label: 'Description 2', defaultDir: 'asc', filterKey: null },
+  { key: 'price', label: 'Price', defaultDir: 'asc', filterKey: null },
+  {
+    key: 'competitionScore',
+    label: 'Competition Score',
+    align: 'right',
+    defaultDir: 'desc',
+    filterKey: null,
+  },
+  {
+    key: 'resultsPageRank',
+    label: 'Results Rank',
+    align: 'right',
+    defaultDir: 'asc',
+    filterKey: null,
+  },
+  {
+    key: 'sellerStarRating',
+    label: 'Seller Stars',
+    align: 'right',
+    defaultDir: 'desc',
+    filterKey: null,
+  },
+  {
+    key: 'numSellerReviews',
+    label: 'Seller Reviews',
+    align: 'right',
+    defaultDir: 'desc',
+    filterKey: null,
+  },
+];
+
+const SCRAPING_STATUS_OPTIONS: ReadonlyArray<{
+  value: ScrapingStatus;
+  label: string;
+}> = [
+  { value: 'INCOMPLETE', label: 'Incomplete' },
+  { value: 'COMPLETE', label: 'Complete' },
 ];
 
 export function UrlTable({
@@ -183,6 +252,7 @@ export function UrlTable({
   projectId,
   onUrlAdded,
   onUrlDeleted,
+  onCellSave,
   selectedPlatform,
 }: Props) {
   // P-46 Workstream 3 Session 1 — filter the column registry by the
@@ -195,70 +265,192 @@ export function UrlTable({
       return true;
     });
   }, [columnVisibility]);
-  // Per-column cell renderer keyed by SortKey — used to drop hidden columns
-  // from each row body without sprinkling visibility checks across the JSX.
+
+  // P-46 Workstream 3 Session 2 — per-column inline-editor cell renderers.
+  // Each renderer returns a <td> containing the appropriate InlineCells
+  // component wired to onCellSave with the right field key. The tbody
+  // iterates visibleColumns.map((col) => cellRenderers[col.key](row)) so
+  // visibility decisions happen at column filtering, not per-cell.
   const cellRenderers = useMemo<
     Record<SortKey, (row: CompetitorUrl) => React.ReactNode>
   >(
     () => ({
       url: (row) => (
         <td key="url" style={cellStyle('left')}>
-          <span style={{ color: '#58a6ff' }}>{shortenUrl(row.url)}</span>
+          <InlineUrlCell
+            value={row.url}
+            onSave={(next) => onCellSave(row.id, { url: next as string })}
+          />
         </td>
       ),
       scrapingStatus: (row) => (
         <td key="scrapingStatus" style={cellStyle('left')}>
-          <span style={scrapingStatusBadgeStyle(row.scrapingStatus)}>
-            {row.scrapingStatus === 'COMPLETE' ? 'Complete' : 'Incomplete'}
-          </span>
+          <InlineEnumCell<ScrapingStatus>
+            value={row.scrapingStatus}
+            options={SCRAPING_STATUS_OPTIONS}
+            onSave={(next) => onCellSave(row.id, { scrapingStatus: next })}
+            renderRead={(active) => (
+              <span style={scrapingStatusBadgeStyle(active.value)}>
+                {active.label}
+              </span>
+            )}
+          />
         </td>
       ),
       isSponsoredAd: (row) => (
         <td key="isSponsoredAd" style={cellStyle('left')}>
-          {row.isSponsoredAd ? (
-            <span style={sponsoredBadgeStyle}>Sponsored</span>
-          ) : (
-            '—'
-          )}
+          <InlineBooleanCell
+            value={row.isSponsoredAd}
+            onSave={(next) => onCellSave(row.id, { isSponsoredAd: next })}
+            trueLabel="Sponsored"
+            falseLabel="—"
+            trueStyle={sponsoredBadgeStyle}
+            falseStyle={{ color: '#6e7681', fontStyle: 'italic' }}
+          />
         </td>
       ),
       productName: (row) => (
         <td key="productName" style={cellStyle('left')}>
-          {row.productName ?? '—'}
+          <InlineTextCell
+            value={row.productName}
+            onSave={(next) => onCellSave(row.id, { productName: next })}
+            placeholder="Set product name"
+          />
         </td>
       ),
       brandName: (row) => (
         <td key="brandName" style={cellStyle('left')}>
-          {row.brandName ?? '—'}
+          <InlineTextCell
+            value={row.brandName}
+            onSave={(next) => onCellSave(row.id, { brandName: next })}
+            placeholder="Set brand name"
+          />
         </td>
       ),
       competitionCategory: (row) => (
         <td key="competitionCategory" style={cellStyle('left')}>
-          {row.competitionCategory ?? '—'}
+          <InlineTextCell
+            value={row.competitionCategory}
+            onSave={(next) =>
+              onCellSave(row.id, { competitionCategory: next })
+            }
+            placeholder="Set category"
+          />
         </td>
       ),
       productStarRating: (row) => (
         <td key="productStarRating" style={cellStyle('right')}>
-          {row.productStarRating == null
-            ? '—'
-            : row.productStarRating.toFixed(1)}
+          <InlineNumberCell
+            value={row.productStarRating}
+            onSave={(next) => onCellSave(row.id, { productStarRating: next })}
+            min={0}
+            max={5}
+            step={0.1}
+            formatRead={(v) => (v == null ? null : v.toFixed(1))}
+          />
         </td>
       ),
       numProductReviews: (row) => (
         <td key="numProductReviews" style={cellStyle('right')}>
-          {row.numProductReviews == null
-            ? '—'
-            : row.numProductReviews.toLocaleString()}
+          <InlineNumberCell
+            value={row.numProductReviews}
+            onSave={(next) => onCellSave(row.id, { numProductReviews: next })}
+            min={0}
+            integer
+          />
         </td>
       ),
       addedAt: (row) => (
         <td key="addedAt" style={cellStyle('right')}>
-          {formatDate(row.addedAt)}
+          <InlineDateCell value={row.addedAt} onSave={async () => {}} readOnly />
+        </td>
+      ),
+      // New W3 S2 columns:
+      type: (row) => (
+        <td key="type" style={cellStyle('left')}>
+          <InlineTextCell
+            value={row.type}
+            onSave={(next) => onCellSave(row.id, { type: next })}
+            placeholder="Set type"
+          />
+        </td>
+      ),
+      description1: (row) => (
+        <td key="description1" style={cellStyle('left')}>
+          <InlineTextCell
+            value={row.description1}
+            onSave={(next) => onCellSave(row.id, { description1: next })}
+            placeholder="Set description"
+            multiline
+          />
+        </td>
+      ),
+      description2: (row) => (
+        <td key="description2" style={cellStyle('left')}>
+          <InlineTextCell
+            value={row.description2}
+            onSave={(next) => onCellSave(row.id, { description2: next })}
+            placeholder="Set description"
+            multiline
+          />
+        </td>
+      ),
+      price: (row) => (
+        <td key="price" style={cellStyle('left')}>
+          <InlineTextCell
+            value={row.price}
+            onSave={(next) => onCellSave(row.id, { price: next })}
+            placeholder="Set price"
+          />
+        </td>
+      ),
+      competitionScore: (row) => (
+        <td key="competitionScore" style={cellStyle('right')}>
+          <InlineNumberCell
+            value={row.competitionScore}
+            onSave={(next) => onCellSave(row.id, { competitionScore: next })}
+            min={1}
+            max={100}
+            integer
+          />
+        </td>
+      ),
+      resultsPageRank: (row) => (
+        <td key="resultsPageRank" style={cellStyle('right')}>
+          <InlineNumberCell
+            value={row.resultsPageRank}
+            onSave={(next) => onCellSave(row.id, { resultsPageRank: next })}
+            min={1}
+            integer
+          />
+        </td>
+      ),
+      sellerStarRating: (row) => (
+        <td key="sellerStarRating" style={cellStyle('right')}>
+          <InlineNumberCell
+            value={row.sellerStarRating}
+            onSave={(next) => onCellSave(row.id, { sellerStarRating: next })}
+            min={0}
+            max={5}
+            step={0.1}
+            formatRead={(v) => (v == null ? null : v.toFixed(1))}
+          />
+        </td>
+      ),
+      numSellerReviews: (row) => (
+        <td key="numSellerReviews" style={cellStyle('right')}>
+          <InlineNumberCell
+            value={row.numSellerReviews}
+            onSave={(next) => onCellSave(row.id, { numSellerReviews: next })}
+            min={0}
+            integer
+          />
         </td>
       ),
     }),
-    []
+    [onCellSave]
   );
+
   const [sortKey, setSortKey] = useState<SortKey>('addedAt');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   // P-29 Slice #1 — modal-open state for the "+ Manually add URL" button.
@@ -307,6 +499,11 @@ export function UrlTable({
   const handleTrashClick = (row: CompetitorUrl, e: React.MouseEvent): void => {
     e.stopPropagation();
     setPendingDeleteRow(row);
+  };
+
+  const handleOpenClick = (row: CompetitorUrl, e: React.MouseEvent): void => {
+    e.stopPropagation();
+    onRowOpen(row.id);
   };
 
   const handleDialogClose = (): void => {
@@ -400,10 +597,6 @@ export function UrlTable({
       setSortKey(col.key);
       setSortDir(col.defaultDir);
     }
-  };
-
-  const handleRowOpen = (urlId: string): void => {
-    onRowOpen(urlId);
   };
 
   const activeFilterCount = countActiveColumnFilters(filters);
@@ -576,11 +769,13 @@ export function UrlTable({
                     color: '#8b949e',
                     fontWeight: 600,
                     whiteSpace: 'nowrap',
-                    width: '48px',
+                    width: '88px',
                   }}
                   aria-label="Row actions"
                 >
-                  {/* P-28 — actions column header; trash button per row */}
+                  {/* P-46 Workstream 3 Session 2 — actions column header.
+                      Holds the per-row "↗" Open detail button + the P-28
+                      trash button. */}
                 </th>
               </tr>
             </thead>
@@ -588,13 +783,10 @@ export function UrlTable({
               {sorted.map((row) => (
                 <tr
                   key={row.id}
-                  onClick={() => handleRowOpen(row.id)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      handleRowOpen(row.id);
-                    }
-                  }}
+                  // Row no longer has its own onClick → handleRowOpen as of
+                  // P-46 Workstream 3 Session 2. Every cell is click-to-edit
+                  // per §A.2; detail-page navigation is the explicit "↗"
+                  // button in the row-actions column.
                   onMouseEnter={(e) => {
                     const cells = e.currentTarget.querySelectorAll<HTMLTableCellElement>('td');
                     cells.forEach((cell) => {
@@ -607,11 +799,7 @@ export function UrlTable({
                       cell.style.background = '';
                     });
                   }}
-                  role="link"
-                  tabIndex={0}
-                  title="Open URL detail page"
                   style={{
-                    cursor: 'pointer',
                     borderBottom: '1px solid #21262d',
                   }}
                 >
@@ -620,15 +808,24 @@ export function UrlTable({
                     style={{
                       textAlign: 'right',
                       padding: '4px 6px',
-                      width: '48px',
+                      width: '88px',
+                      whiteSpace: 'nowrap',
                     }}
                   >
                     <button
                       type="button"
+                      onClick={(e) => handleOpenClick(row, e)}
+                      aria-label={`Open detail page for ${row.url}`}
+                      title="Open detail page"
+                      data-testid="url-row-open-button"
+                      style={rowOpenButtonStyle}
+                    >
+                      ↗
+                    </button>
+                    <button
+                      type="button"
                       onClick={(e) => handleTrashClick(row, e)}
                       onKeyDown={(e) => {
-                        // Stop the row's onKeyDown (Enter/Space → navigate)
-                        // from firing when the trash button has focus.
                         if (e.key === 'Enter' || e.key === ' ') {
                           e.stopPropagation();
                         }
@@ -684,6 +881,18 @@ const rowTrashButtonStyle: React.CSSProperties = {
   border: '1px solid transparent',
   borderRadius: '4px',
   color: '#8b949e',
+  fontSize: '14px',
+  lineHeight: '14px',
+  cursor: 'pointer',
+  padding: '4px 8px',
+  marginLeft: '4px',
+};
+
+const rowOpenButtonStyle: React.CSSProperties = {
+  background: 'transparent',
+  border: '1px solid transparent',
+  borderRadius: '4px',
+  color: '#58a6ff',
   fontSize: '14px',
   lineHeight: '14px',
   cursor: 'pointer',
@@ -895,17 +1104,4 @@ function cellStyle(align: 'left' | 'right'): React.CSSProperties {
 function shortenUrl(url: string): string {
   const trimmed = url.replace(/^https?:\/\//, '').replace(/^www\./, '');
   return trimmed.length > 80 ? `${trimmed.slice(0, 77)}…` : trimmed;
-}
-
-// Format an ISO timestamp like "May 6, 2026". Locale-default formatting is
-// fine for an admin-solo Phase 1 audience; revisit at Phase 3 if workers
-// in different locales surface a need.
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
 }

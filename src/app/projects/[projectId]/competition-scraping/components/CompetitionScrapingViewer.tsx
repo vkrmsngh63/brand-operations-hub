@@ -43,6 +43,8 @@ import {
   type ListCompetitorUrlsResponse,
   type Platform,
   type ReadUserTablePreferencesResponse,
+  type UpdateCompetitorUrlRequest,
+  type UpdateCompetitorUrlResponse,
   type WriteUserTablePreferencesRequest,
 } from '@/lib/shared-types/competition-scraping';
 import { ColumnVisibilityBar } from './ColumnVisibilityBar';
@@ -310,6 +312,47 @@ export function CompetitionScrapingViewer({ projectId }: Props) {
     setUrls((prev) => (prev ? prev.filter((u) => u.id !== urlId) : prev));
   };
 
+  // P-46 Workstream 3 Session 2 — per-cell save handler. UrlTable's inline
+  // cell editors call this with the single field they're editing; we PATCH
+  // /api/projects/[projectId]/competition-scraping/urls/[urlId] and replace
+  // the local row with the server's response. Throws on PATCH failure so
+  // the inline cell can render its error.
+  const handleCellSave = useCallback(
+    async (
+      urlId: string,
+      patch: UpdateCompetitorUrlRequest
+    ): Promise<void> => {
+      const res = await authFetch(
+        `/api/projects/${projectId}/competition-scraping/urls/${urlId}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(patch),
+        }
+      );
+      if (!res.ok) {
+        let detail = `HTTP ${res.status}`;
+        try {
+          const body = (await res.json()) as { error?: string };
+          if (body && typeof body.error === 'string') detail = body.error;
+        } catch {
+          // fall through with HTTP status as the message
+        }
+        throw new Error(detail);
+      }
+      const updated = (await res.json()) as UpdateCompetitorUrlResponse;
+      setUrls((prev) => {
+        if (!prev) return prev;
+        const idx = prev.findIndex((u) => u.id === updated.id);
+        if (idx < 0) return prev;
+        const next = [...prev];
+        next[idx] = updated;
+        return next;
+      });
+    },
+    [projectId]
+  );
+
   const scopedTotal = counts === null ? 0 : counts[selectedPlatform];
 
   return (
@@ -355,6 +398,7 @@ export function CompetitionScrapingViewer({ projectId }: Props) {
             projectId={projectId}
             onUrlAdded={handleUrlAdded}
             onUrlDeleted={handleUrlDeleted}
+            onCellSave={handleCellSave}
             selectedPlatform={selectedPlatform}
           />
         )}

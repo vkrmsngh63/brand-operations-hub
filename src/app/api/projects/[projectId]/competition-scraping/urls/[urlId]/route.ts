@@ -11,6 +11,7 @@ import {
   isValidOverallAnalysesBag,
 } from '@/lib/rich-text/tiptap-helpers';
 import { extractUrlStructuralFieldsPatch } from '@/lib/competition-scraping/url-structural-fields-validation';
+import { extractCompetitionScorePatch } from '@/lib/competition-scraping/competition-score-validation';
 import {
   isPlatform,
   type CompetitorUrl,
@@ -239,6 +240,18 @@ export async function PATCH(
     );
   }
   Object.assign(data, structuralResult.patch);
+  // P-46 Workstream 3 Session 2 (2026-05-23-e) — competitionScore allowlist
+  // per §A.7 (integer 1-100, nullable). Extracted helper exhaustively tested
+  // via node:test so this route stays thin; same Pattern as Session 5's
+  // url-structural-fields helper.
+  const scoreResult = extractCompetitionScorePatch(body);
+  if (!scoreResult.ok) {
+    return withCors(
+      req,
+      NextResponse.json({ error: scoreResult.error }, { status: 400 })
+    );
+  }
+  Object.assign(data, scoreResult.patch);
   // P-46 Workstream 2 Session 3 (2026-05-27) — URL-level Overall Competitor
   // Analysis TipTap doc JSON. Same trust-boundary shape as the per-item
   // Analysis fields on text/[textId] + images/[imageId] + videos/[videoId]:
