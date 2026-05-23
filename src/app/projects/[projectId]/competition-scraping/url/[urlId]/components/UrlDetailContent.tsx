@@ -24,11 +24,13 @@ import { authFetch } from '@/lib/authFetch';
 import { WorkflowTopbar } from '@/lib/workflow-components';
 import type {
   CapturedImageWithUrls,
+  CapturedReview,
   CapturedText,
   CapturedVideoWithUrls,
   CompetitorSize,
   CompetitorUrl,
   ListCapturedImagesResponse,
+  ListCapturedReviewsResponse,
   ListCapturedTextsResponse,
   ListCapturedVideosResponse,
   ListCompetitorSizesResponse,
@@ -45,6 +47,7 @@ import {
 import { CustomFieldsEditor } from './CustomFieldsEditor';
 import { CapturedTextAddModal } from '../../../components/CapturedTextAddModal';
 import { CapturedImageAddModal } from '../../../components/CapturedImageAddModal';
+import { CapturedReviewAddModal } from '../../../components/CapturedReviewAddModal';
 import { PerItemAnalysisBox } from '../../../components/PerItemAnalysisBox';
 import { OverallAnalysisBox } from '../../../components/OverallAnalysisBox';
 import {
@@ -101,6 +104,13 @@ export function UrlDetailContent({ project, urlId }: Props) {
   // carry null URLs and the renderer reads `originalSrcUrl` directly for
   // the inline <iframe>.
   const [videosSlot, setVideosSlot] = useState<FetchSlot<CapturedVideoWithUrls[]>>({
+    data: null,
+    error: null,
+  });
+  // P-46 Workstream 2 Session 4 (2026-05-28) — captured-reviews slot. v1
+  // Reviews enter via the manual-add modal only; per-platform extension
+  // capture deferred to post-P-46 polish per §A.1b.
+  const [reviewsSlot, setReviewsSlot] = useState<FetchSlot<CapturedReview[]>>({
     data: null,
     error: null,
   });
@@ -235,6 +245,46 @@ export function UrlDetailContent({ project, urlId }: Props) {
     [project.id, imagesSlot.data, imagesSlot.error]
   );
 
+  // P-46 Workstream 2 Session 4 (2026-05-28) — captured-review delete.
+  // Same optimistic-remove + rollback shape as text + image; DELETE hits the
+  // shallow per-record path competition-scraping/reviews/[reviewId] matching
+  // text/[textId] and images/[imageId] precedent.
+  const handleReviewDeleted = useCallback(
+    async (reviewId: string): Promise<void> => {
+      const prevList = reviewsSlot.data;
+      if (!prevList) {
+        const res = await authFetch(
+          `/api/projects/${project.id}/competition-scraping/reviews/${reviewId}`,
+          { method: 'DELETE' }
+        );
+        if (!res.ok) {
+          const detail = await readErrorMessage(res, 'Could not delete review');
+          throw new Error(detail);
+        }
+        return;
+      }
+      setReviewsSlot({
+        data: prevList.filter((r) => r.id !== reviewId),
+        error: reviewsSlot.error,
+      });
+      try {
+        const res = await authFetch(
+          `/api/projects/${project.id}/competition-scraping/reviews/${reviewId}`,
+          { method: 'DELETE' }
+        );
+        if (!res.ok) {
+          setReviewsSlot({ data: prevList, error: reviewsSlot.error });
+          const detail = await readErrorMessage(res, 'Could not delete review');
+          throw new Error(detail);
+        }
+      } catch (err) {
+        setReviewsSlot({ data: prevList, error: reviewsSlot.error });
+        throw err instanceof Error ? err : new Error('Network error');
+      }
+    },
+    [project.id, reviewsSlot.data, reviewsSlot.error]
+  );
+
   useEffect(() => {
     // No synchronous setState resets here — the lint rule
     // (react-hooks/purity) flags synchronous setState in an effect body as
@@ -270,19 +320,22 @@ export function UrlDetailContent({ project, urlId }: Props) {
     };
 
     (async () => {
-      const [urlRes, sizesRes, textRes, imagesRes, videosRes] = await Promise.all([
-        fetchOne<ReadCompetitorUrlResponse>(base, 'this URL'),
-        fetchOne<ListCompetitorSizesResponse>(`${base}/sizes`, 'sizes'),
-        fetchOne<ListCapturedTextsResponse>(`${base}/text`, 'captured text'),
-        fetchOne<ListCapturedImagesResponse>(`${base}/images`, 'captured images'),
-        fetchOne<ListCapturedVideosResponse>(`${base}/videos`, 'captured videos'),
-      ]);
+      const [urlRes, sizesRes, textRes, imagesRes, videosRes, reviewsRes] =
+        await Promise.all([
+          fetchOne<ReadCompetitorUrlResponse>(base, 'this URL'),
+          fetchOne<ListCompetitorSizesResponse>(`${base}/sizes`, 'sizes'),
+          fetchOne<ListCapturedTextsResponse>(`${base}/text`, 'captured text'),
+          fetchOne<ListCapturedImagesResponse>(`${base}/images`, 'captured images'),
+          fetchOne<ListCapturedVideosResponse>(`${base}/videos`, 'captured videos'),
+          fetchOne<ListCapturedReviewsResponse>(`${base}/reviews`, 'captured reviews'),
+        ]);
       if (cancelled) return;
       setUrlSlot(urlRes);
       setSizesSlot(sizesRes);
       setTextSlot(textRes);
       setImagesSlot(imagesRes);
       setVideosSlot(videosRes);
+      setReviewsSlot(reviewsRes);
     })();
 
     return () => {
@@ -332,6 +385,22 @@ export function UrlDetailContent({ project, urlId }: Props) {
   // double-listing. Mirrors handleUrlAdded in CompetitionScrapingViewer.
   const handleTextAdded = useCallback((row: CapturedText): void => {
     setTextSlot((prev) => {
+      const list = prev.data ?? [];
+      const existing = list.findIndex((r) => r.clientId === row.clientId);
+      if (existing >= 0) {
+        const next = [...list];
+        next[existing] = row;
+        return { data: next, error: prev.error };
+      }
+      return { data: [row, ...list], error: prev.error };
+    });
+  }, []);
+
+  // P-46 Workstream 2 Session 4 (2026-05-28) — manual-add captured-review
+  // modal calls this with the newly-created row. POST is idempotent on
+  // clientId; we dedup here to avoid double-listing on a retry.
+  const handleReviewAdded = useCallback((row: CapturedReview): void => {
+    setReviewsSlot((prev) => {
       const list = prev.data ?? [];
       const existing = list.findIndex((r) => r.clientId === row.clientId);
       if (existing >= 0) {
@@ -436,6 +505,14 @@ export function UrlDetailContent({ project, urlId }: Props) {
               projectId={project.id}
               urlId={urlId}
               overallAnalysisInitial={urlSlot.data.overallAnalyses?.video ?? {}}
+            />
+            <CapturedReviewsSection
+              slot={reviewsSlot}
+              projectId={project.id}
+              urlId={urlId}
+              overallAnalysisInitial={urlSlot.data.overallAnalyses?.reviews ?? {}}
+              onReviewAdded={handleReviewAdded}
+              onReviewDeleted={handleReviewDeleted}
             />
             {/* P-46 Workstream 2 Session 3 (2026-05-27) — URL-level Overall
                 Competitor Analysis box at the bottom of the URL detail page.
@@ -1597,6 +1674,313 @@ function CapturedVideoCard({
         testId={`captured-video-analysis-${video.id}`}
       />
     </article>
+  );
+}
+
+// P-46 Workstream 2 Session 4 (2026-05-28) — Captured Reviews section.
+// Greenfield UI for the fourth and final capture type. Slots into the same
+// card-list precedent Sessions 1-3 set for Text / Image / Video; v1 Reviews
+// enter through the manual-add modal only (no extension Reviews capture in
+// v1 per §A.1b). The Overall Reviews Analysis box at the bottom of the
+// section reuses Session 3's OverallAnalysisBox with category='reviews'.
+type ReviewSortKey = 'addedAt' | 'starRating';
+
+function CapturedReviewsSection({
+  slot,
+  projectId,
+  urlId,
+  overallAnalysisInitial,
+  onReviewAdded,
+  onReviewDeleted,
+}: {
+  slot: FetchSlot<CapturedReview[]>;
+  projectId: string;
+  urlId: string;
+  overallAnalysisInitial: Record<string, unknown>;
+  onReviewAdded: (row: CapturedReview) => void;
+  onReviewDeleted: (reviewId: string) => Promise<void>;
+}) {
+  const [sortKey, setSortKey] = useState<ReviewSortKey>('addedAt');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [modalOpen, setModalOpen] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<CapturedReview | null>(null);
+
+  const handleConfirmReviewDelete = async (): Promise<void> => {
+    if (!pendingDelete) return;
+    const row = pendingDelete;
+    await onReviewDeleted(row.id);
+    setPendingDelete(null);
+  };
+
+  const sorted = useMemo(() => {
+    if (!slot.data) return [];
+    const copy = [...slot.data];
+    copy.sort((a, b) => {
+      let cmp = 0;
+      if (sortKey === 'starRating') {
+        cmp = a.starRating - b.starRating;
+      } else {
+        cmp = a.addedAt.localeCompare(b.addedAt);
+      }
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+    return copy;
+  }, [slot.data, sortKey, sortDir]);
+
+  return (
+    <section
+      style={{
+        background: '#161b22',
+        border: '1px solid #30363d',
+        borderRadius: '8px',
+        padding: '20px',
+        marginBottom: '20px',
+      }}
+    >
+      <div style={sectionHeaderRowStyle}>
+        <h2 style={sectionHeading}>
+          Captured Reviews
+          {slot.data ? (
+            <span
+              style={{
+                marginLeft: '8px',
+                fontSize: '12px',
+                color: '#8b949e',
+                fontWeight: 400,
+              }}
+            >
+              ({slot.data.length})
+            </span>
+          ) : null}
+        </h2>
+        <button
+          type="button"
+          onClick={() => setModalOpen(true)}
+          data-testid="manual-add-captured-review-button"
+          style={manualAddButtonStyle}
+        >
+          + Add review
+        </button>
+      </div>
+      {slot.error ? (
+        <InlineMessage tone="error" body={slot.error} />
+      ) : slot.data === null ? (
+        <InlineMessage body="Loading captured reviews…" />
+      ) : slot.data.length === 0 ? (
+        <InlineMessage body="No reviews captured for this URL yet. Click + Add review above to enter one manually." />
+      ) : (
+        <div>
+          <CapturedReviewSortControl
+            sortKey={sortKey}
+            sortDir={sortDir}
+            onSortKeyChange={setSortKey}
+            onSortDirChange={setSortDir}
+          />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {sorted.map((r) => (
+              <CapturedReviewCard
+                key={r.id}
+                row={r}
+                projectId={projectId}
+                onDeleteClick={() => setPendingDelete(r)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+      {/* P-46 Workstream 2 Session 4 (2026-05-28) — per-category Overall
+          Analysis box at the bottom of the Captured Reviews section.
+          Persists to CompetitorUrl.overallAnalyses.reviews via the
+          urls/[urlId] PATCH route. The route merges so this slot doesn't
+          wipe sibling categories. */}
+      <OverallAnalysisBox
+        apiUrl={`/api/projects/${projectId}/competition-scraping/urls/${urlId}`}
+        initialContent={overallAnalysisInitial}
+        field={{ kind: 'overallAnalyses', category: 'reviews' }}
+        label="Overall Analysis — Captured Reviews"
+        placeholder="Synthesize your overall analysis across the captured reviews above…"
+        testId="overall-analysis-reviews"
+      />
+      <CapturedReviewAddModal
+        projectId={projectId}
+        urlId={urlId}
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onSuccess={onReviewAdded}
+      />
+      <ConfirmDeleteDialog
+        isOpen={pendingDelete !== null}
+        title="Delete this review?"
+        message={
+          pendingDelete
+            ? truncate(pendingDelete.body, 120) + ' — this cannot be undone.'
+            : 'This cannot be undone.'
+        }
+        confirmLabel="Delete review"
+        onClose={() => setPendingDelete(null)}
+        onConfirm={handleConfirmReviewDelete}
+        variant={{ kind: 'plain' }}
+      />
+    </section>
+  );
+}
+
+function CapturedReviewCard({
+  row,
+  projectId,
+  onDeleteClick,
+}: {
+  row: CapturedReview;
+  projectId: string;
+  onDeleteClick: () => void;
+}) {
+  return (
+    <article
+      style={{
+        background: '#0d1117',
+        border: '1px solid #21262d',
+        borderRadius: '8px',
+        padding: '14px 16px',
+      }}
+      data-testid="captured-review-card"
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
+          gap: '12px',
+          marginBottom: '8px',
+        }}
+      >
+        <div
+          style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}
+        >
+          <StarRatingDisplay value={row.starRating} />
+          {row.reviewerName ? (
+            <span style={{ fontSize: '13px', color: '#c9d1d9', fontWeight: 600 }}>
+              {row.reviewerName}
+            </span>
+          ) : (
+            <span style={{ fontSize: '12px', color: '#6e7681', fontStyle: 'italic' }}>
+              (anonymous)
+            </span>
+          )}
+          {row.reviewDate ? (
+            <span style={{ fontSize: '12px', color: '#8b949e' }}>
+              {formatDate(row.reviewDate)}
+            </span>
+          ) : null}
+        </div>
+        <button
+          type="button"
+          onClick={onDeleteClick}
+          aria-label="Delete review"
+          title="Delete review"
+          data-testid="captured-review-delete-button"
+          style={rowTrashButtonStyle}
+        >
+          🗑
+        </button>
+      </div>
+      <div
+        style={{
+          fontSize: '14px',
+          color: '#e6edf3',
+          lineHeight: 1.5,
+          whiteSpace: 'pre-wrap',
+          wordBreak: 'break-word',
+          marginBottom: '10px',
+        }}
+      >
+        {row.body}
+      </div>
+      <div
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          gap: '12px',
+          fontSize: '12px',
+          color: '#8b949e',
+        }}
+      >
+        <span>
+          <strong style={{ color: '#6e7681', fontWeight: 600 }}>Tags:</strong>{' '}
+          {row.tags.length === 0 ? '—' : row.tags.join(', ')}
+        </span>
+        <span>
+          <strong style={{ color: '#6e7681', fontWeight: 600 }}>Added:</strong>{' '}
+          {formatDate(row.addedAt)}
+        </span>
+      </div>
+      <PerItemAnalysisBox
+        apiUrl={`/api/projects/${projectId}/competition-scraping/reviews/${row.id}`}
+        initialAnalysis={row.analysis}
+        testId={`captured-review-analysis-${row.id}`}
+      />
+    </article>
+  );
+}
+
+function StarRatingDisplay({ value }: { value: number }) {
+  return (
+    <span
+      style={{ display: 'inline-flex', gap: '2px', color: '#f9c74f', fontSize: '15px' }}
+      aria-label={`${value} of 5 stars`}
+      title={`${value} of 5 stars`}
+    >
+      {[1, 2, 3, 4, 5].map((n) => (
+        <span key={n} style={{ color: n <= value ? '#f9c74f' : '#30363d' }}>
+          {n <= value ? '★' : '☆'}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+function CapturedReviewSortControl({
+  sortKey,
+  sortDir,
+  onSortKeyChange,
+  onSortDirChange,
+}: {
+  sortKey: ReviewSortKey;
+  sortDir: 'asc' | 'desc';
+  onSortKeyChange: (k: ReviewSortKey) => void;
+  onSortDirChange: (d: 'asc' | 'desc') => void;
+}) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        marginBottom: '12px',
+        fontSize: '12px',
+        color: '#8b949e',
+      }}
+    >
+      <span>Sort by:</span>
+      <select
+        value={sortKey}
+        onChange={(e) => onSortKeyChange(e.target.value as ReviewSortKey)}
+        style={sortSelectStyle}
+        data-testid="captured-review-sort-key"
+      >
+        <option value="addedAt">Added on</option>
+        <option value="starRating">Star rating</option>
+      </select>
+      <select
+        value={sortDir}
+        onChange={(e) => onSortDirChange(e.target.value as 'asc' | 'desc')}
+        style={sortSelectStyle}
+        data-testid="captured-review-sort-dir"
+      >
+        <option value="asc">Asc</option>
+        <option value="desc">Desc</option>
+      </select>
+    </div>
   );
 }
 
