@@ -24,8 +24,12 @@ import {
   isVideoSourceType,
   isRequestVideoUploadRequest,
   isFinalizeVideoUploadRequest,
+  isScrapingStatus,
+  isCreateCapturedReviewRequest,
+  isTablePreferencesSortDirection,
   PLATFORMS,
   SOURCES,
+  SCRAPING_STATUSES,
   VIDEO_SOURCE_TYPES,
   ACCEPTED_VIDEO_MIME_TYPES,
   VIDEO_UPLOAD_MAX_BYTES,
@@ -398,4 +402,193 @@ test('isFinalizeVideoUploadRequest — rejects misshapen bodies', () => {
   assert.equal(isFinalizeVideoUploadRequest(null), false);
   assert.equal(isFinalizeVideoUploadRequest(undefined), false);
   assert.equal(isFinalizeVideoUploadRequest('embed'), false);
+});
+
+// ─── P-46 Workstream 1 (2026-05-24) — Phase 2 schema additions ──────────
+//
+// Coverage: ScrapingStatus enum guard / CapturedReview create-request guard
+// / UserTablePreferences sort-direction guard. The route handlers built in
+// Workstreams 2-3 depend on these guards at the trust boundary; this test
+// suite makes the closed-vocabulary semantics load-bearing.
+
+test('SCRAPING_STATUSES — vocabulary contains exactly the two values', () => {
+  assert.deepEqual([...SCRAPING_STATUSES], ['INCOMPLETE', 'COMPLETE']);
+});
+
+test('isScrapingStatus — accepts INCOMPLETE and COMPLETE', () => {
+  assert.equal(isScrapingStatus('INCOMPLETE'), true);
+  assert.equal(isScrapingStatus('COMPLETE'), true);
+});
+
+test('isScrapingStatus — rejects nearby misshapen values', () => {
+  // Capitalization slips.
+  assert.equal(isScrapingStatus('incomplete'), false);
+  assert.equal(isScrapingStatus('complete'), false);
+  assert.equal(isScrapingStatus('Incomplete'), false);
+  // Neighboring concepts.
+  assert.equal(isScrapingStatus('IN_PROGRESS'), false);
+  assert.equal(isScrapingStatus('DONE'), false);
+  assert.equal(isScrapingStatus('PENDING'), false);
+  // Empty + whitespace.
+  assert.equal(isScrapingStatus(''), false);
+  assert.equal(isScrapingStatus('INCOMPLETE '), false);
+  assert.equal(isScrapingStatus(' COMPLETE'), false);
+});
+
+test('isScrapingStatus — rejects non-string values', () => {
+  assert.equal(isScrapingStatus(null), false);
+  assert.equal(isScrapingStatus(undefined), false);
+  assert.equal(isScrapingStatus(0), false);
+  assert.equal(isScrapingStatus(true), false);
+  assert.equal(isScrapingStatus({}), false);
+  assert.equal(isScrapingStatus(['INCOMPLETE']), false);
+});
+
+test('isCreateCapturedReviewRequest — accepts the canonical happy path', () => {
+  assert.equal(
+    isCreateCapturedReviewRequest({
+      clientId: '11111111-2222-3333-4444-555555555555',
+      starRating: 5,
+      body: 'Excellent product.',
+    }),
+    true
+  );
+});
+
+test('isCreateCapturedReviewRequest — accepts all valid star ratings (1-5)', () => {
+  for (let star = 1; star <= 5; star++) {
+    assert.equal(
+      isCreateCapturedReviewRequest({
+        clientId: 'cid',
+        starRating: star,
+        body: 'b',
+      }),
+      true,
+      `starRating=${star} should pass`
+    );
+  }
+});
+
+test('isCreateCapturedReviewRequest — rejects out-of-range star ratings', () => {
+  // Boundary: 0 below, 6 above.
+  assert.equal(
+    isCreateCapturedReviewRequest({ clientId: 'a', starRating: 0, body: 'b' }),
+    false
+  );
+  assert.equal(
+    isCreateCapturedReviewRequest({ clientId: 'a', starRating: 6, body: 'b' }),
+    false
+  );
+  // Non-integer floats fail (the field is Int? in Prisma + 1-5 in shape).
+  assert.equal(
+    isCreateCapturedReviewRequest({
+      clientId: 'a',
+      starRating: 3.5,
+      body: 'b',
+    }),
+    false
+  );
+  // Negative.
+  assert.equal(
+    isCreateCapturedReviewRequest({
+      clientId: 'a',
+      starRating: -1,
+      body: 'b',
+    }),
+    false
+  );
+});
+
+test('isCreateCapturedReviewRequest — rejects missing or empty required fields', () => {
+  // Missing clientId.
+  assert.equal(
+    isCreateCapturedReviewRequest({ starRating: 5, body: 'b' }),
+    false
+  );
+  // Empty clientId.
+  assert.equal(
+    isCreateCapturedReviewRequest({ clientId: '', starRating: 5, body: 'b' }),
+    false
+  );
+  // Whitespace-only clientId.
+  assert.equal(
+    isCreateCapturedReviewRequest({
+      clientId: '   ',
+      starRating: 5,
+      body: 'b',
+    }),
+    false
+  );
+  // Missing starRating.
+  assert.equal(
+    isCreateCapturedReviewRequest({ clientId: 'a', body: 'b' }),
+    false
+  );
+  // Missing body.
+  assert.equal(
+    isCreateCapturedReviewRequest({ clientId: 'a', starRating: 5 }),
+    false
+  );
+  // Empty body.
+  assert.equal(
+    isCreateCapturedReviewRequest({ clientId: 'a', starRating: 5, body: '' }),
+    false
+  );
+  // Whitespace-only body.
+  assert.equal(
+    isCreateCapturedReviewRequest({
+      clientId: 'a',
+      starRating: 5,
+      body: '   ',
+    }),
+    false
+  );
+});
+
+test('isCreateCapturedReviewRequest — rejects non-object inputs', () => {
+  assert.equal(isCreateCapturedReviewRequest(null), false);
+  assert.equal(isCreateCapturedReviewRequest(undefined), false);
+  assert.equal(isCreateCapturedReviewRequest('a'), false);
+  assert.equal(isCreateCapturedReviewRequest(5), false);
+  assert.equal(isCreateCapturedReviewRequest(true), false);
+  assert.equal(isCreateCapturedReviewRequest([]), false);
+});
+
+test('isCreateCapturedReviewRequest — rejects wrong-type fields', () => {
+  // clientId not a string.
+  assert.equal(
+    isCreateCapturedReviewRequest({ clientId: 123, starRating: 5, body: 'b' }),
+    false
+  );
+  // starRating not a number.
+  assert.equal(
+    isCreateCapturedReviewRequest({
+      clientId: 'a',
+      starRating: '5',
+      body: 'b',
+    }),
+    false
+  );
+  // body not a string.
+  assert.equal(
+    isCreateCapturedReviewRequest({ clientId: 'a', starRating: 5, body: 123 }),
+    false
+  );
+});
+
+test('isTablePreferencesSortDirection — accepts asc and desc', () => {
+  assert.equal(isTablePreferencesSortDirection('asc'), true);
+  assert.equal(isTablePreferencesSortDirection('desc'), true);
+});
+
+test('isTablePreferencesSortDirection — rejects capitalization slips + neighbors', () => {
+  assert.equal(isTablePreferencesSortDirection('ASC'), false);
+  assert.equal(isTablePreferencesSortDirection('DESC'), false);
+  assert.equal(isTablePreferencesSortDirection('ascending'), false);
+  assert.equal(isTablePreferencesSortDirection('descending'), false);
+  assert.equal(isTablePreferencesSortDirection(''), false);
+  assert.equal(isTablePreferencesSortDirection(null), false);
+  assert.equal(isTablePreferencesSortDirection(undefined), false);
+  assert.equal(isTablePreferencesSortDirection(0), false);
+  assert.equal(isTablePreferencesSortDirection(1), false);
 });

@@ -9,7 +9,9 @@ import { corsPreflightResponse, withCors } from '@/lib/cors-response';
 import {
   isPlatform,
   type CompetitorUrl,
+  type OverallAnalyses,
   type ReadCompetitorUrlResponse,
+  type ScrapingStatus,
   type UpdateCompetitorUrlRequest,
 } from '@/lib/shared-types/competition-scraping';
 
@@ -38,6 +40,18 @@ function toWireShape(
     isSponsoredAd: row.isSponsoredAd,
     customFields: (row.customFields ?? {}) as Record<string, unknown>,
     source: row.source as CompetitorUrl['source'],
+    // P-46 Workstream 1 (2026-05-24) — Phase 2 wire fields per §A.11.
+    type: row.type,
+    description1: row.description1,
+    description2: row.description2,
+    price: row.price,
+    competitionScore: row.competitionScore,
+    scrapingStatus: row.scrapingStatus as ScrapingStatus,
+    overallCompetitorAnalysis: (row.overallCompetitorAnalysis ?? {}) as Record<
+      string,
+      unknown
+    >,
+    overallAnalyses: (row.overallAnalyses ?? {}) as OverallAnalyses,
     addedBy: row.addedBy,
     addedAt: row.addedAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),

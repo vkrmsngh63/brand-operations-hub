@@ -29,8 +29,9 @@ model Project {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  workflows         ProjectWorkflow[]
-  vocabularyEntries VocabularyEntry[]
+  workflows             ProjectWorkflow[]
+  vocabularyEntries     VocabularyEntry[]
+  comprehensiveAnalysis ComprehensiveCompetitorAnalysis?
 
   @@index([userId])
 }
@@ -252,10 +253,10 @@ model UserPreference {
 
 // CompetitorUrl — one row per (Project's W#2 workflow, platform, URL).
 model CompetitorUrl {
-  id                  String   @id @default(uuid())
+  id                  String  @id @default(uuid())
   projectWorkflowId   String // FK to ProjectWorkflow where workflow="competition-scraping"
   platform            String // "amazon" | "ebay" | "etsy" | "walmart" | "google-shopping" | "google-ads" | "independent-website"
-  url                 String   @db.Text
+  url                 String  @db.Text
   competitionCategory String? // value from VocabularyEntry; null until user fills
   productName         String? // value from VocabularyEntry; null until user fills
   brandName           String? // value from VocabularyEntry; null until user fills
@@ -264,18 +265,31 @@ model CompetitorUrl {
   sellerStarRating    Float? // 0.0–5.0 (Etsy primarily)
   numProductReviews   Int?
   numSellerReviews    Int?
-  isSponsoredAd       Boolean  @default(false) // P-6 — manual checkbox in URL-add form; auto-pre-checks for Amazon SSPA-detected URLs (P-4 synergy)
-  customFields        Json     @default("{}") // { fieldName: value } user-defined product-scoped fields
-  source              String   @default("extension") // P-29 Slice #1 — "extension" | "manual"; audit-trail of which client created the row.
-  addedBy             String // userId
-  addedAt             DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  isSponsoredAd       Boolean @default(false) // P-6 — manual checkbox in URL-add form; auto-pre-checks for Amazon SSPA-detected URLs (P-4 synergy)
+  customFields        Json    @default("{}") // { fieldName: value } user-defined product-scoped fields
+  source              String  @default("extension") // P-29 Slice #1 — "extension" | "manual"; audit-trail of which client created the row.
+
+  // P-46 Workstream 1 (2026-05-24) — Phase 2 Competition Data redesign per docs/COMPETITION_DATA_V2_DESIGN.md §A.11.
+  // Additive columns; all nullable or defaulted so existing rows render unchanged.
+  type                      String?
+  description1              String?        @db.Text
+  description2              String?        @db.Text
+  price                     String? // free-text per §A.11 — accommodates "$24.99" / "From $24" / "Free w/ Prime"
+  competitionScore          Int? // 1-100; range validated at application layer per §A.7
+  scrapingStatus            ScrapingStatus @default(INCOMPLETE) // bidirectional mirror with table Status column per §A.8
+  overallCompetitorAnalysis Json           @default("{}") // TipTap document JSON per §A.5
+  overallAnalyses           Json           @default("{}") // bag: { "text": <TipTap>, "image": <TipTap>, "video": <TipTap>, "reviews": <TipTap> } per §A.11
+
+  addedBy   String // userId
+  addedAt   DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   projectWorkflow ProjectWorkflow  @relation(fields: [projectWorkflowId], references: [id], onDelete: Cascade)
   sizes           CompetitorSize[]
   capturedTexts   CapturedText[]
   capturedImages  CapturedImage[]
   capturedVideos  CapturedVideo[]
+  capturedReviews CapturedReview[]
 
   @@unique([projectWorkflowId, platform, url])
   @@index([projectWorkflowId, platform])
@@ -317,6 +331,7 @@ model CapturedText {
   tags            Json     @default("[]") // string[]
   sortOrder       Int      @default(0)
   source          String   @default("extension") // P-29 Slice #1 — "extension" | "manual"; audit-trail of which client created the row.
+  analysis        Json     @default("{}") // P-46 (2026-05-24) — TipTap document JSON for the per-item Analysis text box per §A.11
   addedBy         String // userId
   addedAt         DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -350,6 +365,7 @@ model CapturedImage {
   height          Int?
   sortOrder       Int      @default(0)
   source          String   @default("extension") // P-29 Slice #1 — "extension" | "manual"; audit-trail of which client created the row (distinct from sourceType which describes the image's content shape).
+  analysis        Json     @default("{}") // P-46 (2026-05-24) — TipTap document JSON for the per-item Analysis text box per §A.11
   addedBy         String
   addedAt         DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -396,6 +412,7 @@ model CapturedVideo {
   sortOrder Int @default(0)
 
   source    String   @default("extension") // "extension" | "manual"
+  analysis  Json     @default("{}") // P-46 (2026-05-24) — TipTap document JSON for the per-item Analysis text box per §A.11
   addedBy   String // userId
   addedAt   DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -416,6 +433,75 @@ enum VideoSourceType {
   EMBED
   DIRECT_BYTES
   SCREEN_RECORDING
+}
+
+// ScrapingStatus — P-46 Workstream 1 (2026-05-24) per docs/COMPETITION_DATA_V2_DESIGN.md §A.8.
+// Bidirectional mirror between the URL detail page's Scraping Status toggle and the
+// Competition Data table's Status column. Both reads + writes go through CompetitorUrl.scrapingStatus.
+enum ScrapingStatus {
+  INCOMPLETE
+  COMPLETE
+}
+
+// CapturedReview — one row per captured product review against a CompetitorUrl.
+// P-46 Workstream 1 (2026-05-24) per §A.1b. v1: source="manual" (vklf.com-side manual entry form).
+// Future per-platform extension capture gestures add other source values.
+model CapturedReview {
+  id              String    @id @default(uuid())
+  clientId        String    @unique // UUIDv4 from client; idempotency key
+  competitorUrlId String
+  starRating      Int // 1-5; range validated at application layer per §A.1b
+  body            String    @db.Text
+  reviewerName    String?
+  reviewDate      DateTime?
+  tags            Json      @default("[]") // string[]
+  analysis        Json      @default("{}") // TipTap document JSON for per-item Analysis box per §A.11
+  source          String    @default("manual") // "manual" in v1; future per-platform values
+  addedBy         String // userId
+  addedAt         DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  competitorUrl CompetitorUrl @relation(fields: [competitorUrlId], references: [id], onDelete: Cascade)
+
+  @@index([competitorUrlId])
+}
+
+// ComprehensiveCompetitorAnalysis — one row per Project per §A.4. Single rich-text doc
+// (TipTap JSON) synthesizing across ALL competitors + platforms in this Project. Hyperlinks
+// can point back to per-URL detail pages.
+// P-46 Workstream 1 (2026-05-24).
+model ComprehensiveCompetitorAnalysis {
+  id           String   @id @default(uuid())
+  projectId    String   @unique // exactly one per Project
+  contentJson  Json     @default("{}") // TipTap document JSON per §A.5
+  lastEditedBy String
+  lastEditedAt DateTime @updatedAt
+  createdAt    DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+// UserTablePreferences — per-user-per-project UI preferences for the Competition Data table
+// per §A.3. Server-side storage enables cross-device sync (column widths / visibility / font
+// size / row order survive login on a different device). Joins UserExtensionState +
+// UserProjectHighlightTerm as the third per-user-per-project preference table per §A.12.
+// P-46 Workstream 1 (2026-05-24).
+model UserTablePreferences {
+  id                    String   @id @default(uuid())
+  userId                String
+  projectId             String
+  columnVisibility      Json     @default("{}") // { columnId: boolean }
+  columnWidths          Json     @default("{}") // { columnId: pixels }
+  fontSize              Int      @default(14) // 10-24 range; validated at application layer
+  rowOrder              Json     @default("[]") // [competitorUrlId] in user's preferred order
+  lastUsedSortColumn    String?
+  lastUsedSortDirection String? // "asc" | "desc" — validated at application layer
+  updatedAt             DateTime @updatedAt
+
+  @@unique([userId, projectId])
+  @@index([userId])
 }
 
 // VocabularyEntry — platform-shared vocabularies per PLATFORM_REQUIREMENTS.md §8.4.

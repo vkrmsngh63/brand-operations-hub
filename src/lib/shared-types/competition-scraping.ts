@@ -72,6 +72,34 @@ export function isVocabularyType(value: unknown): value is VocabularyType {
   );
 }
 
+// ─── ScrapingStatus enum (P-46 Workstream 1, 2026-05-24) ───────────────
+// Mirrors the Prisma `ScrapingStatus` enum at prisma/schema.prisma. Drives
+// the bidirectional mirror between the URL detail page's Scraping Status
+// toggle and the Competition Data table's Status column per
+// docs/COMPETITION_DATA_V2_DESIGN.md §A.8. Default is INCOMPLETE; user flips
+// to COMPLETE once a URL's capture work is done.
+export const SCRAPING_STATUSES = ['INCOMPLETE', 'COMPLETE'] as const;
+export type ScrapingStatus = (typeof SCRAPING_STATUSES)[number];
+
+export function isScrapingStatus(value: unknown): value is ScrapingStatus {
+  return (
+    typeof value === 'string' &&
+    (SCRAPING_STATUSES as readonly string[]).includes(value)
+  );
+}
+
+// ─── OverallAnalyses bag (P-46 Workstream 1, 2026-05-24) ───────────────
+// Per-URL × per-capture-category Overall Analysis text boxes are stored
+// denormalized as a single JSON column on CompetitorUrl per §A.11. Each
+// value is a TipTap document JSON (Record<string, unknown>) — shape comes
+// from the TipTap editor. Missing keys render as empty editor state.
+export interface OverallAnalyses {
+  text?: Record<string, unknown>;
+  image?: Record<string, unknown>;
+  video?: Record<string, unknown>;
+  reviews?: Record<string, unknown>;
+}
+
 // ─── CompetitorUrl ──────────────────────────────────────────────────────
 // Wire shape returned by GET / POST / PATCH on the urls endpoints.
 // Mirrors prisma CompetitorUrl with Date → ISO string and customFields
@@ -101,6 +129,19 @@ export interface CompetitorUrl {
   // wire omits it, so the extension's existing POST traffic stays
   // unchanged. Always present on the wire (schema-level @default).
   source: Source;
+  // P-46 Workstream 1 (2026-05-24) — Phase 2 Competition Data redesign fields
+  // per docs/COMPETITION_DATA_V2_DESIGN.md §A.11. All optional / nullable on
+  // the wire so existing rows render unchanged before any UI workstream lands.
+  // Workstream 2's URL detail page redesign starts reading these fields;
+  // Workstream 3's table redesign starts editing them.
+  type: string | null;
+  description1: string | null;
+  description2: string | null;
+  price: string | null;
+  competitionScore: number | null;
+  scrapingStatus: ScrapingStatus;
+  overallCompetitorAnalysis: Record<string, unknown>; // TipTap document JSON per §A.5
+  overallAnalyses: OverallAnalyses; // per-category TipTap bag per §A.11
   addedBy: string;
   addedAt: string;
   updatedAt: string;
@@ -151,6 +192,17 @@ export interface UpdateCompetitorUrlRequest {
   // flag (no `null` since the column is NOT NULL).
   isSponsoredAd?: boolean;
   customFields?: Record<string, unknown>;
+  // P-46 Workstream 1 (2026-05-24) — new fields per §A.11. Wire shape only;
+  // route-handler PATCH-allowlist extension lands in Workstream 2 when the
+  // URL detail page UI starts emitting these.
+  type?: string | null;
+  description1?: string | null;
+  description2?: string | null;
+  price?: string | null;
+  competitionScore?: number | null;
+  scrapingStatus?: ScrapingStatus;
+  overallCompetitorAnalysis?: Record<string, unknown>;
+  overallAnalyses?: Partial<OverallAnalyses>;
 }
 
 // POST /api/projects/[projectId]/competition-scraping/urls — response.
@@ -261,6 +313,11 @@ export interface CapturedText {
   sortOrder: number;
   // P-29 Slice #1 — see CompetitorUrl.source.
   source: Source;
+  // P-46 Workstream 1 (2026-05-24) — TipTap document JSON for the per-item
+  // Analysis text box rendered below this captured item on the URL detail
+  // page per docs/COMPETITION_DATA_V2_DESIGN.md §A.11. Empty object on existing
+  // rows; populated when Workstream 2's UI starts editing.
+  analysis: Record<string, unknown>;
   addedBy: string;
   addedAt: string;
   updatedAt: string;
@@ -287,10 +344,14 @@ export interface CreateCapturedTextRequest {
 }
 
 // PATCH .../text/[textId] — clientId is immutable; cannot be re-targeted.
+// P-46 Workstream 1 (2026-05-24) — adds optional `analysis` (TipTap document
+// JSON) so Workstream 2's UI can write to the per-item Analysis box.
 export type UpdateCapturedTextRequest = Omit<
   Partial<CreateCapturedTextRequest>,
   'clientId'
->;
+> & {
+  analysis?: Record<string, unknown>;
+};
 
 export type CreateCapturedTextResponse = CapturedText;
 export type UpdateCapturedTextResponse = CapturedText;
@@ -364,6 +425,9 @@ export interface CapturedImage {
   // (which describes the image's content shape — regular vs. region-
   // screenshot); source describes which CLIENT created the row.
   source: Source;
+  // P-46 Workstream 1 (2026-05-24) — per-item Analysis TipTap document JSON
+  // per docs/COMPETITION_DATA_V2_DESIGN.md §A.11.
+  analysis: Record<string, unknown>;
   addedBy: string;
   addedAt: string;
   updatedAt: string;
@@ -471,12 +535,15 @@ export interface FetchImageByUrlResponse {
 // PATCH .../images/[imageId] — fields the user can edit after the upload
 // is finalized. clientId, sourceType, storagePath, fileSize, mimeType,
 // width, height are immutable after capture.
+// P-46 Workstream 1 (2026-05-24) — adds optional `analysis` (TipTap document
+// JSON) so Workstream 2's UI can write to the per-item Analysis box.
 export interface UpdateCapturedImageRequest {
   imageCategory?: string;
   composition?: string;
   embeddedText?: string;
   tags?: string[];
   sortOrder?: number;
+  analysis?: Record<string, unknown>;
 }
 
 export type UpdateCapturedImageResponse = CapturedImage;
@@ -656,6 +723,9 @@ export interface CapturedVideo {
 
   sortOrder: number;
   source: Source;
+  // P-46 Workstream 1 (2026-05-24) — per-item Analysis TipTap document JSON
+  // per docs/COMPETITION_DATA_V2_DESIGN.md §A.11.
+  analysis: Record<string, unknown>;
   addedBy: string;
   addedAt: string;
   updatedAt: string;
@@ -771,12 +841,15 @@ export type ListCapturedVideosResponse = CapturedVideoWithUrls[];
 // PATCH .../videos/[videoId] — fields editable after capture. clientId,
 // sourceType, originalSrcUrl, storage paths, and bytes-derived metadata are
 // immutable; re-capture is the path to change them.
+// P-46 Workstream 1 (2026-05-24) — adds optional `analysis` (TipTap document
+// JSON) so Workstream 2's UI can write to the per-item Analysis box.
 export interface UpdateCapturedVideoRequest {
   videoCategory?: string;
   composition?: string;
   embeddedText?: string;
   tags?: string[];
   sortOrder?: number;
+  analysis?: Record<string, unknown>;
 }
 
 export type UpdateCapturedVideoResponse = CapturedVideo;
@@ -839,6 +912,171 @@ export function isFinalizeVideoUploadRequest(
     // are all optional metadata (server tolerates missing).
   }
   return true;
+}
+
+// ─── CapturedReview (P-46 Workstream 1, 2026-05-24) ────────────────────
+// Wire shape for product reviews captured against a CompetitorUrl per
+// docs/COMPETITION_DATA_V2_DESIGN.md §A.1b. v1 source defaults to 'manual'
+// (vklf.com-side manual entry form ships in Workstream 5); per-platform
+// extension capture gestures DEFERRED to post-P-46 polish sessions.
+//
+// Mirrors prisma CapturedReview with Date → ISO string and tags as string[].
+export interface CapturedReview {
+  id: string;
+  clientId: string;
+  competitorUrlId: string;
+  starRating: number; // 1-5; range validated at application layer
+  body: string;
+  reviewerName: string | null;
+  reviewDate: string | null; // ISO date string when present
+  tags: string[];
+  // Per-item Analysis TipTap document JSON per §A.11 (same shape pattern as
+  // CapturedText/Image/Video.analysis).
+  analysis: Record<string, unknown>;
+  // 'manual' = vklf.com-side manual entry (v1). Future per-platform values:
+  // 'extension-amazon' | 'extension-ebay' | ... etc. once those polish
+  // sessions land. Open-ended string at the wire layer.
+  source: string;
+  addedBy: string;
+  addedAt: string;
+  updatedAt: string;
+}
+
+// POST /api/projects/[projectId]/competition-scraping/urls/[urlId]/reviews
+// — required: clientId (UUIDv4 from client), starRating (1-5), body.
+// Idempotent on clientId per the captured-* convention.
+export interface CreateCapturedReviewRequest {
+  clientId: string;
+  starRating: number; // 1-5
+  body: string;
+  reviewerName?: string;
+  reviewDate?: string; // ISO date string
+  tags?: string[];
+  analysis?: Record<string, unknown>;
+  source?: string;
+}
+
+// PATCH .../reviews/[reviewId] — clientId is immutable per captured-* convention.
+export type UpdateCapturedReviewRequest = Omit<
+  Partial<CreateCapturedReviewRequest>,
+  'clientId'
+>;
+
+export type CreateCapturedReviewResponse = CapturedReview;
+export type UpdateCapturedReviewResponse = CapturedReview;
+export interface DeleteCapturedReviewResponse {
+  success: true;
+}
+
+// GET .../urls/[urlId]/reviews — ordered by (addedAt ASC) since reviews lack
+// a sortOrder column in v1 (no user-reorderable UI in v1 per §A.1b scope).
+export type ListCapturedReviewsResponse = CapturedReview[];
+
+// Type guard used at the trust boundary in the future PATCH route handler.
+// Validates the minimum CapturedReview shape: clientId + starRating in
+// [1, 5] + non-empty body string.
+export function isCreateCapturedReviewRequest(
+  value: unknown
+): value is CreateCapturedReviewRequest {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Record<string, unknown>;
+  if (typeof v.clientId !== 'string' || v.clientId.trim().length === 0) {
+    return false;
+  }
+  if (
+    typeof v.starRating !== 'number' ||
+    !Number.isInteger(v.starRating) ||
+    v.starRating < 1 ||
+    v.starRating > 5
+  ) {
+    return false;
+  }
+  if (typeof v.body !== 'string' || v.body.trim().length === 0) {
+    return false;
+  }
+  return true;
+}
+
+// ─── ComprehensiveCompetitorAnalysis (P-46 Workstream 1, 2026-05-24) ────
+// Wire shape for the per-Project rich-text doc per
+// docs/COMPETITION_DATA_V2_DESIGN.md §A.4. One row per Project (enforced by
+// prisma @unique on projectId). Workstream 4 ships the editor page that
+// reads + writes this row.
+export interface ComprehensiveCompetitorAnalysis {
+  id: string;
+  projectId: string;
+  // TipTap document JSON per §A.5. Serialized JSON-to-HTML at render time
+  // using TipTap's generateHTML for non-editor read views.
+  contentJson: Record<string, unknown>;
+  lastEditedBy: string;
+  lastEditedAt: string;
+  createdAt: string;
+}
+
+// GET /api/projects/[projectId]/competition-scraping/comprehensive-analysis
+// Returns the row when present; 404 when the user hasn't started editing yet
+// (no row exists — client should render empty-state editor).
+export type ReadComprehensiveCompetitorAnalysisResponse =
+  ComprehensiveCompetitorAnalysis;
+
+// PUT /api/projects/[projectId]/competition-scraping/comprehensive-analysis
+// — upsert. First write creates the row; subsequent writes update
+// contentJson + lastEditedBy + lastEditedAt.
+export interface WriteComprehensiveCompetitorAnalysisRequest {
+  contentJson: Record<string, unknown>;
+}
+
+export type WriteComprehensiveCompetitorAnalysisResponse =
+  ComprehensiveCompetitorAnalysis;
+
+// ─── UserTablePreferences (P-46 Workstream 1, 2026-05-24) ──────────────
+// Wire shape for per-user-per-project Competition Data table preferences
+// per docs/COMPETITION_DATA_V2_DESIGN.md §A.3. Cross-device sync via
+// server-side storage (joins UserExtensionState + UserProjectHighlightTerm
+// as the third per-user-per-project preference table per §A.12). Workstream 3
+// ships the table controls that read + write this row.
+export interface UserTablePreferences {
+  id: string;
+  userId: string;
+  projectId: string;
+  // { columnId: boolean } — true = visible. Missing keys default to visible.
+  columnVisibility: Record<string, boolean>;
+  // { columnId: pixels }. Missing keys default to the column's default width.
+  columnWidths: Record<string, number>;
+  fontSize: number; // 10-24; validated at application layer
+  // [competitorUrlId] in user's preferred order. Missing IDs fall back to
+  // the table's default sort.
+  rowOrder: string[];
+  lastUsedSortColumn: string | null;
+  lastUsedSortDirection: 'asc' | 'desc' | null;
+  updatedAt: string;
+}
+
+// GET /api/users/[userId]/table-preferences/[projectId]
+// Returns the row when present; 404 when no preferences saved yet (client
+// falls back to defaults).
+export type ReadUserTablePreferencesResponse = UserTablePreferences;
+
+// PUT /api/users/[userId]/table-preferences/[projectId] — upsert. Full or
+// partial payload (any subset of editable fields).
+export interface WriteUserTablePreferencesRequest {
+  columnVisibility?: Record<string, boolean>;
+  columnWidths?: Record<string, number>;
+  fontSize?: number; // 10-24
+  rowOrder?: string[];
+  lastUsedSortColumn?: string | null;
+  lastUsedSortDirection?: 'asc' | 'desc' | null;
+}
+
+export type WriteUserTablePreferencesResponse = UserTablePreferences;
+
+// Type guard for the sort-direction field — validated at the trust boundary
+// before persisting to the DB (the column is a free String at the DB layer
+// per §A.3; this guard enforces the two-value invariant at the API edge).
+export function isTablePreferencesSortDirection(
+  value: unknown
+): value is 'asc' | 'desc' {
+  return value === 'asc' || value === 'desc';
 }
 
 // ─── Generic error shape ────────────────────────────────────────────────

@@ -26,6 +26,7 @@ function makeRow(overrides: Partial<CapturedTextRow> = {}): CapturedTextRow {
     tags: [],
     sortOrder: 0,
     source: 'extension',
+    analysis: {},
     addedBy: 'u-1',
     addedAt: FROZEN_DATE,
     updatedAt: FROZEN_DATE,

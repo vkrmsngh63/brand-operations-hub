@@ -34,6 +34,7 @@ function makeRow(overrides: Partial<CapturedImageRow> = {}): CapturedImageRow {
     height: null,
     sortOrder: 0,
     source: 'extension',
+    analysis: {},
     addedBy: 'u-1',
     addedAt: FROZEN_DATE,
     updatedAt: FROZEN_DATE,

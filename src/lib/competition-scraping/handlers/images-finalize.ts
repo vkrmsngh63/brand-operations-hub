@@ -48,6 +48,8 @@ export type CapturedImageRow = {
   height: number | null;
   sortOrder: number;
   source: string;
+  // P-46 Workstream 1 (2026-05-24) — per-item Analysis TipTap document JSON.
+  analysis: Prisma.JsonValue;
   addedBy: string;
   addedAt: Date;
   updatedAt: Date;
@@ -107,6 +109,7 @@ export function toWireShape(row: CapturedImageRow | null): CapturedImage | null 
     height: row.height,
     sortOrder: row.sortOrder,
     source: row.source as CapturedImage['source'],
+    analysis: (row.analysis ?? {}) as Record<string, unknown>,
     addedBy: row.addedBy,
     addedAt: row.addedAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),

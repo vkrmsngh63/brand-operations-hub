@@ -33,6 +33,17 @@ const ROW_A: CompetitorUrl = {
   // session's verification scoreboard only ran root-level tsc, not the
   // extension's own tsc. Logged in CORRECTIONS_LOG 2026-05-15-d.
   source: 'extension',
+  // P-46 Workstream 1 (2026-05-24) — new wire fields per
+  // docs/COMPETITION_DATA_V2_DESIGN.md §A.11. Defaults match the
+  // post-migration database state (all nullable / defaulted).
+  type: null,
+  description1: null,
+  description2: null,
+  price: null,
+  competitionScore: null,
+  scrapingStatus: 'INCOMPLETE',
+  overallCompetitorAnalysis: {},
+  overallAnalyses: {},
   addedBy: 'user-1',
   addedAt: '2026-05-11T00:00:00.000Z',
   updatedAt: '2026-05-11T00:00:00.000Z',

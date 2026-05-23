@@ -15,6 +15,8 @@ import {
   isSource,
   type CompetitorUrl,
   type CreateCompetitorUrlRequest,
+  type OverallAnalyses,
+  type ScrapingStatus,
 } from '../../shared-types/competition-scraping.ts';
 
 const WORKFLOW = 'competition-scraping';
@@ -55,6 +57,18 @@ export type CompetitorUrlRow = {
   isSponsoredAd: boolean;
   customFields: Prisma.JsonValue;
   source: string;
+  // P-46 Workstream 1 (2026-05-24) — new schema columns per
+  // docs/COMPETITION_DATA_V2_DESIGN.md §A.11. All nullable or defaulted at
+  // the schema layer so existing rows carry these on read after the
+  // migration without backfill.
+  type: string | null;
+  description1: string | null;
+  description2: string | null;
+  price: string | null;
+  competitionScore: number | null;
+  scrapingStatus: string;
+  overallCompetitorAnalysis: Prisma.JsonValue;
+  overallAnalyses: Prisma.JsonValue;
   addedBy: string;
   addedAt: Date;
   updatedAt: Date;
@@ -100,6 +114,18 @@ export function toWireShape(row: CompetitorUrlRow | null): CompetitorUrl | null 
     isSponsoredAd: row.isSponsoredAd,
     customFields: (row.customFields ?? {}) as Record<string, unknown>,
     source: row.source as CompetitorUrl['source'],
+    // P-46 Workstream 1 (2026-05-24) — Phase 2 wire fields per §A.11.
+    type: row.type,
+    description1: row.description1,
+    description2: row.description2,
+    price: row.price,
+    competitionScore: row.competitionScore,
+    scrapingStatus: row.scrapingStatus as ScrapingStatus,
+    overallCompetitorAnalysis: (row.overallCompetitorAnalysis ?? {}) as Record<
+      string,
+      unknown
+    >,
+    overallAnalyses: (row.overallAnalyses ?? {}) as OverallAnalyses,
     addedBy: row.addedBy,
     addedAt: row.addedAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),

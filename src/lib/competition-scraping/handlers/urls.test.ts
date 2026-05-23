@@ -42,6 +42,17 @@ function makeRow(overrides: Partial<CompetitorUrlRow> = {}): CompetitorUrlRow {
     isSponsoredAd: false,
     customFields: {},
     source: 'extension',
+    // P-46 Workstream 1 (2026-05-24) — new schema column defaults matching
+    // the post-migration database state. All nullable or defaulted at the
+    // schema layer so existing rows carry these on read.
+    type: null,
+    description1: null,
+    description2: null,
+    price: null,
+    competitionScore: null,
+    scrapingStatus: 'INCOMPLETE',
+    overallCompetitorAnalysis: {},
+    overallAnalyses: {},
     addedBy: 'u-1',
     addedAt: FROZEN_DATE,
     updatedAt: FROZEN_DATE,

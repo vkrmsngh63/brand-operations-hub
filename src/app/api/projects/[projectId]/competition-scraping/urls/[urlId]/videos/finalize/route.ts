@@ -62,6 +62,7 @@ function toWireShape(
     tags: (row.tags ?? []) as string[],
     sortOrder: row.sortOrder,
     source: row.source as CapturedVideo['source'],
+    analysis: (row.analysis ?? {}) as Record<string, unknown>,
     addedBy: row.addedBy,
     addedAt: row.addedAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
