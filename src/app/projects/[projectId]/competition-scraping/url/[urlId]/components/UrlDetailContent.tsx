@@ -27,21 +27,22 @@ import type {
   CapturedReview,
   CapturedText,
   CapturedVideoWithUrls,
-  CompetitorSize,
   CompetitorUrl,
   ListCapturedImagesResponse,
   ListCapturedReviewsResponse,
   ListCapturedTextsResponse,
   ListCapturedVideosResponse,
-  ListCompetitorSizesResponse,
   Platform,
   ReadCompetitorUrlResponse,
+  ScrapingStatus,
   UpdateCompetitorUrlRequest,
 } from '@/lib/shared-types/competition-scraping';
 import { ImageViewerModal } from './ImageViewerModal';
 import {
   EditableBooleanField,
+  EditableEnumField,
   EditableNumberField,
+  EditableTextField,
   EditableVocabularyField,
 } from './EditableField';
 import { CustomFieldsEditor } from './CustomFieldsEditor';
@@ -84,10 +85,6 @@ const PLATFORM_LABELS: Record<Platform, string> = {
 export function UrlDetailContent({ project, urlId }: Props) {
   const router = useRouter();
   const [urlSlot, setUrlSlot] = useState<FetchSlot<CompetitorUrl>>({
-    data: null,
-    error: null,
-  });
-  const [sizesSlot, setSizesSlot] = useState<FetchSlot<CompetitorSize[]>>({
     data: null,
     error: null,
   });
@@ -319,11 +316,14 @@ export function UrlDetailContent({ project, urlId }: Props) {
       }
     };
 
+    // P-46 Workstream 2 Session 5 (2026-05-23-b) — Sizes/Options fetch
+    // dropped per §A.6 (hide-UI-keep-data). Schema + API endpoint remain
+    // for reversibility; the client just stops paying the network cost +
+    // doesn't render the section.
     (async () => {
-      const [urlRes, sizesRes, textRes, imagesRes, videosRes, reviewsRes] =
+      const [urlRes, textRes, imagesRes, videosRes, reviewsRes] =
         await Promise.all([
           fetchOne<ReadCompetitorUrlResponse>(base, 'this URL'),
-          fetchOne<ListCompetitorSizesResponse>(`${base}/sizes`, 'sizes'),
           fetchOne<ListCapturedTextsResponse>(`${base}/text`, 'captured text'),
           fetchOne<ListCapturedImagesResponse>(`${base}/images`, 'captured images'),
           fetchOne<ListCapturedVideosResponse>(`${base}/videos`, 'captured videos'),
@@ -331,7 +331,6 @@ export function UrlDetailContent({ project, urlId }: Props) {
         ]);
       if (cancelled) return;
       setUrlSlot(urlRes);
-      setSizesSlot(sizesRes);
       setTextSlot(textRes);
       setImagesSlot(imagesRes);
       setVideosSlot(videosRes);
@@ -483,7 +482,6 @@ export function UrlDetailContent({ project, urlId }: Props) {
               onPatch={patchUrl}
               onDeleteClick={() => setUrlDeleteOpen(true)}
             />
-            <SizesSubsection slot={sizesSlot} />
             <CapturedTextSubsection
               slot={textSlot}
               projectId={project.id}
@@ -710,6 +708,18 @@ function UrlMetadataCard({
         </div>
       </div>
 
+      {/* P-46 Workstream 2 Session 5 (2026-05-23-b): Scraping Status toggle
+          per §A.8. Bidirectional mirror with the Competition Data table's
+          Status column — both surfaces read + write CompetitorUrl.scrapingStatus. */}
+      <div style={{ marginBottom: '16px' }}>
+        <EditableEnumField<ScrapingStatus>
+          label="Scraping Status"
+          value={row.scrapingStatus}
+          options={SCRAPING_STATUS_OPTIONS}
+          onSave={(next) => onPatch({ scrapingStatus: next })}
+        />
+      </div>
+
       <div
         style={{
           display: 'grid',
@@ -720,6 +730,21 @@ function UrlMetadataCard({
         {/* Platform stays read-only in slice (a.3) — re-targeting a row to a
             different platform is rare + needs a confirm dialog (deferred). */}
         <ReadOnlyField label="Platform" value={PLATFORM_LABELS[row.platform]} />
+        {/* P-46 Workstream 2 Session 5 (2026-05-23-b): Type field per §A.11.
+            Free-text (no vocabulary autocomplete in v1); single-line input. */}
+        <EditableTextField
+          label="Type"
+          value={row.type}
+          onSave={(next) => onPatch({ type: next })}
+        />
+        {/* P-46 Workstream 2 Session 5 (2026-05-23-b): Price field per §A.11.
+            Stored as free-text per §A.11 to accommodate "$24.99" / "From $24"
+            / "Free w/ Prime"; no Decimal coercion in v1. */}
+        <EditableTextField
+          label="Price"
+          value={row.price}
+          onSave={(next) => onPatch({ price: next })}
+        />
         <EditableVocabularyField
           label="Product Name"
           value={row.productName}
@@ -791,6 +816,34 @@ function UrlMetadataCard({
         <ReadOnlyField label="Last Updated" value={formatDate(row.updatedAt)} />
       </div>
 
+      {/* P-46 Workstream 2 Session 5 (2026-05-23-b): Description-1 +
+          Description-2 per §A.11. Both are db.Text columns — render full-
+          width below the grid as multiline EditableTextField so the longer
+          content has room to breathe. */}
+      <div
+        style={{
+          marginTop: '16px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '12px',
+        }}
+      >
+        <EditableTextField
+          label="Description-1"
+          value={row.description1}
+          onSave={(next) => onPatch({ description1: next })}
+          multiline
+          rows={3}
+        />
+        <EditableTextField
+          label="Description-2"
+          value={row.description2}
+          onSave={(next) => onPatch({ description2: next })}
+          multiline
+          rows={3}
+        />
+      </div>
+
       <CustomFieldsEditor
         record={row.customFields}
         onSaveAll={(next) => onPatch({ customFields: next })}
@@ -798,6 +851,17 @@ function UrlMetadataCard({
     </section>
   );
 }
+
+// P-46 Workstream 2 Session 5 (2026-05-23-b): segmented-control options for
+// the Scraping Status toggle per §A.8. Two-value enum mirroring the Prisma
+// `ScrapingStatus` enum at prisma/schema.prisma.
+const SCRAPING_STATUS_OPTIONS: ReadonlyArray<{
+  value: ScrapingStatus;
+  label: string;
+}> = [
+  { value: 'INCOMPLETE', label: 'Incomplete' },
+  { value: 'COMPLETE', label: 'Complete' },
+];
 
 // Read-only field used for Platform / Added On / Last Updated. Mirrors the
 // EditableField shell visually so the card stays consistent.
@@ -823,52 +887,6 @@ function ReadOnlyField({
         {value ?? '—'}
       </div>
     </div>
-  );
-}
-
-function SizesSubsection({ slot }: { slot: FetchSlot<CompetitorSize[]> }) {
-  return (
-    <section
-      style={{
-        background: '#161b22',
-        border: '1px solid #30363d',
-        borderRadius: '8px',
-        padding: '20px',
-        marginBottom: '20px',
-      }}
-    >
-      <h2 style={sectionHeading}>Sizes / Options</h2>
-      {slot.error ? (
-        <InlineMessage tone="error" body={slot.error} />
-      ) : slot.data === null ? (
-        <InlineMessage body="Loading sizes…" />
-      ) : slot.data.length === 0 ? (
-        <InlineMessage body="No sizes captured for this URL yet." />
-      ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={tableStyle}>
-            <thead>
-              <tr>
-                <th style={thStyle('left')}>Size / Option</th>
-                <th style={thStyle('right')}>Price</th>
-                <th style={thStyle('right')}>Shipping Cost</th>
-                <th style={thStyle('right')}>Added On</th>
-              </tr>
-            </thead>
-            <tbody>
-              {slot.data.map((s) => (
-                <tr key={s.id} style={{ borderBottom: '1px solid #21262d' }}>
-                  <td style={cellStyle('left')}>{s.sizeOption}</td>
-                  <td style={cellStyle('right')}>{formatMoney(s.price)}</td>
-                  <td style={cellStyle('right')}>{formatMoney(s.shippingCost)}</td>
-                  <td style={cellStyle('right')}>{formatDate(s.addedAt)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </section>
   );
 }
 
@@ -2165,36 +2183,6 @@ const rowTrashButtonStyle: React.CSSProperties = {
   padding: '4px 8px',
 };
 
-const tableStyle: React.CSSProperties = {
-  width: '100%',
-  borderCollapse: 'collapse',
-  fontSize: '13px',
-};
-
-function thStyle(align: 'left' | 'right'): React.CSSProperties {
-  return {
-    textAlign: align,
-    padding: '8px 10px',
-    borderBottom: '1px solid #30363d',
-    color: '#8b949e',
-    fontWeight: 600,
-    whiteSpace: 'nowrap',
-  };
-}
-
-function cellStyle(align: 'left' | 'right'): React.CSSProperties {
-  return {
-    textAlign: align,
-    padding: '8px 10px',
-    color: '#c9d1d9',
-    fontVariantNumeric: align === 'right' ? 'tabular-nums' : 'normal',
-    maxWidth: '320px',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-  };
-}
-
 // ─── Formatters ─────────────────────────────────────────────────────────
 
 function formatRating(value: number | null): string | null {
@@ -2213,14 +2201,6 @@ function formatDate(iso: string): string {
     month: 'short',
     day: 'numeric',
   });
-}
-
-function formatMoney(decimalString: string | null): string {
-  if (decimalString == null) return '—';
-  // Decimal columns serialize as a string from the wire. We render as-is to
-  // preserve precision; locale-formatted display can come at a future
-  // slice once currency is captured per-Project.
-  return decimalString;
 }
 
 function shortenUrl(url: string, max = 80): string {

@@ -10,6 +10,7 @@ import {
   isValidAnalysisPayload,
   isValidOverallAnalysesBag,
 } from '@/lib/rich-text/tiptap-helpers';
+import { extractUrlStructuralFieldsPatch } from '@/lib/competition-scraping/url-structural-fields-validation';
 import {
   isPlatform,
   type CompetitorUrl,
@@ -224,6 +225,20 @@ export async function PATCH(
         ? (body.customFields as Prisma.InputJsonValue)
         : Prisma.JsonNull;
   }
+  // P-46 Workstream 2 Session 5 (2026-05-23-b) — URL-level structural
+  // fields per §C.2 + §A.11. Delegated to the extracted trust-boundary
+  // helper so node:test can exercise the per-field normalization (trim-or-
+  // null for the 4 free-text fields; strict enum-acceptance for the 5th)
+  // without spinning up Next.js / Prisma. See
+  // src/lib/competition-scraping/url-structural-fields-validation.ts.
+  const structuralResult = extractUrlStructuralFieldsPatch(body);
+  if (!structuralResult.ok) {
+    return withCors(
+      req,
+      NextResponse.json({ error: structuralResult.error }, { status: 400 })
+    );
+  }
+  Object.assign(data, structuralResult.patch);
   // P-46 Workstream 2 Session 3 (2026-05-27) — URL-level Overall Competitor
   // Analysis TipTap doc JSON. Same trust-boundary shape as the per-item
   // Analysis fields on text/[textId] + images/[imageId] + videos/[videoId]:

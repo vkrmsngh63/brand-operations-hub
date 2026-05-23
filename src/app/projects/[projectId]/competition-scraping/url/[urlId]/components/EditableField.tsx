@@ -2,11 +2,14 @@
 
 // W#2 per-URL detail page — editable-field primitives (slice a.3).
 //
-// Three variants share a single read-mode/edit-mode wrapper:
+// Five variants share a single read-mode/edit-mode wrapper:
 //
-//   <EditableTextField>        — string | null (plain text)
+//   <EditableTextField>        — string | null (plain text; multiline opt-in)
 //   <EditableNumberField>      — number | null (with min/max/step/integer)
 //   <EditableVocabularyField>  — string | null (typeahead from /vocabulary)
+//   <EditableBooleanField>     — boolean (single-click optimistic toggle)
+//   <EditableEnumField>        — string from a fixed option set (segmented
+//                                control; single-click optimistic write)
 //
 // Each variant accepts `onSave(newValue) => Promise<void>`. Save is called
 // when the user hits ✓ or presses Enter; cancel via ✕ or Esc reverts to
@@ -32,6 +35,10 @@ interface FieldShellProps {
   errorMessage: string | null;
   // Read-mode display value. Null renders as italic gray "—".
   readValue: string | null;
+  // Optional style overrides for the read-mode display block (e.g.,
+  // multiline EditableTextField uses pre-wrap whiteSpace so saved newlines
+  // render correctly in read mode).
+  readValueStyle?: React.CSSProperties;
   // Whether the field can enter edit mode. False to disable (not used in
   // slice a.3 but plumbed for future Phase-2 admin-vs-worker permissions).
   editable?: boolean;
@@ -47,6 +54,7 @@ function FieldShell({
   saving,
   errorMessage,
   readValue,
+  readValueStyle,
   editable = true,
   children,
 }: FieldShellProps) {
@@ -118,6 +126,7 @@ function FieldShell({
             fontSize: '13px',
             color: readValue == null ? '#6e7681' : '#c9d1d9',
             fontStyle: readValue == null ? 'italic' : 'normal',
+            ...readValueStyle,
           }}
         >
           {readValue ?? '—'}
@@ -148,6 +157,8 @@ export function EditableTextField({
   onSave,
   editable,
   formatRead,
+  multiline,
+  rows,
 }: {
   label: string;
   value: string | null;
@@ -155,16 +166,26 @@ export function EditableTextField({
   editable?: boolean;
   // Optional read-mode formatter (e.g., title-case the platform name).
   formatRead?: (raw: string | null) => string | null;
+  // P-46 Workstream 2 Session 5 (2026-05-23-b): when true, renders a
+  // <textarea> instead of <input> for db.Text columns like description1 /
+  // description2. Enter inserts a newline (the shell's Enter-to-save is
+  // suppressed via stopPropagation); save by clicking ✓ or pressing Tab off
+  // the field.
+  multiline?: boolean;
+  rows?: number;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState<string>(value ?? '');
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    if (isEditing) inputRef.current?.focus();
-  }, [isEditing]);
+    if (!isEditing) return;
+    if (multiline) textareaRef.current?.focus();
+    else inputRef.current?.focus();
+  }, [isEditing, multiline]);
 
   const enterEdit = () => {
     setDraft(value ?? '');
@@ -196,6 +217,8 @@ export function EditableTextField({
     }
   };
 
+  const readDisplay = formatRead ? formatRead(value) : value;
+
   return (
     <FieldShell
       label={label}
@@ -205,18 +228,37 @@ export function EditableTextField({
       onCancel={cancel}
       saving={saving}
       errorMessage={errorMessage}
-      readValue={formatRead ? formatRead(value) : value}
+      readValue={readDisplay}
+      readValueStyle={multiline ? multilineReadValueStyle : undefined}
       editable={editable}
     >
-      <input
-        ref={inputRef}
-        type="text"
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        disabled={saving}
-        style={inputStyle}
-        placeholder={`Set ${label.toLowerCase()}`}
-      />
+      {multiline ? (
+        <textarea
+          ref={textareaRef}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            // Multiline mode: Enter inserts a newline. Stop propagation so
+            // the shell's Enter-to-save handler doesn't fire. Esc still
+            // bubbles to the shell to cancel.
+            if (e.key === 'Enter') e.stopPropagation();
+          }}
+          disabled={saving}
+          rows={rows ?? 3}
+          style={textareaStyle}
+          placeholder={`Set ${label.toLowerCase()}`}
+        />
+      ) : (
+        <input
+          ref={inputRef}
+          type="text"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          disabled={saving}
+          style={inputStyle}
+          placeholder={`Set ${label.toLowerCase()}`}
+        />
+      )}
     </FieldShell>
   );
 }
@@ -514,6 +556,125 @@ export function EditableBooleanField({
   );
 }
 
+// ─── Enum variant ───────────────────────────────────────────────────────
+//
+// Segmented-control over a fixed option set. Like EditableBooleanField, a
+// click on an inactive option optimistically writes the new value and falls
+// back to the prior value if the save throws. No separate edit/save/cancel
+// dance — for a tiny option set, the single-click commit is the cleanest
+// affordance. Use cases: Scraping Status (INCOMPLETE / COMPLETE) per §A.8;
+// future click-to-edit enum cells in the Competition Data table (Workstream
+// 3) consume the same component via inline rendering.
+//
+// Generic over the option string-union so the consumer's onSave callback is
+// typed against the specific enum, not the looser `string`.
+
+export function EditableEnumField<T extends string>({
+  label,
+  value,
+  options,
+  onSave,
+  editable = true,
+}: {
+  label: string;
+  value: T;
+  options: ReadonlyArray<{ value: T; label: string }>;
+  onSave: (next: T) => Promise<void>;
+  editable?: boolean;
+}) {
+  const [optimistic, setOptimistic] = useState<T | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const displayed = optimistic ?? value;
+
+  const onPick = async (next: T) => {
+    if (!editable || saving || next === displayed) return;
+    setOptimistic(next);
+    setSaving(true);
+    setErrorMessage(null);
+    try {
+      await onSave(next);
+      setOptimistic(null);
+    } catch (e) {
+      setErrorMessage(e instanceof Error ? e.message : 'Save failed.');
+      setOptimistic(null);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div>
+      <div
+        style={{
+          fontSize: '12px',
+          color: '#8b949e',
+          marginBottom: '4px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+        }}
+      >
+        <span>{label}</span>
+        {saving ? (
+          <span style={{ fontSize: '11px', color: '#6e7681' }}>Saving…</span>
+        ) : null}
+      </div>
+      <div
+        role="radiogroup"
+        aria-label={label}
+        style={{
+          display: 'inline-flex',
+          border: '1px solid #30363d',
+          borderRadius: '6px',
+          overflow: 'hidden',
+        }}
+      >
+        {options.map((opt, idx) => {
+          const active = opt.value === displayed;
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              onClick={() => void onPick(opt.value)}
+              disabled={!editable || saving}
+              style={{
+                padding: '4px 12px',
+                background: active ? '#1f6feb' : 'transparent',
+                color: active ? '#fff' : '#8b949e',
+                border: 'none',
+                borderRight:
+                  idx < options.length - 1 ? '1px solid #30363d' : 'none',
+                fontSize: '12px',
+                fontWeight: active ? 600 : 400,
+                cursor: !editable || saving ? 'not-allowed' : 'pointer',
+                opacity: saving && !active ? 0.6 : 1,
+              }}
+            >
+              {opt.label}
+            </button>
+          );
+        })}
+      </div>
+      {errorMessage ? (
+        <div
+          role="alert"
+          style={{
+            marginTop: '4px',
+            fontSize: '11px',
+            color: '#f85149',
+          }}
+        >
+          {errorMessage}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 // ─── Style helpers (kept local to match the rest of the detail page) ────
 
 const pencilButtonStyle: React.CSSProperties = {
@@ -536,6 +697,27 @@ const inputStyle: React.CSSProperties = {
   fontSize: '13px',
   fontFamily: 'inherit',
   outline: 'none',
+};
+
+const textareaStyle: React.CSSProperties = {
+  width: '100%',
+  padding: '6px 8px',
+  background: '#0d1117',
+  border: '1px solid #30363d',
+  borderRadius: '4px',
+  color: '#c9d1d9',
+  fontSize: '13px',
+  fontFamily: 'inherit',
+  outline: 'none',
+  resize: 'vertical',
+  minHeight: '60px',
+  lineHeight: 1.5,
+};
+
+const multilineReadValueStyle: React.CSSProperties = {
+  whiteSpace: 'pre-wrap',
+  wordBreak: 'break-word',
+  lineHeight: 1.5,
 };
 
 function saveButtonStyle(disabled: boolean): React.CSSProperties {

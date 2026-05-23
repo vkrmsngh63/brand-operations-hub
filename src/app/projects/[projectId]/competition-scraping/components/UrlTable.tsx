@@ -11,8 +11,14 @@
 // renders the popovers and hands changes back via onFiltersChange.
 //
 // Columns:
-//   URL · Product Name · Brand Name · Category · Product Stars
+//   URL · Status · Product Name · Brand Name · Category · Product Stars
 //   · # Reviews · Added On
+//
+// P-46 Workstream 2 Session 5 (2026-05-23-b) added the Status column as a
+// read-only display reflecting CompetitorUrl.scrapingStatus per §A.8 (the
+// bidirectional mirror with the URL detail page's Scraping Status toggle).
+// Click-to-edit on the column cell lands in Workstream 3 with the rest of
+// the table redesign; per-column filtering for Status also lands there.
 //
 // Header interaction:
 //   - Click the column LABEL → toggle sort.
@@ -47,6 +53,7 @@ import {
 
 type SortKey =
   | 'url'
+  | 'scrapingStatus'
   | 'isSponsoredAd'
   | 'productName'
   | 'brandName'
@@ -101,6 +108,16 @@ interface ColumnDef {
 
 const COLUMNS: ColumnDef[] = [
   { key: 'url', label: 'URL', defaultDir: 'asc', filterKey: null },
+  // P-46 Workstream 2 Session 5 (2026-05-23-b) — bidirectional mirror with
+  // the URL detail page's Scraping Status toggle per §A.8. Sort by status
+  // works (INCOMPLETE < COMPLETE lexically); per-column filtering is
+  // deferred to Workstream 3.
+  {
+    key: 'scrapingStatus',
+    label: 'Status',
+    defaultDir: 'asc',
+    filterKey: null,
+  },
   {
     key: 'isSponsoredAd',
     label: 'Sponsored',
@@ -522,6 +539,13 @@ export function UrlTable({
                     <span style={{ color: '#58a6ff' }}>{shortenUrl(row.url)}</span>
                   </td>
                   <td style={cellStyle('left')}>
+                    <span style={scrapingStatusBadgeStyle(row.scrapingStatus)}>
+                      {row.scrapingStatus === 'COMPLETE'
+                        ? 'Complete'
+                        : 'Incomplete'}
+                    </span>
+                  </td>
+                  <td style={cellStyle('left')}>
                     {row.isSponsoredAd ? (
                       <span style={sponsoredBadgeStyle}>Sponsored</span>
                     ) : (
@@ -777,6 +801,31 @@ const sponsoredBadgeStyle: React.CSSProperties = {
   lineHeight: '14px',
   whiteSpace: 'nowrap',
 };
+
+// P-46 Workstream 2 Session 5 (2026-05-23-b) — color-coded Status pill.
+// COMPLETE = green (workflow done); INCOMPLETE = gray (still in progress).
+// Per §A.8 the value is sourced from CompetitorUrl.scrapingStatus enum.
+function scrapingStatusBadgeStyle(
+  status: CompetitorUrl['scrapingStatus']
+): React.CSSProperties {
+  const complete = status === 'COMPLETE';
+  return {
+    display: 'inline-block',
+    padding: '2px 8px',
+    borderRadius: '999px',
+    background: complete
+      ? 'rgba(63, 185, 80, 0.15)'
+      : 'rgba(139, 148, 158, 0.15)',
+    color: complete ? '#3fb950' : '#8b949e',
+    border: complete
+      ? '1px solid rgba(63, 185, 80, 0.40)'
+      : '1px solid rgba(139, 148, 158, 0.40)',
+    fontSize: '11px',
+    fontWeight: 600,
+    lineHeight: '14px',
+    whiteSpace: 'nowrap',
+  };
+}
 
 function cellStyle(align: 'left' | 'right'): React.CSSProperties {
   return {
