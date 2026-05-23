@@ -11,7 +11,7 @@
 // Reads from GET /api/projects/[projectId]/competition-scraping/urls (shipped
 // in API-routes session-1; spec at COMPETITION_SCRAPING_STACK_DECISIONS.md
 // §11.1). Pulls every URL for the Project in one request — counts per
-// platform (sidebar) and the active platform's table are derived
+// platform (header bar) and the active platform's table are derived
 // client-side. At Phase 3 throughput (~30 URLs/platform/Project) client-side
 // sort + filter stays snappy without pagination; revisit if a future scale
 // pass shows otherwise.
@@ -22,18 +22,19 @@
 // the user's exact view. Filter state lives in URL; the search box uses a
 // debounced URL write so each keystroke doesn't trigger a routing flush.
 //
+// P-46 Workstream 3 Session 1 (2026-05-23-d) — replaces the left-side
+// PlatformSidebar with a horizontal ColumnVisibilityBar at the top of the
+// table that combines platform filters + per-column show/hide. Column
+// visibility persists per-user-per-project via UserTablePreferences (auth-
+// derived path /api/projects/[projectId]/competition-scraping/table-preferences).
+// The fetch happens once at mount; mutations fire a debounced PUT ~500ms
+// after the last change so column-toggle bursts don't hammer the server.
+//
 // Slice (a.1) wires click-row to navigate to /url/[urlId]; the prior
 // open-in-new-tab behavior is preserved via an explicit "Open original
 // URL ↗" button on the detail page itself.
-//
-// Deferred to follow-up slices:
-//   - filtering on Seller Stars / # Seller Reviews / Results Page Rank
-//     (currently not surfaced as visible columns)
-//   - filtering on customFields (JSON column; needs its own design pass)
-//   - saved filter combinations / saved views
-//   - server-side filtering (Phase 3 scale concern, revisit at scale)
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { authFetch } from '@/lib/authFetch';
 import {
@@ -41,8 +42,11 @@ import {
   type CompetitorUrl,
   type ListCompetitorUrlsResponse,
   type Platform,
+  type ReadUserTablePreferencesResponse,
+  type WriteUserTablePreferencesRequest,
 } from '@/lib/shared-types/competition-scraping';
-import { PlatformSidebar, type ScopeFilter } from './PlatformSidebar';
+import { ColumnVisibilityBar } from './ColumnVisibilityBar';
+import type { ScopeFilter } from './url-table-columns';
 import { UrlTable } from './UrlTable';
 import {
   EMPTY_COLUMN_FILTERS,
@@ -56,6 +60,7 @@ interface Props {
 }
 
 const SEARCH_DEBOUNCE_MS = 250;
+const PREFS_DEBOUNCE_MS = 500;
 
 export function CompetitionScrapingViewer({ projectId }: Props) {
   const router = useRouter();
@@ -134,8 +139,88 @@ export function CompetitionScrapingViewer({ projectId }: Props) {
     };
   }, [projectId]);
 
-  // Per-platform counts for the sidebar. Memoized so a sort or filter
-  // change doesn't recompute them.
+  // P-46 Workstream 3 Session 1 — UserTablePreferences (column visibility
+  // only this session; Sessions 2-3 wire columnWidths / fontSize / rowOrder).
+  // Defaults to empty map (which renders everything visible per
+  // isColumnVisible's missing-key-default-true). 404 from the GET is
+  // expected on first visit — the row is created lazily on first toggle.
+  const [columnVisibility, setColumnVisibility] = useState<
+    Record<string, boolean>
+  >({});
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await authFetch(
+          `/api/projects/${projectId}/competition-scraping/table-preferences`
+        );
+        if (cancelled) return;
+        if (res.status === 404) {
+          // First-visit; no row exists yet. Leave the default empty map.
+          return;
+        }
+        if (!res.ok) return; // Silent fallback; defaults render fine.
+        const data = (await res.json()) as ReadUserTablePreferencesResponse;
+        if (cancelled) return;
+        setColumnVisibility(data.columnVisibility ?? {});
+      } catch {
+        // Network error — silently fall back to defaults. Failed prefs
+        // shouldn't prevent the table from rendering.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
+
+  // Debounced PUT — coalesces a burst of column toggles into one network
+  // write. The latest body wins; a new pendingBody resets the timer.
+  const prefsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    // Cleanup on unmount; we don't fire on every body change explicitly
+    // since handleToggleColumn drives the timer below.
+    return () => {
+      if (prefsTimerRef.current) clearTimeout(prefsTimerRef.current);
+    };
+  }, []);
+
+  const flushPrefsPut = useCallback(
+    async (body: WriteUserTablePreferencesRequest) => {
+      try {
+        await authFetch(
+          `/api/projects/${projectId}/competition-scraping/table-preferences`,
+          {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          }
+        );
+      } catch {
+        // Silent failure; the next mutation will retry. Local state stays
+        // consistent so the user sees their choice; cross-device sync just
+        // pauses.
+      }
+    },
+    [projectId]
+  );
+
+  const handleToggleColumn = useCallback(
+    (columnId: string, visible: boolean) => {
+      setColumnVisibility((prev) => {
+        const next = { ...prev, [columnId]: visible };
+        if (prefsTimerRef.current) clearTimeout(prefsTimerRef.current);
+        prefsTimerRef.current = setTimeout(() => {
+          void flushPrefsPut({ columnVisibility: next });
+        }, PREFS_DEBOUNCE_MS);
+        return next;
+      });
+    },
+    [flushPrefsPut]
+  );
+
+  // Per-platform counts for the new horizontal bar. Memoized so a sort or
+  // filter change doesn't recompute them.
   const counts = useMemo(() => {
     if (!urls) return null;
     const c: Record<ScopeFilter, number> = {
@@ -228,19 +313,14 @@ export function CompetitionScrapingViewer({ projectId }: Props) {
   const scopedTotal = counts === null ? 0 : counts[selectedPlatform];
 
   return (
-    <section
-      style={{
-        display: 'grid',
-        gridTemplateColumns: '220px 1fr',
-        gap: '16px',
-        marginTop: '32px',
-      }}
-    >
-      <PlatformSidebar
-        selected={selectedPlatform}
+    <section style={{ marginTop: '32px' }}>
+      <ColumnVisibilityBar
+        selectedPlatform={selectedPlatform}
         counts={counts}
         loading={urls === null && !error}
-        onSelect={handleSelectPlatform}
+        onSelectPlatform={handleSelectPlatform}
+        columnVisibility={columnVisibility}
+        onToggleColumn={handleToggleColumn}
       />
 
       <div
@@ -263,6 +343,7 @@ export function CompetitionScrapingViewer({ projectId }: Props) {
           />
         ) : (
           <UrlTable
+            columnVisibility={columnVisibility}
             rows={visibleUrls}
             scopeRows={scopeRows}
             searchText={draftSearch}

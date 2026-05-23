@@ -63,6 +63,11 @@ type SortKey =
   | 'addedAt';
 
 interface Props {
+  // P-46 Workstream 3 Session 1 — per-column visibility map sourced from
+  // UserTablePreferences. Missing keys default to visible; this prop is
+  // optional so callers that don't yet thread preferences through still
+  // see every column.
+  columnVisibility?: Record<string, boolean>;
   // Rows already filtered by the platform sidebar AND the free-text search
   // box (handled by the parent). Column filters are applied INSIDE this
   // component, after filterless rendering, so the multi-select option lists
@@ -166,6 +171,7 @@ const COLUMNS: ColumnDef[] = [
 ];
 
 export function UrlTable({
+  columnVisibility,
   rows,
   scopeRows,
   searchText,
@@ -179,6 +185,80 @@ export function UrlTable({
   onUrlDeleted,
   selectedPlatform,
 }: Props) {
+  // P-46 Workstream 3 Session 1 — filter the column registry by the
+  // visibility map. Missing keys default to visible (matches
+  // ColumnVisibilityBar's isColumnVisible).
+  const visibleColumns = useMemo(() => {
+    if (!columnVisibility) return COLUMNS;
+    return COLUMNS.filter((c) => {
+      if (c.key in columnVisibility) return columnVisibility[c.key];
+      return true;
+    });
+  }, [columnVisibility]);
+  // Per-column cell renderer keyed by SortKey — used to drop hidden columns
+  // from each row body without sprinkling visibility checks across the JSX.
+  const cellRenderers = useMemo<
+    Record<SortKey, (row: CompetitorUrl) => React.ReactNode>
+  >(
+    () => ({
+      url: (row) => (
+        <td key="url" style={cellStyle('left')}>
+          <span style={{ color: '#58a6ff' }}>{shortenUrl(row.url)}</span>
+        </td>
+      ),
+      scrapingStatus: (row) => (
+        <td key="scrapingStatus" style={cellStyle('left')}>
+          <span style={scrapingStatusBadgeStyle(row.scrapingStatus)}>
+            {row.scrapingStatus === 'COMPLETE' ? 'Complete' : 'Incomplete'}
+          </span>
+        </td>
+      ),
+      isSponsoredAd: (row) => (
+        <td key="isSponsoredAd" style={cellStyle('left')}>
+          {row.isSponsoredAd ? (
+            <span style={sponsoredBadgeStyle}>Sponsored</span>
+          ) : (
+            '—'
+          )}
+        </td>
+      ),
+      productName: (row) => (
+        <td key="productName" style={cellStyle('left')}>
+          {row.productName ?? '—'}
+        </td>
+      ),
+      brandName: (row) => (
+        <td key="brandName" style={cellStyle('left')}>
+          {row.brandName ?? '—'}
+        </td>
+      ),
+      competitionCategory: (row) => (
+        <td key="competitionCategory" style={cellStyle('left')}>
+          {row.competitionCategory ?? '—'}
+        </td>
+      ),
+      productStarRating: (row) => (
+        <td key="productStarRating" style={cellStyle('right')}>
+          {row.productStarRating == null
+            ? '—'
+            : row.productStarRating.toFixed(1)}
+        </td>
+      ),
+      numProductReviews: (row) => (
+        <td key="numProductReviews" style={cellStyle('right')}>
+          {row.numProductReviews == null
+            ? '—'
+            : row.numProductReviews.toLocaleString()}
+        </td>
+      ),
+      addedAt: (row) => (
+        <td key="addedAt" style={cellStyle('right')}>
+          {formatDate(row.addedAt)}
+        </td>
+      ),
+    }),
+    []
+  );
   const [sortKey, setSortKey] = useState<SortKey>('addedAt');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   // P-29 Slice #1 — modal-open state for the "+ Manually add URL" button.
@@ -427,7 +507,7 @@ export function UrlTable({
           >
             <thead>
               <tr>
-                {COLUMNS.map((col) => {
+                {visibleColumns.map((col) => {
                   const active = sortKey === col.key;
                   const arrow = !active ? '' : sortDir === 'asc' ? ' ▲' : ' ▼';
                   const filterActive =
@@ -535,37 +615,7 @@ export function UrlTable({
                     borderBottom: '1px solid #21262d',
                   }}
                 >
-                  <td style={cellStyle('left')}>
-                    <span style={{ color: '#58a6ff' }}>{shortenUrl(row.url)}</span>
-                  </td>
-                  <td style={cellStyle('left')}>
-                    <span style={scrapingStatusBadgeStyle(row.scrapingStatus)}>
-                      {row.scrapingStatus === 'COMPLETE'
-                        ? 'Complete'
-                        : 'Incomplete'}
-                    </span>
-                  </td>
-                  <td style={cellStyle('left')}>
-                    {row.isSponsoredAd ? (
-                      <span style={sponsoredBadgeStyle}>Sponsored</span>
-                    ) : (
-                      '—'
-                    )}
-                  </td>
-                  <td style={cellStyle('left')}>{row.productName ?? '—'}</td>
-                  <td style={cellStyle('left')}>{row.brandName ?? '—'}</td>
-                  <td style={cellStyle('left')}>{row.competitionCategory ?? '—'}</td>
-                  <td style={cellStyle('right')}>
-                    {row.productStarRating == null
-                      ? '—'
-                      : row.productStarRating.toFixed(1)}
-                  </td>
-                  <td style={cellStyle('right')}>
-                    {row.numProductReviews == null
-                      ? '—'
-                      : row.numProductReviews.toLocaleString()}
-                  </td>
-                  <td style={cellStyle('right')}>{formatDate(row.addedAt)}</td>
+                  {visibleColumns.map((col) => cellRenderers[col.key](row))}
                   <td
                     style={{
                       textAlign: 'right',

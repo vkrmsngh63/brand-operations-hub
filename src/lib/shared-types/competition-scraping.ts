@@ -1052,13 +1052,16 @@ export interface UserTablePreferences {
   updatedAt: string;
 }
 
-// GET /api/users/[userId]/table-preferences/[projectId]
+// GET /api/projects/[projectId]/competition-scraping/table-preferences
 // Returns the row when present; 404 when no preferences saved yet (client
-// falls back to defaults).
+// falls back to defaults). userId is resolved from auth context.
+// Path-convention refactor 2026-05-23-d (P-46 Workstream 3): moved from
+// W1's /api/users/[userId]/table-preferences/[projectId] to match the rest
+// of W#2's auth-derived-userId convention.
 export type ReadUserTablePreferencesResponse = UserTablePreferences;
 
-// PUT /api/users/[userId]/table-preferences/[projectId] — upsert. Full or
-// partial payload (any subset of editable fields).
+// PUT /api/projects/[projectId]/competition-scraping/table-preferences —
+// upsert. Full or partial payload (any subset of editable fields).
 export interface WriteUserTablePreferencesRequest {
   columnVisibility?: Record<string, boolean>;
   columnWidths?: Record<string, number>;
