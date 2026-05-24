@@ -873,7 +873,29 @@ export function UrlTable({
           No URLs match this filter.
         </div>
       ) : (
-        <div style={{ overflowX: 'auto' }}>
+        <div
+          style={{
+            /* 2026-05-24 fix-forward (Issue 6) — table is now a fixed-
+               max-height scroll container with BOTH X and Y scrolling
+               inside it. This lets the sticky <thead> (below) lock to
+               the top of THIS container instead of the page viewport, AND
+               makes the browser's native horizontal scrollbar appear at
+               the bottom of THIS container — always visible while the
+               user vertically scrolls the rows inside it. Director's
+               directive: "the table header row at the top and the table
+               horizontal scroll at the bottom should be locked so that
+               when the user scrolls down on the table to any point, they
+               should be able to see the headers and the bottom horizontal
+               scroll at all times." minHeight floor keeps the table
+               usable on small viewports; maxHeight calc leaves room for
+               the workflow topbar + status row + guide + deliverables
+               + visibility bar above. */
+            overflow: 'auto',
+            maxHeight: 'calc(100vh - 200px)',
+            minHeight: '400px',
+            position: 'relative',
+          }}
+        >
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
@@ -919,7 +941,7 @@ export function UrlTable({
                 <thead>
                   <tr>
                     <th
-                      style={dragHandleHeaderStyle}
+                      style={{ ...dragHandleHeaderStyle, ...stickyHeaderStyle }}
                       aria-label="Reorder rows"
                     />
                     {visibleColumns.map((col) => {
@@ -950,7 +972,19 @@ export function UrlTable({
                               active || filterActive ? '#e6edf3' : '#8b949e',
                             fontWeight: 600,
                             whiteSpace: 'nowrap',
-                            position: 'relative',
+                            /* 2026-05-24 fix-forward (Issue 6) — sticky to
+                               the top of the scroll container so the header
+                               stays visible as the user scrolls rows. The
+                               th must also remain position:relative for the
+                               absolute-positioned ColumnResizeHandle child;
+                               sticky and relative don't conflict — sticky
+                               IS a positioned mode for purposes of
+                               establishing a containing block for absolute
+                               children. */
+                            position: 'sticky',
+                            top: 0,
+                            zIndex: 3,
+                            background: '#0d1117',
                           }}
                         >
                           <span
@@ -1018,6 +1052,7 @@ export function UrlTable({
                         color: '#8b949e',
                         fontWeight: 600,
                         whiteSpace: 'nowrap',
+                        ...stickyHeaderStyle,
                       }}
                       aria-label="Row actions"
                     >
@@ -1539,6 +1574,18 @@ const dragHandleHeaderStyle: React.CSSProperties = {
   padding: 0,
 };
 
+// 2026-05-24 fix-forward (Issue 6) — shared sticky-header positioning
+// applied to every <th> in the table. Sticks to the top of the scroll
+// container; opaque dark background so rows don't show through during
+// vertical scroll; z-index above the resize handle (which sits inside
+// the th) so the handle doesn't poke above the header during scroll.
+const stickyHeaderStyle: React.CSSProperties = {
+  position: 'sticky',
+  top: 0,
+  zIndex: 3,
+  background: '#0d1117',
+};
+
 const dragHandleCellStyle: React.CSSProperties = {
   textAlign: 'center',
   padding: '0 4px',
@@ -1585,8 +1632,9 @@ function resizeHandleStyle(
     background: isDragging ? 'rgba(31, 111, 235, 0.15)' : 'transparent',
     touchAction: 'none',
     transition: 'background 80ms ease-in-out',
-    /* Render above the row backgrounds + drag-handle column so the resize
-       affordance is always reachable, but below modals + popovers. */
-    zIndex: 2,
+    /* Render above the sticky <thead> (zIndex 3) so the handle is grabbable
+       within the header strip too — not just from below it. Still below
+       modals + popovers. */
+    zIndex: 4,
   };
 }
