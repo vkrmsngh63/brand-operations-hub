@@ -28,6 +28,11 @@ export interface AnalysisEditorProps {
   // Empty object `{}` for a Project that has never been edited.
   initialContent: Record<string, unknown>;
 
+  // P-46 W4 S2 — Project id threaded through to the RichTextEditor so the
+  // internal-hyperlink `#url/<urlId>` extension can navigate same-tab and
+  // the "Link to URL" toolbar picker can load this Project's URL list.
+  projectId: string;
+
   placeholder?: string;
   testId?: string;
 }
@@ -39,6 +44,7 @@ const SAVED_INDICATOR_MS = 1500;
 export function AnalysisEditor({
   apiUrl,
   initialContent,
+  projectId,
   placeholder = 'Write your comprehensive competitor analysis here…',
   testId,
 }: AnalysisEditorProps) {
@@ -118,6 +124,7 @@ export function AnalysisEditor({
         placeholder={placeholder}
         variant="full"
         testId={testId}
+        projectId={projectId}
       />
     </div>
   );

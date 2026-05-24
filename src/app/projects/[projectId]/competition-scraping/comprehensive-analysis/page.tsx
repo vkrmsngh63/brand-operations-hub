@@ -213,11 +213,13 @@ export default function ComprehensiveAnalysisPage() {
             <AnalysisEditor
               apiUrl={apiUrl}
               initialContent={loadState.contentJson}
+              projectId={projectId}
               testId="comprehensive-analysis-editor"
             />
           ) : (
             <AnalysisReadView
               contentJson={loadState.contentJson}
+              projectId={projectId}
               testId="comprehensive-analysis-read-view"
             />
           ))}

@@ -21,11 +21,15 @@ import { isEmptyTipTapDoc } from '@/lib/rich-text/tiptap-helpers';
 
 export interface AnalysisReadViewProps {
   contentJson: Record<string, unknown>;
+  // P-46 W4 S2 — Project id threaded through so the internal-hyperlink
+  // extension can navigate same-tab from clicks in read mode too.
+  projectId: string;
   testId?: string;
 }
 
 export function AnalysisReadView({
   contentJson,
+  projectId,
   testId,
 }: AnalysisReadViewProps) {
   const empty = isEmptyTipTapDoc(contentJson);
@@ -70,6 +74,7 @@ export function AnalysisReadView({
         readOnly
         variant="full"
         testId={testId}
+        projectId={projectId}
       />
     </div>
   );

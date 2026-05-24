@@ -24,12 +24,19 @@
 // 1 ships only the 'minimal' rendering.
 
 import { useCallback, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { EditorContent, useEditor, type Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
 import Underline from '@tiptap/extension-underline';
 
 import { normalizeTipTapInput } from '@/lib/rich-text/tiptap-helpers';
+import {
+  URL_REFERENCE_HREF_PREFIX,
+  buildInternalUrlPath,
+} from '@/lib/rich-text/url-reference-helpers';
+import { UrlReferenceExtension } from '../comprehensive-analysis/components/UrlReferenceExtension';
+import { LinkToUrlPicker } from '../comprehensive-analysis/components/LinkToUrlPicker';
 
 export interface RichTextEditorProps {
   // Persisted TipTap doc JSON (the schema's `analysis Json` column reads
@@ -62,6 +69,19 @@ export interface RichTextEditorProps {
   // to the editor's outer DOM node so Playwright (W#2 future sessions)
   // can target the right instance among multiple editors on the page.
   testId?: string;
+
+  // P-46 W4 S2 (2026-05-25) — Project id for the internal-hyperlink
+  // extension. When provided, the wrapper:
+  //   - Registers UrlReferenceExtension so clicks on `<a href="#url/...">`
+  //     navigate same-tab via Next.js router.push to the URL detail page.
+  //   - Extends Link's isAllowedUri to accept the `#url/` shorthand
+  //     (otherwise the Link extension would reject the non-http href).
+  //   - For variant='full', surfaces the LinkToUrlPicker toolbar button so
+  //     the director can pick a URL from this Project's captured list.
+  // When omitted, internal-hyperlink behavior is disabled and the editor
+  // behaves identically to the W2 S1 wrapper (per-item Analysis boxes
+  // don't need internal hyperlinks).
+  projectId?: string;
 }
 
 const DEFAULT_DEBOUNCE_MS = 500;
@@ -74,7 +94,9 @@ export function RichTextEditor({
   variant = 'minimal',
   debounceMs = DEFAULT_DEBOUNCE_MS,
   testId,
+  projectId,
 }: RichTextEditorProps) {
+  const router = useRouter();
   // Pending-debounce timer + latest-content ref so blur can flush without
   // re-creating the debounced callback on every render.
   const pendingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -86,6 +108,21 @@ export function RichTextEditor({
   useEffect(() => {
     onChangeRef.current = onChange;
   }, [onChange]);
+
+  // Latest projectId + router refs so the UrlReferenceExtension's click
+  // handler always sees current values without rebuilding the editor.
+  const projectIdRef = useRef(projectId ?? null);
+  const routerRef = useRef(router);
+  useEffect(() => {
+    projectIdRef.current = projectId ?? null;
+    routerRef.current = router;
+  }, [projectId, router]);
+
+  const handleInternalLinkClick = useCallback((urlId: string) => {
+    const pid = projectIdRef.current;
+    if (!pid) return;
+    routerRef.current.push(buildInternalUrlPath(pid, urlId));
+  }, []);
 
   const flush = useCallback(() => {
     if (pendingTimer.current !== null) {
@@ -116,11 +153,26 @@ export function RichTextEditor({
           rel: 'noopener noreferrer',
           target: '_blank',
         },
+        // Allow the internal-hyperlink shorthand `#url/<urlId>` to pass
+        // Link validation. Without this override, the Link extension's
+        // default isAllowedUri would reject the non-http href and strip
+        // the mark on insert. External links continue to defer to the
+        // built-in validate path.
+        isAllowedUri: (url, ctx) =>
+          url.startsWith(URL_REFERENCE_HREF_PREFIX) ||
+          ctx.defaultValidate(url),
       }),
       // Underline is its own extension (not bundled in StarterKit). Loaded
       // for both variants — the minimal variant's toolbar just doesn't
       // surface a button for it. Full variant exposes it via Toolbar.
       Underline,
+      // P-46 W4 S2 — internal-hyperlink click interceptor. Registered for
+      // both variants when projectId is provided so a `#url/<urlId>` link
+      // works wherever it's written, but only the 'full' toolbar surfaces
+      // the picker affordance.
+      UrlReferenceExtension.configure({
+        onInternalLinkClick: projectId ? handleInternalLinkClick : null,
+      }),
     ],
     content: normalizeTipTapInput(initialContent),
     editable: !readOnly,
@@ -188,13 +240,17 @@ export function RichTextEditor({
   return (
     <div
       data-testid={testId}
+      className="plos-rt-editor"
       style={{
         background: '#0d1117',
         border: '1px solid #30363d',
         borderRadius: '6px',
       }}
     >
-      {!readOnly && <Toolbar editor={editor} variant={variant} />}
+      <InternalLinkStyles />
+      {!readOnly && (
+        <Toolbar editor={editor} variant={variant} projectId={projectId} />
+      )}
       <div
         style={{
           padding: '8px 10px',
@@ -209,12 +265,39 @@ export function RichTextEditor({
   );
 }
 
+// P-46 W4 S2 — distinct styling for internal `#url/<urlId>` hyperlinks
+// per the session-start picker outcome. Same blue underlined color as
+// external links + a small URL-icon prefix signaling "this jumps to a
+// captured URL in this Project." Scoped to the editor wrapper's class so
+// the rule doesn't leak to unrelated `<a>` tags elsewhere on the page.
+function InternalLinkStyles() {
+  return (
+    <style>{`
+      .plos-rt-editor a[href^="#url/"] {
+        color: #58a6ff;
+        text-decoration: underline;
+        text-decoration-style: solid;
+      }
+      .plos-rt-editor a[href^="#url/"]::before {
+        content: "🔗 ";
+        font-size: 0.85em;
+        opacity: 0.85;
+      }
+      .plos-rt-editor a[href^="#url/"]:hover {
+        color: #79b8ff;
+      }
+    `}</style>
+  );
+}
+
 function Toolbar({
   editor,
   variant,
+  projectId,
 }: {
   editor: Editor;
   variant: 'minimal' | 'full';
+  projectId?: string;
 }) {
   const isFull = variant === 'full';
   return (
@@ -328,6 +411,12 @@ function Toolbar({
             title="Code block"
             style={{ fontFamily: 'monospace' }}
           />
+        </>
+      )}
+      {isFull && projectId && (
+        <>
+          <ToolbarSeparator />
+          <LinkToUrlPicker editor={editor} projectId={projectId} />
         </>
       )}
     </div>
