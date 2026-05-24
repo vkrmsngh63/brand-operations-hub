@@ -87,7 +87,6 @@ import {
 import {
   InlineBooleanCell,
   InlineDateCell,
-  InlineEnumCell,
   InlineNumberCell,
   InlineTextCell,
   InlineUrlCell,
@@ -304,14 +303,6 @@ const COLUMNS: ColumnDef[] = [
   },
 ];
 
-const SCRAPING_STATUS_OPTIONS: ReadonlyArray<{
-  value: ScrapingStatus;
-  label: string;
-}> = [
-  { value: 'INCOMPLETE', label: 'Incomplete' },
-  { value: 'COMPLETE', label: 'Complete' },
-];
-
 export function UrlTable({
   columnVisibility,
   columnWidths,
@@ -409,18 +400,15 @@ export function UrlTable({
           </span>
         </td>
       ),
+      // 2026-05-24 fix-forward #5 — Status cell uses click-to-cycle
+      // (toggle INCOMPLETE ↔ COMPLETE on a single click) instead of the
+      // dropdown picker InlineEnumCell would render. Two-value enum →
+      // cycle is the cheapest motion. The PATCH itself is unchanged so
+      // the bidirectional mirror with the URL detail page's Scraping
+      // Status toggle (per §A.8) still works for free.
       scrapingStatus: (row) => (
         <td key="scrapingStatus" style={cellStyle('left')}>
-          <InlineEnumCell<ScrapingStatus>
-            value={row.scrapingStatus}
-            options={SCRAPING_STATUS_OPTIONS}
-            onSave={(next) => onCellSave(row.id, { scrapingStatus: next })}
-            renderRead={(active) => (
-              <span style={scrapingStatusBadgeStyle(active.value)}>
-                {active.label}
-              </span>
-            )}
-          />
+          <StatusCycleCell row={row} onCellSave={onCellSave} />
         </td>
       ),
       isSponsoredAd: (row) => (
@@ -1443,6 +1431,79 @@ function tableColumnDefByKey(key: ColumnSortKey) {
     return { id: key, label: key, dataType: 'text' as const, defaultWidth: 140 };
   }
   return def;
+}
+
+// 2026-05-24 fix-forward #5 — click-to-cycle Status cell. Two-value
+// enum (INCOMPLETE / COMPLETE) → one click flips to the other value
+// via the same PATCH lifecycle the dropdown previously used. Optimistic
+// update means the pill flips colors instantly while the network
+// round-trip resolves; failures roll back the optimistic value + show
+// an inline error message. The PATCH itself targets the same
+// CompetitorUrl.scrapingStatus field the URL detail page's
+// EditableEnumField toggle writes to, so the bidirectional mirror
+// established in Workstream 2 Session 5 (§A.8) still works.
+function StatusCycleCell({
+  row,
+  onCellSave,
+}: {
+  row: CompetitorUrl;
+  onCellSave: (
+    urlId: string,
+    patch: UpdateCompetitorUrlRequest
+  ) => Promise<void>;
+}) {
+  const [optimistic, setOptimistic] = useState<ScrapingStatus | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const displayed: ScrapingStatus = optimistic ?? row.scrapingStatus;
+  const next: ScrapingStatus =
+    displayed === 'COMPLETE' ? 'INCOMPLETE' : 'COMPLETE';
+  const label = displayed === 'COMPLETE' ? 'Complete' : 'Incomplete';
+
+  const handleClick = async (e: React.MouseEvent): Promise<void> => {
+    e.stopPropagation();
+    if (saving) return;
+    setOptimistic(next);
+    setSaving(true);
+    setErrorMessage(null);
+    try {
+      await onCellSave(row.id, { scrapingStatus: next });
+      setOptimistic(null);
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : 'Save failed');
+      setOptimistic(null);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+      <button
+        type="button"
+        onClick={handleClick}
+        title={`Click to mark ${next === 'COMPLETE' ? 'Complete' : 'Incomplete'}`}
+        disabled={saving}
+        style={{
+          background: 'transparent',
+          border: 'none',
+          padding: 0,
+          cursor: saving ? 'wait' : 'pointer',
+          opacity: saving ? 0.6 : 1,
+          fontFamily: 'inherit',
+        }}
+        data-testid="status-cycle-button"
+      >
+        <span style={scrapingStatusBadgeStyle(displayed)}>{label}</span>
+      </button>
+      {errorMessage ? (
+        <span style={{ fontSize: '11px', color: '#f85149' }}>
+          {errorMessage}
+        </span>
+      ) : null}
+    </span>
+  );
 }
 
 // P-46 Workstream 3 Session 3 — sortable row wrapper. Each row gets a
