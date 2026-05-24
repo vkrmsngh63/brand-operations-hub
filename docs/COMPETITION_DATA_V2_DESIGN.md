@@ -1254,4 +1254,94 @@ Meta-shape: when a shared per-action lifecycle (debounced persist + status indic
 
 ---
 
+## §B 2026-05-25 — `session_2026-05-25_p46-workstream-4-session-2-internal-hyperlink-tiptap-extension` — Workstream 4 Session 2 lands the internal-hyperlink TipTap extension + Link-to-URL toolbar picker end-to-end at code level + NEW reusable Pattern "Custom TipTap extension via `addProseMirrorPlugins` for click interception of shorthand hrefs without a custom Mark type" + TWO Rule 14f session-start picker outcomes + Workstream 4 implementation arc COMPLETE at code level (Sessions 1-2 of ~2-3 estimated)
+
+**Session:** `session_2026-05-25_p46-workstream-4-session-2-internal-hyperlink-tiptap-extension`
+**Date:** 2026-05-25
+**Branch:** `workflow-2-competition-scraping` (single-branch session; no main push since Session 2 is a build session, not a deploy session)
+**Build commit:** `5854eff` — 8 files +786/-1
+**Author:** Claude Code (149th session)
+
+### What landed (file-by-file matching build commit `5854eff`)
+
+- **NEW** `src/lib/rich-text/url-reference-helpers.ts` (~115 LOC pure helpers) — `extractUrlIdFromHref(href)` returns the matched id or `null` from a `#url/<urlId>` shape; `buildInternalUrlPath(projectId, urlId)` returns the canonical detail-page path; `buildInternalUrlHref(urlId)` returns the canonical shorthand `#url/<urlId>` href used inside the editor doc; `filterUrlsByQuery(urls, query)` returns a case-insensitive filtered subset of the URL picker entries; `defaultLinkLabelForUrl(url)` derives a sensible default link text from a URL's product name or seller name or the raw URL. Exports `URL_REFERENCE_HREF_PREFIX = '#url/'` constant + `UrlPickerEntry { id, productName, sellerName, url }` interface.
+- **NEW** `src/lib/rich-text/url-reference-helpers.test.ts` (~158 LOC; 19 new node:test cases bringing src/lib to **783 from baseline 764** — exact match).
+- **NEW** `src/app/projects/[projectId]/competition-scraping/comprehensive-analysis/components/UrlReferenceExtension.ts` (~105 LOC TipTap Extension via `addProseMirrorPlugins`). Intercepts clicks on `<a href="#url/<urlId>">` in both editable + read-only modes via ProseMirror's `handleClick` prop. Extracts urlId via the pure helper from the raw `getAttribute('href')` value — **not** `link.href` which is browser-resolved to an absolute fragment URL that includes the page path. Calls `options.onInternalLinkClick(urlId)` callback so the consumer decides how to resolve the click.
+- **NEW** `src/app/projects/[projectId]/competition-scraping/comprehensive-analysis/components/LinkToUrlPicker.tsx` (~304 LOC toolbar dropdown). Lazy-loads URL list via `authFetch('/api/projects/<projectId>/competition-scraping/urls')` on first open + caches. Case-insensitive search filter via the shared `filterUrlsByQuery` helper. On pick, inserts the chosen URL's default label text at cursor position + applies the Link mark with `#url/<urlId>` href via TipTap's `editor.chain().focus().insertContent({...}).setLink({href}).run()` pattern. Closes on outside-click; tab/arrow keys navigate the filtered list.
+- **MODIFIED** `src/app/projects/[projectId]/competition-scraping/components/RichTextEditor.tsx` (+90/-1 LOC) — accepts a new optional `projectId?: string` prop; uses `useRouter` from `next/navigation`; stores `projectId` + `router` in refs so the click handler (registered ONCE at editor mount via the Extension's `handleClick`) always sees the current values without stale-closure bugs; registers `UrlReferenceExtension` with `handleInternalLinkClick = (urlId) => { if (projectIdRef.current) routerRef.current?.push(buildInternalUrlPath(projectIdRef.current, urlId)) }` callback; extends `Link.configure`'s `isAllowedUri` to accept `#url/` hrefs (otherwise the Link extension's default URL-shape gatekeeper would reject the non-http href shape and silently strip the mark); surfaces `LinkToUrlPicker` in the 'full' toolbar variant only when `projectId` provided; inline `<style>` tag with `InternalLinkStyles` component for distinct styling (🔗 emoji glyph prefix + same blue underlined per session-start picker outcome).
+- **MODIFIED** `AnalysisEditor.tsx` (+7 LOC) — accepts + passes-through `projectId` prop.
+- **MODIFIED** `AnalysisReadView.tsx` (+5 LOC) — accepts + passes-through `projectId` prop (the read-mode editor also needs the click interception since rendered hyperlinks must navigate in read mode).
+- **MODIFIED** `comprehensive-analysis/page.tsx` (+2 LOC) — passes `projectId` (already in scope via `useParams()`) to both children.
+
+### TWO Rule 14f session-start picker outcomes
+
+1. **Session 2 scope.** Director picked **"Extension + Link-to-URL picker (Recommended)"** over "Extension only, picker deferred" + "Picker only (NOT recommended)" per `feedback_recommendation_style.md`. The picker is the user-facing affordance that makes the shorthand discoverable + ergonomic; without it, only users who already know the `#url/<urlId>` syntax can use the feature.
+
+2. **Visual styling of internal hyperlinks.** Director picked **"Distinct — small URL icon prefix + same blue (Recommended)"** over "Identical — same blue underlined" + "Distinct — different color." Same blue underlined as external links BUT prefixed with a small 🔗 emoji glyph signaling "internal URL navigation." Implemented via inline `<style>` tag emitted by the editor wrapper, scoped to `.plos-rt-editor a[href^="#url/"]::before { content: "🔗 "; ... }`.
+
+### Design choices captured (ZERO Rule 14f sub-pickers fired during execution; each had a clear "most thorough/reliable" default per `feedback_default_to_recommendation.md`)
+
+- **Extension vs. custom Mark type.** Chose **Extension via `addProseMirrorPlugins`** (lower-cost + reuses the existing Link mark). A custom Mark would have required a new schema type + custom rendering + custom parsing rules. The shorthand href can ride inside the standard Link mark; no separate Mark needed.
+
+- **ProseMirror `handleClick` vs. a per-Mark click handler.** Chose **`handleClick` at the EditorView level**. It intercepts at the right layer (DOM event) + sees the raw DOM node so `getAttribute('href')` returns the unresolved shorthand — `link.href` (the property access) would have returned a browser-resolved absolute URL including the current page path, making the prefix match harder.
+
+- **Stale-closure prevention via refs.** Chose **refs for `projectId` + `router`** over a fresh extension registration on every render. The Extension's `handleClick` is registered ONCE at editor mount; if it captured `projectId` + `router` directly from props, prop changes mid-session would leave the handler with stale values. Refs solve this without forcing editor re-creation on every prop change (which would discard editor state — undo history, selection, cursor position).
+
+- **Lazy URL list load.** Chose **load-on-first-open** for the LinkToUrlPicker over load-at-mount. Saves bandwidth on docs the user never edits + on read-only views where the picker isn't shown.
+
+- **Extending `Link.configure`'s `isAllowedUri`.** The default Link extension's URL-shape gatekeeper rejects non-http hrefs and silently strips the mark on paste/parse. The fix is one line: `Link.configure({ ..., isAllowedUri: (url) => url.startsWith(URL_REFERENCE_HREF_PREFIX) || defaultIsAllowedUri(url) })`. Worth memorializing because the failure mode is silent — the Link mark just disappears at parse time with no error.
+
+- **CSS attribute selector for visual signal.** Chose **`.plos-rt-editor a[href^="#url/"]::before { content: "🔗 "; }`** over a custom Mark type. The CSS selector reuses the Extension's recognition criterion (the `#url/` prefix), so the styling + the click interception share their criterion + can't drift apart.
+
+### NEW reusable Pattern — "Custom TipTap extension via `addProseMirrorPlugins` for click interception of shorthand hrefs without a custom Mark type"
+
+When a feature needs to recognize + intercept clicks on a non-standard href shape (here: `#url/<urlId>` shorthand), the lowest-cost design is an Extension (not a new Mark) that:
+
+1. Adds a ProseMirror plugin via `addProseMirrorPlugins` returning a `Plugin` with `props.handleClick`.
+2. Reads the raw href via the DOM node's `getAttribute('href')` (NOT `link.href` — that property is browser-resolved to an absolute URL).
+3. Filters by the shorthand prefix (or any other shape-test) via a pure helper imported from a shared `src/lib/` module.
+4. Delegates the resolution to a consumer-supplied callback (e.g., `options.onInternalLinkClick(urlId)`).
+
+The existing Link mark is REUSED (just extend `Link.configure`'s `isAllowedUri` to accept the shorthand prefix).
+
+A separate visual signal (CSS attribute selector + `::before` content) handles distinctness without a Mark-level type discriminator.
+
+**WHEN TO USE:** any TipTap doc where you need to recognize + handle a custom href shape but the styling + storage shape of the Link mark are otherwise fine. **WHEN NOT TO USE:** if you need fundamentally different storage shape (extra attributes beyond href), use a custom Mark; if you need different schema position semantics (e.g., a Node not a Mark), use a Node.
+
+This is the **third W4-arc Pattern**, paired with W4 S1's Pattern A "Per-Project edit-affordance parallel to per-row edit-affordance" + W4 S1's Pattern B "Editor-as-readonly substitutes for a separate static renderer."
+
+### Verification scoreboard (all 6 checks GREEN at new baselines)
+
+| Check | Status | Baseline → New |
+|-------|--------|----------------|
+| 1. Root tsc | GREEN | clean → clean |
+| 2. Extension tsc | GREEN | clean → clean |
+| 3. Extension `npm test` | GREEN | 558 → 558 (UNCHANGED) |
+| 4. src/lib node:test | GREEN | 764 → **783 (+19 — exact match with 19 new url-reference-helpers.test.ts cases)** |
+| 5. `npm run build` routes | GREEN | 62 → 62 (UNCHANGED — no new route paths) |
+| 6. Playwright | SKIPPED per non-deploy-session convention | — |
+
+### Schema impact
+
+**Schema-change-in-flight flag STAYS NO** the entire session — no `prisma db push`; pure client-side TipTap extension on top of W4 S1's editor wrapper + page route + components. The new helpers + Extension + picker all operate on doc shapes that were already valid TipTap JSON before this session; nothing new is persisted.
+
+### Impact on §A
+
+**None.** §A.4's example syntax named the `#url/<urlId>` shorthand shape; §A.5's guidance named "custom TipTap extension" for the click-interception mechanism; today's session consumed both as specced. **§A stays frozen per Rule 18.**
+
+### Calibration data point
+
+**Session 2 of 2-3 estimated landed cleanly within bundled scope.** Total in-session time ~150-180 min. No overrun. No fix-forward. All 7 in-session TaskCreate tasks completed cleanly. **W4 implementation arc COMPLETE at code level across Sessions 1-2 of ~2-3 estimated** — landed at the low end of the estimate; budget remains for a single deploy session as the third W4 session.
+
+### Cross-references
+
+- `docs/COMPETITION_DATA_V2_DESIGN.md` §B 2026-05-24-b (W4 S1's design doc append — captured Pattern A + Pattern B; today's Pattern is the third W4-arc Pattern).
+- `docs/COMPETITION_DATA_V2_DESIGN.md` §A.4 + §A.5 (consumed as specced).
+- CORRECTIONS_LOG §Entry 2026-05-25 (today's Workstream 4 Session 2 closing entry — captures the same content from a corrections-log perspective).
+- `docs/ROADMAP.md` P-46 polish-backlog entry (annotated this session — WS#4 Session 2 ✅ DONE-AT-CODE-LEVEL 2026-05-25; (a.82) closed; new (a.83) opened for Workstream 4 deploy session).
+
+**Closing line:** Workstream 4 Session 2 ✅ DONE-AT-CODE-LEVEL 2026-05-25. P-46 implementation arc progress: Workstreams 1 + 2 + 3 = ✅ DONE-AND-VERIFIED on vklf.com; Workstream 4 Sessions 1-2 = ✅ DONE-AT-CODE-LEVEL (W4 arc COMPLETE at code level across Sessions 1-2 of ~2-3 estimated). Next session: Workstream 4 deploy session — Phase-4 deploy ff-merging `workflow-2-competition-scraping` → `main` carrying W4 Sessions 1+2 build commits + doc-batch commits.
+
+---
+
 END OF DOCUMENT
