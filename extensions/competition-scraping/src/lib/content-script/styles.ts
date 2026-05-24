@@ -15,151 +15,13 @@
 // Backdrop > page-overlay so the saved-✓ icons + add-button on neighboring
 // product cards don't punch through the open URL-add modal.
 
-export const CONTENT_SCRIPT_CSS = `
-.plos-cs-add-button {
-  position: fixed !important;
-  width: 24px !important;
-  height: 24px !important;
-  padding: 0 !important;
-  margin: 0 !important;
-  background: #1976d2 !important;
-  color: #fff !important;
-  font-size: 16px !important;
-  line-height: 24px !important;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif !important;
-  font-weight: 700 !important;
-  text-align: center !important;
-  border: 2px solid #fff !important;
-  border-radius: 50% !important;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2) !important;
-  cursor: pointer !important;
-  z-index: 999990 !important;
-  opacity: 0.85 !important;
-  transition: opacity 120ms ease, transform 120ms ease !important;
-  user-select: none !important;
-}
-
-.plos-cs-add-button:hover {
-  opacity: 1 !important;
-  transform: scale(1.1) !important;
-}
-
-.plos-cs-add-button-dismiss {
-  position: fixed !important;
-  width: 14px !important;
-  height: 14px !important;
-  padding: 0 !important;
-  margin: 0 !important;
-  background: #c2185b !important;
-  color: #fff !important;
-  font-size: 11px !important;
-  line-height: 14px !important;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif !important;
-  font-weight: 700 !important;
-  text-align: center !important;
-  border: 1px solid #fff !important;
-  border-radius: 50% !important;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2) !important;
-  cursor: pointer !important;
-  z-index: 999990 !important;
-  user-select: none !important;
-}
-
-.plos-cs-saved-icon {
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  width: 28px !important;
-  height: 28px !important;
-  margin-right: 6px !important;
-  background: #16a34a !important;
-  color: #fff !important;
-  font-size: 18px !important;
-  line-height: 1 !important;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif !important;
-  font-weight: 900 !important;
-  text-align: center !important;
-  border: 3px solid #fff !important;
-  border-radius: 50% !important;
-  box-shadow: 0 0 0 2px #16a34a, 0 3px 8px rgba(0, 0, 0, 0.4) !important;
-  vertical-align: middle !important;
-  user-select: none !important;
-  flex-shrink: 0 !important;
-  position: relative !important;
-  z-index: 999990 !important;
-}
-
-.plos-cs-saved-image-icon,
-.plos-cs-saved-video-icon {
-  position: fixed !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  width: 28px !important;
-  height: 28px !important;
-  background: #16a34a !important;
-  color: #fff !important;
-  font-size: 18px !important;
-  line-height: 1 !important;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif !important;
-  font-weight: 900 !important;
-  text-align: center !important;
-  border: 3px solid #fff !important;
-  border-radius: 50% !important;
-  box-shadow: 0 0 0 2px #16a34a, 0 3px 8px rgba(0, 0, 0, 0.4) !important;
-  user-select: none !important;
-  pointer-events: none !important;
-  z-index: 999990 !important;
-}
-
-/* P-25 saved-text haze. Renders via the CSS Custom Highlight API on the
-   plos-cs-saved-text highlight registry (see saved-text-highlight.ts).
-   Light-yellow background + faint underline gives a subtle already-
-   saved cue that does not compete with the host page own text styling.
-   The pseudo-element is non-DOM-modifying so the haze sits above the
-   text without affecting layout. */
-::highlight(plos-cs-saved-text) {
-  background-color: rgba(255, 235, 59, 0.32) !important;
-  text-decoration: underline dotted rgba(120, 80, 0, 0.45) !important;
-}
-
-.plos-cs-overlay-banner {
-  position: fixed !important;
-  top: 12px !important;
-  right: 12px !important;
-  padding: 10px 14px !important;
-  background: #388e3c !important;
-  color: #fff !important;
-  font-size: 13px !important;
-  line-height: 1.3 !important;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif !important;
-  font-weight: 500 !important;
-  border-radius: 6px !important;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18) !important;
-  z-index: 999990 !important;
-  display: flex !important;
-  align-items: center !important;
-  gap: 8px !important;
-  max-width: 320px !important;
-  user-select: none !important;
-}
-
-.plos-cs-overlay-banner-close {
-  background: transparent !important;
-  color: #fff !important;
-  border: none !important;
-  font-size: 16px !important;
-  line-height: 1 !important;
-  cursor: pointer !important;
-  padding: 0 !important;
-  margin: 0 !important;
-  opacity: 0.85 !important;
-}
-
-.plos-cs-overlay-banner-close:hover {
-  opacity: 1 !important;
-}
-
+// Form-chrome CSS — extracted as a separate exported constant so it can be
+// re-injected inside the video-capture form's Shadow DOM root (P-47, 2026-05-24-d).
+// Composed into CONTENT_SCRIPT_CSS below via ${FORM_CHROME_CSS} interpolation so
+// the other forms (image / text / url-add) that still mount to document.body
+// continue to receive these rules via the host-page <head> stylesheet without
+// drift between the two sites.
+export const FORM_CHROME_CSS = `
 .plos-cs-form-backdrop {
   position: fixed !important;
   inset: 0 !important;
@@ -435,6 +297,154 @@ export const CONTENT_SCRIPT_CSS = `
   color: #c2185b !important;
   text-align: center !important;
 }
+`;
+
+export const CONTENT_SCRIPT_CSS = `
+.plos-cs-add-button {
+  position: fixed !important;
+  width: 24px !important;
+  height: 24px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: #1976d2 !important;
+  color: #fff !important;
+  font-size: 16px !important;
+  line-height: 24px !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif !important;
+  font-weight: 700 !important;
+  text-align: center !important;
+  border: 2px solid #fff !important;
+  border-radius: 50% !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2) !important;
+  cursor: pointer !important;
+  z-index: 999990 !important;
+  opacity: 0.85 !important;
+  transition: opacity 120ms ease, transform 120ms ease !important;
+  user-select: none !important;
+}
+
+.plos-cs-add-button:hover {
+  opacity: 1 !important;
+  transform: scale(1.1) !important;
+}
+
+.plos-cs-add-button-dismiss {
+  position: fixed !important;
+  width: 14px !important;
+  height: 14px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: #c2185b !important;
+  color: #fff !important;
+  font-size: 11px !important;
+  line-height: 14px !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif !important;
+  font-weight: 700 !important;
+  text-align: center !important;
+  border: 1px solid #fff !important;
+  border-radius: 50% !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2) !important;
+  cursor: pointer !important;
+  z-index: 999990 !important;
+  user-select: none !important;
+}
+
+.plos-cs-saved-icon {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 28px !important;
+  height: 28px !important;
+  margin-right: 6px !important;
+  background: #16a34a !important;
+  color: #fff !important;
+  font-size: 18px !important;
+  line-height: 1 !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif !important;
+  font-weight: 900 !important;
+  text-align: center !important;
+  border: 3px solid #fff !important;
+  border-radius: 50% !important;
+  box-shadow: 0 0 0 2px #16a34a, 0 3px 8px rgba(0, 0, 0, 0.4) !important;
+  vertical-align: middle !important;
+  user-select: none !important;
+  flex-shrink: 0 !important;
+  position: relative !important;
+  z-index: 999990 !important;
+}
+
+.plos-cs-saved-image-icon,
+.plos-cs-saved-video-icon {
+  position: fixed !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 28px !important;
+  height: 28px !important;
+  background: #16a34a !important;
+  color: #fff !important;
+  font-size: 18px !important;
+  line-height: 1 !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif !important;
+  font-weight: 900 !important;
+  text-align: center !important;
+  border: 3px solid #fff !important;
+  border-radius: 50% !important;
+  box-shadow: 0 0 0 2px #16a34a, 0 3px 8px rgba(0, 0, 0, 0.4) !important;
+  user-select: none !important;
+  pointer-events: none !important;
+  z-index: 999990 !important;
+}
+
+/* P-25 saved-text haze. Renders via the CSS Custom Highlight API on the
+   plos-cs-saved-text highlight registry (see saved-text-highlight.ts).
+   Light-yellow background + faint underline gives a subtle already-
+   saved cue that does not compete with the host page own text styling.
+   The pseudo-element is non-DOM-modifying so the haze sits above the
+   text without affecting layout. */
+::highlight(plos-cs-saved-text) {
+  background-color: rgba(255, 235, 59, 0.32) !important;
+  text-decoration: underline dotted rgba(120, 80, 0, 0.45) !important;
+}
+
+.plos-cs-overlay-banner {
+  position: fixed !important;
+  top: 12px !important;
+  right: 12px !important;
+  padding: 10px 14px !important;
+  background: #388e3c !important;
+  color: #fff !important;
+  font-size: 13px !important;
+  line-height: 1.3 !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif !important;
+  font-weight: 500 !important;
+  border-radius: 6px !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18) !important;
+  z-index: 999990 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  max-width: 320px !important;
+  user-select: none !important;
+}
+
+.plos-cs-overlay-banner-close {
+  background: transparent !important;
+  color: #fff !important;
+  border: none !important;
+  font-size: 16px !important;
+  line-height: 1 !important;
+  cursor: pointer !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  opacity: 0.85 !important;
+}
+
+.plos-cs-overlay-banner-close:hover {
+  opacity: 1 !important;
+}
+
+${FORM_CHROME_CSS}
 
 /* Live-page Highlight Terms — P-5 fix 2026-05-08-d.
    background-color + color are set inline per-term via the user's chosen

@@ -55,6 +55,7 @@ import {
   validateCapturedVideoDraft,
   type CapturedVideoValidationReason,
 } from '../captured-video-validation.ts';
+import { FORM_CHROME_CSS } from './styles.ts';
 
 /** Direct-branch props — user right-clicked a <video> (or its wrapper). */
 export interface VideoCaptureFormDirectProps {
@@ -164,6 +165,28 @@ export function openVideoCaptureForm(
   }
 
   const w2Platform: Platform = props.platform;
+
+  // P-47 (2026-05-24-d) — Shadow DOM mount. The form lives inside an open
+  // shadow root attached to a fixed-positioned host <div> in document.body
+  // rather than mounting the backdrop directly into document.body. Events
+  // fired inside the shadow root do not bubble to page-level handlers by
+  // default, so the per-input event-isolation band-aid that previously lived
+  // mid-file (P-45 Build #2 2026-05-22-i) is no longer needed — the page
+  // can't reach the form's inputs to steal focus or swallow keystrokes.
+  // The host's z-index (999998) keeps it above page content; the backdrop's
+  // and form's internal z-indexes (999998 / 999999) still apply within the
+  // shadow root and remain consistent with the other content-script forms
+  // (image / text / url-add) that still mount to document.body and consume
+  // these rules from CONTENT_SCRIPT_CSS in styles.ts.
+  const host = document.createElement('div');
+  host.setAttribute('data-plos-cs-host', 'video-capture-form');
+  host.style.position = 'fixed';
+  host.style.inset = '0';
+  host.style.zIndex = '999998';
+  const shadow = host.attachShadow({ mode: 'open' });
+  const shadowStyle = document.createElement('style');
+  shadowStyle.textContent = FORM_CHROME_CSS;
+  shadow.appendChild(shadowStyle);
 
   const backdrop = document.createElement('div');
   backdrop.className = 'plos-cs-form-backdrop';
@@ -547,68 +570,14 @@ export function openVideoCaptureForm(
     }
   });
 
-  // P-45 Build #2 Phase 1 director-verification 2026-05-23 — Bug #11 aggressive
-  // band-aid. Build #8's keystroke-only defense (keydown/keyup/keypress/input
-  // stopPropagation on newCategoryInput) was insufficient because the bug
-  // fires at the FOCUS level on Amazon — the inputs never receive focus in
-  // the first place, so keystroke-level defense was moot. This hardened
-  // band-aid:
-  //   (1) applies to ALL inputs (newCategoryInput + compositionArea +
-  //       embeddedArea + tagsInput) — not just newCategoryInput;
-  //   (2) isolates focus-related events (focus/focusin/focusout/blur) +
-  //       mouse + pointer + click events on top of keyboard events, so
-  //       page-level handlers that steal focus via mousedown→blur or
-  //       focusin→someOtherEl.focus() patterns are blocked;
-  //   (3) on click, immediately calls el.focus() AND schedules a microtask
-  //       retry — overriding any page-level handler that grabbed focus a
-  //       tick earlier.
-  // If this band-aid still fails on Amazon, the long-term fix is a Shadow
-  // DOM refactor (captured as a polish ROADMAP item after this session).
-  // The image-capture-form path doesn't need this defense — it never
-  // mounts a <video> in the form (which is what triggers Bug #11 on
-  // Amazon per the empirical observation in Build #7 director feedback).
-  function applyAggressiveEventIsolation(el: HTMLInputElement | HTMLTextAreaElement): void {
-    const evts = [
-      'mousedown',
-      'mouseup',
-      'click',
-      'dblclick',
-      'pointerdown',
-      'pointerup',
-      'keydown',
-      'keyup',
-      'keypress',
-      'input',
-      'change',
-      'paste',
-      'copy',
-      'cut',
-      'compositionstart',
-      'compositionupdate',
-      'compositionend',
-      'focus',
-      'focusin',
-      'focusout',
-      'blur',
-    ] as const;
-    for (const evt of evts) {
-      el.addEventListener(evt, (e) => {
-        e.stopPropagation();
-      });
-    }
-    el.addEventListener('click', () => {
-      el.focus({ preventScroll: true });
-      queueMicrotask(() => {
-        if (document.activeElement !== el) {
-          el.focus({ preventScroll: true });
-        }
-      });
-    });
-  }
-  applyAggressiveEventIsolation(newCategoryInput);
-  applyAggressiveEventIsolation(compositionArea);
-  applyAggressiveEventIsolation(embeddedArea);
-  applyAggressiveEventIsolation(tagsInput);
+  // P-47 (2026-05-24-d) — the per-input event-isolation band-aid that
+  // previously lived here (P-45 Build #2 2026-05-22-i, 20 events × 4 inputs =
+  // 80 listeners on each form open) is no longer needed: the form now mounts
+  // inside an open Shadow DOM root (see the host+shadow setup at the bottom
+  // of openVideoCaptureForm). Events fired inside the shadow root don't
+  // surface to page-level handlers by default, so page-side mousedown→blur,
+  // focusin→someOtherEl.focus(), and keystroke-stealing patterns can no
+  // longer reach the form's inputs.
   categorySelect.addEventListener('change', () => {
     if (categorySelect.value === ADD_NEW_VIDEO_CATEGORY_VALUE) {
       newCategoryWrap.style.display = 'block';
@@ -620,30 +589,29 @@ export function openVideoCaptureForm(
   });
   function focusNewCategoryInput(): void {
     // Two-frame defer: first frame lets the browser apply the display:block
-    // reflow; second frame is when focus reliably lands.
+    // reflow; second frame is when focus reliably lands. P-47 (2026-05-24-d):
+    // activeElement reads must go through `shadow.activeElement` rather than
+    // `document.activeElement` since the form's inputs live inside the shadow
+    // root — document.activeElement returns the host element regardless of
+    // which descendant inside the shadow is actually focused.
     const tryFocus = (): void => {
       try {
-        if (
-          document.activeElement &&
-          document.activeElement !== document.body &&
-          document.activeElement !== newCategoryInput
-        ) {
-          (document.activeElement as HTMLElement).blur?.();
+        const active = shadow.activeElement;
+        if (active && active !== newCategoryInput) {
+          (active as HTMLElement).blur?.();
         }
       } catch {
-        // Defensive — some shadow-DOM hosts disallow blur(); ignore.
+        // Defensive — some hosts disallow blur(); ignore.
       }
       newCategoryInput.focus({ preventScroll: true });
     };
     requestAnimationFrame(() => {
       requestAnimationFrame(tryFocus);
     });
-    // Retry safety net: if focus was stolen back synchronously by a page
-    // handler, this catches it within one human-perceptible tick.
     setTimeout(() => {
       if (
         newCategoryWrap.style.display !== 'none' &&
-        document.activeElement !== newCategoryInput
+        shadow.activeElement !== newCategoryInput
       ) {
         tryFocus();
       }
@@ -836,9 +804,14 @@ export function openVideoCaptureForm(
       close();
     }
   }
+  // Escape-to-close stays on the document so it fires regardless of where
+  // focus is (page or shadow); keydown events from inside the shadow root
+  // still compose up through the host into the document tree, so the
+  // listener catches them in both cases.
   document.addEventListener('keydown', onKeyDown);
 
-  document.body.appendChild(backdrop);
+  shadow.appendChild(backdrop);
+  document.body.appendChild(host);
   setTimeout(() => {
     urlSelect.focus();
   }, 0);
@@ -929,7 +902,7 @@ export function openVideoCaptureForm(
           URL.revokeObjectURL(blobUrl);
         }
       });
-      if (backdrop.parentNode) backdrop.parentNode.removeChild(backdrop);
+      if (host.parentNode) host.parentNode.removeChild(host);
       document.removeEventListener('keydown', onKeyDown);
       if (activeForm === handle) activeForm = null;
     },
