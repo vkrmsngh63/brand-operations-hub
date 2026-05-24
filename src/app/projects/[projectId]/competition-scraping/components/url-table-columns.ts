@@ -1,3 +1,19 @@
+import { type Platform } from '@/lib/shared-types/competition-scraping';
+
+// User-facing labels for each Platform enum value. Shared by
+// ColumnVisibilityBar (platform-filter chips) and UrlTable (the read-only
+// Platform column cell renderer). Single source of truth so a label
+// rename only needs to change here.
+export const PLATFORM_LABELS: Record<Platform, string> = {
+  amazon: 'Amazon',
+  ebay: 'Ebay',
+  etsy: 'Etsy',
+  walmart: 'Walmart',
+  'google-shopping': 'Google Shopping',
+  'google-ads': 'Google Ads',
+  'independent-website': 'Independent Websites',
+};
+
 // W#2 P-46 Workstream 3 Sessions 1-3 — canonical column registry for the
 // Competition Data table.
 //
@@ -57,7 +73,15 @@ export interface TableColumnDef {
 // Phase-4 verification surfaced the mismatch. Captured to CORRECTIONS_LOG
 // as a Rule 18 spec-capture gap (the spec was given but never echoed into
 // §C.3 or §B refinement before implementation).
+// 2026-05-24 fix-forward #4 — `platform` column added at position 0
+// (very leftmost data column) per director's "Platform column should be
+// on the very left" directive. Source value lives on the CompetitorUrl
+// row (set at capture time by the extension or by the manual-add modal's
+// platform selector); rendered read-only as the friendly label via
+// PLATFORM_LABELS above. Read-only matches the precedent set by the
+// addedAt column (the other server-stamped column).
 export const TABLE_COLUMN_DEFS: readonly TableColumnDef[] = [
+  { id: 'platform', label: 'Platform', dataType: 'enum', defaultWidth: 140 },
   { id: 'competitionCategory', label: 'Category', dataType: 'text', defaultWidth: 160 },
   { id: 'type', label: 'Type', dataType: 'text', defaultWidth: 140 },
   { id: 'isSponsoredAd', label: 'Sponsored', dataType: 'boolean', defaultWidth: 110 },

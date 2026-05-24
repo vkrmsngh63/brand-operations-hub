@@ -24,17 +24,7 @@
 
 import { useEffect, useRef } from 'react';
 import { PLATFORMS, type Platform } from '@/lib/shared-types/competition-scraping';
-import { TABLE_COLUMN_DEFS } from './url-table-columns';
-
-const PLATFORM_LABELS: Record<Platform, string> = {
-  amazon: 'Amazon',
-  ebay: 'Ebay',
-  etsy: 'Etsy',
-  walmart: 'Walmart',
-  'google-shopping': 'Google Shopping',
-  'google-ads': 'Google Ads',
-  'independent-website': 'Independent Websites',
-};
+import { PLATFORM_LABELS, TABLE_COLUMN_DEFS } from './url-table-columns';
 
 interface Props {
   // Set of platforms currently visible in the table. Empty array → none

@@ -97,6 +97,7 @@ import {
   FONT_SIZE_MIN,
   MAX_COLUMN_WIDTH,
   MIN_COLUMN_WIDTH,
+  PLATFORM_LABELS,
   resolveColumnWidth,
   TABLE_COLUMN_DEFS,
 } from './url-table-columns';
@@ -123,7 +124,9 @@ type ColumnSortKey =
   | 'competitionScore'
   | 'resultsPageRank'
   | 'sellerStarRating'
-  | 'numSellerReviews';
+  | 'numSellerReviews'
+  // 2026-05-24 fix-forward #4 — Platform column added at very left.
+  | 'platform';
 
 type SortKey = ColumnSortKey | 'manual';
 
@@ -211,6 +214,11 @@ interface ColumnDef {
 // was an implementation default that hadn't been written into the
 // binding docs; corrected in fix-forward #3.
 const COLUMNS: ColumnDef[] = [
+  // 2026-05-24 fix-forward #4 — Platform column at position 0 (very
+  // leftmost data column). Sort by platform name alphabetically; no
+  // in-column filter (the top-bar's platform-chip group already filters
+  // by platform).
+  { key: 'platform', label: 'Platform', defaultDir: 'asc', filterKey: null },
   {
     key: 'competitionCategory',
     label: 'Category',
@@ -384,6 +392,21 @@ export function UrlTable({
             value={row.url}
             onSave={(next) => onCellSave(row.id, { url: next as string })}
           />
+        </td>
+      ),
+      // 2026-05-24 fix-forward #4 — Platform column at the very left.
+      // Read-only display of the friendly label (matches addedAt's
+      // read-only precedent — the platform value is set at capture time
+      // by the extension or by the manual-add modal's platform selector;
+      // changing it on an existing URL is rare enough to leave as a
+      // future enhancement rather than an inline-edit affordance).
+      platform: (row) => (
+        <td key="platform" style={cellStyle('left')}>
+          <span style={{ color: '#c9d1d9' }}>
+            {PLATFORM_LABELS[row.platform as keyof typeof PLATFORM_LABELS] ??
+              row.platform ??
+              '—'}
+          </span>
         </td>
       ),
       scrapingStatus: (row) => (
