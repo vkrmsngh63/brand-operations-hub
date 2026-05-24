@@ -20,26 +20,58 @@ import { authFetch } from '@/lib/authFetch';
 import { RichTextEditor } from '../../components/RichTextEditor';
 
 export interface AnalysisEditorProps {
-  // The per-Project PUT endpoint.
   apiUrl: string;
-
-  // The persisted comprehensive analysis doc on this Project, read from
-  // the wire shape's `contentJson: Record<string, unknown>` field.
-  // Empty object `{}` for a Project that has never been edited.
   initialContent: Record<string, unknown>;
-
-  // P-46 W4 S2 — Project id threaded through to the RichTextEditor so the
-  // internal-hyperlink `#url/<urlId>` extension can navigate same-tab and
-  // the "Link to URL" toolbar picker can load this Project's URL list.
   projectId: string;
-
   placeholder?: string;
   testId?: string;
+
+  // Called after a successful PUT so the parent page can refresh its
+  // read-mode view with the freshly persisted contentJson + lastEditedAt.
+  // Without this, switching from Edit → Done shows the stale loadState
+  // captured at page mount instead of what the director just typed.
+  onSaved?: (saved: {
+    contentJson: Record<string, unknown>;
+    lastEditedAt: string;
+  }) => void;
 }
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
 const SAVED_INDICATOR_MS = 1500;
+const DEFAULT_EDITOR_FONT_SIZE_PX = 14;
+const MIN_EDITOR_FONT_SIZE_PX = 10;
+const MAX_EDITOR_FONT_SIZE_PX = 24;
+const FONT_SIZE_STORAGE_PREFIX = 'plos:analysis-editor:fontSize:';
+
+function clampFontSize(n: number): number {
+  if (!Number.isFinite(n)) return DEFAULT_EDITOR_FONT_SIZE_PX;
+  return Math.max(MIN_EDITOR_FONT_SIZE_PX, Math.min(MAX_EDITOR_FONT_SIZE_PX, Math.round(n)));
+}
+
+function readStoredFontSize(projectId: string): number {
+  if (typeof window === 'undefined') return DEFAULT_EDITOR_FONT_SIZE_PX;
+  try {
+    const raw = window.localStorage.getItem(FONT_SIZE_STORAGE_PREFIX + projectId);
+    if (raw === null) return DEFAULT_EDITOR_FONT_SIZE_PX;
+    const n = Number.parseInt(raw, 10);
+    return clampFontSize(n);
+  } catch {
+    return DEFAULT_EDITOR_FONT_SIZE_PX;
+  }
+}
+
+function writeStoredFontSize(projectId: string, next: number): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(
+      FONT_SIZE_STORAGE_PREFIX + projectId,
+      String(clampFontSize(next))
+    );
+  } catch {
+    // localStorage may be disabled; non-fatal
+  }
+}
 
 export function AnalysisEditor({
   apiUrl,
@@ -47,11 +79,35 @@ export function AnalysisEditor({
   projectId,
   placeholder = 'Write your comprehensive competitor analysis here…',
   testId,
+  onSaved,
 }: AnalysisEditorProps) {
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [fontSize, setFontSize] = useState<number>(DEFAULT_EDITOR_FONT_SIZE_PX);
   const inFlightGen = useRef(0);
   const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Hydrate font size from localStorage on mount (client-only to keep SSR
+  // hydration stable — default is used during SSR + initial render).
+  useEffect(() => {
+    setFontSize(readStoredFontSize(projectId));
+  }, [projectId]);
+
+  const handleFontSizeChange = useCallback(
+    (next: number) => {
+      const clamped = clampFontSize(next);
+      setFontSize(clamped);
+      writeStoredFontSize(projectId, clamped);
+    },
+    [projectId]
+  );
+
+  // Keep onSaved in a ref so handleChange doesn't tear down on parent
+  // re-renders that pass a fresh callback reference.
+  const onSavedRef = useRef(onSaved);
+  useEffect(() => {
+    onSavedRef.current = onSaved;
+  }, [onSaved]);
 
   useEffect(() => {
     return () => {
@@ -85,6 +141,26 @@ export function AnalysisEditor({
           setSaveState('error');
           setSaveError(detail);
           return;
+        }
+        // Lift saved state back up so the parent's read view + last-edited
+        // timestamp reflect the fresh write immediately (no GET refetch).
+        let savedLastEditedAt: string | null = null;
+        try {
+          const body = (await res.json()) as {
+            contentJson?: Record<string, unknown>;
+            lastEditedAt?: string;
+          };
+          if (body && typeof body.lastEditedAt === 'string') {
+            savedLastEditedAt = body.lastEditedAt;
+          }
+        } catch {
+          // response wasn't JSON — fall back to client clock
+        }
+        if (onSavedRef.current) {
+          onSavedRef.current({
+            contentJson: content,
+            lastEditedAt: savedLastEditedAt ?? new Date().toISOString(),
+          });
         }
         setSaveState('saved');
         if (savedTimer.current !== null) clearTimeout(savedTimer.current);
@@ -125,6 +201,8 @@ export function AnalysisEditor({
         variant="full"
         testId={testId}
         projectId={projectId}
+        fontSize={fontSize}
+        onFontSizeChange={handleFontSizeChange}
       />
     </div>
   );

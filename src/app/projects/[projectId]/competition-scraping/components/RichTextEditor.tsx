@@ -39,52 +39,26 @@ import { UrlReferenceExtension } from '../comprehensive-analysis/components/UrlR
 import { LinkToUrlPicker } from '../comprehensive-analysis/components/LinkToUrlPicker';
 
 export interface RichTextEditorProps {
-  // Persisted TipTap doc JSON (the schema's `analysis Json` column reads
-  // here straight from the wire). Schema default `{}` normalizes to the
-  // canonical empty doc inside the wrapper.
   initialContent: Record<string, unknown>;
-
-  // Called with the latest TipTap doc JSON after the user pauses typing.
-  // Debounced internally (default 500 ms after last keystroke); also
-  // flushes immediately on editor blur so a click-away saves promptly.
   onChange: (content: Record<string, unknown>) => void;
-
-  // When true, the editor renders as read-only (no toolbar, no
-  // contentEditable). Used by future read-mode views.
   readOnly?: boolean;
-
-  // Optional placeholder text shown in the editor's empty state. Wired via
-  // a CSS attribute on the editor's empty paragraph.
   placeholder?: string;
-
-  // Toolbar shape. 'minimal' is the per-item Analysis toolbar (P-46 W#2);
-  // 'full' is the Comprehensive Analysis toolbar (P-46 W#4 — currently
-  // identical to 'minimal' until W#4 lands).
   variant?: 'minimal' | 'full';
-
-  // Debounce window for onChange (ms). Default 500.
   debounceMs?: number;
-
-  // Optional test hook. When provided, the wrapper attaches a data-testid
-  // to the editor's outer DOM node so Playwright (W#2 future sessions)
-  // can target the right instance among multiple editors on the page.
   testId?: string;
-
-  // P-46 W4 S2 (2026-05-25) — Project id for the internal-hyperlink
-  // extension. When provided, the wrapper:
-  //   - Registers UrlReferenceExtension so clicks on `<a href="#url/...">`
-  //     navigate same-tab via Next.js router.push to the URL detail page.
-  //   - Extends Link's isAllowedUri to accept the `#url/` shorthand
-  //     (otherwise the Link extension would reject the non-http href).
-  //   - For variant='full', surfaces the LinkToUrlPicker toolbar button so
-  //     the director can pick a URL from this Project's captured list.
-  // When omitted, internal-hyperlink behavior is disabled and the editor
-  // behaves identically to the W2 S1 wrapper (per-item Analysis boxes
-  // don't need internal hyperlinks).
   projectId?: string;
+
+  // Editor body font size in px. Defaults to 14. When `onFontSizeChange`
+  // is also provided AND variant === 'full', the toolbar surfaces a
+  // − / Npt / + stepper (clamped 10-24).
+  fontSize?: number;
+  onFontSizeChange?: (next: number) => void;
 }
 
 const DEFAULT_DEBOUNCE_MS = 500;
+const DEFAULT_FONT_SIZE_PX = 14;
+const MIN_FONT_SIZE_PX = 10;
+const MAX_FONT_SIZE_PX = 24;
 
 export function RichTextEditor({
   initialContent,
@@ -95,6 +69,8 @@ export function RichTextEditor({
   debounceMs = DEFAULT_DEBOUNCE_MS,
   testId,
   projectId,
+  fontSize = DEFAULT_FONT_SIZE_PX,
+  onFontSizeChange,
 }: RichTextEditorProps) {
   const router = useRouter();
   // Pending-debounce timer + latest-content ref so blur can flush without
@@ -198,13 +174,20 @@ export function RichTextEditor({
     },
   });
 
-  // Clean up the pending timer on unmount so a click-away during a save
-  // doesn't leak a callback into a destroyed component.
+  // Flush any pending debounced content on unmount so a parent toggling
+  // out of edit mode (e.g., Done → read mode) doesn't drop the in-flight
+  // typing. Without this, the 500 ms debounce window after the last
+  // keystroke gets cancelled by cleanup and the content is lost.
   useEffect(() => {
     return () => {
       if (pendingTimer.current !== null) {
         clearTimeout(pendingTimer.current);
         pendingTimer.current = null;
+      }
+      if (pendingContent.current !== null) {
+        const content = pendingContent.current;
+        pendingContent.current = null;
+        onChangeRef.current(content);
       }
     };
   }, []);
@@ -217,18 +200,16 @@ export function RichTextEditor({
   }, [editor, readOnly]);
 
   if (!editor) {
-    // Render a skeleton during the SSR/pre-mount window so the layout
-    // doesn't jump when the editor attaches.
     return (
       <div
         data-testid={testId}
         style={{
           minHeight: '88px',
-          background: '#0d1117',
-          border: '1px solid #30363d',
+          background: '#ffffff',
+          border: '1px solid #d0d7de',
           borderRadius: '6px',
           padding: '8px 10px',
-          color: '#8b949e',
+          color: '#656d76',
           fontSize: '13px',
         }}
       >
@@ -242,21 +223,30 @@ export function RichTextEditor({
       data-testid={testId}
       className="plos-rt-editor"
       style={{
-        background: '#0d1117',
-        border: '1px solid #30363d',
+        background: '#ffffff',
+        border: '1px solid #d0d7de',
         borderRadius: '6px',
+        overflow: 'hidden',
       }}
     >
-      <InternalLinkStyles />
+      <EditorStyles />
       {!readOnly && (
-        <Toolbar editor={editor} variant={variant} projectId={projectId} />
+        <Toolbar
+          editor={editor}
+          variant={variant}
+          projectId={projectId}
+          fontSize={fontSize}
+          onFontSizeChange={onFontSizeChange}
+        />
       )}
       <div
         style={{
-          padding: '8px 10px',
+          padding: '10px 12px',
           minHeight: '60px',
-          fontSize: '14px',
-          color: '#e6edf3',
+          fontSize: `${fontSize}px`,
+          color: '#1f2328',
+          background: '#ffffff',
+          caretColor: '#1f2328',
         }}
       >
         <EditorContent editor={editor} />
@@ -265,27 +255,89 @@ export function RichTextEditor({
   );
 }
 
-// P-46 W4 S2 — distinct styling for internal `#url/<urlId>` hyperlinks
-// per the session-start picker outcome. Same blue underlined color as
-// external links + a small URL-icon prefix signaling "this jumps to a
-// captured URL in this Project." Scoped to the editor wrapper's class so
-// the rule doesn't leak to unrelated `<a>` tags elsewhere on the page.
-function InternalLinkStyles() {
+// Editor-body element styling. Browser/Tailwind resets strip default
+// list bullets and may flatten heading sizes, so the editor wrapper owns
+// the typography rules. Scoped to `.plos-rt-editor` so they don't leak
+// to other content on the page.
+function EditorStyles() {
   return (
     <style>{`
-      .plos-rt-editor a[href^="#url/"] {
-        color: #58a6ff;
-        text-decoration: underline;
-        text-decoration-style: solid;
+      .plos-rt-editor .ProseMirror {
+        outline: none;
+        min-height: 60px;
       }
-      .plos-rt-editor a[href^="#url/"]::before {
+      .plos-rt-editor .ProseMirror p { margin: 0 0 0.5em 0; }
+      .plos-rt-editor .ProseMirror p:last-child { margin-bottom: 0; }
+      .plos-rt-editor .ProseMirror h1 {
+        font-size: 1.6em;
+        font-weight: 700;
+        margin: 0.5em 0 0.4em 0;
+        line-height: 1.25;
+      }
+      .plos-rt-editor .ProseMirror h2 {
+        font-size: 1.35em;
+        font-weight: 700;
+        margin: 0.5em 0 0.35em 0;
+        line-height: 1.25;
+      }
+      .plos-rt-editor .ProseMirror h3 {
+        font-size: 1.15em;
+        font-weight: 600;
+        margin: 0.45em 0 0.3em 0;
+        line-height: 1.25;
+      }
+      .plos-rt-editor .ProseMirror ul {
+        list-style: disc outside;
+        padding-left: 1.5em;
+        margin: 0.3em 0;
+      }
+      .plos-rt-editor .ProseMirror ol {
+        list-style: decimal outside;
+        padding-left: 1.5em;
+        margin: 0.3em 0;
+      }
+      .plos-rt-editor .ProseMirror li { margin: 0.15em 0; }
+      .plos-rt-editor .ProseMirror li > p { margin: 0; }
+      .plos-rt-editor .ProseMirror a {
+        color: #0969da;
+        text-decoration: underline;
+      }
+      .plos-rt-editor .ProseMirror a:hover { color: #1f7fd6; }
+      .plos-rt-editor .ProseMirror a[href^="#url/"]::before {
         content: "🔗 ";
         font-size: 0.85em;
         opacity: 0.85;
       }
-      .plos-rt-editor a[href^="#url/"]:hover {
-        color: #79b8ff;
+      .plos-rt-editor .ProseMirror pre {
+        background: #f6f8fa;
+        border: 1px solid #d0d7de;
+        border-radius: 6px;
+        padding: 10px 12px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.92em;
+        overflow-x: auto;
+        margin: 0.5em 0;
       }
+      .plos-rt-editor .ProseMirror code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        background: #f6f8fa;
+        padding: 0.1em 0.3em;
+        border-radius: 3px;
+        font-size: 0.92em;
+      }
+      .plos-rt-editor .ProseMirror pre code {
+        background: transparent;
+        padding: 0;
+      }
+      .plos-rt-editor .ProseMirror blockquote {
+        border-left: 3px solid #d0d7de;
+        padding-left: 12px;
+        margin: 0.5em 0;
+        color: #656d76;
+      }
+      .plos-rt-editor .ProseMirror strong { font-weight: 700; }
+      .plos-rt-editor .ProseMirror em { font-style: italic; }
+      .plos-rt-editor .ProseMirror u { text-decoration: underline; }
     `}</style>
   );
 }
@@ -294,10 +346,14 @@ function Toolbar({
   editor,
   variant,
   projectId,
+  fontSize,
+  onFontSizeChange,
 }: {
   editor: Editor;
   variant: 'minimal' | 'full';
   projectId?: string;
+  fontSize: number;
+  onFontSizeChange?: (next: number) => void;
 }) {
   const isFull = variant === 'full';
   return (
@@ -305,12 +361,11 @@ function Toolbar({
       style={{
         display: 'flex',
         flexWrap: 'wrap',
+        alignItems: 'center',
         gap: '4px',
         padding: '6px 8px',
-        borderBottom: '1px solid #21262d',
-        background: '#161b22',
-        borderTopLeftRadius: '6px',
-        borderTopRightRadius: '6px',
+        borderBottom: '1px solid #d0d7de',
+        background: '#f6f8fa',
       }}
     >
       {isFull && (
@@ -419,6 +474,63 @@ function Toolbar({
           <LinkToUrlPicker editor={editor} projectId={projectId} />
         </>
       )}
+      {isFull && onFontSizeChange && (
+        <>
+          <span style={{ flex: 1 }} aria-hidden />
+          <FontSizeStepper
+            value={fontSize}
+            onChange={onFontSizeChange}
+          />
+        </>
+      )}
+    </div>
+  );
+}
+
+function FontSizeStepper({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (next: number) => void;
+}) {
+  const clamp = (n: number) =>
+    Math.max(MIN_FONT_SIZE_PX, Math.min(MAX_FONT_SIZE_PX, n));
+  const dec = () => onChange(clamp(value - 1));
+  const inc = () => onChange(clamp(value + 1));
+  return (
+    <div
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '2px',
+        marginLeft: '6px',
+      }}
+      title="Editor font size"
+    >
+      <ToolbarButton
+        label="−"
+        active={false}
+        onClick={dec}
+        title={`Decrease font size (min ${MIN_FONT_SIZE_PX}pt)`}
+      />
+      <span
+        style={{
+          fontSize: '12px',
+          color: '#1f2328',
+          minWidth: '32px',
+          textAlign: 'center',
+          userSelect: 'none',
+        }}
+      >
+        {value}pt
+      </span>
+      <ToolbarButton
+        label="+"
+        active={false}
+        onClick={inc}
+        title={`Increase font size (max ${MAX_FONT_SIZE_PX}pt)`}
+      />
     </div>
   );
 }
@@ -446,8 +558,8 @@ function ToolbarButton({
         padding: '2px 8px',
         borderRadius: '4px',
         border: '1px solid transparent',
-        background: active ? '#21262d' : 'transparent',
-        color: active ? '#e6edf3' : '#8b949e',
+        background: active ? '#dbeafe' : 'transparent',
+        color: active ? '#0969da' : '#1f2328',
         fontSize: '12px',
         cursor: 'pointer',
         minWidth: '24px',
@@ -465,7 +577,8 @@ function ToolbarSeparator() {
       aria-hidden
       style={{
         width: '1px',
-        background: '#30363d',
+        alignSelf: 'stretch',
+        background: '#d0d7de',
         margin: '2px 2px',
       }}
     />

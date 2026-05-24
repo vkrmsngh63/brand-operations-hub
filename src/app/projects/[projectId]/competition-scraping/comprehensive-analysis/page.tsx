@@ -215,6 +215,13 @@ export default function ComprehensiveAnalysisPage() {
               initialContent={loadState.contentJson}
               projectId={projectId}
               testId="comprehensive-analysis-editor"
+              onSaved={({ contentJson, lastEditedAt }) =>
+                setLoadState((prev) =>
+                  prev.kind === 'loaded'
+                    ? { ...prev, contentJson, lastEditedAt }
+                    : prev
+                )
+              }
             />
           ) : (
             <AnalysisReadView

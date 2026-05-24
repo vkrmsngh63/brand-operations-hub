@@ -175,8 +175,8 @@ export function LinkToUrlPicker({ editor, projectId }: LinkToUrlPickerProps) {
           padding: '2px 8px',
           borderRadius: '4px',
           border: '1px solid transparent',
-          background: open ? '#21262d' : 'transparent',
-          color: open ? '#e6edf3' : '#8b949e',
+          background: open ? '#dbeafe' : 'transparent',
+          color: open ? '#0969da' : '#1f2328',
           fontSize: '12px',
           cursor: 'pointer',
           display: 'inline-flex',
@@ -200,10 +200,10 @@ export function LinkToUrlPicker({ editor, projectId }: LinkToUrlPickerProps) {
             maxHeight: '320px',
             display: 'flex',
             flexDirection: 'column',
-            background: '#161b22',
-            border: '1px solid #30363d',
+            background: '#ffffff',
+            border: '1px solid #d0d7de',
             borderRadius: '6px',
-            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
+            boxShadow: '0 8px 24px rgba(31, 35, 40, 0.15)',
             zIndex: 50,
           }}
         >
@@ -216,9 +216,9 @@ export function LinkToUrlPicker({ editor, projectId }: LinkToUrlPickerProps) {
             style={{
               padding: '8px 10px',
               border: 'none',
-              borderBottom: '1px solid #21262d',
+              borderBottom: '1px solid #d0d7de',
               background: 'transparent',
-              color: '#e6edf3',
+              color: '#1f2328',
               fontSize: '13px',
               outline: 'none',
               borderTopLeftRadius: '6px',
@@ -230,7 +230,7 @@ export function LinkToUrlPicker({ editor, projectId }: LinkToUrlPickerProps) {
               <div style={emptyRowStyle}>Loading captured URLs…</div>
             )}
             {load.kind === 'error' && (
-              <div style={{ ...emptyRowStyle, color: '#f85149' }}>
+              <div style={{ ...emptyRowStyle, color: '#cf222e' }}>
                 Couldn’t load URLs: {load.message}
               </div>
             )}
@@ -257,15 +257,15 @@ export function LinkToUrlPicker({ editor, projectId }: LinkToUrlPickerProps) {
                     padding: '8px 10px',
                     background: 'transparent',
                     border: 'none',
-                    borderBottom: '1px solid #21262d',
-                    color: '#e6edf3',
+                    borderBottom: '1px solid #eaeef2',
+                    color: '#1f2328',
                     fontSize: '12px',
                     cursor: 'pointer',
                     fontFamily: "'IBM Plex Sans', sans-serif",
                   }}
                   onMouseEnter={(e) => {
                     (e.currentTarget as HTMLButtonElement).style.background =
-                      '#21262d';
+                      '#f6f8fa';
                   }}
                   onMouseLeave={(e) => {
                     (e.currentTarget as HTMLButtonElement).style.background =
@@ -278,7 +278,7 @@ export function LinkToUrlPicker({ editor, projectId }: LinkToUrlPickerProps) {
                   <div
                     style={{
                       fontSize: '11px',
-                      color: '#8b949e',
+                      color: '#656d76',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
                       whiteSpace: 'nowrap',
@@ -297,7 +297,7 @@ export function LinkToUrlPicker({ editor, projectId }: LinkToUrlPickerProps) {
 
 const emptyRowStyle: React.CSSProperties = {
   padding: '12px 10px',
-  color: '#8b949e',
+  color: '#656d76',
   fontSize: '12px',
   fontStyle: 'italic',
   textAlign: 'center',

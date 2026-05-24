@@ -53,10 +53,10 @@ export function AnalysisReadView({
           style={{
             padding: '16px',
             marginBottom: '8px',
-            background: '#0d1117',
-            border: '1px dashed #30363d',
+            background: '#ffffff',
+            border: '1px dashed #d0d7de',
             borderRadius: '6px',
-            color: '#8b949e',
+            color: '#656d76',
             fontSize: '13px',
             fontStyle: 'italic',
           }}
