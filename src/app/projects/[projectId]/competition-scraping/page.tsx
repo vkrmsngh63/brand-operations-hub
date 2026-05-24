@@ -144,7 +144,7 @@ export default function CompetitionScrapingPage() {
         }
       />
 
-      <main style={{ maxWidth: '1080px', margin: '0 auto', padding: '24px 32px 64px' }}>
+      <main style={{ maxWidth: '100%', padding: '24px 24px 64px' }}>
         {/* Status row — badge + worker-completion button. */}
         <section
           style={{

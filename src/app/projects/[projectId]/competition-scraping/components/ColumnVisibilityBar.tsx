@@ -1,32 +1,30 @@
 'use client';
 
 // W#2 P-46 Workstream 3 Sessions 1+3 — horizontal bar at the top of the
-// Competition Data table combining platform filters + per-column show/hide
-// + a text-size stepper. Replaces the left-side PlatformSidebar per §C.3.
+// Competition Data table combining platform filters + per-column show/hide.
+// Replaces the left-side PlatformSidebar per §C.3.
 //
-// Three control groups in one bar:
-//   - Platforms — "All Platforms" + the seven supported platforms. Single-
-//     select semantics (mirrors the prior sidebar). Selecting one platform
-//     scopes the table to that platform; "All" clears the scope.
-//   - Columns  — per-column show/hide checkboxes. Multi-select; toggles a
-//     column's visibility in the table. Defaults to visible when missing
-//     from the prefs map.
-//   - Text size (Session 3) — a − / size / + stepper that adjusts the
-//     table-wide font size, clamped to FONT_SIZE_MIN..FONT_SIZE_MAX
-//     (10..24 per §A.3 + the handler's validator constants).
+// 2026-05-24 fix-forward — Issue 5: Platform chips become a true MULTI-SELECT.
+// Earlier shape was "All Platforms XOR a single platform" (mutually exclusive
+// chips). Director's directive: "fix this so that if the user wants to see any
+// combination of platforms together, they should be able to." New semantics:
+//   - 7 individual platform checkboxes — independently togglable.
+//   - "All Platforms" checkbox = select-all / deselect-all toggle that mirrors
+//     the state of the 7 individuals (Gmail inbox-header pattern). When all 7
+//     are checked → All Platforms shows checked. When 1-6 are checked →
+//     indeterminate (visual dash). When 0 are checked → unchecked + the
+//     consumer renders the empty-state hint.
+//   - Toggling "All Platforms" sets every individual to true or false in one
+//     shot.
 //
-// Owns no state of its own. Parent (CompetitionScrapingViewer) drives
-// `selectedPlatform` from the URL query + `columnVisibility` / `fontSize`
-// from the fetched UserTablePreferences row + persists changes via the
-// shared debounced PUT.
+// 2026-05-24 fix-forward — Issue 4: Text-size stepper REMOVED from this bar.
+// Director's directive: "Just put the +/- symbols at the top right of the
+// data table because only that data needs to be adjusted in font size."
+// The stepper now lives inside UrlTable's toolbar row instead.
 
+import { useEffect, useRef } from 'react';
 import { PLATFORMS, type Platform } from '@/lib/shared-types/competition-scraping';
-import {
-  FONT_SIZE_MAX,
-  FONT_SIZE_MIN,
-  TABLE_COLUMN_DEFS,
-  type ScopeFilter,
-} from './url-table-columns';
+import { TABLE_COLUMN_DEFS } from './url-table-columns';
 
 const PLATFORM_LABELS: Record<Platform, string> = {
   amazon: 'Amazon',
@@ -39,32 +37,41 @@ const PLATFORM_LABELS: Record<Platform, string> = {
 };
 
 interface Props {
-  selectedPlatform: ScopeFilter;
-  counts: Record<ScopeFilter, number> | null;
+  // Set of platforms currently visible in the table. Empty array → none
+  // selected (consumer renders empty state). Length === PLATFORMS.length
+  // → All Platforms shows checked.
+  selectedPlatforms: Platform[];
+  // Per-platform row counts for the chips' count badges. Null while the
+  // initial URL list is still loading.
+  countsByPlatform: Record<Platform, number> | null;
+  totalCount: number | null;
   loading: boolean;
-  onSelectPlatform: (next: ScopeFilter) => void;
+  onTogglePlatform: (platform: Platform, next: boolean) => void;
+  onSelectAllPlatforms: (next: boolean) => void;
 
   columnVisibility: Record<string, boolean>;
   onToggleColumn: (columnId: string, visible: boolean) => void;
-
-  // P-46 Workstream 3 Session 3 — text-size stepper props.
-  fontSize: number;
-  onFontSizeChange: (size: number) => void;
 }
 
 export function ColumnVisibilityBar({
-  selectedPlatform,
-  counts,
+  selectedPlatforms,
+  countsByPlatform,
+  totalCount,
   loading,
-  onSelectPlatform,
+  onTogglePlatform,
+  onSelectAllPlatforms,
   columnVisibility,
   onToggleColumn,
-  fontSize,
-  onFontSizeChange,
 }: Props) {
-  const decreaseDisabled = fontSize <= FONT_SIZE_MIN;
-  const increaseDisabled = fontSize >= FONT_SIZE_MAX;
-  const platformItems: ScopeFilter[] = ['all', ...PLATFORMS];
+  const allChecked = selectedPlatforms.length === PLATFORMS.length;
+  const someChecked = selectedPlatforms.length > 0 && !allChecked;
+
+  // Native checkbox indeterminate is a JS-only property; reflect the
+  // "some but not all" state through the DOM after each render.
+  const allRef = useRef<HTMLInputElement | null>(null);
+  useEffect(() => {
+    if (allRef.current) allRef.current.indeterminate = someChecked;
+  }, [someChecked]);
 
   return (
     <div
@@ -75,25 +82,39 @@ export function ColumnVisibilityBar({
       <div style={groupStyle}>
         <span style={groupLabelStyle}>Platforms</span>
         <div style={chipRowStyle}>
-          {platformItems.map((item) => {
-            const label =
-              item === 'all' ? 'All Platforms' : PLATFORM_LABELS[item];
-            const active = selectedPlatform === item;
-            const count = loading || !counts ? null : counts[item];
+          <label style={chipStyle(allChecked)} title="Select or clear all platforms">
+            <input
+              ref={allRef}
+              type="checkbox"
+              checked={allChecked}
+              onChange={() => onSelectAllPlatforms(!allChecked)}
+              style={checkboxStyle}
+              aria-label="Select all platforms"
+              data-testid="platform-chip-all"
+            />
+            <span>All Platforms</span>
+            <span style={countBadgeStyle}>
+              {loading || totalCount === null ? '…' : totalCount}
+            </span>
+          </label>
+          {PLATFORMS.map((platform) => {
+            const label = PLATFORM_LABELS[platform];
+            const checked = selectedPlatforms.includes(platform);
+            const count =
+              loading || !countsByPlatform ? null : countsByPlatform[platform];
             return (
               <label
-                key={item}
-                style={chipStyle(active)}
-                title={`Filter to ${label}`}
+                key={platform}
+                style={chipStyle(checked)}
+                title={`Show or hide ${label} rows`}
               >
                 <input
                   type="checkbox"
-                  checked={active}
-                  onChange={() =>
-                    onSelectPlatform(active ? 'all' : (item as ScopeFilter))
-                  }
+                  checked={checked}
+                  onChange={() => onTogglePlatform(platform, !checked)}
                   style={checkboxStyle}
-                  aria-label={`Show ${label}`}
+                  aria-label={`Show ${label} rows`}
+                  data-testid={`platform-chip-${platform}`}
                 />
                 <span>{label}</span>
                 <span style={countBadgeStyle}>
@@ -129,41 +150,6 @@ export function ColumnVisibilityBar({
               </label>
             );
           })}
-        </div>
-      </div>
-
-      <div style={dividerStyle} aria-hidden />
-
-      <div style={fontSizeGroupStyle}>
-        <span style={groupLabelStyle}>Text size</span>
-        <div
-          style={stepperStyle}
-          data-testid="font-size-stepper"
-          aria-label="Adjust table text size"
-        >
-          <button
-            type="button"
-            onClick={() => onFontSizeChange(fontSize - 1)}
-            disabled={decreaseDisabled}
-            style={stepperButtonStyle(decreaseDisabled)}
-            aria-label="Decrease text size"
-            title="Smaller"
-          >
-            −
-          </button>
-          <span style={stepperValueStyle} aria-live="polite">
-            {fontSize}pt
-          </span>
-          <button
-            type="button"
-            onClick={() => onFontSizeChange(fontSize + 1)}
-            disabled={increaseDisabled}
-            style={stepperButtonStyle(increaseDisabled)}
-            aria-label="Increase text size"
-            title="Larger"
-          >
-            +
-          </button>
         </div>
       </div>
     </div>
@@ -251,47 +237,4 @@ const dividerStyle: React.CSSProperties = {
   width: '1px',
   alignSelf: 'stretch',
   background: '#30363d',
-};
-
-// Font-size group sits in a narrow column at the far right; it doesn't
-// `flex: 1` like Platforms + Columns so the stepper doesn't stretch.
-const fontSizeGroupStyle: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '6px',
-  minWidth: '140px',
-};
-
-const stepperStyle: React.CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: '4px',
-  background: '#161b22',
-  border: '1px solid #30363d',
-  borderRadius: '6px',
-  padding: '2px',
-};
-
-function stepperButtonStyle(disabled: boolean): React.CSSProperties {
-  return {
-    background: 'transparent',
-    border: 'none',
-    color: disabled ? '#484f58' : '#c9d1d9',
-    fontSize: '14px',
-    fontWeight: 600,
-    lineHeight: '14px',
-    width: '24px',
-    height: '24px',
-    cursor: disabled ? 'not-allowed' : 'pointer',
-    padding: 0,
-    borderRadius: '4px',
-  };
-}
-
-const stepperValueStyle: React.CSSProperties = {
-  fontSize: '12px',
-  color: '#e6edf3',
-  fontVariantNumeric: 'tabular-nums',
-  minWidth: '36px',
-  textAlign: 'center',
 };

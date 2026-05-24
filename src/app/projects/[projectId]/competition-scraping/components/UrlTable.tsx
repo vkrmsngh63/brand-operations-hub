@@ -42,7 +42,7 @@
 //     'manual' mode (rowOrder still persists server-side; just not
 //     applied visually until the user picks 'manual' again by dragging).
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   DndContext,
   PointerSensor,
@@ -93,6 +93,8 @@ import {
   InlineUrlCell,
 } from './InlineCells';
 import {
+  FONT_SIZE_MAX,
+  FONT_SIZE_MIN,
   MAX_COLUMN_WIDTH,
   MIN_COLUMN_WIDTH,
   resolveColumnWidth,
@@ -138,6 +140,10 @@ interface Props {
   // P-46 Workstream 3 Session 3 — table-wide font size in px. Defaults to
   // FONT_SIZE_DEFAULT (14) when not provided.
   fontSize?: number;
+  // 2026-05-24 fix-forward (Issue 4) — font-size stepper now lives in this
+  // table's toolbar row (was in ColumnVisibilityBar). UrlTable owns the
+  // +/- buttons; the parent still owns the value + debounced PUT.
+  onFontSizeChange?: (size: number) => void;
   // P-46 Workstream 3 Session 3 — preferred row order from
   // UserTablePreferences. Applied only when sortKey === 'manual';
   // otherwise the comparator-based sort wins.
@@ -298,6 +304,7 @@ export function UrlTable({
   columnVisibility,
   columnWidths,
   fontSize,
+  onFontSizeChange,
   rowOrder,
   onColumnResize,
   onRowReorder,
@@ -319,6 +326,27 @@ export function UrlTable({
   const effectiveColumnWidths = columnWidths ?? {};
   const effectiveFontSize = fontSize ?? 14;
   const effectiveRowOrder = rowOrder ?? [];
+
+  // 2026-05-24 fix-forward (Issue 1) — measured table height so the
+  // ColumnResizeHandle can extend its drag zone past the header all the
+  // way down through every row. ResizeObserver picks up height changes
+  // from font-size adjustments, row inserts/deletes, and column-width
+  // changes that reflow row heights.
+  const tableRef = useRef<HTMLTableElement | null>(null);
+  const [tableHeight, setTableHeight] = useState<number>(0);
+  useLayoutEffect(() => {
+    const el = tableRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setTableHeight(entry.contentRect.height);
+      }
+    });
+    observer.observe(el);
+    setTableHeight(el.getBoundingClientRect().height);
+    return () => observer.disconnect();
+  }, []);
+
   // Pointer sensor with a small activation distance prevents the per-cell
   // click-to-edit affordance (Session 2) from being hijacked by a drag
   // gesture on the row's drag handle. Without this, a quick click on the
@@ -780,6 +808,47 @@ export function UrlTable({
         >
           + Manually add URL
         </button>
+        {/* 2026-05-24 fix-forward (Issue 4) — text-size stepper relocated
+            from ColumnVisibilityBar to the data table's toolbar. Director's
+            directive: "Just put the +/- symbols at the top right of the
+            data table because only that data needs to be adjusted in font
+            size." No numeric value, no label — just two buttons. */}
+        {onFontSizeChange ? (
+          <div
+            style={fontSizeStepperStyle}
+            data-testid="font-size-stepper"
+            aria-label="Adjust table text size"
+          >
+            <button
+              type="button"
+              onClick={() =>
+                onFontSizeChange(Math.max(FONT_SIZE_MIN, effectiveFontSize - 1))
+              }
+              disabled={effectiveFontSize <= FONT_SIZE_MIN}
+              style={fontSizeStepperButtonStyle(
+                effectiveFontSize <= FONT_SIZE_MIN
+              )}
+              aria-label="Decrease text size"
+              title="Smaller text"
+            >
+              −
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                onFontSizeChange(Math.min(FONT_SIZE_MAX, effectiveFontSize + 1))
+              }
+              disabled={effectiveFontSize >= FONT_SIZE_MAX}
+              style={fontSizeStepperButtonStyle(
+                effectiveFontSize >= FONT_SIZE_MAX
+              )}
+              aria-label="Increase text size"
+              title="Larger text"
+            >
+              +
+            </button>
+          </div>
+        ) : null}
       </div>
 
       <UrlAddModal
@@ -815,8 +884,16 @@ export function UrlTable({
               strategy={verticalListSortingStrategy}
             >
               <table
+                ref={tableRef}
                 style={{
-                  width: '100%',
+                  /* 2026-05-24 fix-forward (Issue 3) — table sizes to the
+                     sum of column widths (NOT 100% of container) so the
+                     overflowX:'auto' wrapper above can horizontally scroll
+                     when the sum exceeds container width. The minWidth
+                     keeps the table from collapsing narrower than its
+                     container when there are few columns. */
+                  width: 'max-content',
+                  minWidth: '100%',
                   borderCollapse: 'collapse',
                   fontSize: `${effectiveFontSize}px`,
                   tableLayout: 'fixed',
@@ -912,13 +989,22 @@ export function UrlTable({
                           {/* P-46 Workstream 3 Session 3 — drag-to-resize handle
                               on the right edge of every header cell. The handle
                               sits absolutely so it doesn't disrupt the inline
-                              label/sort/filter row above. */}
+                              label/sort/filter row above.
+                              2026-05-24 fix-forward (Issue 1) — drag zone now
+                              extends from the header all the way down to the
+                              bottom of the table (height = tableHeight)
+                              instead of being clipped to the header cell.
+                              Director's directive: "the column width can be
+                              changed by dragging the column border from any
+                              row." Also draws a faint full-height vertical
+                              line so users SEE the column edges. */}
                           <ColumnResizeHandle
                             columnId={col.key}
                             currentWidth={resolveColumnWidth(
                               effectiveColumnWidths,
                               tableColumnDefByKey(col.key)
                             )}
+                            tableHeight={tableHeight}
                             onCommit={(width) => onColumnResize?.(col.key, width)}
                           />
                         </th>
@@ -1143,6 +1229,38 @@ const clearAllButtonStyle: React.CSSProperties = {
   whiteSpace: 'nowrap',
 };
 
+// 2026-05-24 fix-forward (Issue 4) — compact +/- font-size stepper at the
+// far right of the toolbar. No numeric value, no label per director's
+// directive. Buttons match the search box's GitHub-dark palette so the
+// toolbar reads as one row.
+const fontSizeStepperStyle: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '2px',
+  background: '#0d1117',
+  border: '1px solid #30363d',
+  borderRadius: '6px',
+  padding: '2px',
+  marginLeft: 'auto',
+};
+
+function fontSizeStepperButtonStyle(disabled: boolean): React.CSSProperties {
+  return {
+    background: 'transparent',
+    border: 'none',
+    color: disabled ? '#484f58' : '#c9d1d9',
+    fontSize: '14px',
+    fontWeight: 600,
+    lineHeight: '14px',
+    width: '24px',
+    height: '24px',
+    cursor: disabled ? 'not-allowed' : 'pointer',
+    padding: 0,
+    borderRadius: '4px',
+    fontFamily: 'inherit',
+  };
+}
+
 // P-29 Slice #1 — primary action button in the table toolbar. GitHub-green
 // fill matches the modal's Save button so the entry+confirm color story
 // stays consistent.
@@ -1345,13 +1463,21 @@ function SortableUrlRow({
 // the new width on every pointermove tick; commits the final width to the
 // parent on pointerup. Clamps to MIN/MAX_COLUMN_WIDTH so users can't drag
 // a column off-screen or below readability.
+//
+// 2026-05-24 fix-forward (Issue 1) — drag-zone height now spans the full
+// measured table height (passed in by parent via ResizeObserver) instead
+// of being clipped to the header cell. Visual column line (faint vertical
+// stroke) is rendered full-height too so users see where the columns are
+// before reaching for the handle.
 function ColumnResizeHandle({
   columnId,
   currentWidth,
+  tableHeight,
   onCommit,
 }: {
   columnId: string;
   currentWidth: number;
+  tableHeight: number;
   onCommit: (width: number) => void;
 }) {
   const [isDragging, setIsDragging] = useState(false);
@@ -1390,6 +1516,12 @@ function ColumnResizeHandle({
     window.addEventListener('pointercancel', onUp);
   };
 
+  // height: tableHeight on the handle = full table height. Without this,
+  // height:100% would only span the th. tableHeight 0 (before the
+  // ResizeObserver has fired) falls back to a safe default so the handle
+  // still works on the first paint.
+  const effectiveHeight = tableHeight > 0 ? tableHeight : 200;
+
   return (
     <div
       role="separator"
@@ -1397,7 +1529,7 @@ function ColumnResizeHandle({
       aria-orientation="vertical"
       data-testid="column-resize-handle"
       onPointerDown={onPointerDown}
-      style={resizeHandleStyle(isDragging)}
+      style={resizeHandleStyle(isDragging, effectiveHeight)}
     />
   );
 }
@@ -1430,17 +1562,31 @@ const dragHandleButtonStyle: React.CSSProperties = {
   touchAction: 'none',
 };
 
-function resizeHandleStyle(isDragging: boolean): React.CSSProperties {
+function resizeHandleStyle(
+  isDragging: boolean,
+  fullHeight: number
+): React.CSSProperties {
   return {
     position: 'absolute',
     top: 0,
     right: 0,
     width: '6px',
-    height: '100%',
+    /* 2026-05-24 fix-forward (Issue 1) — extend the drag zone past the
+       header all the way down. The handle is rendered inside the <th>
+       which has position:relative, so an explicit pixel height drawn
+       from the parent's ResizeObserver bleeds beyond the th's box. */
+    height: `${fullHeight}px`,
     cursor: 'col-resize',
-    background: isDragging ? '#1f6feb' : 'transparent',
-    borderRight: isDragging ? '1px solid #1f6feb' : '1px solid transparent',
+    /* Faint full-height column line is visible by default so users see
+       where columns end; turns solid blue while actively dragging. */
+    borderRight: isDragging
+      ? '2px solid #1f6feb'
+      : '1px solid #21262d',
+    background: isDragging ? 'rgba(31, 111, 235, 0.15)' : 'transparent',
     touchAction: 'none',
     transition: 'background 80ms ease-in-out',
+    /* Render above the row backgrounds + drag-handle column so the resize
+       affordance is always reachable, but below modals + popovers. */
+    zIndex: 2,
   };
 }

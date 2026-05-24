@@ -1,13 +1,10 @@
-import type { Platform } from '@/lib/shared-types/competition-scraping';
-
 // W#2 P-46 Workstream 3 Sessions 1-3 — canonical column registry for the
 // Competition Data table.
 //
 // Session 1 (2026-05-23-d) lifted the column-id ↔ label mapping out of
 // UrlTable so the new ColumnVisibilityBar + the per-user
 // UserTablePreferences.columnVisibility map can reference the same source
-// of truth, AND houses the ScopeFilter type after PlatformSidebar's
-// deletion.
+// of truth.
 //
 // Session 2 (2026-05-23-e) extends the registry with the 6 new W1-additive
 // data columns per §C.3 + adds a `dataType` discriminator that drives the
@@ -19,11 +16,12 @@ import type { Platform } from '@/lib/shared-types/competition-scraping';
 // + the MIN/MAX width bounds the resize-drag handle clamps to + the
 // FONT_SIZE_* bounds the font-size stepper clamps to (mirroring the
 // handler's validator constants).
-
-// Platform scope selector. 'all' = no platform filter; otherwise a single
-// platform value. Moved here from PlatformSidebar when the sidebar was
-// removed in P-46 Workstream 3 Session 1.
-export type ScopeFilter = 'all' | Platform;
+//
+// 2026-05-24 fix-forward — the legacy single-platform ScopeFilter export
+// ('all' | Platform) was removed after Issue 5 (multi-select platforms)
+// shifted CompetitionScrapingViewer to a Platform[] state shape. Bookmarks
+// that include the legacy `?platform=X` query are handled in the viewer's
+// URL-parsing branch + serialize forward to `?platforms=X`.
 
 // Column id strings double as the keys in UserTablePreferences.columnVisibility
 // JSON — keep them stable. Renaming an id silently flips that column to

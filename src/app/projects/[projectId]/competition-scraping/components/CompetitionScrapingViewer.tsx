@@ -46,6 +46,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { authFetch } from '@/lib/authFetch';
 import {
   isPlatform,
+  PLATFORMS,
   type CompetitorUrl,
   type ListCompetitorUrlsResponse,
   type Platform,
@@ -59,7 +60,6 @@ import {
   FONT_SIZE_DEFAULT,
   FONT_SIZE_MAX,
   FONT_SIZE_MIN,
-  type ScopeFilter,
 } from './url-table-columns';
 import { UrlTable } from './UrlTable';
 import {
@@ -80,11 +80,29 @@ export function CompetitionScrapingViewer({ projectId }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // Read selected platform from the URL query — survives a refresh and
-  // makes a deep link like ?platform=amazon land on the right view.
-  const platformParam = searchParams?.get('platform') ?? null;
-  const selectedPlatform: ScopeFilter =
-    platformParam && isPlatform(platformParam) ? platformParam : 'all';
+  // 2026-05-24 fix-forward (Issue 5) — Multi-select platform state in the
+  // URL query. Source-of-truth shape:
+  //   - `?platforms=amazon,ebay` → exactly those two platforms selected
+  //   - `?platforms=`            → ZERO selected (empty-state)
+  //   - param missing entirely   → ALL selected (default)
+  //   - legacy `?platform=X`     → treated as `?platforms=X` for bookmarks
+  //     written before today's fix-forward
+  const selectedPlatforms = useMemo<Platform[]>(() => {
+    const multi = searchParams?.get('platforms');
+    if (multi !== null && multi !== undefined) {
+      if (multi === '') return [];
+      const parsed = multi
+        .split(',')
+        .map((s) => s.trim())
+        .filter((s): s is Platform => isPlatform(s));
+      return parsed;
+    }
+    // Legacy single-platform query string from the pre-fix-forward deploy.
+    const legacy = searchParams?.get('platform') ?? null;
+    if (legacy && isPlatform(legacy)) return [legacy];
+    // Default — all platforms selected.
+    return [...PLATFORMS];
+  }, [searchParams]);
 
   // Filter state lives in the URL. Re-derive on every render so the back/
   // forward buttons and deep links work without extra wiring.
@@ -294,12 +312,11 @@ export function CompetitionScrapingViewer({ projectId }: Props) {
     [flushPrefsPut]
   );
 
-  // Per-platform counts for the new horizontal bar. Memoized so a sort or
+  // Per-platform counts for the horizontal bar. Memoized so a sort or
   // filter change doesn't recompute them.
-  const counts = useMemo(() => {
+  const countsByPlatform = useMemo<Record<Platform, number> | null>(() => {
     if (!urls) return null;
-    const c: Record<ScopeFilter, number> = {
-      all: urls.length,
+    const c: Record<Platform, number> = {
       amazon: 0,
       ebay: 0,
       etsy: 0,
@@ -313,19 +330,25 @@ export function CompetitionScrapingViewer({ projectId }: Props) {
     }
     return c;
   }, [urls]);
+  const totalCount = urls === null ? null : urls.length;
 
   // Platform-scoped rows — fed to UrlTable as `scopeRows` so its multi-
   // select dropdowns can derive their option lists from the platform-scoped
   // set instead of the search-and-column-filter-narrowed set.
+  //
+  // 2026-05-24 fix-forward (Issue 5) — filter switches from single equality
+  // to set membership. Empty selectedPlatforms → zero rows (empty state).
+  const selectedPlatformSet = useMemo(
+    () => new Set<Platform>(selectedPlatforms),
+    [selectedPlatforms]
+  );
   const scopeRows = useMemo(() => {
     if (!urls) return [];
-    return urls.filter((u) => {
-      if (selectedPlatform !== 'all' && u.platform !== selectedPlatform) {
-        return false;
-      }
-      return true;
-    });
-  }, [urls, selectedPlatform]);
+    if (selectedPlatformSet.size === 0) return [];
+    return urls.filter((u) =>
+      selectedPlatformSet.has(u.platform as Platform)
+    );
+  }, [urls, selectedPlatformSet]);
 
   // Apply the free-text search on top of the platform scope. Column filters
   // are applied inside UrlTable so the table can reason about them
@@ -339,13 +362,51 @@ export function CompetitionScrapingViewer({ projectId }: Props) {
     });
   }, [scopeRows, draftSearch]);
 
-  const handleSelectPlatform = (next: ScopeFilter): void => {
-    const params = new URLSearchParams(searchParams?.toString() ?? '');
-    if (next === 'all') params.delete('platform');
-    else params.set('platform', next);
-    const qs = params.toString();
-    router.replace(qs ? `?${qs}` : '?');
-  };
+  // 2026-05-24 fix-forward (Issue 5) — Multi-select handlers. Both
+  // serialize the final set of selected platforms to `?platforms=` per
+  // the URL convention:
+  //   - all selected (default) → drop the param entirely
+  //   - subset selected        → `?platforms=amazon,ebay`
+  //   - zero selected          → `?platforms=` (empty value)
+  // Also clears the legacy `?platform=X` param from the URL so it doesn't
+  // shadow the new state.
+  const writePlatformsToQuery = useCallback(
+    (next: Platform[]): void => {
+      const params = new URLSearchParams(searchParams?.toString() ?? '');
+      params.delete('platform'); // legacy
+      if (next.length === PLATFORMS.length) {
+        params.delete('platforms');
+      } else if (next.length === 0) {
+        params.set('platforms', '');
+      } else {
+        // Preserve canonical PLATFORMS order in the URL for stability.
+        const ordered = PLATFORMS.filter((p) => next.includes(p));
+        params.set('platforms', ordered.join(','));
+      }
+      const qs = params.toString();
+      router.replace(qs ? `?${qs}` : '?');
+    },
+    [router, searchParams]
+  );
+
+  const handleTogglePlatform = useCallback(
+    (platform: Platform, nextChecked: boolean): void => {
+      const current = new Set(selectedPlatforms);
+      if (nextChecked) current.add(platform);
+      else current.delete(platform);
+      writePlatformsToQuery(
+        PLATFORMS.filter((p) => current.has(p))
+      );
+    },
+    [selectedPlatforms, writePlatformsToQuery]
+  );
+
+  const handleSelectAllPlatforms = useCallback(
+    (nextAll: boolean): void => {
+      writePlatformsToQuery(nextAll ? [...PLATFORMS] : []);
+    },
+    [writePlatformsToQuery]
+  );
 
   const handleFiltersChange = (next: ColumnFiltersState): void => {
     const params = new URLSearchParams(searchParams?.toString() ?? '');
@@ -426,19 +487,24 @@ export function CompetitionScrapingViewer({ projectId }: Props) {
     [projectId]
   );
 
-  const scopedTotal = counts === null ? 0 : counts[selectedPlatform];
+  const scopedTotal = scopeRows.length;
+  // UrlTable still wants a single "default platform" hint for the +Manually
+  // add URL modal. When the multi-select has exactly one platform → that's
+  // the default. Otherwise → 'all' (modal makes user pick).
+  const modalDefaultPlatform: Platform | 'all' =
+    selectedPlatforms.length === 1 ? selectedPlatforms[0] : 'all';
 
   return (
     <section style={{ marginTop: '32px' }}>
       <ColumnVisibilityBar
-        selectedPlatform={selectedPlatform}
-        counts={counts}
+        selectedPlatforms={selectedPlatforms}
+        countsByPlatform={countsByPlatform}
+        totalCount={totalCount}
         loading={urls === null && !error}
-        onSelectPlatform={handleSelectPlatform}
+        onTogglePlatform={handleTogglePlatform}
+        onSelectAllPlatforms={handleSelectAllPlatforms}
         columnVisibility={columnVisibility}
         onToggleColumn={handleToggleColumn}
-        fontSize={fontSize}
-        onFontSizeChange={handleFontSizeChange}
       />
 
       <div
@@ -459,11 +525,17 @@ export function CompetitionScrapingViewer({ projectId }: Props) {
             title="No competitor URLs captured yet"
             body="Install the Chrome extension above to start capturing competitor URLs from Amazon, Ebay, Etsy, Walmart, Google Shopping, Google Ads, and independent product websites. Captured URLs appear here in real time."
           />
+        ) : selectedPlatforms.length === 0 ? (
+          <EmptyState
+            title="No platforms selected"
+            body="Pick at least one platform above to see captured URLs. Click ‘All Platforms’ to show every platform’s URLs at once."
+          />
         ) : (
           <UrlTable
             columnVisibility={columnVisibility}
             columnWidths={columnWidths}
             fontSize={fontSize}
+            onFontSizeChange={handleFontSizeChange}
             rowOrder={rowOrder}
             onColumnResize={handleColumnResize}
             onRowReorder={handleRowReorder}
@@ -479,7 +551,7 @@ export function CompetitionScrapingViewer({ projectId }: Props) {
             onUrlAdded={handleUrlAdded}
             onUrlDeleted={handleUrlDeleted}
             onCellSave={handleCellSave}
-            selectedPlatform={selectedPlatform}
+            selectedPlatform={modalDefaultPlatform}
           />
         )}
       </div>
