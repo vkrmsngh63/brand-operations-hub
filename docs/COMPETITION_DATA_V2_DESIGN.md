@@ -1424,4 +1424,106 @@ Both reproductions happened on Check 5 (Next.js `npm run build` route count) in 
 
 ---
 
+## §B 2026-05-24-c — `session_2026-05-24-c_p46-workstream-5-session-1-extension-url-form-additions-and-reviews-modal-polish` — Workstream 5 Session 1 lands extension URL save form additions (Type / Description-1 / Description-2 / Price) at code level + opportunistic Reviews modal idempotency polish fixes the W2 Session 4 `CapturedReviewAddModal` clientId regen-on-every-Save bug + §C.5 file-list inconsistency informational observation (popup `UrlAddForm.tsx` doesn't exist — URL-add form lives only in content-script) + NEW reusable Pattern "Opportunistic-polish-during-build-session — when scanning a related surface for polish, real bugs may surface alongside cosmetic candidates; prioritize real bugs" + director double-defer informational calibration data point
+
+**Session:** `session_2026-05-24-c_p46-workstream-5-session-1-extension-url-form-additions-and-reviews-modal-polish`
+**Branch:** `workflow-2-competition-scraping` (single-branch; no main push; W5 deploy DEFERRED at director request — 2 build commits sit on workflow branch awaiting future W5 deploy session)
+**Build commits this session:** TWO — (1) `3c981be` — W#2 polish P-46 Workstream 5 Session 1 — extension URL add form additions (Type/Description-1/Description-2/Price) — 4 files +225/-0; (2) `41172f1` — W#2 polish P-46 Workstream 5 polish — fix CapturedReviewAddModal clientId idempotency bug — 1 file +9/-1
+**Pushes today:** 1 — end-of-session push of build commits `3c981be` + `41172f1` + today's doc-batch together to `origin/workflow-2-competition-scraping` (operationally adjacent; NO Rule 9 gate fired — no destructive operations, no main push)
+**Director directive at session start:** deferred original launch-prompt task (W4 Phase-4 verify) + chose to "work on next item on roadmap" — resolved via clarifying picker to P-46 W5 (Recommended) over P-47 Shadow DOM refactor + P-43 mechanical prevention candidate
+**Director directive at end-of-session:** free-text "Other" answer *"for the next session, defer any real world testing items that I need to do. instead work on the next item on our road map for workflow#2"* — resolved via follow-up picker to P-47 Shadow DOM refactor Session 1 (Recommended)
+**Status:** Workstream 5 Session 1 ✅ DONE-AT-CODE-LEVEL 2026-05-24-c. W5 implementation arc progress: Session 1 of §C.5's 1-2 estimated landed at code level; DEPLOY-PENDING (deferred at director request). W4 status STAYS ✅ DEPLOYED-PHASE-4-PENDING 2026-05-26 on vklf.com (no change — Phase-4 verify deferred a second consecutive session).
+
+**What landed this session — empirical narrative:**
+
+Today was a scope-shift session. The original launch-prompt task was the P-46 Workstream 4 Phase-4 director real-Chrome verification on vklf.com. At session-start, director deferred that task again + chose to "work on next item on roadmap" instead. A clarifying picker resolved to P-46 Workstream 5 (Recommended) — the extension URL save form additions per §C.5.
+
+The W5 Session 1 build landed cleanly via build commit `3c981be` (4 files +225/-0):
+
+- **NEW `makeTextareaField()` helper** in `extensions/competition-scraping/src/lib/content-script/url-add-form.ts` alongside the existing `makeField()` helper. The textarea variant renders multi-line input for free-text fields (Description-1 / Description-2) while `makeField()` continues to handle single-line inputs (Type / Price).
+- **4 new fields inserted between Brand Name + Sponsored Ad** at capture time in the URL add form: **Type** / **Description-1** / **Description-2** / **Price**. The position matches §A's intent for these structural fields — they sit near the top of the form alongside Brand Name + Sponsored Ad rather than at the bottom.
+- **POST `/api/projects/[projectId]/competition-scraping/urls` handler allowlist** extended additively for the 4 new optional fields. Existing fields continue to work unchanged.
+- **`CreateCompetitorUrlRequest` wire type** in `src/lib/shared-types/competition-scraping.ts` extended additively with the 4 new optional fields. Wire-type changes match the existing `additive optional fields` convention used throughout W#2 schema evolution.
+- **3 new node:test cases** in `src/lib/competition-scraping/handlers/urls.test.ts` bringing src/lib from 783 to 786. The new cases cover the POST allowlist for each new field (trim-or-null normalization for the 2 textarea fields + trim-or-null for the 2 single-line fields) + a happy-path case combining all 4 new fields with the existing required fields.
+
+All 5 scoreboard checks GREEN at new baselines (root tsc clean / ext tsc clean / 558 ext UNCHANGED / 786 src/lib +3 from baseline 783 / 62 routes UNCHANGED). Check 6 Playwright SKIPPED per non-deploy-session convention.
+
+Then, while scanning the Reviews surface for opportunistic cosmetic polish (focus order / chip preview / placeholder text), a real correctness bug surfaced — the `CapturedReviewAddModal` clientId was being regenerated on every Save click, which defeated the server-side P2002 dedup on retries. The polish commit `41172f1` (1 file +9/-1) fixed it:
+
+- **`CapturedReviewAddModal.tsx`** previously inlined `clientId: crypto.randomUUID()` inside `handleSubmit`, regenerating a new UUID on every Save click. The server-side P2002 dedup in `url-reviews.ts` correctly rejected duplicate clientIds, but the modal kept generating new ones — so retry-after-error appeared as a new submission instead of a duplicate.
+- **Fix:** hoisted clientId to a `useState` seeded per modal-open (`useState(() => crypto.randomUUID())`) + reset on close via a `useEffect` that clears the UUID when the modal closes so the next open generates a fresh one. End-to-end: each modal-open session has exactly ONE clientId across all retry attempts, restoring the server-side P2002 dedup's correctness contract.
+- **No new tests** — React component layer fix; server-side dedup already covered in `url-reviews.test.ts`.
+
+Post-polish /scoreboard 5/5 GREEN at unchanged baselines.
+
+**§C.5 file-list inconsistency informational observation (LOW; §C.5 stays frozen per Rule 18):**
+
+§C.5 of this design doc listed `extensions/competition-scraping/src/entrypoints/popup/components/UrlAddForm.tsx` as a file Workstream 5 would touch. **That file DOES NOT EXIST in the repo.** The popup components dir has CapturedTextPasteForm + CapturedVideoPasteForm + ColorSwatchPopover + HighlightTermsManager + PlatformPicker + ProjectPicker + RegionScreenshotModeButton — no `UrlAddForm.tsx`. The URL-add form lives ONLY in the content-script at `src/lib/content-script/url-add-form.ts`.
+
+**Why this is one-less-file simplification (NOT scope reduction):** §C.5 anticipated adding the 4 new fields to BOTH a popup form AND the content-script form. In practice the popup form doesn't exist — the URL-add flow is content-script-only. Today's W5 Session 1 build landed the 4 new fields in the content-script form via a new `makeTextareaField()` helper alongside the existing `makeField()` helper. The user-facing W5 scope is COMPLETE for URL-add capture; the §C.5 file-list overcounted by one.
+
+**§C.5 stays frozen per Rule 18; informational only.** No §A or §C amendment needed; the observation is captured here in §B 2026-05-24-c.
+
+**NEW reusable Pattern memorialized — "Opportunistic-polish-during-build-session — when scanning a related surface for polish, real bugs may surface alongside cosmetic candidates; prioritize real bugs":**
+
+When a session's primary build scope is locked (today: P-46 W5 extension URL save form additions) but director permits opportunistic polish on related surfaces (today: scanning the Reviews surface for cosmetic UX targets), real correctness bugs may surface alongside the cosmetic candidates. **The Pattern: prioritize real bugs over cosmetic improvements when both surface during opportunistic polish.**
+
+Today's instance: scanning Reviews modal for "improve focus order" / "improve chip preview" / "improve placeholder text" cosmetic candidates surfaced the clientId regen-on-every-Save correctness bug as the highest-value target. Cosmetic candidates deferred to a future polish session; correctness bug fixed today.
+
+**Why this Pattern matters:** Opportunistic polish is bounded-time work inside a primarily-scoped build session; the polish budget should go to the highest-value target surfaced during the polish scan. Correctness bugs are always higher value than cosmetic improvements (correctness regressions affect users immediately; cosmetic regressions accumulate gradually). The Pattern guides time-budget allocation when multiple polish candidates surface.
+
+**Pairs with:** `feedback_recommendation_style.md` (most-thorough/reliable) — when ranking polish candidates surfaced opportunistically, recommend the most-thorough/reliable target = the correctness bug; defer cosmetic candidates to a future polish session where they're the primary scope.
+
+**Director double-defer informational calibration data point:**
+
+Director deferred W4 Phase-4 director real-Chrome verification a second consecutive session today (originally deferred 2026-05-26 W4 deploy session + re-deferred 2026-05-24-c today). Director ALSO deferred W5 deploy + W5 Phase-4 verification at end-of-session per the directive *"defer any real world testing items that I need to do. instead work on the next item on our road map for workflow#2"*.
+
+**Calibration insight:** when director defers Phase-4 verification across multiple consecutive sessions, the standing carry-overs section in NEXT_SESSION.md becomes the canonical place to preserve verification walkthroughs verbatim across sessions. The 10-step W4 Phase-4 walkthrough (preserved verbatim in 2026-05-26 NEXT_SESSION.md per yesterday's director directive) MUST be preserved verbatim AGAIN in today's NEXT_SESSION.md rewrite — the next session needs to be able to copy + execute it without re-deriving.
+
+**No process change needed; just disciplined verbatim preservation across consecutive deferrals.** Today's NEXT_SESSION.md ## Standing carry-overs section preserves the W4 Phase-4 10-step walkthrough verbatim from the 2026-05-26 NEXT_SESSION.md + adds parallel W5 deploy + W5 Phase-4 verify carry-overs.
+
+**Pairs with:** prior multi-session-workstream deploy pattern observations memorialized in design doc §B entries 2026-05-23-c (W2 deploy — "Multi-session workstream deploy gate timing" Pattern) + 2026-05-24 (W3 deploy — "Phase-4 verification fix-forward cascade in a single deploy session" Pattern) + 2026-05-26 (W4 deploy — "Truncated picker response → fire clarifying picker" Pattern + Phase-4 deferred-to-next-session branch). Together these calibrate the deploy + Phase-4 verify shape across W2-W5.
+
+**Verification scoreboard:**
+
+- Pre-deploy /scoreboard after W5 build commit `3c981be`: 5/5 GREEN at new baselines — root tsc clean / extension tsc clean / 558 ext UNCHANGED / **786 src/lib +3 from baseline 783** (exact match with 3 new urls.test.ts cases for the W5 POST allowlist) / 62 routes UNCHANGED. Check 6 Playwright SKIPPED per Rule 27 (non-deploy-session convention).
+- Post-polish /scoreboard after Reviews polish commit `41172f1`: 5/5 GREEN at unchanged baselines — root tsc / ext tsc / 558 / 786 / 62 — no new tests (React component layer fix; server-side dedup already covered in url-reviews.test.ts).
+- End-of-session baselines: root tsc clean / ext tsc clean / 558 ext / **786 src/lib (+3 net)** / 62 routes.
+
+**Affected §A sections (informational — §A frozen per Rule 18):**
+
+- §A.6 (URL detail page Sizes/Options removal + new structural fields Type/Description-1/Description-2/Price) — today's W5 Session 1 build added these 4 fields at the extension URL save form so they're captured at the moment a URL is added; the vklf.com-side editing already shipped in W2 Session 5 (2026-05-23-b). End-to-end the 4 fields are now captured at extension-add time + editable on vklf.com.
+- §A.8 (Reviews capture workflow) — today's opportunistic Reviews modal polish fixed an idempotency bug shipped in W2 Session 4 (2026-05-28). No §A change; the W2 Session 4 design intent was correct, the implementation had a regression that's now fixed.
+- §C.5 (Workstream 5 implementation outline) — listed `UrlAddForm.tsx` (popup) which doesn't exist; today consumed the actual content-script-only file; §C.5 stays frozen per Rule 18; one-less-file simplification captured above.
+
+**Impact on §A: None; §A stays frozen per Rule 18.** All §A binding decisions consumed cleanly; the W5 Session 1 build matched §A.6's intent for the structural fields; the Reviews polish fixed an implementation regression, not a design issue.
+
+**Calibration data point — Workstream 5 session count + full W1-W5 implementation arc progress:**
+
+W5 Session 1 came in at the low end of §C.5's 1-2 estimate (just Session 1 today). W5 may close at code level pending W5 Session 2 if director scopes more W5 work (e.g., manual Reviews entry tweaks on vklf.com based on real-Chrome usage), OR W5 may close at code level today if W5 Session 1 fully covers §C.5's user-visible scope after the popup-form file simplification narrowed the work.
+
+Combined W1+W2+W3+W4+W5 implementation arc progress (as of session-end 2026-05-24-c):
+- Workstream 1 = 1 build session + folded into W2 deploy (under §C.1's 2-3 estimate);
+- Workstream 2 = 5 build sessions + 1 deploy session (top end of §C.2's 3-5 estimate);
+- Workstream 3 = 3 build sessions + 1 deploy session with 6 deploy events from fix-forward cascade (low end of §C.3's 3-4 estimate);
+- Workstream 4 = 2 build sessions + 1 deploy session + 1 Phase-4 verify session pending (top end of §C.4's ~2-3 estimate; deferred-Phase-4 branch adds 1 extra session vs. typical in-deploy Phase-4 pattern; second consecutive defer today);
+- Workstream 5 = 1 build session today (low end of §C.5's 1-2 estimate); deploy + Phase-4 verify both deferred.
+- **Combined W1+W2+W3+W4+W5 = 14 sessions (so far)** vs. 10-16 estimated (sum of §C.1+§C.2+§C.3+§C.4+§C.5 floor/ceiling).
+- **Total P-46 spend trending toward 16-18 sessions** vs. the original 11-17 estimate post-Q1+Q9 scope reductions — within range but at top end of estimate due to deferred-Phase-4 branches adding sessions.
+
+**Cross-references:**
+
+- CORRECTIONS_LOG §Entry 2026-05-24-c (today's W5 Session 1 + Reviews modal polish closing entry — captures the same content from a corrections-log/procedural perspective; this design doc §B captures it from a design/implementation perspective).
+- `docs/COMPETITION_DATA_V2_DESIGN.md` §C.5 (Workstream 5 implementation outline — listed `UrlAddForm.tsx` (popup) which doesn't exist; today consumed the actual content-script-only file; §C.5 stays frozen per Rule 18; one-less-file simplification captured in this §B 2026-05-24-c entry).
+- `docs/COMPETITION_DATA_V2_DESIGN.md` §B 2026-05-26 (W4 deploy session — established the deferred-Phase-4-to-next-session branch; today's W4 Phase-4 verify deferred a second consecutive session; W5 deploy + W5 Phase-4 verify deferred today following the same branch).
+- `docs/COMPETITION_DATA_V2_DESIGN.md` §B 2026-05-28 (W2 Session 4 — shipped CapturedReviewAddModal with the clientId bug fixed today; original implementation correctly extracted per-record handlers behind DI seam matching P-31 precedent but inlined clientId in handleSubmit defeating the server-side P2002 dedup on retries).
+- `docs/COMPETITION_DATA_V2_DESIGN.md` §B 2026-05-23-c (the W2 DEPLOY closing entry — established the "Multi-session workstream deploy gate timing" Pattern).
+- `docs/COMPETITION_DATA_V2_DESIGN.md` §B 2026-05-24 (the W3 DEPLOY closing entry — established the "Phase-4 verification fix-forward cascade in a single deploy session" Pattern).
+- `docs/ROADMAP.md` P-46 polish-backlog entry (annotated this session — WS#5 status flipped to ✅ DONE-AT-CODE-LEVEL 2026-05-24-c — DEPLOY-PENDING (deferred at director request); WS#4 status STAYS ✅ DEPLOYED-PHASE-4-PENDING 2026-05-26 on vklf.com — no change; (a.85) closed + (a.84) stays open + (a.86) opens for P-47 Shadow DOM refactor Session 1).
+- `docs/NEXT_SESSION.md` (today's complete rewrite for P-47 Shadow DOM refactor Session 1 + ## Standing carry-overs section preserving W4 Phase-4 10-step verification walkthrough verbatim + W5 deploy + W5 Phase-4 verify standing carry-overs).
+
+**Closing line:** Workstream 5 Session 1 ✅ DONE-AT-CODE-LEVEL 2026-05-24-c. Opportunistic Reviews modal idempotency polish also DONE-AT-CODE-LEVEL. P-46 implementation arc progress: Workstreams 1 + 2 + 3 = ✅ DONE-AND-VERIFIED on vklf.com; Workstream 4 = ✅ DEPLOYED-PHASE-4-PENDING (W4 Phase-4 verify deferred a second consecutive session); Workstream 5 = ✅ DONE-AT-CODE-LEVEL — DEPLOY-PENDING (deferred at director request). Next session: P-47 Shadow DOM refactor Session 1 per (a.86). Standing carry-overs: W4 Phase-4 verify + W5 deploy + W5 Phase-4 verify (all preserved verbatim in NEXT_SESSION.md ## Standing carry-overs section).
+
+---
+
 END OF DOCUMENT

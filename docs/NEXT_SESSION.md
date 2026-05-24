@@ -1,94 +1,101 @@
 # Next session
 
-**Written:** 2026-05-26 (`session_2026-05-26_p46-workstream-4-deploy-session-phase-4-verification-deferred` — end-of-session handoff after **W#2 polish P-46 Workstream 4 (Comprehensive Competitor Analysis page) ✅ DEPLOYED-PHASE-4-PENDING 2026-05-26 on vklf.com via `workflow-2-competition-scraping` → `main` ff-merge `cafd3ed..096a2ac` carrying 4 commits** (W4 S1 build `283d4d1` + W4 S1 doc-batch `8b30ab3` + W4 S2 build `5854eff` + W4 S2 doc-batch `096a2ac`). Pure deploy session of the W4 build sessions that landed cleanly at code level 2026-05-24-b + 2026-05-25; ff-merge fired against `origin/main` under ONE Rule 9 gate; Vercel auto-redeploy fired. **Phase-4 director real-Chrome verification DEFERRED to next session at director request** — full 10-step verification walkthrough drafted in-session + preserved verbatim below in the ## Launch prompt section so the next session can copy + execute it. **W4 status is now `✅ DEPLOYED-PHASE-4-PENDING` on vklf.com** — not yet ✅ DONE-AND-VERIFIED until Phase-4 PASS next session. **TWO additional pickers fired beyond the Rule 9 gate** — (1) Truncated-picker-response handling NEW informational Pattern; (2) Rule 27 Check 6 Playwright SKIP. **Schema-change-in-flight flag STAYS NO** — no schema work in W4 at all. Pre-deploy + post-merge /scoreboard both 5/5 GREEN at expected W4 S2 baselines (root tsc clean / extension tsc clean / 558 ext UNCHANGED / 783 src/lib UNCHANGED / 62 routes UNCHANGED; Check 6 SKIPPED per Rule 27). **Closes (a.83) RECOMMENDED-NEXT = P-46 Workstream 4 deploy session ✅ DEPLOYED-PHASE-4-PENDING 2026-05-26 on vklf.com**; **opens (a.84) RECOMMENDED-NEXT = P-46 Workstream 4 Phase-4 verification session** on `workflow-2-competition-scraping`.
+**Written:** 2026-05-24-c (`session_2026-05-24-c_p46-workstream-5-session-1-extension-url-form-additions-and-reviews-modal-polish` — end-of-session handoff after **W#2 polish P-46 Workstream 5 Session 1 (Extension URL save form additions — Type / Description-1 / Description-2 / Price fields) ✅ DONE-AT-CODE-LEVEL 2026-05-24-c on `workflow-2-competition-scraping` via build commit `3c981be` (4 files +225/-0) + opportunistic Reviews modal idempotency polish ✅ DONE-AT-CODE-LEVEL 2026-05-24-c via build commit `41172f1` (1 file +9/-1)**). Pure CODE session on `workflow-2-competition-scraping`; NEITHER commit pushed to main (W5 deploy DEFERRED at director request); 2 build commits sit on workflow branch awaiting future W5 deploy session. **W#4 Phase-4 director real-Chrome verification deferred a second consecutive session at director directive** — full 10-step verification walkthrough preserved verbatim below in ## Standing carry-overs section so the next session can copy + execute it without re-deriving. **TWO §4 Step 1c forced-pickers fired** — session-start (director shifted from W4 Phase-4 verify to P-46 W5 Recommended) + end-of-session next-session scope (director picked P-47 Shadow DOM refactor Session 1 Recommended). **Schema-change-in-flight flag STAYS NO** — no `prisma db push`; W5 consumes already-deployed W1 schema; Reviews modal polish is React-component-only. Pre-deploy + post-polish /scoreboard both 5/5 GREEN at new baselines (root tsc clean / extension tsc clean / 558 ext UNCHANGED / **786 src/lib +3 from baseline 783** / **62 routes UNCHANGED**); Check 6 Playwright SKIPPED per non-deploy-session convention. **Closes (a.85) RECOMMENDED-NEXT = P-46 Workstream 5 Session 1 build (opened + closed today)**; **(a.84) RECOMMENDED-NEXT = P-46 W4 Phase-4 verification STAYS OPEN** (deferred a second consecutive session — standing carry-over); **opens (a.86) RECOMMENDED-NEXT = P-47 Shadow DOM refactor Session 1** on `workflow-2-competition-scraping`.
 
 ---
 
 ## What we did this session (in plain terms)
 
-Today was the **P-46 Workstream 4 deploy session** — a pure deploy session of the two W4 build sessions that landed cleanly at code level 2026-05-24-b (Session 1 — comprehensive-analysis page route + handler + editor + read view + navigation button) and 2026-05-25 (Session 2 — internal-hyperlink TipTap extension + Link-to-URL toolbar picker + url-reference-helpers). No new code was written this session — everything that just went live had already been written in the prior two sessions; today was about shipping it to vklf.com.
+Today was a **scope-shift session**. The original launch-prompt task was the P-46 Workstream 4 Phase-4 director real-Chrome verification on vklf.com. At session-start, director deferred that task again and chose to "work on next item on roadmap" instead. A clarifying picker resolved to **P-46 Workstream 5 (Recommended)** — the extension URL save form additions per §C.5. The W5 Session 1 build landed cleanly. Then, while scanning the Reviews surface for opportunistic cosmetic polish, a real correctness bug surfaced — the `CapturedReviewAddModal` clientId was being regenerated on every Save click, which defeated the server-side P2002 dedup on retries. That got prioritized over the cosmetic candidates and shipped today too.
 
 What happened, in plain terms:
 
-- **Pre-deploy /scoreboard verification PASSED 5/5 GREEN** on `workflow-2-competition-scraping`. Same baselines as yesterday's W4 S2 close (root tsc clean / extension tsc clean / 558 ext tests / 783 src/lib tests / 62 routes). Check 6 Playwright was skipped per Rule 27 picker — director picked SKIP since the ff-merge bundle had zero `extensions/` source files (no extension dist changes to test) and the new W4 page surface has no existing Playwright spec coverage.
-- **A truncated-picker-response moment.** At the Rule 9 deploy gate moment, director's first AskUserQuestion answer rendered as a truncated string "deploy now but defer any real wor" (no trailing "k" — most likely a UI rendering truncation, not a director typo). Claude did NOT silently interpret what "real wor[k]" meant; instead Claude fired a clarifying AskUserQuestion picker offering 4 disambiguation options. Director picked "Deploy now — but pause BEFORE the push to main" which is effectively identical to default Rule 9 behavior (the standard Rule 9 disposition is: pause + ask director + then push on Yes). **This validated a new informational Pattern: "Truncated picker response → fire clarifying picker, don't silently interpret"** — could become a feedback memory if it recurs.
-- **The deploy push fired cleanly.** `git push origin main` fast-forwarded main from `ac45737` (the 2026-05-24 W3 fix-forward #5 SHA — unchanged since W3 deploy) to `096a2ac` (the W4 S2 doc-batch SHA from yesterday). The 4-commit fast-forward carried: `283d4d1` (W4 S1 build) + `8b30ab3` (W4 S1 doc-batch) + `5854eff` (W4 S2 build) + `096a2ac` (W4 S2 doc-batch).
-- **Vercel auto-redeploy fired** after the main push. ~2-3 minute build + cache invalidation. The new Comprehensive Competitor Analysis page surface is now live on vklf.com.
-- **Post-merge /scoreboard PASSED 5/5 GREEN** on `main` at the exact same baselines (no new tests, no new routes, no new dependencies — the ff-merge is a clean fast-forward of build commits that already had their tests in their build sessions).
-- **Phase-4 director real-Chrome verification was DEFERRED to next session at director request.** Director's directive was: deploy + defer the Phase-4 verify. The 10-step verification walkthrough was drafted in-session (Claude wrote out the full Phase-4 sequence the next session must follow); director's request was to preserve the walkthrough verbatim in `docs/NEXT_SESSION.md` so the next session can copy + execute it without re-deriving the sequence.
-- **TWO P-43 cwd-leak reproductions on Check 5** during /scoreboard execution — once on pre-deploy + once on post-merge. Both were caught immediately from the output content (the extension build output is structurally different from the Next.js build output — no `Route (app)` table) + recovered with the absolute `cd /workspaces/brand-operations-hub && npm run build` retry. This is the 5th+ reproduction of the P-43 cwd-leak Pattern class; a mechanical prevention candidate was flagged in CORRECTIONS_LOG §Entry 2026-05-26 (add absolute cd prefix to ALL Bash commands in `.claude/commands/scoreboard.md`, not just the extension-rooted Checks 2-3). NOT a top-tier slip — recovery was immediate + result was correct.
-- **Schema-change-in-flight flag STAYS NO** the entire session. No `prisma db push`. The W4 deploy ships UI + route-handler code consuming the already-live `ComprehensiveCompetitorAnalysis` Prisma model from W1's 2026-05-24 schema (already deployed via 2026-05-23-c W2 deploy).
+- **Session-start picker shifted scope.** Director deferred today's planned task (W4 Phase-4 verify) and asked to work on the next roadmap item. A clarifying picker offered P-46 W5 (Recommended) over P-47 Shadow DOM refactor + P-43 mechanical prevention candidate. Director picked W5.
+- **W5 Session 1 build landed cleanly.** Build commit `3c981be` (4 files +225/-0) added Type / Description-1 / Description-2 / Price fields to the extension URL save form via a new `makeTextareaField()` helper alongside the existing `makeField()` helper. The POST `/api/projects/[projectId]/competition-scraping/urls` handler allowlist + `CreateCompetitorUrlRequest` wire type both extended additively. 3 new node:test cases brought src/lib from 783 to 786. All 5 scoreboard checks GREEN at new baselines (root tsc clean / ext tsc clean / 558 ext UNCHANGED / 786 src/lib +3 / 62 routes UNCHANGED). Check 6 Playwright SKIPPED per non-deploy-session convention.
+- **§C.5 file-list inconsistency surfaced + captured informationally.** §C.5 listed `extensions/competition-scraping/src/entrypoints/popup/components/UrlAddForm.tsx` as a file W5 would touch — that file DOES NOT EXIST in the repo. The popup components directory contains other forms (CapturedTextPasteForm + CapturedVideoPasteForm + ColorSwatchPopover + HighlightTermsManager + PlatformPicker + ProjectPicker + RegionScreenshotModeButton) but no `UrlAddForm.tsx`. The URL-add form lives ONLY in the content-script at `src/lib/content-script/url-add-form.ts`. One-less-file simplification; no scope reduction; §C.5 stays frozen per Rule 18.
+- **Opportunistic Reviews modal idempotency polish landed.** While scanning the Reviews surface for cosmetic UX polish (focus order, chip preview, placeholder text), a real correctness bug surfaced: `CapturedReviewAddModal.tsx` was inlining `clientId: crypto.randomUUID()` in `handleSubmit`, which regenerated a new UUID on every Save click. The server-side P2002 dedup in `url-reviews.ts` correctly rejected duplicate clientIds — but the modal was generating new ones, so each retry-after-error appeared as a new submission. Fix: hoisted clientId to a `useState` seeded per modal-open + reset on close via a `useEffect`. Build commit `41172f1` (1 file +9/-1). All 5 scoreboard checks GREEN at unchanged baselines (no new tests — server-side dedup already covered in url-reviews.test.ts).
+- **NEW reusable Pattern memorialized.** The Reviews polish surface led to the new pattern: **"Opportunistic-polish-during-build-session — when scanning a related surface for polish, real bugs may surface alongside cosmetic candidates; prioritize real bugs."** Captured in CORRECTIONS_LOG §Entry 2026-05-24-c + design doc §B 2026-05-24-c.
+- **End-of-session picker chose next-session scope.** Director's free-text "Other" answer: *"for the next session, defer any real world testing items that I need to do. instead work on the next item on our road map for workflow#2"*. Follow-up picker offered P-47 Shadow DOM refactor Session 1 (Recommended) + P-26 below-fold scroll capture + P-43 mechanical prevention. Director picked P-47.
+- **THREE deferred items captured for next session.** W4 Phase-4 real-Chrome verification (carried from start of session — second consecutive defer) + W5 deploy session (NEW today — 2 build commits sit unpushed-to-main) + W5 Phase-4 real-Chrome verification (NEW today — pairs with W5 deploy defer). All destinations preserved verbatim in ## Standing carry-overs section below.
+- **Schema-change-in-flight flag STAYS NO** the entire session. No `prisma db push`. W5 consumes the already-deployed W1 schema (live since W1's 2026-05-24 + deployed since W2's 2026-05-23-c); Reviews modal polish is React-component-only.
 
-**The deploy session landed cleanly + decoupled cleanly from the Phase-4 verify session at director's request.** The "Phase-4 verification fix-forward cascade in a single deploy session" Pattern (memorialized 2026-05-24 W3 deploy) describes what happens IF Phase-4 surfaces issues in-session; today validated the alternate branch — when director defers Phase-4 to next session, the deploy session is a single-deploy with zero fix-forwards; the Phase-4 verification becomes its own next session (with its own potential fix-forward cascade if issues surface there).
+**The session landed cleanly through scope-shift + opportunistic-polish + verbatim-preservation of carry-overs.** No top-tier slips; no fix-forwards; no Rule 9 gates fired; ONE end-of-session push planned to `origin/workflow-2-competition-scraping` carrying 3 commits.
 
 ## What we'll do next session (in plain terms)
 
-Next session is the **P-46 Workstream 4 Phase-4 verification session** — director performs the 10-step real-Chrome verification walkthrough drafted today on the live vklf.com site.
+Next session is the **P-47 Shadow DOM refactor Session 1** — refactor the content-script video-capture form's mounting strategy from the 80-event-listener band-aid shipped in P-45 Build #2 (commit `ee8c79d`) to proper Shadow DOM isolation.
 
-What the Phase-4 verification session covers:
+What the P-47 Session 1 covers:
 
-- **10-step verification walkthrough** (PRESERVED VERBATIM in the ## Launch prompt section below — Claude must copy + execute this verbatim, not re-derive it). The walkthrough covers: navigate from the Competition Data page → click the standalone "→ Comprehensive Competitor Analysis" button → page loads + shows empty-state OR existing content → toggle edit mode → type body content into the rich-text editor → insert a `#url/<urlId>` shorthand via the "Link to URL" toolbar dropdown → toggle Done (read mode) → click the rendered hyperlink → confirm navigation to the URL detail page → use the URL detail page's back-button to return → toggle edit mode one more time + confirm last-edited timestamp updated. Cross-platform exception applies — the new page is per-Project not per-platform, so director picks any one platform.
-- **Director real-Chrome execution** — director runs the 10-step walkthrough live on vklf.com in real Chrome on Mac while Claude observes director's narration + screenshots OR pasted observations of each step's outcome.
-- **PASS or fix-forward branch.** If all 10 steps PASS clean → W4 closes ✅ DONE-AND-VERIFIED 2026-05-XX on vklf.com; new (a.85) opens for P-46 Workstream 5 (Extension URL save form additions + manual Reviews entry) first build session. If any step surfaces an issue → fix-forward cascade per the 2026-05-24 W3 deploy Pattern (each fix-forward = its own build commit + its own Rule 9 gate + its own Phase-4 reverify cycle).
-- **End-of-session doc-batch** — header bumps across the standard 7 Group A docs + 1 Group B doc (`COMPETITION_DATA_V2_DESIGN.md` new §B entry capturing Phase-4 outcome). If W4 closes ✅ DONE-AND-VERIFIED, ROADMAP P-46 entry flips WS#4 to ✅ DONE-AND-VERIFIED + (a.84) closed + new (a.85) opened for WS#5 build session #1.
+- **Refactor `extensions/competition-scraping/src/lib/content-script/video-capture-form.ts`.** Currently the form mounts a backdrop div + content div directly into `document.body`. The refactor changes the mount strategy to a single `<div>` host element with `attachShadow({mode:'open'})` and renders the form inside the shadow root instead. Events don't bubble out of a Shadow DOM into the page DOM by default, so the page-level isolation becomes structural rather than per-listener.
+- **Refactor `extensions/competition-scraping/src/lib/content-script/styles.ts`.** All `.plos-cs-form-*` CSS rules need to be injected inside the shadow root via a `<style>` tag (shadow DOM doesn't inherit page styles). Either inline the styles inside the shadow root at mount time, or import them as a string and inject. Most-thorough/reliable per `feedback_recommendation_style.md` is the inline-at-mount approach (no separate string-import indirection).
+- **Remove the 80-event-listener band-aid.** Once Shadow DOM isolation works, the 20-events × 4-inputs = 80-listeners-per-form-open isolation in `video-capture-form.ts` can be deleted. Memorialize the deletion in the §B entry so the band-aid → Shadow DOM transition is traceable in git history.
+- **No popup-form changes.** Popup forms (CapturedVideoPasteForm + CapturedTextPasteForm + the missing UrlAddForm) are already isolated since the popup is a separate document context. P-47 is content-script-only.
+- **Empirical verification:** load the fresh extension .crx in Chrome on Amazon (where Issue 2's focus-stealing originally surfaced); confirm the form opens + accepts input + saves without any page-level focus interference. Empirical equivalent verification of the band-aid's behavior. Walk through other platforms (Ebay / Walmart / Etsy / Aliexpress / Macys / Bestbuy) at director's discretion — Amazon is the canonical verification target since that's where Issue 2 surfaced.
+- **End-of-session doc-batch** covers the standard 7 Group A docs + 1 Group B doc (likely `docs/COMPETITION_SCRAPING_DESIGN.md` for the Shadow DOM refactor narrative since this is extension structural; alternatively or additionally `docs/COMPETITION_DATA_V2_DESIGN.md` if any cross-references land — TBD by session shape).
 
-**Schema-change-in-flight flag** STAYS **NO** at the Phase-4 session start (no schema work in W4 Phase-4 verify at all; potential fix-forwards may also stay schema-clean since the W4 surface is UI-only).
+**Schema-change-in-flight flag** STAYS **NO** at the P-47 Session 1 start (no schema work in P-47 at all; pure content-script DOM mount refactor).
 
-**After W4 closes ✅ DONE-AND-VERIFIED,** P-46 Workstream 5 (Extension form additions + manual Reviews entry) is the LAST remaining workstream of P-46 — ~1-2 sessions per §C.5 adding Type / Description-1 / Description-2 / Price fields to the extension URL save form + manual Reviews entry tweaks on vklf.com based on real-Chrome usage. Then a Workstream 5 deploy closes the P-46 arc end-to-end.
+**After P-47 ships,** the standing carry-overs (W4 Phase-4 verify + W5 deploy + W5 Phase-4 verify) remain queued. Director may pick them up in any order in subsequent sessions; the verbatim walkthroughs preserved below ensure no re-derivation overhead when they do.
 
 ## What's still left on the total roadmap (in plain terms)
 
-As of session-end 2026-05-26 (W4 ✅ DEPLOYED-PHASE-4-PENDING; Phase-4 verify NEXT):
+As of session-end 2026-05-24-c (P-46 W5 Session 1 ✅ DONE-AT-CODE-LEVEL; W5 deploy + W4 Phase-4 verify + W5 Phase-4 verify all deferred; P-47 NEXT):
 
-- **P-46 Workstream 4 Phase-4 verification session** (NEXT). 1 session. Director runs the 10-step real-Chrome verification walkthrough (preserved verbatim below) on vklf.com. If PASS → W4 closes ✅ DONE-AND-VERIFIED. If issues surface → fix-forward cascade per the W3-deploy Pattern.
-- **P-46 Workstream 5 (Extension form additions + manual Reviews entry).** ~1-2 sessions per §C.5. Adds Type / Description-1 / Description-2 / Price fields to the extension URL save form. One deploy session ends this workstream + closes the P-46 arc.
-- **P-47 Shadow DOM refactor (LOW; AFTER P-46).** ~2-3 sessions. Replaces the 80-event-listener band-aid from P-45 Build #2's Issue 2 fix with proper Shadow DOM isolation. LOW priority since band-aid works empirically.
-- **P-26 below-fold scroll capture (LOW).** ~1-2 sessions. Current two-captures workaround works fine. May be reduced in urgency now that W#2 + W#3 + W#4 surfaces are deployed.
+- **P-47 Shadow DOM refactor Session 1** (NEXT). ~1 session of ~2-3 estimated. Pure content-script structural refactor of `video-capture-form.ts` mount strategy + style injection inside shadow root + removal of the 80-event-listener band-aid.
+- **Standing carry-over: P-46 W4 Phase-4 verification session.** Deferred a second consecutive session at director's request. 1 session when director is ready for real-world testing. The 10-step walkthrough is preserved verbatim in ## Standing carry-overs section below.
+- **Standing carry-over: P-46 W5 deploy session.** 2 build commits sit on `workflow-2-competition-scraping` awaiting ff-merge to main + Vercel auto-redeploy + fresh extension .crx zip. 1 session when director is ready for real-world testing.
+- **Standing carry-over: P-46 W5 Phase-4 verification session.** Pairs with W5 deploy. ~1 session.
+- **P-46 Workstream 5 Session 2 (optional polish — TBD).** §C.5 estimate was 1-2 sessions; W5 Session 1 today covered the user-visible scope after the popup-form file simplification. Session 2 may be redundant; director picks at next W5 deploy session whether to scope additional W5 work before deploy.
+- **P-26 below-fold scroll capture (LOW).** ~1-2 sessions. Current two-captures workaround works fine.
 - **P-27 Bug #9 (Amazon hover-preview deeper-walk) + Bug #15 (Ebay native-controls quirk) — DEFERRED LOW.** May be obsolete now that P-46 redesigned the URL detail page + Competition Data table surfaces they live in.
-- **P-43 mechanical prevention candidate (LOW informational).** Add absolute `cd /workspaces/brand-operations-hub` prefix to ALL Bash commands in `.claude/commands/scoreboard.md` (specifically Check 5's `npm run build` + route-count grep), not just the extension-rooted Checks 2-3. Not blocking any workstream; can happen any time as a polish-detour.
-- **W#2 graduation** after P-46 + P-47 + P-26 ship. Then W#3-W#14 (twelve more workflows on the roadmap; none started yet).
-- **Optional offline step (any time, NOT blocking):** raise the Supabase Global File Size Limit to enable bucket-level 100 MB cap on `competition-scraping-videos`. Director-independent; can happen any time.
+- **P-43 mechanical prevention candidate (LOW informational).** Add absolute `cd /workspaces/brand-operations-hub` prefix to ALL Bash commands in `.claude/commands/scoreboard.md` (specifically Check 5's `npm run build` + route-count grep), not just the extension-rooted Checks 2-3. Not blocking any workstream.
+- **W#2 graduation** after P-46 + P-47 + P-26 ship + standing carry-overs all close. Then W#3-W#14 (twelve more workflows on the roadmap; none started yet).
+- **Optional offline step (any time, NOT blocking):** raise the Supabase Global File Size Limit to enable bucket-level 100 MB cap on `competition-scraping-videos`. Director-independent.
 
 ---
 
-**For:** the next Claude Code session — **P-46 Workstream 4 Phase-4 verification session** (estimated ~30-90 min depending on whether Phase-4 surfaces any fix-forwards: pre-build doc reads ~5-10 min + branch state verify ~2 min + director runs 10-step verification walkthrough live on vklf.com ~15-30 min + 0-N fix-forwards ~10-30 min each + end-of-session doc-batch ~15-20 min). Per Rule 23 Change Impact Audit: **VERIFICATION SESSION** (no new code unless fix-forwards land; pure director-driven verification of the W4 deploy + zero-or-N fix-forward cycles). **Schema-change-in-flight flag stays NO** (no transition; no schema work in W4 Phase-4 verify at all). **Rule 9 triggers planned this session: ZERO MINIMUM + 0-N for any fix-forward pushes.** **Pushes planned per `feedback_approval_scope_per_decision_unit.md`:** 1 minimum (end-of-session doc-batch push to `origin/workflow-2-competition-scraping`) + 0-N fix-forward pushes if Phase-4 issues surface + 1 end-of-session ff-merge push to `origin/main` for doc-batch if W4 closes ✅ DONE-AND-VERIFIED.
+**For:** the next Claude Code session — **P-47 Shadow DOM refactor Session 1** (estimated ~60-120 min: pre-build doc reads ~5-10 min + branch state verify ~2 min + Rule 14f session-start picker ~2 min + content-script refactor ~30-60 min + style injection ~10-20 min + band-aid removal ~5-10 min + empirical Chrome verification ~10-20 min + end-of-session doc-batch ~15-20 min). Per Rule 23 Change Impact Audit: **STRUCTURAL REFACTOR + EXTENSION-ONLY** (DOM mount strategy change inside the content script + CSS rule re-injection inside shadow root + deletion of 80-event-listener band-aid; no new schema; no new routes; no new dependencies). **Schema-change-in-flight flag stays NO** (no transition; no schema work in P-47 at all). **Rule 9 triggers planned this session: ZERO** (pure code session; no push to main). **Pushes planned per `feedback_approval_scope_per_decision_unit.md`:** 1 minimum (end-of-session push to `origin/workflow-2-competition-scraping` carrying P-47 build commit + this doc-batch).
 
 ---
 
 ## Status of today's session
 
-**W#2 polish P-46 Workstream 4 (Comprehensive Competitor Analysis page) ✅ DEPLOYED-PHASE-4-PENDING 2026-05-26 on vklf.com** via ff-merge `cafd3ed..096a2ac` carrying 4 commits (W4 S1 build `283d4d1` + W4 S1 doc-batch `8b30ab3` + W4 S2 build `5854eff` + W4 S2 doc-batch `096a2ac`). Pure deploy session of the W4 build sessions that landed cleanly at code level 2026-05-24-b + 2026-05-25. Phase-4 director real-Chrome verification DEFERRED to next session at director request — 10-step walkthrough drafted + preserved verbatim below.
+**W#2 polish P-46 Workstream 5 Session 1 (Extension URL save form additions — Type / Description-1 / Description-2 / Price fields) ✅ DONE-AT-CODE-LEVEL 2026-05-24-c on `workflow-2-competition-scraping` via build commit `3c981be` (4 files +225/-0) + opportunistic Reviews modal idempotency polish ✅ DONE-AT-CODE-LEVEL 2026-05-24-c via build commit `41172f1` (1 file +9/-1)**. Pure CODE session; NEITHER commit pushed to main (W5 deploy DEFERRED at director request).
 
-**Session shape (DEPLOY SESSION — single-branch entry then ff-merge to main; ONE Rule 9 gate fired; THREE pushes planned):**
+**Session shape (CODE SESSION — single-branch; ZERO Rule 9 gates; TWO §4 Step 1c forced-pickers; ONE push planned):**
 
-- Pre-build reads at session start (read `docs/COMPETITION_DATA_V2_DESIGN.md` §C.4 + §B 2026-05-24-b + §B 2026-05-25 + ROADMAP P-46 entry).
-- Rule 14f session-start confirmation NOT FIRED (next-session task unambiguous + director gave clear deploy-now directive).
-- Pre-deploy /scoreboard on `workflow-2-competition-scraping` — 5/5 GREEN at W4 S2 baselines.
-- Rule 27 Check 6 Playwright SKIP picker — director picked SKIP.
-- Rule 9 gate moment — truncated-picker-response disambiguated via clarifying picker; director picked "Deploy now — but pause BEFORE the push to main" (effectively default Rule 9 Yes).
-- `git push origin main` executed cleanly; main fast-forwarded `ac45737..096a2ac` (4 commits).
-- Vercel auto-redeploy fired.
-- Post-merge /scoreboard on main — 5/5 GREEN at same baselines.
-- Phase-4 director real-Chrome verification DEFERRED to next session at director request.
-- 10-step verification walkthrough drafted in-session + preserved verbatim below.
-- End-of-session doc-batch covers the 8-doc bundle (ROADMAP + CHAT_REGISTRY + DOCUMENT_MANIFEST + CORRECTIONS_LOG with new §Entry 2026-05-26 + HANDOFF_PROTOCOL + CLAUDE_CODE_STARTER + this NEXT_SESSION + the new §B 2026-05-26 entry on COMPETITION_DATA_V2_DESIGN.md).
-- THREE pushes this session: 1 deploy push to `origin/main` (DONE under Rule 9 Yes at `096a2ac`) + 1 end-of-session doc-batch push to `origin/workflow-2-competition-scraping` + 1 end-of-session ff-merge + push to `origin/main` for doc-batch (operationally adjacent to deploy push per `feedback_approval_scope_per_decision_unit.md` — does NOT re-invoke Rule 9).
+- Pre-build reads at session start (read `docs/COMPETITION_DATA_V2_DESIGN.md` §C.5 + ROADMAP P-46 entry + relevant extension content-script file).
+- Rule 14f session-start picker FIRED — director deferred W4 Phase-4 verify + picked P-46 W5 (Recommended) via clarifying picker.
+- W5 Session 1 build landed via `3c981be` (4 files +225/-0).
+- /scoreboard after W5 build — 5/5 GREEN at new baselines (786 src/lib +3).
+- Opportunistic Reviews polish scan → real correctness bug surfaced → fixed via `41172f1` (1 file +9/-1).
+- /scoreboard after polish — 5/5 GREEN at unchanged baselines.
+- End-of-session §4 Step 1c picker FIRED — director picked P-47 Shadow DOM refactor Session 1 (Recommended).
+- End-of-session doc-batch covers the 8-doc bundle (ROADMAP + CHAT_REGISTRY + DOCUMENT_MANIFEST + CORRECTIONS_LOG with new §Entry 2026-05-24-c + HANDOFF_PROTOCOL + CLAUDE_CODE_STARTER + this NEXT_SESSION + the new §B 2026-05-24-c entry on COMPETITION_DATA_V2_DESIGN.md).
+- ONE push this session: end-of-session push of build commits `3c981be` + `41172f1` + today's doc-batch together to `origin/workflow-2-competition-scraping` (operationally adjacent; NO Rule 9 gate fired — no destructive operations this session, no main push).
 
-**§4 Step 1c forced-picker NOT FIRED** — next-session task unambiguous (Phase-4 verification of W4 deploy; the 10-step walkthrough is verbatim-preserved below).
+**§4 Step 1c forced-picker FIRED TWICE** — both pickers resolved per `feedback_recommendation_style.md` to most-thorough/reliable Recommended options.
 
-**ZERO new DEFERRED items at session end (Rule 26)** — Tasks #1-#7 + #9 completed in-session + Task #8 (Fix-forward Phase-4 issues) deleted when director deferred Phase-4 + Task #10 `DEFERRED: P-46 W4 Phase-4 real-Chrome verification` created + closed in this same end-of-session pass after NEXT_SESSION.md + ROADMAP P-46 entry both received the destination capture.
+**THREE DEFERRED items captured for next session at end-of-session sweep (Rule 26):**
 
-**ONE NEW INFORMATIONAL CORRECTIONS_LOG §Entry this session — the P-46 Workstream 4 DEPLOY §Entry 2026-05-26** capturing (a) W4 ✅ DEPLOYED-PHASE-4-PENDING outcome; (b) NEW informational Pattern "Truncated picker response → fire clarifying picker, don't silently interpret"; (c) LOW informational dual P-43 cwd-leak reproductions on Check 5 + mechanical prevention candidate identified; (d) calibration data point — W4 deploy landed without fix-forwards (Phase-4 deferred so no fix-forward cascade possible this session).
+- **Task #1** `DEFERRED: P-46 W4 Phase-4 real-Chrome verification` — carried from start of session (originally deferred 2026-05-26; deferred again today; second consecutive defer)
+- **Task #11** `DEFERRED: P-46 W5 deploy session` — NEW today (2 build commits sit unpushed-to-main; deploy when director ready for real-world testing again)
+- **Task #12** `DEFERRED: P-46 W5 Phase-4 real-Chrome verification` — NEW today (pairs with W5 deploy defer)
 
-**TWENTY-EIGHTH end-of-session run under the Rule 30 + §4 Step 4b template** (sequence prior to today: 2026-05-21-b → 2026-05-21-c → 2026-05-21-d → 2026-05-22 → 2026-05-22-b → 2026-05-21 → 2026-05-22-c → 2026-05-22-d → 2026-05-22-e → 2026-05-22-f → 2026-05-22-g → 2026-05-22-h → 2026-05-22-i → 2026-05-23 → 2026-05-24 → 2026-05-25 → 2026-05-26 → 2026-05-27 → 2026-05-28 → 2026-05-23-b → 2026-05-23-c → 2026-05-23-d → 2026-05-23-e → 2026-05-23-f → 2026-05-24 → 2026-05-24-b → 2026-05-25 → today 2026-05-26). The 3 plain-terms sections above continue carrying the 3 mandatory plain-terms sections at the top per director's standing 2026-05-21 directive.
+All three destinations captured verbatim in ## Standing carry-overs section below. Tasks #2-#10 all completed in-session.
+
+**ONE NEW INFORMATIONAL CORRECTIONS_LOG §Entry 2026-05-24-c** — the P-46 Workstream 5 Session 1 + Reviews modal polish closing §Entry capturing §C.5 file-list inconsistency observation + NEW Pattern "Opportunistic-polish-during-build-session" + director double-defer informational calibration data point.
+
+**TWENTY-NINTH end-of-session run under the Rule 30 + §4 Step 4b template** (sequence prior to today: 2026-05-21-b → 2026-05-21-c → 2026-05-21-d → 2026-05-22 → 2026-05-22-b → 2026-05-21 → 2026-05-22-c → 2026-05-22-d → 2026-05-22-e → 2026-05-22-f → 2026-05-22-g → 2026-05-22-h → 2026-05-22-i → 2026-05-23 → 2026-05-24 → 2026-05-25 → 2026-05-26 → 2026-05-27 → 2026-05-28 → 2026-05-23-b → 2026-05-23-c → 2026-05-23-d → 2026-05-23-e → 2026-05-23-f → 2026-05-24 → 2026-05-24-b → 2026-05-25 → 2026-05-26 → today 2026-05-24-c). The 3 plain-terms sections above + the parent's Personalized Handoff continue carrying the 3 mandatory plain-terms sections at the top per director's standing 2026-05-21 directive.
 
 ---
 
 ## Branch
 
-**`workflow-2-competition-scraping`** — entered at start of next session; the P-46 Workstream 4 Phase-4 verification session begins here. The `./resume` script (or `./resume-workflow 2`) will switch you to `workflow-2-competition-scraping`. Verify with `git branch --show-current` immediately after `./resume`; should be on `workflow-2-competition-scraping`. If you're on `main`, STOP and surface to director.
+**`workflow-2-competition-scraping`** — entered at start of next session; the P-47 Shadow DOM refactor Session 1 begins here. The `./resume` script (or `./resume-workflow 2`) will switch you to `workflow-2-competition-scraping`. Verify with `git branch --show-current` immediately after `./resume`; should be on `workflow-2-competition-scraping`. If you're on `main`, STOP and surface to director.
 
-**Expected branch state on entry:** `workflow-2-competition-scraping` exactly even with `origin/workflow-2-competition-scraping` at today's end-of-session doc-batch commit. `main` should be at the same commit as `workflow-2-competition-scraping` (both branches even at the doc-batch SHA, since today's deploy ff-merged the W4 commits to main + the end-of-session ff-merge ships the doc-batch to main as well). Verify with `git log main..HEAD --oneline` — should show ZERO commits ahead (both branches even). The W4 deploy has ALREADY happened — next session does NOT deploy again unless fix-forwards land.
+**Expected branch state on entry:** `workflow-2-competition-scraping` exactly even with `origin/workflow-2-competition-scraping` at today's end-of-session doc-batch commit. `main` is BEHIND by 3 commits (today's 2 build commits + today's doc-batch). Verify with `git log main..HEAD --oneline` showing 3 commits ahead (NOT zero this time, unlike yesterday's pointer expectation where both branches were even at the deploy SHA). The W5 deploy has NOT happened — next session does NOT deploy unless director decides to bundle a W5 deploy with the P-47 session (NOT recommended; deploys are their own sessions per the "Multi-session workstream deploy gate timing" Pattern).
 
 ---
 
@@ -96,36 +103,60 @@ As of session-end 2026-05-26 (W4 ✅ DEPLOYED-PHASE-4-PENDING; Phase-4 verify NE
 
 Read `docs/CLAUDE_CODE_STARTER.md` and follow every rule in it. **As Step 7b says (NEW 2026-05-21), produce the plain-terms summary of what this session will do BEFORE I give go-ahead.** Today's task:
 
-**W#2 polish P-46 Workstream 4 Phase-4 verification session, on `workflow-2-competition-scraping`.** Closes **(a.84) RECOMMENDED-NEXT**. This is the Phase-4 verification session of Workstream 4 — director performs the 10-step real-Chrome verification walkthrough drafted in the prior session (preserved verbatim below) on the live vklf.com Comprehensive Competitor Analysis page. If all 10 steps PASS → W4 closes ✅ DONE-AND-VERIFIED + new (a.85) opens for P-46 Workstream 5 first build session. If any issue surfaces → fix-forward cascade per the 2026-05-24 W3 deploy Pattern (each fix-forward = own build commit + own Rule 9 gate + own Phase-4 reverify cycle).
+**W#2 polish P-47 Shadow DOM refactor Session 1, on `workflow-2-competition-scraping`.** Closes **(a.86) RECOMMENDED-NEXT**. Pure-code structural refactor session — replaces the 80-event-listener band-aid shipped in P-45 Build #2 (commit `ee8c79d`, 2026-05-22-i) with proper Shadow DOM isolation in the content-script video-capture-form mount strategy.
 
-VERIFICATION session — ZERO Rule 9 gates planned minimum + 0-N for any fix-forward pushes. No new schema work. No new npm dependencies. Phase-4 verifies that the W4 deploy from 2026-05-26 (the 4 W4 commits now live on vklf.com) works end-to-end in real Chrome.
+CODE session — ZERO Rule 9 gates planned. No new schema work. No new npm dependencies. No main push. Pure refactor of existing extension content-script code.
 
-Verify branch state with `git branch --show-current` before any doc reads — should be `workflow-2-competition-scraping`. If you're on `main`, STOP and surface to director. Verify both branches' SHA relationships with `git log main..HEAD --oneline` — should show ZERO commits ahead (both branches even at today's end-of-session doc-batch SHA after the ff-merge that ships this doc-batch to main).
+Verify branch state with `git branch --show-current` before any doc reads — should be `workflow-2-competition-scraping`. If you're on `main`, STOP and surface to director. Verify both branches' SHA relationships with `git log main..HEAD --oneline` — should show 3 commits ahead (today's 2 build commits + today's doc-batch; main is BEHIND because W5 deploy was deferred).
 
 **Per HANDOFF_PROTOCOL Rule 21 + Rule 22 — Pre-build read list:**
 
-- `docs/CLAUDE_CODE_STARTER.md` (mandatory start-of-session; Step 7b plain-terms summary REQUIRED before any heavy reads or Phase-4 verification).
-- `docs/ROADMAP.md` lines 1-30 (header) + the P-46 polish-backlog entry (the Workstream sub-status grid showing WS#4 ✅ DEPLOYED-PHASE-4-PENDING 2026-05-26 on vklf.com via ff-merge `cafd3ed..096a2ac` + (a.84) RECOMMENDED-NEXT = Phase-4 verify — the binding input for today's verification mechanics).
-- **`docs/COMPETITION_DATA_V2_DESIGN.md`** with focus on **§C.4 Workstream 4 implementation outline** + **§A.4 + §A.5 (the design decisions Sessions 1-2 consumed)** + **§B 2026-05-24-b (W4 S1's closing entry)** + **§B 2026-05-25 (W4 S2's closing entry)** + **§B 2026-05-26 (today's deploy session closing entry)**.
-- `docs/HANDOFF_PROTOCOL.md` Rule 9 (only fires this session for any fix-forward push) + Rule 14f (will fire at most ONCE at session-start to confirm Phase-4 verify is the right scope) + Rule 18 (§A frozen; §B new entry for the Phase-4 verify session if there are findings or fix-forwards) + Rule 21 + Rule 22 (pre-build read list) + Rule 23 (Change Impact Audit — VERIFICATION SESSION) + Rule 25 (Multi-Workflow — main push only for fix-forwards) + Rule 26 (DEFERRED items registry) + Rule 27 (Playwright SKIP condition continues to apply) + Rule 30 (Session bookends) + §4 Step 4b extended template.
-- `feedback_approval_scope_per_decision_unit.md` (push count + ping-pong + doc-batch push pattern).
-- The "Phase-4 verification fix-forward cascade in a single deploy session" Pattern from CORRECTIONS_LOG §Entry 2026-05-24 (in case fix-forwards land today).
+- `docs/CLAUDE_CODE_STARTER.md` (mandatory start-of-session; Step 7b plain-terms summary REQUIRED before any heavy reads or refactor).
+- `docs/ROADMAP.md` lines 1-30 (header) + the **P-47 polish-backlog entry** (line ~237 — the canonical scope-and-where description with file paths + severity + rationale + cross-references to P-45 Build #2's Issue 2 fix narrative) + the P-46 polish-backlog entry's WS#5 status flip (so you're aware W5 is DONE-AT-CODE-LEVEL pending deploy).
+- `extensions/competition-scraping/src/lib/content-script/video-capture-form.ts` (the file being refactored — current mount strategy + the 80-event-listener band-aid that gets deleted as part of the refactor).
+- `extensions/competition-scraping/src/lib/content-script/styles.ts` (all `.plos-cs-form-*` CSS rules that need to be injected inside the shadow root).
+- `docs/HANDOFF_PROTOCOL.md` Rule 14f (will fire at most ONCE at session-start to confirm P-47 Session 1 scope) + Rule 18 (Group B design docs append-only) + Rule 21 + Rule 22 (pre-build read list) + Rule 23 (Change Impact Audit — STRUCTURAL REFACTOR + EXTENSION-ONLY) + Rule 25 (Multi-Workflow — workflow-2 only; no main push) + Rule 26 (DEFERRED items registry — three standing carry-overs already captured below; do NOT delete; carry them through to next session) + Rule 27 (Playwright — TBD per session scope) + Rule 30 (Session bookends) + §4 Step 4b extended template.
+- `feedback_approval_scope_per_decision_unit.md` (push count + ping-pong pattern; will not apply to main this session — pure workflow branch session).
+- The P-45 Build #2 closing §Entry 2026-05-22-i in CORRECTIONS_LOG (the Issue 2 fix that shipped the band-aid; P-47 closes the band-aid by replacing it with Shadow DOM isolation).
+- Optionally: `docs/COMPETITION_SCRAPING_DESIGN.md` for content-script architecture context (if the design doc has Shadow DOM precedent or guidance; unlikely since P-47 is the first Shadow DOM mount in the extension).
 
-**Task shape (P-46 Workstream 4 Phase-4 verification session):**
+**Task shape (P-47 Shadow DOM refactor Session 1):**
 
-1. **Plain-terms session-start summary per Rule 30** BEFORE any heavy reads or verification. Cover: what we'll do in the session (Phase-4 director real-Chrome verification of the W4 deploy from 2026-05-26 via the 10-step walkthrough preserved below), schema-change-in-flight flag stays NO, ZERO Rule 9 gates planned minimum + 0-N for fix-forwards.
+1. **Plain-terms session-start summary per Rule 30** BEFORE any heavy reads or refactor. Cover: what we'll do in the session (Shadow DOM refactor of content-script video-capture-form mount + style injection inside shadow root + deletion of 80-event-listener band-aid + empirical Chrome verification on Amazon), schema-change-in-flight flag stays NO, ZERO Rule 9 gates planned.
 
 2. **Pre-build reads** — execute the pre-build read list above. ~5-10 minutes.
 
-3. **Branch state verify** — `git branch --show-current` (should be `workflow-2-competition-scraping`) + `git log main..HEAD --oneline` (should show 0 commits — both branches even at the doc-batch SHA).
+3. **Branch state verify** — `git branch --show-current` (should be `workflow-2-competition-scraping`) + `git log main..HEAD --oneline` (should show 3 commits — today's 2 build commits + today's doc-batch; main is BEHIND because W5 deploy was deferred).
 
-4. **Rule 14f session-start confirmation (if needed)** — confirm Phase-4 verification is the right scope this session (no pre-verification concerns). Director picks; recommended path per `feedback_recommendation_style.md` is proceed-to-verification.
+4. **Rule 14f session-start confirmation** — confirm P-47 Session 1 scope is the right scope this session. Per `feedback_recommendation_style.md` recommended path is proceed-to-refactor with full Shadow DOM + style-injection + band-aid-deletion bundle. Director picks; if director shifts scope, fire clarifying picker between standing carry-overs (W4 Phase-4 verify / W5 deploy / W5 Phase-4 verify) per `feedback_recommendation_style.md`.
 
-5. **Phase-4 director real-Chrome verification — execute the 10-step walkthrough VERBATIM** (preserved below; do NOT re-derive or paraphrase).
+5. **Shadow DOM refactor of `video-capture-form.ts`:** convert the current `document.body`-mounted backdrop+content divs to a single host `<div>` with `attachShadow({mode:'open'})` + render the form inside the shadow root. Preserve all existing form behavior — field rendering, save handlers, region-screenshot interaction, etc. The mount strategy changes; the form contents don't.
+
+6. **Style injection inside shadow root:** create a `<style>` tag inside the shadow root + inject all `.plos-cs-form-*` CSS rules from `styles.ts`. Most-thorough/reliable per `feedback_recommendation_style.md` is inline-at-mount (import the CSS rules as a string from `styles.ts` and inject inside the shadow root). Alternative: duplicate the rules inline in `video-capture-form.ts` (NOT recommended — drift risk).
+
+7. **Delete the 80-event-listener band-aid.** Once Shadow DOM isolation works, the 20-events × 4-inputs = 80-listeners-per-form-open isolation in `video-capture-form.ts` can be deleted. Verify with empirical Chrome test on Amazon (the platform where Issue 2 surfaced) that focus-stealing does not reproduce with the band-aid removed + Shadow DOM in place.
+
+8. **Empirical Chrome verification.** Build a fresh extension zip; load in Chrome on Amazon; trigger the video-capture form; confirm: form opens cleanly + accepts input + saves cleanly + no page-level focus interference. Walk through Ebay / Walmart / Etsy / Aliexpress / Macys / Bestbuy at director's discretion (Amazon is canonical since that's where Issue 2 surfaced; cross-platform verification optional but recommended).
+
+9. **/scoreboard verification** at session-end. Expected 5/5 GREEN at unchanged baselines (no new tests for a structural refactor; existing tests should pass). Check 6 Playwright may apply if the refactor changes any extension Playwright spec assertions; likely SKIPPED.
+
+10. **End-of-session doc-batch** covers ROADMAP (header bump + P-47 entry status flip to ✅ DONE-AT-CODE-LEVEL 2026-05-XX OR ✅ DONE-AND-VERIFIED 2026-05-XX based on empirical-Chrome outcome) + CHAT_REGISTRY (header bump — 152nd Claude Code session) + DOCUMENT_MANIFEST (header bump) + CORRECTIONS_LOG (header bump + new §Entry capturing the refactor outcome + any new reusable Patterns surfaced — likely "Shadow DOM mount refactor of content-script form for page-level isolation without per-event listener band-aid") + NEXT_SESSION.md (rewritten for next-session task per session-end forced-picker outcome) + HANDOFF_PROTOCOL (header bump only — no new rules expected) + CLAUDE_CODE_STARTER (header bump only) + Group B doc per session scope (likely `docs/COMPETITION_SCRAPING_DESIGN.md` for the Shadow DOM refactor narrative; alternatively or additionally `docs/COMPETITION_DATA_V2_DESIGN.md` if any cross-references land). The standing carry-overs section (W4 Phase-4 verify + W5 deploy + W5 Phase-4 verify) must carry forward unchanged into the next NEXT_SESSION.md.
+
+**Per `feedback_recommendation_style.md` (most thorough/reliable) + `feedback_default_to_recommendation.md`:** any picker that fires — surface the recommended path + default to it if director defers.
+
+**Per Rule 14a tightening from 2026-05-24:** if any aspect of the Shadow DOM refactor feels under-specified in the P-47 polish-backlog entry, surface the gap to director via Rule 14f picker BEFORE the code change lands.
+
+**Schema-change-in-flight flag:** STAYS **NO** (no schema work in P-47 at all; pure content-script DOM mount refactor).
 
 ---
 
-### 10-step Phase-4 verification walkthrough (PRESERVED VERBATIM from 2026-05-26 deploy session — director must follow each step in order; Claude observes director's narration + screenshots OR pasted observations of each step's outcome)
+## Standing carry-overs (deferred real-world testing)
+
+The following three real-world-testing items are deferred at director's request. They carry forward across sessions until director picks them up. Each is preserved verbatim below so any future session can copy + execute without re-deriving the verification mechanics.
+
+### (a) P-46 Workstream 4 Phase-4 director real-Chrome verification
+
+**Status:** DEFERRED a second consecutive session (originally deferred 2026-05-26 W4 deploy session; re-deferred 2026-05-24-c today at director directive *"defer any real world testing items that I need to do"*).
 
 **Pre-flight setup:**
 
@@ -156,11 +187,11 @@ On a fresh line, click the **"Link to URL"** dropdown button in the toolbar. Exp
 
 **Step 6 — Toggle Done (transition to read mode).**
 
-Click the "Done" button (the same button that was "Edit" before). Expected: the page transitions back from edit-mode to read-mode. The editor is replaced by a static rich-text rendering of the same content + the last-edited timestamp at the bottom of the page updates to the current time. **Verify:** the content you just typed renders cleanly in read mode (Bold + Italic + H2 all visually distinct + the 🔗 prefix is still in front of the hyperlink + the hyperlink is still blue underlined).
+Click the "Done" button (the same button that was "Edit" before). Expected: the page transitions back from edit-mode to read-mode. The editor is replaced by a static rich-text rendering of the same content + the last-edited timestamp at the bottom of the page updates to the current time. **Verify:** the content you just typed renders cleanly in read mode (Bold + Italic + H2 all visually distinct + the 🔗 emoji prefix is still in front of the hyperlink + the hyperlink is still blue underlined).
 
 **Step 7 — Click the rendered hyperlink.**
 
-In read mode, click the rendered hyperlink (the one with the 🔗 prefix). Expected: navigation to the matching URL detail page at `/projects/<projectId>/competition-scraping/url/<urlId>/`. The URL detail page shows the per-URL detail surface from the W2 deploy 2026-05-23-c (with the W2 Session 5 structural fields + Scraping Status toggle + bidirectional mirror with the Competition Data table's Status column). **Verify:** navigation works + the URL detail page loads + the URL detail surface shows the correct URL (the one you clicked).
+In read mode, click the rendered hyperlink (the one with the 🔗 emoji prefix). Expected: navigation to the matching URL detail page at `/projects/<projectId>/competition-scraping/url/<urlId>/`. The URL detail page shows the per-URL detail surface from the W2 deploy 2026-05-23-c (with the W2 Session 5 structural fields + Scraping Status toggle + bidirectional mirror with the Competition Data table's Status column). **Verify:** navigation works + the URL detail page loads + the URL detail surface shows the correct URL (the one you clicked).
 
 **Step 8 — Navigate back via the back-button.**
 
@@ -168,11 +199,11 @@ On the URL detail page, click the "← Competition Data" back-button at the top 
 
 **Step 9 — Toggle into edit mode one more time + verify the editor mounts.**
 
-Click "Edit" again. Expected: editor mounts cleanly + your existing test content is loaded into the editor as editable rich-text + the hyperlink with the 🔗 prefix is still styled correctly + clicking inside the hyperlink shows the standard TipTap Link mark interaction (edit/remove the link). Now click "Done" again without making any changes. Expected: page returns to read mode + the last-edited timestamp at the bottom of the page should update to the current time (since clicking Done triggers a save lifecycle even if no content changed — confirm this updates on every Done click OR document if it doesn't).
+Click "Edit" again. Expected: editor mounts cleanly + your existing test content is loaded into the editor as editable rich-text + the hyperlink with the 🔗 emoji prefix is still styled correctly + clicking inside the hyperlink shows the standard TipTap Link mark interaction (edit/remove the link). Now click "Done" again without making any changes. Expected: page returns to read mode + the last-edited timestamp at the bottom of the page should update to the current time (since clicking Done triggers a save lifecycle even if no content changed — confirm this updates on every Done click OR document if it doesn't).
 
 **Step 10 — Test the in-line `#url/<urlId>` shorthand syntax (advanced; optional).**
 
-This step tests the "manual shorthand entry" path (the alternative to using the toolbar Link-to-URL picker). Click "Edit" one more time. On a fresh line in the editor, type literally: **the hash character followed by the word url followed by a slash followed by any valid urlId from the URL list, then press space**. Expected: the editor should recognize the shorthand pattern + the typed text should auto-convert to a hyperlink (via the same UrlReferenceExtension that handles the click interception). The result should look identical to the hyperlink you inserted via the picker in Step 5 (blue underlined + 🔗 prefix). **Verify:** this auto-conversion works AND clicking the auto-created hyperlink (after toggling Done) navigates correctly per Step 7. If auto-conversion does NOT happen, that's a known limitation per §C.4's specification — the click interception works on `#url/<urlId>` hrefs regardless of HOW the href was inserted; the toolbar picker is the primary insertion affordance. Document the outcome either way.
+This step tests the "manual shorthand entry" path (the alternative to using the toolbar Link-to-URL picker). Click "Edit" one more time. On a fresh line in the editor, type literally: **the hash character followed by the word url followed by a slash followed by any valid urlId from the URL list, then press space**. Expected: the editor should recognize the shorthand pattern + the typed text should auto-convert to a hyperlink (via the same UrlReferenceExtension that handles the click interception). The result should look identical to the hyperlink you inserted via the picker in Step 5 (blue underlined + 🔗 emoji prefix). **Verify:** this auto-conversion works AND clicking the auto-created hyperlink (after toggling Done) navigates correctly per Step 7. If auto-conversion does NOT happen, that's a known limitation per §C.4's specification — the click interception works on `#url/<urlId>` hrefs regardless of HOW the href was inserted; the toolbar picker is the primary insertion affordance. Document the outcome either way.
 
 **How to report back:**
 
@@ -180,25 +211,64 @@ For each step (1-10), tell Claude in plain language: PASS / FAIL / PARTIAL. If F
 
 **Cross-platform note:** the new Comprehensive Competitor Analysis page is per-Project, not per-platform. Pick any single platform (Amazon OR Ebay OR Walmart OR Etsy OR Aliexpress OR Macys OR Bestbuy) for the verification — there's no need to walk all 7 platforms since the page does not vary by platform.
 
----
+### (b) P-46 Workstream 5 deploy session
 
-6. **If all 10 steps PASS:** close W4 as ✅ DONE-AND-VERIFIED 2026-05-XX on vklf.com. End-of-session doc-batch flips ROADMAP P-46 entry WS#4 to ✅ DONE-AND-VERIFIED + closes (a.84) + opens (a.85) for P-46 Workstream 5 first build session. New §B 2026-05-XX entry on `docs/COMPETITION_DATA_V2_DESIGN.md` captures the Phase-4 PASS narrative.
+**Status:** DEFERRED at director request 2026-05-24-c. 2 build commits sit on `workflow-2-competition-scraping` awaiting ff-merge to main + Vercel auto-redeploy + fresh extension .crx zip.
 
-7. **If any step FAILs or PARTIALs:** initiate fix-forward cascade per the "Phase-4 verification fix-forward cascade in a single deploy session" Pattern memorialized 2026-05-24 (W3 deploy). Each fix-forward = own build commit + own Rule 9 gate + own Phase-4 reverify cycle. End-of-session doc-batch captures all fix-forwards + the final outcome.
+**Build commits to deploy:**
+- `3c981be` — W#2 polish P-46 Workstream 5 Session 1 — extension URL add form additions (Type/Description-1/Description-2/Price) — 4 files +225/-0
+- `41172f1` — W#2 polish P-46 Workstream 5 polish — fix CapturedReviewAddModal clientId idempotency bug — 1 file +9/-1
 
-8. **End-of-session doc-batch** covers ROADMAP (header bump + P-46 entry WS#4 status update based on outcome) + CHAT_REGISTRY (header bump — 151st Claude Code session) + DOCUMENT_MANIFEST (header bump) + CORRECTIONS_LOG (header bump + new §Entry if fix-forwards landed OR informational observation if Phase-4 PASS clean) + NEXT_SESSION.md (rewritten for P-46 Workstream 5 first build session if W4 closes, OR P-46 Workstream 4 next fix-forward session if fix-forwards are still landing) + HANDOFF_PROTOCOL (header bump only — no new rules expected) + CLAUDE_CODE_STARTER (header bump only) + `docs/COMPETITION_DATA_V2_DESIGN.md` (NEW §B entry capturing Phase-4 outcome). Multi-push pattern depends on outcome (1 push minimum if PASS clean; 1-5+ if fix-forwards land).
+**Deploy session shape (mirrors the W2 + W3 + W4 deploy patterns):**
 
-**Per `feedback_recommendation_style.md` (most thorough/reliable) + `feedback_default_to_recommendation.md`:** any picker that fires — surface the recommended path + default to it if director defers.
+1. Pre-deploy /scoreboard on `workflow-2-competition-scraping` — verify 5/5 GREEN at expected baselines (root tsc clean / ext tsc clean / 558 ext / 786 src/lib / 62 routes). Check 6 Playwright — per Rule 27 picker, likely RUN since the ff-merge bundle contains `extensions/` source files (the W5 extension URL save form additions) — director picks RUN vs SKIP based on whether Playwright spec coverage exists for the extension URL save form.
+2. Rule 9 gate moment — ONE Rule 9 picker fires for the deploy push to main. Per `feedback_recommendation_style.md` recommended path is "Deploy now — push to origin/main (recommended)".
+3. `git push origin main` executes; main fast-forwards from `096a2ac` to the W5 doc-batch SHA carrying the 2 build commits + any in-between doc-batch commits.
+4. Vercel auto-redeploy fires (~2-3 minute build + cache invalidation). Optionally: build a fresh extension .crx zip via `npm run build` in `extensions/competition-scraping/` + zip the dist/ output (matches the existing `plos-extension-*.zip` filename pattern at repo root).
+5. Post-merge /scoreboard on `main` — verify 5/5 GREEN at same baselines.
+6. Phase-4 director real-Chrome verification — either runs in-session (per the W3 deploy 2026-05-24 Pattern) OR deferred to next session (per the W4 deploy 2026-05-26 Pattern). Director picks at deploy time.
+7. End-of-session doc-batch + ping-pong sync + end-of-session ff-merge push to `origin/main` for doc-batch.
 
-**Per Rule 14a tightening from 2026-05-24:** if any step's expected behavior feels under-specified in the walkthrough above, surface the gap to director via Rule 14f picker BEFORE running the step.
+**Recommended deploy session timing:** AFTER P-47 Shadow DOM refactor ships (since P-47 is content-script-only + does not touch the W5 URL save form). Alternatively: bundle W5 deploy + P-47 deploy together if P-47 lands cleanly + director wants one deploy session covering both — but the "Multi-session workstream deploy gate timing" Pattern recommends one deploy per workstream for traceability.
 
-**Schema-change-in-flight flag:** STAYS **NO** (no schema work in Phase-4 verify at all; any fix-forwards likely stay schema-clean since W4 surface is UI-only).
+### (c) P-46 Workstream 5 Phase-4 director real-Chrome verification
+
+**Status:** DEFERRED at director request 2026-05-24-c. Pairs with W5 deploy — runs either in-session (during W5 deploy session) or as its own session (per the W4 deferred-Phase-4 Pattern).
+
+**Pre-flight setup:**
+
+- Open Chrome on Mac.
+- Confirm the fresh extension .crx is loaded (manually unpack the latest `plos-extension-2026-05-XX-*.zip` from the repo root into `chrome://extensions/` → "Load unpacked" → pick the dist/ directory).
+- Open any one competitor platform (Amazon / Ebay / Walmart / Etsy / Aliexpress / Macys / Bestbuy) — pick the platform with the most-frequent existing URL captures for highest-signal verification.
+- Sign in to vklf.com if needed.
+
+**Step 1 — Open the extension URL save form on a competitor page.**
+
+Navigate to a product page on the chosen platform (e.g., an Amazon product page). Trigger the extension's URL save flow — likely via the extension popup OR a content-script affordance per the existing URL save form interaction. **Verify:** the URL save form opens cleanly + shows the existing fields (URL / Platform / Brand Name / Sponsored Ad / etc.) **AND** shows the FOUR new fields between Brand Name + Sponsored Ad: **Type** / **Description-1** / **Description-2** / **Price**. The new fields render as textareas (per `makeTextareaField()` helper from W5 Session 1) with appropriate labels + placeholder hints.
+
+**Step 2 — Fill in the four new fields + save.**
+
+Type sensible test values into each new field: e.g., **Type:** "Product" / **Description-1:** "Test description 1" / **Description-2:** "Test description 2" / **Price:** "$29.99". Fill in the other required fields as usual. **Click Save.** **Verify:** the form submits without error + the URL save flow completes successfully (existing UX — likely a toast notification or form-closes-on-success).
+
+**Step 3 — Confirm the row lands on vklf.com with all 4 new fields populated.**
+
+Open vklf.com → navigate to the Project's Competition Data page (`/projects/<projectId>/competition-scraping`). Find the row for the URL you just saved. **Verify:** the row shows the 4 new fields populated with the values you typed in Step 2. The Type / Description-1 / Description-2 / Price columns should all render the test values. If the Type / Description columns are hidden by default, use the ColumnVisibilityBar to show them.
+
+**Step 4 — Optional: test Reviews modal duplicate-Save behavior to confirm idempotency fix works end-to-end.**
+
+Navigate to a URL detail page (`/projects/<projectId>/competition-scraping/url/<urlId>`). Click "Add Review" to open the `CapturedReviewAddModal`. Fill in a test review (1-5 stars + body + optional reviewer name + date). **Click Save TWICE in rapid succession** (or click Save → wait for error → click Save again). **Verify:** ONLY ONE review row lands in the URL's reviews list (the server-side P2002 dedup now correctly recognizes the duplicate clientId since the modal hoisted clientId to a `useState` instead of regenerating on every Save click).
+
+**How to report back:**
+
+For each step (1-4), tell Claude in plain language: PASS / FAIL / PARTIAL. If FAIL or PARTIAL, describe what you saw vs. what was expected. Screenshots or pasted observations are welcome. Claude will collate the report + either close W5 as ✅ DONE-AND-VERIFIED (if all PASS) or initiate a fix-forward cascade (if any FAIL or PARTIAL).
+
+**Cross-platform note:** the URL save form additions are per-extension not per-platform, so cross-platform exception applies (pick any single platform). Optionally walk the other platforms at director's discretion.
 
 ---
 
 ## Pre-session notes (offline steps for director between sessions)
 
-**Required offline step BEFORE the next P-46 Workstream 4 Phase-4 verification session:** none. The W4 deploy has already happened; Vercel auto-redeploy has already fired; director's involvement is just the 10-step real-Chrome verification walkthrough above.
+**Required offline step BEFORE the next P-47 Shadow DOM refactor Session 1:** none. P-47 is pure-code; director's involvement is just the standard go-ahead after the Step 7b plain-terms summary + the empirical Chrome verification on Amazon after the refactor lands.
 
 **Standing optional offline step (NOT blocking — standing carry-over):** raise the Supabase Global File Size Limit to enable the bucket-level 100 MB cap on `competition-scraping-videos`. Step-by-step (unchanged from prior handoffs):
 
@@ -208,41 +278,43 @@ For each step (1-10), tell Claude in plain language: PASS / FAIL / PARTIAL. If F
 4. Save.
 5. EITHER re-run `node scripts/create-competition-scraping-videos-bucket.mjs` to update the bucket's `fileSizeLimit` (the script is idempotent), OR edit the bucket directly via the Supabase Storage UI → bucket settings → file size limit → set to 100 MB.
 
-Not blocking the P-46 Workstream 4 Phase-4 verification session at all — can happen any time. Director-independent.
+Not blocking the P-47 Shadow DOM refactor Session 1 at all — can happen any time. Director-independent.
 
-**Optional offline reading for director:** the 10-step Phase-4 verification walkthrough above in the ## Launch prompt section (~5-minute skim) — gives director a preview of what the verification session will cover step-by-step. Worth scanning before the session starts so director knows the sequence + can have Chrome + vklf.com open ready.
+**Optional offline reading for director:** the P-47 polish-backlog entry in ROADMAP.md (~line 237 — the canonical scope-and-where description with file paths + severity + rationale + cross-references to P-45 Build #2's Issue 2 fix narrative). ~3-minute skim.
 
-**Pre-session setup (informational — Claude will handle in-session):** the Workstream 4 Phase-4 verification session begins on `workflow-2-competition-scraping`; director's involvement is the standard go-ahead after Step 7b plain-terms summary + the live 10-step real-Chrome verification walkthrough.
+**Pre-session setup (informational — Claude will handle in-session):** the P-47 Shadow DOM refactor Session 1 begins on `workflow-2-competition-scraping`; director's involvement is the standard go-ahead after Step 7b plain-terms summary + the empirical Chrome verification on Amazon after the refactor lands.
 
 ---
 
 ## Destructive-operation safety check for next session
 
-**Rule 8 triggers planned this session: ZERO** — no destructive git operations planned (no rebases, no force pushes, no `git reset --hard`, no `git branch -D`). Any fix-forwards would be additive build commits + ff-merge pushes, not destructive ops.
+**Rule 8 triggers planned this session: ZERO** — no destructive git operations planned (no rebases, no force pushes, no `git reset --hard`, no `git branch -D`). The P-47 refactor is additive code change on `workflow-2-competition-scraping`.
 
-**Rule 9 triggers planned this session: ZERO MINIMUM** — no `git push origin main` planned at session start since the deploy already happened in the prior session. Rule 9 gates fire ONLY if Phase-4 surfaces issues + fix-forward pushes to main are needed (per the "Phase-4 verification fix-forward cascade" Pattern, this could be 0-N additional gates).
+**Rule 9 triggers planned this session: ZERO** — no `git push origin main` planned. P-47 Session 1 is a pure code session; deploy would happen in a later session bundling P-47 + W5 deploy (or separately).
 
-**NO Rule 29 (container-level destructive op) triggers planned** this session. NO Codespaces rebuild planned. Claude's memory directory + `.codespace-backup/memory/` mirror both remain intact. Critical files safe. **Layer-3b mirror-staleness canary active since 2026-05-22-f.** If at session-start the canary emits a 🚨 alert (file count differs, presence differs, or any per-file size differs between source and mirror), STOP and investigate before any verification work.
+**NO Rule 29 (container-level destructive op) triggers planned** this session. NO Codespaces rebuild planned. Claude's memory directory + `.codespace-backup/memory/` mirror both remain intact. Critical files safe. **Layer-3b mirror-staleness canary active since 2026-05-22-f.** If at session-start the canary emits an alert (file count differs, presence differs, or any per-file size differs between source and mirror), STOP and investigate before any refactor work.
 
 ---
 
 ## Why this pointer was written this way (debug aid)
 
-Today's session was the **W4 deploy session** for the new Comprehensive Competitor Analysis page. The session ran cleanly through the deploy: pre-deploy /scoreboard PASSED → truncated-picker-response disambiguated → Rule 9 gate Yes → `git push origin main` → main fast-forwarded `ac45737..096a2ac` (4 commits) → Vercel auto-redeploy → post-merge /scoreboard PASSED. **At that point director directed deferring the Phase-4 director real-Chrome verification to next session.** Director's request was to preserve the 10-step verification walkthrough verbatim in `docs/NEXT_SESSION.md` so the next session can copy + execute it without re-deriving the sequence — this pointer file is the result of that directive.
+Today's session was a **scope-shift session** — original launch-prompt task (W4 Phase-4 verify) was deferred at session-start; director chose to work on the next roadmap item. A clarifying picker resolved to P-46 W5 (Recommended), the extension URL save form additions. The W5 Session 1 build landed cleanly; an opportunistic Reviews modal polish surfaced + landed alongside (the new "Opportunistic-polish-during-build-session" Pattern memorialized). At end-of-session, director directed deferring all real-world testing items for next session + working on the next code-only roadmap item. A follow-up picker resolved to **P-47 Shadow DOM refactor Session 1 (Recommended)** over P-26 below-fold scroll capture + P-43 mechanical prevention candidate.
 
-The natural next-session task per (a.84) RECOMMENDED-NEXT is **Workstream 4 Phase-4 verification session** — director performs the 10-step real-Chrome verification walkthrough on the live vklf.com Comprehensive Competitor Analysis page. The 10-step walkthrough is preserved verbatim in the ## Launch prompt section above.
+The natural next-session task per (a.86) RECOMMENDED-NEXT is **P-47 Shadow DOM refactor Session 1** — pure-code structural refactor of the content-script video-capture-form mount strategy from the 80-event-listener band-aid (shipped in P-45 Build #2 commit `ee8c79d` 2026-05-22-i) to proper Shadow DOM isolation. The P-47 polish-backlog entry has the full scope-and-where description; refactor it as specified.
 
-- **(Recommended)** Workstream 4 Phase-4 verification session — director runs the 10-step walkthrough. Recommended because (a) the W4 deploy has already happened + is awaiting verification; (b) deferring further would let the W4 surface drift out of director's attention before being closed; (c) the walkthrough is already drafted + ready to execute.
+- **(Recommended)** P-47 Shadow DOM refactor Session 1 — pure-code structural refactor. Recommended because (a) director explicitly picked this at the end-of-session picker; (b) it's pure-code (matches director's directive "defer real-world testing items"); (c) the band-aid → Shadow DOM transition is cleanest as a single bundled refactor; (d) low-risk since the band-aid works empirically and the refactor is structural.
 
-The shape of the Phase-4 verification session is **director executes 10 steps + reports PASS/FAIL/PARTIAL + 0-N fix-forwards + ONE end-of-session doc-batch + 1-N pushes**.
+The shape of the P-47 Session 1 session is **branch-state verify + Rule 14f confirmation + Shadow DOM refactor + style injection + band-aid deletion + empirical Chrome verification + end-of-session doc-batch + 1 push to workflow branch**.
 
-**After Workstream 4 closes ✅ DONE-AND-VERIFIED on vklf.com, Workstream 5 (Extension form additions + manual Reviews entry) is the LAST remaining workstream of P-46** — ~1-2 sessions. Then P-46 closes ✅ end-to-end. Then P-47 + P-26 + DEFERRED P-27 bugs (or absorbed obsolete) before W#2 graduation. Then W#3-W#14 (twelve more workflows on the roadmap; none started yet).
+**After P-47 ships,** the three standing carry-overs (W4 Phase-4 verify + W5 deploy + W5 Phase-4 verify) remain queued. Director may pick them up in any order in subsequent sessions; the verbatim walkthroughs preserved above in ## Standing carry-overs ensure no re-derivation overhead when they do.
 
-**Alternate next-session candidates if director shifts priorities at session start (after W4 deploy + before W4 Phase-4 verify):**
+**Alternate next-session candidates if director shifts priorities at session start:**
 
-- **Defer Workstream 4 Phase-4 verify + start P-46 Workstream 5 (Extension form additions) build session.** NOT recommended — W4 is deployed-but-not-yet-verified; closing W4's Phase-4 first keeps the implementation arc tight + ensures the deployed surface is verified before director context shifts to W#5.
-- **Defer Workstream 4 Phase-4 verify + start P-47 Shadow DOM refactor.** NOT recommended — P-47 is LOW priority (band-aid works empirically) AND Phase-4-verifying W4 first closes the implementation arc tight.
-- **Defer Workstream 4 Phase-4 verify + work on the P-43 mechanical prevention candidate (add absolute cd prefix to ALL scoreboard.md Bash commands).** NOT recommended — P-43 mechanical prevention is LOW informational (5th+ reproduction stable; each one recovers in ~30 seconds); Phase-4-verifying W4 first is higher value.
+- **Pick up W4 Phase-4 verification** from ## Standing carry-overs section (a). NOT recommended unless director is ready for real-world testing — director explicitly deferred this at end-of-session. The 10-step walkthrough is preserved verbatim above for copy + execute when director is ready.
+- **Pick up W5 deploy session** from ## Standing carry-overs section (b). NOT recommended unless director is ready for real-world testing — director explicitly deferred this at end-of-session. The deploy session shape is described above for execute when director is ready.
+- **Pick up W5 Phase-4 verification** (after W5 deploy lands) from ## Standing carry-overs section (c). NOT recommended this session since W5 deploy hasn't happened yet. The 4-step walkthrough is preserved verbatim above for copy + execute when director is ready.
+- **P-26 below-fold scroll capture (LOW).** NOT recommended — was the second-place option at end-of-session picker; P-47 was picked first; P-26 can happen any time after P-47.
+- **P-43 mechanical prevention candidate.** NOT recommended — was the third-place option at end-of-session picker; LOW informational; not blocking any workstream; can happen any time.
 - **Raise Supabase Global File Size Limit (standing optional offline step).** Director's offline dashboard step — see Pre-session notes above. Not a Claude session task; can happen any time. Director-independent.
 
-Check `ROADMAP.md` for the canonical state. Check `docs/COMPETITION_DATA_V2_DESIGN.md` §C.4 + §A.4 + §A.5 + §B 2026-05-24-b + §B 2026-05-25 + §B 2026-05-26 for the W4 Phase-4 verification session's binding context.
+Check `ROADMAP.md` for the canonical state. Check the P-47 polish-backlog entry at line ~237 for the binding scope-and-where description. Check `docs/COMPETITION_DATA_V2_DESIGN.md` §C.5 for W5 Session 1's binding context (which this session consumed).
