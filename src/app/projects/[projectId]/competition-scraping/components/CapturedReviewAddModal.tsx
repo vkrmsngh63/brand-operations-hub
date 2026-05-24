@@ -46,6 +46,13 @@ export function CapturedReviewAddModal({
   const [reviewerName, setReviewerName] = useState('');
   const [reviewDate, setReviewDate] = useState('');
   const [tagsInput, setTagsInput] = useState('');
+  // P-46 Workstream 5 polish (2026-05-24) — clientId must stay STABLE across
+  // retry clicks within one modal-open session so the server-side P2002
+  // dedup in url-reviews.ts can collapse a partial-failure retry to the
+  // existing row (HTTP 200 instead of a duplicate 201). Regenerate only on
+  // modal close (in the effect below). Do NOT inline crypto.randomUUID()
+  // into handleSubmit — that defeats the server-side idempotency contract.
+  const [clientId, setClientId] = useState<string>(() => crypto.randomUUID());
 
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -60,6 +67,7 @@ export function CapturedReviewAddModal({
       setTagsInput('');
       setSubmitting(false);
       setErrorMessage(null);
+      setClientId(crypto.randomUUID());
     }
   }, [isOpen]);
 
@@ -95,7 +103,7 @@ export function CapturedReviewAddModal({
     }
 
     const payload: CreateCapturedReviewRequest = {
-      clientId: crypto.randomUUID(),
+      clientId,
       starRating,
       body: trimmedBody,
       source: 'manual',
