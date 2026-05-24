@@ -30,6 +30,13 @@
 // The fetch happens once at mount; mutations fire a debounced PUT ~500ms
 // after the last change so column-toggle bursts don't hammer the server.
 //
+// P-46 Workstream 3 Session 3 (today) extends the same UserTablePreferences
+// row + the same debounced-PUT lifecycle to carry three more controls —
+// per-column widths (drag the right edge of any header), row order
+// (drag-to-reorder via dnd-kit), and an adjustable text-size stepper. All
+// three coexist on the same 500ms debounce; a burst of drag events from
+// any control coalesces into one network write.
+//
 // Slice (a.1) wires click-row to navigate to /url/[urlId]; the prior
 // open-in-new-tab behavior is preserved via an explicit "Open original
 // URL ↗" button on the detail page itself.
@@ -48,7 +55,12 @@ import {
   type WriteUserTablePreferencesRequest,
 } from '@/lib/shared-types/competition-scraping';
 import { ColumnVisibilityBar } from './ColumnVisibilityBar';
-import type { ScopeFilter } from './url-table-columns';
+import {
+  FONT_SIZE_DEFAULT,
+  FONT_SIZE_MAX,
+  FONT_SIZE_MIN,
+  type ScopeFilter,
+} from './url-table-columns';
 import { UrlTable } from './UrlTable';
 import {
   EMPTY_COLUMN_FILTERS,
@@ -141,14 +153,21 @@ export function CompetitionScrapingViewer({ projectId }: Props) {
     };
   }, [projectId]);
 
-  // P-46 Workstream 3 Session 1 — UserTablePreferences (column visibility
-  // only this session; Sessions 2-3 wire columnWidths / fontSize / rowOrder).
-  // Defaults to empty map (which renders everything visible per
-  // isColumnVisible's missing-key-default-true). 404 from the GET is
-  // expected on first visit — the row is created lazily on first toggle.
+  // P-46 Workstream 3 Sessions 1+3 — UserTablePreferences state.
+  // Session 1 wired columnVisibility (map of columnId → visible).
+  // Session 3 (today) adds columnWidths (map of columnId → pixels),
+  // fontSize (10-24), and rowOrder (array of competitorUrlIds in the
+  // user's preferred display order).
+  //
+  // All four default to empty/default values; the seed effect below fills
+  // them from a single GET. 404 from the GET is expected on first visit —
+  // the row is created lazily on first mutation via the debounced PUT.
   const [columnVisibility, setColumnVisibility] = useState<
     Record<string, boolean>
   >({});
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
+  const [fontSize, setFontSize] = useState<number>(FONT_SIZE_DEFAULT);
+  const [rowOrder, setRowOrder] = useState<string[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -159,13 +178,18 @@ export function CompetitionScrapingViewer({ projectId }: Props) {
         );
         if (cancelled) return;
         if (res.status === 404) {
-          // First-visit; no row exists yet. Leave the default empty map.
+          // First-visit; no row exists yet. Leave the defaults.
           return;
         }
         if (!res.ok) return; // Silent fallback; defaults render fine.
         const data = (await res.json()) as ReadUserTablePreferencesResponse;
         if (cancelled) return;
         setColumnVisibility(data.columnVisibility ?? {});
+        setColumnWidths(data.columnWidths ?? {});
+        setFontSize(
+          typeof data.fontSize === 'number' ? data.fontSize : FONT_SIZE_DEFAULT
+        );
+        setRowOrder(Array.isArray(data.rowOrder) ? data.rowOrder : []);
       } catch {
         // Network error — silently fall back to defaults. Failed prefs
         // shouldn't prevent the table from rendering.
@@ -217,6 +241,55 @@ export function CompetitionScrapingViewer({ projectId }: Props) {
         }, PREFS_DEBOUNCE_MS);
         return next;
       });
+    },
+    [flushPrefsPut]
+  );
+
+  // P-46 Workstream 3 Session 3 — per-column-width handler. UrlTable's
+  // drag-resize handle calls this with the new pixel width on pointerup;
+  // values are clamped to MIN_COLUMN_WIDTH / MAX_COLUMN_WIDTH at the
+  // call site so a malformed value never reaches state.
+  const handleColumnResize = useCallback(
+    (columnId: string, width: number) => {
+      setColumnWidths((prev) => {
+        const next = { ...prev, [columnId]: width };
+        if (prefsTimerRef.current) clearTimeout(prefsTimerRef.current);
+        prefsTimerRef.current = setTimeout(() => {
+          void flushPrefsPut({ columnWidths: next });
+        }, PREFS_DEBOUNCE_MS);
+        return next;
+      });
+    },
+    [flushPrefsPut]
+  );
+
+  // Font-size stepper hands a clamped value in (FONT_SIZE_MIN, FONT_SIZE_MAX);
+  // we re-clamp defensively in case a future caller skips the bar's UI.
+  const handleFontSizeChange = useCallback(
+    (size: number) => {
+      const clamped = Math.max(
+        FONT_SIZE_MIN,
+        Math.min(FONT_SIZE_MAX, Math.round(size))
+      );
+      setFontSize(clamped);
+      if (prefsTimerRef.current) clearTimeout(prefsTimerRef.current);
+      prefsTimerRef.current = setTimeout(() => {
+        void flushPrefsPut({ fontSize: clamped });
+      }, PREFS_DEBOUNCE_MS);
+    },
+    [flushPrefsPut]
+  );
+
+  // Drag-to-reorder hands a fresh ordered ID array on every drop. We
+  // mirror it to local state immediately (optimistic) so the table re-
+  // renders in the new order before the network round-trip resolves.
+  const handleRowReorder = useCallback(
+    (nextOrder: string[]) => {
+      setRowOrder(nextOrder);
+      if (prefsTimerRef.current) clearTimeout(prefsTimerRef.current);
+      prefsTimerRef.current = setTimeout(() => {
+        void flushPrefsPut({ rowOrder: nextOrder });
+      }, PREFS_DEBOUNCE_MS);
     },
     [flushPrefsPut]
   );
@@ -364,6 +437,8 @@ export function CompetitionScrapingViewer({ projectId }: Props) {
         onSelectPlatform={handleSelectPlatform}
         columnVisibility={columnVisibility}
         onToggleColumn={handleToggleColumn}
+        fontSize={fontSize}
+        onFontSizeChange={handleFontSizeChange}
       />
 
       <div
@@ -387,6 +462,11 @@ export function CompetitionScrapingViewer({ projectId }: Props) {
         ) : (
           <UrlTable
             columnVisibility={columnVisibility}
+            columnWidths={columnWidths}
+            fontSize={fontSize}
+            rowOrder={rowOrder}
+            onColumnResize={handleColumnResize}
+            onRowReorder={handleRowReorder}
             rows={visibleUrls}
             scopeRows={scopeRows}
             searchText={draftSearch}

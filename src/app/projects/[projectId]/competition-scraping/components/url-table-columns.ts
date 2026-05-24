@@ -1,6 +1,6 @@
 import type { Platform } from '@/lib/shared-types/competition-scraping';
 
-// W#2 P-46 Workstream 3 Session 1-2 — canonical column registry for the
+// W#2 P-46 Workstream 3 Sessions 1-3 — canonical column registry for the
 // Competition Data table.
 //
 // Session 1 (2026-05-23-d) lifted the column-id ↔ label mapping out of
@@ -12,8 +12,13 @@ import type { Platform } from '@/lib/shared-types/competition-scraping';
 // Session 2 (2026-05-23-e) extends the registry with the 6 new W1-additive
 // data columns per §C.3 + adds a `dataType` discriminator that drives the
 // per-cell inline-editor selection in UrlTable (text / number / decimal /
-// boolean / enum / date / url). Sessions 3+ will add per-column width
-// defaults + drag-to-reorder anchors.
+// boolean / enum / date / url).
+//
+// Session 3 (today) adds per-column `defaultWidth` (px) used as the seed
+// width when no per-user entry exists in UserTablePreferences.columnWidths
+// + the MIN/MAX width bounds the resize-drag handle clamps to + the
+// FONT_SIZE_* bounds the font-size stepper clamps to (mirroring the
+// handler's validator constants).
 
 // Platform scope selector. 'all' = no platform filter; otherwise a single
 // platform value. Moved here from PlatformSidebar when the sidebar was
@@ -44,36 +49,61 @@ export interface TableColumnDef {
   id: string;
   label: string;
   dataType: TableColumnDataType;
+  defaultWidth: number;
 }
 
 export const TABLE_COLUMN_DEFS: readonly TableColumnDef[] = [
   // Existing columns from Session 1's registry (carried forward).
-  { id: 'url', label: 'URL', dataType: 'url' },
-  { id: 'scrapingStatus', label: 'Status', dataType: 'enum' },
-  { id: 'isSponsoredAd', label: 'Sponsored', dataType: 'boolean' },
-  { id: 'productName', label: 'Product Name', dataType: 'text' },
-  { id: 'brandName', label: 'Brand Name', dataType: 'text' },
-  { id: 'competitionCategory', label: 'Category', dataType: 'text' },
-  { id: 'productStarRating', label: 'Product Stars', dataType: 'number-decimal' },
-  { id: 'numProductReviews', label: '# Reviews', dataType: 'number-integer' },
-  { id: 'addedAt', label: 'Added On', dataType: 'date-readonly' },
+  { id: 'url', label: 'URL', dataType: 'url', defaultWidth: 280 },
+  { id: 'scrapingStatus', label: 'Status', dataType: 'enum', defaultWidth: 120 },
+  { id: 'isSponsoredAd', label: 'Sponsored', dataType: 'boolean', defaultWidth: 110 },
+  { id: 'productName', label: 'Product Name', dataType: 'text', defaultWidth: 220 },
+  { id: 'brandName', label: 'Brand Name', dataType: 'text', defaultWidth: 160 },
+  { id: 'competitionCategory', label: 'Category', dataType: 'text', defaultWidth: 160 },
+  { id: 'productStarRating', label: 'Product Stars', dataType: 'number-decimal', defaultWidth: 110 },
+  { id: 'numProductReviews', label: '# Reviews', dataType: 'number-integer', defaultWidth: 100 },
+  { id: 'addedAt', label: 'Added On', dataType: 'date-readonly', defaultWidth: 130 },
   // P-46 Workstream 3 Session 2 — new data columns per §C.3 + §A.11.
   // Foundation-workstream additive columns (already in CompetitorUrl since W1
   // shipped the schema on 2026-05-24); this session adds them to the table
   // surface + makes them click-to-edit.
-  { id: 'type', label: 'Type', dataType: 'text' },
-  { id: 'description1', label: 'Description 1', dataType: 'text-multiline' },
-  { id: 'description2', label: 'Description 2', dataType: 'text-multiline' },
-  { id: 'price', label: 'Price', dataType: 'text' },
-  { id: 'competitionScore', label: 'Competition Score', dataType: 'number-integer' },
+  { id: 'type', label: 'Type', dataType: 'text', defaultWidth: 140 },
+  { id: 'description1', label: 'Description 1', dataType: 'text-multiline', defaultWidth: 240 },
+  { id: 'description2', label: 'Description 2', dataType: 'text-multiline', defaultWidth: 240 },
+  { id: 'price', label: 'Price', dataType: 'text', defaultWidth: 100 },
+  { id: 'competitionScore', label: 'Competition Score', dataType: 'number-integer', defaultWidth: 140 },
   // Pre-existing schema columns that were never rendered in the table; now
   // surfaced as part of the Workstream 3 redesign.
-  { id: 'resultsPageRank', label: 'Results Rank', dataType: 'number-integer' },
-  { id: 'sellerStarRating', label: 'Seller Stars', dataType: 'number-decimal' },
-  { id: 'numSellerReviews', label: 'Seller Reviews', dataType: 'number-integer' },
+  { id: 'resultsPageRank', label: 'Results Rank', dataType: 'number-integer', defaultWidth: 120 },
+  { id: 'sellerStarRating', label: 'Seller Stars', dataType: 'number-decimal', defaultWidth: 110 },
+  { id: 'numSellerReviews', label: 'Seller Reviews', dataType: 'number-integer', defaultWidth: 120 },
 ];
 
 // Set form for fast in-table visibility lookups.
 export const TABLE_COLUMN_IDS = new Set<string>(
   TABLE_COLUMN_DEFS.map((c) => c.id)
 );
+
+// P-46 Workstream 3 Session 3 — bounds for column-width drag + font-size
+// stepper. The MIN/MAX width pair clamps the resize-drag handle in
+// UrlTable; the FONT_SIZE_* trio mirrors the handler's validator constants
+// (see src/lib/competition-scraping/handlers/user-table-preferences.ts) so
+// the stepper UI can't push a value the server would reject.
+export const MIN_COLUMN_WIDTH = 60;
+export const MAX_COLUMN_WIDTH = 600;
+export const FONT_SIZE_MIN = 10;
+export const FONT_SIZE_MAX = 24;
+export const FONT_SIZE_DEFAULT = 14;
+
+// Resolve the rendered width for a column: per-user override first, then
+// the column's defaultWidth seed.
+export function resolveColumnWidth(
+  columnWidths: Record<string, number>,
+  column: TableColumnDef
+): number {
+  const override = columnWidths[column.id];
+  if (typeof override === 'number' && override > 0) {
+    return override;
+  }
+  return column.defaultWidth;
+}

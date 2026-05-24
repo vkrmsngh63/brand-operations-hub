@@ -29,8 +29,35 @@
 //   - Click the funnel icon next to the label → open that column's filter
 //     popover. The icon turns blue + shows a small dot when a filter is
 //     active on that column.
+//   - Drag the right edge of any column header → resize that column.
+//     Width is clamped to MIN_COLUMN_WIDTH..MAX_COLUMN_WIDTH and saves to
+//     UserTablePreferences.columnWidths via the parent's debounced PUT.
+//
+// Row interaction (P-46 Workstream 3 Session 3 — today):
+//   - Grab the ⋮⋮ handle on the left edge of any row → drag it up or
+//     down to reorder. Drag-end switches sort mode to 'manual' so the
+//     new order sticks visually; row order saves to
+//     UserTablePreferences.rowOrder via the parent's debounced PUT.
+//     Clicking any column header sort button switches back out of
+//     'manual' mode (rowOrder still persists server-side; just not
+//     applied visually until the user picks 'manual' again by dragging).
 
 import { useEffect, useMemo, useState } from 'react';
+import {
+  DndContext,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { authFetch } from '@/lib/authFetch';
 import type {
   CompetitorUrl,
@@ -65,8 +92,18 @@ import {
   InlineTextCell,
   InlineUrlCell,
 } from './InlineCells';
+import {
+  MAX_COLUMN_WIDTH,
+  MIN_COLUMN_WIDTH,
+  resolveColumnWidth,
+  TABLE_COLUMN_DEFS,
+} from './url-table-columns';
 
-type SortKey =
+// Per-column SortKey is the column id from url-table-columns.ts. Plus the
+// special 'manual' state (Session 3) which means "respect rowOrder from
+// UserTablePreferences instead of any column-based comparator." Dragging a
+// row flips into 'manual'; clicking a column header flips out.
+type ColumnSortKey =
   | 'url'
   | 'scrapingStatus'
   | 'isSponsoredAd'
@@ -86,12 +123,30 @@ type SortKey =
   | 'sellerStarRating'
   | 'numSellerReviews';
 
+type SortKey = ColumnSortKey | 'manual';
+
 interface Props {
   // P-46 Workstream 3 Session 1 — per-column visibility map sourced from
   // UserTablePreferences. Missing keys default to visible; this prop is
   // optional so callers that don't yet thread preferences through still
   // see every column.
   columnVisibility?: Record<string, boolean>;
+  // P-46 Workstream 3 Session 3 — per-column width override map. Missing
+  // keys fall back to the column's defaultWidth from url-table-columns.
+  // Pixel values clamped to MIN/MAX_COLUMN_WIDTH at the drag-handle site.
+  columnWidths?: Record<string, number>;
+  // P-46 Workstream 3 Session 3 — table-wide font size in px. Defaults to
+  // FONT_SIZE_DEFAULT (14) when not provided.
+  fontSize?: number;
+  // P-46 Workstream 3 Session 3 — preferred row order from
+  // UserTablePreferences. Applied only when sortKey === 'manual';
+  // otherwise the comparator-based sort wins.
+  rowOrder?: string[];
+  // P-46 Workstream 3 Session 3 — resize-drag end + drop callbacks. The
+  // parent persists the value via the same debounced PUT lifecycle that
+  // carries columnVisibility.
+  onColumnResize?: (columnId: string, width: number) => void;
+  onRowReorder?: (nextOrder: string[]) => void;
   // Rows already filtered by the platform sidebar AND the free-text search
   // box (handled by the parent). Column filters are applied INSIDE this
   // component, after filterless rendering, so the multi-select option lists
@@ -133,7 +188,7 @@ interface Props {
 }
 
 interface ColumnDef {
-  key: SortKey;
+  key: ColumnSortKey;
   label: string;
   align?: 'left' | 'right';
   // Numeric/date columns default to descending on first click — the
@@ -241,6 +296,11 @@ const SCRAPING_STATUS_OPTIONS: ReadonlyArray<{
 
 export function UrlTable({
   columnVisibility,
+  columnWidths,
+  fontSize,
+  rowOrder,
+  onColumnResize,
+  onRowReorder,
   rows,
   scopeRows,
   searchText,
@@ -255,6 +315,17 @@ export function UrlTable({
   onCellSave,
   selectedPlatform,
 }: Props) {
+  // Effective values for the optional Session 3 props.
+  const effectiveColumnWidths = columnWidths ?? {};
+  const effectiveFontSize = fontSize ?? 14;
+  const effectiveRowOrder = rowOrder ?? [];
+  // Pointer sensor with a small activation distance prevents the per-cell
+  // click-to-edit affordance (Session 2) from being hijacked by a drag
+  // gesture on the row's drag handle. Without this, a quick click on the
+  // handle would start a 0px drag instead of just being ignored.
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } })
+  );
   // P-46 Workstream 3 Session 1 — filter the column registry by the
   // visibility map. Missing keys default to visible (matches
   // ColumnVisibilityBar's isColumnVisible).
@@ -272,7 +343,7 @@ export function UrlTable({
   // iterates visibleColumns.map((col) => cellRenderers[col.key](row)) so
   // visibility decisions happen at column filtering, not per-cell.
   const cellRenderers = useMemo<
-    Record<SortKey, (row: CompetitorUrl) => React.ReactNode>
+    Record<ColumnSortKey, (row: CompetitorUrl) => React.ReactNode>
   >(
     () => ({
       url: (row) => (
@@ -566,6 +637,25 @@ export function UrlTable({
   );
 
   const sorted = useMemo(() => {
+    // P-46 Workstream 3 Session 3 — manual sort mode: respect the user's
+    // drag-to-reorder result. IDs not yet in rowOrder (newly-added rows
+    // since the last drag) get appended in addedAt-desc order so they
+    // don't disappear.
+    if (sortKey === 'manual') {
+      const orderIndex = new Map<string, number>();
+      effectiveRowOrder.forEach((id, i) => orderIndex.set(id, i));
+      const copy = [...filtered];
+      copy.sort((a, b) => {
+        const ai = orderIndex.get(a.id);
+        const bi = orderIndex.get(b.id);
+        if (ai !== undefined && bi !== undefined) return ai - bi;
+        if (ai !== undefined) return -1; // a is ordered, b is not — a first
+        if (bi !== undefined) return 1; // b is ordered, a is not — b first
+        // Neither is in rowOrder — fall back to addedAt-desc.
+        return b.addedAt.localeCompare(a.addedAt);
+      });
+      return copy;
+    }
     const copy = [...filtered];
     copy.sort((a, b) => {
       const av = a[sortKey];
@@ -588,7 +678,7 @@ export function UrlTable({
       return sortDir === 'asc' ? cmp : -cmp;
     });
     return copy;
-  }, [filtered, sortKey, sortDir]);
+  }, [filtered, sortKey, sortDir, effectiveRowOrder]);
 
   const handleSortClick = (col: ColumnDef): void => {
     if (col.key === sortKey) {
@@ -597,6 +687,30 @@ export function UrlTable({
       setSortKey(col.key);
       setSortDir(col.defaultDir);
     }
+  };
+
+  // P-46 Workstream 3 Session 3 — drop handler for dnd-kit's DndContext.
+  // Computes the new id order from the current sorted display, persists it
+  // via the parent's debounced PUT, and flips sortKey into 'manual' so the
+  // user-imposed order sticks visually instead of being immediately re-
+  // overwritten by the active column sort.
+  const handleDragEnd = (event: DragEndEvent): void => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = sorted.findIndex((r) => r.id === active.id);
+    const newIndex = sorted.findIndex((r) => r.id === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
+    const newDisplayedOrder = arrayMove(sorted, oldIndex, newIndex).map(
+      (r) => r.id
+    );
+    // Preserve any ids that exist in the prior rowOrder but aren't in the
+    // current sorted set (e.g., rows filtered out by the search box) by
+    // tucking them at the end of the new order in their prior order.
+    const displayedSet = new Set(newDisplayedOrder);
+    const tail = effectiveRowOrder.filter((id) => !displayedSet.has(id));
+    const nextOrder = [...newDisplayedOrder, ...tail];
+    onRowReorder?.(nextOrder);
+    setSortKey('manual');
   };
 
   const activeFilterCount = countActiveColumnFilters(filters);
@@ -691,157 +805,157 @@ export function UrlTable({
         </div>
       ) : (
         <div style={{ overflowX: 'auto' }}>
-          <table
-            style={{
-              width: '100%',
-              borderCollapse: 'collapse',
-              fontSize: '13px',
-            }}
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
           >
-            <thead>
-              <tr>
-                {visibleColumns.map((col) => {
-                  const active = sortKey === col.key;
-                  const arrow = !active ? '' : sortDir === 'asc' ? ' ▲' : ' ▼';
-                  const filterActive =
-                    col.filterKey !== null &&
-                    isColumnFilterActive(filters, col.filterKey);
-                  return (
-                    <th
+            <SortableContext
+              items={sorted.map((r) => r.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              <table
+                style={{
+                  width: '100%',
+                  borderCollapse: 'collapse',
+                  fontSize: `${effectiveFontSize}px`,
+                  tableLayout: 'fixed',
+                }}
+              >
+                <colgroup>
+                  {/* Drag-handle column (Session 3) */}
+                  <col style={{ width: '32px' }} />
+                  {visibleColumns.map((col) => (
+                    <col
                       key={col.key}
-                      aria-sort={
-                        active
-                          ? sortDir === 'asc'
-                            ? 'ascending'
-                            : 'descending'
-                          : 'none'
-                      }
                       style={{
-                        textAlign: col.align ?? 'left',
+                        width: `${resolveColumnWidth(
+                          effectiveColumnWidths,
+                          tableColumnDefByKey(col.key)
+                        )}px`,
+                      }}
+                    />
+                  ))}
+                  {/* Actions column */}
+                  <col style={{ width: '88px' }} />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th
+                      style={dragHandleHeaderStyle}
+                      aria-label="Reorder rows"
+                    />
+                    {visibleColumns.map((col) => {
+                      const active = sortKey === col.key;
+                      const arrow = !active
+                        ? ''
+                        : sortDir === 'asc'
+                        ? ' ▲'
+                        : ' ▼';
+                      const filterActive =
+                        col.filterKey !== null &&
+                        isColumnFilterActive(filters, col.filterKey);
+                      return (
+                        <th
+                          key={col.key}
+                          aria-sort={
+                            active
+                              ? sortDir === 'asc'
+                                ? 'ascending'
+                                : 'descending'
+                              : 'none'
+                          }
+                          style={{
+                            textAlign: col.align ?? 'left',
+                            padding: '8px 10px',
+                            borderBottom: '1px solid #30363d',
+                            color:
+                              active || filterActive ? '#e6edf3' : '#8b949e',
+                            fontWeight: 600,
+                            whiteSpace: 'nowrap',
+                            position: 'relative',
+                          }}
+                        >
+                          <span
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '2px',
+                            }}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => handleSortClick(col)}
+                              style={sortLabelStyle}
+                              aria-label={`Sort by ${col.label}`}
+                            >
+                              {col.label}
+                              <span style={{ color: '#1f6feb' }}>{arrow}</span>
+                            </button>
+                            {col.filterKey !== null ? (
+                              <FilterPopover
+                                isActive={filterActive}
+                                ariaLabel={`Filter ${col.label}`}
+                                renderBody={(close) =>
+                                  renderFilterBody(
+                                    col.filterKey as ColumnFilterKey,
+                                    filters,
+                                    onFiltersChange,
+                                    close,
+                                    distinct,
+                                    blanks
+                                  )
+                                }
+                              />
+                            ) : null}
+                          </span>
+                          {/* P-46 Workstream 3 Session 3 — drag-to-resize handle
+                              on the right edge of every header cell. The handle
+                              sits absolutely so it doesn't disrupt the inline
+                              label/sort/filter row above. */}
+                          <ColumnResizeHandle
+                            columnId={col.key}
+                            currentWidth={resolveColumnWidth(
+                              effectiveColumnWidths,
+                              tableColumnDefByKey(col.key)
+                            )}
+                            onCommit={(width) => onColumnResize?.(col.key, width)}
+                          />
+                        </th>
+                      );
+                    })}
+                    <th
+                      style={{
+                        textAlign: 'right',
                         padding: '8px 10px',
                         borderBottom: '1px solid #30363d',
-                        color: active || filterActive ? '#e6edf3' : '#8b949e',
+                        color: '#8b949e',
                         fontWeight: 600,
                         whiteSpace: 'nowrap',
                       }}
+                      aria-label="Row actions"
                     >
-                      <span
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '2px',
-                        }}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => handleSortClick(col)}
-                          style={sortLabelStyle}
-                          aria-label={`Sort by ${col.label}`}
-                        >
-                          {col.label}
-                          <span style={{ color: '#1f6feb' }}>{arrow}</span>
-                        </button>
-                        {col.filterKey !== null ? (
-                          <FilterPopover
-                            isActive={filterActive}
-                            ariaLabel={`Filter ${col.label}`}
-                            renderBody={(close) =>
-                              renderFilterBody(
-                                col.filterKey as ColumnFilterKey,
-                                filters,
-                                onFiltersChange,
-                                close,
-                                distinct,
-                                blanks
-                              )
-                            }
-                          />
-                        ) : null}
-                      </span>
+                      {/* P-46 Workstream 3 Session 2 — actions column header.
+                          Holds the per-row "↗" Open detail button + the P-28
+                          trash button. */}
                     </th>
-                  );
-                })}
-                <th
-                  style={{
-                    textAlign: 'right',
-                    padding: '8px 10px',
-                    borderBottom: '1px solid #30363d',
-                    color: '#8b949e',
-                    fontWeight: 600,
-                    whiteSpace: 'nowrap',
-                    width: '88px',
-                  }}
-                  aria-label="Row actions"
-                >
-                  {/* P-46 Workstream 3 Session 2 — actions column header.
-                      Holds the per-row "↗" Open detail button + the P-28
-                      trash button. */}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {sorted.map((row) => (
-                <tr
-                  key={row.id}
-                  // Row no longer has its own onClick → handleRowOpen as of
-                  // P-46 Workstream 3 Session 2. Every cell is click-to-edit
-                  // per §A.2; detail-page navigation is the explicit "↗"
-                  // button in the row-actions column.
-                  onMouseEnter={(e) => {
-                    const cells = e.currentTarget.querySelectorAll<HTMLTableCellElement>('td');
-                    cells.forEach((cell) => {
-                      cell.style.background = '#21262d';
-                    });
-                  }}
-                  onMouseLeave={(e) => {
-                    const cells = e.currentTarget.querySelectorAll<HTMLTableCellElement>('td');
-                    cells.forEach((cell) => {
-                      cell.style.background = '';
-                    });
-                  }}
-                  style={{
-                    borderBottom: '1px solid #21262d',
-                  }}
-                >
-                  {visibleColumns.map((col) => cellRenderers[col.key](row))}
-                  <td
-                    style={{
-                      textAlign: 'right',
-                      padding: '4px 6px',
-                      width: '88px',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <button
-                      type="button"
-                      onClick={(e) => handleOpenClick(row, e)}
-                      aria-label={`Open detail page for ${row.url}`}
-                      title="Open detail page"
-                      data-testid="url-row-open-button"
-                      style={rowOpenButtonStyle}
-                    >
-                      ↗
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => handleTrashClick(row, e)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.stopPropagation();
-                        }
-                      }}
-                      aria-label={`Delete URL ${row.url}`}
-                      title="Delete URL"
-                      data-testid="url-row-delete-button"
-                      style={rowTrashButtonStyle}
-                    >
-                      🗑
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sorted.map((row) => (
+                    <SortableUrlRow
+                      key={row.id}
+                      row={row}
+                      visibleColumns={visibleColumns}
+                      cellRenderers={cellRenderers}
+                      onOpenClick={handleOpenClick}
+                      onTrashClick={handleTrashClick}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </SortableContext>
+          </DndContext>
         </div>
       )}
 
@@ -1104,4 +1218,229 @@ function cellStyle(align: 'left' | 'right'): React.CSSProperties {
 function shortenUrl(url: string): string {
   const trimmed = url.replace(/^https?:\/\//, '').replace(/^www\./, '');
   return trimmed.length > 80 ? `${trimmed.slice(0, 77)}…` : trimmed;
+}
+
+// P-46 Workstream 3 Session 3 — resolve a column id to its registry entry
+// for resolveColumnWidth. The local COLUMNS array is a richer
+// (sort + filter aware) wrapper around the same ids; the width resolver
+// only needs the id + defaultWidth.
+function tableColumnDefByKey(key: ColumnSortKey) {
+  const def = TABLE_COLUMN_DEFS.find((c) => c.id === key);
+  if (!def) {
+    // Defensive — the COLUMNS array and TABLE_COLUMN_DEFS are kept in
+    // lockstep; this would only fire if someone added a column to the
+    // local sort registry without registering it in the canonical one.
+    return { id: key, label: key, dataType: 'text' as const, defaultWidth: 140 };
+  }
+  return def;
+}
+
+// P-46 Workstream 3 Session 3 — sortable row wrapper. Each row gets a
+// dnd-kit useSortable hook + a leading drag-handle cell. The drag handle
+// receives the listeners; the rest of the row is normal click-to-edit
+// surface so cell-clicks aren't hijacked by drag activation.
+function SortableUrlRow({
+  row,
+  visibleColumns,
+  cellRenderers,
+  onOpenClick,
+  onTrashClick,
+}: {
+  row: CompetitorUrl;
+  visibleColumns: ColumnDef[];
+  cellRenderers: Record<ColumnSortKey, (row: CompetitorUrl) => React.ReactNode>;
+  onOpenClick: (row: CompetitorUrl, e: React.MouseEvent) => void;
+  onTrashClick: (row: CompetitorUrl, e: React.MouseEvent) => void;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: row.id });
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    borderBottom: '1px solid #21262d',
+    background: isDragging ? '#21262d' : undefined,
+    opacity: isDragging ? 0.6 : 1,
+  };
+
+  return (
+    <tr
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      onMouseEnter={(e) => {
+        if (isDragging) return;
+        const cells =
+          e.currentTarget.querySelectorAll<HTMLTableCellElement>('td');
+        cells.forEach((cell) => {
+          cell.style.background = '#21262d';
+        });
+      }}
+      onMouseLeave={(e) => {
+        const cells =
+          e.currentTarget.querySelectorAll<HTMLTableCellElement>('td');
+        cells.forEach((cell) => {
+          cell.style.background = '';
+        });
+      }}
+    >
+      <td style={dragHandleCellStyle}>
+        <button
+          type="button"
+          {...listeners}
+          style={dragHandleButtonStyle}
+          aria-label={`Drag to reorder ${row.url}`}
+          title="Drag to reorder"
+          data-testid="url-row-drag-handle"
+        >
+          ⋮⋮
+        </button>
+      </td>
+      {visibleColumns.map((col) => cellRenderers[col.key](row))}
+      <td
+        style={{
+          textAlign: 'right',
+          padding: '4px 6px',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        <button
+          type="button"
+          onClick={(e) => onOpenClick(row, e)}
+          aria-label={`Open detail page for ${row.url}`}
+          title="Open detail page"
+          data-testid="url-row-open-button"
+          style={rowOpenButtonStyle}
+        >
+          ↗
+        </button>
+        <button
+          type="button"
+          onClick={(e) => onTrashClick(row, e)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.stopPropagation();
+            }
+          }}
+          aria-label={`Delete URL ${row.url}`}
+          title="Delete URL"
+          data-testid="url-row-delete-button"
+          style={rowTrashButtonStyle}
+        >
+          🗑
+        </button>
+      </td>
+    </tr>
+  );
+}
+
+// P-46 Workstream 3 Session 3 — drag handle on the right edge of every
+// column header. Owns its own in-drag width state so the table re-renders
+// the new width on every pointermove tick; commits the final width to the
+// parent on pointerup. Clamps to MIN/MAX_COLUMN_WIDTH so users can't drag
+// a column off-screen or below readability.
+function ColumnResizeHandle({
+  columnId,
+  currentWidth,
+  onCommit,
+}: {
+  columnId: string;
+  currentWidth: number;
+  onCommit: (width: number) => void;
+}) {
+  const [isDragging, setIsDragging] = useState(false);
+
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>): void => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX;
+    const startWidth = currentWidth;
+    setIsDragging(true);
+
+    let latestWidth = startWidth;
+    const onMove = (ev: PointerEvent): void => {
+      const delta = ev.clientX - startX;
+      const next = Math.max(
+        MIN_COLUMN_WIDTH,
+        Math.min(MAX_COLUMN_WIDTH, Math.round(startWidth + delta))
+      );
+      latestWidth = next;
+      // Optimistic: commit on every move so the colgroup width updates
+      // live as the user drags. The parent's debounced PUT coalesces the
+      // burst into one network write on idle.
+      onCommit(next);
+    };
+    const onUp = (): void => {
+      setIsDragging(false);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+      // Final commit — guarantees the last value lands even if the
+      // browser drops the last pointermove.
+      onCommit(latestWidth);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+  };
+
+  return (
+    <div
+      role="separator"
+      aria-label={`Resize ${columnId} column`}
+      aria-orientation="vertical"
+      data-testid="column-resize-handle"
+      onPointerDown={onPointerDown}
+      style={resizeHandleStyle(isDragging)}
+    />
+  );
+}
+
+const dragHandleHeaderStyle: React.CSSProperties = {
+  borderBottom: '1px solid #30363d',
+  padding: 0,
+};
+
+const dragHandleCellStyle: React.CSSProperties = {
+  textAlign: 'center',
+  padding: '0 4px',
+  color: '#484f58',
+  fontSize: '12px',
+  lineHeight: '12px',
+  cursor: 'grab',
+  userSelect: 'none',
+};
+
+const dragHandleButtonStyle: React.CSSProperties = {
+  background: 'transparent',
+  border: 'none',
+  color: '#484f58',
+  cursor: 'grab',
+  padding: '4px 2px',
+  fontSize: '13px',
+  fontFamily: 'inherit',
+  lineHeight: '13px',
+  letterSpacing: '-1px',
+  touchAction: 'none',
+};
+
+function resizeHandleStyle(isDragging: boolean): React.CSSProperties {
+  return {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: '6px',
+    height: '100%',
+    cursor: 'col-resize',
+    background: isDragging ? '#1f6feb' : 'transparent',
+    borderRight: isDragging ? '1px solid #1f6feb' : '1px solid transparent',
+    touchAction: 'none',
+    transition: 'background 80ms ease-in-out',
+  };
 }
