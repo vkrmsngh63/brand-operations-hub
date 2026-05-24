@@ -6,7 +6,9 @@
 **Branch:** `workflow-2-competition-scraping`
 **Created:** May 4, 2026
 **Created in session:** session_2026-05-04_w2-workflow-requirements-interview (Claude Code)
-**Last updated:** 2026-05-23 (P-46 W#2 Phase 2 design session — new §B 2026-05-23 entry appended at end-of-doc cross-referencing the standalone `docs/COMPETITION_DATA_V2_DESIGN.md` shipped this session (~700 lines; §A frozen 10 questions + §B empty + §C 5-workstream implementation outlines; mirrors the 2026-05-20-b CAPTURED_VIDEOS_DESIGN.md split precedent). §A unchanged per Rule 18 — P-46 is a Phase 2 expansion of W#2's graduated-pattern surface; the design lives in the standalone doc. Future P-46 build sessions get §B entries in `docs/COMPETITION_DATA_V2_DESIGN.md` directly per Rule 18, NOT in this doc's §B. The 10 locked decisions cover Reviews extraction (DEFERRED to future per-platform sessions; v1 = schema + URL-detail-page view + manual entry form) + click-to-edit cells + server-side per-user UI preferences + Comprehensive Analysis page one-per-Project + TipTap rich-text editor + Sizes/Options box hide-UI-keep-data + Competition Score number-input + Status ↔ Scraping Status bidirectional mirror + Select-preview-thumbnail DROPPED + workstream sequencing Schema → URL detail page → Competition Data table → Comprehensive Analysis page → Extension + Reviews. Schema-change-in-flight stayed "No" this session — design-only.)
+**Last updated:** 2026-05-24-d (P-47 Shadow DOM refactor Session 1 — new §B 2026-05-24-d entry appended at end-of-doc capturing the content-script video-capture-form mount strategy refactor from `document.body` + 80-event-listener band-aid to open Shadow DOM root with `FORM_CHROME_CSS` injected inside the shadow + band-aid deletion. Pure CODE session on `workflow-2-competition-scraping` via build commit `d08f673` (2 files +203/-220, net -17 LOC); 5/5 GREEN at unchanged baselines (558 / 786 / 62 all UNCHANGED). §A unchanged per Rule 18 — P-47 is a structural refactor of extension content-script architecture introduced post-graduation; §A captures pre-graduation design only. NEW reusable Pattern memorialized in §B 2026-05-24-d: "Shadow DOM mount as structural replacement for per-listener event-isolation band-aid" — pairs with P-45 Build #2 §Entry 2026-05-22-i Pattern B as the long-term-fix pairing. Schema-change-in-flight stayed "No" this session — pure content-script DOM mount refactor; no schema, no API, no shared-types.)
+
+**Previously updated:** 2026-05-23 (P-46 W#2 Phase 2 design session — new §B 2026-05-23 entry appended at end-of-doc cross-referencing the standalone `docs/COMPETITION_DATA_V2_DESIGN.md` shipped this session (~700 lines; §A frozen 10 questions + §B empty + §C 5-workstream implementation outlines; mirrors the 2026-05-20-b CAPTURED_VIDEOS_DESIGN.md split precedent). §A unchanged per Rule 18 — P-46 is a Phase 2 expansion of W#2's graduated-pattern surface; the design lives in the standalone doc. Future P-46 build sessions get §B entries in `docs/COMPETITION_DATA_V2_DESIGN.md` directly per Rule 18, NOT in this doc's §B. The 10 locked decisions cover Reviews extraction (DEFERRED to future per-platform sessions; v1 = schema + URL-detail-page view + manual entry form) + click-to-edit cells + server-side per-user UI preferences + Comprehensive Analysis page one-per-Project + TipTap rich-text editor + Sizes/Options box hide-UI-keep-data + Competition Score number-input + Status ↔ Scraping Status bidirectional mirror + Select-preview-thumbnail DROPPED + workstream sequencing Schema → URL detail page → Competition Data table → Comprehensive Analysis page → Extension + Reviews. Schema-change-in-flight stayed "No" this session — design-only.)
 
 **Previously updated:** 2026-05-20-b (P-27 Captured-videos feature DESIGN session — new §B 2026-05-20-b entry appended at end-of-doc cross-referencing the standalone `docs/CAPTURED_VIDEOS_DESIGN.md` shipped this session. §A unchanged — P-27 is a NEW polish item on top of W#2's graduated-pattern surface; §A frozen per Rule 18. The design lives in standalone `docs/CAPTURED_VIDEOS_DESIGN.md` (525 lines after corrections; §A.0–§A.18 frozen + §B empty per Rule 18 shape) per the Rule 14f forced-picker pick of Option A — new top-level doc — over Option B (§B append here) and Option C (both). Future P-27 ship sessions get §B entries in `docs/CAPTURED_VIDEOS_DESIGN.md` directly per Rule 18, NOT in this doc's §B. Rule 24 end-of-session catch on the §A.8 asymmetry-claim captured in `docs/CORRECTIONS_LOG.md` §Entry 2026-05-20-b INFORMATIONAL. Schema-change-in-flight stayed "No" this session — design-only.)
 
@@ -3172,6 +3174,99 @@ W#2 graduation estimate revised: ~3-6 more sessions (pre-P-27 capture, items wer
 - CHAT_REGISTRY 2026-05-23 top entry (the canonical chronological log).
 - `feedback_recommendation_style.md` (director's standing preference for most-thorough/reliable path; informed the 8 forced-picker outcomes this session).
 - `feedback_default_to_recommendation.md` (informed the Q8 picker-skip — single most-thorough path obvious; Q8 was permission-on-default-approved-path not intent-clarification).
+
+---
+
+## §B 2026-05-24-d — `session_2026-05-24-d_p47-shadow-dom-refactor-session-1` — P-47 Shadow DOM refactor Session 1 lands the content-script video-capture-form mount strategy refactor from `document.body` + 80-event-listener band-aid to open Shadow DOM root with `FORM_CHROME_CSS` injected inside the shadow + band-aid deletion — NEW reusable Pattern memorialized "Shadow DOM mount as structural replacement for per-listener event-isolation band-aid" pairing with P-45 Build #2 §Entry 2026-05-22-i Pattern B as the long-term-fix pairing — LOW informational sub-observation on CSS extraction into shared exported constant + template-literal interpolation back into composite constant
+
+**Session:** `session_2026-05-24-d_p47-shadow-dom-refactor-session-1` (Claude Code, on `workflow-2-competition-scraping`; PURE CODE — no schema, no API, no shared-types; no main push)
+**Branch:** `workflow-2-competition-scraping` (single-branch; no main push; build commit `d08f673` sits on workflow branch alongside the 2 prior W5 build commits `3c981be` + `41172f1` all awaiting the next bundled W5 + P-47 deploy session per (a.87))
+**Build commits this session:** ONE — `d08f673` — W#2 polish P-47 Shadow DOM refactor Session 1 — replace 80-event-listener band-aid with Shadow DOM mount — 2 files +203/-220 (net -17 LOC)
+**Pushes today:** 1 — end-of-session push of build commit `d08f673` + today's doc-batch together to `origin/workflow-2-competition-scraping` (operationally adjacent; NO Rule 9 gate fired — no destructive operations, no main push)
+**Director directive at session start:** *"please defer any real world testing that needs to be done by me and work on the next item otherwise road map for workflow#"* — same standing pattern as prior 2 sessions; resolved per `feedback_default_to_recommendation.md` without a re-confirmation picker since the launch-prompt task (P-47 Shadow DOM refactor Session 1, pure code) was already the recommended default and matched the directive
+**Director directive mid-session:** *"please skip anything that requires me to do real world testing in this session"* — directly skipped P-47 Step 8 (empirical Chrome verification on Amazon); captured as DEFERRED task #6 + resolved by routing the verify to next session's bundled deploy Phase-4 step
+**Director directive at end-of-session:** picker outcome A (Bundled W5 + P-47 deploy session — Recommended) over (B) P-26 below-fold scroll capture Session 1 + (C) P-43 mechanical prevention small fix + (D) question first
+**Status:** P-47 Session 1 ✅ DONE-AT-CODE-LEVEL 2026-05-24-d. P-47 implementation arc progress: Session 1 of the original 2-3 estimate landed at code level; Session 2 (Cross-platform verification) MERGED into the next deploy session's Phase-4 since the Shadow DOM mount is structural-only with no cross-platform variance expected; Session 3 (DEPLOY) MERGED into the next bundled W5 + P-47 deploy session per (a.87). DEPLOY-PENDING. Phase-4 director real-Chrome verification on Amazon pending — bundles into the next deploy session's Phase-4 step (covers BOTH W5 URL-form additions + P-47 Shadow DOM mount since both ship via the same extension form surface).
+
+**Why this entry lives in `docs/COMPETITION_SCRAPING_DESIGN.md` §B rather than `docs/COMPETITION_DATA_V2_DESIGN.md` §B:** P-47 is a structural refactor of the **extension content-script architecture** introduced post-W#2-graduation as a structural cleanup of P-45 Build #2's band-aid; it has no §A binding in `docs/COMPETITION_DATA_V2_DESIGN.md` (which captures the P-46 Phase 2 redesign of the vklf.com surface — Comprehensive Analysis page + Competition Data table redesign + Reviews capture + URL detail page restructure). P-47 belongs to the W#2 extension content-script subsystem captured in this design doc. Future P-47-related sessions should also land their §B entries here, not in the V2 design doc.
+
+**What landed this session — empirical narrative:**
+
+The content-script video-capture form (`extensions/competition-scraping/src/lib/content-script/video-capture-form.ts`) now mounts inside an **open Shadow DOM root** attached to a fixed-positioned host `<div>` in `document.body`, rather than appending the backdrop directly into `document.body`. Events fired inside the shadow root do not surface to page-level handlers by default, so the per-input event-isolation band-aid (P-45 Build #2 2026-05-22-i, 20 events × 4 inputs = 80 listeners on each form open) is no longer needed and has been deleted.
+
+**`styles.ts` changes:**
+
+- New exported `FORM_CHROME_CSS` constant containing the `.plos-cs-form-*` + `.plos-cs-chip-*` rules previously inlined in `CONTENT_SCRIPT_CSS`.
+- `CONTENT_SCRIPT_CSS` now interpolates `${FORM_CHROME_CSS}`, so the other forms (image / text / url-add) that still mount to `document.body` continue to receive these rules via the host-page `<head>` stylesheet without drift between the two consumption sites.
+
+**`video-capture-form.ts` changes:**
+
+- Import `FORM_CHROME_CSS` from `./styles.ts`.
+- Create host `<div>` with `position:fixed inset:0 z-index:999998` + `attachShadow({mode:'open'})`; inject `<style>FORM_CHROME_CSS</style>` inside the shadow root.
+- Append backdrop inside the shadow root; append host to `document.body`.
+- `destroy()` removes the host (parent of the shadow root) instead of the backdrop.
+- `focusNewCategoryInput()` reads `shadow.activeElement` instead of `document.activeElement`, since `document.activeElement` returns the host element for any descendant focused inside the shadow.
+- Delete `applyAggressiveEventIsolation` function (62 LOC including the 20-event-array `stopPropagation` loop + the click-handler force-focus with `queueMicrotask` retry) + its 4 call sites + its 20-line context comment.
+- Escape-to-close `keydown` listener stays on `document` — keydown events from inside the shadow root compose up through the host into the document tree, so the listener catches them in both cases.
+
+All 5 scoreboard checks GREEN at unchanged baselines (root tsc clean / ext tsc clean / 558 ext UNCHANGED / 786 src/lib UNCHANGED / 62 routes UNCHANGED). Check 6 Playwright SKIPPED per non-deploy-session convention. No new tests — the refactor is structural-only with no new units of behaviour to cover at the node:test layer (form-mount lifecycle isn't unit-tested today; coverage will land if/when this proves useful as a regression bell).
+
+**NEW reusable Pattern memorialized — "Shadow DOM mount as structural replacement for per-listener event-isolation band-aid":**
+
+When a per-listener band-aid (N events × M elements = N×M listeners on each component open) successfully isolates a component from page-level interference, the structural replacement is a Shadow DOM mount providing the same isolation at the boundary level with zero per-listener overhead.
+
+Today's instance: P-45 Build #2 (2026-05-22-i) shipped an aggressive event-isolation band-aid (20 events × 4 inputs = 80 listeners on each video-capture-form open) to solve the page-level focus-stealing problem on Amazon. The band-aid worked empirically — verified on Amazon during P-45's Phase-4 verification — but carried hidden risk for any future video-form feature that needed to PROPAGATE events upward, and the per-listener overhead grew linearly with form-control count. P-47 Session 1 today replaced the band-aid with a Shadow DOM mount: events fired inside the shadow root do not surface to page-level handlers by default, so the isolation is at the boundary rather than per-listener.
+
+**Pairs with P-45 Build #2 §Entry 2026-05-22-i Pattern B** (the band-aid memorialized) as the long-term-fix pairing. The band-aid + Shadow DOM mount form a complete pattern lifecycle:
+- **Pattern B from P-45 Build #2 §Entry 2026-05-22-i** memorialized the band-aid: "aggressive page-event-isolation via per-listener stopPropagation across the full input event surface — viable as a localized late-stage fix when a structural refactor would balloon scope and the band-aid stays bounded to a small component surface".
+- **Today's Pattern memorialized in this §B entry** memorializes the structural replacement: "when a per-listener band-aid successfully isolates a component from page-level interference, the structural replacement is a Shadow DOM mount providing the same isolation at the boundary level with zero per-listener overhead".
+
+Together these two Patterns calibrate the band-aid → structural-fix arc: ship the band-aid first to unblock the immediate ship; capture the structural replacement as a polish-backlog entry; ship the structural replacement in a later session when scope permits. P-45 Build #2 → P-47 Session 1 is the canonical exemplar.
+
+**Why this Pattern matters:** Many UI-isolation problems present first as "events from the host page interfere with the component"; the band-aid (per-listener stopPropagation across the full event surface of the component's input elements) solves the immediate problem but doesn't generalize — every new input or event type added later must be added to the band-aid arrays manually, and the overhead grows linearly. Shadow DOM mount provides the same isolation at the boundary level — events composed inside the shadow root don't surface to the page unless explicitly bubbled through with `composed: true`. The structural replacement is cheaper at runtime AND less brittle at code-level.
+
+**LOW informational sub-observation — "CSS extraction into shared exported constant + template-literal interpolation back into composite constant":**
+
+When refactoring `styles.ts` to inject CSS rules inside the Shadow DOM root (which doesn't inherit page styles), the natural approach was to duplicate the `.plos-cs-form-*` rules inline inside `video-capture-form.ts`. That would have introduced drift risk: any future change to a form-chrome CSS rule would have to be made in two places (the page-level stylesheet for the image / text / url-add forms that still mount to `document.body`, and the inline copy inside `video-capture-form.ts` for the shadow root).
+
+The most-thorough/reliable approach per `feedback_recommendation_style.md`: extract the form-chrome rules to a new exported `FORM_CHROME_CSS` constant; re-interpolate that constant back into `CONTENT_SCRIPT_CSS` via `${FORM_CHROME_CSS}` so the global stylesheet consumers continue to receive these rules via the host-page `<head>` stylesheet; import `FORM_CHROME_CSS` into `video-capture-form.ts` and inject it via a `<style>` tag inside the shadow root.
+
+The Pattern: **single source of truth via template-literal interpolation back into composite constant** — both consumption sites (global stylesheet + Shadow DOM root) consume the same exported `FORM_CHROME_CSS` constant; any future change to a form-chrome CSS rule lands in one place and propagates to both sites without drift.
+
+**Why this is informational not a full Pattern:** the technique is a standard refactor pattern (extract-shared-constant + interpolate-back) rather than a novel insight; captured as a sub-observation under the main P-47 entry rather than a standalone reusable Pattern.
+
+**Verification scoreboard:**
+
+- Pre-build /scoreboard: 5/5 GREEN at baselines — root tsc clean / extension tsc clean / 558 ext UNCHANGED / 786 src/lib UNCHANGED / 62 routes UNCHANGED. Check 6 Playwright SKIPPED per Rule 27 (non-deploy-session convention).
+- Post-refactor /scoreboard after build commit `d08f673`: 5/5 GREEN at unchanged baselines — root tsc / ext tsc / 558 / 786 / 62 — no new tests (structural-only refactor; existing tests cover the form's input handling + save logic which is unchanged).
+- End-of-session baselines: root tsc clean / ext tsc clean / 558 ext / 786 src/lib / 62 routes (all UNCHANGED from session-start; the refactor is structural-only).
+
+**Affected §A sections (informational — §A frozen per Rule 18):**
+
+- §A is unchanged. The video-capture-form is part of the extension content-script architecture added post-W#2-graduation (the captured-videos feature originated as P-27 designed 2026-05-20-b in `docs/CAPTURED_VIDEOS_DESIGN.md`); the form's mount strategy is an implementation detail not captured in §A's pre-graduation design surface.
+- The §B narrative log for extension content-script architecture changes lives in this doc (e.g., the original 2026-05-19-g P-23 saved-URL-dropdown entries + this 2026-05-24-d P-47 entry). Future content-script architecture changes append here per the canonical Group B pattern.
+
+**Impact on §A: None; §A stays frozen per Rule 18.**
+
+**Director triple-defer informational calibration data point continuation:**
+
+Director has now deferred W4 Phase-4 director real-Chrome verification a THIRD consecutive session (originally deferred 2026-05-26 W4 deploy session + re-deferred 2026-05-24-c + re-deferred 2026-05-24-d today). The standing carry-overs pattern memorialized in CORRECTIONS_LOG §Entry 2026-05-24-c continues to apply — the 10-step W4 Phase-4 walkthrough preserved verbatim in NEXT_SESSION.md ## Standing carry-overs section must carry forward AGAIN. No process change needed; just disciplined verbatim preservation across consecutive deferrals.
+
+**Calibration insight:** when director defers Phase-4 verification across multiple consecutive sessions AND the unshipped-to-main queue accumulates (today: 3 build commits unshipped — W5 build + Reviews polish + P-47 Shadow DOM), the natural resolution is a **bundled deploy session** that ships everything in the queue under ONE Rule 9 gate + ONE Phase-4 verification step. That's the picker outcome A from today's end-of-session picker: bundled W5 + P-47 deploy ff-merges 3 build commits + the interleaved doc-batch commits + Vercel auto-redeploy + fresh extension zip + Phase-4 covers BOTH W5 URL-form additions AND Shadow DOM mount since both ship via the same extension form surface.
+
+**Cross-references:**
+
+- CORRECTIONS_LOG §Entry 2026-05-24-d (today's W5 + P-47 closing entry — captures the same content from a corrections-log/procedural perspective; this design doc §B captures it from a design/implementation perspective + the long-term-fix pairing arc with P-45 Build #2's band-aid memorialization).
+- CORRECTIONS_LOG §Entry 2026-05-22-i (P-45 Build #2 — established Pattern B "aggressive page-event-isolation via per-listener stopPropagation" — the band-aid this refactor replaces).
+- CORRECTIONS_LOG §Entry 2026-05-24-c (yesterday's W5 build session — established the director double-defer informational calibration data point; today's session continues the pattern with a triple-defer of W4 Phase-4 verify).
+- `docs/ROADMAP.md` P-47 polish-backlog entry (annotated this session — Status flipped to ✅ DONE-AT-CODE-LEVEL 2026-05-24-d on workflow-2-competition-scraping via `d08f673` — DEPLOY-PENDING bundled into next session's W5 + P-47 deploy; (a.86) closed + (a.87) opens for bundled W5 + P-47 deploy session).
+- `docs/COMPETITION_SCRAPING_DESIGN.md` §B 2026-05-19-g (P-23 saved-URL-dropdown side-by-side ship session — sibling extension content-script architecture entry).
+- `docs/CAPTURED_VIDEOS_DESIGN.md` (the sibling design doc for P-27 + P-45 captured-videos feature where the band-aid this refactor replaces was originally shipped).
+- `docs/NEXT_SESSION.md` (today's complete rewrite for bundled W5 + P-47 deploy session + ## Standing carry-overs section preserving W4 Phase-4 10-step verification walkthrough verbatim — third consecutive verbatim preservation).
+- `feedback_recommendation_style.md` (most-thorough/reliable — today's end-of-session picker resolved to Recommended option A "Bundled W5 + P-47 deploy"; today's NEW Pattern "Shadow DOM mount as structural replacement" recommends the structural fix over continuing with band-aids per most-thorough/reliable).
+- `feedback_default_to_recommendation.md` (today's session-start director directive resolved per this feedback memory without a re-confirmation picker — launch-prompt task was already the recommended default).
+
+**Closing line:** P-47 Shadow DOM refactor Session 1 ✅ DONE-AT-CODE-LEVEL 2026-05-24-d. Content-script video-capture-form mount strategy refactored from `document.body` + 80-event-listener band-aid to open Shadow DOM root with `FORM_CHROME_CSS` injected inside the shadow + band-aid deletion. Next session: bundled W5 + P-47 deploy session per (a.87). Standing carry-over: W4 Phase-4 verify (preserved verbatim in NEXT_SESSION.md ## Standing carry-overs section — third consecutive verbatim preservation).
 
 ---
 
