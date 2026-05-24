@@ -252,6 +252,25 @@ export function makeUrlsHandlers(deps: UrlsHandlerDeps) {
           ? (body.customFields as Prisma.InputJsonValue)
           : Prisma.JsonNull,
       ...(body.source !== undefined ? { source: body.source } : {}),
+      // P-46 Workstream 5 (2026-05-24) — 4 new structural fields the
+      // extension URL save form now collects up front. Whitespace-only
+      // normalizes to null matching productName / brandName pattern above.
+      type:
+        typeof body.type === 'string' && body.type.trim()
+          ? body.type.trim()
+          : null,
+      description1:
+        typeof body.description1 === 'string' && body.description1.trim()
+          ? body.description1.trim()
+          : null,
+      description2:
+        typeof body.description2 === 'string' && body.description2.trim()
+          ? body.description2.trim()
+          : null,
+      price:
+        typeof body.price === 'string' && body.price.trim()
+          ? body.price.trim()
+          : null,
       addedBy: userId,
     };
 

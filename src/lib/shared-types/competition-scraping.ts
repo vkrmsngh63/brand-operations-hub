@@ -169,6 +169,15 @@ export interface CreateCompetitorUrlRequest {
   // omitted so the Chrome extension's existing POST traffic stays
   // unchanged. vklf.com's manual-add modal sends `manual` explicitly.
   source?: Source;
+  // P-46 Workstream 5 (2026-05-24) — extension URL save form now collects
+  // these 4 structural fields up front per docs/COMPETITION_DATA_V2_DESIGN.md
+  // §C.5. All optional on the wire; server normalizes whitespace-only to
+  // null and persists trimmed strings. PATCH already accepts these via
+  // UpdateCompetitorUrlRequest (shipped Workstream 2 Session 5).
+  type?: string;
+  description1?: string;
+  description2?: string;
+  price?: string;
 }
 
 // PATCH /api/projects/[projectId]/competition-scraping/urls/[urlId] —

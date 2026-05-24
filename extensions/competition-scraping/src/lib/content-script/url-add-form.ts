@@ -182,6 +182,32 @@ export function openUrlAddForm(props: UrlAddFormProps): UrlAddForm {
     return { wrap, input };
   }
 
+  // P-46 Workstream 5 (2026-05-24) — textarea factory for the Description-1 +
+  // Description-2 fields whose schema columns are db.Text. Mirrors makeField()
+  // shape so the call-site spread + setSaving wiring stays uniform.
+  function makeTextareaField(
+    label: string,
+    name: string,
+    placeholder: string,
+    rows = 3,
+  ): { wrap: HTMLElement; input: HTMLTextAreaElement } {
+    const wrap = document.createElement('div');
+    wrap.className = 'plos-cs-form-field';
+    const lab = document.createElement('label');
+    lab.className = 'plos-cs-form-label';
+    lab.textContent = label;
+    lab.htmlFor = `plos-cs-${name}`;
+    const input = document.createElement('textarea');
+    input.id = `plos-cs-${name}`;
+    input.name = name;
+    input.className = 'plos-cs-form-input';
+    input.placeholder = placeholder;
+    input.rows = rows;
+    wrap.appendChild(lab);
+    wrap.appendChild(input);
+    return { wrap, input };
+  }
+
   // 2026-05-15-d Slice #2.5 — Competition Category field with the same
   // sentinel-based dropdown pattern the popup's CapturedTextPasteForm uses
   // for content-category. The DOM lives in plain TS here (content-script
@@ -330,10 +356,41 @@ export function openUrlAddForm(props: UrlAddFormProps): UrlAddForm {
     'e.g., Brand X',
   );
 
+  // P-46 Workstream 5 (2026-05-24) — 4 new structural fields per §C.5.
+  // Order matches the URL detail page's vklf.com layout from W2 Session 5 so
+  // muscle-memory carries between the two surfaces. All optional; server
+  // normalizes whitespace-only to null.
+  const typeField = makeField(
+    'Type (optional)',
+    'type',
+    '',
+    'e.g., Red light therapy panel',
+  );
+  const description1Field = makeTextareaField(
+    'Description 1 (optional)',
+    'description1',
+    'Longer prose — key product details, claims, positioning',
+  );
+  const description2Field = makeTextareaField(
+    'Description 2 (optional)',
+    'description2',
+    'A second batch of prose — anything else worth capturing',
+  );
+  const priceField = makeField(
+    'Price (optional)',
+    'price',
+    '',
+    'e.g., $299 or 299.00 or $250–$350',
+  );
+
   form.appendChild(urlField.wrap);
   form.appendChild(categoryField.wrap);
   form.appendChild(productField.wrap);
   form.appendChild(brandField.wrap);
+  form.appendChild(typeField.wrap);
+  form.appendChild(description1Field.wrap);
+  form.appendChild(description2Field.wrap);
+  form.appendChild(priceField.wrap);
 
   // P-6 — Sponsored Ad checkbox. Below the 3 free-text fields. Pre-checked
   // when defaultIsSponsoredAd is true (orchestrator passes this for Amazon
@@ -406,6 +463,10 @@ export function openUrlAddForm(props: UrlAddFormProps): UrlAddForm {
     categoryField.setDisabled(saving);
     productField.input.disabled = saving;
     brandField.input.disabled = saving;
+    typeField.input.disabled = saving;
+    description1Field.input.disabled = saving;
+    description2Field.input.disabled = saving;
+    priceField.input.disabled = saving;
     sponsoredInput.disabled = saving;
     saveBtn.textContent = saving ? 'Saving…' : 'Save';
   }
@@ -458,6 +519,21 @@ export function openUrlAddForm(props: UrlAddFormProps): UrlAddForm {
           : {}),
         ...(brandField.input.value.trim()
           ? { brandName: brandField.input.value.trim() }
+          : {}),
+        // P-46 Workstream 5 (2026-05-24) — 4 new structural fields. Same
+        // "send only when set" spread pattern as the existing optional
+        // fields; server normalizes whitespace-only to null defensively.
+        ...(typeField.input.value.trim()
+          ? { type: typeField.input.value.trim() }
+          : {}),
+        ...(description1Field.input.value.trim()
+          ? { description1: description1Field.input.value.trim() }
+          : {}),
+        ...(description2Field.input.value.trim()
+          ? { description2: description2Field.input.value.trim() }
+          : {}),
+        ...(priceField.input.value.trim()
+          ? { price: priceField.input.value.trim() }
           : {}),
         // P-6 — only send when checked; the schema-level default false
         // applies when omitted (mirrors the existing "send only when set"

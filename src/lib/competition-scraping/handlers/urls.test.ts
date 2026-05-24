@@ -298,6 +298,127 @@ test('POST 201 trims metadata strings and accepts isSponsoredAd boolean', async 
   assert.equal(seen[0].isSponsoredAd, true);
 });
 
+// P-46 Workstream 5 (2026-05-24) — 4 new structural fields the extension
+// URL save form now collects up front. The POST allowlist trims + persists;
+// whitespace-only or absent → null (matches productName/brandName pattern).
+
+test('POST 201 trims + persists W5 fields (type / description1 / description2 / price)', async () => {
+  const deps = makeDeps();
+  const { POST } = makeUrlsHandlers(deps);
+  const seen: Array<Prisma.CompetitorUrlUncheckedCreateInput> = [];
+  deps.prisma.competitorUrl.create = async ({ data }) => {
+    seen.push(data);
+    return makeRow({
+      id: 'url-w5-trim',
+      projectWorkflowId: data.projectWorkflowId,
+      platform: data.platform,
+      url: data.url,
+      type: (data.type as string) ?? null,
+      description1: (data.description1 as string) ?? null,
+      description2: (data.description2 as string) ?? null,
+      price: (data.price as string) ?? null,
+      addedBy: data.addedBy,
+    });
+  };
+  const r = await POST(
+    makeReq({
+      body: {
+        platform: 'amazon',
+        url: 'https://x.com',
+        type: '  Red light therapy panel  ',
+        description1: '  500 LEDs, 660nm + 850nm  ',
+        description2: '  FDA registered Class II  ',
+        price: '  $349  ',
+      },
+    }),
+    ctx
+  );
+  assert.equal(r.status, 201);
+  assert.equal(seen.length, 1);
+  assert.equal(seen[0].type, 'Red light therapy panel');
+  assert.equal(seen[0].description1, '500 LEDs, 660nm + 850nm');
+  assert.equal(seen[0].description2, 'FDA registered Class II');
+  assert.equal(seen[0].price, '$349');
+});
+
+test('POST 201 W5 fields — whitespace-only and absent both persist as null', async () => {
+  const deps = makeDeps();
+  const { POST } = makeUrlsHandlers(deps);
+  const seen: Array<Prisma.CompetitorUrlUncheckedCreateInput> = [];
+  deps.prisma.competitorUrl.create = async ({ data }) => {
+    seen.push(data);
+    return makeRow({
+      id: 'url-w5-null',
+      projectWorkflowId: data.projectWorkflowId,
+      platform: data.platform,
+      url: data.url,
+      type: (data.type as string | null) ?? null,
+      description1: (data.description1 as string | null) ?? null,
+      description2: (data.description2 as string | null) ?? null,
+      price: (data.price as string | null) ?? null,
+      addedBy: data.addedBy,
+    });
+  };
+  const r = await POST(
+    makeReq({
+      body: {
+        platform: 'amazon',
+        url: 'https://x.com',
+        // type absent entirely
+        description1: '   ',
+        description2: '\n\t  ',
+        price: '',
+      },
+    }),
+    ctx
+  );
+  assert.equal(r.status, 201);
+  assert.equal(seen.length, 1);
+  assert.equal(seen[0].type, null);
+  assert.equal(seen[0].description1, null);
+  assert.equal(seen[0].description2, null);
+  assert.equal(seen[0].price, null);
+});
+
+test('POST 201 W5 fields — non-string values are rejected to null defensively', async () => {
+  const deps = makeDeps();
+  const { POST } = makeUrlsHandlers(deps);
+  const seen: Array<Prisma.CompetitorUrlUncheckedCreateInput> = [];
+  deps.prisma.competitorUrl.create = async ({ data }) => {
+    seen.push(data);
+    return makeRow({
+      id: 'url-w5-defensive',
+      projectWorkflowId: data.projectWorkflowId,
+      platform: data.platform,
+      url: data.url,
+      type: (data.type as string | null) ?? null,
+      description1: (data.description1 as string | null) ?? null,
+      description2: (data.description2 as string | null) ?? null,
+      price: (data.price as string | null) ?? null,
+      addedBy: data.addedBy,
+    });
+  };
+  const r = await POST(
+    makeReq({
+      body: {
+        platform: 'amazon',
+        url: 'https://x.com',
+        type: 42,
+        description1: null,
+        description2: { nested: 'object' },
+        price: ['a', 'b'],
+      },
+    }),
+    ctx
+  );
+  assert.equal(r.status, 201);
+  assert.equal(seen.length, 1);
+  assert.equal(seen[0].type, null);
+  assert.equal(seen[0].description1, null);
+  assert.equal(seen[0].description2, null);
+  assert.equal(seen[0].price, null);
+});
+
 test('POST 200 idempotent on P2002 — returns existing row', async () => {
   const existing = makeRow({ id: 'url-existing', source: 'extension' });
   const { prisma, state } = makeFakePrisma({ findUniqueResult: existing });
