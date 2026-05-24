@@ -1064,4 +1064,99 @@ During /scoreboard Check 5 the parallel-Bash invocation leaked cwd from Checks 2
 
 ---
 
+## §B 2026-05-24 — Workstream 3 DEPLOY closing entry — Workstream 3 ✅ DONE-AND-VERIFIED end-to-end on vklf.com via initial ff-merge `51e68f8..c727da9` (6 commits) + 5 in-session fix-forwards `f8293f1` → `0703174` → `712efa0` → `7358963` → `ac45737` resolving 11 Phase-4 verification issues + NEW reusable Pattern "Phase-4 verification fix-forward cascade in a single deploy session" + MEDIUM informational Rule 18 spec-capture gap observation with mechanical prevention added to working methodology + Workstream 3 implementation arc COMPLETE end-to-end (Sessions 1-3 build + 1 deploy with 6 deploy events)
+
+**Session:** `session_2026-05-24_p46-workstream-3-deploy-and-five-fix-forwards`
+**Branch:** `workflow-2-competition-scraping` → `main` (ping-pong sync 6 times across the day)
+**Deploy events:** 6 — initial ff-merge `51e68f8..c727da9` + fix-forward #1 `f8293f1` + fix-forward #2 `0703174` + fix-forward #3 `712efa0` + fix-forward #4 `7358963` + fix-forward #5 `ac45737`
+**Total pushes today:** ~14 — 6 deploy pushes to `origin/main` (each gated via AskUserQuestion Rule 9 picker; director picked "Deploy now (recommended)" for all 6) + 6 ping-pong syncs to `origin/workflow-2-competition-scraping` (all clean fast-forwards) + 1 end-of-session doc-batch push + 1 end-of-session ping-pong
+**Director verdict at session end:** *"pass"* — all 11 Phase-4 issues PASS on vklf.com after fix-forward #5
+**Status:** Workstream 3 ✅ DONE-AND-VERIFIED 2026-05-24 on vklf.com end-to-end. Workstream 3 implementation arc COMPLETE across 3 build sessions + 1 deploy session with 6 deploy events. Next session: Workstream 4 (Comprehensive Competitor Analysis page) first build session per (a.81) RECOMMENDED-NEXT — ~2-3 sessions estimated per §C.4.
+
+**Full enumeration of 11 issues surfaced at Phase-4 verification + which fix-forward landed each:**
+
+Initial deploy (ff-merge `51e68f8..c727da9` carrying Workstream 3 Sessions 1+2+3 build commits + doc-batches as one 6-commit fast-forward; Vercel auto-redeploy fired; director loaded vklf.com Competition Data page in real Chrome on Mac). Director surfaced the following 11 issues across Phase-4 verification + the subsequent re-verifications:
+
+1. **Issue 1 — column resize handle should extend to full table height showing a faint column line during drag.** Fixed in fix-forward #1 (commit `f8293f1`). NEW `ResizeObserver` on the table tracks live table height; `height: tableHeight` applied on the `ColumnResizeHandle` so the resize line visibly extends past the header during drag. Phase-4 re-verify PASS.
+
+2. **Issue 2 — page should be full width.** Fixed in fix-forward #1 (commit `f8293f1`). `src/app/projects/[projectId]/competition-scraping/page.tsx` `<main>` had `maxWidth: 1080px` + `margin: auto` — both removed so the page consumes the viewport width. Phase-4 re-verify PASS.
+
+3. **Issue 3 — table should be horizontally scrollable instead of breaking out of its container.** Fixed in fix-forward #1 (commit `f8293f1`). Table `width` changed from `100%` to `max-content` + `minWidth: 100%` so the existing `overflowX: auto` wrapper now scrolls horizontally when columns overflow the viewport instead of breaking the layout. Phase-4 re-verify PASS.
+
+4. **Issue 4 — relocate font-size stepper from ColumnVisibilityBar to the table toolbar, as bare +/- buttons (no Npt display).** Fixed in fix-forward #1 (commit `f8293f1`). Stepper removed from ColumnVisibilityBar; added to UrlTable's toolbar as bare `+`/`−` buttons with no `Npt` value display + no label. Phase-4 re-verify PASS.
+
+5. **Issue 5 — Platform filter should support multi-select via checkboxes (not single-select).** Fixed in fix-forward #1 (commit `f8293f1`). `Platform[]` state shape replaces single-value `Platform`; `?platforms=X,Y` URL convention replaces `?platform=X`; "All Platforms" select-all/deselect-all toggle; legacy `?platform=X` backwards compat in the URL-detail-page viewer (treats single-value `?platform=` as a one-element array on the new state shape). Phase-4 re-verify PASS.
+
+6. **Issue 6 — sticky table header + sticky horizontal scrollbar when scrolling within the table.** Fixed in fix-forward #2 (commit `0703174`). Table wrapper changed to `overflow: auto` + `maxHeight: calc(100vh - 200px)` + `minHeight: 400px`; all 3 `<th>` variants (drag-handle / sortable / non-sortable) got `position: sticky; top: 0; zIndex: 3; background: #0d1117` via a shared `stickyHeaderStyle` constant for consistency; `ColumnResizeHandle` zIndex bumped from 2 to 4 to render above the sticky thead so the drag handle isn't covered by the header. Phase-4 re-verify PASS.
+
+7. **Issue 7 — director-specified column order.** Fixed in fix-forward #3 (commit `712efa0`). `TABLE_COLUMN_DEFS` + `COLUMNS` reshuffled in lockstep to: Category · Type · Sponsored · Product Name · Brand Name · Description 1 · Description 2 · Results Rank · Price · Product Stars · # Reviews · Seller Stars · Seller Reviews · Competition Score · URL · Status · Added On. Phase-4 re-verify PASS.
+
+8. **Issue 8 — ↗ Open button relocate inside Product Name cell with stopPropagation.** Fixed in fix-forward #3 (commit `712efa0`). Moved from row-actions column into Product Name cell with `e.stopPropagation()` on click so the cell still click-to-edits the text but the inline link opens the URL detail page in a new tab; row-actions column shrunk from 88px to 52px containing only trash; standalone `rowOpenButtonStyle` + `handleOpenClick` + `onOpenClick` prop all removed; NEW `inlineProductNameOpenButtonStyle`. Phase-4 re-verify PASS.
+
+9. **Issue 9 — URL detail page should be full width.** Fixed in fix-forward #3 (commit `712efa0`). `UrlDetailContent.tsx` `<main>` `maxWidth: 1080px` + `margin: auto` changed to `maxWidth: 100%` with `24px` side padding; inner content caps at 480px breadcrumb / 320px image / 480px video player intentionally untouched (these specific caps preserve readability per their original §A constraints). Phase-4 re-verify PASS.
+
+10. **Issue 10 — Platform column at very left of the table.** Fixed in fix-forward #4 (commit `7358963`). NEW `'platform'` entry at position 0 in `TABLE_COLUMN_DEFS` + `COLUMNS` + `ColumnSortKey` union + `cellRenderers`; renders friendly label via `PLATFORM_LABELS` lookup; `PLATFORM_LABELS` moved from `ColumnVisibilityBar` local const to `url-table-columns.ts` exported shared const so both the bar checkbox row + the table cell renderer use a single source of truth; column read-only display matches `addedAt`'s server-stamped read-only precedent; checkbox auto-appears in Columns visibility bar since the bar iterates `TABLE_COLUMN_DEFS`. Phase-4 re-verify PASS.
+
+11. **Issue 11 — Status column should be click-to-cycle (one-click toggle between INCOMPLETE/COMPLETE), not a dropdown.** Fixed in fix-forward #5 (commit `ac45737`). NEW internal `StatusCycleCell` sub-component replaces `InlineEnumCell` dropdown for `scrapingStatus`; one-click toggle between `INCOMPLETE`/`COMPLETE` with optimistic update + error rollback; `saving`-disabled prevents double-click pileup; bidirectional mirror with URL detail page's `EditableEnumField` Scraping Status toggle preserved via the same shared `CompetitorUrl.scrapingStatus` PATCH; removed unused `InlineEnumCell` import + `SCRAPING_STATUS_OPTIONS` const since `scrapingStatus` was the only `InlineEnumCell` caller in this file. Phase-4 re-verify PASS. **Director's verbatim end-of-session words: "pass"** — all 11 issues confirmed PASS on vklf.com.
+
+**NEW reusable Pattern memorialized — "Phase-4 verification fix-forward cascade in a single deploy session":**
+
+When Phase-4 director verification surfaces multiple issues post-deploy, fix-forward in-session rather than deferring; each fix-forward becomes its own build commit + own Rule 9 gate + own Phase-4 reverify cycle; the session ends with N deploys total. Today's session set the new high-water mark: 6 deploys (initial + 5 fix-forwards). Pairs with the P-45 Build #2 2026-05-22-i fix-forward Pattern (1 initial + 1 fix-forward) — today extends to N≥5 fix-forwards in one session showing the pattern scales.
+
+**When to use:** any deploy session where Phase-4 verify surfaces multiple issues that are scoped + reversible + UI-only.
+
+**When NOT to use:** if any issue requires schema change OR significant new code OR director shifts scope away from current workstream → defer to next session instead. The pattern depends on each fix being small enough that the cost of an extra `tsc + build + push + Vercel-redeploy + Phase-4-reverify` cycle is small relative to the cost of capturing the issue + scheduling a follow-up session for it.
+
+Today's 11-issues / 5-fix-forwards execution validated the pattern's scaling: every fix-forward landed in under 30 minutes from issue surfacing to PASS verification; no fix-forward needed to be reverted; each one's tsc + Next.js build re-verification stayed at 61 routes UNCHANGED; full /scoreboard was acceptably skipped per fix-forward (no new tests, no new routes, no new dependencies). The pattern composes with prior memorialized Patterns: the W3 "Multi-session workstream deploy gate timing" (memorialized 2026-05-23-c) defines when the deploy session lands; today's "Phase-4 verification fix-forward cascade" defines what happens INSIDE that deploy session when multiple issues surface; together they cover the multi-session-workstream deploy-cadence end-to-end shape.
+
+**MEDIUM informational — Rule 18 spec-capture gap surfaced + mechanical prevention added to working methodology:**
+
+Director's column-order specification for the Competition Data table existed in director's intent but was never echoed into binding docs (§C.3 of this design doc or a §B refinement entry). The Session 2 (2026-05-23-e) implementation defaulted to "additive append" semantics — the 9 pre-P-46 columns kept their pre-existing positions (URL / Brand Name / Product Name / Sponsored / Product Stars / # Reviews / Category / Added On / Actions) and the 8 new ones were appended at the end (Type / Description 1 / Description 2 / Price / Competition Score / Results Rank / Seller Stars / Seller Reviews) without asking. The default felt natural for an additive change so no Rule 14f picker fired. The gap surfaced at Phase-4 verification of the initial deploy + fix-forwards #1-#2; director re-specified the column order verbatim; fix-forward #3 reshuffled both `TABLE_COLUMN_DEFS` + `COLUMNS` in lockstep.
+
+**Mechanical prevention added to working methodology:** any UI-shape spec given mid-build (column order, button position, layout decision, sort default, etc.) must be echoed into binding docs + read back per Rule 14a BEFORE implementation lands. The capture point: at session-start when reading the design doc's §C.X session-spec block + the most-recent §B entries, scan for any sequencing/ordering/positioning language; if any is implicit-but-not-explicit, fire a Rule 14f picker on the canonical spec BEFORE writing code. This is a tightening of Rule 14a from "the design doc is the source of truth" to "the design doc is the source of truth; if any aspect of the implementation feels like 'the default should be obvious,' explicitly check that the default is captured in binding docs first." Captured as a footnote in CORRECTIONS_LOG §Entry 2026-05-24 + here in the design doc for traceability across future workstream sessions.
+
+**Verification scoreboard:**
+
+- Pre-deploy /scoreboard (workflow-2 before initial ff-merge): root tsc clean / extension tsc clean / 558 ext UNCHANGED / 744 src/lib UNCHANGED / 61 routes UNCHANGED; Check 6 Playwright SKIPPED per Rule 27 (no `extensions/` source files in the ff-merge bundle)
+- Post-merge /scoreboard (main after initial ff-merge): identical baselines preserved through ff
+- After fix-forwards #1-#5: root tsc clean + Next.js build 61 routes UNCHANGED each time; full /scoreboard not re-run per fix-forward (acceptable since each fix-forward was small UI-only with no new tests, no new routes, no new dependencies — calibration data point: baselines stayed UNCHANGED across all 6 deploys)
+
+**P-43 cwd-leak class re-reproduced ~9 times across the day (LOW informational sub-observation):**
+
+Across pre-deploy /scoreboard + post-merge /scoreboard + the various single-check tsc/build sanity passes between fix-forwards, the P-43 cwd-leak class re-reproduced approximately 9 times. Same Pattern as the 2026-05-22-i + 2026-05-23-c + 2026-05-23-e + 2026-05-23-f reproductions: when Check 3 (extension `npm test`) cd's to `extensions/competition-scraping/`, the cwd leaks into Check 5's `npm run build` call. Caught + recovered every single time with the absolute `cd /workspaces/brand-operations-hub` template form. Pattern stable; P-43's template-hardening fix protects verbatim-template-read pathways but NOT Claude's inline-typed shortcuts (the high count today reflects that Claude reaches for the shortcut form more often when running many sanity-check loops in a row). LOW informational; no impact on scoreboard or deploy results.
+
+**Date-stamping anomaly continuation (LOW informational sub-observation):**
+
+Calendar date today per director confirmation is **2026-05-24**. The 5 fix-forward commit MESSAGES used suffix labels `2026-05-23-g` through `2026-05-23-k` continuing yesterday's `-f` sequence. Git commit TIMESTAMPS in the actual git history are correct (2026-05-24); only the human-readable labels in commit MESSAGES diverged. Same anomaly class as noted in the 2026-05-23-b §Entry. Pattern: when many sessions occur in close succession across calendar-day boundaries, the `-letter` suffix convention sometimes diverges from the calendar date. Not corrections-tier; LOW informational; the in-doc dating discipline is intact (header bumps + ROADMAP polish entry + this §B entry + NEXT_SESSION.md + CORRECTIONS_LOG §Entry all use the correct calendar date 2026-05-24).
+
+**Affected §A sections (informational — §A frozen per Rule 18):**
+
+- §A.2 (click-to-edit on every cell) — Status column became click-to-cycle via the new `StatusCycleCell` rather than the `InlineEnumCell` dropdown, slightly narrowing the click-to-edit interpretation for enum fields with exactly 2 states (cycle is faster than dropdown for binary toggles); §A.2's underlying binding decision unchanged.
+- §A.3 (server-side per-user `UserTablePreferences`) — fully consumed; all 6 fields now driving live UI on vklf.com.
+- §A.7 (Competition Score 1-100) — surfaced via the existing PATCH allowlist + Session 2's `extractCompetitionScorePatch`; now deployed.
+- §A.8 (Status column bidirectional mirror) — bidirectional mirror preserved through the StatusCycleCell change (still PATCHes the same `CompetitorUrl.scrapingStatus` field).
+- §C.3 — Workstream 3 implementation outline; fully consumed across Sessions 1-3 + the 5 fix-forwards; Workstream 3 now ✅ DONE-AND-VERIFIED on vklf.com end-to-end. §C.4 begins next session.
+
+**Impact on §A: None; §A stays frozen per Rule 18.** All §A binding decisions consumed cleanly despite the 11-issue Phase-4 cascade because all 11 issues were either (a) layout/styling refinements within the same §A surface area or (b) UX polish that left §A's underlying binding decisions intact. The Rule 18 spec-capture gap surfaced this session was about an UNDERSPECIFIED §C.3 section (column order), not a §A binding decision being violated.
+
+**Calibration data point — full W1+W2+W3 implementation arc complete:**
+
+- Workstream 1 = 1 build session + folded into W2 deploy (under §C.1's 2-3 estimate);
+- Workstream 2 = 5 build sessions + 1 deploy session (top end of §C.2's 3-5 estimate);
+- Workstream 3 = 3 build sessions + 1 deploy session with 6 deploy events from fix-forward cascade (low end of §C.3's 3-4 estimate for build sessions);
+- **Combined W1+W2+W3 = 11 sessions** vs. 7-11 estimated (sum of §C.1+§C.2+§C.3 floor/ceiling) — landed at top end of estimate with no overrun;
+- Useful data point for sizing Workstreams 4-5: W4 = ~2-3 sessions per §C.4; W5 = ~1-2 sessions per §C.5; **total P-46 spend trending toward 14-16 sessions** vs. the original 11-17 estimate post-Q1+Q9 scope reductions.
+
+**Cross-references:**
+
+- CORRECTIONS_LOG §Entry 2026-05-24 (the closing entry for this deploy session — captures the same 11 issues + 5 fix-forwards + new Pattern + Rule 18 gap from a procedural perspective; this design doc §B captures the same content from a design/implementation perspective).
+- `docs/COMPETITION_DATA_V2_DESIGN.md` §B 2026-05-23-c (the W2 deploy session — established the "Multi-session workstream deploy gate timing" Pattern that today's W3 deploy composed with the new "Phase-4 verification fix-forward cascade" Pattern).
+- `docs/COMPETITION_DATA_V2_DESIGN.md` §B 2026-05-23-d through §B 2026-05-23-f (the three W3 build session entries — Sessions 1-3 whose bundled scopes today's deploy shipped together via the initial ff-merge).
+- `docs/ROADMAP.md` P-46 polish-backlog entry (annotated this session — WS#3 flipped to ✅ DONE-AND-VERIFIED 2026-05-24 on vklf.com via 6 deploys; (a.80) closed; new (a.81) opened for Workstream 4 first build session).
+- CORRECTIONS_LOG §Entry 2026-05-22-i (the P-45 Build #2 deploy session that established the prior 1-initial + 1-fix-forward Pattern; today's 1-initial + 5-fix-forward execution scales it).
+
+**Closing line:** Workstream 3 ✅ DONE-AND-VERIFIED 2026-05-24 on vklf.com end-to-end via 6-deploy fix-forward cascade. P-46 implementation arc progress: Workstreams 1 + 2 + 3 = 3 of 5 ✅ DONE-AND-VERIFIED on vklf.com. Next session: Workstream 4 (Comprehensive Competitor Analysis page) first build session — NEW page hosting per-Project TipTap rich-text doc with hyperlinks back to URL detail pages + edit-mode toggle + "Competition Data" back-button; uses the same `RichTextEditor` wrapper W2 S1 built with `variant='full'`; NEW route `/projects/[projectId]/competition-scraping/comprehensive-analysis/page.tsx`; NEW API route `/api/projects/[projectId]/competition-scraping/comprehensive-analysis` (currently 501-stub from W1; needs implementation); NEW Prisma model `ComprehensiveCompetitorAnalysis` already shipped in W1 schema ready for use.
+
+---
+
 END OF DOCUMENT
