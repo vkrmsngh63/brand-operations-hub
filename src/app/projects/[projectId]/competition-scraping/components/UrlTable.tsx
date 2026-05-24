@@ -203,13 +203,21 @@ interface ColumnDef {
   filterKey: ColumnFilterKey | null;
 }
 
+// 2026-05-24 fix-forward #3 — Column order matches director's specified
+// left-to-right order (also reflected in TABLE_COLUMN_DEFS in
+// url-table-columns.ts). The two arrays must stay in lockstep: this one
+// drives the table's thead/tbody render; the other drives the
+// ColumnVisibilityBar's checkbox order. Prior "additive append" order
+// was an implementation default that hadn't been written into the
+// binding docs; corrected in fix-forward #3.
 const COLUMNS: ColumnDef[] = [
-  { key: 'url', label: 'URL', defaultDir: 'asc', filterKey: null },
-  // P-46 Workstream 2 Session 5 (2026-05-23-b) — bidirectional mirror with
-  // the URL detail page's Scraping Status toggle per §A.8. Sort by status
-  // works (INCOMPLETE < COMPLETE lexically); per-column filtering is
-  // deferred to Workstream 3.
-  { key: 'scrapingStatus', label: 'Status', defaultDir: 'asc', filterKey: null },
+  {
+    key: 'competitionCategory',
+    label: 'Category',
+    defaultDir: 'asc',
+    filterKey: 'competitionCategory',
+  },
+  { key: 'type', label: 'Type', defaultDir: 'asc', filterKey: null },
   {
     key: 'isSponsoredAd',
     label: 'Sponsored',
@@ -228,12 +236,16 @@ const COLUMNS: ColumnDef[] = [
     defaultDir: 'asc',
     filterKey: 'brandName',
   },
+  { key: 'description1', label: 'Description 1', defaultDir: 'asc', filterKey: null },
+  { key: 'description2', label: 'Description 2', defaultDir: 'asc', filterKey: null },
   {
-    key: 'competitionCategory',
-    label: 'Category',
+    key: 'resultsPageRank',
+    label: 'Results Rank',
+    align: 'right',
     defaultDir: 'asc',
-    filterKey: 'competitionCategory',
+    filterKey: null,
   },
+  { key: 'price', label: 'Price', defaultDir: 'asc', filterKey: null },
   {
     key: 'productStarRating',
     label: 'Product Stars',
@@ -249,34 +261,6 @@ const COLUMNS: ColumnDef[] = [
     filterKey: 'numProductReviews',
   },
   {
-    key: 'addedAt',
-    label: 'Added On',
-    align: 'right',
-    defaultDir: 'desc',
-    filterKey: 'addedAt',
-  },
-  // P-46 Workstream 3 Session 2 — new data columns per §C.3 + §A.11. No
-  // per-column filtering this session (header funnel icons land Session 3
-  // along with column resize + drag-to-reorder).
-  { key: 'type', label: 'Type', defaultDir: 'asc', filterKey: null },
-  { key: 'description1', label: 'Description 1', defaultDir: 'asc', filterKey: null },
-  { key: 'description2', label: 'Description 2', defaultDir: 'asc', filterKey: null },
-  { key: 'price', label: 'Price', defaultDir: 'asc', filterKey: null },
-  {
-    key: 'competitionScore',
-    label: 'Competition Score',
-    align: 'right',
-    defaultDir: 'desc',
-    filterKey: null,
-  },
-  {
-    key: 'resultsPageRank',
-    label: 'Results Rank',
-    align: 'right',
-    defaultDir: 'asc',
-    filterKey: null,
-  },
-  {
     key: 'sellerStarRating',
     label: 'Seller Stars',
     align: 'right',
@@ -289,6 +273,26 @@ const COLUMNS: ColumnDef[] = [
     align: 'right',
     defaultDir: 'desc',
     filterKey: null,
+  },
+  {
+    key: 'competitionScore',
+    label: 'Competition Score',
+    align: 'right',
+    defaultDir: 'desc',
+    filterKey: null,
+  },
+  { key: 'url', label: 'URL', defaultDir: 'asc', filterKey: null },
+  // P-46 Workstream 2 Session 5 (2026-05-23-b) — bidirectional mirror with
+  // the URL detail page's Scraping Status toggle per §A.8. Sort by status
+  // works (INCOMPLETE < COMPLETE lexically); per-column filtering is
+  // deferred to Workstream 3.
+  { key: 'scrapingStatus', label: 'Status', defaultDir: 'asc', filterKey: null },
+  {
+    key: 'addedAt',
+    label: 'Added On',
+    align: 'right',
+    defaultDir: 'desc',
+    filterKey: 'addedAt',
   },
 ];
 
@@ -410,11 +414,41 @@ export function UrlTable({
       ),
       productName: (row) => (
         <td key="productName" style={cellStyle('left')}>
-          <InlineTextCell
-            value={row.productName}
-            onSave={(next) => onCellSave(row.id, { productName: next })}
-            placeholder="Set product name"
-          />
+          {/* 2026-05-24 fix-forward #3 — ↗ Open button embedded on the
+              right side of the Product Name cell per director's
+              directive. The cell remains click-to-edit (InlineTextCell
+              still fills the cell); only the ↗ button navigates. The
+              button's onClick stops propagation so it doesn't trigger
+              the cell's edit-mode click. */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              minWidth: 0,
+            }}
+          >
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <InlineTextCell
+                value={row.productName}
+                onSave={(next) => onCellSave(row.id, { productName: next })}
+                placeholder="Set product name"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onRowOpen(row.id);
+              }}
+              aria-label={`Open detail page for ${row.url}`}
+              title="Open detail page"
+              data-testid="url-row-open-button"
+              style={inlineProductNameOpenButtonStyle}
+            >
+              ↗
+            </button>
+          </div>
         </td>
       ),
       brandName: (row) => (
@@ -547,7 +581,7 @@ export function UrlTable({
         </td>
       ),
     }),
-    [onCellSave]
+    [onCellSave, onRowOpen]
   );
 
   const [sortKey, setSortKey] = useState<SortKey>('addedAt');
@@ -598,11 +632,6 @@ export function UrlTable({
   const handleTrashClick = (row: CompetitorUrl, e: React.MouseEvent): void => {
     e.stopPropagation();
     setPendingDeleteRow(row);
-  };
-
-  const handleOpenClick = (row: CompetitorUrl, e: React.MouseEvent): void => {
-    e.stopPropagation();
-    onRowOpen(row.id);
   };
 
   const handleDialogClose = (): void => {
@@ -935,8 +964,9 @@ export function UrlTable({
                       }}
                     />
                   ))}
-                  {/* Actions column */}
-                  <col style={{ width: '88px' }} />
+                  {/* Actions column — trash only since fix-forward #3
+                      moved the ↗ Open button into the Product Name cell. */}
+                  <col style={{ width: '52px' }} />
                 </colgroup>
                 <thead>
                   <tr>
@@ -1056,9 +1086,8 @@ export function UrlTable({
                       }}
                       aria-label="Row actions"
                     >
-                      {/* P-46 Workstream 3 Session 2 — actions column header.
-                          Holds the per-row "↗" Open detail button + the P-28
-                          trash button. */}
+                      {/* Actions column — trash only since fix-forward #3
+                          moved the ↗ Open button into the Product Name cell. */}
                     </th>
                   </tr>
                 </thead>
@@ -1069,7 +1098,6 @@ export function UrlTable({
                       row={row}
                       visibleColumns={visibleColumns}
                       cellRenderers={cellRenderers}
-                      onOpenClick={handleOpenClick}
                       onTrashClick={handleTrashClick}
                     />
                   ))}
@@ -1123,15 +1151,21 @@ const rowTrashButtonStyle: React.CSSProperties = {
   marginLeft: '4px',
 };
 
-const rowOpenButtonStyle: React.CSSProperties = {
+// 2026-05-24 fix-forward #3 — small ↗ Open button that lives inside the
+// Product Name cell (right side). Compact width so it doesn't crowd the
+// text; same blue accent as the prior row-actions ↗ for visual continuity.
+// Flex-shrink: 0 keeps the icon visible even when product names are long.
+const inlineProductNameOpenButtonStyle: React.CSSProperties = {
   background: 'transparent',
   border: '1px solid transparent',
   borderRadius: '4px',
   color: '#58a6ff',
-  fontSize: '14px',
-  lineHeight: '14px',
+  fontSize: '13px',
+  lineHeight: '13px',
   cursor: 'pointer',
-  padding: '4px 8px',
+  padding: '2px 6px',
+  flexShrink: 0,
+  fontFamily: 'inherit',
 };
 
 function renderFilterBody(
@@ -1396,13 +1430,11 @@ function SortableUrlRow({
   row,
   visibleColumns,
   cellRenderers,
-  onOpenClick,
   onTrashClick,
 }: {
   row: CompetitorUrl;
   visibleColumns: ColumnDef[];
   cellRenderers: Record<ColumnSortKey, (row: CompetitorUrl) => React.ReactNode>;
-  onOpenClick: (row: CompetitorUrl, e: React.MouseEvent) => void;
   onTrashClick: (row: CompetitorUrl, e: React.MouseEvent) => void;
 }) {
   const {
@@ -1463,16 +1495,6 @@ function SortableUrlRow({
           whiteSpace: 'nowrap',
         }}
       >
-        <button
-          type="button"
-          onClick={(e) => onOpenClick(row, e)}
-          aria-label={`Open detail page for ${row.url}`}
-          title="Open detail page"
-          data-testid="url-row-open-button"
-          style={rowOpenButtonStyle}
-        >
-          ↗
-        </button>
         <button
           type="button"
           onClick={(e) => onTrashClick(row, e)}

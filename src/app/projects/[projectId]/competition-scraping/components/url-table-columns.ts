@@ -50,31 +50,31 @@ export interface TableColumnDef {
   defaultWidth: number;
 }
 
+// 2026-05-24 fix-forward #3 — Director's specified left-to-right column
+// order. The prior "additive append" order (the 9 pre-P-46 columns first
+// then 8 new ones appended at end) was an implementation default that
+// hadn't been written into the binding docs; director re-specified after
+// Phase-4 verification surfaced the mismatch. Captured to CORRECTIONS_LOG
+// as a Rule 18 spec-capture gap (the spec was given but never echoed into
+// §C.3 or §B refinement before implementation).
 export const TABLE_COLUMN_DEFS: readonly TableColumnDef[] = [
-  // Existing columns from Session 1's registry (carried forward).
-  { id: 'url', label: 'URL', dataType: 'url', defaultWidth: 280 },
-  { id: 'scrapingStatus', label: 'Status', dataType: 'enum', defaultWidth: 120 },
+  { id: 'competitionCategory', label: 'Category', dataType: 'text', defaultWidth: 160 },
+  { id: 'type', label: 'Type', dataType: 'text', defaultWidth: 140 },
   { id: 'isSponsoredAd', label: 'Sponsored', dataType: 'boolean', defaultWidth: 110 },
   { id: 'productName', label: 'Product Name', dataType: 'text', defaultWidth: 220 },
   { id: 'brandName', label: 'Brand Name', dataType: 'text', defaultWidth: 160 },
-  { id: 'competitionCategory', label: 'Category', dataType: 'text', defaultWidth: 160 },
-  { id: 'productStarRating', label: 'Product Stars', dataType: 'number-decimal', defaultWidth: 110 },
-  { id: 'numProductReviews', label: '# Reviews', dataType: 'number-integer', defaultWidth: 100 },
-  { id: 'addedAt', label: 'Added On', dataType: 'date-readonly', defaultWidth: 130 },
-  // P-46 Workstream 3 Session 2 — new data columns per §C.3 + §A.11.
-  // Foundation-workstream additive columns (already in CompetitorUrl since W1
-  // shipped the schema on 2026-05-24); this session adds them to the table
-  // surface + makes them click-to-edit.
-  { id: 'type', label: 'Type', dataType: 'text', defaultWidth: 140 },
   { id: 'description1', label: 'Description 1', dataType: 'text-multiline', defaultWidth: 240 },
   { id: 'description2', label: 'Description 2', dataType: 'text-multiline', defaultWidth: 240 },
-  { id: 'price', label: 'Price', dataType: 'text', defaultWidth: 100 },
-  { id: 'competitionScore', label: 'Competition Score', dataType: 'number-integer', defaultWidth: 140 },
-  // Pre-existing schema columns that were never rendered in the table; now
-  // surfaced as part of the Workstream 3 redesign.
   { id: 'resultsPageRank', label: 'Results Rank', dataType: 'number-integer', defaultWidth: 120 },
+  { id: 'price', label: 'Price', dataType: 'text', defaultWidth: 100 },
+  { id: 'productStarRating', label: 'Product Stars', dataType: 'number-decimal', defaultWidth: 110 },
+  { id: 'numProductReviews', label: '# Reviews', dataType: 'number-integer', defaultWidth: 100 },
   { id: 'sellerStarRating', label: 'Seller Stars', dataType: 'number-decimal', defaultWidth: 110 },
   { id: 'numSellerReviews', label: 'Seller Reviews', dataType: 'number-integer', defaultWidth: 120 },
+  { id: 'competitionScore', label: 'Competition Score', dataType: 'number-integer', defaultWidth: 140 },
+  { id: 'url', label: 'URL', dataType: 'url', defaultWidth: 280 },
+  { id: 'scrapingStatus', label: 'Status', dataType: 'enum', defaultWidth: 120 },
+  { id: 'addedAt', label: 'Added On', dataType: 'date-readonly', defaultWidth: 130 },
 ];
 
 // Set form for fast in-table visibility lookups.

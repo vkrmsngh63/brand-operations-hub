@@ -463,7 +463,7 @@ export function UrlDetailContent({ project, urlId }: Props) {
         icon={WORKFLOW_ICON}
       />
 
-      <main style={{ maxWidth: '1080px', margin: '0 auto', padding: '24px 32px 64px' }}>
+      <main style={{ maxWidth: '100%', padding: '24px 24px 64px' }}>
         <Breadcrumb
           projectId={project.id}
           platform={urlSlot.data?.platform ?? null}
