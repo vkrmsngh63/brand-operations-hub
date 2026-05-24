@@ -982,4 +982,86 @@ Each subsection captures: scope (what ships), file-level deltas (which files cha
 
 ---
 
+## §B 2026-05-23-f — Workstream 3 Session 3 closing entry — column resize + drag-to-reorder rows + table-wide font-size stepper bundled per Rule 14f outcome + NEW reusable Pattern "Shared debounced-mutation lifecycle reused across an N-control surface" + three new @dnd-kit npm dependencies + Workstream 3 implementation arc COMPLETE at code level (Sessions 1-3 of 3-4 estimated)
+
+**Session:** `session_2026-05-23-f_p46-workstream-3-session-3-column-resize-drag-reorder-font-size`
+**Branch:** `workflow-2-competition-scraping`
+**Build commit:** `7ad7eff` — 6 files +781/-178
+**Status:** Workstream 3 Session 3 ✅ DONE-AT-CODE-LEVEL 2026-05-23-f. Workstream 3 implementation arc COMPLETE at code level across Sessions 1-3 of 3-4 estimated — landed inside the estimated window. Next session: Workstream 3 deploy session (Phase-4 deploy per (a.80) RECOMMENDED-NEXT).
+
+**Rule 14f session-start scope-pick outcome:**
+
+Director picked "Bundle all 3 controls (recommended)" over "Ship just font size + drag-to-reorder, defer column resize" and "Ship just column resize, defer font size + drag-to-reorder." Recommended option per `feedback_recommendation_style.md` — most thorough — all 3 share the same `UserTablePreferences` plumbing + debounced PUT lifecycle Session 1 wired, so bundling avoids re-deriving the same patterns 2-3 times across sessions. ZERO Rule 14f sub-pickers fired during execution per `feedback_default_to_recommendation.md` — library choice (`@dnd-kit` over alternatives like react-dnd / dnd-kit / native HTML5 drag/drop), MIN/MAX clamping bounds for column widths + font size, sort-mode disambiguation ('manual' vs. existing column sort), and "preserve rowOrder ids not in current sorted set" semantics were all clear "most thorough/reliable" defaults.
+
+**File-by-file recap matching build commit `7ad7eff`:**
+
+1. **`src/app/projects/[projectId]/competition-scraping/components/url-table-columns.ts`** — adds `defaultWidth: number` to `TableColumnDef` + per-column defaults (URL=280, Description-1/2=240, Product Name=220, etc.) + NEW constants `MIN_COLUMN_WIDTH = 60` / `MAX_COLUMN_WIDTH = 600` / `FONT_SIZE_MIN = 10` / `FONT_SIZE_MAX = 24` / `FONT_SIZE_DEFAULT = 14` (the font-size trio mirrors the handler's validator constants per Session 1's `extractTablePreferencesPatch` for shared client-server clamping semantics) + NEW `resolveColumnWidth(map, column)` helper.
+
+2. **`src/app/projects/[projectId]/competition-scraping/components/CompetitionScrapingViewer.tsx`** — adds three new state slices (`columnWidths` / `fontSize` / `rowOrder`) alongside Session 1's `columnVisibility` + extends the seed-from-GET effect to fill all four fields from `UserTablePreferences` at mount + NEW handlers `handleColumnResize` / `handleFontSizeChange` / `handleRowReorder` all sharing the existing `prefsTimerRef` 500 ms debounced PUT (a burst of drag events from any control coalesces into one network write on idle; the latest mutation always wins because each handler clears the timer before resetting it).
+
+3. **`src/app/projects/[projectId]/competition-scraping/components/ColumnVisibilityBar.tsx`** — adds a third group "Text size" at the far right of the bar with − / Npt / + stepper buttons disabled at FONT_SIZE_MIN / FONT_SIZE_MAX bounds + the supporting styles (`fontSizeGroupStyle`, `stepperStyle`, `stepperButtonStyle`, `stepperValueStyle`).
+
+4. **`src/app/projects/[projectId]/competition-scraping/components/UrlTable.tsx`** — major rewrite (+629/-178 region; bulk of session diff):
+   - Splits the `SortKey` type into `ColumnSortKey | 'manual'`; 'manual' mode respects `rowOrder` from `UserTablePreferences`, otherwise the existing comparator-based sort wins.
+   - Wraps `<tbody>` in `<DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>` + `<SortableContext items={...} strategy={verticalListSortingStrategy}>`.
+   - `PointerSensor` with `activationConstraint: { distance: 4 }` so per-cell click-to-edit (Session 2) isn't hijacked by drag activation on the row's drag handle.
+   - Each `<tr>` becomes a NEW `SortableUrlRow` sub-component that uses `useSortable({ id: row.id })` + applies `CSS.Transform.toString(transform)` style + threads `attributes` onto the row + spreads `listeners` onto the leading drag-handle button.
+   - Adds `<colgroup>` with explicit widths per column (drag-handle column 32px + visible columns from `resolveColumnWidth(...)` + actions column 88px); switches table to `tableLayout: 'fixed'` so colgroup widths bind exactly.
+   - Adds NEW `ColumnResizeHandle` sub-component — drag handle absolutely positioned at the right edge of every `<th>`; `onPointerDown` captures + tracks `pointermove` (computing delta + clamping to MIN/MAX) + commits on `pointerup`; optimistic per-pointermove commit so the table re-renders width live during the drag.
+   - Applies `effectiveFontSize` as `fontSize: ${effectiveFontSize}px` on the `<table>` element so every cell scales together.
+   - `handleDragEnd` computes the new id order from the sorted display, preserves any rowOrder IDs not in the current sorted set (e.g., rows filtered out by the search box — they stay in their saved position when the filter clears), calls `onRowReorder` with the merged order, sets `sortKey` to `'manual'` so the user-imposed order sticks visually.
+   - Adds NEW `tableColumnDefByKey(key)` helper to resolve a column id to its `TABLE_COLUMN_DEFS` entry for width lookup.
+
+5. **`package.json`** — adds three @dnd-kit dependencies (`@dnd-kit/core`, `@dnd-kit/sortable`, `@dnd-kit/utilities`).
+6. **`package-lock.json`** — auto-updated; 4 packages added net (3 direct + 1 transitive `@dnd-kit/accessibility`).
+
+**NEW reusable Pattern memorialized — "Shared debounced-mutation lifecycle reused across an N-control surface":**
+
+When a foundation session wires a debounced PUT lifecycle for ONE field of a shared per-user prefs row, the next session can land N additional controls without re-deriving the batching logic by routing every new control through the SAME timer ref + the SAME flush callback (with a partial body specific to that control). The 500 ms debounce coalesces bursts from ANY of the N controls into ONE network write; the latest mutation always wins because each handler clears the timer before resetting it.
+
+Today's session validated this Pattern by routing 3 new controls (column resize / row reorder / font-size change) through Session 1's `prefsTimerRef` + `flushPrefsPut`, producing zero additional debounce code beyond a one-line handler per control. Composes with:
+
+- **W2 S5's "Field-allowlist subset extraction" Pattern** — different shape (server-side trust boundary) but same meta-Pattern of "foundation-session primitive becomes Pattern when reused by N=2+ subsequent sessions";
+- **W3 S1's "Foundation-workstream path-convention drift surfaced by next-workstream session-start picker" Pattern** — the path convention itself was the foundational decision; today's reuse benefits from S1's convention-correct path;
+- **W3 S2's "In-table inline-cell parallel-component set to URL-detail-page EditableField primitives" Pattern** — the parallel-component set + today's debounced-lifecycle reuse together cover the "extract once, reuse N times" meta-shape across both component-structure (S2) and effect-lifecycle (S3) dimensions.
+
+Together these three Workstream 3 Patterns form a complete foundation→reuse cycle: S1 lays the route + plumbing primitive; S2 reuses the plumbing for click-to-edit while extracting the parallel-component set primitive; S3 reuses BOTH (the plumbing + the in-table edit affordances) while extracting the shared-debounced-mutation-lifecycle primitive that future workstreams/sessions can claim for free.
+
+**Three new npm dependencies landed (first runtime drag-and-drop library on this layer):**
+
+`@dnd-kit/core` + `@dnd-kit/sortable` + `@dnd-kit/utilities` (with one transitive `@dnd-kit/accessibility`). First time the Competition Data table layer takes a runtime drag-and-drop library; bundle size +~30 KB gzipped one-time cost. The @dnd-kit family chosen as the "most thorough/reliable" default per `feedback_recommendation_style.md` — modern React-first API, pointer-event based, accessibility built-in, MIT license, actively maintained. Alternatives considered + rejected silently (no Rule 14f picker fired since the recommendation was clear): react-dnd (older API, HTML5-backend abstractions add complexity for our pointer-friendly use case), native HTML5 drag-and-drop (poor accessibility story; harder to integrate with React's render lifecycle).
+
+**Verification scoreboard at unchanged baselines:**
+
+- root tsc: clean (UNCHANGED)
+- extension tsc: clean (UNCHANGED)
+- extension `npm test`: **558/558** UNCHANGED (no extension code touched)
+- src/lib node:test: **744/744** UNCHANGED (no new server-side code; UI-only session per pointer expectation; the new constants + helpers in `url-table-columns.ts` are UI-only)
+- Next.js `npm run build`: **61 routes** compiled successfully UNCHANGED (no new routes; only extended existing `urls/[urlId]` already-existing PATCH allowlist semantics indirectly via the new controls hitting the existing table-preferences PUT)
+- Check 6 Playwright: SKIPPED per non-deploy-session convention
+
+**Calibration data point — Workstream 3 lands at LOWER end of 3-4 estimate:**
+
+Sessions 1-3 ✅ DONE-AT-CODE-LEVEL within scope per §C.3 spec. Workstream 3 came in at the LOWER end of the 3-4 estimate (3 sessions vs. 3-4 budgeted), reflecting that:
+- Session 1's foundational `UserTablePreferences` plumbing (DI-seam handler + auth-derived-userId route + horizontal bar + sidebar removal) was a one-session bundle as specced;
+- Session 2's bundled scope (click-to-edit cell editors + 8 new data columns) fit cleanly in one session because 3 of the 7 needed cell-editor primitives already existed in W2 Session 5's EditableField.tsx;
+- Session 3's bundled scope (column resize + drag-reorder + font size) fit cleanly in one session because all 3 controls reused Session 1's debounced PUT lifecycle without re-derivation, and the @dnd-kit family integrated cleanly without surprises.
+
+Combined Workstream 1+2+3 calibration: W1 = 1 session (under 2-3 estimate); W2 = 5 build sessions + 1 deploy (top end of 3-5 estimate); W3 = 3 sessions (low end of 3-4 estimate); Workstream 3 deploy session pending. Useful data point for sizing Workstreams 4-5 (W4 = ~2-3; W5 = ~1-2).
+
+**P-43 cwd-leak class re-reproduced ONCE (sixth reproduction overall) — LOW informational sub-observation:**
+
+During /scoreboard Check 5 the parallel-Bash invocation leaked cwd from Checks 2+3 (which legitimately `cd extensions/competition-scraping/`) into the Check 5 `npm run build` call, producing the EXTENSION build output (`Built extension in 2.432 s`) instead of Next.js routes. Caught immediately from the output content + recovered with the absolute-`cd` template form. Same LOW informational pattern as the 2026-05-22-i + 2026-05-23-b + 2026-05-23-c + 2026-05-23-e reproductions. Captured in CORRECTIONS_LOG §Entry 2026-05-23-f as a LOW informational sub-observation; NOT promoted to a corrections-tier slip; immediate detection + recovery; no impact on scoreboard result.
+
+**Affected §A sections (informational — §A frozen per Rule 18):**
+
+- §A.3 — server-side per-user `UserTablePreferences` Prisma model keyed by (userId, projectId) (binding decision Q3; fully consumed this session across all three new fields `columnWidths` + `fontSize` + `rowOrder`).
+- §C.3 — Workstream 3 implementation outline; Session 3 spec executed cleanly this session bundling all 3 deliverables; Workstream 3 implementation arc now COMPLETE at code level across Sessions 1-3 of 3-4 estimated.
+
+**Impact on §A: None; §A stays frozen per Rule 18.** All §A binding decisions consumed cleanly as specced; no §A amendment needed; no §A surprises during implementation.
+
+- **Closing line:** Workstream 3 Session 3 ✅ DONE-AT-CODE-LEVEL. Workstream 3 implementation arc COMPLETE at code level across Sessions 1-3. Next session: Workstream 3 deploy session — Phase-4 deploy ff-merging `workflow-2-competition-scraping` → `main` (6 commits as one fast-forward) → Vercel auto-redeploy → ping-pong sync → Phase-4 director real-Chrome cross-platform verify across the Competition Data table surfaces (column resize + drag-to-reorder + font-size stepper).
+
+---
+
 END OF DOCUMENT
