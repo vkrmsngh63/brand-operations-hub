@@ -1526,4 +1526,79 @@ Combined W1+W2+W3+W4+W5 implementation arc progress (as of session-end 2026-05-2
 
 ---
 
+## §B 2026-05-24-e — `session_2026-05-24-e_bundled-w5-p47-deploy` — bundled P-46 W5 + P-47 deploy session ships 3 build commits + 2 doc-batch commits behind ONE Rule 9 gate as the FIRST CROSS-WORKSTREAM bundled deploy in W#2 history + NEW reusable Pattern "Bundled-build-commit deploy under ONE Rule 9 gate" memorialized + Phase-4 director real-Chrome verification DEFERRED to next session per W4 deploy 2026-05-26 Pattern with 3 walkthroughs preserved verbatim in NEXT_SESSION.md ## Standing carry-overs section (W4 4th consecutive defer + W5 1st defer + P-47 1st defer) — informational; §A stays frozen per Rule 18
+
+**Session shape:** Pure orchestration DEPLOY session on `workflow-2-competition-scraping` → `main`. ZERO new code. ZERO new schema. ZERO new dependencies. ZERO new routes. ONE Rule 9 gate fired (deploy push). TWO §4 Step 1c forced-pickers fired (Rule 9 deploy gate + Phase-4 in-session vs deferred). THREE pushes planned per `feedback_approval_scope_per_decision_unit.md` (deploy push DONE; end-of-session doc-batch push + ff-merge push pending). THREE DEFERRED items carry forward as standing carry-overs.
+
+**Outcome:** Three build commits sitting on `workflow-2-competition-scraping` since the 2026-05-24-c W5 build + 2026-05-24-d P-47 build sessions shipped to `main` cleanly via ONE ff-merge `9205340..d68885a` carrying 5 commits (W5 build `3c981be` + Reviews polish `41172f1` + W5 doc-batch `4d0f771` + P-47 build `d08f673` + P-47 doc-batch `d68885a`) behind ONE Rule 9 gate; Vercel auto-redeploy fired (~2-3 minute build + cache invalidation); fresh extension zip `plos-extension-2026-05-24-w2-deploy-34.zip` 202.98 KB dropped at repo root via `npm run zip` in `extensions/competition-scraping/` (31st zip artifact at repo root; ready for director sideload at Phase-4 verification next session).
+
+**Two §4 Step 1c forced-pickers fired this session:**
+
+- **Rule 9 deploy gate picker** — picker offered (A) Deploy now — push to origin/main (Recommended) / (B) Hold + investigate first / (C) other. Director picked A per `feedback_recommendation_style.md` most-thorough/reliable.
+- **Phase-4 in-session vs deferred picker** — picker offered (A) Run Phase-4 in-session now (Recommended per `feedback_recommendation_style.md` since in-session Phase-4 closes the deploy session with ✅ DONE-AND-VERIFIED instead of ✅ DEPLOYED-PHASE-4-PENDING) / (B) Defer Phase-4 to next session (per W4 deploy 2026-05-26 Pattern). Director picked B — "Defer to next session". This is the THIRD time the bundled-Phase-4 defer Pattern fires (W4 2026-05-26 first; W5+P-47 today second; W4 STILL pending for 4th consecutive defer is third instance).
+
+**Pre-deploy /scoreboard on `workflow-2-competition-scraping`:** 5/5 GREEN at unchanged baselines (root tsc clean / extension tsc clean / 558 ext UNCHANGED / 786 src/lib UNCHANGED / 62 routes UNCHANGED); Check 6 Playwright SKIPPED per Rule 27 non-deploy-spec convention (none of the 3 build commits introduced extension Playwright spec coverage — W5 added node:test cases to urls.test.ts; Reviews polish was React-component-only; P-47 was structural-only).
+
+**Post-merge /scoreboard on `main`:** 5/5 GREEN at exact same baselines.
+
+### NEW reusable Pattern memorialized — "Bundled-build-commit deploy under ONE Rule 9 gate"
+
+**Shape:** When N build commits sit on a workflow branch awaiting deploy + each commit already passed /scoreboard GREEN at its own session + all commits are additive + no inter-commit dependencies require fix-forward sequencing, the most-thorough/reliable choice is to ff-merge ALL N commits behind ONE Rule 9 gate rather than splitting into N separate deploy sessions.
+
+**Why it works:**
+- Each build commit already passed individual session /scoreboards GREEN — the bundle's combined /scoreboard pre-deploy is operationally equivalent to N sequential individual /scoreboards.
+- ff-merge to main is fast-forward only — no merge conflicts possible since the commits are linear on the workflow branch.
+- Vercel auto-redeploy fires ONCE per main push regardless of how many commits in the push — so N separate deploy sessions would each pay the ~2-3 minute Vercel build + cache invalidation cost; bundling pays it once.
+- Rule 9 deploy gate fires ONCE — director approval cost is constant regardless of N.
+- Phase-4 verification can pair walkthroughs from sibling commits when they share the same UI surface (today: W5 + P-47 both ship via the extension form surface — Phase-4 covers both walkthroughs in one session at next-session).
+
+**When to use:** N build commits already at ✅ DONE-AT-CODE-LEVEL with /scoreboard GREEN at individual sessions; all commits additive (no schema, no breaking changes); no inter-commit dependencies; Phase-4 verification walkthroughs can be paired OR deferred together.
+
+**When NOT to use:** any commit has fix-forward dependency on another commit (must sequence individually); any commit involves schema-change-in-flight transition (deploy each schema commit individually for cleaner rollback); Phase-4 verification needs intermediate sign-off between commits.
+
+**Exemplars in W#2 history:**
+- **First exemplar — W2 deploy 2026-05-23-c** — carried 5 build sessions + Workstream 1 schema commits as one fast-forward. But single-workstream (all P-46 W2).
+- **Second exemplar (FIRST CROSS-WORKSTREAM) — today's bundled W5 + P-47 deploy 2026-05-24-e** — the FIRST cross-workstream bundled deploy in W#2 history (P-46 W5 + P-46 Reviews polish + P-47 Shadow DOM are 3 distinct polish items shipped together; P-46 + P-47 are different ROADMAP polish entries).
+
+**Pairs with prior deploy Patterns memorialized in §B entries of this doc:**
+- §B 2026-05-23-c W2 deploy — "Multi-session workstream deploy gate timing" Pattern (deploy lands AFTER the LAST build session that contains user-visible UI, not after the schema session).
+- §B 2026-05-24 W3 deploy — "Phase-4 verification fix-forward cascade in a single deploy session" Pattern (opposite end of the spectrum — 6 fix-forwards in one session demonstrating the pattern scales when issues are scoped + reversible + UI-only; today's deferred-Phase-4 means no fix-forward cascade possible this session).
+- §B 2026-05-26 W4 deploy — single Rule 9 gate + Phase-4 deferred (closest analog to today's shape).
+
+**Calibration data point:** today's bundled deploy landed cleanly without any fix-forwards (Phase-4 deferred so no fix-forward cascade possible this session). 3 prior standing carry-overs from 2026-05-24-c (W5 deploy + W5 Phase-4 verify + P-47 Phase-4 verify) all collapse: W5 deploy RESOLVED via today's bundled deploy; W5 + P-47 Phase-4 verifies RE-DEFERRED into next session's 3-walkthrough bundled Phase-4. ONE prior standing carry-over from 2026-05-26 (W4 Phase-4 verify) re-defers for 4th consecutive session.
+
+### Phase-4 verification queued for next session — 3 walkthroughs bundled
+
+Director picked "Defer to next session (per W4 deploy 2026-05-26 Pattern)" over Recommended "Run in-session now" at the Phase-4 picker. The 3 walkthroughs queued for next session:
+
+- **(a) W4 Comprehensive Competitor Analysis page 10-step walkthrough** — 4th consecutive defer; carries forward verbatim from 2026-05-26 W4 deploy + 2026-05-24-c + 2026-05-24-d + today.
+- **(b) W5 URL save form additions 4-step walkthrough** — 1st defer today.
+- **(c) P-47 Shadow DOM mount 2-step walkthrough** — 1st defer today.
+
+The (b) + (c) walkthroughs pair into ONE Phase-4 step at next session (same extension form surface — director walks both verifications on the same Amazon product page in one sitting); (a) is a separate Phase-4 step on the per-Project Comprehensive Competitor Analysis page on vklf.com.
+
+If all 3 walkthroughs PASS next session → P-46 W4 + W5 + P-47 all flip to ✅ DONE-AND-VERIFIED + P-46 Workstream 5 closes the entire P-46 implementation arc end-to-end + P-47 closes (only Session 1 was needed at code level + Phase-4; Sessions 2-3 from the original P-47 estimate MERGED into today's bundled deploy).
+
+If any walkthrough FAILS or PARTIAL → initiate fix-forward cascade per W3 deploy 2026-05-24 Pattern.
+
+### Impact on §A
+
+**None.** §A stays frozen per Rule 18. Today's bundled deploy + Phase-4 deferral consumes specs already locked: §A.2's click-to-edit cells + structural fields (W5); §A.11's schema additions (W5 already-deployed since W1's 2026-05-24 + 2026-05-23-c W2 deploy); §A.5's TipTap editor (W4 already-deployed since 2026-05-26 W4 deploy); the P-47 Shadow DOM mount is content-script architecture not covered by §A.
+
+### Cross-references
+
+- `docs/CORRECTIONS_LOG.md` §Entry 2026-05-24-e (this session's closing §Entry — the bundled W5 + P-47 deploy session closing entry capturing bundled-deploy outcome + NEW Pattern + LOW informational dual P-43 cwd-leak reproductions + calibration data point).
+- `docs/COMPETITION_SCRAPING_DESIGN.md` §B 2026-05-24-e (parallel deploy entry in the W#2 design doc — captures the P-47 Shadow DOM mount DEPLOY outcome from a content-script architecture perspective; pairs with §B 2026-05-24-d as the build session entry + today's §B as the deploy entry; today's bundled deploy spans BOTH design docs since it ships cross-doc-scoped commits).
+- `docs/COMPETITION_DATA_V2_DESIGN.md` §B 2026-05-23-c (the W2 DEPLOY closing entry — established the "Multi-session workstream deploy gate timing" Pattern; precedent for single-workstream bundled deploy).
+- `docs/COMPETITION_DATA_V2_DESIGN.md` §B 2026-05-24 (the W3 DEPLOY closing entry — established the "Phase-4 verification fix-forward cascade in a single deploy session" Pattern; reference for what to do if next session's Phase-4 surfaces issues).
+- `docs/COMPETITION_DATA_V2_DESIGN.md` §B 2026-05-26 (the W4 DEPLOY closing entry — established the Phase-4-deferred-to-next-session branch + the bundled-Phase-4 defer Pattern that today's session executes the deferred Phase-4 for via the 3-walkthrough bundle next session).
+- `docs/COMPETITION_DATA_V2_DESIGN.md` §B 2026-05-24-c (the W5 build session entry + the standing carry-overs that all RESOLVE at today's deploy or RE-DEFER into next session's Phase-4).
+- `docs/ROADMAP.md` P-46 polish-backlog entry (annotated this session — WS#5 status flipped to ✅ DEPLOYED-PHASE-4-PENDING 2026-05-24-e on vklf.com; WS#4 status STAYS ✅ DEPLOYED-PHASE-4-PENDING 2026-05-26 on vklf.com — no change; (a.87) closed + (a.88) opens for the bundled Phase-4 real-Chrome verification session).
+- `docs/ROADMAP.md` P-47 polish-backlog entry (annotated this session — status flipped to ✅ DEPLOYED-PHASE-4-PENDING 2026-05-24-e on vklf.com).
+- `docs/NEXT_SESSION.md` (today's complete rewrite for the bundled Phase-4 real-Chrome verification session + ## Standing carry-overs section preserving W4 10-step + W5 4-step + P-47 2-step verification walkthroughs verbatim).
+
+**Closing line:** Bundled W5 + P-47 deploy session ✅ DEPLOYED-PHASE-4-PENDING 2026-05-24-e on vklf.com via `workflow-2-competition-scraping` → `main` bundled ff-merge `9205340..d68885a` carrying 5 commits (3 build + 2 doc-batch) behind ONE Rule 9 gate. P-46 implementation arc progress: W1-W3 = ✅ DONE-AND-VERIFIED on vklf.com; W4 + W5 = ✅ DEPLOYED-PHASE-4-PENDING (both bundle into next session's 3-walkthrough Phase-4 step alongside P-47). Next session: bundled Phase-4 real-Chrome verification session per (a.88) covering W4 10-step + W5 4-step + P-47 2-step walkthroughs.
+
+---
+
 END OF DOCUMENT
