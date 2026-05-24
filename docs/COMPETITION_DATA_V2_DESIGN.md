@@ -1159,4 +1159,99 @@ Calendar date today per director confirmation is **2026-05-24**. The 5 fix-forwa
 
 ---
 
+## §B 2026-05-24-b — `session_2026-05-24-b_p46-workstream-4-session-1-comprehensive-analysis-page` — Workstream 4 Session 1 lands the per-Project Comprehensive Analysis page end-to-end at code level — full §C.4 Session 1 scope shipped + TWO new reusable Patterns memorialized + FIRST APPLICATION of the 2026-05-24 Rule 14a tightening
+
+**Session:** `session_2026-05-24-b_p46-workstream-4-session-1-comprehensive-analysis-page`
+**Branch:** `workflow-2-competition-scraping` (single-branch session; no main push since Session 1 is a build session, not a deploy session)
+**Build commit:** `283d4d1` — 9 files +1258/-32
+**Director verdict at session end:** Session 1 closed at code level; Session 2 (internal-hyperlink TipTap extension) opens (a.82) RECOMMENDED-NEXT
+**Status:** Workstream 4 Session 1 ✅ DONE-AT-CODE-LEVEL 2026-05-24-b; Sessions 2-3 remaining per §C.4 (Session 2 = internal-hyperlink TipTap extension; Session 3 = conditional deploy if Sessions 1-2 land clean).
+
+**What landed (9 files +1258/-32):**
+
+- **NEW** `src/lib/competition-scraping/handlers/comprehensive-analysis.ts` (~225 LOC DI-seam handler factory mirroring `user-table-preferences.ts` precedent) — exports `extractComprehensiveAnalysisPatch` strict trust-boundary validator + `toWireShape` JsonValue → Record<string, unknown> coercion with bad-DB-shape fallback to empty doc + `makeComprehensiveAnalysisHandlers` factory returning GET + PUT. PUT populates `lastEditedBy` from auth-derived `userId` on every upsert; `lastEditedAt` is Prisma-managed via `@updatedAt` on update, passed explicitly on create.
+- **NEW** `src/lib/competition-scraping/handlers/comprehensive-analysis.test.ts` (~380 LOC; 20 new node:test cases bringing src/lib to **764 from baseline 744**).
+- **MODIFIED** `src/app/api/projects/[projectId]/competition-scraping/comprehensive-analysis/route.ts` — replaces Workstream 1's 501-stub with thin DI-seam shim wrapping `makeComprehensiveAnalysisHandlers` via the `verifyProjectAuthAdapter` pattern from `table-preferences/route.ts`.
+- **MODIFIED** `src/app/projects/[projectId]/competition-scraping/components/RichTextEditor.tsx` — extends `variant='full'` toolbar per §A.5: H1/H2/H3 headings + Bold + Italic + Underline + bullet/numbered lists + Link + Code block. StarterKit's `heading: false` flipped to `heading: { levels: [1, 2, 3] }` when variant is 'full'. `@tiptap/extension-underline` imported and registered for both variants (toolbar surfaces it only for 'full'). Minimal variant unchanged.
+- **NEW** `src/app/projects/[projectId]/competition-scraping/comprehensive-analysis/page.tsx` (~269 LOC client page route; uses `useWorkflowContext` + `useParams` + `useRouter`; GET on mount via `authFetch`; 404-tolerant empty-state; Edit/Done toggle; back-button "← Competition Data" at top; last-edited timestamp footer).
+- **NEW** `src/app/projects/[projectId]/competition-scraping/comprehensive-analysis/components/AnalysisEditor.tsx` (~151 LOC parallel-component to W2 S1's `PerItemAnalysisBox` — same save-lifecycle Pattern but PUT method + `{ contentJson }` body shape + `variant='full'` toolbar; Saving/✓ Saved/Save failed status indicator).
+- **NEW** `src/app/projects/[projectId]/competition-scraping/comprehensive-analysis/components/AnalysisReadView.tsx` (~76 LOC; renders the TipTap doc via `RichTextEditor` with `readOnly=true` rather than a separate `generateHTML` static render path — chosen to keep typography identical between read/edit modes without risk of style drift; empty-state placeholder shown when `isEmptyTipTapDoc(contentJson)`).
+- **MODIFIED** `src/app/projects/[projectId]/competition-scraping/components/CompetitionScrapingViewer.tsx` (+31 LOC; standalone "→ Comprehensive Competitor Analysis" navigation button row above `ColumnVisibilityBar` per the session-start Rule 14f sub-picker; uses existing `router.push` already imported).
+- **MODIFIED** `package.json` (+1 line; `@tiptap/extension-underline@3.23.6` promoted from transitive (already in node_modules via `@tiptap/extensions`) to top-level dep so the version is locked).
+
+**TWO Rule 14f forced-pickers fired at session start (per Rule 14a tightening from 2026-05-24):**
+
+1. **Session 1 scope** — director picked **Full §C.4 scope (recommended)** over "Conservative pointer scope" + "Handler-only this session." The §C.4 binding spec was the source of truth; yesterday's NEXT_SESSION.md pointer had defaulted to a more conservative Session 1 scope; the 2026-05-24 Rule 14a tightening directed surfacing the divergence to director rather than silently picking the pointer's recommendation. **This is the FIRST APPLICATION of the Rule 14a tightening shipped 2026-05-24** (any UI-shape spec given mid-build must be echoed into binding docs + read back per Rule 14a BEFORE implementation lands — the pointer-vs-binding-spec divergence is a sibling shape since both are mid-arc planning artifacts where the binding spec wins).
+
+2. **Navigation surface placement** — director picked **Standalone button above the bar (recommended)** over "Tab strip" + "Button inside ColumnVisibilityBar." §A.4's "tab at the top" wording resolved cleanly to a standalone button row above `ColumnVisibilityBar`.
+
+**ZERO Rule 14f sub-pickers fired during execution** per `feedback_default_to_recommendation.md`.
+
+**Pattern A memorialized — "Per-Project edit-affordance parallel to per-row edit-affordance":**
+
+When an edit affordance needs the same save-lifecycle shape at TWO scope levels (per-row vs. per-Project), extract parallel components that share structure but differ on the per-scope wire details:
+
+- **PerItemAnalysisBox** (W2 S1) — per-row scope; PATCH method; body `{ analysis }`; `variant='minimal'`.
+- **AnalysisEditor** (W4 S1, today) — per-Project scope; PUT method; body `{ contentJson }`; `variant='full'`.
+
+Both wrap the same `RichTextEditor`. Both have the same Saving/Saved/Failed status-indicator structure. Both use a `generation counter ref` for stale-response protection.
+
+Pairs with:
+- W2 S1's "PerItemAnalysisBox extraction" Pattern (2026-05-25)
+- W2 S3's "OverallAnalysisBox parallel component" Pattern (2026-05-27)
+
+Meta-shape: when a shared per-action lifecycle (debounced persist + status indicator + retry on error) is needed at N scopes (per-row / per-category / per-Project), each new scope adds a thin parallel component that wraps the same editor primitive — the save-lifecycle structure stays uniform via shared property shape, while per-scope wire details (method, body, scope key) parameterize via props. Three reusable Patterns now compose into this meta-shape across the W2+W4 implementation arc.
+
+**Pattern B memorialized — "Editor-as-readonly substitutes for a separate static renderer":**
+
+§A.5 mentions `generateHTML` for non-editor read views. AnalysisReadView instead uses `RichTextEditor readOnly=true` (the wrapper supports a `readOnly` prop since W2 S1). Rationale: identical typography between edit and read modes without a duplicate render path. The editor's overhead is one ProseMirror instance per mount, negligible for a single per-Project doc. A separate static renderer would risk style drift between the two paths. Worth memorializing as a reusable Pattern for future read-view/edit-view siblings.
+
+**§A.5 generateHTML divergence (informational; NOT a slip):**
+
+§A.5 explicitly mentions `generateHTML` as the path for non-editor read views. Today chose Pattern B (editor-as-readonly) instead. The §A.5 mention is preserved as a design intent; the actual implementation diverges to the readonly-editor path for the style-drift-prevention rationale captured in Pattern B above. No §A amendment needed — Pattern B is a refinement on §A.5's reading guidance, not a contradiction.
+
+**§C.4 file-naming drift (TipTapEditor vs RichTextEditor — informational):**
+
+§C.4 names the editor wrapper `TipTapEditor.tsx` but the wrapper W2 S1 actually shipped is named `RichTextEditor.tsx`. The rename was captured in W2 S1's §B 2026-05-25 entry. Today consumed the actual filename. No §A amendment needed; no slip; just informational. Pattern: when a foundation session renames a component during implementation, downstream sessions consume the renamed file; the original §C plan's filename becomes informational rather than binding.
+
+**Schema-change-in-flight flag STAYS NO** entire session — no `prisma db push`; consumes the existing `ComprehensiveCompetitorAnalysis` Prisma model from W1's 2026-05-24 schema (already deployed via 2026-05-23-c W2 deploy).
+
+**Verification scoreboard:**
+
+| Check | Status | Baseline → New |
+|-------|--------|----------------|
+| 1. Root tsc | GREEN | clean → clean |
+| 2. Extension tsc | GREEN | clean → clean |
+| 3. Extension `npm test` | GREEN | 558 → 558 (UNCHANGED) |
+| 4. src/lib node:test | GREEN | 744 → **764 (+20 — exact match with 20 new comprehensive-analysis.test.ts cases)** |
+| 5. `npm run build` routes | GREEN | 61 → 61 (UNCHANGED — W1 501-stub at existing path filled in; no new route paths created) |
+| 6. Playwright | SKIPPED per non-deploy-session convention | — |
+
+**Calibration data point — Session 1 of 2-3 estimated landed cleanly within scope:**
+
+- Session duration: ~150-180 min (top end of recommended-scope estimate per the Rule 14f Session 1 scope-pick rationale);
+- No overrun, no fix-forward, all 17 in-session TaskCreate tasks completed cleanly;
+- Two new Patterns surfaced organically during implementation — the "parallel-component at per-Project scope" Pattern was a natural extension of the W2 S1 + W2 S3 parallel-component lineage; the "editor-as-readonly" Pattern was a default-to-recommendation choice for style-drift prevention;
+- Sessions 2-3 remaining: Session 2 = internal-hyperlink TipTap extension (custom extension recognizing `#url/<urlId>` shorthand + resolving to URL detail page navigation; may polish hyperlink-insertion affordance UI via "Link to URL" button helper); Session 3 = conditional deploy if Sessions 1-2 land clean;
+- Continuation of the W1+W2+W3 calibration discipline — total P-46 spend now at 12 sessions (1 W1 + 5 W2 build + 1 W2 deploy + 3 W3 build + 1 W3 deploy + 1 W4 build today) vs. 14-16 estimated trajectory for the full P-46 arc.
+
+**Affected §A sections (informational — §A frozen per Rule 18):**
+
+- **§A.4** (one Comprehensive Analysis page per Project synthesizing all platforms + competitors) — surfaced + implemented end-to-end; per-Project doc reads + writes against `ComprehensiveCompetitorAnalysis` row via the new DI-seam handlers; back-button to `/projects/[projectId]/competition-scraping` per §A.4's "back to Competition Data" wording.
+- **§A.5** (TipTap rich-text editor library decision; full toolbar config for Comprehensive Analysis page) — surfaced + extended; W2 S1's `RichTextEditor` wrapper extended with the full toolbar (H1/H2/H3 + Bold + Italic + Underline + bullet/numbered lists + Link + Code block); `@tiptap/extension-underline` registered for both variants. `generateHTML` static render path mentioned in §A.5 was replaced with Pattern B "editor-as-readonly" — informational; no §A amendment.
+
+**Impact on §A: None; §A stays frozen per Rule 18.** All §A binding decisions consumed cleanly. The two Patterns surfaced today are §B refinements on §A.4 + §A.5's implementation shape, not amendments to the binding decisions.
+
+**Cross-references:**
+
+- CORRECTIONS_LOG §Entry 2026-05-24-b (the closing entry for this session — captures the same Pattern memorializations + the Rule 14a tightening first-application + calibration data point from a procedural perspective; this §B captures the same content from a design/implementation perspective).
+- `docs/COMPETITION_DATA_V2_DESIGN.md` §B 2026-05-25 (W2 S1's "PerItemAnalysisBox extraction" Pattern — direct parent of today's Pattern A).
+- `docs/COMPETITION_DATA_V2_DESIGN.md` §B 2026-05-27 (W2 S3's "OverallAnalysisBox parallel component" Pattern — sibling parallel-component Pattern at per-category scope).
+- `docs/COMPETITION_DATA_V2_DESIGN.md` §B 2026-05-24 (W3 deploy entry — captures the Rule 14a tightening mechanical prevention that today's session applied for the first time).
+- `docs/ROADMAP.md` P-46 polish-backlog entry (annotated this session — WS#4 Session 1 ✅ DONE-AT-CODE-LEVEL 2026-05-24-b; (a.81) closed; new (a.82) opened for Workstream 4 Session 2).
+
+**Closing line:** Workstream 4 Session 1 ✅ DONE-AT-CODE-LEVEL 2026-05-24-b. P-46 implementation arc progress: Workstreams 1 + 2 + 3 = ✅ DONE-AND-VERIFIED on vklf.com; Workstream 4 Session 1 = ✅ DONE-AT-CODE-LEVEL (1 of ~2-3 estimated sessions). Next session: Workstream 4 Session 2 — internal-hyperlink TipTap extension per §C.4 Session 2 spec.
+
+---
+
 END OF DOCUMENT
