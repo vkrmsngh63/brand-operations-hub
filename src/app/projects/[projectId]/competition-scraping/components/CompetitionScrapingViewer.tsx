@@ -496,6 +496,37 @@ export function CompetitionScrapingViewer({ projectId }: Props) {
 
   return (
     <section style={{ marginTop: '32px' }}>
+      <div
+        style={{
+          display: 'flex',
+          marginBottom: '12px',
+        }}
+      >
+        <button
+          type="button"
+          onClick={() =>
+            router.push(
+              `/projects/${projectId}/competition-scraping/comprehensive-analysis`
+            )
+          }
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '8px 16px',
+            background: '#1f6feb',
+            color: '#ffffff',
+            border: '1px solid #1f6feb',
+            borderRadius: '6px',
+            fontSize: '13px',
+            fontWeight: 600,
+            cursor: 'pointer',
+          }}
+          data-testid="open-comprehensive-analysis-button"
+        >
+          → Comprehensive Competitor Analysis
+        </button>
+      </div>
       <ColumnVisibilityBar
         selectedPlatforms={selectedPlatforms}
         countsByPlatform={countsByPlatform}

@@ -19,6 +19,7 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@supabase/supabase-js": "^2.101.1",
     "@tiptap/extension-link": "^3.23.6",
+    "@tiptap/extension-underline": "^3.23.6",
     "@tiptap/react": "^3.23.6",
     "@tiptap/starter-kit": "^3.23.6",
     "next": "16.2.2",

@@ -27,6 +27,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { EditorContent, useEditor, type Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
+import Underline from '@tiptap/extension-underline';
 
 import { normalizeTipTapInput } from '@/lib/rich-text/tiptap-helpers';
 
@@ -70,7 +71,7 @@ export function RichTextEditor({
   onChange,
   readOnly = false,
   placeholder,
-  variant: _variant = 'minimal',
+  variant = 'minimal',
   debounceMs = DEFAULT_DEBOUNCE_MS,
   testId,
 }: RichTextEditorProps) {
@@ -101,10 +102,11 @@ export function RichTextEditor({
   const editor: Editor | null = useEditor({
     extensions: [
       StarterKit.configure({
-        // Disable heading in the minimal variant (per-item Analysis boxes
-        // don't need document-level headings; full variant for the
-        // Comprehensive Analysis page enables headings via W#4 config).
-        heading: false,
+        // Minimal variant disables heading (per-item Analysis boxes don't
+        // need document-level headings); full variant for the Comprehensive
+        // Analysis page enables h1/h2/h3 + code block (StarterKit ships
+        // codeBlock by default — only the disable flag changes here).
+        heading: variant === 'full' ? { levels: [1, 2, 3] } : false,
       }),
       Link.configure({
         openOnClick: false, // user clicks edit affordance to open links
@@ -115,6 +117,10 @@ export function RichTextEditor({
           target: '_blank',
         },
       }),
+      // Underline is its own extension (not bundled in StarterKit). Loaded
+      // for both variants — the minimal variant's toolbar just doesn't
+      // surface a button for it. Full variant exposes it via Toolbar.
+      Underline,
     ],
     content: normalizeTipTapInput(initialContent),
     editable: !readOnly,
@@ -188,7 +194,7 @@ export function RichTextEditor({
         borderRadius: '6px',
       }}
     >
-      {!readOnly && <Toolbar editor={editor} />}
+      {!readOnly && <Toolbar editor={editor} variant={variant} />}
       <div
         style={{
           padding: '8px 10px',
@@ -203,11 +209,19 @@ export function RichTextEditor({
   );
 }
 
-function Toolbar({ editor }: { editor: Editor }) {
+function Toolbar({
+  editor,
+  variant,
+}: {
+  editor: Editor;
+  variant: 'minimal' | 'full';
+}) {
+  const isFull = variant === 'full';
   return (
     <div
       style={{
         display: 'flex',
+        flexWrap: 'wrap',
         gap: '4px',
         padding: '6px 8px',
         borderBottom: '1px solid #21262d',
@@ -216,6 +230,38 @@ function Toolbar({ editor }: { editor: Editor }) {
         borderTopRightRadius: '6px',
       }}
     >
+      {isFull && (
+        <>
+          <ToolbarButton
+            label="H1"
+            active={editor.isActive('heading', { level: 1 })}
+            onClick={() =>
+              editor.chain().focus().toggleHeading({ level: 1 }).run()
+            }
+            title="Heading 1"
+            style={{ fontWeight: 700 }}
+          />
+          <ToolbarButton
+            label="H2"
+            active={editor.isActive('heading', { level: 2 })}
+            onClick={() =>
+              editor.chain().focus().toggleHeading({ level: 2 }).run()
+            }
+            title="Heading 2"
+            style={{ fontWeight: 700 }}
+          />
+          <ToolbarButton
+            label="H3"
+            active={editor.isActive('heading', { level: 3 })}
+            onClick={() =>
+              editor.chain().focus().toggleHeading({ level: 3 }).run()
+            }
+            title="Heading 3"
+            style={{ fontWeight: 700 }}
+          />
+          <ToolbarSeparator />
+        </>
+      )}
       <ToolbarButton
         label="B"
         active={editor.isActive('bold')}
@@ -230,6 +276,15 @@ function Toolbar({ editor }: { editor: Editor }) {
         title="Italic (⌘I)"
         style={{ fontStyle: 'italic' }}
       />
+      {isFull && (
+        <ToolbarButton
+          label="U"
+          active={editor.isActive('underline')}
+          onClick={() => editor.chain().focus().toggleUnderline().run()}
+          title="Underline (⌘U)"
+          style={{ textDecoration: 'underline' }}
+        />
+      )}
       <ToolbarSeparator />
       <ToolbarButton
         label="• List"
@@ -263,6 +318,18 @@ function Toolbar({ editor }: { editor: Editor }) {
         }}
         title="Add or edit link"
       />
+      {isFull && (
+        <>
+          <ToolbarSeparator />
+          <ToolbarButton
+            label="</>"
+            active={editor.isActive('codeBlock')}
+            onClick={() => editor.chain().focus().toggleCodeBlock().run()}
+            title="Code block"
+            style={{ fontFamily: 'monospace' }}
+          />
+        </>
+      )}
     </div>
   );
 }
