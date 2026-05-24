@@ -1344,4 +1344,84 @@ This is the **third W4-arc Pattern**, paired with W4 S1's Pattern A "Per-Project
 
 ---
 
+## §B 2026-05-26 — `session_2026-05-26_p46-workstream-4-deploy-session-phase-4-verification-deferred` — Workstream 4 DEPLOY SESSION ships W4 Sessions 1+2's UI + route-handler code to vklf.com end-to-end via ff-merge `cafd3ed..096a2ac` (4 commits) + Phase-4 director real-Chrome verification DEFERRED to next session at director request + NEW informational Pattern "Truncated picker response → fire clarifying picker, don't silently interpret" + Workstream 4 status flips to ✅ DEPLOYED-PHASE-4-PENDING (not yet ✅ DONE-AND-VERIFIED until Phase-4 PASS next session)
+
+**Session:** `session_2026-05-26_p46-workstream-4-deploy-session-phase-4-verification-deferred`
+**Branch:** `workflow-2-competition-scraping` → `main` (ff-merge — main moved from `ac45737` to `096a2ac` via 4-commit fast-forward; `workflow-2-competition-scraping` unchanged at `096a2ac` before + after the ff-merge — ff-merge only changes main's SHA, not the source branch's; no mid-session ping-pong sync needed)
+**Deploy events:** 1 — initial ff-merge `cafd3ed..096a2ac` carrying 4 commits (W4 S1 build `283d4d1` + W4 S1 doc-batch `8b30ab3` + W4 S2 build `5854eff` + W4 S2 doc-batch `096a2ac`); ZERO in-session fix-forwards because Phase-4 director real-Chrome verification was DEFERRED to next session at director request
+**Total pushes today:** 3 — 1 deploy push to `origin/main` (gated via AskUserQuestion Rule 9 picker; director picked "Deploy now — push to origin/main (recommended)" after a clarifying picker disambiguated a truncated director response "deploy now but defer any real wor") + 1 end-of-session doc-batch push to `origin/workflow-2-competition-scraping` + 1 end-of-session ff-merge push to `origin/main` for the doc-batch (operationally adjacent to the deploy push — does NOT re-invoke Rule 9)
+**Director directive at deploy time:** *"deploy now but defer any real wor"* (truncated; clarified via clarifying picker to "Deploy now — but pause BEFORE the push to main" which is effectively identical to default Rule 9 behavior)
+**Status:** Workstream 4 ✅ DEPLOYED-PHASE-4-PENDING 2026-05-26 on vklf.com. W4 implementation arc COMPLETE at code level across Sessions 1-2 of ~2-3 estimated + deploy COMPLETE + Phase-4 verify NEXT session. **W4 flips to ✅ DONE-AND-VERIFIED after Phase-4 PASS next session per (a.84) RECOMMENDED-NEXT.** If Phase-4 surfaces issues → fix-forward cascade per the 2026-05-24 W3 deploy Pattern.
+
+**What landed this session — empirical narrative:**
+
+The session began with the pre-deploy /scoreboard verification on `workflow-2-competition-scraping`. All 5 checks GREEN at expected W4 S2 baselines: root tsc clean / extension tsc clean / 558 ext UNCHANGED / 783 src/lib UNCHANGED / 62 routes UNCHANGED. Check 6 Playwright SKIPPED per Rule 27 picker — director picked SKIP since ff-merge bundle has zero `extensions/` source files (no extension dist changes to test) and the new W4 page surface has no existing Playwright spec coverage.
+
+At the Rule 9 gate moment, Claude fired an AskUserQuestion picker. Director's first answer rendered as a truncated string "deploy now but defer any real wor" (no trailing "k" — likely a UI rendering truncation, not director error). Claude did NOT silently interpret + fired a clarifying AskUserQuestion picker offering 4 disambiguation options (deploy-now-skip-Phase4, deploy-now-pause-before-push, deploy-then-defer-everything-else, defer-entire-deploy). Director picked **"Deploy now — but pause BEFORE the push to main"** which was effectively identical to default Rule 9 behavior (the default Rule 9 disposition is exactly: pause + ask director + then push on Yes).
+
+`git push origin main` executed cleanly, fast-forwarding main from `ac45737` to `096a2ac`. Vercel auto-redeploy fired (~2-3 minute build + cache invalidation). Post-merge /scoreboard on `main` 5/5 GREEN at exact same baselines.
+
+At this point director directed deferring the Phase-4 director real-Chrome verification to next session. **The 10-step verification walkthrough was drafted in-session** — director's request was that the walkthrough be preserved verbatim so next session can copy + execute it. The walkthrough covers: navigation from Competition Data → standalone "→ Comprehensive Competitor Analysis" button → page loads → toggle edit mode → type body content + insert `#url/<urlId>` shorthand via the "Link to URL" toolbar dropdown → toggle Done → click the rendered hyperlink → confirm navigation → back-button returns to Comprehensive Analysis page → final edit-mode toggle. Cross-platform exception applies (the new page is per-Project not per-platform, so director picks any one platform). Drafted walkthrough preserved verbatim in `docs/NEXT_SESSION.md` ## Launch prompt section.
+
+**NEW informational Pattern memorialized — "Truncated picker response → fire clarifying picker, don't silently interpret":**
+
+When director's AskUserQuestion answer renders as a truncated string (e.g., missing the trailing word or character of an answer that's clearly mid-sentence), Claude must NOT silently interpret the truncated text. Instead, Claude fires a clarifying AskUserQuestion picker offering the most likely 3-4 disambiguation options + lets director pick. Today's session validated this Pattern: director's first AskUserQuestion answer rendered as "deploy now but defer any real wor" — Claude could have inferred "deploy now but defer any real work" (= ship the deploy + skip non-deploy work), but the inference space was actually larger (was "real work" Phase-4 verification? fix-forwards? next-session prep? unclear). Claude fired a 4-option clarifying picker; director picked the most-thorough deploy option which was effectively default Rule 9 behavior.
+
+**Why this Pattern matters:** AskUserQuestion picker text is short-form by design (often single phrases or one-liners), so a truncated reply that drops a critical word can flip the meaning entirely (e.g., "deploy now AND defer X" vs. "deploy now BUT defer X" — opposite implications for X). Silent interpretation risks the wrong execution path. Clarifying picker overhead is small (~30 seconds) and the disambiguation has perfect fidelity since director picks the literal text.
+
+**Pairs with Rule 14g** (trust director confirmation when explicit, but ambiguity → clarify rather than assume). **Could become a feedback memory if it recurs** — for now, informational only; one observation insufficient to confirm a recurring pattern.
+
+**Multi-session-workstream deploy pattern observations across §B entries — the third such observation:**
+
+This §B 2026-05-26 entry is the **third multi-session-workstream deploy pattern observation in this design doc**, joining §B 2026-05-23-c (W2 deploy) + §B 2026-05-24 (W3 deploy with 5-fix-forward cascade). The three observations together calibrate the deploy-session shape:
+
+- **§B 2026-05-23-c (W2 deploy):** memorialized the "Multi-session workstream deploy gate timing" Pattern — the deploy session lands after the LAST build session that contains user-visible UI (NOT after every build session). W2 had 5 build sessions; the deploy session was session #6 in the W2 arc.
+- **§B 2026-05-24 (W3 deploy):** memorialized the "Phase-4 verification fix-forward cascade in a single deploy session" Pattern — when Phase-4 surfaces multiple issues post-deploy, fix-forward in-session; each fix-forward = own build commit + own Rule 9 gate + own Phase-4 reverify cycle. W3 deploy set the high-water mark at 6 deploys (initial + 5 fix-forwards) resolving 11 verification issues.
+- **§B 2026-05-26 (today's W4 deploy):** validates the alternate branch of the W3 Pattern — when director defers Phase-4 to next session, the deploy session is a single-deploy with zero fix-forwards; the Phase-4 verification becomes its own next session (with its own potential fix-forward cascade if issues surface there). The deploy mechanic + the Phase-4 verify mechanic can be decoupled across two sessions when director chooses.
+
+Calibration data point: across W2 + W3 + W4 deploy sessions, the total deploy-event count is 1 (W2) + 6 (W3) + 1 (W4 so far) = 8 deploys to ship 3 workstreams' UI surfaces to vklf.com. W3 was the outlier with the high-fix-forward count; W2 + W4 were single-deploy sessions (W4's single-deploy was because Phase-4 was deferred — the actual fix-forward count for W4 will be known after next session's Phase-4 verify).
+
+**Verification scoreboard:**
+
+- Pre-deploy /scoreboard (workflow-2 before ff-merge): root tsc clean / extension tsc clean / 558 ext UNCHANGED / 783 src/lib UNCHANGED / 62 routes UNCHANGED; Check 6 Playwright SKIPPED per Rule 27 (no `extensions/` source files in the ff-merge bundle)
+- Post-merge /scoreboard (main after ff-merge): identical baselines preserved through ff
+- No fix-forwards happened (Phase-4 deferred to next session)
+
+**P-43 cwd-leak class re-reproduced TWICE during /scoreboard execution (LOW informational sub-observation; 5th+ reproduction overall):**
+
+Both reproductions happened on Check 5 (Next.js `npm run build` route count) in pre-deploy AND post-merge /scoreboard runs. Root cause: parallel Checks 2+3 use `cd /workspaces/brand-operations-hub/extensions/competition-scraping && ...` which drifts the shell cwd to the extension directory; Check 5's template in `.claude/commands/scoreboard.md` has a bare `npm run build` without an absolute-cd prefix, so it picked up the drifted cwd and ran the EXTENSION build instead of the Next.js build. Caught immediately from output content + recovered with absolute `cd /workspaces/brand-operations-hub && npm run build` retry; final 62-routes result correct after retry.
+
+**Mechanical prevention candidate (informational only; NOT shipped this session):** add absolute `cd /workspaces/brand-operations-hub` prefix to ALL Bash commands in `.claude/commands/scoreboard.md` (specifically Check 5's `npm run build` + route-count grep), not just the extension-rooted Checks 2-3. The prior P-43 template-hardening pass (2026-05-22-g) added absolute cd to Checks 2-3 (the drift-causing checks) but did NOT add it to Check 5 (the drift-absorbing check). Bilateral hardening would make the template robust against any reordering or parallelization changes. Candidate for a future P-43-followup polish session, but not blocking any active workstream. NOT a top-tier slip — recovery was immediate + result was correct.
+
+**Affected §A sections (informational — §A frozen per Rule 18):**
+
+- §A.4 (Comprehensive Competitor Analysis page surface) — fully deployed; the per-Project rich-text doc + the "Link to URL" toolbar picker + the internal-hyperlink rendering are all now live on vklf.com awaiting Phase-4 verification.
+- §A.5 (TipTap editor wrapper with variant='full' toolbar) — fully deployed; H1/H2/H3 + Bold + Italic + Underline + bullet/numbered lists + Link + Code block + the new "Link to URL" picker are all live on vklf.com.
+- §C.4 — Workstream 4 implementation outline; Sessions 1-2 fully consumed; Session 3 (deploy) consumed today; Phase-4 verify becomes effectively a Session 4 (NOT in original §C.4 estimate of ~2-3 sessions; calibration data point — when Phase-4 is deferred to a separate session, the total workstream session count is build sessions + 1 deploy + 1 Phase-4 verify = build+2 sessions). Useful data point for sizing W#5: §C.5 estimates ~1-2 build sessions; with the deferred-Phase-4 branch as a possibility, total W#5 spend could be 1 build + 1 deploy + 1 Phase-4 verify = 3 sessions worst case.
+
+**Impact on §A: None; §A stays frozen per Rule 18.** All §A binding decisions consumed cleanly; the deploy was a pure mechanical shipment of W4 S1 + S2's code to vklf.com with no design changes required.
+
+**Calibration data point — full W1+W2+W3+W4 implementation arc progress:**
+
+- Workstream 1 = 1 build session + folded into W2 deploy (under §C.1's 2-3 estimate);
+- Workstream 2 = 5 build sessions + 1 deploy session (top end of §C.2's 3-5 estimate);
+- Workstream 3 = 3 build sessions + 1 deploy session with 6 deploy events from fix-forward cascade (low end of §C.3's 3-4 estimate for build sessions);
+- Workstream 4 = 2 build sessions + 1 deploy session + 1 Phase-4 verify session pending (top end of §C.4's ~2-3 estimate for build sessions, with the deferred-Phase-4 branch adding 1 extra session vs. the typical in-deploy Phase-4 pattern);
+- **Combined W1+W2+W3+W4 = 13 sessions (so far)** vs. 9-14 estimated (sum of §C.1+§C.2+§C.3+§C.4 floor/ceiling — with W4 trending toward 14 if Phase-4 verifies clean OR 15+ if fix-forwards land);
+- Useful data point for sizing Workstream 5: W5 = ~1-2 sessions per §C.5; **total P-46 spend trending toward 15-17 sessions** vs. the original 11-17 estimate post-Q1+Q9 scope reductions.
+
+**Cross-references:**
+
+- CORRECTIONS_LOG §Entry 2026-05-26 (the closing entry for this deploy session — captures the same content from a corrections-log/procedural perspective; this design doc §B captures it from a design/implementation perspective).
+- `docs/COMPETITION_DATA_V2_DESIGN.md` §B 2026-05-25 (yesterday's W4 Session 2 closing entry — captures the third W4-arc Pattern "Custom TipTap extension via `addProseMirrorPlugins`" + the W4 implementation arc COMPLETE at code level across Sessions 1-2).
+- `docs/COMPETITION_DATA_V2_DESIGN.md` §B 2026-05-24-b (W4 Session 1 closing entry — captures Pattern A + Pattern B + FIRST APPLICATION of Rule 14a tightening).
+- `docs/COMPETITION_DATA_V2_DESIGN.md` §B 2026-05-24 (the W3 DEPLOY closing entry — established the "Phase-4 verification fix-forward cascade in a single deploy session" Pattern that today's W4 deploy validates the alternate branch of).
+- `docs/COMPETITION_DATA_V2_DESIGN.md` §B 2026-05-23-c (the W2 DEPLOY closing entry — established the "Multi-session workstream deploy gate timing" Pattern that today's W4 deploy composes with the deferred-Phase-4 branch).
+- `docs/ROADMAP.md` P-46 polish-backlog entry (annotated this session — WS#4 flipped to ✅ DEPLOYED-PHASE-4-PENDING 2026-05-26 on vklf.com via ff-merge `cafd3ed..096a2ac` (4 commits); (a.83) closed; new (a.84) opened for Workstream 4 Phase-4 verification session).
+- `docs/NEXT_SESSION.md` (today's complete rewrite for the W4 Phase-4 verification session — preserves the 10-step verification walkthrough verbatim in the ## Launch prompt section so the next session can copy + execute it).
+
+**Closing line:** Workstream 4 ✅ DEPLOYED-PHASE-4-PENDING 2026-05-26 on vklf.com via single ff-merge of 4 commits. Phase-4 director real-Chrome verification DEFERRED to next session at director request — 10-step walkthrough preserved verbatim in NEXT_SESSION.md. P-46 implementation arc progress: Workstreams 1 + 2 + 3 = ✅ DONE-AND-VERIFIED on vklf.com; Workstream 4 = ✅ DEPLOYED-PHASE-4-PENDING (W4 closes ✅ DONE-AND-VERIFIED after Phase-4 PASS next session per (a.84)). Next session: Workstream 4 Phase-4 verification session — director executes 10-step real-Chrome verification walkthrough on vklf.com.
+
+---
+
 END OF DOCUMENT
