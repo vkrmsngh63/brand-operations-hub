@@ -232,8 +232,25 @@ function productionCropStreamToRegion(
   video.muted = true;
   video.playsInline = true;
   video.srcObject = sourceStream;
-  // Detached from the document — no need to render; canvas reads frames
-  // straight from the video element regardless.
+  // P-48 Session 2 fix-forward #1 (2026-05-25) — attach the hidden video
+  // element to the DOM with off-screen + 1x1 + transparent styling.
+  // PRIOR ASSUMPTION: detached element renders frames fine since canvas
+  // reads from it directly. EMPIRICALLY WRONG — Chrome throttles
+  // detached video elements down to ~6-7 fps to save CPU. ffprobe on
+  // both pre-fix and post-fix recordings shows 154 frames / 22.69 s and
+  // 106 frames / 15.616 s respectively — ~6.79 fps actual playback rate
+  // even though canvas.captureStream(30) requests 30 fps. Attaching to
+  // the DOM with non-zero size + non-display-none styling restores the
+  // browser's full-framerate render budget for this element.
+  video.style.position = 'fixed';
+  video.style.top = '0';
+  video.style.left = '0';
+  video.style.width = '1px';
+  video.style.height = '1px';
+  video.style.opacity = '0';
+  video.style.pointerEvents = 'none';
+  video.style.zIndex = '-2147483648';
+  document.body.appendChild(video);
   void video.play().catch(() => {
     // Defensive — autoplay policy shouldn't fire on muted video, but if
     // it does the rAF loop will just paint stale frames until the user
@@ -284,6 +301,12 @@ function productionCropStreamToRegion(
         // Defensive.
       }
       video.srcObject = null;
+      // P-48 Session 2 fix-forward #1 — remove the hidden video element
+      // from the DOM after teardown so it doesn't accumulate across
+      // record/stop cycles.
+      if (video.parentNode !== null) {
+        video.parentNode.removeChild(video);
+      }
     },
   };
 }
