@@ -3299,4 +3299,47 @@ The content-script video-capture form is now live on vklf.com end-to-end mountin
 
 ---
 
+## §B 2026-05-24-f — `session_2026-05-24-f_p46-w4-phase4-fix-forward-1-then-w5-p47-phase4-pass-plus-p48-capture` — P-47 Shadow DOM mount Phase-4 PASS first-walk on Amazon closes the band-aid → structural-fix lifecycle end-to-end on vklf.com; P-47 ✅ DONE-AND-VERIFIED 2026-05-24-f; NEW P-48 cross-reference (different feature — P-45 screen recording playback — but lives in the same docs)
+
+**§A frozen** per Rule 18. This entry is informational + lifecycle-completion. **P-47 implementation arc COMPLETE end-to-end ✅ DONE-AND-VERIFIED 2026-05-24-f on vklf.com**: P-45 Build #2 §Entry 2026-05-22-i Pattern B band-aid memorialization (the per-listener event-isolation band-aid that needed structural replacement) → P-47 Session 1 build §B 2026-05-24-d (Shadow DOM mount + CSS migration + band-aid deletion at code level) → P-47 Session 1 deploy §B 2026-05-24-e (bundled W5 + P-47 deploy under ONE Rule 9 gate) → P-47 Phase-4 PASS today (this entry). **Sessions 2-3 from the original P-47 estimate MERGED into today's bundled deploy outcome** — the original estimate budgeted Session 2 for cross-platform verification + Session 3 for deploy; the structural-only refactor with no behavioural changes meant no cross-platform variance was expected, so Sessions 2-3 collapsed into the bundled deploy + Phase-4 PASS path.
+
+**P-47 Phase-4 verification mechanics.** Director walked 2 steps on Amazon (the original Issue 2 platform from P-45 Build #2 where the band-aid was originally needed) per the verification walkthrough preserved verbatim in 2026-05-24-e NEXT_SESSION.md ## Standing carry-overs section (c):
+
+**Step 1 — Open the extension URL save form on a competitor page + confirm the form opens cleanly.** PASS — form opens cleanly + the form chrome (backdrop overlay + form border + buttons) looks identical to before the refactor (the CSS extraction into `FORM_CHROME_CSS` shared exported constant + template-literal interpolation back into composite `CONTENT_SCRIPT_CSS` constant means single source of truth for both global stylesheet consumers + Shadow DOM root consumer — zero visual drift).
+
+**Step 2 — Confirm form interaction works cleanly with the Shadow DOM mount + no page-level focus interference.** PASS — text inputs + textareas accept focus cleanly + retain focus while typing + clicking outside-and-back works cleanly + Amazon's page-level handlers do NOT steal focus from the form (the original Issue 2 symptom that drove the band-aid is structurally prevented by the Shadow DOM boundary); Escape closes the form cleanly (the Escape-to-close `keydown` listener stays on `document` and keydown events from inside the shadow root compose up through the host into the document tree as designed).
+
+**Zero fix-forwards needed for P-47.** This is the cleanest possible Phase-4 verification outcome — the structural refactor preserved the band-aid's behaviour without per-listener overhead (62 LOC `applyAggressiveEventIsolation` function + 4 call sites + 20-line context comment all deleted; structural Shadow DOM boundary replaces 80 event listeners per form open).
+
+**Pairs with the §B 2026-05-22-i Pattern B band-aid memorialization (in P-45 Build #2 closing entry — CORRECTIONS_LOG §Entry 2026-05-22-i) as the LONG-TERM-FIX PAIRING completion.** The band-aid → structural-fix lifecycle now verified end-to-end in production:
+- **Build §B 2026-05-22-i** (P-45 Build #2) — ship the band-aid first to unblock the immediate ship + capture the structural replacement as a polish-backlog entry (P-47 NEW 2026-05-22-i).
+- **Build §B 2026-05-24-d** (P-47 Session 1) — ship the structural replacement at code level (Shadow DOM mount + CSS migration + band-aid deletion).
+- **Deploy §B 2026-05-24-e** (P-47 deploy via bundled W5 + P-47 deploy) — deploy the structural replacement to production removing the band-aid from production code.
+- **Phase-4 PASS §B 2026-05-24-f** (today) — verify the structural replacement preserves the band-aid's behaviour on the original Issue 2 platform (Amazon) in real Chrome with director Yes verdict.
+
+P-45 Build #2 → P-47 Session 1 build → P-47 Session 1 deploy → P-47 Session 1 Phase-4 PASS is the canonical exemplar of the **complete band-aid → structural-fix lifecycle end-to-end in W#2 history** — first such lifecycle to close in W#2.
+
+**NEW P-48 cross-reference (different feature — P-45 screen recording playback — but lives in the same docs).** During today's verification session, director observed: *"The video saved is very laggy when played back on vklf.com."* Follow-up clarifying picker disambiguated symptom (stutters / frame drops during playback, specifically affecting P-45 screen-recording captures — not P-23 drag-and-drop captures). Per Rule 24 search across all docs (ROADMAP P-NN entries; CORRECTIONS_LOG §Entry table; design docs §A + §B; COMPETITION_SCRAPING_VERIFICATION_BACKLOG): no prior treatment found. Captured as NEW P-48 polish item in ROADMAP polish backlog with diagnostic + implementation scope (~1-2 sessions estimated). P-48 sketch: capture-side likely root cause (`MediaRecorder` constructed with no `videoBitsPerSecond` cap → browser default 6-8 Mbps+ at 1080p → files exceed real-time decode budget); Session 1 Diagnostic = `ffprobe` inspection + Chrome DevTools Network panel observation; Session 2 Implementation = capture-side bitrate cap at 2.5 Mbps + frame-rate cap at 30fps + dimension cap at 1080p in `extensions/competition-scraping/src/lib/content-script/screen-recorder.ts` (~30 LOC). P-48 lives in the content-script feature surface (same general area as P-47 + P-45) so the design entries when P-48 ships will live here in COMPETITION_SCRAPING_DESIGN.md (capture-side concerns) AND/OR COMPETITION_DATA_V2_DESIGN.md (delivery + display concerns). Cross-reference established now so the diagnostic session can pick the right doc(s) for the implementation §B entry.
+
+**Pre-deploy /scoreboard 5/5 GREEN at unchanged baselines** (root tsc clean / extension tsc clean / 558 ext UNCHANGED / 786 src/lib UNCHANGED / 62 routes UNCHANGED); Check 6 Playwright SKIPPED per Rule 27 — no Playwright spec coverage for content-script form mount lifecycle (no behavioural changes to unit-test). Post-merge /scoreboard partial (root tsc clean / extension tsc clean / src/lib 786/786 GREEN); Check 5 + Check 3 trusted at unchanged baselines since merged commit byte-identical to pre-deploy via clean ff-merge (no rebase, no squash).
+
+**Schema-change-in-flight flag STAYS NO** entire session — UI-only W4 fix-forward; P-47 itself is content-script mount refactor with no schema, no API, no shared-types.
+
+**Impact on §A:** None. §A's content-script architecture coverage + P-27 captured-videos design + P-23 saved-URL dropdown all consumed without amendment; today's P-47 Phase-4 PASS is the verification of the structural refactor that was already captured in §B 2026-05-24-d at code level. §A stays frozen per Rule 18.
+
+**Cross-references:**
+- `docs/COMPETITION_SCRAPING_DESIGN.md` §B 2026-05-24-d (P-47 Session 1 build session — the structural Shadow DOM mount + band-aid deletion that today's Phase-4 verifies in production).
+- `docs/COMPETITION_SCRAPING_DESIGN.md` §B 2026-05-24-e (P-47 Session 1 deploy — the bundled W5 + P-47 deploy that landed the structural replacement on vklf.com awaiting today's Phase-4 verification).
+- `docs/COMPETITION_DATA_V2_DESIGN.md` §B 2026-05-24-f — paired entry capturing the W4 + W5 Phase-4 PASS lifecycle outcome (different design doc per the 2026-05-24-d precedent; W#2 design layer concerns there + content-script architecture concerns here).
+- `docs/CORRECTIONS_LOG.md` §Entry 2026-05-22-i (P-45 Build #2 closing entry — Pattern B band-aid memorialization that today's P-47 Phase-4 PASS verifies as structurally replaced in production).
+- `docs/CORRECTIONS_LOG.md` §Entry 2026-05-24-f (today's bundled Phase-4 verification + fix-forward #1 + Phase-4 PASS closing entry — 6 sub-observations including NEW P-48 capture).
+- `docs/ROADMAP.md` P-47 polish-backlog entry (annotated today — status flipped to ✅ DONE-AND-VERIFIED 2026-05-24-f end-to-end; the band-aid → structural-fix lifecycle now closes end-to-end on vklf.com).
+- `docs/ROADMAP.md` P-46 polish-backlog entry (annotated today — entire 5-workstream polish arc closes ✅ DONE-AND-VERIFIED end-to-end 2026-05-24-f).
+- `docs/ROADMAP.md` NEW P-48 polish-backlog entry (captured today per Rule 24 search; diagnostic + implementation scope; LOW–MEDIUM severity; 1-2 sessions estimated).
+- `docs/NEXT_SESSION.md` (today's complete rewrite for P-48 Session 1 (Diagnostic) + ZERO standing carry-overs since all 3 Phase-4 verifications closed today).
+
+**Closing line:** P-47 Shadow DOM mount Phase-4 PASS first-walk on Amazon closes the band-aid → structural-fix lifecycle end-to-end on vklf.com ✅ DONE-AND-VERIFIED 2026-05-24-f. First complete band-aid → structural-fix lifecycle in W#2 history. NEW P-48 polish item captured for future session (video playback stutters on vklf.com; P-45 screen-recording-specific; LOW–MEDIUM severity; ~1-2 sessions diagnostic + implementation). Next session: P-48 Session 1 (Diagnostic) per (a.89).
+
+---
+
 END OF DOCUMENT
