@@ -1724,4 +1724,59 @@ If any walkthrough FAILS or PARTIAL → initiate fix-forward cascade per W3 depl
 
 ---
 
+## §B 2026-05-25-b — `session_2026-05-25-b_reviews-phase-2-design-session` — Reviews Phase 2 Design Session producing `docs/REVIEWS_PHASE_2_DESIGN.md` — cross-reference pointer entry from data-shape side per the dual-doc P-23 + P-46 precedent; §A frozen per Rule 18; this is the second application of the design-doc-split precedent (P-46 → COMPETITION_DATA_V2_DESIGN.md 2026-05-23 + P-27 → CAPTURED_VIDEOS_DESIGN.md 2026-05-20-b; today: P-49 → REVIEWS_PHASE_2_DESIGN.md 2026-05-25-b)
+
+**§A frozen** per Rule 18. This entry is informational + design-doc-split cross-reference from the **data-shape side** of the design (the extension-side architecture cross-reference for P-49 Workstream 2 lives in `docs/COMPETITION_SCRAPING_DESIGN.md` §B 2026-05-25-b — paired entry — per the P-23 precedent that extension content-script changes live in the W#2 master design doc, not in this P-46 doc). Suffix `-b` per Rule 14 disambiguation since §B 2026-05-25 already exists in this doc for yesterday's Reviews Phase 2 scope-expansion capture session.
+
+**Session shape: pure design session (NO code, NO builds, NO deploys, ZERO Rule 9 gates fired).** Today executed the (a.92) RECOMMENDED-NEXT task locked by yesterday's capture session: Reviews Phase 2 Design Session (Workflow Requirements Interview producing `docs/REVIEWS_PHASE_2_DESIGN.md`). Director walked through the 15-question scaffold preserved verbatim in yesterday's NEXT_SESSION.md `## Proposed interview question scaffold` section. Director answered all 15 forced-pickers — 14 direct-Yes-to-Recommended + 1 Q7 substantive refinement on the AI model-version selector (preserved Opus-throughout Recommended path while adding a per-run 4.7-default / 4.6-selectable dropdown alongside per-run + per-Project monthly cost caps from the W#1 pattern).
+
+**NEW standalone `docs/REVIEWS_PHASE_2_DESIGN.md` shipped (790 lines).** §A frozen at 15 interview-locked subsections A.1-A.15 + §B empty append-only per Rule 18 + §C 4 active workstream implementation outlines (W1 DONE this session / W2 Per-platform extension extraction with 4 sub-clusters Amazon→eBay→Etsy→Walmart / W4 Captured Reviews UI extensions / W5 AI review analysis system at 3 levels) + W3 Crawler infrastructure DROPPED placeholder per Q1 outcome. Same structural shape as this doc (`COMPETITION_DATA_V2_DESIGN.md`) — the P-46 design doc precedent set 2026-05-23 + the 2026-05-20-b `CAPTURED_VIDEOS_DESIGN.md` precedent. This is the SECOND APPLICATION of the design-doc-split pattern from this doc's lineage (the FIRST being the original 2026-05-23 split that produced this doc).
+
+**15 decisions locked across A.1-A.15 in `docs/REVIEWS_PHASE_2_DESIGN.md`** (summarized here for cross-reference; canonical lives in the new design doc):
+
+- **A.1 (Q1) collection method = Extension only** — W3 Crawler workstream DROPS per director's verbatim *"behaviorally indistinguishable from real-world human user sitting where admin is"* anti-bot constraint.
+- **A.2 (Q2) per-platform priority = Amazon → eBay → Etsy → Walmart** — matches director's stated 2026-05-25 priority order.
+- **A.3 (Q3) scrape execution = In-page with Shadow DOM progress indicator** — reuses P-47 mount pattern from §B 2026-05-24-d + 2026-05-22-i.
+- **A.4 (Q4) per-star cap = Per-URL setting + per-trigger override** — new `CompetitorUrl.reviewScrapeCap Int? @default(200)` column.
+- **A.5 (Q5) reordering = Drag-to-reorder** — new `sortRank Int?` column on `CapturedReview` reusing W3 Session 3 @dnd-kit shared debounced-mutation Pattern from §B 2026-05-23-f.
+- **A.6 (Q6) bulk-delete = Multi-select checkboxes + confirm modal** — new batch-delete API route.
+- **A.7 (Q7) AI model = Claude Opus throughout with per-run model-version selector** — 4.7 default / 4.6 selectable dropdown + per-run + per-Project monthly cost caps (W#1 pattern from `docs/MODEL_QUALITY_SCORING.md`).
+- **A.8 (Q8) batch sizing = Adaptive ~80% context fill** — W#1 `INPUT_CONTEXT_SCALING_DESIGN.md` Tiered Canvas Serialization reuse.
+- **A.9 (Q9) AI output = Rich-text TipTap JSON** — reuses existing `RichTextEditor` from this doc's §A.5 + P-46 W2 Session 1 + W4 Session 1.
+- **A.10 (Q10) UI placement = Per-product on URL detail + per-Type & cross-everything on existing P-46 W4 Comprehensive Competitor Analysis page** — reuses existing surfaces from this doc's §A.4 (`ComprehensiveCompetitorAnalysis` shape).
+- **A.11 (Q11) trigger = Manual button + model dropdown + cost preview modal** — director-controlled; cost-visible per click.
+- **A.12 (Q12) caching = Fingerprint cache (review-IDs + model version) + "out of date" badge + explicit re-run** — lowest-cost cache strategy.
+- **A.13 (Q13) schema = Full package locked** — new `ReviewAnalysis` table with discriminated `level` enum {PER_PRODUCT, PER_TYPE, PER_PROJECT} + `analysisJson Json` + `reviewsHash String` + `modelVersion String` + `runAt DateTime` + `runByUserId String?` + `costUsdMicros Int?`; `CapturedReview` field additions including `source` enum value addition + `sortRank Int?` + `helpfulCount Int?` + `platform String?`; `CompetitorUrl.reviewScrapeCap Int? @default(200)`.
+- **A.14 (Q14) star UI = Counter-bar with click-to-filter** — replaces existing star-rating-multi-select.
+- **A.15 (Q15) anti-bot = Conservative everywhere** — 1-3s random delays + captcha-aware abort + rate-limit UI notification.
+
+**Affected §A sections in this doc (informational — §A stays frozen per Rule 18).** The new P-49 spec touches several existing §A sections informationally — making explicit cross-references that future P-49 build sessions will encounter:
+
+- **§A.1 (Reviews extraction shape) — was updated 2026-05-25 with "RESOLVED 2026-05-25 — see ROADMAP P-49" cross-reference paragraph; that resolution is now fully realized via the new design doc.** Yesterday's §A.1 update is the bridge from the original 2026-05-23 deferral → the 2026-05-25 P-49 capture → today's 2026-05-25-b design-session ingestion. The new design doc's A.1 fully supersedes this §A.1 deferral for P-49 build-session purposes.
+- **§A.1b (`CapturedReview` shape) — the v1 schema P-49 extends.** Current `CapturedReview` model has `source` field with v1 value `'manual'`; P-49 Workstream 2 adds `source = 'extension-scrape'` as a new enum value per A.13. Other field additions per A.13: `sortRank Int?` for server-side reordering per A.5; `helpfulCount Int?` (Amazon supplies; eBay/Etsy/Walmart don't); `platform String?` (denormalized from parent CompetitorUrl for query convenience).
+- **§A.4 (`ComprehensiveCompetitorAnalysis` shape) — the UI surface P-49 Workstream 5 extends.** Per the new design doc's A.10, the per-Project Comprehensive Competitor Analysis page (P-46 W4 — shipped 2026-05-24-f) is the locked-in home for the cross-Type + cross-everything AI analysis surfaces per W5. Per-product W5 analysis lives on the URL detail page (this doc's §A.1b surface).
+- **§A.5 (TipTap JSON storage) — consumed for AI analysis output rendering.** Per the new design doc's A.9, AI summaries land as rich-text TipTap JSON; reuse the existing `RichTextEditor` (read-mode `AnalysisReadView`) for display per the W2 Session 1 + W4 Session 1 precedent.
+- **§A.11 (consolidated schema list) — design-session deliverable extends this list.** Workstream 1 added: `CompetitorUrl` new columns + `CapturedText`/`Image`/`Video` new `analysis` column + new `ScrapingStatus` enum + new `CapturedReview` / `ComprehensiveCompetitorAnalysis` / `UserTablePreferences` models. P-49 design session A.13 locks the next round: `CapturedReview` field additions (new source enum value + helpfulCount + sortRank + platform) + `CompetitorUrl.reviewScrapeCap` + new `ReviewAnalysis` model (discriminated `level` enum).
+- **§A.13 (Living Questions answers — Shared Data Registry) — new entries expected at design-session close.** The new design doc adds `ReviewAnalysis` entity + extended `CapturedReview` entity + `CompetitorUrl.reviewScrapeCap` entity with the 3 Living Questions answered (Who reads it? Who writes it? Where does it live?). Lives in the new design doc per Rule 18.
+- **§A.14 (Cross-Tool Data Flow Map reciprocal output declaration) — new entries expected.** Per-platform extension extraction (W2) produces CapturedReview rows consumed by W5 AI analysis; W5 produces ReviewAnalysis rows consumed by the W4 Comprehensive Analysis page UI + per-product URL detail UI. Lives in the new design doc per Rule 18.
+
+**Cross-references:**
+- `docs/REVIEWS_PHASE_2_DESIGN.md` (NEW — 790 lines) — canonical interview-locked design spec; future P-49 build-session §B entries land there per Rule 18, NOT in this doc's §B.
+- `docs/ROADMAP.md` P-49 entry — Status flip from "DESIGN-PENDING" to "🟢 DESIGN-FROZEN 2026-05-25-b" + 4-active-workstreams-instead-of-5 update + (a.92) close + (a.93) open.
+- `docs/COMPETITION_SCRAPING_DESIGN.md` §B 2026-05-25-b — paired entry covering extension-side architecture cross-reference for P-49 Workstream 2 (per-platform extension extraction architecture: URL-prefix dispatch from P-23 + Shadow DOM mounts from P-47 + `makeTextareaField()` helper extensions from P-46 W5). Per the P-23 precedent, extension content-script changes live in the W#2 master design doc; this doc covers the data-shape side.
+- §B 2026-05-25 (Reviews Phase 2 scope-expansion capture session) — yesterday's opening entry for this Workstream 1 arc; today's §B 2026-05-25-b closes the W1 arc and opens the W2-W5 build arc.
+- §B 2026-05-23 (the initial P-46 W#2 Phase 2 design session that produced this doc) — set the design-doc-split precedent today's P-49 follows; first application of the pattern.
+- §B 2026-05-24-f (P-46 entire 5-workstream polish arc closure — the prior hub-and-spokes lifecycle exemplar; P-49 is the second W#2 hub-and-spokes polish hub).
+- §A.1 (resolved 2026-05-25; today fully superseded by the new design doc's A.1).
+- §A.1b (v1 Reviews surface — schema + manual-entry path P-49 extends).
+- §A.4 (ComprehensiveCompetitorAnalysis surface — locked-in home for W5 cross-Type + cross-everything AI analysis per the new design doc's A.10).
+- §A.5 (TipTap JSON storage — reused for W5 AI analysis output rendering per the new design doc's A.9).
+- §A.11 (consolidated schema list — design-session deliverable extends this list).
+- `docs/CORRECTIONS_LOG.md` §Entry 2026-05-25-b (P-49 Reviews Phase 2 design-session closing entry — the FOURTH 2026-05-25-dated §Entry) — today's closing §Entry capturing the NEW reusable Pattern "Director-supplied per-platform DOM specs in capture-session memorialization pay off at design-session ingestion" + calibration data point + LOW informational sub-observation.
+- W#2 graduation step (now further deferred until Reviews Phase 2 closes at the workstream-by-workstream level per the P-49 ROADMAP entry).
+
+**Closing line:** P-49 Reviews Phase 2 DESIGN SESSION ✅ DONE 2026-05-25-b on `workflow-2-competition-scraping` — pure design session (NO code, NO builds, NO deploys, ZERO Rule 9 gates fired). NEW standalone `docs/REVIEWS_PHASE_2_DESIGN.md` shipped (790 lines; §A frozen 15 decisions + §B empty + §C 4 active workstream outlines + W3 Crawler DROPPED placeholder per Q1 outcome). Director answered 14 of 15 picker direct-Yes-to-Recommended + 1 Q7 substantive refinement on the AI model-version selector. SECOND APPLICATION of the design-doc-split precedent from this doc's lineage (P-46 → COMPETITION_DATA_V2_DESIGN.md 2026-05-23 [first]; P-49 → REVIEWS_PHASE_2_DESIGN.md 2026-05-25-b [second]). §A.1 resolved 2026-05-25 + fully superseded today by the new design doc's A.1; future P-49 build-session §B entries land in the new design doc, not in this doc's §B per Rule 18. Next session: P-49 W2 Amazon Session 1 (schema migration + shared scrape-pagination helper + Shadow DOM progress indicator + Amazon DOM walker) per (a.93) on `workflow-2-competition-scraping`.
+
+---
+
 END OF DOCUMENT

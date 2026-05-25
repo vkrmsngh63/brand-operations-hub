@@ -1,31 +1,41 @@
 # Next session
 
-**Written:** 2026-05-25 (`session_2026-05-25_reviews-phase-2-capture-session` — end-of-session handoff after **W#2 polish Reviews Phase 2 scope-expansion CAPTURE SESSION ✅ DONE 2026-05-25 on `workflow-2-competition-scraping`** — pure-capture session (NO code, NO builds, NO deploys, ZERO Rule 9 gates fired). Director surfaced the long-promised "next round of additions" at session-start before any P-48 Session 3 work began; Rule 14f session-direction picker chose pure capture (P-48 Session 3 deferred opportunistically). NEW `P-49 Reviews Phase 2` ROADMAP entry (hub-and-spokes mirroring P-46 — 5 internal workstreams: Design Session NEXT + per-platform extension extraction × 4 platforms Amazon→eBay→Etsy→Walmart + Crawler infrastructure CONDITIONAL + Captured Reviews UI extensions + AI review analysis system at 3 levels) + NEW `P-50 Condition Pathology card` ROADMAP entry (small `main`-branch placeholder card; card-only scope per Rule 14f picker — no W# renumbering). `docs/COMPETITION_DATA_V2_DESIGN.md` §A.1 updated with "RESOLVED 2026-05-25 — see ROADMAP P-49" cross-reference paragraph linking the original 2026-05-23 deferral to the now-captured P-49 hub. **Closes (a.91) RECOMMENDED-NEXT** = P-48 Session 3 (Diagnostic #2) DEFERRED to opportunistic insertion via the P-48 ROADMAP entry which already documents Session 3 as the next-within-P-48 step. **Opens (a.92) RECOMMENDED-NEXT** = Reviews Phase 2 Design Session (Workflow Requirements Interview producing `docs/REVIEWS_PHASE_2_DESIGN.md`) on `workflow-2-competition-scraping`.
+**Written:** 2026-05-25-b (`session_2026-05-25-b_reviews-phase-2-design-session` — end-of-session handoff after **W#2 polish P-49 Reviews Phase 2 DESIGN SESSION ✅ DONE 2026-05-25-b on `workflow-2-competition-scraping`** — pure design session (NO code, NO builds, NO deploys, ZERO Rule 9 gates fired). Workflow Requirements Interview walked the 15-question scaffold preserved verbatim in yesterday's NEXT_SESSION.md `## Proposed interview question scaffold` section; director answered all 15 forced-pickers — 14 direct-Yes-to-Recommended + 1 Q7 substantive refinement on the AI model-version selector (preserved Opus-throughout Recommended path while adding a per-run 4.7-default / 4.6-selectable dropdown alongside per-run + per-Project monthly cost caps). NEW standalone `docs/REVIEWS_PHASE_2_DESIGN.md` shipped (790 lines; §A frozen at 15 interview-locked subsections A.1-A.15 + §B empty append-only per Rule 18 + §C 4 active workstream implementation outlines W1 DONE / W2 / W4 / W5 + W3 Crawler DROPPED placeholder per Q1 outcome — extension-only locked matching director's verbatim *"functionality should be very close to real world human user sitting where admin is"* anti-bot constraint). Revised P-49 scope post-design: 4 active workstreams instead of 5; revised estimate ~15-25 sessions total instead of ~20-50. **Closes (a.92) RECOMMENDED-NEXT** = Reviews Phase 2 Design Session ✅ DONE 2026-05-25-b producing `docs/REVIEWS_PHASE_2_DESIGN.md`. **Opens (a.93) RECOMMENDED-NEXT** = P-49 W2 Amazon Session 1 (schema migration + shared scrape-pagination helper + Shadow DOM progress indicator + Amazon DOM walker getting basic end-to-end extraction working on a real Amazon product page) on `workflow-2-competition-scraping`.
 
 ---
 
 ## What we did this session (in plain terms)
 
-Today was a **pure-capture session** — no code, no builds, no deploys, no pushes to production. The plan walking in was the screen-recording stutter diagnostic (P-48 Session 3). Before I read any of the pre-build documents, you flagged the long-promised "next round of additions" to Competition Scraping and dropped the entire scope in one message: automated review collection for Amazon, eBay, Etsy, and Walmart; per-product two-sweep AI review summarization; cross-Type pooled AI analysis; cross-everything competitive-landscape AI analysis; plus a small new "Condition Pathology" card on the PLOS dashboard.
+Today was a **pure design session** — no code, no builds, no deploys, no pushes to production. I walked you through the 15-question Reviews Phase 2 interview we drafted yesterday, one question at a time. You answered all 15 by picking the Recommended option on 14 of them and making one substantive refinement on the AI model question — keeping Claude Opus throughout but adding a per-run dropdown so you can pick 4.7 (the newest, default) or 4.6 (cheaper fallback) at run time, alongside the per-run + per-Project monthly cost caps we already use on the keyword clustering tool.
 
-I paused the stutter work and we ran three quick decision-pickers together: (1) should today be pure capture or mixed with the stutter work? — you picked pure capture; (2) should I capture this as one big hub-and-spokes ROADMAP entry mirroring P-46, or split it into 4-5 separate items? — you picked hub-and-spokes; (3) for the Condition Pathology card, is this just a placeholder card or a full new workflow we should renumber everything around? — you picked placeholder card only. With those locked, I wrote two new ROADMAP entries (P-49 Reviews Phase 2 + P-50 Condition Pathology card), updated the existing P-46 design doc to point §A.1's old "we'll figure out reviews per platform later" deferral at the new P-49 capture, and drafted a 15-question Workflow Requirements Interview for the design session next time we meet.
+The big takeaway from the very first question — Q1 collection method — is that we're going **extension-only**. The crawler workstream (which would have been a server-side scraper running on residential proxies with captcha-solving and browser-fingerprint randomization) is **dropped entirely**. That single decision saved an estimated 5-10 sessions of speculative crawler infrastructure work. The rationale is your verbatim anti-bot constraint: the extension runs in your browser at your IP, behaviorally indistinguishable from a real human user, so platforms like Amazon have no signal to flag the activity. A headless crawler at a data-center IP would be high-risk on Amazon specifically and require significant ongoing infrastructure cost.
 
-Nothing shipped to production. Nothing changed in code. The stutter work didn't go away — it's still queued via the P-48 ROADMAP entry — but it's now opportunistically interleavable rather than the immediate next-session lock, because today's capture revealed that Reviews Phase 2 is a multi-month workstream that gates W#2 graduation, and starting its design interview is the most-valuable next session.
+The deliverable is a new design document called `docs/REVIEWS_PHASE_2_DESIGN.md` — 790 lines, same shape as the existing P-46 design doc (`docs/COMPETITION_DATA_V2_DESIGN.md`): §A is the frozen interview decisions (15 subsections, one per question), §B is empty for future build-session refinements, and §C is the 4-active-workstream implementation outlines (W1 done today, W2 per-platform extension extraction with 4 sub-clusters Amazon → eBay → Etsy → Walmart, W4 Captured Reviews UI extensions, W5 AI review analysis system at 3 levels) plus W3 Crawler as a "DROPPED" placeholder.
+
+Nothing shipped to production. Nothing changed in code. The total P-49 build arc is now estimated at ~15-25 sessions instead of the original ~20-50 — the Q1 outcome cut roughly half off the estimate by dropping crawler entirely, and the other 14 questions locked the implementation details so the build sessions can move briskly without re-debating scope.
 
 ## What we'll do next session (in plain terms)
 
-Next session is the **Reviews Phase 2 Design Session** — a Workflow Requirements Interview where I walk you through about 15 design questions and we lock down all the open decisions before any code starts. The deliverable is a new document called `docs/REVIEWS_PHASE_2_DESIGN.md` — same shape as the existing P-46 design doc (`docs/COMPETITION_DATA_V2_DESIGN.md`): a §A section of frozen design decisions, an empty §B for future build-session refinements, and a §C with per-workstream implementation outlines.
+Next session is **P-49 Workstream 2 Amazon Session 1** — the first actual build session for Reviews Phase 2. This is the foundation session for all the per-platform review extraction work. It's NOT a deploy session — we'll be on the workflow branch (`workflow-2-competition-scraping`) and the goal is to get the schema migration + shared infrastructure + Amazon-specific extraction working in development, not yet shipped to production.
 
-**This is a pure design session — no code, no deploys.** Estimated ~1.5-2 hours of conversation. The questions cover: should we build extension-only or also a server-side crawler (anti-bot risk on Amazon especially)? Which of the 4 platforms do we tackle first? How do we orchestrate the actual scraping (background job vs in-page extension worker)? How does the UI let you adjust per-star scrape caps? How does the AI analysis work at 3 levels (per-product, cross-Type, cross-everything)? What AI model do we use and how do we guard the cost? Where in the UI does the AI analysis appear? What new database tables and columns do we need?
+**Three things ship at the code level next session:** (1) the database schema migration that adds the new `ReviewAnalysis` table + four new fields on `CapturedReview` (sortRank, helpfulCount, platform, source enum value addition for 'extension-scrape') + one new field on `CompetitorUrl` (`reviewScrapeCap` with default 200). (2) A shared helper module called `scrape-pagination.ts` that all 4 per-platform modules will reuse — it handles the conservative anti-bot defaults (1-3 second random delays between page clicks, captcha detection that aborts cleanly, rate-limit UI notifications), plus the Shadow DOM progress indicator that surfaces "scraping page 3 of N..." inside the page itself reusing the P-47 mount pattern. (3) The Amazon-specific DOM walker — the per-platform module that knows Amazon's per-star URL structure + "View 10 more reviews" button + helpful-count selector + Customers say block — and the right-click context-menu entry "Scrape reviews for this URL" that triggers it.
 
-After the design session locks all the answers, the actual build sessions follow — most likely starting with the first per-platform extension extraction module (probably Amazon since that's your stated priority order). Each platform is its own ~2-4 session build cluster. The full P-49 arc is estimated at ~20-50 sessions total, broken into 5 workstreams; we'll do them one at a time, not all at once.
+The session goal is **end-to-end extraction working on a real Amazon product page in development** — you right-click → "Scrape reviews for this URL" → the Shadow DOM progress indicator appears → reviews start landing in the database with the new fields populated → the scrape completes when the cap is hit or all reviews on the page are exhausted. We don't yet ship to production; that comes after at least one more Amazon refinement session + the schema migration is verified in a deploy session.
+
+**Important:** the schema-change-in-flight flag flips to **YES** at the start of next session when we run `prisma db push`. That means deploy-gate Rule 9 expectations kick in for the eventual deploy session (currently estimated 2-4 Amazon sessions from now).
 
 ## What's still left on the total roadmap (in plain terms)
 
-As of session-end 2026-05-25 (Reviews Phase 2 scope-expansion CAPTURE ✅ DONE; W#2 polish queue grew significantly today since P-49 added a whole new multi-workstream hub):
+As of session-end 2026-05-25-b (Reviews Phase 2 Design Session ✅ DONE; P-49 scope locked at 4 active workstreams):
 
-- **Reviews Phase 2 Design Session — NEXT.** ~1.5-2 hours pure design conversation. No main push expected. Produces `docs/REVIEWS_PHASE_2_DESIGN.md`.
-- **P-49 Reviews Phase 2 build workstreams (after design session locks scope).** ~20-50 sessions total across 5 workstreams (W1 Design Session NEXT + W2 per-platform extension extraction × 4 platforms = ~8-16 sessions + W3 crawler infrastructure CONDITIONAL ~5-10 sessions if scoped in + W4 Captured Reviews UI extensions ~2-3 sessions + W5 AI review analysis system ~5-10 sessions).
+- **P-49 W2 Amazon Session 1 — NEXT (a.93).** ~1-2 hours in-Claude. Schema migration + shared scrape-pagination helper + Shadow DOM progress indicator + Amazon DOM walker. No deploy this session. Schema-change-in-flight flag flips to YES at start.
+- **P-49 W2 Amazon Sessions 2-3 (refinement) + Amazon deploy session.** ~3-5 more sessions after Session 1. Full Amazon end-to-end working in production + Phase-4 real-Chrome verification by director.
+- **P-49 W2 eBay sub-cluster (Sessions 1-3 + deploy).** ~3-4 sessions. Per A.2 priority order — eBay second.
+- **P-49 W2 Etsy sub-cluster (Sessions 1-3 + deploy).** ~3-4 sessions. Per A.2 priority order — Etsy third.
+- **P-49 W2 Walmart sub-cluster (Sessions 1-3 + deploy).** ~3-4 sessions. Per A.2 priority order — Walmart fourth.
+- **P-49 W4 Captured Reviews UI extensions.** ~2-3 sessions. Star-count counter-bar with click-to-filter, drag-to-reorder via new `sortRank` column, bulk-delete with multi-select + confirm modal. Interleavable with W2 platform builds.
+- **P-49 W5 AI review analysis system.** ~5-10 sessions. 3 levels (per-product two-sweep + cross-Type pooled + cross-everything competitive landscape) with Claude Opus + per-run model-version dropdown + cost caps + fingerprint cache. Interleavable but most useful after W2 ships at least Amazon since it needs review data to summarize.
+- **P-49 total build arc ~15-25 sessions.** Revised down from original ~20-50 by W3 Crawler drop on Q1.
 - **P-50 Condition Pathology card.** ~10 min in-Claude. Lives on `main` branch (platform-wide UI, not workflow-2-scoped). Can slot into any deploy session OR done standalone between W#2 sessions. NOT on the critical path.
 - **P-48 Session 3 (Diagnostic #2) — DEFERRED to opportunistic insertion.** ~30-60 min in-Claude. Empirical instrumentation pass to identify the ~6-7 fps source-file bottleneck for the screen-recording stutter. Lives within the existing P-48 ROADMAP entry. Can interleave with P-49 work whenever you'd like to slot it in.
 - **P-43 mechanical prevention candidate (LOW informational).** ~1 small session. Add absolute `cd /workspaces/brand-operations-hub` prefix to ALL Bash commands in `.claude/commands/scoreboard.md`. Opportunistic.
@@ -38,48 +48,46 @@ As of session-end 2026-05-25 (Reviews Phase 2 scope-expansion CAPTURE ✅ DONE; 
 
 ---
 
-**For:** the next Claude Code session — **Reviews Phase 2 Design Session (Workflow Requirements Interview producing `docs/REVIEWS_PHASE_2_DESIGN.md`) on `workflow-2-competition-scraping`** (estimated ~1.5-2 hours in-Claude: pre-build doc reads + branch state verify + read P-49 ROADMAP entry + read COMPETITION_DATA_V2_DESIGN.md §A as the structural precedent + walk director through the 15 interview questions one-at-a-time with Rule 14f forced-pickers per question + assemble locked-decisions §A in a new standalone design doc + write empty §B + write §C per-workstream implementation outlines + end-of-session doc-batch). Per Rule 23 Change Impact Audit: **DESIGN SESSION** (no production code; no schema; no API changes — the design doc is the deliverable). **Schema-change-in-flight flag stays NO** at session start AND at session end (no `prisma db push` this session; flag EXPECTED to flip to YES when first per-platform build session lands the `source = 'extension-scrape'` enum value addition + the AI analysis output tables). **Rule 9 triggers planned this session: ZERO** (design-only; no main push). **Pushes planned per `feedback_approval_scope_per_decision_unit.md`:** 2 (end-of-session doc-batch push + doc-batch ff-merge to main — both operationally adjacent + do NOT invoke Rule 9).
+**For:** the next Claude Code session — **P-49 W2 Amazon Session 1 (schema migration + shared scrape-pagination helper + Shadow DOM progress indicator + Amazon DOM walker) on `workflow-2-competition-scraping`** (estimated ~1.5-2 hours in-Claude: pre-build doc reads + branch state verify + `prisma db push` for the A.13 schema package + shared `scrape-pagination.ts` helper build + Shadow DOM progress indicator extraction into shared helper + Amazon per-platform module wiring + right-click context-menu entry + Amazon DOM walker + first end-to-end extraction working on a real Amazon product page in development + end-of-session doc-batch). Per Rule 23 Change Impact Audit: **SCHEMA + EXTENSION + UI surface** (Prisma schema migration; new shared content-script helper; new Amazon per-platform content-script module; new right-click context-menu entry; new Shadow DOM mount). **Schema-change-in-flight flag flips to YES at session start** when `prisma db push` runs the A.13 migration package — flag STAYS YES until the Amazon deploy session ships the migration to production (~3-5 sessions from now). **Rule 9 triggers planned this session: ZERO** (build session only; no main push). **Pushes planned per `feedback_approval_scope_per_decision_unit.md`:** 2 (end-of-session push to workflow-2-competition-scraping carrying the build commit + doc-batch + end-of-session ff-merge to main for the doc-batch portion only — operationally adjacent + does NOT invoke Rule 9 since the build commit stays on the workflow branch until the eventual deploy session).
 
 ---
 
 ## Status of last session
 
-**W#2 polish Reviews Phase 2 scope-expansion CAPTURE SESSION ✅ DONE 2026-05-25 on `workflow-2-competition-scraping`** — pure-capture session executing the Rule 14f session-direction picker outcome (Recommended: pure capture today).
+**W#2 polish P-49 Reviews Phase 2 DESIGN SESSION ✅ DONE 2026-05-25-b on `workflow-2-competition-scraping`** — pure design session executing the (a.92) RECOMMENDED-NEXT task locked by yesterday's capture session.
 
-**Session shape (PURE CAPTURE — ZERO Rule 9 gates fired; ZERO code commits; THREE Rule 14f forced-pickers fired):**
+**Session shape (PURE DESIGN — ZERO Rule 9 gates fired; ZERO code commits; 16 Rule 14f forced-pickers fired):**
 
-- Pre-build reads partial at session start (ROADMAP header + P-48 entry started but interrupted by director's scope drop).
-- Director surfaced the long-promised "next round of additions" to W#2 before pre-build reads completed.
-- Rule 14f session-direction forced-picker fired immediately — (A) Pure capture today (Recommended) / (B) Mixed P-48 + capture / (C) Pivot fully / (D) P-48 as planned + minimal capture; director picked (A).
-- Rule 24 searches across all docs for prior treatment of Reviews Phase 2 + Condition Pathology + per-platform extraction + AI review analysis — no prior treatment found; only related touch is §A.1 in COMPETITION_DATA_V2_DESIGN (deferred decision from 2026-05-23) which today's capture RESOLVES.
-- Rule 14f capture-shape forced-picker fired — Hub-and-spokes (Recommended) over flat split over hybrid for P-49 + card-only (Recommended) over full-Workflow over scope-defer for P-50; director picked both Recommended options.
-- Wrote NEW P-49 Reviews Phase 2 hub-and-spokes ROADMAP entry with director's verbatim per-platform DOM specs preserved + anti-bot constraint preserved + 3-level AI analysis output shape preserved.
-- Wrote NEW P-50 Condition Pathology placeholder card ROADMAP entry with card-only scope locked.
-- Updated `docs/COMPETITION_DATA_V2_DESIGN.md` §A.1 with "RESOLVED 2026-05-25 — see ROADMAP P-49" cross-reference paragraph at end of §A.1 (preserves original director-supplied reasoning intact while making the resolution discoverable to future readers walking §A top-to-bottom).
-- Drafted 15-question Workflow Requirements Interview scaffold for next session's design interview ingestion.
-- Rule 14f entry-approval + next-session forced-picker fired — director approved both entries + locked Reviews Phase 2 Design Session as next-session task per (a.92).
-- End-of-session doc-batch covers the 9-doc bundle (ROADMAP header bump only + CHAT_REGISTRY header bump only + DOCUMENT_MANIFEST header bump only + CORRECTIONS_LOG header bump + new §Entry 2026-05-25 Reviews Phase 2 capture + HANDOFF_PROTOCOL header bump only + CLAUDE_CODE_STARTER header bump only + this NEXT_SESSION full rewrite + COMPETITION_SCRAPING_DESIGN.md §B 2026-05-25 Reviews Phase 2 capture append + COMPETITION_DATA_V2_DESIGN.md §B 2026-05-25 Reviews Phase 2 capture append + §A.1 cross-reference update in COMPETITION_DATA_V2_DESIGN).
-- TWO pushes planned per `feedback_approval_scope_per_decision_unit.md`: end-of-session doc-batch push to `origin/workflow-2-competition-scraping` + end-of-session ff-merge + push to `origin/main` for doc-batch (operationally adjacent + do NOT re-invoke Rule 9 since pure-capture + no destructive operations).
+- Pre-build reads partial at session start (CLAUDE_CODE_STARTER + ROADMAP P-49 entry + COMPETITION_DATA_V2_DESIGN.md §A as structural precedent + yesterday's §B 2026-05-25 capture-session entries in both design docs + the 15-question interview scaffold from yesterday's NEXT_SESSION.md).
+- Plain-terms session-start summary per Rule 30 — 3 mandatory sections (What we did last session / What this session will do / What's still left on the total roadmap).
+- Branch state verify — `git branch --show-current` confirmed `workflow-2-competition-scraping`; `git log main..HEAD --oneline` showed 0 commits ahead (clean start from yesterday's doc-batch ff-merge).
+- Rule 14f session-start confirmation picker — Recommended path = Reviews Phase 2 Design Session per (a.92); director confirmed Yes (no shift in priority).
+- Walked director through Q1-Q15 one-at-a-time with Rule 14f forced-picker per question. Captured locked-decision narrative + alternatives considered + Recommended reasoning per question. Director answered 14 direct-Yes-to-Recommended + 1 substantive Q7 refinement (model-version selector dropdown added on top of the Recommended Opus-throughout cost-cap baseline).
+- Mid-interview cascade integration — Q1 outcome (Extension only) cascaded into Q3 (in-page scrape orchestration locked since no crawler) + Q15 (anti-bot defensive posture conservative defaults sufficient since extension runs at director's IP). Q7 model-version selector refinement cascaded into A.13 schema (the new `ReviewAnalysis` table needs `modelVersion String` field to track per-run model choice — confirmed already covered in Q13 Recommended package).
+- Assembled `docs/REVIEWS_PHASE_2_DESIGN.md` (790 lines) per Rule 18 structure — same shape as `docs/COMPETITION_DATA_V2_DESIGN.md` + `docs/CAPTURED_VIDEOS_DESIGN.md`. §A frozen at 15 interview-locked subsections A.1-A.15 + §B empty append-only per Rule 18 + §C 4 active workstream implementation outlines (W1 DONE / W2 / W4 / W5) + W3 Crawler DROPPED placeholder. File-level scope per workstream + session estimates per workstream + cross-references back to §A decisions throughout §C.
+- Rule 14f end-of-session next-session picker — Recommended path = P-49 W2 Amazon Session 1; director picked Yes.
+- End-of-session doc-batch covers the 9-doc bundle (ROADMAP header bump + P-49 status flip from "DESIGN-PENDING" to "🟢 DESIGN-FROZEN 2026-05-25-b" + 4-active-workstreams-instead-of-5 update + (a.92) close + (a.93) open + cross-reference paragraph / CHAT_REGISTRY header bump — 158th session / DOCUMENT_MANIFEST header bump + new doc REVIEWS_PHASE_2_DESIGN.md added to Group B Currently Active table / CORRECTIONS_LOG header bump + new §Entry 2026-05-25-b Reviews Phase 2 design-session closing entry / HANDOFF_PROTOCOL header bump only / CLAUDE_CODE_STARTER header bump only / this NEXT_SESSION full rewrite for W2 Amazon Session 1 / COMPETITION_SCRAPING_DESIGN.md header bump + new §B 2026-05-25-b cross-reference pointer entry / COMPETITION_DATA_V2_DESIGN.md new §B 2026-05-25-b cross-reference pointer entry).
+- TWO pushes planned per `feedback_approval_scope_per_decision_unit.md`: end-of-session doc-batch push to `origin/workflow-2-competition-scraping` + end-of-session ff-merge + push to `origin/main` for doc-batch (operationally adjacent + do NOT invoke Rule 9 since pure-design + no destructive operations).
 
-**THREE Rule 14f forced-pickers fired all director-Yes per recommendations:** session-direction (Pure capture) + capture-shape (Hub-and-spokes for P-49 + card-only for P-50) + entry-approval + next-session (Both approved + Reviews Phase 2 Design Session locked).
+**16 Rule 14f forced-pickers fired all director-Yes-aligned:** 15 interview pickers (14 direct-Yes-to-Recommended + 1 Q7 substantive refinement preserving Recommended path) + 1 (a.93) next-session picker (Recommended W2 Amazon Session 1; director-Yes).
 
-**ZERO Rule 9 deploy gates fired** (pure-capture; no deploys; no destructive ops).
+**ZERO Rule 9 deploy gates fired** (pure-design; no deploys; no destructive ops).
 
-**ZERO DEFERRED items at session end (Rule 26)** — P-48 Session 3 carries via the P-48 ROADMAP entry itself (which already documents Session 3 as the next-within-P-48 step), NOT as a NEXT_SESSION standing carry-over. Reviews Phase 2 Design Session IS the next-session task per (a.92).
+**ZERO DEFERRED items at session end (Rule 26)** — 18 TaskCreate tasks created this session; ALL 17 active tasks COMPLETED at session end + 1 task (this doc-batch task #18) marks completed by parent after push lands. ZERO open `DEFERRED:` tasks; ZERO open `in_progress` tasks at session end. P-49 W2 Amazon Session 1 IS the next-session task per (a.93), not a Claude-defer.
 
-**ONE NEW INFORMATIONAL CORRECTIONS_LOG §Entry 2026-05-25 (the THIRD 2026-05-25-dated §Entry — Reviews Phase 2 scope-expansion capture)** capturing 4 sub-observations including (a) scope-expansion capture outcome; (b) NEW reusable Pattern "Mid-pre-build scope-expansion redirect — when director surfaces major new scope at session-start before pre-build reads complete, the most-thorough/reliable path is a pure-capture session (pause planned task; run Rule 24 searches; capture as ROADMAP entries; defer planned task) rather than mixed-session attempts" — pairs as a Rule-30 plain-terms-summary lesson; (c) LOW informational sub-observation — long-deferred concerns naturally resolve when director's mental model of what they want catches up with the deferred scope (A.1 deferred 2026-05-23; resolved 2026-05-25 with full Phase 2 specs); (d) operational note — 15 interview-question draft preserved verbatim in NEXT_SESSION.md ## Proposed interview question scaffold section.
+**ONE NEW INFORMATIONAL CORRECTIONS_LOG §Entry 2026-05-25-b (the FOURTH 2026-05-25-dated §Entry — P-49 Reviews Phase 2 design-session closing entry)** capturing 4 sub-observations including (a) design session outcome — 15 decisions locked + standalone 790-line design doc produced; (b) **NEW reusable Pattern "Director-supplied per-platform DOM specs in capture-session memorialization pay off at design-session ingestion — verbatim specs preserved 2026-05-25 in the P-49 ROADMAP entry directly informed Q1/Q2/Q3 + W2 §C.2 file-level scope without re-asking director"** — pairs as the design-session-level analog of the §Entry 2026-05-25 capture-session's "Mid-pre-build scope-expansion redirect" Pattern; (c) **calibration data point — director defaulted to Recommended on 14 of 15 pickers** + offered substantive refinement only on Q7 (model-version selector) = high signal that the most-thorough/reliable framing is well-calibrated to director's intent (per `feedback_default_to_recommendation.md` + `feedback_recommendation_style.md`); 14/15 = 93.3% direct-Yes-to-Recommended rate; (d) **LOW informational sub-observation — Q1 outcome (Extension only) DROPPED an entire workstream** (W3 Crawler ~5-10 sessions saved) on the first interview question; design-session value demonstrably high.
 
 **Baselines unchanged from prior session** (no code change to verify): root tsc clean / extension tsc clean / **562 ext UNCHANGED** / **786 src/lib UNCHANGED** / **62 routes UNCHANGED**. Check 6 Playwright SKIPPED per Rule 27.
 
-**THIRTY-FIFTH end-of-session run under the Rule 30 + §4 Step 4b template.** The 3 plain-terms sections above + the parent's Personalized Handoff continue carrying the 3 mandatory plain-terms sections at the top per director's standing 2026-05-21 directive.
+**THIRTY-SIXTH end-of-session run under the Rule 30 + §4 Step 4b template.** The 3 plain-terms sections above + the parent's Personalized Handoff continue carrying the 3 mandatory plain-terms sections at the top per director's standing 2026-05-21 directive.
 
 ---
 
 ## Branch
 
-**`workflow-2-competition-scraping`** — entered at start of next session; Reviews Phase 2 Design Session begins here. The `./resume` script (or `./resume-workflow 2`) will switch you to `workflow-2-competition-scraping`. Verify with `git branch --show-current` immediately after `./resume`; should be on `workflow-2-competition-scraping`. If you're on `main`, STOP and surface to director.
+**`workflow-2-competition-scraping`** — entered at start of next session; P-49 W2 Amazon Session 1 begins here. The `./resume` script (or `./resume-workflow 2`) will switch you to `workflow-2-competition-scraping`. Verify with `git branch --show-current` immediately after `./resume`; should be on `workflow-2-competition-scraping`. If you're on `main`, STOP and surface to director.
 
-**Expected branch state on entry:** `workflow-2-competition-scraping` exactly even with `origin/workflow-2-competition-scraping` at today's end-of-session doc-batch commit. `main` exactly even with `origin/main` at today's end-of-session doc-batch commit (both branches end the session at the same SHA after the doc-batch ff-merge — both branches share the doc-batch since pure-capture + ff-merge to main lands the docs equally on both). Verify with `git log main..HEAD --oneline` showing 0 commits ahead. Session entry branch SHA = today's end-of-session doc-batch commit; design session adds only doc commits on the workflow branch (no code).
+**Expected branch state on entry:** `workflow-2-competition-scraping` exactly even with `origin/workflow-2-competition-scraping` at today's end-of-session doc-batch commit. `main` exactly even with `origin/main` at today's end-of-session doc-batch commit (both branches end the session at the same SHA after the doc-batch ff-merge — both branches share the doc-batch since pure-design + ff-merge to main lands the docs equally on both). Verify with `git log main..HEAD --oneline` showing 0 commits ahead at session entry. Next session's build commit lands on workflow branch ONLY (no ff-merge to main this session); the eventual Amazon deploy session 3-5 sessions from now is what ff-merges the build commits to main under Rule 9 gate.
 
 ---
 
@@ -87,245 +95,66 @@ As of session-end 2026-05-25 (Reviews Phase 2 scope-expansion CAPTURE ✅ DONE; 
 
 Read `docs/CLAUDE_CODE_STARTER.md` and follow every rule in it. **Per Step 7b, produce the plain-terms summary of what this session will do BEFORE I give go-ahead.** Today's task:
 
-**W#2 polish Reviews Phase 2 Design Session on `workflow-2-competition-scraping`.** Closes **(a.92) RECOMMENDED-NEXT**. Pure design session — Workflow Requirements Interview walking through ~15 design questions to lock the anti-bot strategy + extension-vs-crawler scope + per-platform DOM extraction shape + AI model choice + cost guards + batch sizing + UI placement + schema additions before any code starts. The deliverable is a new standalone design doc `docs/REVIEWS_PHASE_2_DESIGN.md` with the same shape as `docs/COMPETITION_DATA_V2_DESIGN.md` (§A frozen-decisions + §B empty append-only + §C per-workstream implementation outlines).
+**W#2 polish P-49 Reviews Phase 2 Workstream 2 Amazon Session 1 on `workflow-2-competition-scraping`.** Closes **(a.93) RECOMMENDED-NEXT**. Build session — schema migration via `prisma db push` (the A.13 package: new `ReviewAnalysis` table + `CapturedReview` field additions including new `source` enum value 'extension-scrape' + `sortRank Int?` + `helpfulCount Int?` + `platform String?` + new `CompetitorUrl.reviewScrapeCap Int? @default(200)` column) + new shared content-script helper `scrape-pagination.ts` implementing A.15 conservative anti-bot defaults (1-3s random delays + captcha-aware abort + rate-limit UI notification) + Shadow DOM progress indicator extracted into shared helper (reuses P-47 mount pattern from §B 2026-05-24-d) + Amazon per-platform module wiring in `extensions/competition-scraping/src/lib/content-script/` + right-click "Scrape reviews for this URL" context-menu entry + Amazon DOM walker (per-star URL pattern `https://www.amazon.com/product-reviews/<ASIN>/...&filterByStar=...&pageNumber=N` at 10/page + helpful-count selector + Customers say block capture + sort by helpful-count desc within star) + first end-to-end extraction working on a real Amazon product page in development. **NO production deploy this session** — build commits stay on `workflow-2-competition-scraping` until the eventual Amazon deploy session (~3-5 sessions from now after additional refinement Sessions 2+3).
 
-DESIGN session — ZERO Rule 9 gates planned. NO main push for code expected. ONE end-of-session doc-batch push + ONE doc-batch ff-merge push to main (operationally adjacent; does NOT invoke Rule 9).
+BUILD session — ZERO Rule 9 gates planned. NO main push for code expected. ONE end-of-session push to `origin/workflow-2-competition-scraping` carrying the build commit + this doc-batch + ONE doc-batch ff-merge to main (operationally adjacent; does NOT invoke Rule 9 since the build commit stays on the workflow branch).
 
-Verify branch state with `git branch --show-current` before any doc reads — should be `workflow-2-competition-scraping`. If you're on `main`, STOP and surface to director. Verify both branches' SHA relationships with `git log main..HEAD --oneline` — should show 0 commits ahead.
+Verify branch state with `git branch --show-current` before any doc reads — should be `workflow-2-competition-scraping`. If you're on `main`, STOP and surface to director. Verify both branches' SHA relationships with `git log main..HEAD --oneline` — should show 0 commits ahead at session entry.
 
 **Per HANDOFF_PROTOCOL Rule 21 + Rule 22 — Pre-build read list:**
 
-- `docs/CLAUDE_CODE_STARTER.md` (mandatory start-of-session; Step 7b plain-terms summary REQUIRED before any heavy reads or design mechanics).
-- `docs/ROADMAP.md` lines 1-30 (header) + the **NEW P-49 Reviews Phase 2 polish-backlog entry** (canonical capture of director's verbatim per-platform DOM specs for Amazon/eBay/Etsy/Walmart + anti-bot constraint + 3-level AI analysis output shape + 5-workstream hub-and-spokes structure).
-- `docs/ROADMAP.md` NEW P-50 polish-backlog entry — Condition Pathology card placeholder (small `main`-branch standalone session; not on the (a.92) critical path; not relevant to the design session but read for full ROADMAP awareness).
-- `docs/COMPETITION_DATA_V2_DESIGN.md` §A (lines 41-400ish — entire frozen-decisions section — as the structural precedent for how to organize the new `REVIEWS_PHASE_2_DESIGN.md` §A) + §A.1 with today's "RESOLVED 2026-05-25 — see ROADMAP P-49" cross-reference paragraph at end + §A.11 schema additions section + §A.13 Living Questions answers + §A.14 Cross-Tool Data Flow Map reciprocal output declaration + §A.16 Deferred-items registry.
-- `docs/COMPETITION_DATA_V2_DESIGN.md` §B 2026-05-25 (Reviews Phase 2 capture session) — yesterday's data-shape-side capture entry with schema cross-references + design-session ingestion guidance for the new design doc.
-- `docs/COMPETITION_SCRAPING_DESIGN.md` §B 2026-05-25 (Reviews Phase 2 capture session) — yesterday's extension-side-architecture capture entry covering URL-prefix dispatch + Shadow DOM mounts + `makeTextareaField()` helper extensions for the per-platform extraction modules.
-- `docs/CORRECTIONS_LOG.md` §Entry 2026-05-25 (Reviews Phase 2 scope-expansion capture — the THIRD 2026-05-25-dated §Entry) — today's closing §Entry with the NEW reusable Pattern "Mid-pre-build scope-expansion redirect" + 4 sub-observations.
-- The **## Proposed interview question scaffold section BELOW** in this NEXT_SESSION.md — the 15 questions to walk director through verbatim per question with Rule 14f forced-pickers per question.
-- `docs/AUTO_ANALYZE_PROMPT_V1.md` / `docs/AUTO_ANALYZE_PROMPT_V2.md` / `docs/AUTO_ANALYZE_PROMPT_V3.md` / `docs/AUTO_ANALYZE_PROMPT_V4.md` (the W#1 Keyword Clustering AI analysis prompt history — relevant Pattern reference for P-49 Workstream 5 AI analysis design questions Q7-Q12; the W#1 prompt evolved through 4 versions before stabilizing).
-- `docs/MODEL_QUALITY_SCORING.md` + `docs/INPUT_CONTEXT_SCALING_DESIGN.md` (W#1 AI model evaluation + context scaling design docs — relevant for P-49 W5 model choice + cost guard design questions Q7-Q8).
-- `prisma/schema.prisma` `CapturedReview` model — current v1 shape per P-46 W2 Session 4 (shipped 2026-05-28); P-49 W2 adds `source = 'extension-scrape'` enum value + likely other fields; locked at design-session per Q13.
-- `extensions/competition-scraping/src/lib/content-script/` directory listing — current per-platform module structure (relevant for Q1 crawler scope + Q2 per-platform priority order + Q15 anti-bot defensive posture).
-- `docs/HANDOFF_PROTOCOL.md` Rule 18 (Interview-cluster + append-only DESIGN doc structure methodology — this session's deliverable follows it) + Rule 14f (forced-picker mechanics — ~15 will fire this session, one per interview question) + Rule 21 + Rule 22 + Rule 23 (Change Impact Audit — DESIGN) + Rule 24 (search before capturing — relevant for any sub-design-decisions that surface mid-interview) + Rule 25 (Multi-Workflow — workflow-2 only) + Rule 26 (DEFERRED items registry — ZERO standing carry-overs at session entry) + Rule 30 (Session bookends) + §4 Step 4b extended template.
+- `docs/CLAUDE_CODE_STARTER.md` (mandatory start-of-session; Step 7b plain-terms summary REQUIRED before any heavy reads or build mechanics).
+- `docs/ROADMAP.md` lines 1-30 (header + recent session sequence) + the **P-49 Reviews Phase 2 polish-backlog entry** (4-active-workstreams update + (a.92) close + (a.93) open + cross-reference paragraph pointing at the new design doc).
+- **`docs/REVIEWS_PHASE_2_DESIGN.md` (NEW — 790 lines) — PRIMARY SPEC for this session.** §A.1 collection method (Extension only) + §A.2 per-platform priority (Amazon first) + §A.3 scrape execution (in-page Shadow DOM progress indicator) + §A.4 per-star cap UX (per-URL `reviewScrapeCap` column + per-trigger override) + §A.13 schema additions (the full A.13 package this session ships via `prisma db push`) + §A.15 anti-bot defensive posture (conservative 1-3s delays + captcha-aware abort + rate-limit UI notification) + §C.2 W2 Per-platform extension extraction implementation outline (Amazon sub-cluster file-level scope + session sequencing).
+- `docs/COMPETITION_SCRAPING_DESIGN.md` §B 2026-05-25-b (cross-reference pointer entry to the new design doc) + §A.7 (content-script architecture overview — existing architecture P-49 W2 modules extend additively) + §B 2026-05-19-g (P-23 saved-URL dropdown — URL-prefix dispatch pattern reused) + §B 2026-05-22-i (P-45 Build #2 — `applyAggressiveEventIsolation` band-aid) + §B 2026-05-24-d (P-47 Shadow DOM mount as structural replacement — mount strategy reused for the progress indicator) + §B 2026-05-24-c + 2026-05-24-e + 2026-05-24-f (P-46 W5 extension form additions — `makeTextareaField()` helper pattern that may extend if per-platform settings panels need text inputs).
+- `docs/COMPETITION_DATA_V2_DESIGN.md` §B 2026-05-25-b (paired data-shape-side cross-reference entry to the new design doc) + §A.1b (current `CapturedReview` schema shape P-49 extends) + §A.4 (`ComprehensiveCompetitorAnalysis` shape — relevant for later W5 sessions, not this one) + §A.11 (consolidated schema list — this session extends it).
+- `docs/CORRECTIONS_LOG.md` §Entry 2026-05-25-b (P-49 Reviews Phase 2 design-session closing entry — the FOURTH 2026-05-25-dated §Entry) — yesterday's closing §Entry with the NEW reusable Pattern + calibration data point + LOW informational sub-observation.
+- `prisma/schema.prisma` `CapturedReview` model + `CompetitorUrl` model — current v1 shapes per P-46 W2 Session 4 (shipped 2026-05-28); this session adds the A.13 package on top.
+- `extensions/competition-scraping/src/lib/content-script/` directory listing — current per-platform module structure (relevant for where the new Amazon module + shared `scrape-pagination.ts` helper land).
+- `extensions/competition-scraping/src/lib/content-script/url-add-form.ts` + `extensions/competition-scraping/src/lib/content-script/video-capture-form.ts` (P-47 reference — Shadow DOM mount pattern + `FORM_CHROME_CSS` extraction precedent).
+- `extensions/competition-scraping/src/lib/content-script/styles.ts` (where `FORM_CHROME_CSS` lives — may need extension for the new progress indicator chrome).
+- `docs/HANDOFF_PROTOCOL.md` Rule 18 (Interview-cluster + append-only DESIGN doc structure — `REVIEWS_PHASE_2_DESIGN.md` follows it; future P-49 build-session §B entries land there per Rule 18) + Rule 14f (forced-picker mechanics — ~1-2 will fire this session for any session-start refinement) + Rule 21 + Rule 22 + Rule 23 (Change Impact Audit — SCHEMA + EXTENSION + UI surface) + Rule 24 (search before capturing — relevant for any sub-implementation-decisions that surface mid-build) + Rule 25 (Multi-Workflow — workflow-2 only) + Rule 26 (DEFERRED items registry — ZERO standing carry-overs at session entry) + Rule 30 (Session bookends) + §4 Step 4b extended template.
 - `feedback_recommendation_style.md` (most-thorough/reliable — every Rule 14f picker this session should surface the recommended path + default to it).
-- `feedback_approval_scope_per_decision_unit.md` (2-push design-session pattern: doc-batch push + doc-batch ff-merge push).
+- `feedback_approval_scope_per_decision_unit.md` (2-push build-session pattern: push to workflow branch carrying build commit + doc-batch + doc-batch ff-merge to main).
 - `feedback_default_to_recommendation.md` (most picker choices should default to recommended unless director shifts).
 - `feedback_session_bookends_plain_summary.md` (Rule 30 — the 3 mandatory plain-terms sections at session start + session end).
 
-**Task shape (Reviews Phase 2 Design Session):**
+**Task shape (P-49 W2 Amazon Session 1):**
 
-1. **Plain-terms session-start summary per Rule 30** BEFORE any heavy reads or design mechanics. Cover: what we'll do (pre-build reads + branch state verify + walk director through the 15 interview questions with Rule 14f forced-pickers per question + assemble the new `docs/REVIEWS_PHASE_2_DESIGN.md` with §A frozen-decisions + §B empty + §C per-workstream implementation outlines + end-of-session doc-batch); schema-change-in-flight flag stays NO; ZERO Rule 9 gates planned; 2 pushes planned total.
+1. **Plain-terms session-start summary per Rule 30** BEFORE any heavy reads or build mechanics. Cover: what we'll do (pre-build reads + branch state verify + `prisma db push` for the A.13 schema package + new shared `scrape-pagination.ts` helper + Shadow DOM progress indicator extraction into shared helper + Amazon per-platform module + Amazon DOM walker + first end-to-end extraction in development + end-of-session doc-batch); schema-change-in-flight flag flips to YES at session start (when `prisma db push` runs); ZERO Rule 9 gates planned; 2 pushes planned total (workflow-branch push carrying build commit + doc-batch + ff-merge to main for doc-batch).
 
-2. **Pre-build reads** — execute the pre-build read list above. ~10-15 min (this is a heavier read than usual because the design doc inheritance touches W#1 AI prompt history + the existing P-46 design doc + the two §B 2026-05-25 capture entries).
+2. **Pre-build reads** — execute the pre-build read list above. ~15-20 min (this is a heavier read than usual because the design doc is brand-new + the Amazon DOM walker reads need fresh per-platform DOM patterns from the design doc's A.1 references).
 
-3. **Branch state verify** — `git branch --show-current` (should be `workflow-2-competition-scraping`) + `git log main..HEAD --oneline` (should show 0 commits ahead — both branches at same SHA from prior session's doc-batch ff-merge).
+3. **Branch state verify** — `git branch --show-current` (should be `workflow-2-competition-scraping`) + `git log main..HEAD --oneline` (should show 0 commits ahead at session entry — both branches at same SHA from prior session's doc-batch ff-merge).
 
-4. **Rule 14f session-start confirmation** — likely no picker fires (design-session task is the recommended default per (a.92); director directive matches). If director has additional context between sessions (e.g., they've thought further about the crawler-vs-extension tradeoff or about the AI model choice), fire clarifying picker on whether to expand or contract the interview scope.
+4. **Rule 14f session-start confirmation** — likely no picker fires (P-49 W2 Amazon Session 1 task is the recommended default per (a.93); director directive matches). If director has additional context between sessions (e.g., they've thought further about whether Amazon Session 1 should sequence schema-first or shared-helper-first), fire clarifying picker on the sequencing order.
 
-5. **Walk director through the 15 interview questions BELOW one-at-a-time.** Fire Rule 14f forced-picker per question with options + Recommended pick. Capture director's answer + locked-decision narrative + alternatives considered + reasoning per question. Each question follows the same shape: question text + alternatives (A) (B) (C)... + Recommended pick + director's pick + locked decision + impact on other workstreams.
+5. **Schema migration via `prisma db push`** — the A.13 package: new `ReviewAnalysis` model with discriminated `level` enum {PER_PRODUCT, PER_TYPE, PER_PROJECT} + `analysisJson Json` + `reviewsHash String` + `modelVersion String` + `runAt DateTime` + `runByUserId String?` + `costUsdMicros Int?` + appropriate `urlId? String?` / `projectId String? + typeFilter String?` / `projectId String?` discriminator fields + appropriate indexes per typical query paths; `CapturedReview` field additions (`source` enum value addition for `extension-scrape` + `sortRank Int?` + `helpfulCount Int?` + `platform String?`); `CompetitorUrl.reviewScrapeCap Int? @default(200)`. **Schema-change-in-flight flag flips to YES at this step.** Verify migration cleanly via `prisma generate` + scoreboard root tsc check.
 
-6. **Mid-interview cross-decision integration.** Some questions cascade — e.g., Q1 crawler scope decision affects Q15 anti-bot posture + Q3 scrape job orchestration; Q7 AI model choice affects Q8 batch sizing + Q12 caching. Be aware of cascade points + fire clarifying re-pickers if a later question's options shift based on an earlier question's answer.
+6. **Shared `scrape-pagination.ts` helper build** — new file at `extensions/competition-scraping/src/lib/content-script/scrape-pagination.ts`. Implements A.15 conservative anti-bot defaults: 1-3s random delay between pagination clicks via `await sleep(1000 + Math.random() * 2000)`; captcha detection by polling for known captcha selectors (Amazon: `#captchacharacters` / generic CAPTCHA iframe markers); abort on captcha detection with clear UI notification surfaced via Shadow DOM helper; rate-limit detection via HTTP status code (429 → abort + UI notification); cancellable via `AbortSignal` for user-initiated cancel; emits structured `ScrapeProgress` events (page-N-of-M-loading / page-N-loaded / completed / aborted / captcha-detected / rate-limited).
 
-7. **Assemble `docs/REVIEWS_PHASE_2_DESIGN.md`** — new standalone design doc with same shape as `docs/COMPETITION_DATA_V2_DESIGN.md`:
-   - Header (Polish item: P-49 Reviews Phase 2 / Parent workflow: W#2 / Status: 🟢 Design phase — initial interview FROZEN <date> / Branch (design): workflow-2-competition-scraping / Created: <date> / Created in session: <session-id> / Pre-graduation gating: YES — P-49 is the major Phase 2 review-collection + analysis expansion of W#2 / Doc type: Group B (workflow-specific) / Doc location rationale: P-49 is a large multi-workstream scope-drop; dedicated top-level doc parallels COMPETITION_DATA_V2_DESIGN.md for P-46).
-   - Related docs (mirror the COMPETITION_DATA_V2_DESIGN.md Related docs list with appropriate P-49 substitutions).
-   - Structure note (per HANDOFF_PROTOCOL Rule 18 — §A frozen + §B empty + §C per-workstream).
-   - **§A — Initial design-session interview answers (FROZEN <date>).** One subsection per locked question (A.1 = Q1 / A.2 = Q2 / etc.) + A.N Schema additions (consolidated) + A.N+1 Platform-truths audit + A.N+2 Living Questions answers + A.N+3 Cross-Tool Data Flow Map + A.N+4 Scaffold fit + A.N+5 Deferred-items registry per Rule 14e + Rule 26.
-   - **§B — In-flight refinements (append-only).** Empty at end of interview.
-   - **§C — Per-workstream implementation outlines.** Five subsections: W1 Design Session DONE (this session) / W2 Per-platform extension extraction (4 sub-clusters Amazon/eBay/Etsy/Walmart) / W3 Crawler infrastructure (CONDITIONAL per Q1 outcome) / W4 Captured Reviews UI extensions / W5 AI review analysis system. Each has file-level scope + session estimate + cross-references back to §A decisions.
+7. **Shadow DOM progress indicator extracted into shared helper** — new file at `extensions/competition-scraping/src/lib/content-script/scrape-progress-indicator.ts` reusing the P-47 mount pattern. Open Shadow DOM root on a fixed-positioned host `<div>` in `document.body` (z-index: 999998); `FORM_CHROME_CSS` extension OR new dedicated `PROGRESS_INDICATOR_CSS` constant injected inside the shadow; subscribes to `ScrapeProgress` events from `scrape-pagination.ts` + renders "Scraping page N of M — X reviews captured so far..." with cancel button; auto-dismisses on completed; persists on captcha-detected / rate-limited with director-facing error message; close button always available.
 
-8. **End-of-session doc-batch** covers ROADMAP (header bump + P-49 status flip from "DESIGN-PENDING" to "🟢 DESIGN-FROZEN <date>; Workstream 2 NEXT (a.93)" + (a.92) closes + (a.93) opens for whichever next-task; most likely (a.93) = Reviews Phase 2 Workstream 2 Amazon extension extraction Session 1 OR Workstream 4 UI extensions Session 1 depending on the design-session sequencing decision) + CHAT_REGISTRY (header bump — 158th Claude Code session) + DOCUMENT_MANIFEST (header bump + new doc REVIEWS_PHASE_2_DESIGN.md added to Group B registry) + CORRECTIONS_LOG (header + new §Entry capturing the design session outcome + any reusable Patterns memorialized during the interview) + NEXT_SESSION (rewritten for whichever next-next task per (a.93)) + HANDOFF_PROTOCOL (header bump only) + CLAUDE_CODE_STARTER (header bump only) + COMPETITION_DATA_V2_DESIGN.md §B (cross-reference pointer entry to the new REVIEWS_PHASE_2_DESIGN.md — mirrors §B 2026-05-23 pattern from when P-46 was first split into its own design doc) + COMPETITION_SCRAPING_DESIGN.md §B (cross-reference pointer entry to the new REVIEWS_PHASE_2_DESIGN.md — mirrors §B 2026-05-20-b pattern from CAPTURED_VIDEOS_DESIGN.md split + §B 2026-05-23 pattern from COMPETITION_DATA_V2_DESIGN.md split) + NEW REVIEWS_PHASE_2_DESIGN.md the actual design doc.
+8. **Amazon per-platform module + DOM walker** — new file at `extensions/competition-scraping/src/lib/content-script/amazon-review-scraper.ts`. Platform detection via URL prefix match `^https://(www\.)?amazon\.com/`; per-star URL construction (`https://www.amazon.com/product-reviews/<ASIN>/ref=cm_cr_arp_d_viewopt_sr?...&filterByStar=<star>&pageNumber=<N>`); DOM walker for each review row (`[data-hook="review"]` selector tree); per-row capture of star + title + body + helpful-count (Amazon's `[data-hook="helpful-vote-statement"]` text parse — "X people found this helpful"); pagination via "Next page" button click-loop or URL-pageNumber-increment (per design doc decision); sort by helpful-count desc within star; default cap 200/star from `CompetitorUrl.reviewScrapeCap`.
 
-**Per `feedback_recommendation_style.md` (most thorough/reliable) + `feedback_default_to_recommendation.md`:** every Rule 14f picker fired during the interview should surface the recommended path + default to it unless director shifts.
+9. **Right-click context-menu entry registration** — new context-menu entry "Scrape reviews for this URL" registered via the existing extension context-menu wiring; when clicked, dispatches to the platform-detection helper which routes to `amazon-review-scraper.ts` for Amazon URLs (or surfaces "Platform not yet supported" for eBay/Etsy/Walmart this session — those land in their respective sub-cluster Sessions later).
 
-**Schema-change-in-flight flag:** STAYS **NO** at session start AND at session end (no `prisma db push`; pure design doc). EXPECTED YES when next-next session (whichever P-49 Workstream 2 first build session) lands.
+10. **First end-to-end extraction in development** — director picks an Amazon product they have saved as a CompetitorUrl + right-clicks → "Scrape reviews for this URL" + the Shadow DOM progress indicator should appear + reviews should start landing in the database with the new fields populated + the scrape should complete when the cap is hit (default 200/star) or all reviews on the page are exhausted. Verify via Prisma Studio OR `npx prisma studio` browser tab OR a one-off `node scripts/p49-list-amazon-reviews.mjs` script (throwaway; deleted at session end per the 2026-05-25 housekeeping convention).
 
----
+11. **End-of-session doc-batch** covers ROADMAP (header bump + P-49 W2 Amazon Session 1 status note added to the entry; (a.93) closes + (a.94) opens for whichever next-task — likely P-49 W2 Amazon Session 2 refinement OR W2 Amazon deploy session if Session 1 was complete enough to deploy) + CHAT_REGISTRY (header bump — 159th session) + DOCUMENT_MANIFEST (header bump only) + CORRECTIONS_LOG (header + new §Entry capturing the build session outcome + any reusable Patterns memorialized during the build) + NEXT_SESSION (rewritten for next-next task per (a.94)) + HANDOFF_PROTOCOL (header bump only) + CLAUDE_CODE_STARTER (header bump only) + REVIEWS_PHASE_2_DESIGN.md §B 2026-05-26 (Workstream 2 Amazon Session 1 first §B entry in the new design doc per Rule 18 — captures the actual schema migration + shared helper file paths + Amazon DOM walker selectors + first end-to-end extraction outcome + any in-build refinements to §A decisions that surface) + COMPETITION_SCRAPING_DESIGN.md (likely UNCHANGED unless a content-script architecture-spanning observation surfaces; P-49 W2 build-session §B entries primarily land in the new design doc per Rule 18) + COMPETITION_DATA_V2_DESIGN.md (likely UNCHANGED for the same reason).
 
-## Proposed interview question scaffold
+**Per `feedback_recommendation_style.md` (most thorough/reliable) + `feedback_default_to_recommendation.md`:** every Rule 14f picker fired during the build should surface the recommended path + default to it unless director shifts.
 
-The 15 questions below are the draft Workflow Requirements Interview scaffold for the Reviews Phase 2 Design Session. Walk director through them one-at-a-time with Rule 14f forced-pickers. **Recommended picks per most-thorough/reliable reasoning** are noted at each question; director should default to Recommended unless they shift.
-
----
-
-**Q1 — Crawler scope.** Should Reviews Phase 2 build a server-side crawler as a parallel collection method alongside the extension-side capture, or extension-only?
-
-- (A) **Extension-only — defer crawler entirely (Recommended).** Director's logged-in browser session at director's IP is behaviorally indistinguishable from a power user; lowest anti-bot risk on all 4 platforms; no proxy/captcha-solving/fingerprint-randomization infrastructure cost; matches director's verbatim anti-bot constraint *"functionality should be very close to real world human user sitting where admin is."* Trade-off: collection happens only when director is actively on a platform page (no overnight scrapes).
-- (B) Extension primary + crawler for non-Amazon platforms only. Lower-risk crawler (eBay/Walmart/Etsy) lets background scrapes run; Amazon stays extension-only. Trade-off: split codebase + still some anti-bot risk + still proxy + captcha cost for 3 platforms.
-- (C) Crawler-first across all 4 platforms with extension as fallback. Highest collection throughput + overnight capability. Trade-off: significant infrastructure cost + ongoing maintenance + non-trivial Amazon anti-bot risk that could trigger seller-account flags.
-- (D) Defer Q1 — design crawler later as separate session if Phase 2 collection volume proves insufficient.
-
-**Cascade impact:** Q1 outcome (A) drops Workstream 3 entirely from P-49; Q1 outcome (B) or (C) keeps W3 in scope. Affects Q3 (scrape job orchestration) + Q15 (anti-bot defensive posture).
-
----
-
-**Q2 — Per-platform priority order.** In what order do we build the 4 per-platform extension extraction modules (P-49 Workstream 2 sub-clusters)?
-
-- (A) **Amazon → eBay → Etsy → Walmart (Recommended; matches director's stated order).** Amazon first because (a) most-complex DOM (per-star pagination URL + helpful-count + Customers say block); (b) director explicitly listed Amazon first in 2026-05-25 scope drop; (c) builds the Pattern foundation for the simpler platforms after.
-- (B) Walmart → Etsy → eBay → Amazon (simplest-first). Walmart's per-star query-param URL is the simplest; Amazon's per-star pagination + helpful-count is most-complex. Builds confidence on simpler platforms before tackling Amazon.
-- (C) Pair-wise (Amazon+Walmart together + eBay+Etsy together). Amazon + Walmart share the per-star URL pattern; eBay + Etsy share the overlay/feedback pattern. Reuse Pattern infrastructure within each pair.
-- (D) Director picks per-platform readiness (e.g., which platforms have active products in director's current catalog).
-
-**Cascade impact:** Q2 affects per-platform-session sequencing only; no schema cascade.
-
----
-
-**Q3 — Scrape job orchestration.** How does a single review-collection request get from director's click to the database insert?
-
-- (A) **In-page extension worker — synchronous within the open tab (Recommended).** Director right-clicks → "Scrape reviews for this URL" → extension content-script walks the DOM + paginates + inserts directly via existing Supabase auth in the page session. Progress UI inside a Shadow DOM mounted on the page (per P-47 precedent). Trade-off: locks the tab during scrape (typically 30s-5min depending on review count); if director closes tab, scrape aborts (partial inserts kept).
-- (B) Background extension worker — extension service worker handles the scrape; content-script just kicks it off then closes. Director can navigate away mid-scrape. Trade-off: extension service workers have limited DOM access (no canonical way to read a third-party page from a service worker without re-opening it via a hidden tab — which is also flaggable behavior on Amazon).
-- (C) Hybrid — content-script captures the initial review batch from the current page state instantly + background worker continues pagination if needed. Best UX + still operates within director's session boundary.
-- (D) Crawler-driven (Q1-dependent — if crawler scoped in, the scrape runs server-side; extension is just a trigger).
-
-**Cascade impact:** Q3 affects UI design for the progress indicator (Q14 star-count breakdown UI may share the surface) + affects whether a "scrape complete" notification + retry-on-failure are needed.
-
----
-
-**Q4 — Per-star scrape count UX.** How does director adjust the "200 reviews per star" default cap?
-
-- (A) **Per-URL setting — small input field next to the right-click trigger (Recommended).** Director sets the cap once per URL save (lives on the existing `CompetitorUrl` row as new column `reviewScrapeCap Int? @default(200)`) + per-trigger override via a small input in the extension popup. Most-thorough/reliable because (i) per-URL granularity matches real-world need (some products have 10 reviews + some have 50000); (ii) reuses existing per-URL settings UI from P-46 W3 click-to-edit cell editors.
-- (B) Global setting per Project (lives in `UserTablePreferences` model from P-46 W1). Simpler UI but less flexible.
-- (C) Per-trigger only (no persisted setting — director enters cap each time). Maximum control but high friction.
-- (D) Fixed at 200/star with no override. Simplest; defers customization.
-
-**Cascade impact:** Q4 affects Q13 schema additions (whether `CompetitorUrl.reviewScrapeCap` field needed).
-
----
-
-**Q5 — Server-side review reordering.** Reviews are stored per-star and need within-star + across-star reordering on vklf.com (drag-to-reorder, similar to P-46 W3 Session 3 column reorder + W3 Session 3 row reorder).
-
-- (A) **Reuse the W3 Session 3 @dnd-kit row-reorder Pattern with new `sortRank Int?` field on `CapturedReview` (Recommended).** Same shared debounced-mutation lifecycle Pattern from W3 Session 3 (§B 2026-05-23-f). Pairs with existing P-46 W3 drag-to-reorder UI affordance.
-- (B) Star-count sort only — no within-star reorder. Trade-off: less flexibility but no schema change + simpler UI.
-- (C) Helpful-count sort (Amazon-only data; others use insertion order). Trade-off: cross-platform asymmetry; Amazon gets richer ordering than eBay/Etsy/Walmart.
-- (D) Defer reorder entirely; ship Q4 (per-star cap UX) only at first.
-
-**Cascade impact:** Q5 (A) adds `sortRank Int?` field to schema per Q13.
-
----
-
-**Q6 — Bulk-delete affordance.** Reviews accumulate fast; director needs a way to bulk-delete reviews that aren't useful (typically 1-star spam reviews).
-
-- (A) **Multi-select checkboxes + bulk-delete-with-confirm modal (Recommended).** Mirrors P-46 W2 Captured Reviews list per-row delete + adds multi-select. Standard UI pattern; reuses existing delete API route with batch wrapper.
-- (B) Per-row delete only (current v1 from P-46 W2 Session 4). Trade-off: high friction for bulk operations.
-- (C) Filter-then-bulk-delete (filter to 1-star + select all + delete). Most-thorough for spam-cleanup workflow.
-- (D) Defer bulk-delete; ship multi-select-only without delete-confirm modal first.
-
-**Cascade impact:** Q6 affects Q4 UI sub-design (whether the existing star-filter doubles as the multi-select scope).
-
----
-
-**Q7 — AI model choice + cost guards.** Which LLM does P-49 Workstream 5 use for review analysis at 3 levels (per-product two-sweep + cross-Type pooled + cross-everything)?
-
-- (A) **Claude Opus 4 (or whatever the current Anthropic flagship is at design-session time) + per-request cost cap + per-Project monthly cost cap (Recommended).** Best output quality for nuanced review summarization; cost caps prevent runaway spend; mirrors W#1 Keyword Clustering's per-Project cost-cap Pattern from `docs/MODEL_QUALITY_SCORING.md`. Trade-off: higher per-request cost than Claude Sonnet or GPT-4o.
-- (B) Claude Sonnet 4 (cheaper Anthropic option). Trade-off: lower quality on long-context summarization; may need more two-sweep iterations to hit Opus-quality output.
-- (C) Hybrid — Opus for per-product two-sweep + Sonnet for cross-Type/cross-everything where the input is already-summarized batch summaries. Cost-optimized.
-- (D) GPT-4o or Gemini-Pro (non-Anthropic). Trade-off: PLOS currently has Anthropic infra; introducing a second provider adds operational complexity.
-
-**Cascade impact:** Q7 affects Q8 batch sizing (different models have different context windows + cost-per-token) + Q12 caching + re-run economics.
-
----
-
-**Q8 — Two-sweep batch sizing.** First-sweep batch sizing for per-product summarization: how many reviews per batch?
-
-- (A) **Adaptive batching based on token count — 80% of model context window per batch (Recommended).** Claude Opus 4 context is ~200K tokens; reviews are typically 50-500 tokens each; batches of 200-1000 reviews per first-sweep call. Mirrors W#1 Keyword Clustering's INPUT_CONTEXT_SCALING_DESIGN.md adaptive pattern. Trade-off: more complex batch-sizing logic; needs token-counting before each call.
-- (B) Fixed batch of 100 reviews per first-sweep call. Simple; predictable cost per batch. Trade-off: doesn't scale to high-review-count products (Amazon products with 50,000 reviews would need 500 first-sweep calls).
-- (C) Fixed batch of 500 reviews per first-sweep call. Larger batches reduce call count but risk hitting context window limits on long reviews.
-- (D) Defer to first build session of W5; ship Q7 model choice first + tune batch size empirically.
-
-**Cascade impact:** Q8 affects Q12 caching strategy (per-batch caching vs per-product caching).
-
----
-
-**Q9 — AI analysis output shape.** What does each level of AI analysis produce as its output artifact?
-
-- (A) **Rich-text TipTap JSON (Recommended).** Reuses the existing `RichTextEditor` + `AnalysisReadView` rendering Pattern from P-46 W2 Sessions 1+3 + W4 Sessions 1+2. AI output renders inline with existing per-item + URL-level + Project-level analysis surfaces. Same schema shape as existing `analysis` JSONB columns.
-- (B) Structured JSON with named fields (e.g., `{pros: [...], cons: [...], commonComplaints: [...], commonPraise: [...]}`). Trade-off: more structured for downstream querying but doesn't reuse the existing rich-text rendering Pattern.
-- (C) Both — structured JSON internally + rendered to rich-text TipTap JSON for display. Maximum flexibility; supports both UI display + potential future downstream analytics. Trade-off: 2x storage; more complex AI prompt to emit two formats.
-- (D) Plain markdown text. Trade-off: doesn't fit the existing rich-text editor rendering.
-
-**Cascade impact:** Q9 affects Q13 schema additions for new AI analysis output tables.
-
----
-
-**Q10 — AI analysis UI placement.** Where on vklf.com does each level's AI analysis output appear?
-
-- (A) **Per-product on the existing URL detail page (next to Captured Reviews section) + cross-Type + cross-everything on the existing Comprehensive Competitor Analysis page (P-46 W4) as new sections (Recommended).** Reuses existing surfaces; consistent with the W#2 navigation pattern; no new pages needed. Per-product analysis sits next to the data it summarizes; cross-Type + cross-everything sit on the Project-level Comprehensive page.
-- (B) New dedicated `/reviews-analysis` page per-Project with all 3 levels in one place. Trade-off: introduces a new page + navigation entry; better for "analysis-focused" workflows but doesn't co-locate with the underlying data.
-- (C) Per-product on URL detail + per-Type on Competition Data table row expand + cross-everything on Comprehensive page. Trade-off: per-Type on row expand introduces a new affordance to the table; may collide with W3's existing row-expand UI.
-- (D) Defer UI placement to first build session of W5; ship per-product first + decide cross-level placement empirically.
-
-**Cascade impact:** Q10 affects file-level scope of Workstream 5 + extends or duplicates Comprehensive Competitor Analysis page from P-46 W4.
-
----
-
-**Q11 — AI analysis trigger UX.** How does director initiate an AI analysis run?
-
-- (A) **Button in the UI per surface — "Analyze reviews" on URL detail page (per-product); "Analyze Type" on Comprehensive page per-Type section; "Analyze Project" on Comprehensive page top (Recommended).** Director-controlled; cost-visible (button click = one cost-incurring run); supports re-run after new reviews added.
-- (B) Auto-trigger on review-count threshold (e.g., when a product crosses 50 reviews, analysis auto-runs). Trade-off: less director control over cost; may run before director is ready for results.
-- (C) Auto-trigger on review-add (analysis re-runs every time a new review lands). Trade-off: very high cost; not aligned with two-sweep batch design.
-- (D) Hybrid — manual button + optional auto-trigger toggle per-Project setting.
-
-**Cascade impact:** Q11 affects Q12 caching (manual trigger needs explicit re-run affordance; auto-trigger needs cache invalidation logic).
-
----
-
-**Q12 — AI analysis caching + re-run.** When does AI analysis output become stale + how does re-run work?
-
-- (A) **Cache per-product analysis by reviews-set-hash; show "out-of-date" indicator when new reviews land; re-run button refreshes (Recommended).** Lowest cost; user always sees prior analysis instantly; explicit re-run when director wants fresh. Hash includes all review IDs sorted; new review → new hash → "out-of-date" badge.
-- (B) Cache per-product with no staleness check; explicit re-run only. Trade-off: director may not realize output is stale if new reviews added.
-- (C) Cache + auto-refresh on every page load (re-runs in background). Trade-off: high cost; latency on page load.
-- (D) No caching — every page view triggers an AI call. Trade-off: prohibitively expensive at scale.
-
-**Cascade impact:** Q12 affects Q13 schema additions for cache-tracking fields.
-
----
-
-**Q13 — Schema additions (consolidated).** What new Prisma schema additions does P-49 require?
-
-- (A) **(Recommended)** `CapturedReview` field additions: `source` enum value `extension-scrape` added; new `sortRank Int?` (per Q5) + new `helpfulCount Int?` (Amazon-only nullable) + new `platform String?` (denormalized from parent for query convenience). `CompetitorUrl` field addition: new `reviewScrapeCap Int? @default(200)` (per Q4). NEW `ReviewAnalysis` model — `id` / `urlId? String?` (per-product) OR `projectId String? + typeFilter String?` (per-Type) OR `projectId String?` (per-Project) discriminated via `level enum {PER_PRODUCT, PER_TYPE, PER_PROJECT}` / `analysisJson Json` (TipTap per Q9) / `reviewsHash String` (cache key per Q12) / `modelVersion String` (Q7) / `runAt DateTime` / `runByUserId String?` / `costUsdMicros Int?`. NEW indexes per typical query paths.
-- (B) Same as (A) but use 3 separate tables instead of one discriminated model (`PerProductReviewAnalysis` + `PerTypeReviewAnalysis` + `PerProjectReviewAnalysis`). Trade-off: clearer per-level queries but 3x migration work + 3x downstream code paths.
-- (C) Minimal — only `source` enum addition; defer all other schema additions to per-workstream sessions.
-- (D) Defer entire schema decision to first W2 or W5 build session.
-
-**Cascade impact:** Q13 (A) or (B) flips Schema-change-in-flight flag to YES at the start of the first W1 or W5 build session. Q13 (C) or (D) keeps it deferred.
-
----
-
-**Q14 — Star-count breakdown UI.** How does the new star-count counter bar replace or augment the existing star-rating multi-select filter on Captured Reviews?
-
-- (A) **Counter-bar with click-to-filter (Recommended) — 1-star (count) / 2-star (count) / 3-star (count) / 4-star (count) / 5-star (count) buttons at top of Captured Reviews section; click toggles filter; reuses existing multi-select state internally but presents as one-click affordances.** Compact; data-dense; faster to filter than checkboxes; matches Amazon-style star-filter UX.
-- (B) Keep existing multi-select checkboxes; add counter labels alongside each. Less change to existing UI.
-- (C) Counter-bar only (no filter); separate filter dropdown for advanced filtering. Trade-off: splits the UI into two affordances.
-- (D) Defer Q14 UI to W4 build session; lock counter-bar wiring only at design session.
-
-**Cascade impact:** Q14 affects W4 file-level scope.
-
----
-
-**Q15 — Anti-bot defensive posture.** What rate-limiting + behavioral randomization does the extension apply to per-platform scrapes to honor the verbatim director constraint *"functionality should be very close to real world human user sitting where admin is"*?
-
-- (A) **Conservative defaults: 1-3 second random delay between pagination clicks + respect platform's intrinsic rate limits + abort on captcha detection + show clear UI notification to director if any platform rate-limits us (Recommended).** Mirrors human-paced browsing; respects platform limits + lets director know if behavior surfaces anti-bot challenges; aborts cleanly rather than retrying (which is itself a bot signal).
-- (B) Aggressive — minimum delays (50-200ms) + retry on rate-limit. Trade-off: faster scrapes + higher anti-bot risk; may flag director's Amazon seller account.
-- (C) Platform-specific — Amazon gets conservative defaults; eBay/Etsy/Walmart get faster defaults. Trade-off: per-platform tuning is more complex but recognizes Amazon's tighter anti-bot posture.
-- (D) Defer Q15 to first W2 build session; lock rate-limit-aware UI affordance only at design session.
-
-**Cascade impact:** Q15 affects W2 per-platform module code shape; Q15 (A) Recommended is the safest default for the "behavioral indistinguishability from a real user" constraint.
-
----
-
-**End of interview question scaffold.** After walking through all 15 questions, assemble `docs/REVIEWS_PHASE_2_DESIGN.md` §A with one A.N subsection per locked question + the standard A.N+1 to A.N+5 sections (Schema additions / Platform-truths audit / Living Questions / Cross-Tool Data Flow Map / Scaffold fit / Deferred-items registry). Then write empty §B. Then write §C with 5 workstream implementation outlines (W1 DONE this session + W2 per-platform extraction with 4 sub-clusters + W3 crawler CONDITIONAL + W4 UI extensions + W5 AI analysis system).
+**Schema-change-in-flight flag:** STAYS **NO** at session start UNTIL `prisma db push` runs at step 5, then flips to **YES** for the rest of the session AND for all subsequent sessions until the Amazon deploy session (~3-5 sessions from now) ships the migration to production. The yellow-tape "schema migration in flight" warnings stay active on every session-start pre-build check during this window.
 
 ---
 
 ## Pre-session notes (offline steps for director between sessions)
 
-**Optional — not required for the design session:**
+**Optional — not required for the next session:**
 
-- Read the NEW P-49 Reviews Phase 2 ROADMAP entry to refresh context on the per-platform DOM specs you supplied (Amazon `Customers say` + per-star URL / eBay Neutral+Negative feedback / Etsy overlay / Walmart per-star query-param). These are preserved verbatim from your 2026-05-25 scope drop in the ROADMAP entry.
-- Skim the 15 interview questions above to mentally pre-load the design decisions. Each has options + a Recommended pick; you can default to Recommended on any question without prepping.
-- Think about Q1 (crawler scope) ahead of time — this is the highest-leverage question because it determines whether Workstream 3 (Crawler infrastructure) lives in P-49 at all. Recommended is extension-only (defer crawler entirely) per your anti-bot constraint.
-- Think about Q2 (per-platform priority order) — the Recommended Amazon → eBay → Etsy → Walmart order matches what you stated at 2026-05-25 scope drop, but if you have a different priority based on your current catalog readiness or seasonal sales priorities, surface it at session start.
+- **Open a competitor's Amazon product page in a Chrome tab** so testing the end-to-end extraction is immediate when we get to step 10 of next session. Pick a product with at least 50+ reviews so the per-star pagination has reviews to walk. Ideally a product where you also already have a saved CompetitorUrl in vklf.com (so the right-click → "Scrape reviews for this URL" context-menu entry routes through cleanly).
+- **Skim the new `docs/REVIEWS_PHASE_2_DESIGN.md`** to refresh context on the 15 locked decisions. Particularly §A.1 (Extension only locked) + §A.2 (Amazon first priority) + §A.4 (per-URL `reviewScrapeCap` default 200/star) + §A.13 (schema additions) + §A.15 (conservative anti-bot defaults). The design doc is the canonical interview-locked spec for all P-49 work; future build-session §B entries land in it per Rule 18.
 
 **Standing optional offline step (NOT blocking — standing carry-over):** raise the Supabase Global File Size Limit to enable the bucket-level 100 MB cap on `competition-scraping-videos`. Step-by-step (unchanged from prior handoffs):
 
@@ -335,41 +164,44 @@ The 15 questions below are the draft Workflow Requirements Interview scaffold fo
 4. Save.
 5. EITHER re-run `node scripts/create-competition-scraping-videos-bucket.mjs` to update the bucket's `fileSizeLimit` (the script is idempotent), OR edit the bucket directly via the Supabase Storage UI → bucket settings → file size limit → set to 100 MB.
 
-Not blocking the Reviews Phase 2 Design Session at all — can happen any time. Director-independent.
+Not blocking the P-49 W2 Amazon Session 1 at all — can happen any time. Director-independent.
 
 ---
 
 ## Destructive-operation safety check for next session
 
-**Rule 8 triggers planned this session: ZERO** — no destructive git operations planned (no rebases, no force pushes, no `git reset --hard`, no `git branch -D`). Pure design + doc-write session.
+**Rule 8 triggers planned this session: ZERO** — no destructive git operations planned (no rebases, no force pushes, no `git reset --hard`, no `git branch -D`). Pure build session on the workflow branch.
 
-**Rule 9 triggers planned this session: ZERO** — no main push for code expected. Design doc lands on workflow-2-competition-scraping; doc-batch ff-merges to main at end-of-session (operationally adjacent; does NOT invoke Rule 9 since no destructive operations + no code changes).
+**Rule 9 triggers planned this session: ZERO** — no main push for code expected. Build commits land on `workflow-2-competition-scraping` only this session; the eventual Amazon deploy session (~3-5 sessions from now) is what ff-merges to main under Rule 9 gate.
 
-**NO Rule 29 (container-level destructive op) triggers planned** this session. NO Codespaces rebuild planned. Claude's memory directory + `.codespace-backup/memory/` mirror both remain intact. Critical files safe. **Layer-3b mirror-staleness canary active since 2026-05-22-f.** If at session-start the canary emits an alert (file count differs, presence differs, or any per-file size differs between source and mirror), STOP and investigate before any design mechanics.
+**Rule 9 triggers expected in upcoming sessions:** the Amazon deploy session (~3-5 sessions from now) WILL fire Rule 9 gate — first shipment of the A.13 schema migration to production + Phase-4 director real-Chrome verification of the Amazon end-to-end extraction. Schema-change-in-flight flag will be YES throughout the build sessions leading up to that deploy.
+
+**NO Rule 29 (container-level destructive op) triggers planned** this session. NO Codespaces rebuild planned. Claude's memory directory + `.codespace-backup/memory/` mirror both remain intact. Critical files safe. **Layer-3b mirror-staleness canary active since 2026-05-22-f.** If at session-start the canary emits an alert (file count differs, presence differs, or any per-file size differs between source and mirror), STOP and investigate before any build mechanics.
 
 ---
 
 ## Why this pointer was written this way (debug aid)
 
-Today's session was unplanned — pre-build launch was P-48 Session 3 (Diagnostic #2), but director surfaced the long-promised "next round of additions" before pre-build reads completed. The most-thorough/reliable response (per the NEW reusable Pattern memorialized today in CORRECTIONS_LOG §Entry 2026-05-25 Reviews Phase 2 capture) was a pure-capture session: pause the planned task, run Rule 24 searches, capture as ROADMAP entries with verbatim director-supplied specs preserved, and defer the planned task opportunistically.
+Today's session executed the (a.92) RECOMMENDED-NEXT task locked yesterday — the Reviews Phase 2 Design Session producing `docs/REVIEWS_PHASE_2_DESIGN.md`. The design doc is now the canonical interview-locked spec for all P-49 work; the 4-active-workstream structure is locked + revised estimate ~15-25 sessions instead of original ~20-50.
 
-The natural next-session task per (a.92) RECOMMENDED-NEXT is **Reviews Phase 2 Design Session on `workflow-2-competition-scraping`** — Workflow Requirements Interview producing `docs/REVIEWS_PHASE_2_DESIGN.md`. The shape mirrors the 2026-05-23 P-46 Phase 2 design session (which produced `docs/COMPETITION_DATA_V2_DESIGN.md`) and is the foundation that gates all 5 P-49 workstreams.
+The natural next-session task per (a.93) RECOMMENDED-NEXT is **P-49 W2 Amazon Session 1 on `workflow-2-competition-scraping`** — the first build session in the Reviews Phase 2 arc. The shape mirrors how P-46 W2 Session 1 followed the P-46 design session (which produced `docs/COMPETITION_DATA_V2_DESIGN.md`): design session ships the canonical spec, then the first build session lands the schema migration + shared infrastructure + first per-platform/per-surface piece getting end-to-end working.
 
-- **(Recommended)** Reviews Phase 2 Design Session — Workflow Requirements Interview walking through 15 questions (anti-bot strategy + crawler scope + per-platform priority + scrape orchestration + UX details + AI model + analysis output shape + UI placement + caching + schema additions + defensive posture). Recommended because (a) it's the locked next-session task per director's Rule 14f forced-picker outcome 2026-05-25; (b) Workstream 1 must close before any of W2-W5 can start; (c) the 15-question scaffold is already drafted; (d) all 5 P-49 workstreams cascade from design decisions locked here; (e) pure-design session has zero deploy risk + zero Rule 9 gate exposure.
+- **(Recommended)** P-49 W2 Amazon Session 1 — schema migration + shared scrape-pagination helper + Shadow DOM progress indicator + Amazon DOM walker + first end-to-end extraction working on a real Amazon product page in development. Recommended because (a) it's the locked next-session task per director's Rule 14f forced-picker outcome 2026-05-25-b; (b) per A.2 of the new design doc, Amazon is the locked priority-1 platform (matches director's stated 2026-05-25 order Amazon → eBay → Etsy → Walmart); (c) per A.13, the full schema package needs to land before any per-platform extraction can write to the database; (d) per A.3 + A.15, the shared scrape-pagination + Shadow DOM progress indicator helpers need to land before any per-platform module can wire to them; (e) Amazon Session 1 is the foundation session for W2 — subsequent eBay/Etsy/Walmart sub-cluster sessions reuse all the shared infrastructure landed today.
 
-The shape of the Reviews Phase 2 Design Session is **plain-terms summary + pre-build reads + branch state verify + Rule 14f session-start confirmation + walk director through the 15 interview questions one-at-a-time with per-question Rule 14f forced-pickers + mid-interview cross-decision integration + assemble `docs/REVIEWS_PHASE_2_DESIGN.md` (§A frozen-decisions + §B empty + §C per-workstream implementation outlines) + end-of-session doc-batch (10 docs including the new REVIEWS_PHASE_2_DESIGN.md) + 2 pushes**.
+The shape of P-49 W2 Amazon Session 1 is **plain-terms summary + pre-build reads + branch state verify + Rule 14f session-start confirmation + `prisma db push` for the A.13 schema package (schema-change-in-flight flag flips to YES) + new shared `scrape-pagination.ts` helper + Shadow DOM progress indicator extraction into shared helper + Amazon per-platform module + Amazon DOM walker + right-click context-menu entry + first end-to-end extraction in development + end-of-session doc-batch (10 docs including REVIEWS_PHASE_2_DESIGN.md §B 2026-05-26 first build-session entry) + 2 pushes (workflow-branch push + doc-batch ff-merge to main)**.
 
-**After the Design Session locks the §A frozen-decisions,** the next-next sessions step through P-49 Workstream 2 first per-platform extension extraction (Amazon Session 1 most likely per Q2 Recommended) → continue through W2 sub-clusters → W4 Captured Reviews UI extensions (interleavable) → W5 AI review analysis system (interleavable) → W3 Crawler infrastructure CONDITIONAL (if scoped in per Q1 outcome) → then P-43 mechanical prevention + P-26 below-fold scroll + P-27 re-evaluation → W#2 graduation step → THEN STOP AND EXPLICITLY ASK director for next round of competition-scraping additions per director's standing directive.
+**After Amazon Session 1 ships,** the next-next sessions step through P-49 W2 Amazon Session 2 (refinement of any first-pass issues from end-of-Session-1 extraction test) → potentially Amazon Session 3 (Phase-4 real-Chrome verification on a different Amazon product) → Amazon DEPLOY session (under Rule 9 gate; first production deploy of the A.13 schema migration + the Amazon scraper) → P-49 W2 eBay Session 1 (reusing all the shared infrastructure landed today) → ... continue through W2 sub-clusters → W4 Captured Reviews UI extensions (interleavable) → W5 AI review analysis system (interleavable but most useful after at least Amazon ships) → then P-43 mechanical prevention + P-26 below-fold scroll + P-27 re-evaluation → W#2 graduation step → THEN STOP AND EXPLICITLY ASK director for next round of competition-scraping additions per director's standing directive.
 
 **Alternate next-session candidates if director shifts priorities at session start:**
 
-- **P-48 Session 3 (Diagnostic #2) — defer Reviews Phase 2 Design Session to a later session.** NOT recommended — Reviews Phase 2 is the major scope expansion that gates W#2 graduation + already captured today as the (a.92) RECOMMENDED-NEXT. P-48 Session 3 is opportunistic and can interleave with P-49 work.
+- **P-49 W4 Captured Reviews UI extensions Session 1 — defer W2 Amazon Session 1 to a later session.** NOT recommended — W4 doesn't strictly depend on W2 (W4 ships the UI for reviews already in the database from existing manual entry per P-46 W2 Session 4), but starting W2 Amazon first lets W4 surfaces test against real extension-scraped data immediately rather than against the smaller manual-entry corpus. Per A.2 of new design doc, Amazon W2 is the locked priority sequence.
+- **P-49 W5 AI review analysis system Session 1 — defer W2 Amazon Session 1 to a later session.** NOT recommended — W5 strictly depends on having review data to analyze, and W2 Amazon Session 1 is the foundation for getting real-scraped review data into the database. W5 makes more sense interleaved after W2 Amazon ships at least one platform.
+- **P-48 Session 3 (Diagnostic #2) — defer P-49 W2 Amazon Session 1 to a later session.** NOT recommended — P-49 is the major scope expansion that gates W#2 graduation + already captured the design + the (a.93) RECOMMENDED-NEXT lock. P-48 Session 3 is opportunistic and can interleave with P-49 work.
 - **P-50 Condition Pathology card — small `main`-branch standalone session.** NOT recommended as the next-session task — P-50 is ~10 min in-Claude + lives on `main` not `workflow-2-competition-scraping`. Better to slot it into a future deploy session or do it standalone between W#2 sessions.
-- **P-43 mechanical prevention small fix.** NOT recommended — P-43 is LOW informational + opportunistic. Better after Reviews Phase 2 Design Session + first per-platform build session land.
+- **P-43 mechanical prevention small fix.** NOT recommended — P-43 is LOW informational + opportunistic. Better after P-49 W2 Amazon Session 1 lands.
 - **P-26 below-fold scroll capture evaluation.** NOT recommended — P-26 is LOW alternate; re-evaluate after Reviews Phase 2 closes (which is months out).
 - **P-27 Bug #9 + Bug #15 re-evaluation.** NOT recommended — likely obsolete after P-46. Re-evaluate after P-26.
 - **W#2 graduation step.** NOT recommended UNTIL Reviews Phase 2 + P-48 stutter + P-43 + P-26 + P-27 all close. Currently many months out.
-- **Skip the design session + go directly to a P-49 Workstream 2 first build session.** NOT recommended — without the design session locking the 15 design decisions, the W2 build session would face 15 forced-pickers on its own session-start (which is the inverse of clean session-shapes per today's NEW reusable Pattern). The design session is the most-thorough/reliable foundation.
 - **Raise Supabase Global File Size Limit (standing optional offline step).** Director's offline dashboard step — see Pre-session notes above. Not a Claude session task; can happen any time. Director-independent.
 
-Check `ROADMAP.md` for the canonical state. Check the NEW P-49 polish-backlog entry for the canonical capture of director's verbatim per-platform specs + anti-bot constraint + 3-level AI analysis output shape + 5-workstream hub-and-spokes structure. Check `docs/COMPETITION_DATA_V2_DESIGN.md` §A as the structural precedent for how to organize the new `REVIEWS_PHASE_2_DESIGN.md` §A. Check `docs/CORRECTIONS_LOG.md` §Entry 2026-05-25 (Reviews Phase 2 scope-expansion capture — the THIRD 2026-05-25-dated §Entry) for the NEW reusable Pattern memorialization + 4 sub-observations.
+Check `ROADMAP.md` for the canonical state. Check `docs/REVIEWS_PHASE_2_DESIGN.md` for the canonical interview-locked spec (790 lines; §A frozen 15 decisions + §B empty + §C 4 active workstream outlines + W3 Crawler DROPPED placeholder). Check `docs/CORRECTIONS_LOG.md` §Entry 2026-05-25-b (P-49 Reviews Phase 2 design-session closing entry — the FOURTH 2026-05-25-dated §Entry) for the NEW reusable Pattern memorialization + 4 sub-observations.
