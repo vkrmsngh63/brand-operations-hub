@@ -790,3 +790,146 @@ test('canvas-crop — when cropStreamToRegion is absent, MediaRecorder gets the 
   await ctrl.start({ region: VALID_REGION, onStopped() {} });
   assert.strictEqual(recorderStreamReceived, fakeStream);
 });
+
+// ─── Controller — fix-webm-duration patch (P-48 Session 2) ─────────────
+
+test('fix-webm-duration — patched blob is emitted via onStopped when dep is wired', async () => {
+  const clock = makeFakeClock();
+  const fakeRecorder = makeFakeMediaRecorder();
+  const baseDeps = makeDeps({ clock, fakeRecorder });
+  const patchedBlob = new Blob(['patched-bytes'], { type: 'video/webm' });
+  const deps = {
+    ...baseDeps,
+    fixWebmDuration: async () => patchedBlob,
+  };
+  const ctrl = createRecordController(deps);
+
+  let stoppedResult: RecordControllerStoppedResult | null = null;
+  const onStoppedFired = new Promise<void>((resolve) => {
+    void ctrl.start({
+      region: VALID_REGION,
+      onStopped(result) {
+        stoppedResult = result;
+        resolve();
+      },
+    });
+  });
+  // The start() promise above resolves synchronously through makeDeps's
+  // immediate getDisplayMedia; await the next microtask so the
+  // controller is in the 'recording' state before we simulate data + stop.
+  await Promise.resolve();
+
+  fakeRecorder.simulateData(new Blob(['chunk-1'], { type: 'video/webm' }));
+  clock.advance(8_000);
+  ctrl.stop();
+  fakeRecorder.simulateStop();
+
+  await onStoppedFired;
+  assert.ok(stoppedResult);
+  const r: RecordControllerStoppedResult = stoppedResult!;
+  assert.strictEqual(r.blob, patchedBlob);
+});
+
+test('fix-webm-duration — dep is called with the assembled blob and duration in milliseconds', async () => {
+  const clock = makeFakeClock();
+  const fakeRecorder = makeFakeMediaRecorder();
+  const baseDeps = makeDeps({ clock, fakeRecorder });
+  const calls: Array<{ blob: Blob; durationMs: number }> = [];
+  const deps = {
+    ...baseDeps,
+    async fixWebmDuration(blob: Blob, durationMs: number) {
+      calls.push({ blob, durationMs });
+      return blob;
+    },
+  };
+  const ctrl = createRecordController(deps);
+
+  const onStoppedFired = new Promise<void>((resolve) => {
+    void ctrl.start({
+      region: VALID_REGION,
+      onStopped() {
+        resolve();
+      },
+    });
+  });
+  await Promise.resolve();
+
+  fakeRecorder.simulateData(new Blob(['chunk-1'], { type: 'video/webm' }));
+  clock.advance(12_345);
+  ctrl.stop();
+  fakeRecorder.simulateStop();
+  await onStoppedFired;
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0]!.durationMs, 12_345);
+  assert.ok(calls[0]!.blob instanceof Blob);
+  assert.equal(calls[0]!.blob.type, RECORDING_MIMETYPE_PREFERENCES[0]);
+});
+
+test('fix-webm-duration — when dep throws, onStopped emits the unpatched blob (recording not lost)', async () => {
+  const clock = makeFakeClock();
+  const fakeRecorder = makeFakeMediaRecorder();
+  const baseDeps = makeDeps({ clock, fakeRecorder });
+  const deps = {
+    ...baseDeps,
+    async fixWebmDuration() {
+      throw new Error('test-patch-failure');
+    },
+  };
+  const ctrl = createRecordController(deps);
+
+  let stoppedResult: RecordControllerStoppedResult | null = null;
+  const onStoppedFired = new Promise<void>((resolve) => {
+    void ctrl.start({
+      region: VALID_REGION,
+      onStopped(result) {
+        stoppedResult = result;
+        resolve();
+      },
+    });
+  });
+  await Promise.resolve();
+
+  fakeRecorder.simulateData(new Blob(['chunk-1'], { type: 'video/webm' }));
+  fakeRecorder.simulateData(new Blob(['chunk-2'], { type: 'video/webm' }));
+  clock.advance(5_000);
+  ctrl.stop();
+  fakeRecorder.simulateStop();
+
+  await onStoppedFired;
+  assert.ok(stoppedResult);
+  const r: RecordControllerStoppedResult = stoppedResult!;
+  assert.ok(r.blob instanceof Blob);
+  // The unpatched blob is the chunk-concatenation Blob assembled in
+  // emitStoppedOnce; size should equal the sum of chunk sizes.
+  assert.equal(r.blob.size, 'chunk-1'.length + 'chunk-2'.length);
+  assert.equal(r.blob.type, RECORDING_MIMETYPE_PREFERENCES[0]);
+});
+
+test('fix-webm-duration — when dep is absent, onStopped emits the raw unpatched blob (pre-Session-2 behavior preserved)', async () => {
+  const clock = makeFakeClock();
+  const fakeRecorder = makeFakeMediaRecorder();
+  const deps = makeDeps({ clock, fakeRecorder });
+  // No fixWebmDuration on deps — pre-Session-2 behavior.
+  const ctrl = createRecordController(deps);
+
+  let stoppedResult: RecordControllerStoppedResult | null = null;
+  await ctrl.start({
+    region: VALID_REGION,
+    onStopped(result) {
+      stoppedResult = result;
+    },
+  });
+
+  fakeRecorder.simulateData(new Blob(['chunk-1'], { type: 'video/webm' }));
+  clock.advance(3_000);
+  ctrl.stop();
+  fakeRecorder.simulateStop();
+
+  // Sync emit path — onStopped fires before simulateStop returns since
+  // there are no awaits hit when fixWebmDuration is absent.
+  assert.ok(stoppedResult);
+  const r: RecordControllerStoppedResult = stoppedResult!;
+  assert.ok(r.blob instanceof Blob);
+  assert.equal(r.blob.size, 'chunk-1'.length);
+});

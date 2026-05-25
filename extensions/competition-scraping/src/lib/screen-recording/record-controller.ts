@@ -21,6 +21,8 @@
 //   extension; the public interface stays the same so the orchestrator
 //   wiring landed in 1b doesn't need to change again.
 
+import ysFixWebmDuration from 'fix-webm-duration';
+
 import type { Rect } from '../region-screenshot.ts';
 
 // ─── Constants ─────────────────────────────────────────────────────────
@@ -151,6 +153,20 @@ export interface RecordControllerDeps {
    *  + by integration scenarios where the user picks a region matching
    *  the picked tab. */
   cropStreamToRegion?(stream: MediaStream, region: Rect): CroppedStream;
+  /** Patches the EBML Segment Info Duration tag into the final webm Blob
+   *  produced by MediaRecorder. Required because Chrome's MediaRecorder
+   *  writes the EBML header at recording-START before duration is known
+   *  and never patches it after `stop()`, leaving `format.duration: NOPTS`
+   *  in the output — which makes the HTML5 video player see
+   *  `videoElement.duration === Infinity` on load and breaks its
+   *  pre-buffer-planning math, causing reactive chunk-fetching that
+   *  surfaces as playback stutter on vklf.com. P-48 Session 2 (2026-05-25)
+   *  diagnosed via `ffprobe` + EBML deep-probe across 3 production
+   *  SCREEN_RECORDING webm files. Production wires this to
+   *  `fix-webm-duration` from yusitnikov (canonical ~3 KB MIT library;
+   *  no transitive deps). Optional so that pre-Session-2 unit tests
+   *  pass unchanged (when omitted, the raw unpatched blob is emitted). */
+  fixWebmDuration?(blob: Blob, durationMs: number): Promise<Blob>;
 }
 
 export function createProductionDeps(): RecordControllerDeps {
@@ -192,6 +208,9 @@ export function createProductionDeps(): RecordControllerDeps {
       globalThis.clearInterval(handle as ReturnType<typeof setInterval>);
     },
     cropStreamToRegion: productionCropStreamToRegion,
+    fixWebmDuration(blob, durationMs) {
+      return ysFixWebmDuration(blob, durationMs);
+    },
   };
 }
 
@@ -359,16 +378,31 @@ export function createRecordController(
     }
   }
 
-  function emitStoppedOnce(): void {
+  async function emitStoppedOnce(): Promise<void> {
     if (stoppedEmitted) return;
     stoppedEmitted = true;
     const durationSeconds = (deps.now() - startTimestamp) / 1000;
-    const blob = new Blob(chunks, { type: mimeType });
+    const rawBlob = new Blob(chunks, { type: mimeType });
     state = 'stopped';
     teardownStream();
     clearTimers();
+
+    // Patch the EBML Segment Info Duration tag into the webm container
+    // header via fix-webm-duration (when wired). On error, fall through
+    // to emitting the unpatched blob so a library failure doesn't lose
+    // the recording — the user can still play back (with the original
+    // stutter) and re-record if needed.
+    let finalBlob = rawBlob;
+    if (deps.fixWebmDuration) {
+      try {
+        finalBlob = await deps.fixWebmDuration(rawBlob, durationSeconds * 1000);
+      } catch {
+        finalBlob = rawBlob;
+      }
+    }
+
     activeOpts?.onStopped({
-      blob,
+      blob: finalBlob,
       mimeType,
       durationSeconds,
       region: normalizedRegion,
