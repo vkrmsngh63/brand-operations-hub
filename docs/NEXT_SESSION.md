@@ -1,102 +1,85 @@
 # Next session
 
-**Written:** 2026-05-25 (`session_2026-05-25_p48-session-2-implementation-and-ff1-busted` — end-of-session handoff after **W#2 polish P-48 Session 2 (Implementation + Fix-Forward #1 BUSTED) ✅ DEPLOYED-PARTIAL 2026-05-25 on vklf.com via `workflow-2-competition-scraping` → `main`** — `fix-webm-duration` patch shipped end-to-end via build commit `279da34` ff-merged `a486af8..279da34` to main (4 files +211/-9; DI-seam wiring in `record-controller.ts` + 4 new node:test cases) under Rule 9 gate #1; director-verified the SEEK BAR fix end-to-end on vklf.com (recordings made post-deploy now show real total duration like "0:22" instead of "∞" / "Live" / "-:--"); Phase-4 surfaced that playback STUTTER PERSISTS even with duration metadata now correct; empirical ffprobe revealed every SCREEN_RECORDING webm file (since P-45 shipped 2026-05-22-i) is captured at ~6-7 fps actual rate (not the intended 30 fps); speculative FF-1 build commit `d8b9507` (1 file +25/-2; attach hidden video element to DOM) ff-merged `279da34..d8b9507` to main under Rule 9 gate #2 but empirically BUSTED via post-FF-1 ffprobe (155 frames / 18.19s = 8.52 fps — within noise of pre-fix 6.21-6.79 fps baseline); per director Rule 14f forced-picker outcome, remaining stutter work deferred to P-48 Session 3 (Diagnostic #2) with proper "ffprobe-first" discipline before any more structural fixes ship; FF-1 commit `d8b9507` STAYS in production (no rollback) as calibration data point. **Closes (a.90) RECOMMENDED-NEXT = P-48 Session 2 (Implementation) ✅ DEPLOYED-PARTIAL 2026-05-25**; **opens (a.91) RECOMMENDED-NEXT = P-48 Session 3 (Diagnostic #2) on `workflow-2-competition-scraping`** — empirical instrumentation pass to identify the ~6-7 fps source-file bottleneck BEFORE shipping any more structural fixes.
+**Written:** 2026-05-25 (`session_2026-05-25_reviews-phase-2-capture-session` — end-of-session handoff after **W#2 polish Reviews Phase 2 scope-expansion CAPTURE SESSION ✅ DONE 2026-05-25 on `workflow-2-competition-scraping`** — pure-capture session (NO code, NO builds, NO deploys, ZERO Rule 9 gates fired). Director surfaced the long-promised "next round of additions" at session-start before any P-48 Session 3 work began; Rule 14f session-direction picker chose pure capture (P-48 Session 3 deferred opportunistically). NEW `P-49 Reviews Phase 2` ROADMAP entry (hub-and-spokes mirroring P-46 — 5 internal workstreams: Design Session NEXT + per-platform extension extraction × 4 platforms Amazon→eBay→Etsy→Walmart + Crawler infrastructure CONDITIONAL + Captured Reviews UI extensions + AI review analysis system at 3 levels) + NEW `P-50 Condition Pathology card` ROADMAP entry (small `main`-branch placeholder card; card-only scope per Rule 14f picker — no W# renumbering). `docs/COMPETITION_DATA_V2_DESIGN.md` §A.1 updated with "RESOLVED 2026-05-25 — see ROADMAP P-49" cross-reference paragraph linking the original 2026-05-23 deferral to the now-captured P-49 hub. **Closes (a.91) RECOMMENDED-NEXT** = P-48 Session 3 (Diagnostic #2) DEFERRED to opportunistic insertion via the P-48 ROADMAP entry which already documents Session 3 as the next-within-P-48 step. **Opens (a.92) RECOMMENDED-NEXT** = Reviews Phase 2 Design Session (Workflow Requirements Interview producing `docs/REVIEWS_PHASE_2_DESIGN.md`) on `workflow-2-competition-scraping`.
 
 ---
 
 ## What we did this session (in plain terms)
 
-Today was a **build + deploy + fix-forward session** for the screen-recording stutter issue you flagged during the 2026-05-24-f verifications.
+Today was a **pure-capture session** — no code, no builds, no deploys, no pushes to production. The plan walking in was the screen-recording stutter diagnostic (P-48 Session 3). Before I read any of the pre-build documents, you flagged the long-promised "next round of additions" to Competition Scraping and dropped the entire scope in one message: automated review collection for Amazon, eBay, Etsy, and Walmart; per-product two-sweep AI review summarization; cross-Type pooled AI analysis; cross-everything competitive-landscape AI analysis; plus a small new "Condition Pathology" card on the PLOS dashboard.
 
-The good news first: I shipped the `fix-webm-duration` patch that Session 1 (yesterday-same-day) had locked as the fix path. It's live on vklf.com. You sideloaded the new extension, recorded a fresh screen recording, loaded it on vklf.com, and the SEEK BAR is now fixed end-to-end — recordings show real total durations like "0:22" instead of "∞" / "Live" / "-:--". That part of the original symptom is resolved.
+I paused the stutter work and we ran three quick decision-pickers together: (1) should today be pure capture or mixed with the stutter work? — you picked pure capture; (2) should I capture this as one big hub-and-spokes ROADMAP entry mirroring P-46, or split it into 4-5 separate items? — you picked hub-and-spokes; (3) for the Condition Pathology card, is this just a placeholder card or a full new workflow we should renumber everything around? — you picked placeholder card only. With those locked, I wrote two new ROADMAP entries (P-49 Reviews Phase 2 + P-50 Condition Pathology card), updated the existing P-46 design doc to point §A.1's old "we'll figure out reviews per platform later" deferral at the new P-49 capture, and drafted a 15-question Workflow Requirements Interview for the design session next time we meet.
 
-The bad news: the stutter is still there. You watched the post-fix recording and the playback was just as choppy as before. That confused me — Session 1's diagnosis said missing-duration was THE root cause of the stutter, but here we have correct duration AND continued stutter. So I ran `ffprobe` on the post-fix file and three earlier files to characterize what's actually being captured. The numbers were eye-opening: every single screen recording in your database — the three pre-fix files AND the new post-fix file — was captured at roughly 6-7 frames per second, not 30 fps. (Specifically: 6.79 / 6.79 / 6.21 fps across four samples.) That's the actual root cause of the stutter you've been seeing — playback can't be smoother than the source, and the source is genuinely a low-fps recording. Session 1's missing-duration fix was correct for the seek bar but didn't touch this separate problem.
-
-I attempted a quick speculative fix-forward to address the framerate — the theory was that Chrome throttles `<video>` elements that aren't attached to the DOM as a battery-saving optimization, and our screen-recording pipeline creates a hidden video element that never gets attached. I shipped a small change (25 lines) attaching the video to the page with 1×1-pixel opacity-0 styling, deployed it, you sideloaded the new build and recorded another recording. I ran ffprobe again: 8.52 fps. Within noise of the 6.21-6.79 fps baseline. The theory was empirically wrong. I asked you whether you wanted to (A) defer the stutter work to a fresh diagnostic session next time, (B) try one more empirical guess, or (C) roll back the failed-theory commit. You picked (A) — defer + leave the failed-theory commit in production as a calibration breadcrumb for the design-doc lesson.
-
-Mid-session I had **one false-alarm.** I told you the Platform column was missing from the Competition Data table (looked like a regression to me); you immediately pointed out it was right there — I'd just missed it scanning the screenshot. No real regression. Recorded as a deleted task in the session log; not a real bug.
-
-Lesson captured for future fix-forward shaping: **I shouldn't recommend a quick speculative fix-forward when there's a cheap empirical test that would tell us whether the theory is right BEFORE we ship it.** Today's FF-1 cycle (~30-45 min including your sideload + ffprobe + verification) would have cost about 10-15 minutes if I'd written a standalone browser-context HTML page first, attached + detached a video, counted frames over time, and confirmed the throttling hypothesis. I'll have that "have I empirically verified the theory?" gate baked into recommendation logic going forward. This pairs with Session 1's "ffprobe-first" lesson at the fix-forward level.
+Nothing shipped to production. Nothing changed in code. The stutter work didn't go away — it's still queued via the P-48 ROADMAP entry — but it's now opportunistically interleavable rather than the immediate next-session lock, because today's capture revealed that Reviews Phase 2 is a multi-month workstream that gates W#2 graduation, and starting its design interview is the most-valuable next session.
 
 ## What we'll do next session (in plain terms)
 
-Next session is **P-48 Session 3 (Diagnostic #2) on `workflow-2-competition-scraping`** — empirical instrumentation pass before any more structural fixes ship. Estimated 30-60 min in-Claude.
+Next session is the **Reviews Phase 2 Design Session** — a Workflow Requirements Interview where I walk you through about 15 design questions and we lock down all the open decisions before any code starts. The deliverable is a new document called `docs/REVIEWS_PHASE_2_DESIGN.md` — same shape as the existing P-46 design doc (`docs/COMPETITION_DATA_V2_DESIGN.md`): a §A section of frozen design decisions, an empty §B for future build-session refinements, and a §C with per-workstream implementation outlines.
 
-The goal: identify exactly which layer of the screen-recording pipeline drops the rate from your intended 30 fps to the observed 6-7 fps. There are four candidate layers:
+**This is a pure design session — no code, no deploys.** Estimated ~1.5-2 hours of conversation. The questions cover: should we build extension-only or also a server-side crawler (anti-bot risk on Amazon especially)? Which of the 4 platforms do we tackle first? How do we orchestrate the actual scraping (background job vs in-page extension worker)? How does the UI let you adjust per-star scrape caps? How does the AI analysis work at 3 levels (per-product, cross-Type, cross-everything)? What AI model do we use and how do we guard the cost? Where in the UI does the AI analysis appear? What new database tables and columns do we need?
 
-1. **The browser's getDisplayMedia source** — when we ask Chrome for a screen-share stream at 30 fps, does it actually give us 30 fps, or does it silently downgrade to 6-7? `track.getSettings().frameRate` will tell us.
-2. **The hidden `<video>` element** — even with today's FF-1 attaching it to the DOM, Chrome may still throttle hidden videos to save battery. We need to count actual VideoFrames coming OUT of the video element.
-3. **The canvas-crop pipeline** — we call `canvas.captureStream(30)` to tell the canvas to broadcast at 30 fps, but if the requestAnimationFrame loop driving the canvas is slower than 30 Hz, the output won't be 30 fps regardless of what we asked for.
-4. **The MediaRecorder encoder** — even if its input is 30 fps, the encoder may drop frames if it can't sustain real-time encoding.
-
-I'll add lightweight per-frame instrumentation to the extension content-script (probably feature-flagged or as a dev-only branch — you'll pick), you'll record a couple of new screen recordings with the instrumented build, and I'll read the logs to identify exactly which layer drops the rate. Then Session 4 will be a small targeted fix at the identified bottleneck layer.
-
-Session 3 is diagnostic-only — same shape as Session 1. No `main` push planned; just an instrumentation branch + your recordings + log analysis + locking the Session 4 implementation scope.
+After the design session locks all the answers, the actual build sessions follow — most likely starting with the first per-platform extension extraction module (probably Amazon since that's your stated priority order). Each platform is its own ~2-4 session build cluster. The full P-49 arc is estimated at ~20-50 sessions total, broken into 5 workstreams; we'll do them one at a time, not all at once.
 
 ## What's still left on the total roadmap (in plain terms)
 
-As of session-end 2026-05-25 (P-48 Session 2 ✅ DEPLOYED-PARTIAL; W#2 polish queue grew by one mini-session today since Session 2 didn't fully close P-48):
+As of session-end 2026-05-25 (Reviews Phase 2 scope-expansion CAPTURE ✅ DONE; W#2 polish queue grew significantly today since P-49 added a whole new multi-workstream hub):
 
-- **P-48 Session 3 (Diagnostic #2) — NEXT.** ~30-60 min in-Claude. Empirical instrumentation pass to identify the ~6-7 fps source-file bottleneck. No main push expected (pure diagnostic).
-- **P-48 Session 4 (Implementation #2).** Conditional follow-up to Session 3. Scope depends on which layer Session 3 identifies as the bottleneck. Estimated 30-90 min in-Claude + Rule 9 deploy gate + director Phase-4 real-Chrome verification on a fresh recording.
-- **P-43 mechanical prevention candidate (LOW informational).** ~1 small session. Add absolute `cd /workspaces/brand-operations-hub` prefix to ALL Bash commands in `.claude/commands/scoreboard.md` (specifically Check 3's `npm test` + Check 5's `npm run build` — the prior P-43 template-hardening pass missed both). Not blocking any workstream; 7+ reproductions across sessions now.
-- **P-26 below-fold scroll capture (LOW).** ~1-2 sessions, OR drop. Current two-captures workaround works fine. Has been the alternate candidate in recent end-of-session pickers; consistently not picked. Re-evaluate after P-48 + P-43 close — if still LOW + not blocking anything, you may just want to drop it.
-- **P-27 Bug #9 + Bug #15 — DEFERRED LOW.** ~0-1 sessions. Likely obsolete now that P-46 redesigned the surfaces. Re-evaluate after P-26.
-- **W#2 graduation step.** ~1 session. Formal transition that closes W#2 and makes W#3 available. Requires all polish items DONE-AND-VERIFIED first.
-- **THEN STOP AND EXPLICITLY ASK DIRECTOR for the next round of competition-scraping additions** per your verbatim 2026-05-24-f directive: *"We will be adding more things to competition scraping once the pending things are finished and I want you to explicitly ask me to give you the next round of additions once all remaining things are done."*
+- **Reviews Phase 2 Design Session — NEXT.** ~1.5-2 hours pure design conversation. No main push expected. Produces `docs/REVIEWS_PHASE_2_DESIGN.md`.
+- **P-49 Reviews Phase 2 build workstreams (after design session locks scope).** ~20-50 sessions total across 5 workstreams (W1 Design Session NEXT + W2 per-platform extension extraction × 4 platforms = ~8-16 sessions + W3 crawler infrastructure CONDITIONAL ~5-10 sessions if scoped in + W4 Captured Reviews UI extensions ~2-3 sessions + W5 AI review analysis system ~5-10 sessions).
+- **P-50 Condition Pathology card.** ~10 min in-Claude. Lives on `main` branch (platform-wide UI, not workflow-2-scoped). Can slot into any deploy session OR done standalone between W#2 sessions. NOT on the critical path.
+- **P-48 Session 3 (Diagnostic #2) — DEFERRED to opportunistic insertion.** ~30-60 min in-Claude. Empirical instrumentation pass to identify the ~6-7 fps source-file bottleneck for the screen-recording stutter. Lives within the existing P-48 ROADMAP entry. Can interleave with P-49 work whenever you'd like to slot it in.
+- **P-43 mechanical prevention candidate (LOW informational).** ~1 small session. Add absolute `cd /workspaces/brand-operations-hub` prefix to ALL Bash commands in `.claude/commands/scoreboard.md`. Opportunistic.
+- **P-26 below-fold scroll capture (LOW).** ~1-2 sessions, OR drop. Re-evaluate after Reviews Phase 2 closes.
+- **P-27 Bug #9 + Bug #15 — DEFERRED LOW.** ~0-1 sessions. Likely obsolete after P-46. Re-evaluate after P-26.
+- **W#2 graduation step (now further deferred).** Was originally gated by P-46 + P-47 + P-26. Now also gated by Reviews Phase 2 closure at the workstream-by-workstream level. Likely 6-12 months out at current sessions-per-week cadence.
+- **THEN STOP AND EXPLICITLY ASK DIRECTOR for any next round of competition-scraping additions** per your standing directive after Reviews Phase 2 + P-48 stutter + P-43 + P-26 + P-27 all close.
 - **After your next round of additions ships:** W#3-W#14 (twelve more workflows on the roadmap; none started yet).
 - **Optional offline step (any time, NOT blocking):** raise the Supabase Global File Size Limit to enable bucket-level 100 MB cap on `competition-scraping-videos`. Director-independent.
 
 ---
 
-**For:** the next Claude Code session — **P-48 Session 3 (Diagnostic #2) on `workflow-2-competition-scraping`** (estimated ~30-60 min in-Claude: pre-build doc reads + branch state verify + read Session 2 outcome + design empirical instrumentation pass + Rule 14f picker on feature-flag vs dev-only branch + ship instrumentation + director records 1-2 NEW recordings with instrumented build + read logs + identify empirical bottleneck + lock Session 4 implementation scope + end-of-session doc-batch). Per Rule 23 Change Impact Audit: **DIAGNOSTIC SESSION** (per-frame instrumentation only; no production fixes). **Schema-change-in-flight flag stays NO**. **Rule 9 triggers planned this session: ZERO** (diagnostic-only; no main push expected, but if director picks "ship instrumentation feature-flagged to production for easier real-Chrome data collection" the Rule 9 picker would fire). **Pushes planned per `feedback_approval_scope_per_decision_unit.md`:** 2 (end-of-session doc-batch push + ff-merge to main for doc-batch — same as Session 1 pattern).
+**For:** the next Claude Code session — **Reviews Phase 2 Design Session (Workflow Requirements Interview producing `docs/REVIEWS_PHASE_2_DESIGN.md`) on `workflow-2-competition-scraping`** (estimated ~1.5-2 hours in-Claude: pre-build doc reads + branch state verify + read P-49 ROADMAP entry + read COMPETITION_DATA_V2_DESIGN.md §A as the structural precedent + walk director through the 15 interview questions one-at-a-time with Rule 14f forced-pickers per question + assemble locked-decisions §A in a new standalone design doc + write empty §B + write §C per-workstream implementation outlines + end-of-session doc-batch). Per Rule 23 Change Impact Audit: **DESIGN SESSION** (no production code; no schema; no API changes — the design doc is the deliverable). **Schema-change-in-flight flag stays NO** at session start AND at session end (no `prisma db push` this session; flag EXPECTED to flip to YES when first per-platform build session lands the `source = 'extension-scrape'` enum value addition + the AI analysis output tables). **Rule 9 triggers planned this session: ZERO** (design-only; no main push). **Pushes planned per `feedback_approval_scope_per_decision_unit.md`:** 2 (end-of-session doc-batch push + doc-batch ff-merge to main — both operationally adjacent + do NOT invoke Rule 9).
 
 ---
 
 ## Status of last session
 
-**W#2 polish P-48 Session 2 (Implementation + Fix-Forward #1 BUSTED) ✅ DEPLOYED-PARTIAL 2026-05-25 on vklf.com via `workflow-2-competition-scraping` → `main`** — BUILD + DEPLOY + FIX-FORWARD session executing the (a.90) RECOMMENDED-NEXT protocol drafted at end of Session 1.
+**W#2 polish Reviews Phase 2 scope-expansion CAPTURE SESSION ✅ DONE 2026-05-25 on `workflow-2-competition-scraping`** — pure-capture session executing the Rule 14f session-direction picker outcome (Recommended: pure capture today).
 
-**Session shape (BUILD + DEPLOY + FIX-FORWARD — TWO Rule 9 gates fired; TWO build commits landed; ONE Rule 14f forced-picker fired):**
+**Session shape (PURE CAPTURE — ZERO Rule 9 gates fired; ZERO code commits; THREE Rule 14f forced-pickers fired):**
 
-- Pre-build reads at session start (CLAUDE_CODE_STARTER + ROADMAP P-48 revised + COMPETITION_SCRAPING_DESIGN §B 2026-05-25 Session 1 + CORRECTIONS_LOG §Entry 2026-05-25 Session 1 + `record-controller.ts` + `record-controller.test.ts`).
-- Branch state verify — `workflow-2-competition-scraping` even at prior session's doc-batch SHA.
-- Rule 14f session-start confirmation — NO picker fired (launch-prompt task was the recommended default + director directive matched).
-- Step 1 — `cd extensions/competition-scraping && npm install fix-webm-duration` → new dep landed in extension `package.json` + `package-lock.json`.
-- Step 2 — edit `record-controller.ts` to wire `RecordControllerDeps.fixWebmDuration` optional dep + `createProductionDeps` wiring + `emitStoppedOnce` async + try/catch fallback (~40 LOC changed).
-- Step 3 — extend `record-controller.test.ts` with 4 new node:test cases covering DI-seam happy/error/missing-dep paths (test count 558 → 562).
-- Step 4 — pre-deploy /scoreboard 5/5 GREEN at new baselines (root tsc clean / extension tsc clean / 562 ext +4 / 786 src/lib UNCHANGED / 62 routes UNCHANGED); Check 6 Playwright SKIPPED per Rule 27.
-- Step 5 — Rule 9 gate #1 fired; director picked "Deploy now — Recommended"; ff-merge `a486af8..279da34` to main + push; Vercel auto-redeploy fired; fresh extension zip `plos-extension-2026-05-25-w2-deploy-35.zip` (207.03 KB) at repo root; ping-pong #1 to workflow-2 branch.
-- Step 6 — Phase-4 director real-Chrome verification: sideload new zip + record NEW recording + load on vklf.com → seek bar PASS (real "0:22" duration) + stutter FAIL (visible stutters persist).
-- Step 7 — post-deploy diagnostic: ffprobe on pre-fix + post-fix samples → empirical 6.21-6.79 fps across all files → root cause for stutter sub-symptom locked as low-fps source files, NOT missing duration metadata.
-- Step 8 — fix-forward #1 attempt: edit `productionCropStreamToRegion` to attach hidden video element to DOM with hidden-positioning styling (theory: Chrome throttles detached videos to ~6-7 fps); 1 file +25/-2; /scoreboard 5/5 GREEN at unchanged baselines; Rule 9 gate #2 fired; director picked "Deploy now — Recommended"; ff-merge `279da34..d8b9507` to main + push; Vercel auto-redeploy; fresh zip `plos-extension-2026-05-25-w2-deploy-36-ff1.zip` (207.09 KB); ping-pong #2.
-- Step 9 — director re-recorded post-FF-1 + ffprobe: 8.52 fps; within noise; FF-1 theory empirically BUSTED.
-- Step 10 — Rule 14f forced-picker fired (deferred-vs-iterate): picker offered (A) Defer to P-48 Session 3 (Recommended) / (B) one more empirical fix attempt / (C) roll back FF-1 + defer; director picked (A); FF-1 commit STAYS in production as calibration data point.
-- Step 11 — Platform column false-alarm: Claude reported missing Platform column as regression; director clarified it was actually present; task deleted (not a real bug).
-- Step 12 — delete throwaway `scripts/p48-s2-probe-new.mjs` (Session 1 housekeeping convention).
-- End-of-session §4 Step 1c next-session-scope picker — NOT FIRED (next-session task unambiguous per (a.91) = P-48 Session 3 Diagnostic #2; locked by today's Rule 14f deferred-vs-iterate outcome).
-- End-of-session doc-batch covers the 8-doc bundle (ROADMAP + CHAT_REGISTRY + DOCUMENT_MANIFEST + CORRECTIONS_LOG with new §Entry 2026-05-25 Session 2 + HANDOFF_PROTOCOL + CLAUDE_CODE_STARTER + this NEXT_SESSION + COMPETITION_SCRAPING_DESIGN.md §B 2026-05-25 Session 2 append).
-- SIX pushes total per `feedback_approval_scope_per_decision_unit.md`: Deploy push #1 (Rule 9 gate #1) DONE + ping-pong #1 DONE + Deploy push #2 (Rule 9 gate #2) DONE + ping-pong #2 DONE + end-of-session doc-batch push + end-of-session ff-merge + push for doc-batch (the last two operationally adjacent; do NOT re-invoke Rule 9).
+- Pre-build reads partial at session start (ROADMAP header + P-48 entry started but interrupted by director's scope drop).
+- Director surfaced the long-promised "next round of additions" to W#2 before pre-build reads completed.
+- Rule 14f session-direction forced-picker fired immediately — (A) Pure capture today (Recommended) / (B) Mixed P-48 + capture / (C) Pivot fully / (D) P-48 as planned + minimal capture; director picked (A).
+- Rule 24 searches across all docs for prior treatment of Reviews Phase 2 + Condition Pathology + per-platform extraction + AI review analysis — no prior treatment found; only related touch is §A.1 in COMPETITION_DATA_V2_DESIGN (deferred decision from 2026-05-23) which today's capture RESOLVES.
+- Rule 14f capture-shape forced-picker fired — Hub-and-spokes (Recommended) over flat split over hybrid for P-49 + card-only (Recommended) over full-Workflow over scope-defer for P-50; director picked both Recommended options.
+- Wrote NEW P-49 Reviews Phase 2 hub-and-spokes ROADMAP entry with director's verbatim per-platform DOM specs preserved + anti-bot constraint preserved + 3-level AI analysis output shape preserved.
+- Wrote NEW P-50 Condition Pathology placeholder card ROADMAP entry with card-only scope locked.
+- Updated `docs/COMPETITION_DATA_V2_DESIGN.md` §A.1 with "RESOLVED 2026-05-25 — see ROADMAP P-49" cross-reference paragraph at end of §A.1 (preserves original director-supplied reasoning intact while making the resolution discoverable to future readers walking §A top-to-bottom).
+- Drafted 15-question Workflow Requirements Interview scaffold for next session's design interview ingestion.
+- Rule 14f entry-approval + next-session forced-picker fired — director approved both entries + locked Reviews Phase 2 Design Session as next-session task per (a.92).
+- End-of-session doc-batch covers the 9-doc bundle (ROADMAP header bump only + CHAT_REGISTRY header bump only + DOCUMENT_MANIFEST header bump only + CORRECTIONS_LOG header bump + new §Entry 2026-05-25 Reviews Phase 2 capture + HANDOFF_PROTOCOL header bump only + CLAUDE_CODE_STARTER header bump only + this NEXT_SESSION full rewrite + COMPETITION_SCRAPING_DESIGN.md §B 2026-05-25 Reviews Phase 2 capture append + COMPETITION_DATA_V2_DESIGN.md §B 2026-05-25 Reviews Phase 2 capture append + §A.1 cross-reference update in COMPETITION_DATA_V2_DESIGN).
+- TWO pushes planned per `feedback_approval_scope_per_decision_unit.md`: end-of-session doc-batch push to `origin/workflow-2-competition-scraping` + end-of-session ff-merge + push to `origin/main` for doc-batch (operationally adjacent + do NOT re-invoke Rule 9 since pure-capture + no destructive operations).
 
-**ONE Rule 14f forced-picker FIRED** at the deferred-vs-iterate decision point — picker offered (A) Defer to P-48 Session 3 (Recommended) / (B) one more empirical fix attempt / (C) roll back FF-1 + defer; director picked (A).
+**THREE Rule 14f forced-pickers fired all director-Yes per recommendations:** session-direction (Pure capture) + capture-shape (Hub-and-spokes for P-49 + card-only for P-50) + entry-approval + next-session (Both approved + Reviews Phase 2 Design Session locked).
 
-**TWO Rule 9 deploy gates fired** — Gate #1 (build commit `279da34`) + Gate #2 (FF-1 `d8b9507`); both director-Yes per `feedback_recommendation_style.md` recommended path.
+**ZERO Rule 9 deploy gates fired** (pure-capture; no deploys; no destructive ops).
 
-**ZERO DEFERRED items at session end (Rule 26)** — 13 tasks created this session; all 12 active tasks COMPLETED at session end + 1 task (#11 Platform column diagnosis) DELETED after director clarified there was no regression; Session 3 task IS the next-session task per (a.91), not a Claude-defer.
+**ZERO DEFERRED items at session end (Rule 26)** — P-48 Session 3 carries via the P-48 ROADMAP entry itself (which already documents Session 3 as the next-within-P-48 step), NOT as a NEXT_SESSION standing carry-over. Reviews Phase 2 Design Session IS the next-session task per (a.92).
 
-**ONE NEW INFORMATIONAL CORRECTIONS_LOG §Entry 2026-05-25 (Session 2)** — the P-48 Session 2 Implementation + FF-1 Busted closing §Entry capturing 5 sub-observations: (a) calibration data point — symptom-level polish items can produce PARTIAL Phase-4 PASSES when symptom has multiple causes; (b) NEW reusable Pattern "Speculative fix-forward without empirical pre-verification = antipattern (reinforcement of Session 1's ffprobe-first Pattern at the fix-forward level)"; (c) MEDIUM informational — empirical 6-7 fps source-file finding; (d) calibration data point — session budget overrun (~2-3 hours actual vs 30-45 min budgeted); (e) operational housekeeping — one throwaway diagnostic script deleted at session end.
+**ONE NEW INFORMATIONAL CORRECTIONS_LOG §Entry 2026-05-25 (the THIRD 2026-05-25-dated §Entry — Reviews Phase 2 scope-expansion capture)** capturing 4 sub-observations including (a) scope-expansion capture outcome; (b) NEW reusable Pattern "Mid-pre-build scope-expansion redirect — when director surfaces major new scope at session-start before pre-build reads complete, the most-thorough/reliable path is a pure-capture session (pause planned task; run Rule 24 searches; capture as ROADMAP entries; defer planned task) rather than mixed-session attempts" — pairs as a Rule-30 plain-terms-summary lesson; (c) LOW informational sub-observation — long-deferred concerns naturally resolve when director's mental model of what they want catches up with the deferred scope (A.1 deferred 2026-05-23; resolved 2026-05-25 with full Phase 2 specs); (d) operational note — 15 interview-question draft preserved verbatim in NEXT_SESSION.md ## Proposed interview question scaffold section.
 
-**New baseline locked from this session:** extension `npm test` = **562/562** (+4 from baseline 558).
+**Baselines unchanged from prior session** (no code change to verify): root tsc clean / extension tsc clean / **562 ext UNCHANGED** / **786 src/lib UNCHANGED** / **62 routes UNCHANGED**. Check 6 Playwright SKIPPED per Rule 27.
 
-**THIRTY-FOURTH end-of-session run under the Rule 30 + §4 Step 4b template.** The 3 plain-terms sections above + the parent's Personalized Handoff continue carrying the 3 mandatory plain-terms sections at the top per director's standing 2026-05-21 directive.
+**THIRTY-FIFTH end-of-session run under the Rule 30 + §4 Step 4b template.** The 3 plain-terms sections above + the parent's Personalized Handoff continue carrying the 3 mandatory plain-terms sections at the top per director's standing 2026-05-21 directive.
 
 ---
 
 ## Branch
 
-**`workflow-2-competition-scraping`** — entered at start of next session; P-48 Session 3 (Diagnostic #2) begins here. The `./resume` script (or `./resume-workflow 2`) will switch you to `workflow-2-competition-scraping`. Verify with `git branch --show-current` immediately after `./resume`; should be on `workflow-2-competition-scraping`. If you're on `main`, STOP and surface to director.
+**`workflow-2-competition-scraping`** — entered at start of next session; Reviews Phase 2 Design Session begins here. The `./resume` script (or `./resume-workflow 2`) will switch you to `workflow-2-competition-scraping`. Verify with `git branch --show-current` immediately after `./resume`; should be on `workflow-2-competition-scraping`. If you're on `main`, STOP and surface to director.
 
-**Expected branch state on entry:** `workflow-2-competition-scraping` exactly even with `origin/workflow-2-competition-scraping` at today's end-of-session doc-batch commit. `main` exactly even with `origin/main` at today's end-of-session doc-batch commit (both branches end the session at the same SHA after the ping-pong pattern — both deploy pushes have already done their main + ping-pong cycles; the doc-batch ff-merge to main lands the docs equally on both branches). Verify with `git log main..HEAD --oneline` showing 0 commits ahead. Session 2 landed TWO build commits on main today (`279da34` build + `d8b9507` FF-1); Session 3 starts from `d8b9507` as the baseline.
+**Expected branch state on entry:** `workflow-2-competition-scraping` exactly even with `origin/workflow-2-competition-scraping` at today's end-of-session doc-batch commit. `main` exactly even with `origin/main` at today's end-of-session doc-batch commit (both branches end the session at the same SHA after the doc-batch ff-merge — both branches share the doc-batch since pure-capture + ff-merge to main lands the docs equally on both). Verify with `git log main..HEAD --oneline` showing 0 commits ahead. Session entry branch SHA = today's end-of-session doc-batch commit; design session adds only doc commits on the workflow branch (no code).
 
 ---
 
@@ -104,61 +87,245 @@ As of session-end 2026-05-25 (P-48 Session 2 ✅ DEPLOYED-PARTIAL; W#2 polish qu
 
 Read `docs/CLAUDE_CODE_STARTER.md` and follow every rule in it. **Per Step 7b, produce the plain-terms summary of what this session will do BEFORE I give go-ahead.** Today's task:
 
-**W#2 polish P-48 Session 3 (Diagnostic #2) on `workflow-2-competition-scraping`.** Closes **(a.91) RECOMMENDED-NEXT**. Pure diagnostic session — empirical instrumentation pass to identify the ~6-7 fps source-file bottleneck across the 4 candidate layers (getDisplayMedia source / hidden video element throttling / canvas.captureStream / MediaRecorder encoder). NO production fixes this session; output is empirical diagnosis + locked Session 4 implementation scope.
+**W#2 polish Reviews Phase 2 Design Session on `workflow-2-competition-scraping`.** Closes **(a.92) RECOMMENDED-NEXT**. Pure design session — Workflow Requirements Interview walking through ~15 design questions to lock the anti-bot strategy + extension-vs-crawler scope + per-platform DOM extraction shape + AI model choice + cost guards + batch sizing + UI placement + schema additions before any code starts. The deliverable is a new standalone design doc `docs/REVIEWS_PHASE_2_DESIGN.md` with the same shape as `docs/COMPETITION_DATA_V2_DESIGN.md` (§A frozen-decisions + §B empty append-only + §C per-workstream implementation outlines).
 
-DIAGNOSTIC session — ZERO Rule 9 gates planned. NO main push for code expected. ONE end-of-session doc-batch push + ONE doc-batch ff-merge push to main (operationally adjacent; does NOT invoke Rule 9).
+DESIGN session — ZERO Rule 9 gates planned. NO main push for code expected. ONE end-of-session doc-batch push + ONE doc-batch ff-merge push to main (operationally adjacent; does NOT invoke Rule 9).
 
 Verify branch state with `git branch --show-current` before any doc reads — should be `workflow-2-competition-scraping`. If you're on `main`, STOP and surface to director. Verify both branches' SHA relationships with `git log main..HEAD --oneline` — should show 0 commits ahead.
 
 **Per HANDOFF_PROTOCOL Rule 21 + Rule 22 — Pre-build read list:**
 
-- `docs/CLAUDE_CODE_STARTER.md` (mandatory start-of-session; Step 7b plain-terms summary REQUIRED before any heavy reads or build mechanics).
-- `docs/ROADMAP.md` lines 1-30 (header) + the **REVISED P-48 polish-backlog entry** (status ✅ DEPLOYED-PARTIAL 2026-05-25 (Sessions 1 + 2 done; seek bar fixed; stutter NOT resolved); WHY paragraph with the empirical 6-7 fps source-file finding + FF-1 BUSTED narrative; Fix scope with Session 3 OPEN scope locked = empirical instrumentation pass).
-- `docs/COMPETITION_SCRAPING_DESIGN.md` §B 2026-05-25 (Session 2) — today's Session 2 implementation + Phase-4 PARTIAL + FF-1 BUSTED entry + NEW reusable Pattern memorialization + empirical 6-7 fps finding + locked Session 3 path.
-- `docs/COMPETITION_SCRAPING_DESIGN.md` §B 2026-05-25 (Session 1) — yesterday's Session 1 Diagnostic entry; "ffprobe-first" Pattern (today's Session 2 Pattern is its fix-forward-level pairing).
-- `docs/CORRECTIONS_LOG.md` §Entry 2026-05-25 (Session 2) — today's Session 2 closing entry with 5 sub-observations including the NEW reusable Pattern "Speculative fix-forward without empirical pre-verification = antipattern".
-- `docs/CORRECTIONS_LOG.md` §Entry 2026-05-25 (Session 1) — yesterday's Session 1 Diagnostic closing entry; the "ffprobe-first" Pattern reference.
-- `extensions/competition-scraping/src/lib/screen-recording/record-controller.ts` (the file Session 3 will instrument — note Session 2's `fix-webm-duration` patch + FF-1's `productionCropStreamToRegion` DOM-attachment both live here now).
-- `extensions/competition-scraping/src/lib/screen-recording/record-controller.test.ts` (current test count baseline **562**; if Session 3 adds new instrumentation that's unit-testable, extend with new node:test cases).
-- The relevant test infrastructure for adding instrumentation tests — `extensions/competition-scraping/src/lib/screen-recording/` directory for the broader context.
-- `docs/HANDOFF_PROTOCOL.md` Rule 9 (deploy push gate — likely NOT fired this session) + Rule 14f (forced-picker mechanics — likely 1-2 will fire on instrumentation scope + ship strategy) + Rule 21 + Rule 22 + Rule 23 (Change Impact Audit — DIAGNOSTIC) + Rule 24 (search before capturing new items) + Rule 25 (Multi-Workflow — workflow-2 only) + Rule 26 (DEFERRED items registry — ZERO standing carry-overs at session entry) + Rule 30 (Session bookends) + §4 Step 4b extended template.
-- `feedback_recommendation_style.md` (most-thorough/reliable — Session 3 IS the most-thorough path because the FF-1 BUSTED outcome demonstrated empirically that speculative fix-forwards without pre-verification are antipatterns).
-- `feedback_approval_scope_per_decision_unit.md` (2-push diagnostic-session pattern: doc-batch push + doc-batch ff-merge push).
-- `feedback_default_to_recommendation.md` (most picker choices today should default to recommended unless director shifts).
+- `docs/CLAUDE_CODE_STARTER.md` (mandatory start-of-session; Step 7b plain-terms summary REQUIRED before any heavy reads or design mechanics).
+- `docs/ROADMAP.md` lines 1-30 (header) + the **NEW P-49 Reviews Phase 2 polish-backlog entry** (canonical capture of director's verbatim per-platform DOM specs for Amazon/eBay/Etsy/Walmart + anti-bot constraint + 3-level AI analysis output shape + 5-workstream hub-and-spokes structure).
+- `docs/ROADMAP.md` NEW P-50 polish-backlog entry — Condition Pathology card placeholder (small `main`-branch standalone session; not on the (a.92) critical path; not relevant to the design session but read for full ROADMAP awareness).
+- `docs/COMPETITION_DATA_V2_DESIGN.md` §A (lines 41-400ish — entire frozen-decisions section — as the structural precedent for how to organize the new `REVIEWS_PHASE_2_DESIGN.md` §A) + §A.1 with today's "RESOLVED 2026-05-25 — see ROADMAP P-49" cross-reference paragraph at end + §A.11 schema additions section + §A.13 Living Questions answers + §A.14 Cross-Tool Data Flow Map reciprocal output declaration + §A.16 Deferred-items registry.
+- `docs/COMPETITION_DATA_V2_DESIGN.md` §B 2026-05-25 (Reviews Phase 2 capture session) — yesterday's data-shape-side capture entry with schema cross-references + design-session ingestion guidance for the new design doc.
+- `docs/COMPETITION_SCRAPING_DESIGN.md` §B 2026-05-25 (Reviews Phase 2 capture session) — yesterday's extension-side-architecture capture entry covering URL-prefix dispatch + Shadow DOM mounts + `makeTextareaField()` helper extensions for the per-platform extraction modules.
+- `docs/CORRECTIONS_LOG.md` §Entry 2026-05-25 (Reviews Phase 2 scope-expansion capture — the THIRD 2026-05-25-dated §Entry) — today's closing §Entry with the NEW reusable Pattern "Mid-pre-build scope-expansion redirect" + 4 sub-observations.
+- The **## Proposed interview question scaffold section BELOW** in this NEXT_SESSION.md — the 15 questions to walk director through verbatim per question with Rule 14f forced-pickers per question.
+- `docs/AUTO_ANALYZE_PROMPT_V1.md` / `docs/AUTO_ANALYZE_PROMPT_V2.md` / `docs/AUTO_ANALYZE_PROMPT_V3.md` / `docs/AUTO_ANALYZE_PROMPT_V4.md` (the W#1 Keyword Clustering AI analysis prompt history — relevant Pattern reference for P-49 Workstream 5 AI analysis design questions Q7-Q12; the W#1 prompt evolved through 4 versions before stabilizing).
+- `docs/MODEL_QUALITY_SCORING.md` + `docs/INPUT_CONTEXT_SCALING_DESIGN.md` (W#1 AI model evaluation + context scaling design docs — relevant for P-49 W5 model choice + cost guard design questions Q7-Q8).
+- `prisma/schema.prisma` `CapturedReview` model — current v1 shape per P-46 W2 Session 4 (shipped 2026-05-28); P-49 W2 adds `source = 'extension-scrape'` enum value + likely other fields; locked at design-session per Q13.
+- `extensions/competition-scraping/src/lib/content-script/` directory listing — current per-platform module structure (relevant for Q1 crawler scope + Q2 per-platform priority order + Q15 anti-bot defensive posture).
+- `docs/HANDOFF_PROTOCOL.md` Rule 18 (Interview-cluster + append-only DESIGN doc structure methodology — this session's deliverable follows it) + Rule 14f (forced-picker mechanics — ~15 will fire this session, one per interview question) + Rule 21 + Rule 22 + Rule 23 (Change Impact Audit — DESIGN) + Rule 24 (search before capturing — relevant for any sub-design-decisions that surface mid-interview) + Rule 25 (Multi-Workflow — workflow-2 only) + Rule 26 (DEFERRED items registry — ZERO standing carry-overs at session entry) + Rule 30 (Session bookends) + §4 Step 4b extended template.
+- `feedback_recommendation_style.md` (most-thorough/reliable — every Rule 14f picker this session should surface the recommended path + default to it).
+- `feedback_approval_scope_per_decision_unit.md` (2-push design-session pattern: doc-batch push + doc-batch ff-merge push).
+- `feedback_default_to_recommendation.md` (most picker choices should default to recommended unless director shifts).
+- `feedback_session_bookends_plain_summary.md` (Rule 30 — the 3 mandatory plain-terms sections at session start + session end).
 
-**Task shape (P-48 Session 3 — Diagnostic #2):**
+**Task shape (Reviews Phase 2 Design Session):**
 
-1. **Plain-terms session-start summary per Rule 30** BEFORE any heavy reads or build mechanics. Cover: what we'll do (pre-build reads + branch state verify + design empirical instrumentation pass + Rule 14f picker on feature-flag vs dev-only branch + ship instrumentation + director records 1-2 NEW recordings with instrumented build + read logs + identify empirical bottleneck + lock Session 4 implementation scope + end-of-session doc-batch); schema-change-in-flight flag stays NO; ZERO Rule 9 gates planned; 2 pushes planned total.
+1. **Plain-terms session-start summary per Rule 30** BEFORE any heavy reads or design mechanics. Cover: what we'll do (pre-build reads + branch state verify + walk director through the 15 interview questions with Rule 14f forced-pickers per question + assemble the new `docs/REVIEWS_PHASE_2_DESIGN.md` with §A frozen-decisions + §B empty + §C per-workstream implementation outlines + end-of-session doc-batch); schema-change-in-flight flag stays NO; ZERO Rule 9 gates planned; 2 pushes planned total.
 
-2. **Pre-build reads** — execute the pre-build read list above. ~5 min.
+2. **Pre-build reads** — execute the pre-build read list above. ~10-15 min (this is a heavier read than usual because the design doc inheritance touches W#1 AI prompt history + the existing P-46 design doc + the two §B 2026-05-25 capture entries).
 
-3. **Branch state verify** — `git branch --show-current` (should be `workflow-2-competition-scraping`) + `git log main..HEAD --oneline` (should show 0 commits ahead — both branches at same SHA from prior session's ping-pong + doc-batch ff-merge).
+3. **Branch state verify** — `git branch --show-current` (should be `workflow-2-competition-scraping`) + `git log main..HEAD --oneline` (should show 0 commits ahead — both branches at same SHA from prior session's doc-batch ff-merge).
 
-4. **Rule 14f session-start confirmation** — likely no picker fires (diagnostic task is the recommended default per (a.91); director directive matches). If director has additional context on the stutter symptoms surfaced between sessions (e.g., they ran the post-Session-2 walkthrough and noticed something new), fire clarifying picker on whether Session 3 still focuses on framerate diagnosis OR pivots to a new contributor.
+4. **Rule 14f session-start confirmation** — likely no picker fires (design-session task is the recommended default per (a.92); director directive matches). If director has additional context between sessions (e.g., they've thought further about the crawler-vs-extension tradeoff or about the AI model choice), fire clarifying picker on whether to expand or contract the interview scope.
 
-5. **Design the empirical instrumentation pass.** Likely scope: a small content-script logging helper that records (a) `track.getSettings()` from the getDisplayMedia source — captures actual frameRate the OS gave us; (b) per-VideoFrame count over time at source vs after canvas-crop using `MediaStreamTrackProcessor` if available (Chromium has this; Firefox doesn't but PLOS only targets Chrome); (c) MediaRecorder `ondataavailable` chunk timing — how often chunks arrive + how big each chunk is. Likely ~50-100 LOC added to `record-controller.ts` behind a runtime flag (e.g., `process.env.PLOS_DEBUG_RECORD_FRAMES === '1'` or a global window variable settable from the extension popup). Log destination: console.log (simplest; director can copy from DevTools console) OR to a Blob the extension can dump to disk. Director picks scope + log destination.
+5. **Walk director through the 15 interview questions BELOW one-at-a-time.** Fire Rule 14f forced-picker per question with options + Recommended pick. Capture director's answer + locked-decision narrative + alternatives considered + reasoning per question. Each question follows the same shape: question text + alternatives (A) (B) (C)... + Recommended pick + director's pick + locked decision + impact on other workstreams.
 
-6. **Fire Rule 14f picker on ship strategy.** Offer (A) Feature-flag in production behind a hidden toggle (default OFF; director enables in DevTools console; instrumentation lives in production code but inert unless flagged); (B) Dev-only branch (instrumentation lives only on `workflow-2-competition-scraping`; never ships to `main`); (C) Local-only via dev sideload (build a one-off debug zip that bypasses the publish step). Each has tradeoffs; (B) is the most-thorough/reliable default since it doesn't pollute production at all but requires director to sideload a separate dev build.
+6. **Mid-interview cross-decision integration.** Some questions cascade — e.g., Q1 crawler scope decision affects Q15 anti-bot posture + Q3 scrape job orchestration; Q7 AI model choice affects Q8 batch sizing + Q12 caching. Be aware of cascade points + fire clarifying re-pickers if a later question's options shift based on an earlier question's answer.
 
-7. **Ship the instrumentation** per the picker outcome. Build commit on workflow-2 (if A or B); no main push (since diagnostic-only). /scoreboard pre-build to confirm baselines; /scoreboard post-instrument to confirm tests still 562/562 GREEN.
+7. **Assemble `docs/REVIEWS_PHASE_2_DESIGN.md`** — new standalone design doc with same shape as `docs/COMPETITION_DATA_V2_DESIGN.md`:
+   - Header (Polish item: P-49 Reviews Phase 2 / Parent workflow: W#2 / Status: 🟢 Design phase — initial interview FROZEN <date> / Branch (design): workflow-2-competition-scraping / Created: <date> / Created in session: <session-id> / Pre-graduation gating: YES — P-49 is the major Phase 2 review-collection + analysis expansion of W#2 / Doc type: Group B (workflow-specific) / Doc location rationale: P-49 is a large multi-workstream scope-drop; dedicated top-level doc parallels COMPETITION_DATA_V2_DESIGN.md for P-46).
+   - Related docs (mirror the COMPETITION_DATA_V2_DESIGN.md Related docs list with appropriate P-49 substitutions).
+   - Structure note (per HANDOFF_PROTOCOL Rule 18 — §A frozen + §B empty + §C per-workstream).
+   - **§A — Initial design-session interview answers (FROZEN <date>).** One subsection per locked question (A.1 = Q1 / A.2 = Q2 / etc.) + A.N Schema additions (consolidated) + A.N+1 Platform-truths audit + A.N+2 Living Questions answers + A.N+3 Cross-Tool Data Flow Map + A.N+4 Scaffold fit + A.N+5 Deferred-items registry per Rule 14e + Rule 26.
+   - **§B — In-flight refinements (append-only).** Empty at end of interview.
+   - **§C — Per-workstream implementation outlines.** Five subsections: W1 Design Session DONE (this session) / W2 Per-platform extension extraction (4 sub-clusters Amazon/eBay/Etsy/Walmart) / W3 Crawler infrastructure (CONDITIONAL per Q1 outcome) / W4 Captured Reviews UI extensions / W5 AI review analysis system. Each has file-level scope + session estimate + cross-references back to §A decisions.
 
-8. **Director records 1-2 NEW recordings with the instrumented build** — sideload the new zip + start a screen recording on any platform + let it run ~10-15 seconds + stop the recording. Open Chrome DevTools console + copy the instrumentation logs.
+8. **End-of-session doc-batch** covers ROADMAP (header bump + P-49 status flip from "DESIGN-PENDING" to "🟢 DESIGN-FROZEN <date>; Workstream 2 NEXT (a.93)" + (a.92) closes + (a.93) opens for whichever next-task; most likely (a.93) = Reviews Phase 2 Workstream 2 Amazon extension extraction Session 1 OR Workstream 4 UI extensions Session 1 depending on the design-session sequencing decision) + CHAT_REGISTRY (header bump — 158th Claude Code session) + DOCUMENT_MANIFEST (header bump + new doc REVIEWS_PHASE_2_DESIGN.md added to Group B registry) + CORRECTIONS_LOG (header + new §Entry capturing the design session outcome + any reusable Patterns memorialized during the interview) + NEXT_SESSION (rewritten for whichever next-next task per (a.93)) + HANDOFF_PROTOCOL (header bump only) + CLAUDE_CODE_STARTER (header bump only) + COMPETITION_DATA_V2_DESIGN.md §B (cross-reference pointer entry to the new REVIEWS_PHASE_2_DESIGN.md — mirrors §B 2026-05-23 pattern from when P-46 was first split into its own design doc) + COMPETITION_SCRAPING_DESIGN.md §B (cross-reference pointer entry to the new REVIEWS_PHASE_2_DESIGN.md — mirrors §B 2026-05-20-b pattern from CAPTURED_VIDEOS_DESIGN.md split + §B 2026-05-23 pattern from COMPETITION_DATA_V2_DESIGN.md split) + NEW REVIEWS_PHASE_2_DESIGN.md the actual design doc.
 
-9. **Read logs + identify empirical bottleneck.** Tabulate the per-layer frame counts. Look for the layer where the rate drops from the requested 30 to the observed 6-7. Hypothesis test order: (i) getDisplayMedia source — is `track.getSettings().frameRate` actually 30, or is it 6-7 already at source? (ii) hidden video element — what's the VideoFrame count from the video.captureStream over a 10s window? (iii) canvas captureStream — how often does the requestAnimationFrame loop fire + how many of those frames make it to the canvas captureStream? (iv) MediaRecorder encoder — how often does ondataavailable fire + is each chunk a full ~33ms of frames or less?
+**Per `feedback_recommendation_style.md` (most thorough/reliable) + `feedback_default_to_recommendation.md`:** every Rule 14f picker fired during the interview should surface the recommended path + default to it unless director shifts.
 
-10. **Lock Session 4 implementation scope.** Once the empirical bottleneck is identified, write up the locked Session 4 fix path in the ROADMAP P-48 entry + COMPETITION_SCRAPING_DESIGN.md §B entry. Likely fix shapes by layer: (i) source — pass explicit `frameRate: { ideal: 30, min: 24 }` constraint to getDisplayMedia OR query/log to user that their OS isn't allowing 30 fps; (ii) hidden video — try Firefox-style polyfill OR more aggressive DOM attachment; (iii) canvas — switch from requestAnimationFrame-driven canvas drawing to MediaStreamTrackProcessor-based pull (more efficient); (iv) MediaRecorder — tune `videoBitsPerSecond` + `videoKeyFrameIntervalCount` to give the encoder more headroom.
+**Schema-change-in-flight flag:** STAYS **NO** at session start AND at session end (no `prisma db push`; pure design doc). EXPECTED YES when next-next session (whichever P-49 Workstream 2 first build session) lands.
 
-11. **End-of-session doc-batch** covers ROADMAP (header bump + P-48 status flip if Session 3 locks Session 4 scope OR stays at ✅ DEPLOYED-PARTIAL if Session 3 didn't reach a conclusion; (a.91) closes + new (a.92) opens for whichever next-task — likely P-48 Session 4 Implementation #2) + CHAT_REGISTRY (header bump — 157th Claude Code session) + DOCUMENT_MANIFEST (header bump) + CORRECTIONS_LOG (header + new §Entry capturing the diagnostic + locked Session 4 scope) + NEXT_SESSION (rewritten for whichever next-next task per Session 3's outcome) + HANDOFF_PROTOCOL (header bump only) + CLAUDE_CODE_STARTER (header bump only) + COMPETITION_SCRAPING_DESIGN.md §B 2026-05-25 → §B 2026-05-26 (next session-letter) for the Session 3 diagnostic findings entry.
+---
 
-**Per `feedback_recommendation_style.md` (most thorough/reliable) + `feedback_default_to_recommendation.md`:** any picker that fires — surface the recommended path + default to it if director defers.
+## Proposed interview question scaffold
 
-**Schema-change-in-flight flag:** STAYS **NO** at session start AND at session end (no `prisma db push`; pure extension instrumentation).
+The 15 questions below are the draft Workflow Requirements Interview scaffold for the Reviews Phase 2 Design Session. Walk director through them one-at-a-time with Rule 14f forced-pickers. **Recommended picks per most-thorough/reliable reasoning** are noted at each question; director should default to Recommended unless they shift.
+
+---
+
+**Q1 — Crawler scope.** Should Reviews Phase 2 build a server-side crawler as a parallel collection method alongside the extension-side capture, or extension-only?
+
+- (A) **Extension-only — defer crawler entirely (Recommended).** Director's logged-in browser session at director's IP is behaviorally indistinguishable from a power user; lowest anti-bot risk on all 4 platforms; no proxy/captcha-solving/fingerprint-randomization infrastructure cost; matches director's verbatim anti-bot constraint *"functionality should be very close to real world human user sitting where admin is."* Trade-off: collection happens only when director is actively on a platform page (no overnight scrapes).
+- (B) Extension primary + crawler for non-Amazon platforms only. Lower-risk crawler (eBay/Walmart/Etsy) lets background scrapes run; Amazon stays extension-only. Trade-off: split codebase + still some anti-bot risk + still proxy + captcha cost for 3 platforms.
+- (C) Crawler-first across all 4 platforms with extension as fallback. Highest collection throughput + overnight capability. Trade-off: significant infrastructure cost + ongoing maintenance + non-trivial Amazon anti-bot risk that could trigger seller-account flags.
+- (D) Defer Q1 — design crawler later as separate session if Phase 2 collection volume proves insufficient.
+
+**Cascade impact:** Q1 outcome (A) drops Workstream 3 entirely from P-49; Q1 outcome (B) or (C) keeps W3 in scope. Affects Q3 (scrape job orchestration) + Q15 (anti-bot defensive posture).
+
+---
+
+**Q2 — Per-platform priority order.** In what order do we build the 4 per-platform extension extraction modules (P-49 Workstream 2 sub-clusters)?
+
+- (A) **Amazon → eBay → Etsy → Walmart (Recommended; matches director's stated order).** Amazon first because (a) most-complex DOM (per-star pagination URL + helpful-count + Customers say block); (b) director explicitly listed Amazon first in 2026-05-25 scope drop; (c) builds the Pattern foundation for the simpler platforms after.
+- (B) Walmart → Etsy → eBay → Amazon (simplest-first). Walmart's per-star query-param URL is the simplest; Amazon's per-star pagination + helpful-count is most-complex. Builds confidence on simpler platforms before tackling Amazon.
+- (C) Pair-wise (Amazon+Walmart together + eBay+Etsy together). Amazon + Walmart share the per-star URL pattern; eBay + Etsy share the overlay/feedback pattern. Reuse Pattern infrastructure within each pair.
+- (D) Director picks per-platform readiness (e.g., which platforms have active products in director's current catalog).
+
+**Cascade impact:** Q2 affects per-platform-session sequencing only; no schema cascade.
+
+---
+
+**Q3 — Scrape job orchestration.** How does a single review-collection request get from director's click to the database insert?
+
+- (A) **In-page extension worker — synchronous within the open tab (Recommended).** Director right-clicks → "Scrape reviews for this URL" → extension content-script walks the DOM + paginates + inserts directly via existing Supabase auth in the page session. Progress UI inside a Shadow DOM mounted on the page (per P-47 precedent). Trade-off: locks the tab during scrape (typically 30s-5min depending on review count); if director closes tab, scrape aborts (partial inserts kept).
+- (B) Background extension worker — extension service worker handles the scrape; content-script just kicks it off then closes. Director can navigate away mid-scrape. Trade-off: extension service workers have limited DOM access (no canonical way to read a third-party page from a service worker without re-opening it via a hidden tab — which is also flaggable behavior on Amazon).
+- (C) Hybrid — content-script captures the initial review batch from the current page state instantly + background worker continues pagination if needed. Best UX + still operates within director's session boundary.
+- (D) Crawler-driven (Q1-dependent — if crawler scoped in, the scrape runs server-side; extension is just a trigger).
+
+**Cascade impact:** Q3 affects UI design for the progress indicator (Q14 star-count breakdown UI may share the surface) + affects whether a "scrape complete" notification + retry-on-failure are needed.
+
+---
+
+**Q4 — Per-star scrape count UX.** How does director adjust the "200 reviews per star" default cap?
+
+- (A) **Per-URL setting — small input field next to the right-click trigger (Recommended).** Director sets the cap once per URL save (lives on the existing `CompetitorUrl` row as new column `reviewScrapeCap Int? @default(200)`) + per-trigger override via a small input in the extension popup. Most-thorough/reliable because (i) per-URL granularity matches real-world need (some products have 10 reviews + some have 50000); (ii) reuses existing per-URL settings UI from P-46 W3 click-to-edit cell editors.
+- (B) Global setting per Project (lives in `UserTablePreferences` model from P-46 W1). Simpler UI but less flexible.
+- (C) Per-trigger only (no persisted setting — director enters cap each time). Maximum control but high friction.
+- (D) Fixed at 200/star with no override. Simplest; defers customization.
+
+**Cascade impact:** Q4 affects Q13 schema additions (whether `CompetitorUrl.reviewScrapeCap` field needed).
+
+---
+
+**Q5 — Server-side review reordering.** Reviews are stored per-star and need within-star + across-star reordering on vklf.com (drag-to-reorder, similar to P-46 W3 Session 3 column reorder + W3 Session 3 row reorder).
+
+- (A) **Reuse the W3 Session 3 @dnd-kit row-reorder Pattern with new `sortRank Int?` field on `CapturedReview` (Recommended).** Same shared debounced-mutation lifecycle Pattern from W3 Session 3 (§B 2026-05-23-f). Pairs with existing P-46 W3 drag-to-reorder UI affordance.
+- (B) Star-count sort only — no within-star reorder. Trade-off: less flexibility but no schema change + simpler UI.
+- (C) Helpful-count sort (Amazon-only data; others use insertion order). Trade-off: cross-platform asymmetry; Amazon gets richer ordering than eBay/Etsy/Walmart.
+- (D) Defer reorder entirely; ship Q4 (per-star cap UX) only at first.
+
+**Cascade impact:** Q5 (A) adds `sortRank Int?` field to schema per Q13.
+
+---
+
+**Q6 — Bulk-delete affordance.** Reviews accumulate fast; director needs a way to bulk-delete reviews that aren't useful (typically 1-star spam reviews).
+
+- (A) **Multi-select checkboxes + bulk-delete-with-confirm modal (Recommended).** Mirrors P-46 W2 Captured Reviews list per-row delete + adds multi-select. Standard UI pattern; reuses existing delete API route with batch wrapper.
+- (B) Per-row delete only (current v1 from P-46 W2 Session 4). Trade-off: high friction for bulk operations.
+- (C) Filter-then-bulk-delete (filter to 1-star + select all + delete). Most-thorough for spam-cleanup workflow.
+- (D) Defer bulk-delete; ship multi-select-only without delete-confirm modal first.
+
+**Cascade impact:** Q6 affects Q4 UI sub-design (whether the existing star-filter doubles as the multi-select scope).
+
+---
+
+**Q7 — AI model choice + cost guards.** Which LLM does P-49 Workstream 5 use for review analysis at 3 levels (per-product two-sweep + cross-Type pooled + cross-everything)?
+
+- (A) **Claude Opus 4 (or whatever the current Anthropic flagship is at design-session time) + per-request cost cap + per-Project monthly cost cap (Recommended).** Best output quality for nuanced review summarization; cost caps prevent runaway spend; mirrors W#1 Keyword Clustering's per-Project cost-cap Pattern from `docs/MODEL_QUALITY_SCORING.md`. Trade-off: higher per-request cost than Claude Sonnet or GPT-4o.
+- (B) Claude Sonnet 4 (cheaper Anthropic option). Trade-off: lower quality on long-context summarization; may need more two-sweep iterations to hit Opus-quality output.
+- (C) Hybrid — Opus for per-product two-sweep + Sonnet for cross-Type/cross-everything where the input is already-summarized batch summaries. Cost-optimized.
+- (D) GPT-4o or Gemini-Pro (non-Anthropic). Trade-off: PLOS currently has Anthropic infra; introducing a second provider adds operational complexity.
+
+**Cascade impact:** Q7 affects Q8 batch sizing (different models have different context windows + cost-per-token) + Q12 caching + re-run economics.
+
+---
+
+**Q8 — Two-sweep batch sizing.** First-sweep batch sizing for per-product summarization: how many reviews per batch?
+
+- (A) **Adaptive batching based on token count — 80% of model context window per batch (Recommended).** Claude Opus 4 context is ~200K tokens; reviews are typically 50-500 tokens each; batches of 200-1000 reviews per first-sweep call. Mirrors W#1 Keyword Clustering's INPUT_CONTEXT_SCALING_DESIGN.md adaptive pattern. Trade-off: more complex batch-sizing logic; needs token-counting before each call.
+- (B) Fixed batch of 100 reviews per first-sweep call. Simple; predictable cost per batch. Trade-off: doesn't scale to high-review-count products (Amazon products with 50,000 reviews would need 500 first-sweep calls).
+- (C) Fixed batch of 500 reviews per first-sweep call. Larger batches reduce call count but risk hitting context window limits on long reviews.
+- (D) Defer to first build session of W5; ship Q7 model choice first + tune batch size empirically.
+
+**Cascade impact:** Q8 affects Q12 caching strategy (per-batch caching vs per-product caching).
+
+---
+
+**Q9 — AI analysis output shape.** What does each level of AI analysis produce as its output artifact?
+
+- (A) **Rich-text TipTap JSON (Recommended).** Reuses the existing `RichTextEditor` + `AnalysisReadView` rendering Pattern from P-46 W2 Sessions 1+3 + W4 Sessions 1+2. AI output renders inline with existing per-item + URL-level + Project-level analysis surfaces. Same schema shape as existing `analysis` JSONB columns.
+- (B) Structured JSON with named fields (e.g., `{pros: [...], cons: [...], commonComplaints: [...], commonPraise: [...]}`). Trade-off: more structured for downstream querying but doesn't reuse the existing rich-text rendering Pattern.
+- (C) Both — structured JSON internally + rendered to rich-text TipTap JSON for display. Maximum flexibility; supports both UI display + potential future downstream analytics. Trade-off: 2x storage; more complex AI prompt to emit two formats.
+- (D) Plain markdown text. Trade-off: doesn't fit the existing rich-text editor rendering.
+
+**Cascade impact:** Q9 affects Q13 schema additions for new AI analysis output tables.
+
+---
+
+**Q10 — AI analysis UI placement.** Where on vklf.com does each level's AI analysis output appear?
+
+- (A) **Per-product on the existing URL detail page (next to Captured Reviews section) + cross-Type + cross-everything on the existing Comprehensive Competitor Analysis page (P-46 W4) as new sections (Recommended).** Reuses existing surfaces; consistent with the W#2 navigation pattern; no new pages needed. Per-product analysis sits next to the data it summarizes; cross-Type + cross-everything sit on the Project-level Comprehensive page.
+- (B) New dedicated `/reviews-analysis` page per-Project with all 3 levels in one place. Trade-off: introduces a new page + navigation entry; better for "analysis-focused" workflows but doesn't co-locate with the underlying data.
+- (C) Per-product on URL detail + per-Type on Competition Data table row expand + cross-everything on Comprehensive page. Trade-off: per-Type on row expand introduces a new affordance to the table; may collide with W3's existing row-expand UI.
+- (D) Defer UI placement to first build session of W5; ship per-product first + decide cross-level placement empirically.
+
+**Cascade impact:** Q10 affects file-level scope of Workstream 5 + extends or duplicates Comprehensive Competitor Analysis page from P-46 W4.
+
+---
+
+**Q11 — AI analysis trigger UX.** How does director initiate an AI analysis run?
+
+- (A) **Button in the UI per surface — "Analyze reviews" on URL detail page (per-product); "Analyze Type" on Comprehensive page per-Type section; "Analyze Project" on Comprehensive page top (Recommended).** Director-controlled; cost-visible (button click = one cost-incurring run); supports re-run after new reviews added.
+- (B) Auto-trigger on review-count threshold (e.g., when a product crosses 50 reviews, analysis auto-runs). Trade-off: less director control over cost; may run before director is ready for results.
+- (C) Auto-trigger on review-add (analysis re-runs every time a new review lands). Trade-off: very high cost; not aligned with two-sweep batch design.
+- (D) Hybrid — manual button + optional auto-trigger toggle per-Project setting.
+
+**Cascade impact:** Q11 affects Q12 caching (manual trigger needs explicit re-run affordance; auto-trigger needs cache invalidation logic).
+
+---
+
+**Q12 — AI analysis caching + re-run.** When does AI analysis output become stale + how does re-run work?
+
+- (A) **Cache per-product analysis by reviews-set-hash; show "out-of-date" indicator when new reviews land; re-run button refreshes (Recommended).** Lowest cost; user always sees prior analysis instantly; explicit re-run when director wants fresh. Hash includes all review IDs sorted; new review → new hash → "out-of-date" badge.
+- (B) Cache per-product with no staleness check; explicit re-run only. Trade-off: director may not realize output is stale if new reviews added.
+- (C) Cache + auto-refresh on every page load (re-runs in background). Trade-off: high cost; latency on page load.
+- (D) No caching — every page view triggers an AI call. Trade-off: prohibitively expensive at scale.
+
+**Cascade impact:** Q12 affects Q13 schema additions for cache-tracking fields.
+
+---
+
+**Q13 — Schema additions (consolidated).** What new Prisma schema additions does P-49 require?
+
+- (A) **(Recommended)** `CapturedReview` field additions: `source` enum value `extension-scrape` added; new `sortRank Int?` (per Q5) + new `helpfulCount Int?` (Amazon-only nullable) + new `platform String?` (denormalized from parent for query convenience). `CompetitorUrl` field addition: new `reviewScrapeCap Int? @default(200)` (per Q4). NEW `ReviewAnalysis` model — `id` / `urlId? String?` (per-product) OR `projectId String? + typeFilter String?` (per-Type) OR `projectId String?` (per-Project) discriminated via `level enum {PER_PRODUCT, PER_TYPE, PER_PROJECT}` / `analysisJson Json` (TipTap per Q9) / `reviewsHash String` (cache key per Q12) / `modelVersion String` (Q7) / `runAt DateTime` / `runByUserId String?` / `costUsdMicros Int?`. NEW indexes per typical query paths.
+- (B) Same as (A) but use 3 separate tables instead of one discriminated model (`PerProductReviewAnalysis` + `PerTypeReviewAnalysis` + `PerProjectReviewAnalysis`). Trade-off: clearer per-level queries but 3x migration work + 3x downstream code paths.
+- (C) Minimal — only `source` enum addition; defer all other schema additions to per-workstream sessions.
+- (D) Defer entire schema decision to first W2 or W5 build session.
+
+**Cascade impact:** Q13 (A) or (B) flips Schema-change-in-flight flag to YES at the start of the first W1 or W5 build session. Q13 (C) or (D) keeps it deferred.
+
+---
+
+**Q14 — Star-count breakdown UI.** How does the new star-count counter bar replace or augment the existing star-rating multi-select filter on Captured Reviews?
+
+- (A) **Counter-bar with click-to-filter (Recommended) — 1-star (count) / 2-star (count) / 3-star (count) / 4-star (count) / 5-star (count) buttons at top of Captured Reviews section; click toggles filter; reuses existing multi-select state internally but presents as one-click affordances.** Compact; data-dense; faster to filter than checkboxes; matches Amazon-style star-filter UX.
+- (B) Keep existing multi-select checkboxes; add counter labels alongside each. Less change to existing UI.
+- (C) Counter-bar only (no filter); separate filter dropdown for advanced filtering. Trade-off: splits the UI into two affordances.
+- (D) Defer Q14 UI to W4 build session; lock counter-bar wiring only at design session.
+
+**Cascade impact:** Q14 affects W4 file-level scope.
+
+---
+
+**Q15 — Anti-bot defensive posture.** What rate-limiting + behavioral randomization does the extension apply to per-platform scrapes to honor the verbatim director constraint *"functionality should be very close to real world human user sitting where admin is"*?
+
+- (A) **Conservative defaults: 1-3 second random delay between pagination clicks + respect platform's intrinsic rate limits + abort on captcha detection + show clear UI notification to director if any platform rate-limits us (Recommended).** Mirrors human-paced browsing; respects platform limits + lets director know if behavior surfaces anti-bot challenges; aborts cleanly rather than retrying (which is itself a bot signal).
+- (B) Aggressive — minimum delays (50-200ms) + retry on rate-limit. Trade-off: faster scrapes + higher anti-bot risk; may flag director's Amazon seller account.
+- (C) Platform-specific — Amazon gets conservative defaults; eBay/Etsy/Walmart get faster defaults. Trade-off: per-platform tuning is more complex but recognizes Amazon's tighter anti-bot posture.
+- (D) Defer Q15 to first W2 build session; lock rate-limit-aware UI affordance only at design session.
+
+**Cascade impact:** Q15 affects W2 per-platform module code shape; Q15 (A) Recommended is the safest default for the "behavioral indistinguishability from a real user" constraint.
+
+---
+
+**End of interview question scaffold.** After walking through all 15 questions, assemble `docs/REVIEWS_PHASE_2_DESIGN.md` §A with one A.N subsection per locked question + the standard A.N+1 to A.N+5 sections (Schema additions / Platform-truths audit / Living Questions / Cross-Tool Data Flow Map / Scaffold fit / Deferred-items registry). Then write empty §B. Then write §C with 5 workstream implementation outlines (W1 DONE this session + W2 per-platform extraction with 4 sub-clusters + W3 crawler CONDITIONAL + W4 UI extensions + W5 AI analysis system).
 
 ---
 
 ## Pre-session notes (offline steps for director between sessions)
 
-**Optional (NOT required for Session 3):** if you want to re-confirm the seek-bar fix from Session 2 is still working end-to-end, open Chrome → vklf.com → any Project with a Competition Data URL with a saved screen recording made AFTER today's Session 2 deploy (the one made post-build commit `279da34` and before FF-1 commit `d8b9507`, or the one made after FF-1) → load the URL detail page → check that the seek bar shows a real total duration like "0:22" and NOT "∞" / "Live" / "-:--". This is a quick 30-second check; not required for Session 3.
+**Optional — not required for the design session:**
+
+- Read the NEW P-49 Reviews Phase 2 ROADMAP entry to refresh context on the per-platform DOM specs you supplied (Amazon `Customers say` + per-star URL / eBay Neutral+Negative feedback / Etsy overlay / Walmart per-star query-param). These are preserved verbatim from your 2026-05-25 scope drop in the ROADMAP entry.
+- Skim the 15 interview questions above to mentally pre-load the design decisions. Each has options + a Recommended pick; you can default to Recommended on any question without prepping.
+- Think about Q1 (crawler scope) ahead of time — this is the highest-leverage question because it determines whether Workstream 3 (Crawler infrastructure) lives in P-49 at all. Recommended is extension-only (defer crawler entirely) per your anti-bot constraint.
+- Think about Q2 (per-platform priority order) — the Recommended Amazon → eBay → Etsy → Walmart order matches what you stated at 2026-05-25 scope drop, but if you have a different priority based on your current catalog readiness or seasonal sales priorities, surface it at session start.
 
 **Standing optional offline step (NOT blocking — standing carry-over):** raise the Supabase Global File Size Limit to enable the bucket-level 100 MB cap on `competition-scraping-videos`. Step-by-step (unchanged from prior handoffs):
 
@@ -168,42 +335,41 @@ Verify branch state with `git branch --show-current` before any doc reads — sh
 4. Save.
 5. EITHER re-run `node scripts/create-competition-scraping-videos-bucket.mjs` to update the bucket's `fileSizeLimit` (the script is idempotent), OR edit the bucket directly via the Supabase Storage UI → bucket settings → file size limit → set to 100 MB.
 
-Not blocking the P-48 Session 3 diagnostic session at all — can happen any time. Director-independent.
-
-The Network Panel walkthrough from Session 1's NEXT_SESSION.md is no longer required since Session 2 confirmed the seek-bar fix end-to-end + Session 3's diagnosis path is empirical instrumentation in code, not browser-DevTools observation. Available for reference if director wants to run it but NOT REQUIRED.
+Not blocking the Reviews Phase 2 Design Session at all — can happen any time. Director-independent.
 
 ---
 
 ## Destructive-operation safety check for next session
 
-**Rule 8 triggers planned this session: ZERO** — no destructive git operations planned (no rebases, no force pushes, no `git reset --hard`, no `git branch -D`). Pure diagnostic + instrumentation session.
+**Rule 8 triggers planned this session: ZERO** — no destructive git operations planned (no rebases, no force pushes, no `git reset --hard`, no `git branch -D`). Pure design + doc-write session.
 
-**Rule 9 triggers planned this session: ZERO** — no main push expected. If Session 3 picker outcome is (A) Feature-flag in production, a Rule 9 picker WOULD fire to push the instrumentation behind the flag to main; but that's diagnostic-only code (inert unless flagged ON), and would be a single deploy push.
+**Rule 9 triggers planned this session: ZERO** — no main push for code expected. Design doc lands on workflow-2-competition-scraping; doc-batch ff-merges to main at end-of-session (operationally adjacent; does NOT invoke Rule 9 since no destructive operations + no code changes).
 
-**NO Rule 29 (container-level destructive op) triggers planned** this session. NO Codespaces rebuild planned. Claude's memory directory + `.codespace-backup/memory/` mirror both remain intact. Critical files safe. **Layer-3b mirror-staleness canary active since 2026-05-22-f.** If at session-start the canary emits an alert (file count differs, presence differs, or any per-file size differs between source and mirror), STOP and investigate before any build mechanics.
+**NO Rule 29 (container-level destructive op) triggers planned** this session. NO Codespaces rebuild planned. Claude's memory directory + `.codespace-backup/memory/` mirror both remain intact. Critical files safe. **Layer-3b mirror-staleness canary active since 2026-05-22-f.** If at session-start the canary emits an alert (file count differs, presence differs, or any per-file size differs between source and mirror), STOP and investigate before any design mechanics.
 
 ---
 
 ## Why this pointer was written this way (debug aid)
 
-Today's Session 2 shipped what Session 1 had locked as the fix path (`fix-webm-duration` patch) end-to-end and director-verified the seek-bar layer. BUT Phase-4 surfaced that the stutter persists, and empirical post-deploy ffprobe revealed the actual root cause of the stutter is a SEPARATE problem: every SCREEN_RECORDING webm file is captured at ~6-7 fps actual rate, not 30 fps. A speculative fix-forward (DOM-attachment theory) shipped under Rule 9 gate #2 but was empirically BUSTED — refining Session 1's "ffprobe-first" Pattern lesson at the fix-forward level into a NEW Pattern memorialization: **"Speculative fix-forward without empirical pre-verification = antipattern."**
+Today's session was unplanned — pre-build launch was P-48 Session 3 (Diagnostic #2), but director surfaced the long-promised "next round of additions" before pre-build reads completed. The most-thorough/reliable response (per the NEW reusable Pattern memorialized today in CORRECTIONS_LOG §Entry 2026-05-25 Reviews Phase 2 capture) was a pure-capture session: pause the planned task, run Rule 24 searches, capture as ROADMAP entries with verbatim director-supplied specs preserved, and defer the planned task opportunistically.
 
-The natural next-session task per (a.91) RECOMMENDED-NEXT is **P-48 Session 3 (Diagnostic #2) on `workflow-2-competition-scraping`** — empirical instrumentation pass BEFORE any more structural fixes ship, applying the new Pattern. The shape mirrors Session 1 (diagnostic-only; no main push; ~30-60 min in-Claude; output is empirical diagnosis + locked Session 4 implementation scope).
+The natural next-session task per (a.92) RECOMMENDED-NEXT is **Reviews Phase 2 Design Session on `workflow-2-competition-scraping`** — Workflow Requirements Interview producing `docs/REVIEWS_PHASE_2_DESIGN.md`. The shape mirrors the 2026-05-23 P-46 Phase 2 design session (which produced `docs/COMPETITION_DATA_V2_DESIGN.md`) and is the foundation that gates all 5 P-49 workstreams.
 
-- **(Recommended)** P-48 Session 3 (Diagnostic #2) — empirical instrumentation across 4 candidate bottleneck layers (getDisplayMedia source / hidden video element throttling / canvas.captureStream / MediaRecorder encoder); identify exactly which layer drops the rate from requested 30 to observed 6-7; lock Session 4 implementation scope. Recommended because (a) today's FF-1 BUSTED outcome empirically demonstrated that speculative fix-forwards without empirical pre-verification are antipatterns; (b) Session 1's "ffprobe-first" Pattern naturally extends to "instrumentation-first" for in-pipeline diagnostics; (c) small + scoped + reversible + same workstream as Sessions 1-2; (d) director-Phase-4 cost is minimal (1-2 short recordings + log copy-paste, not the full sideload + record + load + visual-verify cycle).
+- **(Recommended)** Reviews Phase 2 Design Session — Workflow Requirements Interview walking through 15 questions (anti-bot strategy + crawler scope + per-platform priority + scrape orchestration + UX details + AI model + analysis output shape + UI placement + caching + schema additions + defensive posture). Recommended because (a) it's the locked next-session task per director's Rule 14f forced-picker outcome 2026-05-25; (b) Workstream 1 must close before any of W2-W5 can start; (c) the 15-question scaffold is already drafted; (d) all 5 P-49 workstreams cascade from design decisions locked here; (e) pure-design session has zero deploy risk + zero Rule 9 gate exposure.
 
-The shape of the P-48 Session 3 diagnostic session is **plain-terms summary + pre-build reads + branch state verify + Rule 14f session-start confirmation + design empirical instrumentation pass + Rule 14f picker on ship strategy (feature-flag vs dev-only branch vs local-only) + ship instrumentation + director records 1-2 NEW recordings with instrumented build + read logs + identify empirical bottleneck + lock Session 4 implementation scope + end-of-session doc-batch + 2 pushes**.
+The shape of the Reviews Phase 2 Design Session is **plain-terms summary + pre-build reads + branch state verify + Rule 14f session-start confirmation + walk director through the 15 interview questions one-at-a-time with per-question Rule 14f forced-pickers + mid-interview cross-decision integration + assemble `docs/REVIEWS_PHASE_2_DESIGN.md` (§A frozen-decisions + §B empty + §C per-workstream implementation outlines) + end-of-session doc-batch (10 docs including the new REVIEWS_PHASE_2_DESIGN.md) + 2 pushes**.
 
-**After P-48 Session 3 locks Session 4 scope,** the next-next sessions step through P-48 Session 4 (Implementation #2) → P-43 mechanical prevention small fix → P-26 below-fold scroll evaluation → P-27 re-evaluation → W#2 graduation step → THEN STOP AND EXPLICITLY ASK director for next round of competition-scraping additions per director's verbatim 2026-05-24-f directive.
+**After the Design Session locks the §A frozen-decisions,** the next-next sessions step through P-49 Workstream 2 first per-platform extension extraction (Amazon Session 1 most likely per Q2 Recommended) → continue through W2 sub-clusters → W4 Captured Reviews UI extensions (interleavable) → W5 AI review analysis system (interleavable) → W3 Crawler infrastructure CONDITIONAL (if scoped in per Q1 outcome) → then P-43 mechanical prevention + P-26 below-fold scroll + P-27 re-evaluation → W#2 graduation step → THEN STOP AND EXPLICITLY ASK director for next round of competition-scraping additions per director's standing directive.
 
 **Alternate next-session candidates if director shifts priorities at session start:**
 
-- **Skip Session 3 diagnostic + go directly to P-48 Session 4 implementation with another speculative theory.** NOT recommended — today's FF-1 BUSTED outcome empirically demonstrated that speculative fix-forwards without pre-verification are antipatterns. Session 3's instrumentation pass is the most-thorough/reliable path.
-- **Skip P-48 entirely + go directly to P-43 mechanical prevention.** NOT recommended — P-48 is the first item in director's locked 2026-05-24-f sequence; P-43 comes after P-48 closes (which it hasn't — only Sessions 1-2 done with PARTIAL outcome).
-- **P-26 below-fold scroll capture evaluation.** NOT recommended this session — P-26 is the LOW alternate that comes AFTER P-43. May get dropped after re-evaluation.
-- **P-27 Bug #9 + Bug #15 re-evaluation.** NOT recommended this session — likely obsolete after P-46. Re-evaluate after P-26.
-- **W#2 graduation step.** NOT recommended UNTIL all polish items DONE-AND-VERIFIED. Currently P-48 stutter sub-symptom + P-43 + P-26 + P-27 left.
-- **Roll back FF-1 commit `d8b9507`.** NOT recommended — director explicitly picked Option (A) "leave FF-1 in production as calibration data point" at today's Rule 14f deferred-vs-iterate picker. Re-litigating that choice would be against `feedback_default_to_recommendation.md`.
+- **P-48 Session 3 (Diagnostic #2) — defer Reviews Phase 2 Design Session to a later session.** NOT recommended — Reviews Phase 2 is the major scope expansion that gates W#2 graduation + already captured today as the (a.92) RECOMMENDED-NEXT. P-48 Session 3 is opportunistic and can interleave with P-49 work.
+- **P-50 Condition Pathology card — small `main`-branch standalone session.** NOT recommended as the next-session task — P-50 is ~10 min in-Claude + lives on `main` not `workflow-2-competition-scraping`. Better to slot it into a future deploy session or do it standalone between W#2 sessions.
+- **P-43 mechanical prevention small fix.** NOT recommended — P-43 is LOW informational + opportunistic. Better after Reviews Phase 2 Design Session + first per-platform build session land.
+- **P-26 below-fold scroll capture evaluation.** NOT recommended — P-26 is LOW alternate; re-evaluate after Reviews Phase 2 closes (which is months out).
+- **P-27 Bug #9 + Bug #15 re-evaluation.** NOT recommended — likely obsolete after P-46. Re-evaluate after P-26.
+- **W#2 graduation step.** NOT recommended UNTIL Reviews Phase 2 + P-48 stutter + P-43 + P-26 + P-27 all close. Currently many months out.
+- **Skip the design session + go directly to a P-49 Workstream 2 first build session.** NOT recommended — without the design session locking the 15 design decisions, the W2 build session would face 15 forced-pickers on its own session-start (which is the inverse of clean session-shapes per today's NEW reusable Pattern). The design session is the most-thorough/reliable foundation.
 - **Raise Supabase Global File Size Limit (standing optional offline step).** Director's offline dashboard step — see Pre-session notes above. Not a Claude session task; can happen any time. Director-independent.
 
-Check `ROADMAP.md` for the canonical state. Check the REVISED P-48 polish-backlog entry for the binding Session 3 scope-and-where description. Check `docs/COMPETITION_SCRAPING_DESIGN.md` §B 2026-05-25 (Session 2) — today's Session 2 entry — for the canonical record of the Session 2 implementation + Phase-4 PARTIAL + FF-1 BUSTED lifecycle and the locked Session 3 fix path. Check `docs/CORRECTIONS_LOG.md` §Entry 2026-05-25 (Session 2) — today's closing §Entry — for the NEW reusable Pattern memorialization + 5 sub-observations.
+Check `ROADMAP.md` for the canonical state. Check the NEW P-49 polish-backlog entry for the canonical capture of director's verbatim per-platform specs + anti-bot constraint + 3-level AI analysis output shape + 5-workstream hub-and-spokes structure. Check `docs/COMPETITION_DATA_V2_DESIGN.md` §A as the structural precedent for how to organize the new `REVIEWS_PHASE_2_DESIGN.md` §A. Check `docs/CORRECTIONS_LOG.md` §Entry 2026-05-25 (Reviews Phase 2 scope-expansion capture — the THIRD 2026-05-25-dated §Entry) for the NEW reusable Pattern memorialization + 4 sub-observations.
