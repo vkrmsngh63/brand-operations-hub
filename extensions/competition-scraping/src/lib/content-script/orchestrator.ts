@@ -61,6 +61,16 @@ import {
   urlsMatchByListingId,
   type EtsyStarFilter,
 } from './etsy-review-extractor.ts';
+import {
+  WALMART_DEFAULT_SELECTED_STARS,
+  WALMART_STAR_FILTERS,
+  extractProductIdFromWalmartUrl,
+  isWalmartScrapableUrl,
+  isWalmartStarFilter,
+  runWalmartReviewScrape,
+  urlsMatchByProductId,
+  type WalmartStarFilter,
+} from './walmart-review-extractor.ts';
 import { openScrapeTriggerModal } from './scrape-trigger-modal.ts';
 import {
   getSelectedPlatform,
@@ -1178,8 +1188,9 @@ if (msg.kind === 'enter-video-region-record-mode') {
       // dispatched us here from the "Scrape reviews for this URL" right-click.
       // Steps:
       //   1. Detect platform — Amazon (Session 1 + 2 + DEPLOY 2026-05-28),
-      //      eBay (sub-cluster Session 1 2026-05-30). Future Etsy + Walmart
-      //      sub-clusters extend the dispatch chain here.
+      //      eBay (sub-cluster Session 1 2026-05-30), Etsy (sub-cluster
+      //      Session 1 2026-05-31), Walmart (sub-cluster Session 1 — FINAL
+      //      per-platform sub-cluster per §A.2 priority order).
       //   2. Match against the saved CompetitorUrl rows by the platform's
       //      product identifier (Amazon: ASIN; eBay: item_id).
       //   3. Drive the per-platform extractor, routing per-review inserts
@@ -1531,10 +1542,107 @@ if (msg.kind === 'enter-video-region-record-mode') {
         sendResponse({ ok: true });
         return;
       }
-      // Future Walmart sub-cluster session lands here. For now, surface a
-      // friendly message rather than failing silently.
+      if (isWalmartScrapableUrl(pageUrl)) {
+        // Walmart path — sub-cluster Session 1 (FOURTH + FINAL per-platform
+        // sub-cluster per §A.2 priority order). Accepts both /ip/<slug>/<id>
+        // listing pages + /reviews/product/<id> reviews pages per the FF#1
+        // symmetric helper Pattern from the 2026-05-28 Amazon deploy.
+        const parent = savedCompetitorUrlRows.find((r) =>
+          urlsMatchByProductId(pageUrl, r.url),
+        );
+        if (!parent) {
+          showCaptureFailureToast(
+            "Couldn't find a saved Competitor URL for this Walmart product. Open the product page first and click + Add to save it, then come back here and re-run the scrape.",
+          );
+          sendResponse({ ok: false });
+          return;
+        }
+        const productId = extractProductIdFromWalmartUrl(pageUrl);
+        if (!productId) {
+          showCaptureFailureToast(
+            "Couldn't read the product ID from this Walmart page. Try refreshing and re-running.",
+          );
+          sendResponse({ ok: false });
+          return;
+        }
+        const parentRef = parent;
+        const parentName = parentRef.productName;
+        const triggerInputs = {
+          scopeLabel: parentName
+            ? `Walmart reviews — ${parentName}`
+            : 'Walmart reviews',
+          defaultCapPerStar:
+            parentRef.reviewScrapeCap && parentRef.reviewScrapeCap > 0
+              ? parentRef.reviewScrapeCap
+              : 200,
+          // Walmart: director can opt into / out of any star via the modal,
+          // but the default selection captures all 5 stars (5+4+3+2+1) per
+          // the §A.2 director-verbatim spec. Walmart's per-star URL contract
+          // is the cleanest of the 4 platforms, so capturing all stars by
+          // default is the most-comprehensive choice.
+          selectableStars: [...WALMART_STAR_FILTERS],
+          defaultSelectedStars: [...WALMART_DEFAULT_SELECTED_STARS],
+        };
+        void openScrapeTriggerModal(triggerInputs).then((triggerResult) => {
+          if (triggerResult === null) {
+            // Director cancelled at the trigger modal — no scrape dispatched.
+            return;
+          }
+          // Translate the modal's selectedStars (numeric 1..5) into
+          // WalmartStarFilter[]; skip any rating that doesn't map (defensive —
+          // the modal restricts to 1..5).
+          const starsToVisit: WalmartStarFilter[] = [];
+          for (const rating of triggerResult.selectedStars) {
+            if (isWalmartStarFilter(rating)) starsToVisit.push(rating);
+          }
+          if (starsToVisit.length === 0) {
+            showCaptureFailureToast(
+              'Pick at least one star rating to scrape.',
+            );
+            return;
+          }
+          const ctx = {
+            projectId,
+            competitorUrlId: parentRef.id,
+            productId,
+            capPerStar: triggerResult.capPerStar,
+            starsToVisit,
+            scopeLabel: triggerInputs.scopeLabel,
+            async saveReview(input: {
+              clientId: string;
+              starRating: number;
+              body: string;
+              title: string | null;
+              reviewerName: string | null;
+              reviewDate: string | null;
+              helpfulCount: null;
+              platform: 'walmart';
+              source: 'extension-scrape';
+            }): Promise<void> {
+              await createCapturedReview(projectId, parentRef.id, {
+                clientId: input.clientId,
+                starRating: input.starRating,
+                body: input.body,
+                reviewerName: input.reviewerName ?? undefined,
+                reviewDate: input.reviewDate ?? undefined,
+                helpfulCount: input.helpfulCount ?? undefined,
+                platform: input.platform,
+                source: input.source,
+              });
+            },
+          };
+          void runWalmartReviewScrape(ctx).catch((err) => {
+            console.error('[PLOS] Walmart review scrape failed:', err);
+          });
+        });
+        sendResponse({ ok: true });
+        return;
+      }
+      // No supported platform matched. Surface a friendly message rather
+      // than failing silently. With Walmart shipped, the 4-platform set
+      // (Amazon + eBay + Etsy + Walmart) is now complete.
       showCaptureFailureToast(
-        'Review scraping is currently available on Amazon, eBay, and Etsy product pages. Walmart ships in an upcoming session.',
+        'Review scraping is currently available on Amazon, eBay, Etsy, and Walmart product pages. This page isn’t one of those.',
       );
       sendResponse({ ok: false });
       return;
