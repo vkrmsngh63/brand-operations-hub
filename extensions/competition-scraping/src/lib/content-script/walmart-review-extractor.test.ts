@@ -48,10 +48,24 @@ describe('isWalmartListingPage', () => {
       true,
     );
   });
+  it('accepts the slugless /ip/<id> shape (FF#1 2026-06-01 — director-saved URL on vklf.com)', () => {
+    assert.equal(
+      isWalmartListingPage('https://www.walmart.com/ip/803154651'),
+      true,
+    );
+  });
   it('accepts /ip/<slug>/<id> with query parameters', () => {
     assert.equal(
       isWalmartListingPage(
         'https://www.walmart.com/ip/Amazing-Product/123456789?wmlspartner=foo',
+      ),
+      true,
+    );
+  });
+  it('accepts /ip/<slug>/<id> with the empirical long slug + multi-param query (director 2026-06-01 paste)', () => {
+    assert.equal(
+      isWalmartListingPage(
+        'https://www.walmart.com/ip/PanOxyl-Foaming-Acne-Wash-10-Benzoyl-Peroxide-Maximum-Strength-5-5-oz/803154651?classType=VARIANT&athbdg=L1102&from=/search',
       ),
       true,
     );
@@ -181,12 +195,28 @@ describe('extractProductIdFromListingUrl', () => {
       '123456789',
     );
   });
+  it('extracts the numeric ID from the slugless /ip/<id> shape (FF#1 2026-06-01)', () => {
+    assert.equal(
+      extractProductIdFromListingUrl(
+        'https://www.walmart.com/ip/803154651',
+      ),
+      '803154651',
+    );
+  });
   it('extracts even when query parameters follow', () => {
     assert.equal(
       extractProductIdFromListingUrl(
         'https://www.walmart.com/ip/slug/987654321?wmlspartner=foo',
       ),
       '987654321',
+    );
+  });
+  it('extracts from the empirical FF#1 director 2026-06-01 page URL', () => {
+    assert.equal(
+      extractProductIdFromListingUrl(
+        'https://www.walmart.com/ip/PanOxyl-Foaming-Acne-Wash-10-Benzoyl-Peroxide-Maximum-Strength-5-5-oz/803154651?classType=VARIANT&athbdg=L1102&from=/search',
+      ),
+      '803154651',
     );
   });
   it('returns null for non-listing URLs', () => {
@@ -283,6 +313,24 @@ describe('urlsMatchByProductId', () => {
       urlsMatchByProductId(
         'https://www.walmart.com/ip/slug/123456789',
         'https://www.walmart.com/ip/slug/123456789',
+      ),
+      true,
+    );
+  });
+  it('matches slugged page URL against slugless saved URL (FF#1 2026-06-01 — the empirical case)', () => {
+    assert.equal(
+      urlsMatchByProductId(
+        'https://www.walmart.com/ip/PanOxyl-Foaming-Acne-Wash-10-Benzoyl-Peroxide-Maximum-Strength-5-5-oz/803154651?classType=VARIANT&athbdg=L1102&from=/search',
+        'https://www.walmart.com/ip/803154651',
+      ),
+      true,
+    );
+  });
+  it('matches slugless page URL against slugged saved URL (FF#1 2026-06-01 — inverse)', () => {
+    assert.equal(
+      urlsMatchByProductId(
+        'https://www.walmart.com/ip/803154651',
+        'https://www.walmart.com/ip/PanOxyl-Foaming-Acne-Wash-10-Benzoyl-Peroxide-Maximum-Strength-5-5-oz/803154651',
       ),
       true,
     );

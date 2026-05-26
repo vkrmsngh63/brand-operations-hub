@@ -52,7 +52,18 @@ import {
 import { openScrapeProgressIndicator } from './scrape-progress-indicator.ts';
 
 const WALMART_URL_PREFIX = /^https?:\/\/(www\.)?walmart\.com\//;
-const LISTING_PAGE_PATH = /\/ip\/[^/?#]+\/(\d+)\b/;
+// FF#1 (2026-06-01) — empirically-grounded regex loosening. Walmart serves
+// BOTH listing shapes canonically:
+//   • `/ip/<id>`            (slugless — saved URL on vklf.com may have this shape)
+//   • `/ip/<slug>/<id>`     (slug + id — actual product page after Walmart's URL rewrite)
+// Director's 2026-06-01 Phase 4 paste confirmed: saved URL "/ip/803154651"
+// + page URL "/ip/PanOxyl-Foaming-Acne-Wash-10-Benzoyl-Peroxide-Maximum-Strength-5-5-oz/803154651?...".
+// The original `/\/ip\/[^/?#]+\/(\d+)\b/` regex required the slug segment, so the
+// slugless saved URL parsed to null + urlsMatchByProductId returned false.
+// Fix: make the slug segment optional via `(?:[^/?#]+\/)?`. Single canonical
+// regex, no progressively-broader fallbacks added (per the 2026-05-31 Etsy
+// FF#3 Pattern).
+const LISTING_PAGE_PATH = /\/ip\/(?:[^/?#]+\/)?(\d+)\b/;
 const REVIEWS_PAGE_PATH = /\/reviews\/product\/(\d+)\b/;
 
 const DEFAULT_CAP_PER_STAR = 200;
