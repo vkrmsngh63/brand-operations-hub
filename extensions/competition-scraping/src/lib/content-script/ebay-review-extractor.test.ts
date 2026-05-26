@@ -16,6 +16,7 @@ import {
   extractFeedbackBody,
   extractFeedbackFromDocument,
   extractFeedbackUser,
+  extractSellerFromListingHtml,
   extractItemIdFromEbayUrl,
   extractItemIdFromFeedbackUrl,
   extractItemIdFromItemUrl,
@@ -657,6 +658,111 @@ describe('extractSellerFromListingDocument', () => {
   it('returns null when /usr/ href is malformed (no username segment)', () => {
     const doc = fakeListingDoc([{ href: 'https://www.ebay.com/usr/' }]);
     assert.equal(extractSellerFromListingDocument(doc), null);
+  });
+});
+
+describe('extractSellerFromListingHtml (FF#5 2026-05-30)', () => {
+  it('extracts seller from "sellerUserName":"<value>" JSON blob', () => {
+    const html =
+      '<html><body><script>var x = {"sellerUserName":"hot.girls","other":"data"};</script></body></html>';
+    assert.equal(extractSellerFromListingHtml(html), 'hot.girls');
+  });
+  it('handles seller usernames with dots + hyphens + digits', () => {
+    assert.equal(
+      extractSellerFromListingHtml('"sellerUserName":"my-seller_99.test"'),
+      'my-seller_99.test',
+    );
+  });
+  it('returns null when sellerUserName key is absent', () => {
+    assert.equal(
+      extractSellerFromListingHtml('<html><body>no seller here</body></html>'),
+      null,
+    );
+  });
+  it('returns null on empty html', () => {
+    assert.equal(extractSellerFromListingHtml(''), null);
+  });
+  it('returns the first match when multiple sellerUserName keys exist', () => {
+    // Multiple keys can appear in eBay's HTML (related-sellers carousel etc.).
+    // First match wins — typically the primary item's seller.
+    const html =
+      '"sellerUserName":"first-seller","x":"y","sellerUserName":"second-seller"';
+    assert.equal(extractSellerFromListingHtml(html), 'first-seller');
+  });
+  it('decodes \\uXXXX escapes in JSON values', () => {
+    // Cyrillic "А" (U+0410) — exotic but JSON-escaped form a defensive
+    // decoder should handle.
+    assert.equal(
+      extractSellerFromListingHtml('"sellerUserName":"sell\\u0410r"'),
+      'sellАr',
+    );
+  });
+});
+
+describe('extractFeedbackFromDocument tabpanel scoping (FF#5 2026-05-30)', () => {
+  // The empirically-verified bug: eBay renders BOTH the "This Item" panel
+  // AND the "All Items" panel in the same HTML; only the active panel is
+  // visible (the inactive one carries the `hidden` attribute). Without
+  // scoping, the walker matches rows from both panels.
+  it('scopes to [role=tabpanel]:not([hidden]) — skips the hidden All Items panel', () => {
+    // Build a fake doc with two tabpanels: one visible (This Item) with 1 row;
+    // one hidden (All Items) with 5 rows. Walker should return just the 1 row.
+    const thisItemRow = el({
+      '.fdbk-container__details__comment': el({}, 'This item review'),
+    });
+    const allItemsRows = [
+      el({
+        '.fdbk-container__details__comment': el({}, 'Other item review 1'),
+      }),
+      el({
+        '.fdbk-container__details__comment': el({}, 'Other item review 2'),
+      }),
+    ];
+    // Simulate the scoped querySelector return: when caller asks for
+    // `[role=tabpanel]:not([hidden])`, return a fake tabpanel that itself
+    // exposes querySelectorAll for the row selector matching only the
+    // visible row. Other selectors return the full row list (hidden +
+    // visible) to prove the SCOPE is what filters.
+    const visibleTabpanel = el({
+      '.fdbk-container': [thisItemRow],
+    });
+    const doc: Document = {
+      querySelector(sel: string): FakeEl | null {
+        if (sel === '[role=tabpanel]:not([hidden])') return visibleTabpanel;
+        return null;
+      },
+      querySelectorAll(sel: string): FakeEl[] {
+        // Document-scope querySelectorAll returns BOTH panels' rows (the
+        // bug); the scope-narrowing in the walker is what prevents this.
+        if (sel === '.fdbk-container') {
+          return [thisItemRow, ...allItemsRows];
+        }
+        return [];
+      },
+    } as unknown as Document;
+    const rows = extractFeedbackFromDocument(doc);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0]?.body, 'This item review');
+  });
+  it('falls through to whole-document scope when no tabpanel found (classic-view safety)', () => {
+    // No [role=tabpanel] in classic-view variants; walker should still
+    // capture rows from the document root.
+    const row = el({
+      '.fdbk-container__details__comment': el({}, 'Classic view review'),
+    });
+    const doc: Document = {
+      querySelector(sel: string): FakeEl | null {
+        if (sel === '[role=tabpanel]:not([hidden])') return null;
+        return null;
+      },
+      querySelectorAll(sel: string): FakeEl[] {
+        if (sel === '.fdbk-container') return [row];
+        return [];
+      },
+    } as unknown as Document;
+    const rows = extractFeedbackFromDocument(doc);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0]?.body, 'Classic view review');
   });
 });
 

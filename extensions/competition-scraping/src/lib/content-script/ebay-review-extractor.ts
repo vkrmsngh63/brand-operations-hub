@@ -37,48 +37,6 @@ import {
 } from './scrape-pagination.ts';
 import { openScrapeProgressIndicator } from './scrape-progress-indicator.ts';
 
-// FF#4 2026-05-30 — TEMPORARY DIAGNOSTIC INSTRUMENTATION (remove in FF#5
-// after director uploads the dumped HTML files + I write proper selectors
-// based on actual eBay DOM evidence). 3 speculative FFs (FF#1+#2 bundled,
-// FF#3 standalone) burned through without empirical access; per the
-// 2026-05-25 P-48 Session 2 antipattern Pattern + director's explicit
-// 2026-05-30 picker outcome, stop guessing + gather empirical evidence.
-//
-// What this instrumentation does:
-//   1. After each eBay fetch (listing page in orchestrator.ts AND feedback
-//      page 1 here), save the response HTML to director's Downloads folder
-//      via a programmatic <a download> click. Files named
-//      `plos-debug-ebay-<scope>-<key>.html`.
-//   2. Console.log a structured row-count breakdown per selector probe,
-//      to surface which selectors match against the real DOM + how many.
-// Director re-runs scrape → uploads HTML files from Downloads → I write
-// FF#5 with proper selectors + (likely) a different fetch strategy.
-export function downloadHtmlForDiagnostic(
-  filename: string,
-  html: string,
-): void {
-  try {
-    const blob = new Blob([html], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.style.display = 'none';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => {
-      try {
-        URL.revokeObjectURL(url);
-      } catch {
-        // ignore — best-effort cleanup
-      }
-    }, 1000);
-  } catch (err) {
-    console.error('[PLOS DEBUG] HTML download failed:', err);
-  }
-}
-
 const EBAY_URL_PREFIX = /^https?:\/\/(www\.)?ebay\.com\//;
 const ITEM_PAGE_PATH = /\/itm\/(\d+)\b/;
 const FEEDBACK_PAGE_PATH = /\/fdbk\/mweb_profile\b/;
@@ -278,22 +236,44 @@ export interface EbayFeedbackRow {
 
 /**
  * Extracts feedback rows from a parsed eBay seller-feedback page Document.
- * Selectors per the director-supplied 2026-05-25 spec preserved in the P-49
- * ROADMAP entry — body-only capture (no helpful-count, no star — the star
- * comes from the filter being walked).
  *
- * Defensive: rows missing a body are skipped. eBay's feedback DOM evolves;
- * the extractor probes a small set of selector fallbacks for each field.
+ * Body-only capture (no helpful-count, no star — the star comes from the
+ * filter being walked) per director's verbatim 2026-05-25 spec.
+ *
+ * FF#5 2026-05-30 — selector scoping: eBay's feedback page renders BOTH
+ * the "This Item" panel AND the "All Items" panel in the same HTML
+ * (server-side). The All Items panel carries the `hidden` HTML attribute
+ * and is shown only when director clicks its tab; the This Item panel
+ * is the visible default for our scraped URLs. Without scoping, the
+ * walker matched rows from BOTH panels (~25-26 total per page, with
+ * only 0-1 from This Item) — the empirical bug that surfaced in Phase 4.
+ * Scoping to `[role=tabpanel]:not([hidden])` keeps the walker locked
+ * to the visible This Item content.
+ *
+ * Row selector candidates (each tried in order; first non-empty match wins):
+ *   1. `.fdbk-container` — modern eBay feedback row wrapper (confirmed by
+ *      the 2026-05-30 director-uploaded HTML evidence).
+ *   2. `.fdbk-container__details` — inner details sub-element, matches 1:1
+ *      with `.fdbk-container` but is kept as a fallback for shape variants.
+ *   3. `li.feedback-list-table-row` — legacy / classic-view fallback.
+ *   4. `[data-test-id*="feedback-item"]` — generic data-test-id fallback.
  */
 export function extractFeedbackFromDocument(doc: Document): EbayFeedbackRow[] {
+  // FF#5 2026-05-30 — scope to the visible "This Item" tabpanel; falls
+  // through to whole-document scope if the tabpanel can't be found (e.g.,
+  // classic-view variant rendered without ARIA tabs).
+  const scope: ParentNode =
+    doc.querySelector('[role=tabpanel]:not([hidden])') ?? doc;
+
   const ROW_SELECTORS: readonly string[] = [
+    '.fdbk-container',
     '.fdbk-container__details',
     'li.feedback-list-table-row',
     '[data-test-id*="feedback-item"]',
   ];
   let rowEls: Element[] = [];
   for (const sel of ROW_SELECTORS) {
-    rowEls = Array.from(doc.querySelectorAll(sel));
+    rowEls = Array.from(scope.querySelectorAll(sel));
     if (rowEls.length > 0) break;
   }
 
@@ -388,17 +368,37 @@ export function parseEbayFeedbackDate(text: string): string | null {
 // ─── Seller extraction (listing-page DOM) ────────────────────────────────
 
 /**
- * Extracts the seller username from a parsed eBay item listing page
- * Document. eBay listing pages expose the seller via a link to
- * `https://www.ebay.com/usr/<username>` — we probe the seller card area
- * first, then fall back to any /usr/ link in the document.
+ * Extracts the seller username from an eBay item listing page's raw HTML.
  *
- * Returns the username, or null when no /usr/ link is found.
- *
- * Used by the orchestrator when the trigger fires from a /itm/<ID> page
- * (the saved CompetitorUrl shape per A.2). The orchestrator fetches the
- * listing page via fetch() + DOMParser and passes the resulting Document
- * here — same fetch+DOMParser Pattern as the Amazon Customers-say capture.
+ * FF#5 2026-05-30 — empirically-verified extraction path. eBay's modern
+ * listing pages don't render a `/usr/<seller>` link in the visible DOM
+ * (the legacy approach in extractSellerFromListingDocument fell through
+ * to null on the 2026-05-30 director-uploaded listing-page evidence).
+ * Instead, eBay embeds a JSON data island that includes the
+ * `"sellerUserName":"<value>"` key — confirmed unique + reliable across
+ * the dumped HTML. Regex extraction against the raw HTML string is the
+ * most robust path here (and skips re-serializing the parsed Document
+ * back to text, which can lose JSON escaping).
+ */
+export function extractSellerFromListingHtml(html: string): string | null {
+  const match = html.match(/"sellerUserName":"([^"]+)"/);
+  if (!match) return null;
+  const raw = match[1];
+  if (!raw || raw.length === 0) return null;
+  // The JSON value may contain escaped characters (. etc.). Decode
+  // the common ones; eBay's seller usernames don't typically need this
+  // but the decode is cheap + defensive.
+  return raw.replace(/\\u([0-9a-fA-F]{4})/g, (_, code) =>
+    String.fromCharCode(parseInt(code, 16)),
+  );
+}
+
+/**
+ * Legacy DOM-based seller extraction — preserved as a fallback for
+ * regional / classic-view listing pages that may not carry the JSON
+ * data island. Probes for `/usr/<seller>` links in the seller-card area.
+ * Empirically returned null on modern-UI listing pages 2026-05-30; the
+ * FF#5 path is extractSellerFromListingHtml above.
  */
 export function extractSellerFromListingDocument(doc: Document): string | null {
   const SCOPED_SELECTORS: readonly string[] = [
@@ -718,42 +718,6 @@ async function scrapeOneFilter(
       const parser = new DOMParser();
       currentDoc = parser.parseFromString(html, 'text/html');
       currentPageNumber = nextPageNumber;
-      // FF#4 diagnostic — dump page 1 HTML + log selector match counts so
-      // I can analyze the actual eBay DOM in FF#5.
-      if (nextPageNumber === 1) {
-        downloadHtmlForDiagnostic(
-          `plos-debug-ebay-feedback-${filter}-page1.html`,
-          html,
-        );
-        const probe = (sel: string): number => {
-          try {
-            return currentDoc?.querySelectorAll(sel).length ?? 0;
-          } catch {
-            return -1;
-          }
-        };
-        console.log('[PLOS DEBUG] eBay feedback page 1', {
-          filter,
-          url: nextUrl,
-          httpStatus: resp.status,
-          htmlLength: html.length,
-          rowsBy_fdbkContainerDetails: probe('.fdbk-container__details'),
-          rowsBy_feedbackListTableRow: probe('li.feedback-list-table-row'),
-          rowsBy_dataTestIdFeedbackItem: probe(
-            '[data-test-id*="feedback-item"]',
-          ),
-          // Probe modern eBay UI candidate selectors based on the 2026-05-30
-          // screenshot (Verified-purchase badge per row + star icon per row).
-          rowsBy_dataTestIdContainsFeedback: probe('[data-testid*="feedback"]'),
-          rowsBy_articleRole: probe('[role="article"]'),
-          rowsBy_listItem: probe('li'),
-          // "This Item" tab counter (the screenshot showed "This item (117)").
-          thisItemTabPresent: probe('button[aria-selected="true"]'),
-          allItemsTabPresent: probe('button[aria-selected="false"]'),
-          // First 800 chars to spot-check what eBay's server returned.
-          htmlSampleFirst800: html.substring(0, 800),
-        });
-      }
       const rowsOnPage = extractFeedbackFromDocument(currentDoc).length;
       if (rowsOnPage === 0) return false;
       return true;
