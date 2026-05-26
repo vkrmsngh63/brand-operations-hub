@@ -11,14 +11,22 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  AMAZON_STAR_FILTERS,
+  buildAmazonProductListingUrl,
+  buildAmazonStarFilterUrl,
   extractAsinFromReviewUrl,
+  extractCustomersSayFromListing,
   extractReviewsFromDocument,
   findNextPageUrl,
   isAmazonReviewPage,
   parseAmazonReviewDate,
   parseHelpfulCount,
   parseStarRating,
+  sortByHelpfulCountDesc,
+  starRatingForFilter,
   urlsMatchByAsin,
+  type AmazonReviewRow,
+  type AmazonStarFilter,
 } from './amazon-review-extractor.ts';
 
 describe('isAmazonReviewPage', () => {
@@ -316,5 +324,179 @@ describe('findNextPageUrl', () => {
       findNextPageUrl(doc, 'https://www.amazon.com/product-reviews/B0/'),
       null,
     );
+  });
+});
+
+// ─── P-49 W2 Session 2 (2026-05-27) additions ──────────────────────────
+
+describe('AMAZON_STAR_FILTERS + starRatingForFilter', () => {
+  it('lists exactly five star filters in ascending order', () => {
+    assert.equal(AMAZON_STAR_FILTERS.length, 5);
+    assert.deepEqual(
+      [...AMAZON_STAR_FILTERS],
+      ['one_star', 'two_star', 'three_star', 'four_star', 'five_star'],
+    );
+  });
+  it('maps each filter to its 1-5 star rating', () => {
+    assert.equal(starRatingForFilter('one_star'), 1);
+    assert.equal(starRatingForFilter('two_star'), 2);
+    assert.equal(starRatingForFilter('three_star'), 3);
+    assert.equal(starRatingForFilter('four_star'), 4);
+    assert.equal(starRatingForFilter('five_star'), 5);
+  });
+});
+
+describe('buildAmazonStarFilterUrl', () => {
+  it('produces the canonical per-star review-page URL with default page 1', () => {
+    assert.equal(
+      buildAmazonStarFilterUrl('B0ABCDEFGH', 'one_star'),
+      'https://www.amazon.com/product-reviews/B0ABCDEFGH/?filterByStar=one_star&pageNumber=1',
+    );
+  });
+  it('respects the page-number parameter for pages 2+', () => {
+    assert.equal(
+      buildAmazonStarFilterUrl('B0ABCDEFGH', 'five_star', 3),
+      'https://www.amazon.com/product-reviews/B0ABCDEFGH/?filterByStar=five_star&pageNumber=3',
+    );
+  });
+  it('uses the canonical filter value for each of the 5 stars', () => {
+    for (const filter of AMAZON_STAR_FILTERS) {
+      const url = buildAmazonStarFilterUrl('B0ZZZZZZZZ', filter);
+      assert.ok(url.includes(`filterByStar=${filter}`));
+      assert.ok(url.startsWith('https://www.amazon.com/product-reviews/'));
+    }
+  });
+});
+
+describe('buildAmazonProductListingUrl', () => {
+  it('produces the canonical /dp/<ASIN>/ shape', () => {
+    assert.equal(
+      buildAmazonProductListingUrl('B0ABCDEFGH'),
+      'https://www.amazon.com/dp/B0ABCDEFGH/',
+    );
+  });
+});
+
+describe('sortByHelpfulCountDesc', () => {
+  function row(helpfulCount: number | null, starRating = 5): AmazonReviewRow {
+    return {
+      starRating,
+      body: 'b',
+      title: null,
+      reviewerName: null,
+      reviewDate: null,
+      helpfulCount,
+    };
+  }
+
+  it('sorts rows by helpfulCount desc', () => {
+    const sorted = sortByHelpfulCountDesc([row(5), row(100), row(0), row(42)]);
+    assert.deepEqual(
+      sorted.map((r) => r.helpfulCount),
+      [100, 42, 5, 0],
+    );
+  });
+
+  it('places null-helpfulCount rows after rows with any count', () => {
+    const sorted = sortByHelpfulCountDesc([row(null), row(3), row(null), row(0)]);
+    assert.deepEqual(
+      sorted.map((r) => r.helpfulCount),
+      [3, 0, null, null],
+    );
+  });
+
+  it('is stable on equal helpfulCounts (insertion order preserved)', () => {
+    const a = row(7, 5);
+    const b = row(7, 4);
+    const c = row(7, 3);
+    const sorted = sortByHelpfulCountDesc([a, b, c]);
+    // All equal — order should match input.
+    assert.equal(sorted[0]?.starRating, 5);
+    assert.equal(sorted[1]?.starRating, 4);
+    assert.equal(sorted[2]?.starRating, 3);
+  });
+
+  it('returns a new array (does not mutate the input)', () => {
+    const input = [row(1), row(2)];
+    const before = input.map((r) => r.helpfulCount);
+    sortByHelpfulCountDesc(input);
+    assert.deepEqual(
+      input.map((r) => r.helpfulCount),
+      before,
+    );
+  });
+
+  it('handles empty arrays', () => {
+    assert.deepEqual(sortByHelpfulCountDesc([]), []);
+  });
+});
+
+describe('extractCustomersSayFromListing', () => {
+  // The Customers-say block lives on /dp/<ASIN> listing pages, not on
+  // /product-reviews/<ASIN>/ review-list pages. The extractor probes a
+  // small set of selectors in priority order; first match wins.
+  function listingDoc(matchByText: Record<string, string>): Document {
+    return {
+      querySelector(sel: string): FakeEl | null {
+        if (sel in matchByText) {
+          return el('div', {}, matchByText[sel] ?? '');
+        }
+        return null;
+      },
+      querySelectorAll(_sel: string): FakeEl[] {
+        return [];
+      },
+    } as unknown as Document;
+  }
+
+  it('returns the canonical [data-hook="cr-insights-widget"] block text', () => {
+    const doc = listingDoc({
+      '[data-hook="cr-insights-widget"]':
+        'Customers find the product reliable and well-built.',
+    });
+    assert.equal(
+      extractCustomersSayFromListing(doc),
+      'Customers find the product reliable and well-built.',
+    );
+  });
+
+  it('falls back to the #cr-summarization-attributes selector', () => {
+    const doc = listingDoc({
+      '#cr-summarization-attributes': 'Reviewers praise the comfort.',
+    });
+    assert.equal(
+      extractCustomersSayFromListing(doc),
+      'Reviewers praise the comfort.',
+    );
+  });
+
+  it('trims surrounding whitespace', () => {
+    const doc = listingDoc({
+      '[data-hook="cr-insights-widget"]':
+        '   Customers find the product reliable.   ',
+    });
+    assert.equal(
+      extractCustomersSayFromListing(doc),
+      'Customers find the product reliable.',
+    );
+  });
+
+  it('returns null when none of the known selectors match', () => {
+    const doc = listingDoc({});
+    assert.equal(extractCustomersSayFromListing(doc), null);
+  });
+
+  it('returns null when the matched selector has only whitespace', () => {
+    const doc = listingDoc({
+      '[data-hook="cr-insights-widget"]': '    ',
+    });
+    assert.equal(extractCustomersSayFromListing(doc), null);
+  });
+});
+
+describe('AmazonStarFilter typing (compile-time sanity)', () => {
+  it('AMAZON_STAR_FILTERS values are all assignable to AmazonStarFilter', () => {
+    const allFilters: AmazonStarFilter[] = [...AMAZON_STAR_FILTERS];
+    assert.equal(allFilters.length, AMAZON_STAR_FILTERS.length);
   });
 });

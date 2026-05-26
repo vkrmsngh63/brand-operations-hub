@@ -31,10 +31,12 @@ import {
   listCapturedVideos,
 } from './api-bridge.ts';
 import {
+  extractAsinFromReviewUrl,
   isAmazonReviewPage,
   runAmazonReviewScrape,
   urlsMatchByAsin,
 } from './amazon-review-extractor.ts';
+import { openScrapeTriggerModal } from './scrape-trigger-modal.ts';
 import {
   getSelectedPlatform,
   getSelectedProjectId,
@@ -1179,40 +1181,70 @@ if (msg.kind === 'enter-video-region-record-mode') {
         sendResponse({ ok: false });
         return;
       }
-      const ctx = {
-        projectId,
-        competitorUrlId: parent.id,
-        cap: parent.reviewScrapeCap,
-        scopeLabel: parent.productName
-          ? `Amazon reviews — ${parent.productName}`
+      const asin = extractAsinFromReviewUrl(pageUrl);
+      if (!asin) {
+        showCaptureFailureToast(
+          "Couldn't read the product code from this Amazon review URL. Try refreshing the page and re-running.",
+        );
+        sendResponse({ ok: false });
+        return;
+      }
+      // P-49 W2 Session 2 (2026-05-27): mount the Shadow DOM trigger modal
+      // BEFORE dispatching the scrape so director can override the per-URL
+      // cap for this one run (per §A.4 per-trigger override). Modal returns
+      // null on cancel; resolved with { capPerStar } on Start.
+      const parentRef = parent;
+      const parentName = parentRef.productName;
+      const triggerInputs = {
+        scopeLabel: parentName
+          ? `Amazon reviews — ${parentName}`
           : 'Amazon reviews',
-        async saveReview(input: {
-          clientId: string;
-          starRating: number;
-          body: string;
-          title: string | null;
-          reviewerName: string | null;
-          reviewDate: string | null;
-          helpfulCount: number | null;
-          platform: 'amazon';
-        }): Promise<void> {
-          await createCapturedReview(projectId, parent.id, {
-            clientId: input.clientId,
-            starRating: input.starRating,
-            body: input.body,
-            reviewerName: input.reviewerName ?? undefined,
-            reviewDate: input.reviewDate ?? undefined,
-            helpfulCount: input.helpfulCount ?? undefined,
-            platform: input.platform,
-            source: 'extension-scrape',
-          });
-        },
+        defaultCapPerStar:
+          parentRef.reviewScrapeCap && parentRef.reviewScrapeCap > 0
+            ? parentRef.reviewScrapeCap
+            : 200,
       };
-      // Fire-and-forget; the indicator owns the user-visible feedback. We
-      // don't await so the message handler returns immediately + Chrome
-      // doesn't keep the message port open for the full scrape duration.
-      void runAmazonReviewScrape(ctx).catch((err) => {
-        console.error('[PLOS] Amazon review scrape failed:', err);
+      void openScrapeTriggerModal(triggerInputs).then((triggerResult) => {
+        if (triggerResult === null) {
+          // Director cancelled at the trigger modal — no scrape dispatched.
+          return;
+        }
+        const ctx = {
+          projectId,
+          competitorUrlId: parentRef.id,
+          asin,
+          capPerStar: triggerResult.capPerStar,
+          scopeLabel: triggerInputs.scopeLabel,
+          async saveReview(input: {
+            clientId: string;
+            starRating: number;
+            body: string;
+            title: string | null;
+            reviewerName: string | null;
+            reviewDate: string | null;
+            helpfulCount: number | null;
+            platform: 'amazon';
+            source: 'extension-scrape' | 'extension-scrape:customers-say';
+          }): Promise<void> {
+            await createCapturedReview(projectId, parentRef.id, {
+              clientId: input.clientId,
+              starRating: input.starRating,
+              body: input.body,
+              reviewerName: input.reviewerName ?? undefined,
+              reviewDate: input.reviewDate ?? undefined,
+              helpfulCount: input.helpfulCount ?? undefined,
+              platform: input.platform,
+              source: input.source,
+            });
+          },
+        };
+        // Fire-and-forget after the modal resolves; the indicator owns the
+        // user-visible feedback. The Chrome message handler already returned
+        // ok above, so the message port is closed by now — both the modal
+        // and the scrape continue independently of it.
+        void runAmazonReviewScrape(ctx).catch((err) => {
+          console.error('[PLOS] Amazon review scrape failed:', err);
+        });
       });
       sendResponse({ ok: true });
       return;
