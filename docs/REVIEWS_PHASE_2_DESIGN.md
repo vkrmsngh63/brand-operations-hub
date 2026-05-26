@@ -1040,4 +1040,73 @@ The Amazon cluster (Session 1) bundles the §A.16 schema migration as the founda
 
 ---
 
+## §B 2026-05-29 — POST-DEPLOY SUB-SECTION — `session_2026-05-29_p49-w4-captured-reviews-ui-session-1` (continued same calendar day) — W4 Captured Reviews UI extensions ✅ DEPLOYED-AND-VERIFIED 2026-05-29 end-to-end on vklf.com via `workflow-2-competition-scraping` → `main`; ff-merge `a40e4ba..1e610ce main -> main` under ONE Rule 9 deploy gate; Phase 4 director real-Chrome verification 6/6 PASS; W4 entire workstream now ✅ DEPLOYED-AND-VERIFIED with no remaining scope; Sessions 2 + 3 from §C.4 outline CLOSED; §C.4 estimate "~2-3 sessions" compressed into "1 session shipped + 1 session deployed in same day"
+
+**Same calendar day extension of the §B 2026-05-29 build-session entry above** per the existing-entry-same-day pattern (mirrors the 2026-05-26 + 2026-05-27 + 2026-05-28 build/deploy-session §B entry precedent for same-day deploy after build-session entry already landed). Build session above closed at "ZERO Rule 9 deploy gates fired + EXACTLY ONE Rule 14f forced-picker fired"; this sub-section closes the post-deploy outcome.
+
+**Session shape transition (build-only → build + deploy + Phase-4-PASS):** end-of-session Rule 14f deploy-or-exit picker fired offering (A) Deploy-now-and-Phase-4-verify (Recommended — ~30-60 min in-Claude; W4 UI lands on vklf.com immediately; corpus already exists from 2026-05-28 Amazon DEPLOY; bounded UI features against locked spec) vs (B) Exit-now (~10-15 min next-session-start overhead) vs (C) Defer Phase 4 only. **Director picked Recommended "Deploy now" (option A).** Calibration data point 1/1 on the deploy-or-exit picker; combined with the Session 1 scope picker earlier (0/1), final session calibration is 1/2 = 50% Yes-to-Recommended; running cumulative 24/27 = 88.9% across recent 4 sessions.
+
+**Deploy execution:**
+
+- **Pre-deploy /scoreboard 5/5 GREEN** identical to the post-build baselines (no code change between post-build and pre-deploy; root tsc clean / extension tsc clean / **655 ext** / **838 src/lib** / **64 routes**); Check 6 Playwright SKIP picker fired + director picked SKIP (Recommended per the standing non-deploy-session precedent — though this IS a deploy session, the W4 UI changes don't have Playwright spec coverage).
+- **Rule 9 deploy gate combined picker** — director picked Deploy now (Recommended) covering ff-merge + push + Vercel auto-redeploy + ping-pong.
+- **Ff-merge `a40e4ba..1e610ce main -> main`** carrying 2 commits (build commit `e89ae50` + build-session doc-batch `1e610ce`).
+- **Push to `origin/main`** triggered Vercel auto-redeploy (~2-3 min cycle).
+- **Ping-pong push to `origin/workflow-2-competition-scraping`** brings both branches even at the deploy SHA.
+- **Post-merge /scoreboard SKIPPED full re-run** per the 2026-05-24-e "trust-at-unchanged-baseline" Pattern (code byte-identical pre + post; no merge commit, no conflict resolution).
+
+**Phase 4 director real-Chrome verification 6/6 PASS on vklf.com** on a project with existing Amazon-scraped review corpus from the 2026-05-28 Amazon DEPLOY:
+
+| # | Step | Verdict |
+|---|------|---------|
+| 1 | Customers-say banner renders separately above counter-bar | **PASS** |
+| 2 | Counter-bar shows per-star counts matching actual scraped data | **PASS** |
+| 3 | Click-to-filter narrows the list to the clicked star | **PASS** |
+| 4 | Multi-star selection OR's the filters together | **PASS** |
+| 5 | Bulk-select + delete batches correctly with confirm modal | **PASS** |
+| 6 | Drag-to-reorder persists + survives page reload | **PASS** |
+
+**Director PASS verdict resolves the session at ✅ DEPLOYED-AND-VERIFIED 2026-05-29 end-to-end on vklf.com.** No fix-forwards needed (the W4 UI features were bounded against locked spec; no extension-side changes; no schema changes; no anti-bot considerations).
+
+**Files now live in production on vklf.com:**
+
+- `src/app/projects/[projectId]/competition-scraping/url/[urlId]/components/UrlDetailContent.tsx` — major rewrite (counter-bar / banner / drag handles / checkboxes / bulk-delete / all wiring)
+- `src/lib/competition-scraping/captured-reviews-helpers.ts` — 5 pure helpers
+- `src/lib/competition-scraping/handlers/reviews-batch-delete.ts` + thin shim route — POST batch-delete API
+- `src/lib/competition-scraping/handlers/reviews-reorder.ts` + thin shim route — PUT reorder API
+
+**Schema-change-in-flight flag STAYS NO entire session** (W4 had no schema work; the broader Reviews Phase 2 schema YES → NO transition already happened at the 2026-05-28 Amazon DEPLOY initial deploy push completion).
+
+**W4 estimate compression memorialized:** §C.4 "~2-3 sessions" → "1 session shipped + 1 session deployed in same day" (well under estimate). Per the §C.4 outline, W4 had Session 1 + Session 2 + Session 3 (CONDITIONAL deploy). With all 3 §A pieces (counter-bar + bulk-delete + drag-reorder) shipped in Session 1 + deployed today, **Sessions 2 + 3 from §C.4 are now CLOSED (no remaining W4 scope). W4 entire workstream is now ✅ DEPLOYED-AND-VERIFIED with no remaining scope.** This compression came from the convergence of two Rule 14f picker outcomes within one session: Session 1 scope picker (director picked all-three-bundled) + end-of-session deploy-or-exit picker (director picked immediate-deploy).
+
+**Active workstream status post-W4-DEPLOY:**
+
+- **W1 Reviews Phase 2 Design Session** — ✅ DONE 2026-05-25-b.
+- **W2 Per-platform extension extraction** — IN-FLIGHT. Amazon sub-cluster ✅ DEPLOYED-AND-VERIFIED 2026-05-28. eBay sub-cluster NEXT per (a.98) per §A.2 priority order. Etsy sub-cluster after eBay. Walmart sub-cluster fourth.
+- **W3 Crawler infrastructure** — DROPPED per A.1 Q1 outcome.
+- **W4 Captured Reviews UI extensions** — ✅ DEPLOYED-AND-VERIFIED 2026-05-29 (TODAY). Fully covered with no remaining scope.
+- **W5 AI review analysis system** — DEFERRED until W2 per-platform sub-clusters all deploy (W5 strictly depends on review data corpus; Amazon corpus exists since 2026-05-28; eBay + Etsy + Walmart corpora pending).
+
+**§C.4 outline cross-reference (informational; §C frozen per Rule 18):**
+
+- §C.4 Session 1 (counter-bar + bulk-delete + drag-reorder) — ✅ SHIPPED 2026-05-29 + ✅ DEPLOYED-AND-VERIFIED 2026-05-29.
+- §C.4 Session 2 (additional polish) — CLOSED (no remaining scope; all pieces shipped in Session 1).
+- §C.4 Session 3 (CONDITIONAL deploy) — CLOSED (deploy happened end-of-Session 1 within one calendar day).
+
+**NEW reusable Pattern candidate cross-referenced from CORRECTIONS_LOG §Entry 2026-05-29 post-deploy sub-observation:** **"End-of-build-session deploy-or-exit Rule 14f picker — when a build session lands clean + the design doc opens a deploy session as the next-task, fire a director picker offering Deploy-now vs Exit. Director's energy + availability for Phase 4 verification determines the right path; the framing must surface both options with their realistic trade-offs (~30-60 min in-Claude for deploy-now + Phase 4 vs. ~10-15 min next-session-start overhead for exit-now)."** Today fired this Pattern at the end of the build portion of the session — pairs with the 2026-05-27 build-session push Pattern as the symmetric in-session-deploy variant. Future build sessions should consider firing this picker at end-of-build IF (a) build lands clean, (b) design doc opens deploy session as next-task, (c) director available for Phase 4, (d) deploy is bounded (no schema; no anti-bot; UI-only or API-only).
+
+**Cross-references:**
+
+- `docs/CORRECTIONS_LOG.md` §Entry 2026-05-29 sub-observation (f) — canonical post-deploy outcome capture + NEW reusable Pattern candidate "End-of-build-session deploy-or-exit Rule 14f picker" + final calibration 1/2 + P-43 cwd-leak Pattern Class reproductions UPDATED to 3 + W4 estimate compression.
+- §B 2026-05-29 build-session entry above — predecessor entry capturing the build portion of today's session.
+- §B 2026-05-28 (W2 Amazon DEPLOY + 4-fix-forward cascade) — Phase 4 verification issue #3 (W4 destination capture) RESOLVED today via the W4 deploy + Phase 4 PASS.
+- §A.5 (drag-to-reorder via sortRank) + §A.6 (bulk-delete) + §A.14 (star UI counter-bar) — all fully consumed + deployed today.
+- §A.16 (API routes list) — fully consumed for W4 scope (2 new API routes deployed: POST batch-delete + PUT reorder).
+- §A.12 (staleness badge for ReviewAnalysis fingerprint cache) — DEFERRED to W5 (ReviewAnalysis dependency); W4 deploy does not touch ReviewAnalysis.
+- `docs/ROADMAP.md` P-49 polish-backlog entry — W4 status flipped to ✅ DEPLOYED-AND-VERIFIED 2026-05-29 + W4 entire workstream status to ✅ DEPLOYED-AND-VERIFIED + (a.96) + (a.97) close + (a.98) opens for P-49 W2 eBay sub-cluster Session 1.
+
+**Closing line (POST-DEPLOY UPDATED):** P-49 W4 Captured Reviews UI extensions ✅ DEPLOYED-AND-VERIFIED 2026-05-29 end-to-end on vklf.com via `workflow-2-competition-scraping` → `main` — Session 1 build commit `e89ae50` (9 files +2162/-43) + build-session doc-batch `1e610ce` ff-merged to main under ONE Rule 9 deploy gate (`a40e4ba..1e610ce`); Vercel auto-redeploy fired; Phase 4 director real-Chrome verification 6/6 PASS on vklf.com; W4 entire workstream now ✅ DEPLOYED-AND-VERIFIED with no remaining scope (Sessions 2 + 3 from §C.4 outline CLOSED); §C.4 estimate "~2-3 sessions" compressed into "1 session shipped + 1 session deployed in same day"; 52 new src/lib tests + 2 new API routes live in production; 5/5 scoreboard GREEN at new baselines (838 src/lib +52 / 64 routes +2 / 655 ext UNCHANGED); ONE Rule 9 deploy gate + TWO Rule 14f forced-pickers fired total (Session 1 scope 0/1 + deploy-or-exit 1/1 = 50% final calibration; running cumulative 24/27 = 88.9%); Schema-change-in-flight flag STAYS NO entire session; TWO NEW reusable Patterns memorialized in build sub-section above + ONE NEW reusable Pattern candidate in post-deploy sub-observation ("End-of-build-session deploy-or-exit Rule 14f picker"); LOW informational P-43 cwd-leak Pattern Class reproduction UPDATED to 3 this session (running tally ~7-8+; strong empirical signal continues mounting). **Closes (a.96) + (a.97); opens (a.98) RECOMMENDED-NEXT = P-49 W2 eBay sub-cluster Session 1** on `workflow-2-competition-scraping` per §A.2 priority order + §C.2 implementation outline (reuses W2 Amazon Patterns: FF#1 symmetric helpers + FF#4 URL-construction pagination + cross-star loop + Shadow DOM trigger modal). **FOURTH+ build/deploy-session §B entry in this design doc per Rule 18** — pairs with §B 2026-05-26 (W2 Session 1) + §B 2026-05-27 (W2 Session 2) + §B 2026-05-28 (W2 Amazon DEPLOY) as the W2 Amazon arc trio + §B 2026-05-29 build-session above as the first W4 entry + this post-deploy sub-section closing the W4 arc. The next §B entry will land at the eBay sub-cluster Session 1 close (likely §B 2026-05-30 if next session lands within 24 hours).
+
+---
+
 END OF DOCUMENT
