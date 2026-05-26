@@ -34,7 +34,9 @@ import {
   extractAsinFromAmazonUrl,
   isAmazonScrapableUrl,
   runAmazonReviewScrape,
+  starFilterForRating,
   urlsMatchByAsin,
+  type AmazonStarFilter,
 } from './amazon-review-extractor.ts';
 import { openScrapeTriggerModal } from './scrape-trigger-modal.ts';
 import {
@@ -1212,11 +1214,21 @@ if (msg.kind === 'enter-video-region-record-mode') {
           // Director cancelled at the trigger modal — no scrape dispatched.
           return;
         }
+        // Fix-forward #2 2026-05-28: translate the modal's selectedStars (numeric
+        // 1..5) into AmazonStarFilter[] for AmazonScrapeContext.starsToVisit;
+        // skip any rating that doesn't map (defensive — should never happen
+        // since the modal restricts to 1..5).
+        const starsToVisit: AmazonStarFilter[] = [];
+        for (const rating of triggerResult.selectedStars) {
+          const filter = starFilterForRating(rating);
+          if (filter) starsToVisit.push(filter);
+        }
         const ctx = {
           projectId,
           competitorUrlId: parentRef.id,
           asin,
           capPerStar: triggerResult.capPerStar,
+          starsToVisit,
           scopeLabel: triggerInputs.scopeLabel,
           async saveReview(input: {
             clientId: string;

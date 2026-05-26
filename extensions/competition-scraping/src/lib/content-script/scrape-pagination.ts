@@ -24,12 +24,13 @@ export type ScrapeAbortReason =
 
 export type ScrapeProgress =
   | { kind: 'starting' }
-  | { kind: 'page-loading'; pageIndex: number }
+  | { kind: 'page-loading'; pageIndex: number; starContext?: string }
   | {
       kind: 'page-loaded';
       pageIndex: number;
       rowsOnPage: number;
       totalRowsCaptured: number;
+      starContext?: string;
     }
   | { kind: 'row-saved'; totalRowsCaptured: number }
   | { kind: 'completed'; totalRowsCaptured: number }
@@ -38,6 +39,16 @@ export type ScrapeProgress =
       reason: ScrapeAbortReason;
       totalRowsCaptured: number;
       message?: string;
+    }
+  // Fix-forward #3 2026-05-28 — emitted by platform modules that drive a
+  // cross-filter loop (Amazon's 5-star loop) so the indicator can show a
+  // per-star breakdown rather than a single jumping cumulative count.
+  | { kind: 'star-started'; starRating: number }
+  | {
+      kind: 'star-completed';
+      starRating: number;
+      rowsForStar: number;
+      totalRowsCaptured: number;
     };
 
 export type ScrapeProgressListener = (event: ScrapeProgress) => void;

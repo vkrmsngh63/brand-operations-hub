@@ -24,6 +24,7 @@ import {
   parseStarRating,
   sortByHelpfulCountDesc,
   starRatingForFilter,
+  starFilterForRating,
   urlsMatchByAsin,
   isAmazonProductPage,
   isAmazonScrapableUrl,
@@ -485,6 +486,31 @@ describe('AMAZON_STAR_FILTERS + starRatingForFilter', () => {
     assert.equal(starRatingForFilter('three_star'), 3);
     assert.equal(starRatingForFilter('four_star'), 4);
     assert.equal(starRatingForFilter('five_star'), 5);
+  });
+});
+
+describe('starFilterForRating (fix-forward #2 2026-05-28)', () => {
+  it('maps each integer 1-5 to the canonical filter (inverse of starRatingForFilter)', () => {
+    assert.equal(starFilterForRating(1), 'one_star');
+    assert.equal(starFilterForRating(2), 'two_star');
+    assert.equal(starFilterForRating(3), 'three_star');
+    assert.equal(starFilterForRating(4), 'four_star');
+    assert.equal(starFilterForRating(5), 'five_star');
+  });
+  it('returns null for ratings outside 1-5', () => {
+    assert.equal(starFilterForRating(0), null);
+    assert.equal(starFilterForRating(6), null);
+    assert.equal(starFilterForRating(-1), null);
+  });
+  it('returns null for non-integer inputs that slip through type-erasure', () => {
+    assert.equal(starFilterForRating(3.5 as unknown as number), null);
+    assert.equal(starFilterForRating(NaN), null);
+  });
+  it('round-trips with starRatingForFilter for all 5 canonical filters', () => {
+    for (const filter of AMAZON_STAR_FILTERS) {
+      const rating = starRatingForFilter(filter);
+      assert.equal(starFilterForRating(rating), filter);
+    }
   });
 });
 

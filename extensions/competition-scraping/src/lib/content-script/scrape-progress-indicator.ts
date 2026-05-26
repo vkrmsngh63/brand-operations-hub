@@ -120,6 +120,13 @@ export const PROGRESS_INDICATOR_CSS = `
   margin-bottom: 8px !important;
 }
 
+.plos-cs-scrape-indicator-breakdown {
+  font-size: 12px !important;
+  color: #555 !important;
+  margin-bottom: 6px !important;
+  letter-spacing: 0.2px !important;
+}
+
 .plos-cs-scrape-indicator-actions {
   display: flex !important;
   gap: 6px !important;
@@ -200,6 +207,14 @@ export function openScrapeProgressIndicator(
   countEl.textContent = 'Starting…';
   box.appendChild(countEl);
 
+  // Fix-forward #3 2026-05-28: per-star breakdown line. Hidden until the first
+  // 'star-started' event fires. Updates as each star completes; the in-progress
+  // star renders as "3★: …" (ellipsis) until 'star-completed' replaces it.
+  const breakdownEl = document.createElement('div');
+  breakdownEl.className = 'plos-cs-scrape-indicator-breakdown';
+  breakdownEl.style.display = 'none';
+  box.appendChild(breakdownEl);
+
   const statusEl = document.createElement('div');
   statusEl.className = 'plos-cs-scrape-indicator-status';
   statusEl.textContent = '';
@@ -220,6 +235,28 @@ export function openScrapeProgressIndicator(
   let destroyed = false;
   let autoDismissTimer: ReturnType<typeof setTimeout> | null = null;
   let cancelHandled = false;
+
+  // Fix-forward #3 2026-05-28: per-star breakdown state. Map<starRating, rowsForStar | null>
+  // where null means in-progress (renders as ellipsis). Order preserved per insertion.
+  const perStarCounts = new Map<number, number | null>();
+  let currentStar: number | null = null;
+
+  function renderBreakdown(): void {
+    if (perStarCounts.size === 0) {
+      breakdownEl.style.display = 'none';
+      return;
+    }
+    const parts: string[] = [];
+    for (const [rating, rows] of perStarCounts) {
+      if (rows === null) {
+        parts.push(`${String(rating)}★: …`);
+      } else {
+        parts.push(`${String(rating)}★: ${String(rows)}`);
+      }
+    }
+    breakdownEl.textContent = parts.join('  ·  ');
+    breakdownEl.style.display = 'block';
+  }
 
   function destroy(): void {
     if (destroyed) return;
@@ -267,17 +304,39 @@ export function openScrapeProgressIndicator(
         countEl.textContent = 'Starting…';
         statusEl.textContent = '';
         break;
-      case 'page-loading':
-        statusEl.textContent = `Loading page ${String(event.pageIndex + 1)}…`;
+      case 'page-loading': {
+        // Fix-forward #3 2026-05-28: prepend starContext when present so director
+        // sees per-star progression ("3★ — Loading page 2…") rather than a bare
+        // "Loading page 2…" that could be from any of 5 star filters.
+        const prefix = event.starContext ? `${event.starContext} — ` : '';
+        statusEl.textContent = `${prefix}Loading page ${String(event.pageIndex + 1)}…`;
         break;
-      case 'page-loaded':
-        statusEl.textContent = `Page ${String(event.pageIndex + 1)} — ${String(
+      }
+      case 'page-loaded': {
+        const prefix = event.starContext ? `${event.starContext} — ` : '';
+        statusEl.textContent = `${prefix}Page ${String(event.pageIndex + 1)} — ${String(
           event.rowsOnPage,
         )} reviews on this page`;
         countEl.textContent = `${String(event.totalRowsCaptured)} reviews captured`;
         break;
+      }
       case 'row-saved':
         countEl.textContent = `${String(event.totalRowsCaptured)} reviews captured`;
+        break;
+      case 'star-started':
+        // Fix-forward #3 2026-05-28: mark this star as in-progress in the
+        // breakdown. The breakdown line becomes visible on the first star.
+        currentStar = event.starRating;
+        perStarCounts.set(event.starRating, null);
+        renderBreakdown();
+        break;
+      case 'star-completed':
+        // Fix-forward #3 2026-05-28: replace the ellipsis with the final count
+        // for this star. Cumulative total also updates here.
+        perStarCounts.set(event.starRating, event.rowsForStar);
+        if (currentStar === event.starRating) currentStar = null;
+        countEl.textContent = `${String(event.totalRowsCaptured)} reviews captured`;
+        renderBreakdown();
         break;
       case 'completed':
         countEl.textContent = `${String(event.totalRowsCaptured)} reviews captured`;

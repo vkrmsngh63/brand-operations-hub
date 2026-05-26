@@ -70,6 +70,29 @@ export function starRatingForFilter(filter: AmazonStarFilter): number {
 }
 
 /**
+ * Inverse of starRatingForFilter — returns the AmazonStarFilter for an integer
+ * star rating 1..5, or null when the rating is out of range. Used by the
+ * orchestrator to translate the trigger modal's selectedStars: number[] into
+ * AmazonScrapeContext.starsToVisit (fix-forward #2 2026-05-28).
+ */
+export function starFilterForRating(rating: number): AmazonStarFilter | null {
+  switch (rating) {
+    case 1:
+      return 'one_star';
+    case 2:
+      return 'two_star';
+    case 3:
+      return 'three_star';
+    case 4:
+      return 'four_star';
+    case 5:
+      return 'five_star';
+    default:
+      return null;
+  }
+}
+
+/**
  * Returns the canonical Amazon per-star review page URL for the given ASIN +
  * filter + page number. Format per the director-supplied 2026-05-25 spec
  * preserved in the P-49 ROADMAP entry: `/product-reviews/<ASIN>/?filterByStar=<filter>&pageNumber=<page>`.
@@ -432,6 +455,11 @@ export async function runAmazonReviewScrape(
         runningAbort = 'user-cancel';
         break;
       }
+      // Fix-forward #3 2026-05-28: emit star-started so the progress indicator
+      // can mark the current star + render a per-star breakdown rather than a
+      // single jumping cumulative count.
+      const starRating = starRatingForFilter(filter);
+      onProgress({ kind: 'star-started', starRating });
       const perStarResult = await scrapeOneStar({
         ctx,
         filter,
@@ -442,6 +470,13 @@ export async function runAmazonReviewScrape(
       });
       insertedByStar[filter] = perStarResult.inserted;
       totalInserted += perStarResult.inserted;
+      // Fix-forward #3: emit star-completed for the per-star breakdown row.
+      onProgress({
+        kind: 'star-completed',
+        starRating,
+        rowsForStar: perStarResult.inserted,
+        totalRowsCaptured: totalInserted,
+      });
       if (perStarResult.abortReason !== undefined) {
         runningAbort = perStarResult.abortReason;
         runningAbortMessage = perStarResult.abortMessage;
@@ -547,12 +582,23 @@ async function scrapeOneStar(
 
   // Wrap the parent onProgress so 'page-loaded' + 'row-saved' events report
   // cumulative totals across the whole cross-star scrape, not per-star.
+  // Fix-forward #3 2026-05-28: attach starContext to page-loading + page-loaded
+  // so the indicator can render "1★ — page 2…" rather than the bare "page 2".
+  const starContext = `${String(starRating)}★`;
   const wrappedOnProgress: ScrapeProgressListener = (event) => {
-    if (event.kind === 'page-loaded' || event.kind === 'row-saved') {
+    if (event.kind === 'page-loaded') {
+      onProgress({
+        ...event,
+        starContext,
+        totalRowsCaptured: startingRowOffset + event.totalRowsCaptured,
+      });
+    } else if (event.kind === 'row-saved') {
       onProgress({
         ...event,
         totalRowsCaptured: startingRowOffset + event.totalRowsCaptured,
       });
+    } else if (event.kind === 'page-loading') {
+      onProgress({ ...event, starContext });
     } else if (event.kind === 'aborted' || event.kind === 'completed') {
       // Suppress per-star 'completed' + 'aborted' — the parent emits them
       // once the cross-star loop reaches its own conclusion.

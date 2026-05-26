@@ -20,6 +20,7 @@
 
 const MIN_CAP = 1;
 const MAX_CAP = 5000;
+const DEFAULT_SELECTABLE_STARS = [1, 2, 3, 4, 5];
 
 export interface ScrapeTriggerModalOptions {
   /** Human-readable label rendered in the modal header. */
@@ -30,11 +31,29 @@ export interface ScrapeTriggerModalOptions {
    * MIN_CAP..MAX_CAP get clamped on resolve.
    */
   defaultCapPerStar: number;
+  /**
+   * Stars selectable in the modal. Defaults to [1, 2, 3, 4, 5] (Amazon's
+   * 5 filter views). Other platforms in future sub-cluster sessions can
+   * override (e.g., eBay's Neutral/Negative maps to [3, 1] per A.2).
+   * Fix-forward #2 2026-05-28.
+   */
+  selectableStars?: number[];
+  /**
+   * Initially-checked stars. Defaults to all `selectableStars`. Fix-forward
+   * #2 2026-05-28.
+   */
+  defaultSelectedStars?: number[];
 }
 
 export interface ScrapeTriggerModalResult {
   /** Director's chosen cap, clamped to MIN_CAP..MAX_CAP. */
   capPerStar: number;
+  /**
+   * Director's chosen stars to scrape. Subset of the modal's selectableStars
+   * (sorted ascending). At least 1 entry — Start button is disabled when zero
+   * checkboxes are checked. Fix-forward #2 2026-05-28.
+   */
+  selectedStars: number[];
 }
 
 /**
@@ -80,6 +99,42 @@ export function openScrapeTriggerModal(
     sub.textContent = 'Review scrape settings';
     card.appendChild(sub);
 
+    // Fix-forward #2 2026-05-28: per-star checkbox group. Default = all 5 stars
+    // checked; director can uncheck any to skip that star filter.
+    const selectableStars =
+      opts.selectableStars && opts.selectableStars.length > 0
+        ? [...opts.selectableStars].sort((a, b) => a - b)
+        : DEFAULT_SELECTABLE_STARS;
+    const initialSelected = new Set(
+      opts.defaultSelectedStars && opts.defaultSelectedStars.length > 0
+        ? opts.defaultSelectedStars
+        : selectableStars,
+    );
+
+    const starsLabel = document.createElement('div');
+    starsLabel.className = 'plos-cs-scrape-trigger-field-label';
+    starsLabel.textContent = 'Stars to scrape';
+    card.appendChild(starsLabel);
+
+    const starsRow = document.createElement('div');
+    starsRow.className = 'plos-cs-scrape-trigger-stars-row';
+    const starCheckboxes = new Map<number, HTMLInputElement>();
+    for (const rating of selectableStars) {
+      const starLabel = document.createElement('label');
+      starLabel.className = 'plos-cs-scrape-trigger-star-checkbox';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = initialSelected.has(rating);
+      cb.setAttribute('aria-label', `${String(rating)}-star reviews`);
+      const txt = document.createElement('span');
+      txt.textContent = `${String(rating)}★`;
+      starLabel.appendChild(cb);
+      starLabel.appendChild(txt);
+      starsRow.appendChild(starLabel);
+      starCheckboxes.set(rating, cb);
+    }
+    card.appendChild(starsRow);
+
     const fieldLabel = document.createElement('label');
     fieldLabel.className = 'plos-cs-scrape-trigger-field-label';
     fieldLabel.textContent = 'Per-star cap (1 – 5000)';
@@ -98,7 +153,7 @@ export function openScrapeTriggerModal(
     const hint = document.createElement('div');
     hint.className = 'plos-cs-scrape-trigger-hint';
     hint.textContent =
-      'Visits each of 5 star filters (1– 5) and scrapes up to this many reviews per filter. Saved per-URL value pre-fills; override here for this one run only.';
+      'Visits each checked star filter and scrapes up to this many reviews per filter. Saved per-URL value pre-fills the cap; override here for this one run only.';
     card.appendChild(hint);
 
     const actions = document.createElement('div');
@@ -143,8 +198,36 @@ export function openScrapeTriggerModal(
       return clampCap(raw);
     }
 
+    function readSelectedStars(): number[] {
+      const out: number[] = [];
+      for (const [rating, cb] of starCheckboxes) {
+        if (cb.checked) out.push(rating);
+      }
+      return out.sort((a, b) => a - b);
+    }
+
+    function syncStartEnabled(): void {
+      // Start disabled when zero stars checked — there's nothing to scrape.
+      const anyChecked = readSelectedStars().length > 0;
+      if (anyChecked) {
+        startBtn.removeAttribute('disabled');
+        startBtn.style.opacity = '1';
+        startBtn.style.cursor = 'pointer';
+      } else {
+        startBtn.setAttribute('disabled', 'true');
+        startBtn.style.opacity = '0.5';
+        startBtn.style.cursor = 'not-allowed';
+      }
+    }
+
+    for (const cb of starCheckboxes.values()) {
+      cb.addEventListener('change', syncStartEnabled);
+    }
+
     function onStart(): void {
-      done({ capPerStar: readCap() });
+      const selectedStars = readSelectedStars();
+      if (selectedStars.length === 0) return; // guard — Start disabled, but defensive
+      done({ capPerStar: readCap(), selectedStars });
     }
 
     function onCancel(): void {
@@ -176,6 +259,9 @@ export function openScrapeTriggerModal(
     startBtn.addEventListener('click', onStart);
     cancelBtn.addEventListener('click', onCancel);
     document.addEventListener('keydown', onKeyDown, true);
+
+    // Initial Start-enabled sync now that all checkboxes + the button exist.
+    syncStartEnabled();
 
     // Track for the idempotent re-open path.
     activeHost = host;
@@ -261,6 +347,32 @@ export const TRIGGER_MODAL_CSS = `
   font-size: 12px !important;
   color: #444 !important;
   margin-bottom: 12px !important;
+}
+
+.plos-cs-scrape-trigger-stars-row {
+  display: flex !important;
+  gap: 12px !important;
+  flex-wrap: wrap !important;
+  margin-bottom: 16px !important;
+  margin-top: -6px !important;
+}
+
+.plos-cs-scrape-trigger-star-checkbox {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  font-size: 13px !important;
+  color: #333 !important;
+  cursor: pointer !important;
+  user-select: none !important;
+  font-weight: 500 !important;
+}
+
+.plos-cs-scrape-trigger-star-checkbox input[type="checkbox"] {
+  cursor: pointer !important;
+  width: 14px !important;
+  height: 14px !important;
+  margin: 0 !important;
 }
 
 .plos-cs-scrape-trigger-input {
