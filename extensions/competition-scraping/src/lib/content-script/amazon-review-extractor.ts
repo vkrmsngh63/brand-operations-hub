@@ -576,6 +576,12 @@ async function scrapeOneStar(
 
   let currentDoc: Document | null = null;
   let currentPageUrl = buildAmazonStarFilterUrl(ctx.asin, filter, 1);
+  // Fix-forward #4 2026-05-28: pageNumber-increment pagination — Amazon
+  // switched per-star filtered pages from the numbered <li.a-last><a> link
+  // to a "Show 10 more reviews" button (which findNextPageUrl can't parse),
+  // so we drive pagination by directly constructing pageNumber URLs via
+  // buildAmazonStarFilterUrl. Stop signal = fetched page has 0 reviews.
+  let currentPageNumber = 1;
   let isFirstPage = true;
 
   const buffer: AmazonReviewRow[] = [];
@@ -618,20 +624,20 @@ async function scrapeOneStar(
       return extractReviewsFromDocument(currentDoc);
     },
     advanceToNextPage: async () => {
-      // Page 1 fetches the per-star page directly; subsequent pages follow
-      // the rendered Next link from the just-fetched doc. Returning true on
-      // page 1 means paginate() will call extractCurrentPageRows again,
-      // which will see the freshly populated currentDoc.
-      let nextUrl: string;
+      // Fix-forward #4 2026-05-28: direct pageNumber increment via
+      // buildAmazonStarFilterUrl, replacing the findNextPageUrl approach.
+      // The `?pageNumber=N` URL parameter has been a stable Amazon contract
+      // for years; works regardless of which UI affordance Amazon currently
+      // renders (numbered links, "Show 10 more" button, AJAX). Stop signal
+      // = the just-fetched page returns 0 reviews (caught below).
+      let nextPageNumber: number;
       if (isFirstPage) {
-        nextUrl = currentPageUrl;
+        nextPageNumber = 1;
         isFirstPage = false;
       } else {
-        if (!currentDoc) return false;
-        const next = findNextPageUrl(currentDoc, currentPageUrl);
-        if (!next) return false;
-        nextUrl = next;
+        nextPageNumber = currentPageNumber + 1;
       }
+      const nextUrl = buildAmazonStarFilterUrl(ctx.asin, filter, nextPageNumber);
       const resp = await fetch(nextUrl, {
         credentials: 'include',
         headers: { Accept: 'text/html' },
@@ -648,6 +654,13 @@ async function scrapeOneStar(
       const parser = new DOMParser();
       currentDoc = parser.parseFromString(html, 'text/html');
       currentPageUrl = nextUrl;
+      currentPageNumber = nextPageNumber;
+      // Natural end-of-pagination signal: when the fetched page renders zero
+      // review rows, we've passed the last page of this star filter. Returning
+      // false here causes paginate() to exit the loop cleanly without firing
+      // another randomPaginationDelay + advanceToNextPage cycle.
+      const rowsOnPage = extractReviewsFromDocument(currentDoc).length;
+      if (rowsOnPage === 0) return false;
       return true;
     },
     saveRow: async (row) => {
