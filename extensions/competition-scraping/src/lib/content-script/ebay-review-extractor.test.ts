@@ -342,9 +342,10 @@ describe('buildEbayFeedbackUrl', () => {
     assert.equal(params.get('item_id'), '123456789012');
     assert.equal(params.get('username'), 'cool-seller');
     assert.equal(params.get('overall_rating_item'), 'NEUTRAL');
-    assert.equal(params.get('_pgn'), '1');
   });
-  it('respects the page-number parameter for pages 2+', () => {
+  it('FF#3 2026-05-30: paginates via page_id_item=N (not legacy _pgn)', () => {
+    // Director's screenshot + working URLs confirmed the "This Item" view
+    // paginates via page_id_item; _pgn fell back to All Items default.
     const url = buildEbayFeedbackUrl(
       '123456789012',
       'cool-seller',
@@ -352,7 +353,8 @@ describe('buildEbayFeedbackUrl', () => {
       4,
     );
     const params = new URL(url).searchParams;
-    assert.equal(params.get('_pgn'), '4');
+    assert.equal(params.get('page_id_item'), '4');
+    assert.equal(params.get('_pgn'), null); // legacy param explicitly absent
     assert.equal(params.get('overall_rating_item'), 'NEGATIVE');
   });
   it('URL-encodes seller usernames with reserved characters', () => {
@@ -365,9 +367,6 @@ describe('buildEbayFeedbackUrl', () => {
     assert.equal(params.get('username'), 'cool seller&foo');
   });
   it('FF#2 2026-05-30: includes q=<itemId> search query for "This Item" filter', () => {
-    // Phase 4 verification surfaced that item_id=<ID> alone is context-only
-    // on eBay's server side; q=<itemId> is what actually narrows the
-    // feedback list. Without this, eBay returns ALL items' feedback.
     const url = buildEbayFeedbackUrl(
       '355823393241',
       'hot.girls',
@@ -388,9 +387,23 @@ describe('buildEbayFeedbackUrl', () => {
       'feedback_page:RECEIVED_AS_SELLER',
     );
   });
-  it('FF#2 2026-05-30: q always equals item_id (not seller, not page)', () => {
-    // Verify q is item-keyed even when page > 1 — the search query stays
-    // the same across pagination; only _pgn changes.
+  it('FF#3 2026-05-30: emits the full _item-suffixed param set', () => {
+    // Director's 2026-05-30 working URLs all carry this exact param set;
+    // without it eBay falls out of "This Item" view to the All Items default.
+    const url = buildEbayFeedbackUrl(
+      '355823393241',
+      'hot.girls',
+      'NEUTRAL',
+    );
+    const params = new URL(url).searchParams;
+    assert.equal(params.get('sort_item'), 'RELEVANCEV2');
+    assert.equal(params.get('filter_image_item'), 'false');
+    assert.equal(params.get('filter_video_item'), 'false');
+    assert.equal(params.get('filter_automated_feedback_item'), 'true');
+    assert.equal(params.get('filter_topic_item'), '');
+  });
+  it('FF#3 2026-05-30: q always equals item_id across pagination', () => {
+    // The search query stays the same across pagination; only page_id_item changes.
     for (const page of [1, 2, 5, 10]) {
       const url = buildEbayFeedbackUrl(
         '355823393241',
@@ -400,7 +413,7 @@ describe('buildEbayFeedbackUrl', () => {
       );
       const params = new URL(url).searchParams;
       assert.equal(params.get('q'), '355823393241');
-      assert.equal(params.get('_pgn'), String(page));
+      assert.equal(params.get('page_id_item'), String(page));
     }
   });
 });

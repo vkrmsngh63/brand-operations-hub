@@ -78,19 +78,32 @@ export function feedbackFilterForStarRating(
 
 /**
  * Returns the canonical eBay seller-feedback URL for the given item_id +
- * seller username + filter + page number, narrowed to "This Item" via the
- * `q=<itemId>` search query parameter.
+ * seller username + filter + page number, narrowed to "This Item" view via
+ * the full `_item`-suffixed parameter set eBay's UI uses when the "This
+ * Item" tab is active.
  *
- * Pagination via the `_pgn=N` URL parameter (FF#4 URL-construction Pattern
- * from the 2026-05-28 Amazon deploy lesson: build pagination URLs directly
- * rather than scraping next-page links which evolve).
+ * Param shape per the director-supplied 2026-05-30 working URL captured at
+ * Phase 4 verification:
+ *   fdbkType=FeedbackReceivedAsSeller
+ *   item_id=<id>
+ *   username=<seller>
+ *   q=<itemId>
+ *   filter=feedback_page:RECEIVED_AS_SELLER
+ *   page_id_item=<page>          ← pagination cursor (NOT _pgn)
+ *   overall_rating_item=<filter>  ← rating filter (NEUTRAL | NEGATIVE)
+ *   sort_item=RELEVANCEV2
+ *   filter_image_item=false
+ *   filter_video_item=false
+ *   filter_automated_feedback_item=true  ← drops eBay-generated automated rows
+ *   filter_topic_item=
  *
- * Fix-forward #2 2026-05-30 — Phase 4 verification surfaced that
- * `item_id=<ID>` alone is context-only on eBay's server side; without
- * `q=<itemId>` + `filter=feedback_page:RECEIVED_AS_SELLER` the page renders
- * ALL items' feedback rather than just this item's. The director's
- * working feedback URL (the one eBay's UI renders for "This Item" view)
- * carried both params; this URL builder now matches.
+ * Fix-forward history:
+ *   FF#2 2026-05-30 — added q + filter params; insufficient on its own
+ *     because pagination was still using legacy `_pgn=N` which falls out
+ *     of "This Item" view.
+ *   FF#3 2026-05-30 — full `_item`-suffixed param adoption. Director's
+ *     screenshot confirmed "This Item" tab is the default when these
+ *     params are present; without them eBay falls back to All Items.
  */
 export function buildEbayFeedbackUrl(
   itemId: string,
@@ -102,13 +115,20 @@ export function buildEbayFeedbackUrl(
     fdbkType: 'FeedbackReceivedAsSeller',
     item_id: itemId,
     username: seller,
-    // FF#2 2026-05-30 — these two params are what actually narrow the
-    // feedback list to just this item; without them the page renders the
-    // seller's full feedback history regardless of item_id.
     q: itemId,
     filter: 'feedback_page:RECEIVED_AS_SELLER',
+    // FF#3 2026-05-30 — `_item`-suffixed param set keeps the URL in
+    // "This Item" view across pagination + rating filters. eBay's UI
+    // emits all of these when director clicks the "This Item" tab +
+    // the rating filter chips; without them the server-rendered HTML
+    // falls back to the All Items default.
+    page_id_item: String(pageNumber),
     overall_rating_item: filter,
-    _pgn: String(pageNumber),
+    sort_item: 'RELEVANCEV2',
+    filter_image_item: 'false',
+    filter_video_item: 'false',
+    filter_automated_feedback_item: 'true',
+    filter_topic_item: '',
   });
   return `https://www.ebay.com/fdbk/mweb_profile?${params.toString()}`;
 }
