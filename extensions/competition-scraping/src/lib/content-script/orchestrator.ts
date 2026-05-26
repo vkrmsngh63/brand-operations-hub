@@ -38,6 +38,18 @@ import {
   urlsMatchByAsin,
   type AmazonStarFilter,
 } from './amazon-review-extractor.ts';
+import {
+  buildEbayListingUrl,
+  extractItemIdFromEbayUrl,
+  extractSellerFromFeedbackUrl,
+  extractSellerFromListingDocument,
+  feedbackFilterForStarRating,
+  isEbayFeedbackPage,
+  isEbayScrapableUrl,
+  runEbayReviewScrape,
+  urlsMatchByItemId,
+  type EbayFeedbackFilter,
+} from './ebay-review-extractor.ts';
 import { openScrapeTriggerModal } from './scrape-trigger-modal.ts';
 import {
   getSelectedPlatform,
@@ -1151,117 +1163,238 @@ if (msg.kind === 'enter-video-region-record-mode') {
       return;
     }
     if (msg.kind === 'start-review-scrape') {
-      // P-49 W2 Amazon Session 1 (2026-05-26): review-scrape gesture. The
-      // background dispatched us here from the "Scrape reviews for this URL"
-      // right-click. Steps:
-      //   1. Detect platform (Session 1: Amazon only — eBay / Etsy / Walmart
-      //      sub-cluster sessions land in their respective sessions).
-      //   2. Match against the saved CompetitorUrl rows by ASIN (Amazon's
-      //      product-reviews URL contains the same ASIN as the saved /dp/
-      //      product URL).
+      // P-49 W2 (2026-05-26 onwards) — review-scrape gesture. The background
+      // dispatched us here from the "Scrape reviews for this URL" right-click.
+      // Steps:
+      //   1. Detect platform — Amazon (Session 1 + 2 + DEPLOY 2026-05-28),
+      //      eBay (sub-cluster Session 1 2026-05-30). Future Etsy + Walmart
+      //      sub-clusters extend the dispatch chain here.
+      //   2. Match against the saved CompetitorUrl rows by the platform's
+      //      product identifier (Amazon: ASIN; eBay: item_id).
       //   3. Drive the per-platform extractor, routing per-review inserts
       //      through createCapturedReview() (background-proxied).
       const pageUrl = msg.pageUrl;
-      if (!isAmazonScrapableUrl(pageUrl)) {
-        // Future sub-cluster sessions land here for eBay / Etsy / Walmart;
-        // for now surface a no-op friendly message rather than failing
-        // silently. The progress indicator's not yet mounted, so use the
-        // existing capture-failure toast. Post-Session-2 fix-forward #1
-        // (2026-05-28): accepts /dp/<ASIN> + /product-reviews/<ASIN>/ both,
-        // since the cross-star loop fetches every page via fetch+DOMParser —
-        // the starting page is just an ASIN source.
-        showCaptureFailureToast(
-          'Review scraping is currently available on Amazon product pages (/dp/<ASIN>) or product-review pages. Other platforms ship in upcoming sessions.',
+      if (isAmazonScrapableUrl(pageUrl)) {
+        // Amazon path — preserved from W2 Session 1/2 + 2026-05-28 deploy
+        // FF#1 (accept /dp/<ASIN> + /product-reviews/<ASIN>/ both since the
+        // cross-star loop fetches every page via fetch+DOMParser; starting
+        // page is just an ASIN source).
+        const parent = savedCompetitorUrlRows.find((r) =>
+          urlsMatchByAsin(pageUrl, r.url),
         );
-        sendResponse({ ok: false });
-        return;
-      }
-      const parent = savedCompetitorUrlRows.find((r) =>
-        urlsMatchByAsin(pageUrl, r.url),
-      );
-      if (!parent) {
-        showCaptureFailureToast(
-          "Couldn't find a saved Competitor URL for this Amazon product. Open the product page first and click + Add to save it, then come back here and re-run the scrape.",
-        );
-        sendResponse({ ok: false });
-        return;
-      }
-      const asin = extractAsinFromAmazonUrl(pageUrl);
-      if (!asin) {
-        showCaptureFailureToast(
-          "Couldn't read the product code from this Amazon page. Try refreshing and re-running.",
-        );
-        sendResponse({ ok: false });
-        return;
-      }
-      // P-49 W2 Session 2 (2026-05-27): mount the Shadow DOM trigger modal
-      // BEFORE dispatching the scrape so director can override the per-URL
-      // cap for this one run (per §A.4 per-trigger override). Modal returns
-      // null on cancel; resolved with { capPerStar } on Start.
-      const parentRef = parent;
-      const parentName = parentRef.productName;
-      const triggerInputs = {
-        scopeLabel: parentName
-          ? `Amazon reviews — ${parentName}`
-          : 'Amazon reviews',
-        defaultCapPerStar:
-          parentRef.reviewScrapeCap && parentRef.reviewScrapeCap > 0
-            ? parentRef.reviewScrapeCap
-            : 200,
-      };
-      void openScrapeTriggerModal(triggerInputs).then((triggerResult) => {
-        if (triggerResult === null) {
-          // Director cancelled at the trigger modal — no scrape dispatched.
+        if (!parent) {
+          showCaptureFailureToast(
+            "Couldn't find a saved Competitor URL for this Amazon product. Open the product page first and click + Add to save it, then come back here and re-run the scrape.",
+          );
+          sendResponse({ ok: false });
           return;
         }
-        // Fix-forward #2 2026-05-28: translate the modal's selectedStars (numeric
-        // 1..5) into AmazonStarFilter[] for AmazonScrapeContext.starsToVisit;
-        // skip any rating that doesn't map (defensive — should never happen
-        // since the modal restricts to 1..5).
-        const starsToVisit: AmazonStarFilter[] = [];
-        for (const rating of triggerResult.selectedStars) {
-          const filter = starFilterForRating(rating);
-          if (filter) starsToVisit.push(filter);
+        const asin = extractAsinFromAmazonUrl(pageUrl);
+        if (!asin) {
+          showCaptureFailureToast(
+            "Couldn't read the product code from this Amazon page. Try refreshing and re-running.",
+          );
+          sendResponse({ ok: false });
+          return;
         }
-        const ctx = {
-          projectId,
-          competitorUrlId: parentRef.id,
-          asin,
-          capPerStar: triggerResult.capPerStar,
-          starsToVisit,
-          scopeLabel: triggerInputs.scopeLabel,
-          async saveReview(input: {
-            clientId: string;
-            starRating: number;
-            body: string;
-            title: string | null;
-            reviewerName: string | null;
-            reviewDate: string | null;
-            helpfulCount: number | null;
-            platform: 'amazon';
-            source: 'extension-scrape' | 'extension-scrape:customers-say';
-          }): Promise<void> {
-            await createCapturedReview(projectId, parentRef.id, {
-              clientId: input.clientId,
-              starRating: input.starRating,
-              body: input.body,
-              reviewerName: input.reviewerName ?? undefined,
-              reviewDate: input.reviewDate ?? undefined,
-              helpfulCount: input.helpfulCount ?? undefined,
-              platform: input.platform,
-              source: input.source,
-            });
-          },
+        const parentRef = parent;
+        const parentName = parentRef.productName;
+        const triggerInputs = {
+          scopeLabel: parentName
+            ? `Amazon reviews — ${parentName}`
+            : 'Amazon reviews',
+          defaultCapPerStar:
+            parentRef.reviewScrapeCap && parentRef.reviewScrapeCap > 0
+              ? parentRef.reviewScrapeCap
+              : 200,
         };
-        // Fire-and-forget after the modal resolves; the indicator owns the
-        // user-visible feedback. The Chrome message handler already returned
-        // ok above, so the message port is closed by now — both the modal
-        // and the scrape continue independently of it.
-        void runAmazonReviewScrape(ctx).catch((err) => {
-          console.error('[PLOS] Amazon review scrape failed:', err);
+        void openScrapeTriggerModal(triggerInputs).then((triggerResult) => {
+          if (triggerResult === null) {
+            // Director cancelled at the trigger modal — no scrape dispatched.
+            return;
+          }
+          // Fix-forward #2 2026-05-28: translate the modal's selectedStars
+          // (numeric 1..5) into AmazonStarFilter[] for AmazonScrapeContext
+          // .starsToVisit; skip any rating that doesn't map (defensive —
+          // should never happen since the modal restricts to 1..5).
+          const starsToVisit: AmazonStarFilter[] = [];
+          for (const rating of triggerResult.selectedStars) {
+            const filter = starFilterForRating(rating);
+            if (filter) starsToVisit.push(filter);
+          }
+          const ctx = {
+            projectId,
+            competitorUrlId: parentRef.id,
+            asin,
+            capPerStar: triggerResult.capPerStar,
+            starsToVisit,
+            scopeLabel: triggerInputs.scopeLabel,
+            async saveReview(input: {
+              clientId: string;
+              starRating: number;
+              body: string;
+              title: string | null;
+              reviewerName: string | null;
+              reviewDate: string | null;
+              helpfulCount: number | null;
+              platform: 'amazon';
+              source: 'extension-scrape' | 'extension-scrape:customers-say';
+            }): Promise<void> {
+              await createCapturedReview(projectId, parentRef.id, {
+                clientId: input.clientId,
+                starRating: input.starRating,
+                body: input.body,
+                reviewerName: input.reviewerName ?? undefined,
+                reviewDate: input.reviewDate ?? undefined,
+                helpfulCount: input.helpfulCount ?? undefined,
+                platform: input.platform,
+                source: input.source,
+              });
+            },
+          };
+          void runAmazonReviewScrape(ctx).catch((err) => {
+            console.error('[PLOS] Amazon review scrape failed:', err);
+          });
         });
-      });
-      sendResponse({ ok: true });
+        sendResponse({ ok: true });
+        return;
+      }
+      if (isEbayScrapableUrl(pageUrl)) {
+        // eBay path — sub-cluster Session 1 (2026-05-30). Accepts both
+        // /itm/<id> listing pages + /fdbk/mweb_profile?...&item_id=<id>
+        // feedback pages per the FF#1 symmetric helper Pattern from the
+        // 2026-05-28 Amazon deploy.
+        const parent = savedCompetitorUrlRows.find((r) =>
+          urlsMatchByItemId(pageUrl, r.url),
+        );
+        if (!parent) {
+          showCaptureFailureToast(
+            "Couldn't find a saved Competitor URL for this eBay listing. Open the listing page first and click + Add to save it, then come back here and re-run the scrape.",
+          );
+          sendResponse({ ok: false });
+          return;
+        }
+        const itemId = extractItemIdFromEbayUrl(pageUrl);
+        if (!itemId) {
+          showCaptureFailureToast(
+            "Couldn't read the item ID from this eBay page. Try refreshing and re-running.",
+          );
+          sendResponse({ ok: false });
+          return;
+        }
+        const parentRef = parent;
+        const parentName = parentRef.productName;
+        const triggerInputs = {
+          scopeLabel: parentName
+            ? `eBay feedback — ${parentName}`
+            : 'eBay feedback',
+          defaultCapPerStar:
+            parentRef.reviewScrapeCap && parentRef.reviewScrapeCap > 0
+              ? parentRef.reviewScrapeCap
+              : 200,
+          // eBay maps Neutral → 3-star + Negative → 1-star per the director's
+          // verbatim 2026-05-25 spec (Positive feedback excluded by design).
+          // The modal labels these as "3★" + "1★" — director understands the
+          // mapping from the scope label ("eBay feedback — Product X").
+          selectableStars: [1, 3],
+          defaultSelectedStars: [1, 3],
+        };
+        void openScrapeTriggerModal(triggerInputs).then(async (triggerResult) => {
+          if (triggerResult === null) {
+            // Director cancelled at the trigger modal — no scrape dispatched.
+            return;
+          }
+          // Resolve seller — either from the trigger URL's `username` param
+          // (when director triggered from a /fdbk/ page) or by fetching the
+          // /itm/<itemId> listing page and parsing the seller card.
+          let seller: string | null = null;
+          if (isEbayFeedbackPage(pageUrl)) {
+            seller = extractSellerFromFeedbackUrl(pageUrl);
+          }
+          if (!seller) {
+            try {
+              const resp = await fetch(buildEbayListingUrl(itemId), {
+                credentials: 'include',
+                headers: { Accept: 'text/html' },
+              });
+              if (resp.ok) {
+                const html = await resp.text();
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                seller = extractSellerFromListingDocument(doc);
+              }
+            } catch (err) {
+              console.warn('[PLOS] eBay seller-resolve fetch failed:', err);
+            }
+          }
+          if (!seller) {
+            showCaptureFailureToast(
+              "Couldn't read the seller name from this eBay listing. Try opening the feedback page for this listing directly and re-running.",
+            );
+            return;
+          }
+          // Translate modal's selectedStars into eBay feedback filters; skip
+          // any rating outside the {3, 1} eBay mapping (defensive — modal
+          // restricts to [1, 3]).
+          const filtersToVisit: EbayFeedbackFilter[] = [];
+          for (const rating of triggerResult.selectedStars) {
+            const filter = feedbackFilterForStarRating(rating);
+            if (filter) filtersToVisit.push(filter);
+          }
+          if (filtersToVisit.length === 0) {
+            // Defensive — modal Start button is disabled when zero checkboxes
+            // selected, so this branch shouldn't fire. Surface a friendly
+            // message if it does.
+            showCaptureFailureToast(
+              'Pick at least one feedback type (Neutral or Negative) to scrape.',
+            );
+            return;
+          }
+          const sellerRef = seller;
+          const ctx = {
+            projectId,
+            competitorUrlId: parentRef.id,
+            itemId,
+            seller: sellerRef,
+            capPerFilter: triggerResult.capPerStar,
+            filtersToVisit,
+            scopeLabel: triggerInputs.scopeLabel,
+            async saveReview(input: {
+              clientId: string;
+              starRating: number;
+              body: string;
+              title: null;
+              reviewerName: string | null;
+              reviewDate: string | null;
+              helpfulCount: null;
+              platform: 'ebay';
+              source: 'extension-scrape';
+            }): Promise<void> {
+              await createCapturedReview(projectId, parentRef.id, {
+                clientId: input.clientId,
+                starRating: input.starRating,
+                body: input.body,
+                reviewerName: input.reviewerName ?? undefined,
+                reviewDate: input.reviewDate ?? undefined,
+                helpfulCount: input.helpfulCount ?? undefined,
+                platform: input.platform,
+                source: input.source,
+              });
+            },
+          };
+          void runEbayReviewScrape(ctx).catch((err) => {
+            console.error('[PLOS] eBay review scrape failed:', err);
+          });
+        });
+        sendResponse({ ok: true });
+        return;
+      }
+      // Future Etsy + Walmart sub-cluster sessions land here. For now,
+      // surface a friendly message rather than failing silently.
+      showCaptureFailureToast(
+        'Review scraping is currently available on Amazon and eBay product pages. Etsy and Walmart ship in upcoming sessions.',
+      );
+      sendResponse({ ok: false });
       return;
     }
   };
