@@ -2,47 +2,61 @@
 // sub-cluster Session 1 per docs/REVIEWS_PHASE_2_DESIGN.md §C.2 + §A.2
 // priority order (Etsy third per-platform sub-cluster after Amazon + eBay).
 //
-// Architecture mirrors amazon-review-extractor.ts + ebay-review-extractor.ts
-// with three Etsy-specific adaptations per the director-supplied 2026-05-25
-// verbatim spec preserved in the P-49 ROADMAP entry:
+// FF#1 (rewrite) — architecture pivot from URL-construction (Amazon + eBay
+// Pattern) to live-DOM-driver (Session 1 Amazon-original "scrape current
+// view" Pattern, re-applied to Etsy's deep-dive review overlay). Reason:
+// Etsy's "View all reviews for this item" overlay loads via AJAX on the
+// same listing URL — no separate URL exists for the overlay or for per-
+// star filters or for pagination. The URL-construction approach shipped
+// in the initial Session 1 build commit BUSTED in Phase 4 because the
+// scraper fetched the bare listing URL which has only ~2-3 inline reviews
+// visible, missing the overlay's per-page corpus of 8 reviews.
 //
-//   1. Reviews are on the listing page itself (`/listing/<ID>/...`) + a
-//      "View all reviews for this item" overlay with per-star percentage
-//      filter affordances at top-right (hover to see %, click to filter).
-//      ~8 reviews/page in the overlay paginated.
+// Empirical evidence: director's 2026-05-31 paste of the overlay outerHTML
+// (captured via DevTools Copy outerHTML after clicking "View all reviews
+// for this item"). Selectors below are all empirically grounded in that
+// paste, not speculation.
 //
-//   2. Capture review body only — Etsy doesn't expose a helpful-count
-//      signal or per-review title field per the director spec.
+// Architecture (live-DOM driver):
+//   1. Verify we're on a /listing/<ID> page.
+//   2. Click the "View all reviews for this item" button on the listing
+//      page (text-content-based finder since the page uses Etsy's wt-*
+//      design system classes with no stable data-testid).
+//   3. Wait for the overlay to mount via polling (max 5s).
+//   4. For each star in starsToVisit (3, 2, 1 by default):
+//      a. Click the histogram filter button `[data-rating-value="<N>"]`
+//         inside `[data-reviews-histogram="true"]`. SKIP cleanly if
+//         the button is disabled (aria-disabled="true" — happens when
+//         the listing has 0 reviews of that rating; e.g., empirical
+//         2-star case in director's HTML showed 0%).
+//      b. Wait for the reviews container to swap content (poll until
+//         the first review row's data-review-region ID changes from
+//         the pre-click snapshot).
+//      c. Loop pagination:
+//         - Walk visible rows in `[data-review-region]` containers.
+//         - Persist each via saveReview.
+//         - If cap hit, break.
+//         - Find Next page button in the pagination nav.
+//         - If Next disabled or absent, break (last page).
+//         - Click Next; wait for content swap; loop.
 //
-//   3. Default capture: 3-star + 2-star + 1-star reviews (negative +
-//      middling only) at 200/star user-adjustable. Etsy's positive 4-star +
-//      5-star reviews can be opted into via the trigger modal but aren't on
-//      the default capture path — competitively informative reviews skew
-//      toward the negative + middling buckets.
-//
-// Reuses W2 Amazon + eBay Patterns from the 2026-05-28 + 2026-05-30 deploys:
+// Reuses W2 Amazon + eBay Patterns where applicable:
 //   • FF#1 symmetric URL helpers (isEtsyListingPage + isEtsyScrapableUrl +
 //     extractListingIdFromEtsyUrl + urlsMatchByListingId).
-//   • FF#4 URL-construction-based pagination (buildEtsyReviewUrl drives the
-//     pagination loop via `?ratings=<N>&page=<N>` query parameters rather
-//     than scraping next-page links which evolve with the UI).
-//   • Cross-filter loop structure mirroring the W2 Amazon 5-star loop +
-//     W2 eBay 2-filter loop (3 → 2 → 1 stars by default; anti-bot abort
-//     on captcha + rate-limit per §A.15).
-//   • Shadow DOM trigger modal with per-URL cap override (reused as-is;
-//     selectableStars=[1,2,3,4,5] + defaultSelectedStars=[3,2,1] passed
-//     at orchestration time per the director-verbatim default).
-//   • NEW JSON data-island extraction Pattern from yesterday's eBay FF#5
-//     applied from the start for any seller/shop metadata that Etsy's
-//     React UI may render via component state rather than `<a href>`
-//     links — extractShopNameFromListingHtml below.
-//   • NEW Tabpanel-scoped DOM walking Pattern from yesterday's eBay FF#5
-//     applied from the start — if Etsy's review overlay uses tabbed UI
-//     with hidden inactive tabs, the walker scope falls through to the
-//     active panel before whole-doc fallback.
+//   • Cross-star loop structure mirroring W2 Amazon + eBay sub-clusters.
+//   • Shadow DOM trigger modal reuse with per-URL cap override (orchestrator
+//     side; selectableStars=[1,2,3,4,5] + defaultSelectedStars=[3,2,1]).
+//   • §A.15 anti-bot conservative random delays between clicks.
+//
+// Does NOT reuse the FF#4 URL-construction-based pagination Pattern from
+// Amazon + eBay — that Pattern requires a separate URL per page, which
+// Etsy doesn't expose. Instead drives the live overlay UI via clicks.
 
 import {
-  paginate,
+  GENERIC_CAPTCHA_SELECTORS,
+  detectCaptcha,
+  randomPaginationDelay,
+  type ScrapeProgress,
   type ScrapeProgressListener,
 } from './scrape-pagination.ts';
 import { openScrapeProgressIndicator } from './scrape-progress-indicator.ts';
@@ -51,13 +65,15 @@ const ETSY_URL_PREFIX = /^https?:\/\/(www\.)?etsy\.com\//;
 const LISTING_PAGE_PATH = /\/listing\/(\d+)\b/;
 
 const DEFAULT_CAP_PER_STAR = 200;
+const OVERLAY_WAIT_TIMEOUT_MS = 8000;
+const REVIEWS_SWAP_TIMEOUT_MS = 8000;
+const POLL_INTERVAL_MS = 200;
+const POST_SWAP_SETTLE_MS = 400;
 
 // Etsy's per-star filter values per the director's verbatim 2026-05-25 spec.
 // All 5 stars are selectable in the trigger modal (director can opt into
 // 4-star + 5-star captures) but the DEFAULT selection is the negative +
-// middling buckets only (3, 2, 1). The cross-filter loop visits in
-// descending order so that director sees the most-recently-filtered most
-// competitively-informative reviews land first.
+// middling buckets only (3, 2, 1).
 export const ETSY_STAR_FILTERS = [1, 2, 3, 4, 5] as const;
 export type EtsyStarFilter = (typeof ETSY_STAR_FILTERS)[number];
 
@@ -83,44 +99,7 @@ export function isEtsyStarFilter(rating: number): rating is EtsyStarFilter {
   );
 }
 
-/**
- * Returns the canonical Etsy listing page URL for the given listing_id.
- * The listing page is where extractShopNameFromListingHtml resolves the
- * shop name + where review rows render inline before the overlay opens.
- */
-export function buildEtsyListingUrl(listingId: string): string {
-  return `https://www.etsy.com/listing/${listingId}`;
-}
-
-/**
- * Returns the canonical Etsy review URL for the given listing_id + star
- * filter + page number. Per the director-supplied 2026-05-25 spec, the
- * "View all reviews for this item" overlay paginates at ~8 reviews/page
- * with per-star percentage filter affordances at top-right. The URL
- * parameter contract is built on `?ratings=<N>` (the per-star filter) +
- * `?page=<N>` (the pagination cursor) — both attached to the listing URL.
- *
- * Per FF#4 Pattern from the 2026-05-28 Amazon deploy: prefer URL-construction
- * pagination over DOM-link-scraping when the URL parameter contract is
- * stable. Stop signal = the fetched page renders 0 review rows (caught
- * inside `advanceToNextPage` in `runEtsyReviewScrape`).
- *
- * If Phase 4 verification reveals the URL params need adjustment (e.g.,
- * Etsy expects `rating=<N>` singular or `&page_offset=<N>`), this is the
- * canonical fix point — adjust the param shape + re-deploy following the
- * eBay FF#3 precedent.
- */
-export function buildEtsyReviewUrl(
-  listingId: string,
-  starFilter: EtsyStarFilter,
-  pageNumber = 1,
-): string {
-  const params = new URLSearchParams({
-    ratings: String(starFilter),
-    page: String(pageNumber),
-  });
-  return `https://www.etsy.com/listing/${listingId}?${params.toString()}`;
-}
+// ─── URL detection helpers (FF#1 symmetric Pattern) ──────────────────────
 
 /** Returns true when the given URL is a recognized Etsy listing page. */
 export function isEtsyListingPage(url: string): boolean {
@@ -129,12 +108,10 @@ export function isEtsyListingPage(url: string): boolean {
 
 /**
  * Returns true when the given URL is any Etsy page the scrape can dispatch
- * from. For Etsy reviews live on the listing page itself (no separate
- * review URL shape like Amazon's `/product-reviews/<ASIN>/` or eBay's
- * `/fdbk/mweb_profile?...`), so `isEtsyScrapableUrl` reduces to
- * `isEtsyListingPage`. Kept as a separate function to preserve the FF#1
- * symmetric helper Pattern from the 2026-05-28 Amazon deploy — the
- * orchestrator dispatch chain uses `isXxxScrapableUrl` per platform.
+ * from. For Etsy, reviews live on the listing page itself, so
+ * `isEtsyScrapableUrl` reduces to `isEtsyListingPage`. Kept as a separate
+ * function to preserve the FF#1 symmetric helper Pattern from the
+ * 2026-05-28 Amazon deploy.
  */
 export function isEtsyScrapableUrl(url: string): boolean {
   return isEtsyListingPage(url);
@@ -161,8 +138,7 @@ export function extractListingIdFromEtsyUrl(url: string): string | null {
 
 /**
  * Returns true when the given Etsy URL matches the same listing_id as the
- * given saved CompetitorUrl's URL. Mirrors `urlsMatchByAsin` + `urlsMatchByItemId`
- * Patterns from Amazon + eBay (FF#1 symmetric helper from 2026-05-28).
+ * given saved CompetitorUrl's URL.
  */
 export function urlsMatchByListingId(
   pageUrl: string,
@@ -174,59 +150,177 @@ export function urlsMatchByListingId(
   return savedId === pageId;
 }
 
-// ─── DOM walkers (operate on any Document — current page OR fetched HTML) ─
+// ─── DOM walkers + DOM driver helpers (empirically grounded in director's
+//     2026-05-31 paste of the overlay outerHTML) ──────────────────────────
 
 export interface EtsyReviewRow {
   body: string;
   reviewerName: string | null;
   reviewDate: string | null;
   /**
-   * Star rating parsed from the per-review aria-label when present. May be
-   * null on parse failure; the orchestrator falls back to the currently-
-   * walked filter's star value when persisting the row.
+   * Star rating parsed from the per-review `[role="img"][aria-label^="Rating:"]`
+   * element. Null on parse failure; the orchestrator falls back to the
+   * currently-walked filter's star value when persisting.
    */
   starRating: number | null;
+  /**
+   * Etsy's per-review transaction ID from the `data-review-region` attribute.
+   * Used to detect content swap after histogram-filter click + pagination
+   * Next click (the first review row's ID changes when AJAX reload completes).
+   */
+  reviewRegionId: string | null;
 }
 
 /**
- * Extracts review rows from a parsed Etsy listing-page Document.
+ * Returns the deep-dive review overlay element when present in the document.
+ * The overlay is the dialog mounted when director clicks "View all reviews
+ * for this item" on the listing page. Returns null when the overlay isn't
+ * currently mounted.
  *
- * Per the director-supplied 2026-05-25 spec: "Reviews for this item" section
- * on the listing page + "View all reviews for this item" overlay. The
- * overlay paginates at ~8 reviews/page. Capture review body only (Etsy
- * doesn't expose helpful-count or title fields).
- *
- * Apply NEW Pattern from yesterday's eBay FF#5 — Tabpanel-scoped DOM walking:
- * if Etsy's overlay uses tabbed UI with hidden inactive tabs (per the
- * Generalization noted in CORRECTIONS_LOG §Entry 2026-05-30 sub-observation b),
- * scope the walker to `[role=tabpanel]:not([hidden])` to avoid capturing
- * rows from inactive panels. Falls through to whole-doc scope as a
- * classic-view safety net.
- *
- * Row selector candidates (each tried in order; first non-empty match wins):
- *   1. `[data-testid="review-item"]` — modern Etsy data-testid (most stable).
- *   2. `[data-region="review"]` — Etsy's data-region marker for review wrappers.
- *   3. `.shop-review-card` — list-shop-review-cards container shape.
- *   4. `.review-listing-item` — legacy / classic-view fallback.
+ * Empirical: per director's 2026-05-31 HTML paste, the overlay is a
+ * `<div aria-modal="true" role="dialog" class="deep-dive-sheet center-sheet
+ * custom-width wt-sheet wt-sheet--position-bottom">`. The `aria-modal` +
+ * `role` selector pair is the most stable identifier.
  */
-export function extractReviewsFromDocument(doc: Document): EtsyReviewRow[] {
-  // NEW Pattern (eBay FF#5 2026-05-30) — scope to the visible tabpanel if
-  // one exists; falls through to whole-doc scope as classic-view fallback.
-  const scope: ParentNode =
-    doc.querySelector('[role=tabpanel]:not([hidden])') ?? doc;
+export function findOverlayContainer(doc: ParentNode): Element | null {
+  return (
+    doc.querySelector('[aria-modal="true"][role="dialog"].deep-dive-sheet') ??
+    doc.querySelector('.deep-dive-sheet') ??
+    doc.querySelector('[aria-modal="true"][role="dialog"]')
+  );
+}
 
-  const ROW_SELECTORS: readonly string[] = [
-    '[data-testid="review-item"]',
-    '[data-region="review"]',
-    '.shop-review-card',
-    '.review-listing-item',
-  ];
-  let rowEls: Element[] = [];
-  for (const sel of ROW_SELECTORS) {
-    rowEls = Array.from(scope.querySelectorAll(sel));
-    if (rowEls.length > 0) break;
+/**
+ * Returns the reviews list container element within the overlay. Reviews
+ * are children of this container; pagination + histogram filter live as
+ * siblings outside it.
+ *
+ * Empirical: `<div data-deep-dive-reviews-container="true">` wraps the
+ * `[data-review-region]` row list per director's HTML paste.
+ */
+export function findReviewsContainer(overlay: ParentNode): Element | null {
+  return overlay.querySelector('[data-deep-dive-reviews-container="true"]');
+}
+
+/**
+ * Returns the histogram filter button for the given star rating (1..5),
+ * or null when no matching button exists. The button is clickable even
+ * when "disabled" (aria-disabled="true") in markup; callers must check
+ * `isHistogramButtonDisabled` before clicking to avoid wasted clicks.
+ *
+ * Empirical: the histogram wraps 5 `<button data-rating-value="N">`
+ * elements inside `<div data-reviews-histogram="true">`. Each button
+ * represents one star rating; the 2-star button in director's HTML
+ * carried both `disabled=""` + `aria-disabled="true"` because the
+ * listing has 0 2-star reviews.
+ */
+export function findHistogramButton(
+  overlay: ParentNode,
+  rating: EtsyStarFilter,
+): Element | null {
+  return overlay.querySelector(
+    `[data-reviews-histogram="true"] button[data-rating-value="${String(rating)}"]`,
+  );
+}
+
+/**
+ * Returns true when a histogram filter button is in its disabled state.
+ * Etsy marks histogram buttons as disabled when the listing has 0 reviews
+ * of that rating (e.g., the 2-star bucket on a listing with no 2-star
+ * reviews). Disabled clicks no-op + cause the AJAX reload to never fire,
+ * so we must skip them rather than wait forever for a content swap.
+ */
+export function isHistogramButtonDisabled(button: Element): boolean {
+  return (
+    button.getAttribute('aria-disabled') === 'true' ||
+    button.hasAttribute('disabled')
+  );
+}
+
+/**
+ * Returns the pagination Next button within the overlay, or null when the
+ * pagination nav is absent (e.g., the filter has only 1 page of results).
+ *
+ * Empirical: pagination lives in `<nav aria-label="Pagination of reviews"
+ * data-clg-id="WtPagination">`. The Next button is the LAST button in the
+ * action-group and contains `<span class="wt-screen-reader-only">Next</span>`.
+ * The Previous button contains the analogous "Previous" screen-reader span.
+ * Both Next + Previous are disabled (`aria-disabled="true"` + `disabled=""`)
+ * when at the corresponding boundary.
+ */
+export function findNextPageButton(overlay: ParentNode): Element | null {
+  const nav = overlay.querySelector(
+    'nav[aria-label="Pagination of reviews"], nav[data-clg-id="WtPagination"]',
+  );
+  if (!nav) return null;
+  const buttons = Array.from(nav.querySelectorAll('button'));
+  for (const btn of buttons) {
+    const srOnly = btn.querySelector('.wt-screen-reader-only');
+    const label = srOnly?.textContent?.trim() ?? '';
+    if (label === 'Next') return btn;
   }
+  return null;
+}
 
+/**
+ * Returns true when the pagination Next button is in its disabled state
+ * (we're on the last page; no further pagination available).
+ */
+export function isNextPageButtonDisabled(button: Element): boolean {
+  return (
+    button.getAttribute('aria-disabled') === 'true' ||
+    button.hasAttribute('disabled')
+  );
+}
+
+/**
+ * Returns the "View all reviews for this item" button on the listing page,
+ * or null when the button can't be located. Etsy doesn't expose a stable
+ * data-testid for this button, so we fall back to text-content matching
+ * across all `<button>` + `<a>` elements in the document.
+ *
+ * Defensive: trims + lowercases for case-insensitive comparison; matches
+ * canonical phrasing first, then a more permissive "view all reviews" prefix.
+ */
+export function findViewAllReviewsButton(doc: ParentNode): Element | null {
+  const CANONICAL = 'view all reviews for this item';
+  const FALLBACK = 'view all reviews';
+  const candidates = Array.from(doc.querySelectorAll('button, a'));
+
+  // Pass 1: exact canonical text match
+  for (const el of candidates) {
+    const text = (el.textContent ?? '').trim().toLowerCase();
+    if (text === CANONICAL) return el;
+  }
+  // Pass 2: starts-with canonical
+  for (const el of candidates) {
+    const text = (el.textContent ?? '').trim().toLowerCase();
+    if (text.startsWith(CANONICAL)) return el;
+  }
+  // Pass 3: starts-with fallback prefix (covers regional variants like
+  // "View all reviews (107)" or "View all 107 reviews")
+  for (const el of candidates) {
+    const text = (el.textContent ?? '').trim().toLowerCase();
+    if (text.startsWith(FALLBACK)) return el;
+  }
+  return null;
+}
+
+/**
+ * Extracts review rows from the overlay. Walks each `[data-review-region]`
+ * direct/descendant inside the reviews container, extracting body + name +
+ * date + star rating.
+ *
+ * Empirical: per director's HTML paste, each `<div data-review-region="<id>">`
+ * wraps a single review. The body is `<div class="wt-text-body">`; the
+ * reviewer name is a `<a href*="/people/">` link; the date is a sibling
+ * `<span>` of that link with class `wt-text-body-small--tight`; the rating
+ * is in `<div role="img" aria-label="Rating: N out of 5 stars">`.
+ */
+export function extractReviewsFromOverlay(overlay: ParentNode): EtsyReviewRow[] {
+  const container = findReviewsContainer(overlay);
+  if (!container) return [];
+  const rowEls = Array.from(container.querySelectorAll('[data-review-region]'));
   const rows: EtsyReviewRow[] = [];
   for (const el of rowEls) {
     const body = extractReviewBody(el);
@@ -234,24 +328,25 @@ export function extractReviewsFromDocument(doc: Document): EtsyReviewRow[] {
     const reviewerName = extractReviewerName(el);
     const reviewDate = extractReviewDate(el);
     const starRating = extractReviewStarRating(el);
-    rows.push({ body, reviewerName, reviewDate, starRating });
+    const reviewRegionId = el.getAttribute('data-review-region');
+    rows.push({ body, reviewerName, reviewDate, starRating, reviewRegionId });
   }
   return rows;
 }
 
 /**
- * Extracts the review body text from a single Etsy review element. Tries
- * the canonical data-testid first, then a small set of class-name + tag
- * fallbacks. Returns the trimmed text, or empty string when no selector
- * matches.
+ * Extracts the review body text from a single review row element.
+ *
+ * Empirical: `<div class="wt-text-body">I think this is working, thank you!</div>`
+ * is the innermost body wrapper per director's HTML paste. Falls back to
+ * a couple of older Etsy class names + the generic .review-text in case
+ * Etsy's classic-view markup is rendered.
  */
 export function extractReviewBody(rowEl: Element): string {
   const SELECTORS: readonly string[] = [
-    '[data-testid="review-text"]',
-    '[data-region="review-text"]',
+    '.wt-text-body',
     '.shop-review-card__text',
     '.review-text',
-    'p.shop2-review-text',
   ];
   for (const sel of SELECTORS) {
     const bodyEl = rowEl.querySelector(sel);
@@ -262,45 +357,58 @@ export function extractReviewBody(rowEl: Element): string {
 }
 
 /**
- * Extracts the reviewer's display name from a single Etsy review element.
- * Etsy renders usernames as plain text (no anonymization like eBay's
- * "b***r" pattern). Returns null when no selector matches.
+ * Extracts the reviewer's display name from a single review row element.
+ *
+ * Empirical: `<a href="https://www.etsy.com/people/<handle>?ref=l_review"
+ * class="wt-text-title-small wt-text-link-no-underline">Jenny</a>` per
+ * director's HTML paste. The /people/ href is the most stable selector.
  */
 export function extractReviewerName(rowEl: Element): string | null {
-  const SELECTORS: readonly string[] = [
-    '[data-testid="review-reviewer-name"]',
-    '[data-region="reviewer-name"]',
-    '.shop-review-card__reviewer',
-    '.review-reviewer-name',
-    'a[href*="/people/"]',
-  ];
-  for (const sel of SELECTORS) {
-    const userEl = rowEl.querySelector(sel);
-    const text = userEl?.textContent?.trim() ?? '';
-    if (text.length > 0) return text;
-  }
-  return null;
+  const link = rowEl.querySelector('a[href*="/people/"]');
+  const text = link?.textContent?.trim() ?? '';
+  return text.length > 0 ? text : null;
 }
 
 /**
- * Extracts the review date from a single Etsy review element. Etsy renders
- * dates in a few shapes — "Apr 12, 2024", "Reviewed Apr 12, 2024", and
- * canonical `<time datetime="...">` markup. Returns the parsed ISO
- * timestamp when parseable; the raw rendered text on parse failure; null
- * when no date element is found. The downstream UI accepts both shapes.
+ * Extracts the review date from a single review row element.
+ *
+ * Empirical: the date is a `<span class="wt-bl-xs wt-text-body-small--tight
+ * wt-sem-text-secondary">May 20, 2026</span>` rendered as a sibling of the
+ * reviewer-name `<a>` in the same horizontal flex container. The most
+ * stable selector path is the parent flex div followed by `span` siblings
+ * of the link; we fall through to several class-name probes.
+ *
+ * Returns the parsed ISO timestamp when parseable; the raw rendered text
+ * on parse failure; null when no date element is found.
  */
 export function extractReviewDate(rowEl: Element): string | null {
+  // Primary: the span that's a sibling of the /people/ reviewer-name link.
+  const link = rowEl.querySelector('a[href*="/people/"]');
+  if (link?.parentElement) {
+    const siblings = Array.from(link.parentElement.children);
+    for (const sib of siblings) {
+      if (sib === link) continue;
+      if (sib.tagName !== 'SPAN') continue;
+      const text = sib.textContent?.trim() ?? '';
+      if (text.length === 0) continue;
+      const iso = parseEtsyReviewDate(text);
+      if (iso) return iso;
+      // Heuristic: bare text that looks like a date but doesn't parse
+      // returns as-is so downstream UI shows something rather than blank.
+      if (/\d{4}/.test(text) || /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\b/i.test(text)) {
+        return text;
+      }
+    }
+  }
+  // Fallbacks for classic-view variants.
   const SELECTORS: readonly string[] = [
-    '[data-testid="review-date"]',
-    '[data-region="review-date"]',
+    '.wt-text-body-small--tight.wt-sem-text-secondary',
     '.shop-review-card__date',
     '.review-date',
     'time',
   ];
   for (const sel of SELECTORS) {
     const dateEl = rowEl.querySelector(sel);
-    // <time datetime="..."> is the most-reliable extraction shape — prefer
-    // the datetime attribute over the textContent when both are present.
     const dt = (dateEl as HTMLTimeElement | null)?.dateTime;
     if (dt) {
       const iso = parseEtsyReviewDate(dt);
@@ -315,29 +423,42 @@ export function extractReviewDate(rowEl: Element): string | null {
 }
 
 /**
- * Extracts the per-review star rating (1-5 integer) from a single Etsy
- * review element. Etsy renders ratings as a row of star icons with an
- * aria-label carrying "<N> out of 5 stars" or "<N> stars" on the
- * container. Returns null on parse failure — the orchestrator falls back
- * to the currently-walked filter's star value when persisting the row.
+ * Extracts the per-review star rating (1-5 integer) from a single review
+ * row element.
+ *
+ * Empirical: `<div role="img" aria-label="Rating: 5 out of 5 stars" ...>`
+ * is the canonical rating element per director's HTML paste. The aria-label
+ * pattern "Rating: <N> out of 5 stars" is consistent across all reviews.
  */
 export function extractReviewStarRating(rowEl: Element): number | null {
+  const ratingEl = rowEl.querySelector('[role="img"][aria-label^="Rating:"]');
+  const label = ratingEl?.getAttribute('aria-label')?.trim() ?? '';
+  if (label.length > 0) {
+    const m = label.match(/Rating:\s*(\d+(?:\.\d+)?)/i);
+    if (m) {
+      const n = parseFloat(m[1] ?? '');
+      if (Number.isFinite(n)) {
+        const rounded = Math.round(n);
+        if (rounded >= 1 && rounded <= 5) return rounded;
+      }
+    }
+  }
+  // Fallback: any aria-label with a "<N> stars" phrase (covers classic view).
   const ariaCandidates = Array.from(rowEl.querySelectorAll('[aria-label]'));
   for (const el of ariaCandidates) {
-    const label = el.getAttribute('aria-label')?.trim() ?? '';
-    const rating = parseEtsyStarRating(label);
+    const fallback = el.getAttribute('aria-label')?.trim() ?? '';
+    const rating = parseEtsyStarRating(fallback);
     if (rating !== null) return rating;
   }
   return null;
 }
 
 /**
- * Parses an Etsy star-rating aria-label string. Common shapes:
+ * Parses an Etsy star-rating string. Common shapes:
+ *   "Rating: 5 out of 5 stars" → 5 (canonical overlay shape)
  *   "5 out of 5 stars" → 5
  *   "4 stars" → 4
- *   "3.5 out of 5 stars" → 4 (Math.round)
- * Returns null on parse failure (e.g., aria-label that doesn't contain a
- * star-rating phrase, or that resolves to a number outside 1..5).
+ *   "3.5 out of 5 stars" → 4 (rounded)
  */
 export function parseEtsyStarRating(text: string): number | null {
   const trimmed = text.trim();
@@ -353,121 +474,44 @@ export function parseEtsyStarRating(text: string): number | null {
 
 /**
  * Attempts to parse an Etsy review date string into an ISO 8601 timestamp.
- * Handles the "Reviewed Apr 12, 2024" prefix Etsy sometimes prepends in
- * its rendered text. Returns null on parse failure — caller falls back to
- * the raw rendered text per `extractReviewDate`'s contract.
+ * Handles the "Reviewed Apr 12, 2024" prefix Etsy sometimes prepends.
+ * Returns null on parse failure.
  */
 export function parseEtsyReviewDate(text: string): string | null {
   const trimmed = text.trim();
   if (trimmed.length === 0) return null;
-  // Strip the leading "Reviewed" prefix Etsy sometimes prepends.
   const stripped = trimmed.replace(/^Reviewed\s+/i, '');
   const d = new Date(stripped);
   if (Number.isNaN(d.getTime())) return null;
   return d.toISOString();
 }
 
-// ─── Listing metadata (JSON data-island Pattern from FF#5 2026-05-30) ────
-
-/**
- * Extracts the seller shop name from an Etsy listing page's raw HTML.
- *
- * Applies the NEW JSON data-island extraction Pattern from yesterday's eBay
- * FF#5 (2026-05-30) — modern site listing pages frequently embed seller +
- * listing metadata in JSON blobs (Etsy in particular embeds extensive
- * shop + listing data in its Apollo / Redux blobs). Regex extraction
- * against raw HTML is more robust than DOM-link probing when the visible
- * UI renders the same data via React components rather than `<a href>`
- * links.
- *
- * Tries several plausible JSON keys for the shop name. Falls back to null
- * when none match — the DOM-based fallback path can still surface the
- * shop name via `extractShopNameFromListingDocument`.
- *
- * NOTE: this is currently informational — the W2 Etsy Session 1 dispatch
- * doesn't require the shop name to drive the scrape (Etsy reviews live on
- * the listing page, no separate seller-feedback URL like eBay's). Kept
- * here for future polish + parity with the eBay precedent.
- */
-export function extractShopNameFromListingHtml(html: string): string | null {
-  // Common JSON keys for the Etsy shop name across the embedded data islands.
-  const PATTERNS: readonly RegExp[] = [
-    /"shop_name":"([^"]+)"/,
-    /"shopName":"([^"]+)"/,
-    /"shop":\s*\{[^}]*?"name":"([^"]+)"/,
-  ];
-  for (const re of PATTERNS) {
-    const m = html.match(re);
-    if (m) {
-      const raw = m[1];
-      if (raw && raw.length > 0) {
-        return raw.replace(/\\u([0-9a-fA-F]{4})/g, (_, code) =>
-          String.fromCharCode(parseInt(code, 16)),
-        );
-      }
-    }
-  }
-  return null;
-}
-
-/**
- * Legacy DOM-based shop name extraction — preserved as a fallback for
- * regional / classic-view listing pages that may not carry the JSON data
- * island. Probes for the shop-name link or data attribute in the seller-
- * card area.
- */
-export function extractShopNameFromListingDocument(
-  doc: Document,
-): string | null {
-  // data-shop-name attribute — direct attribute lookup.
-  const dataEl = doc.querySelector('[data-shop-name]');
-  const dataAttr = dataEl?.getAttribute('data-shop-name');
-  if (dataAttr && dataAttr.length > 0) return dataAttr;
-
-  // Text-content selectors — shop-name link or label in the seller card.
-  const TEXT_SELECTORS: readonly string[] = [
-    '.shop2-name-and-icon a',
-    '.shop-name',
-    'a[href*="/shop/"]',
-  ];
-  for (const sel of TEXT_SELECTORS) {
-    const el = doc.querySelector(sel);
-    const text = el?.textContent?.trim() ?? '';
-    if (text.length > 0) return text;
-  }
-  return null;
-}
-
-// ─── Scrape orchestration ────────────────────────────────────────────────
+// ─── Scrape orchestration (live-DOM driver) ──────────────────────────────
 
 export interface EtsyScrapeContext {
   /** Project we're scraping into. */
   projectId: string;
   /** Parent CompetitorUrl id to attach captured reviews to. */
   competitorUrlId: string;
-  /** Listing ID parsed from the trigger URL — keyed for the cross-star loop. */
+  /** Listing ID parsed from the trigger URL — informational + scope-label only. */
   listingId: string;
   /**
    * Per-star cap. The cross-star loop visits up to this many rows per
    * star filter before moving to the next. Defaults to 200 when
-   * null/undefined. Director can override the per-URL default at trigger
-   * time via the trigger modal (per §A.4 of REVIEWS_PHASE_2_DESIGN.md).
+   * null/undefined.
    */
   capPerStar: number | null;
   /**
    * Optional explicit list of star filters to visit. When omitted, defaults
-   * to ETSY_DEFAULT_SELECTED_STARS (the director-verbatim 3+2+1 default).
-   * Exposed for test isolation + trigger-modal-driven scope tightening
-   * (e.g., "just scrape 1-star reviews this run").
+   * to ETSY_DEFAULT_SELECTED_STARS (3, 2, 1).
    */
   starsToVisit?: readonly EtsyStarFilter[];
   /** Human label for the indicator (e.g., "Etsy reviews — Product X"). */
   scopeLabel: string;
   /**
-   * Background-proxy review-save call. Implementations route the call to
-   * the existing /api/projects/[projectId]/competition-scraping/urls/[urlId]/reviews
-   * endpoint via the extension's BackgroundRequest pattern (content-scripts
-   * can't reach vklf.com directly due to CORS).
+   * Background-proxy review-save call. Routes to the existing
+   * /api/projects/[projectId]/competition-scraping/urls/[urlId]/reviews
+   * endpoint via the extension's BackgroundRequest pattern.
    */
   saveReview(input: EtsyScrapeSaveInput): Promise<void>;
 }
@@ -482,7 +526,7 @@ export interface EtsyScrapeSaveInput {
   reviewDate: string | null;
   /** Always null for Etsy — no helpful-count signal exposed per the director spec. */
   helpfulCount: null;
-  /** Always "etsy" for this module; passed for the denormalized column. */
+  /** Always "etsy" for this module. */
   platform: 'etsy';
   /** Discriminator — always "extension-scrape" for Etsy per-reviewer rows. */
   source: 'extension-scrape';
@@ -493,23 +537,27 @@ export interface EtsyScrapeResult {
   insertedByStar: Partial<Record<EtsyStarFilter, number>>;
   abortReason?: 'captcha' | 'rate-limit' | 'user-cancel' | 'error';
   abortMessage?: string;
+  /**
+   * Stars skipped because their histogram filter button was disabled
+   * (the listing has 0 reviews of that rating; e.g., 2-star bucket on
+   * a listing where no buyer left a 2-star review).
+   */
+  skippedStars?: EtsyStarFilter[];
 }
 
 /**
  * Drives an end-to-end Etsy review scrape against the trigger listing's
- * listing_id. Opens the Shadow DOM progress indicator, walks each star
- * filter (per director's default 3 → 2 → 1) page-by-page (page 1..N up
- * to capPerStar), and persists each row via saveReview with the synthetic
- * starRating from the filter mapping (or the per-review aria-label-parsed
- * rating when available).
+ * deep-dive review overlay. Opens the Shadow DOM progress indicator,
+ * opens the overlay if not already open, walks each star filter
+ * (per director's default 3 → 2 → 1) page-by-page (page 1..N up to
+ * capPerStar) via click-driven UI navigation, and persists each row.
  *
- * Mirrors `runEbayReviewScrape`'s cross-filter loop structure (Session 2
- * 2026-05-27 Pattern) and `runAmazonReviewScrape`'s 5-star loop structure
- * (Session 2 2026-05-27). No helpful-count buffer/sort step (Etsy doesn't
- * expose helpful-count) — rows save immediately in document order.
+ * Live-DOM driver — operates on `document` directly (no fetch+DOMParser
+ * since Etsy's overlay loads via AJAX with no separate URL exposed).
  */
 export async function runEtsyReviewScrape(
   ctx: EtsyScrapeContext,
+  liveDoc: Document = document,
 ): Promise<EtsyScrapeResult> {
   const controller = new AbortController();
   const indicator = openScrapeProgressIndicator({
@@ -528,224 +576,351 @@ export async function runEtsyReviewScrape(
       : (ETSY_DEFAULT_SELECTED_STARS.filter(isEtsyStarFilter) as readonly EtsyStarFilter[]);
 
   const insertedByStar: Partial<Record<EtsyStarFilter, number>> = {};
+  const skippedStars: EtsyStarFilter[] = [];
   let totalInserted = 0;
   let runningAbort: EtsyScrapeResult['abortReason'];
   let runningAbortMessage: string | undefined;
 
+  onProgress({ kind: 'starting' });
+
   try {
+    // Step 1: Open the overlay if not already open.
+    let overlay = findOverlayContainer(liveDoc);
+    if (!overlay) {
+      const trigger = findViewAllReviewsButton(liveDoc);
+      if (!trigger) {
+        const msg =
+          "Couldn't find the 'View all reviews for this item' button on the listing page. Etsy may have changed the listing layout; re-load the page and try again.";
+        onProgress({
+          kind: 'aborted',
+          reason: 'error',
+          totalRowsCaptured: 0,
+          message: msg,
+        });
+        return {
+          inserted: 0,
+          insertedByStar,
+          skippedStars,
+          abortReason: 'error',
+          abortMessage: msg,
+        };
+      }
+      clickElement(trigger);
+      overlay = await waitForOverlay(liveDoc, controller.signal);
+    }
+
+    // Step 2: Cross-star loop driven by live histogram filter clicks.
     starLoop: for (const filter of starsToVisit) {
       if (controller.signal.aborted) {
         runningAbort = 'user-cancel';
         break;
       }
+      // CAPTCHA defensive check before each filter; abort cleanly if
+      // Etsy serves one mid-scrape.
+      if (detectCaptcha([...GENERIC_CAPTCHA_SELECTORS, '#captcha', 'img[src*="captcha"]'])) {
+        runningAbort = 'captcha';
+        runningAbortMessage =
+          'Captcha detected. Finish the captcha in the tab then re-run the scrape.';
+        break;
+      }
       onProgress({ kind: 'star-started', starRating: filter });
-      const perStarResult = await scrapeOneStar({
-        ctx,
-        filter,
-        capPerStar,
-        controller,
-        onProgress,
-        startingRowOffset: totalInserted,
-      });
-      insertedByStar[filter] = perStarResult.inserted;
-      totalInserted += perStarResult.inserted;
+
+      const histogramBtn = findHistogramButton(overlay, filter);
+      if (!histogramBtn) {
+        // Histogram button missing entirely — atypical (Etsy renders all
+        // 5 buttons even at 0%). Skip this star without error.
+        skippedStars.push(filter);
+        onProgress({
+          kind: 'star-completed',
+          starRating: filter,
+          rowsForStar: 0,
+          totalRowsCaptured: totalInserted,
+        });
+        continue;
+      }
+      if (isHistogramButtonDisabled(histogramBtn)) {
+        // No reviews exist for this star (e.g., 2-star bucket at 0%).
+        // SKIP cleanly — no click, no wait, no error.
+        skippedStars.push(filter);
+        onProgress({
+          kind: 'star-completed',
+          starRating: filter,
+          rowsForStar: 0,
+          totalRowsCaptured: totalInserted,
+        });
+        continue;
+      }
+
+      // Snapshot the current first-review ID so we can detect the AJAX
+      // content swap that follows the click.
+      const preClickFirstId = currentFirstReviewId(overlay);
+
+      // §A.15 random delay BEFORE the click so the inter-click gap is
+      // the noisy human-like duration, not the deterministic settle.
+      try {
+        await randomPaginationDelay({ abortSignal: controller.signal });
+      } catch {
+        runningAbort = 'user-cancel';
+        break;
+      }
+      clickElement(histogramBtn);
+
+      try {
+        await waitForReviewsSwap(overlay, preClickFirstId, controller.signal);
+      } catch (err) {
+        if (controller.signal.aborted) {
+          runningAbort = 'user-cancel';
+          break;
+        }
+        const msg = err instanceof Error ? err.message : 'wait failed';
+        runningAbort = 'error';
+        runningAbortMessage = `Etsy ${String(filter)}★ filter content didn't load: ${msg}`;
+        break;
+      }
+
+      // Pagination loop within this star.
+      let pageIndex = 1;
+      let rowsForThisStar = 0;
+      let isFirstPageOfStar = true;
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        if (controller.signal.aborted) {
+          runningAbort = 'user-cancel';
+          break starLoop;
+        }
+        onProgress({
+          kind: 'page-loading',
+          pageIndex,
+          starContext: `${String(filter)}★`,
+        });
+        const rows = extractReviewsFromOverlay(overlay);
+        onProgress({
+          kind: 'page-loaded',
+          pageIndex,
+          rowsOnPage: rows.length,
+          totalRowsCaptured: totalInserted,
+          starContext: `${String(filter)}★`,
+        });
+
+        for (const row of rows) {
+          if (controller.signal.aborted) {
+            runningAbort = 'user-cancel';
+            break starLoop;
+          }
+          if (rowsForThisStar >= capPerStar) break;
+          try {
+            await ctx.saveReview({
+              clientId: makeClientId(),
+              starRating: row.starRating ?? filter,
+              body: row.body,
+              title: null,
+              reviewerName: row.reviewerName,
+              reviewDate: row.reviewDate,
+              helpfulCount: null,
+              platform: 'etsy',
+              source: 'extension-scrape',
+            });
+            rowsForThisStar += 1;
+            totalInserted += 1;
+            onProgress({ kind: 'row-saved', totalRowsCaptured: totalInserted });
+          } catch (err) {
+            const status = errStatus(err);
+            if (status === 429 || status === 503) {
+              runningAbort = 'rate-limit';
+            } else if (errName(err) === 'AbortError') {
+              runningAbort = 'user-cancel';
+            } else {
+              runningAbort = 'error';
+              runningAbortMessage =
+                err instanceof Error ? err.message : 'save failed';
+            }
+            break starLoop;
+          }
+        }
+
+        if (rowsForThisStar >= capPerStar) break;
+
+        // Advance to next page within this star.
+        const nextBtn = findNextPageButton(overlay);
+        if (!nextBtn || isNextPageButtonDisabled(nextBtn)) break;
+
+        const prePagFirstId = currentFirstReviewId(overlay);
+        try {
+          await randomPaginationDelay({ abortSignal: controller.signal });
+        } catch {
+          runningAbort = 'user-cancel';
+          break starLoop;
+        }
+        clickElement(nextBtn);
+
+        try {
+          await waitForReviewsSwap(overlay, prePagFirstId, controller.signal);
+        } catch (err) {
+          if (controller.signal.aborted) {
+            runningAbort = 'user-cancel';
+            break starLoop;
+          }
+          // Pagination wait failed — likely end of pages or content didn't
+          // update. Break the inner pagination loop + continue to next star.
+          break;
+        }
+        pageIndex += 1;
+        isFirstPageOfStar = false;
+      }
+
+      insertedByStar[filter] = rowsForThisStar;
       onProgress({
         kind: 'star-completed',
         starRating: filter,
-        rowsForStar: perStarResult.inserted,
+        rowsForStar: rowsForThisStar,
         totalRowsCaptured: totalInserted,
       });
-      if (perStarResult.abortReason !== undefined) {
-        runningAbort = perStarResult.abortReason;
-        runningAbortMessage = perStarResult.abortMessage;
-        // Per §A.15 anti-escalation: captcha + rate-limit + user-cancel +
-        // error all abort the whole scrape. Don't continue to the next
-        // filter — that'd compound the bot signal.
-        break starLoop;
-      }
     }
 
     if (runningAbort === undefined) {
       onProgress({ kind: 'completed', totalRowsCaptured: totalInserted });
+    } else {
+      onProgress({
+        kind: 'aborted',
+        reason: runningAbort,
+        totalRowsCaptured: totalInserted,
+        message: runningAbortMessage,
+      });
     }
 
     return {
       inserted: totalInserted,
       insertedByStar,
+      skippedStars,
       abortReason: runningAbort,
       abortMessage: runningAbortMessage,
     };
   } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Unexpected error';
     indicator.update({
       kind: 'aborted',
       reason: 'error',
       totalRowsCaptured: totalInserted,
-      message: err instanceof Error ? err.message : 'Unexpected error',
+      message: msg,
     });
     return {
       inserted: totalInserted,
       insertedByStar,
+      skippedStars,
       abortReason: 'error',
-      abortMessage: err instanceof Error ? err.message : 'Unexpected error',
+      abortMessage: msg,
     };
   }
 }
 
-interface ScrapeOneStarOptions {
-  ctx: EtsyScrapeContext;
-  filter: EtsyStarFilter;
-  capPerStar: number;
-  controller: AbortController;
-  onProgress: ScrapeProgressListener;
-  /**
-   * Running total of rows captured by previous stars in this same scrape.
-   * The progress indicator surfaces cumulative counts so director sees a
-   * single growing number rather than per-star counts that reset.
-   */
-  startingRowOffset: number;
+// ─── Live-DOM driver helpers ─────────────────────────────────────────────
+
+function clickElement(el: Element): void {
+  // HTMLElement.click() is the most reliable way to fire a synthetic
+  // click; works on both native + React-managed elements.
+  (el as HTMLElement).click();
 }
 
-interface ScrapeOneStarResult {
-  inserted: number;
-  abortReason?: EtsyScrapeResult['abortReason'];
-  abortMessage?: string;
+function currentFirstReviewId(overlay: ParentNode): string | null {
+  const container = findReviewsContainer(overlay);
+  if (!container) return null;
+  const first = container.querySelector('[data-review-region]');
+  return first?.getAttribute('data-review-region') ?? null;
 }
 
 /**
- * Walks the per-star Etsy review URL page-by-page via fetch() + DOMParser,
- * persisting each row in document order (no helpful-count sort — Etsy
- * doesn't expose helpful-count). Stop signal = fetched page renders 0
- * review rows (FF#4 Pattern from the 2026-05-28 Amazon deploy).
+ * Polls for the overlay to mount in the document. Returns the overlay
+ * element once present, or throws on timeout / abort.
  */
-async function scrapeOneStar(
-  opts: ScrapeOneStarOptions,
-): Promise<ScrapeOneStarResult> {
-  const {
-    ctx,
-    filter,
-    capPerStar,
-    controller,
-    onProgress,
-    startingRowOffset,
-  } = opts;
-
-  let currentDoc: Document | null = null;
-  let currentPageNumber = 1;
-  let isFirstPage = true;
-
-  // Cumulative-totals wrapper — page-loaded + row-saved events surface
-  // session-wide totals across the cross-star scrape, not per-star.
-  // Filter context lets the indicator render "3★ — page 2…" rather than
-  // bare "page 2".
-  const starContext = `${String(filter)}★`;
-  const wrappedOnProgress: ScrapeProgressListener = (event) => {
-    if (event.kind === 'page-loaded') {
-      onProgress({
-        ...event,
-        starContext,
-        totalRowsCaptured: startingRowOffset + event.totalRowsCaptured,
-      });
-    } else if (event.kind === 'row-saved') {
-      onProgress({
-        ...event,
-        totalRowsCaptured: startingRowOffset + event.totalRowsCaptured,
-      });
-    } else if (event.kind === 'page-loading') {
-      onProgress({ ...event, starContext });
-    } else if (event.kind === 'aborted' || event.kind === 'completed') {
-      // Per-star completed + aborted suppressed — the parent emits them
-      // once the cross-star loop reaches its own conclusion. No-op.
-    } else {
-      onProgress(event);
+async function waitForOverlay(
+  doc: ParentNode,
+  abortSignal: AbortSignal,
+): Promise<Element> {
+  const startTs = Date.now();
+  while (true) {
+    if (abortSignal.aborted) {
+      const err = new Error('aborted while waiting for overlay');
+      err.name = 'AbortError';
+      throw err;
     }
-  };
+    const overlay = findOverlayContainer(doc);
+    if (overlay) {
+      // Brief settle to let the overlay's initial review rows mount.
+      await sleep(POST_SWAP_SETTLE_MS);
+      return overlay;
+    }
+    if (Date.now() - startTs > OVERLAY_WAIT_TIMEOUT_MS) {
+      throw new Error('timed out waiting for review overlay to open');
+    }
+    await sleep(POLL_INTERVAL_MS);
+  }
+}
 
-  const result = await paginate<EtsyReviewRow>({
-    onProgress: wrappedOnProgress,
-    abortSignal: controller.signal,
-    // Etsy-specific captcha selectors — Etsy occasionally serves an
-    // hCaptcha challenge inline. The generic CAPTCHA selectors merged
-    // in by paginate() catch hCaptcha; we add Etsy's own affordances
-    // here defensively.
-    captchaSelectors: [
-      'form[action*="captcha"]',
-      'img[src*="captcha"]',
-      '#captcha',
-    ],
-    capRows: capPerStar,
-    extractCurrentPageRows: () => {
-      if (!currentDoc) return [];
-      return extractReviewsFromDocument(currentDoc);
-    },
-    advanceToNextPage: async () => {
-      // FF#4 Pattern: build pagination URL directly via buildEtsyReviewUrl.
-      // `?ratings=<N>&page=<N>` is the constructed URL contract; works
-      // regardless of whether Etsy currently renders numbered links,
-      // "Show more" buttons, or AJAX load-more affordances. Stop signal =
-      // the just-fetched page returns 0 review rows.
-      let nextPageNumber: number;
-      if (isFirstPage) {
-        nextPageNumber = 1;
-        isFirstPage = false;
-      } else {
-        nextPageNumber = currentPageNumber + 1;
+/**
+ * Polls the reviews container's first-row data-review-region attribute
+ * until it changes from the pre-action snapshot. This is the canonical
+ * signal that an AJAX content swap completed (per-star filter click,
+ * pagination click).
+ *
+ * Special case: if the AJAX swap empties the container (e.g., 0 reviews
+ * for the selected filter), we resolve when the container has been
+ * observed in an "empty" state for a couple of poll cycles.
+ */
+async function waitForReviewsSwap(
+  overlay: ParentNode,
+  prevFirstId: string | null,
+  abortSignal: AbortSignal,
+): Promise<void> {
+  const startTs = Date.now();
+  let emptyTicks = 0;
+  while (true) {
+    if (abortSignal.aborted) {
+      const err = new Error('aborted while waiting for reviews swap');
+      err.name = 'AbortError';
+      throw err;
+    }
+    const currentId = currentFirstReviewId(overlay);
+    if (currentId !== null && currentId !== prevFirstId) {
+      // Content swapped — settle then return.
+      await sleep(POST_SWAP_SETTLE_MS);
+      return;
+    }
+    if (currentId === null) {
+      emptyTicks += 1;
+      // 3 consecutive empty polls = container is genuinely empty post-click
+      // (legitimate 0-results state). Settle + return.
+      if (emptyTicks >= 3) {
+        await sleep(POST_SWAP_SETTLE_MS);
+        return;
       }
-      const nextUrl = buildEtsyReviewUrl(
-        ctx.listingId,
-        filter,
-        nextPageNumber,
-      );
-      const resp = await fetch(nextUrl, {
-        credentials: 'include',
-        headers: { Accept: 'text/html' },
-        signal: controller.signal,
-      });
-      if (!resp.ok) {
-        const err = new Error(
-          `Etsy per-star fetch returned ${String(resp.status)} for ${String(filter)}★`,
-        ) as Error & { status: number };
-        err.status = resp.status;
-        throw err;
-      }
-      const html = await resp.text();
-      const parser = new DOMParser();
-      currentDoc = parser.parseFromString(html, 'text/html');
-      currentPageNumber = nextPageNumber;
-      const rowsOnPage = extractReviewsFromDocument(currentDoc).length;
-      if (rowsOnPage === 0) return false;
-      return true;
-    },
-    saveRow: async (row) => {
-      // Save immediately — Etsy doesn't have helpful-count so there's no
-      // per-star buffer + sort step (unlike Amazon's per-star sort by
-      // helpful-count before save).
-      await ctx.saveReview({
-        clientId: makeClientId(),
-        // Prefer the per-review aria-label parsed rating when available
-        // (defends against any star-filter URL leakage where Etsy
-        // returns rows from adjacent star buckets); fall back to the
-        // walked-filter value.
-        starRating: row.starRating ?? filter,
-        body: row.body,
-        title: null,
-        reviewerName: row.reviewerName,
-        reviewDate: row.reviewDate,
-        helpfulCount: null,
-        platform: 'etsy',
-        source: 'extension-scrape',
-      });
-    },
-  });
+    }
+    if (Date.now() - startTs > REVIEWS_SWAP_TIMEOUT_MS) {
+      throw new Error('timed out waiting for reviews content swap');
+    }
+    await sleep(POLL_INTERVAL_MS);
+  }
+}
 
-  return {
-    inserted: result.totalRowsCaptured,
-    abortReason: result.abortReason,
-    abortMessage: result.abortMessage,
-  };
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function errStatus(err: unknown): number | undefined {
+  if (typeof err === 'object' && err !== null) {
+    const s = (err as { status?: unknown }).status;
+    if (typeof s === 'number') return s;
+  }
+  return undefined;
+}
+
+function errName(err: unknown): string | undefined {
+  if (typeof err === 'object' && err !== null) {
+    const n = (err as { name?: unknown }).name;
+    if (typeof n === 'string') return n;
+  }
+  return undefined;
 }
 
 function makeClientId(): string {
-  // crypto.randomUUID is widely available in Chrome 92+. The extension's
-  // minimum-Chrome is later than that per the manifest v3 baseline.
   return crypto.randomUUID();
 }

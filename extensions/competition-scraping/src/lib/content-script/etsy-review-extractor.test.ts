@@ -1,13 +1,12 @@
 // Tests for the Etsy review extractor pure functions shipped under P-49
 // Workstream 2 Etsy sub-cluster Session 1 per docs/REVIEWS_PHASE_2_DESIGN.md
-// §C.2 + §A.2 priority order (Etsy third per-platform sub-cluster after
-// Amazon + eBay).
+// §C.2 + §A.2 priority order.
 //
-// Mirrors ebay-review-extractor.test.ts + amazon-review-extractor.test.ts
-// patterns: URL detection + listing_id extraction + same-id matching +
-// per-field extractors + star-rating parsing + date parsing + JSON data-
-// island extraction (NEW Pattern from yesterday's eBay FF#5 applied from
-// the start). Same zero-dependency fake-DOM pattern.
+// FF#1 (test rewrite) — selectors now empirically grounded in director's
+// 2026-05-31 overlay HTML paste rather than speculation. Live-DOM driver
+// integration paths (waitForOverlay, waitForReviewsSwap, runEtsyReviewScrape
+// click+wait+walk) are validated via Phase 4 director walk, not unit
+// tested here (would require a real browser harness).
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -15,20 +14,23 @@ import assert from 'node:assert/strict';
 import {
   ETSY_DEFAULT_SELECTED_STARS,
   ETSY_STAR_FILTERS,
-  buildEtsyListingUrl,
-  buildEtsyReviewUrl,
   extractListingIdFromEtsyUrl,
   extractListingIdFromListingUrl,
   extractReviewBody,
   extractReviewDate,
   extractReviewStarRating,
   extractReviewerName,
-  extractReviewsFromDocument,
-  extractShopNameFromListingDocument,
-  extractShopNameFromListingHtml,
+  extractReviewsFromOverlay,
+  findHistogramButton,
+  findNextPageButton,
+  findOverlayContainer,
+  findReviewsContainer,
+  findViewAllReviewsButton,
   isEtsyListingPage,
   isEtsyScrapableUrl,
   isEtsyStarFilter,
+  isHistogramButtonDisabled,
+  isNextPageButtonDisabled,
   parseEtsyReviewDate,
   parseEtsyStarRating,
   urlsMatchByListingId,
@@ -56,7 +58,7 @@ describe('isEtsyListingPage', () => {
   it('accepts /listing/<id> with query parameters', () => {
     assert.equal(
       isEtsyListingPage(
-        'https://www.etsy.com/listing/123456789?ratings=3&page=2',
+        'https://www.etsy.com/listing/4381757599/new-all-in-one-serum-for-eyes-face?ls=a&ref=sc_gallery-1-7',
       ),
       true,
     );
@@ -92,18 +94,13 @@ describe('isEtsyScrapableUrl (FF#1 symmetric helper)', () => {
     );
   });
   it('reduces to isEtsyListingPage (no separate review URL shape)', () => {
-    // For Etsy isEtsyScrapableUrl === isEtsyListingPage; the helper is kept
-    // for API parity with Amazon + eBay symmetric helpers.
     assert.equal(
       isEtsyScrapableUrl('https://www.etsy.com/listing/123456789?ratings=3'),
       isEtsyListingPage('https://www.etsy.com/listing/123456789?ratings=3'),
     );
   });
   it('rejects etsy URLs without listing shape', () => {
-    assert.equal(
-      isEtsyScrapableUrl('https://www.etsy.com/shop/foo'),
-      false,
-    );
+    assert.equal(isEtsyScrapableUrl('https://www.etsy.com/shop/foo'), false);
     assert.equal(isEtsyScrapableUrl('https://www.etsy.com/'), false);
   });
   it('rejects non-etsy URLs', () => {
@@ -131,12 +128,12 @@ describe('extractListingIdFromListingUrl', () => {
       '123456789',
     );
   });
-  it('extracts the listing_id from /listing/<id>?...', () => {
+  it('extracts the listing_id from director-supplied 2026-05-31 URL with full query string', () => {
     assert.equal(
       extractListingIdFromListingUrl(
-        'https://www.etsy.com/listing/123456789?ratings=3&page=2',
+        'https://www.etsy.com/listing/4381757599/new-all-in-one-serum-for-eyes-face?ls=a&ga_order=most_relevant&ref=sc_gallery-1-7',
       ),
-      '123456789',
+      '4381757599',
     );
   });
   it('returns null when no /listing/ segment is present', () => {
@@ -219,7 +216,10 @@ describe('ETSY_STAR_FILTERS + ETSY_DEFAULT_SELECTED_STARS', () => {
   });
   it('default stars subset all valid star filters', () => {
     for (const rating of ETSY_DEFAULT_SELECTED_STARS) {
-      assert.ok(isEtsyStarFilter(rating), `${String(rating)} should be a valid star filter`);
+      assert.ok(
+        isEtsyStarFilter(rating),
+        `${String(rating)} should be a valid star filter`,
+      );
     }
   });
 });
@@ -238,53 +238,12 @@ describe('isEtsyStarFilter', () => {
   });
 });
 
-// ─── URL construction (FF#4 Pattern) ────────────────────────────────────
-
-describe('buildEtsyListingUrl', () => {
-  it('produces the canonical /listing/<id> shape', () => {
-    assert.equal(
-      buildEtsyListingUrl('123456789'),
-      'https://www.etsy.com/listing/123456789',
-    );
-  });
-});
-
-describe('buildEtsyReviewUrl', () => {
-  it('produces a /listing/<id>?ratings=<N>&page=<N> URL', () => {
-    const url = buildEtsyReviewUrl('123456789', 3);
-    assert.ok(url.startsWith('https://www.etsy.com/listing/123456789?'));
-    const params = new URL(url).searchParams;
-    assert.equal(params.get('ratings'), '3');
-    assert.equal(params.get('page'), '1');
-  });
-  it('defaults page number to 1', () => {
-    const url = buildEtsyReviewUrl('123456789', 3);
-    assert.equal(new URL(url).searchParams.get('page'), '1');
-  });
-  it('FF#4 Pattern: paginates via page=<N> URL parameter', () => {
-    const url = buildEtsyReviewUrl('123456789', 3, 5);
-    assert.equal(new URL(url).searchParams.get('page'), '5');
-  });
-  it('produces distinct URLs per star filter for the same listing', () => {
-    const url1 = buildEtsyReviewUrl('123456789', 1, 1);
-    const url3 = buildEtsyReviewUrl('123456789', 3, 1);
-    assert.notEqual(url1, url3);
-    assert.equal(new URL(url1).searchParams.get('ratings'), '1');
-    assert.equal(new URL(url3).searchParams.get('ratings'), '3');
-  });
-  it('preserves the listing_id across pagination', () => {
-    for (const page of [1, 2, 5, 10]) {
-      const url = buildEtsyReviewUrl('123456789', 2, page);
-      const m = url.match(/\/listing\/(\d+)/);
-      assert.equal(m?.[1], '123456789');
-      assert.equal(new URL(url).searchParams.get('page'), String(page));
-    }
-  });
-});
-
 // ─── parseEtsyStarRating ────────────────────────────────────────────────
 
 describe('parseEtsyStarRating', () => {
+  it('parses "Rating: 5 out of 5 stars" → 5 (canonical overlay shape)', () => {
+    assert.equal(parseEtsyStarRating('Rating: 5 out of 5 stars'), 5);
+  });
   it('parses "5 out of 5 stars" → 5', () => {
     assert.equal(parseEtsyStarRating('5 out of 5 stars'), 5);
   });
@@ -313,7 +272,12 @@ describe('parseEtsyStarRating', () => {
 // ─── parseEtsyReviewDate ────────────────────────────────────────────────
 
 describe('parseEtsyReviewDate', () => {
-  it('parses "Apr 12, 2024" → ISO 2024-04-12', () => {
+  it('parses "May 20, 2026" → ISO 2026-05-20 (director-supplied empirical date)', () => {
+    const iso = parseEtsyReviewDate('May 20, 2026');
+    assert.ok(iso);
+    assert.equal(iso?.slice(0, 10), '2026-05-20');
+  });
+  it('parses "Apr 12, 2024"', () => {
     const iso = parseEtsyReviewDate('Apr 12, 2024');
     assert.ok(iso);
     assert.equal(iso?.slice(0, 10), '2024-04-12');
@@ -337,100 +301,315 @@ describe('parseEtsyReviewDate', () => {
   });
 });
 
-// ─── DOM walker tests — hand-built fake Document ────────────────────────
+// ─── isHistogramButtonDisabled + isNextPageButtonDisabled ───────────────
 
-// Minimal element stub satisfying the small subset of Element used by the
-// walker. Mirrors ebay-review-extractor.test.ts + amazon-review-extractor.test.ts
-// patterns (Element is too large to fully implement — cast via
-// `as unknown as Element` at the call site).
+describe('isHistogramButtonDisabled', () => {
+  it('returns true when aria-disabled="true"', () => {
+    const btn = makeFakeElement({ attrs: { 'aria-disabled': 'true' } });
+    assert.equal(isHistogramButtonDisabled(btn as unknown as Element), true);
+  });
+  it('returns true when disabled attribute present (empirical case — 2-star at 0%)', () => {
+    // Director's HTML shows 2-star button with both `disabled=""` + `aria-disabled="true"`.
+    const btn = makeFakeElement({ attrs: { disabled: '', 'aria-disabled': 'true' } });
+    assert.equal(isHistogramButtonDisabled(btn as unknown as Element), true);
+  });
+  it('returns false when only aria-disabled="false"', () => {
+    const btn = makeFakeElement({ attrs: { 'aria-disabled': 'false' } });
+    assert.equal(isHistogramButtonDisabled(btn as unknown as Element), false);
+  });
+  it('returns false with no disabled attributes', () => {
+    const btn = makeFakeElement({ attrs: {} });
+    assert.equal(isHistogramButtonDisabled(btn as unknown as Element), false);
+  });
+});
+
+describe('isNextPageButtonDisabled', () => {
+  it('returns true when aria-disabled="true"', () => {
+    const btn = makeFakeElement({ attrs: { 'aria-disabled': 'true' } });
+    assert.equal(isNextPageButtonDisabled(btn as unknown as Element), true);
+  });
+  it('returns true when disabled attribute present', () => {
+    const btn = makeFakeElement({ attrs: { disabled: '' } });
+    assert.equal(isNextPageButtonDisabled(btn as unknown as Element), true);
+  });
+  it('returns false on a clickable button', () => {
+    const btn = makeFakeElement({ attrs: {} });
+    assert.equal(isNextPageButtonDisabled(btn as unknown as Element), false);
+  });
+});
+
+// ─── DOM walker tests — hand-built fake Document ────────────────────────
+//
+// Selectors below use a pre-registered child-map pattern (mirrors eBay +
+// Amazon test infrastructure). Each fake element carries a registry of
+// `selector → child(ren)`; querySelector / querySelectorAll look up the
+// registry directly. Tag name + parentElement + children are tracked
+// explicitly for the extractReviewDate sibling-walk path.
+
 interface FakeEl {
+  tagName: string;
   textContent: string | null;
   attributes: Record<string, string>;
-  children: Map<string, FakeEl[]>;
+  registry: Map<string, FakeEl[]>;
+  children: FakeEl[];
+  parentElement: FakeEl | null;
   getAttribute(name: string): string | null;
+  hasAttribute(name: string): boolean;
   querySelector(sel: string): FakeEl | null;
   querySelectorAll(sel: string): FakeEl[];
 }
 
-function el(
-  childMap: Record<string, FakeEl | FakeEl[]> = {},
-  textContent: string | null = null,
-  attrs: Record<string, string> = {},
-): FakeEl {
-  const children = new Map<string, FakeEl[]>();
-  for (const [sel, kids] of Object.entries(childMap)) {
-    children.set(sel, Array.isArray(kids) ? kids : [kids]);
+// Return type intersection cast (`FakeEl & ParentNode & Element`) lets the
+// helper satisfy both: (a) test internals that read FakeEl fields directly,
+// (b) calls into the production module that expect ParentNode / Element.
+// The runtime object only implements the FakeEl subset; the cast is a
+// type-system escape hatch needed because FakeEl can't structurally match
+// the full DOM Element interface (50+ properties).
+type ParentLike = FakeEl & ParentNode & Element;
+
+function makeFakeElement(opts: {
+  tag?: string;
+  attrs?: Record<string, string>;
+  textContent?: string | null;
+  registry?: Record<string, FakeEl | FakeEl[]>;
+  children?: FakeEl[];
+}): ParentLike {
+  const registry = new Map<string, FakeEl[]>();
+  if (opts.registry) {
+    for (const [sel, kids] of Object.entries(opts.registry)) {
+      registry.set(sel, Array.isArray(kids) ? kids : [kids]);
+    }
   }
-  return {
-    textContent,
-    attributes: { ...attrs },
+  const children = opts.children ?? [];
+  const el: FakeEl = {
+    tagName: (opts.tag ?? 'div').toUpperCase(),
+    textContent: opts.textContent ?? null,
+    attributes: { ...(opts.attrs ?? {}) },
+    registry,
     children,
+    parentElement: null,
     getAttribute(name) {
       return name in this.attributes ? (this.attributes[name] ?? null) : null;
     },
+    hasAttribute(name) {
+      return name in this.attributes;
+    },
     querySelector(sel) {
-      const found = this.children.get(sel);
+      const found = this.registry.get(sel);
       return found && found.length > 0 ? (found[0] ?? null) : null;
     },
     querySelectorAll(sel) {
-      return this.children.get(sel) ?? [];
+      return this.registry.get(sel) ?? [];
     },
   };
+  for (const child of children) {
+    child.parentElement = el;
+  }
+  return el as unknown as ParentLike;
 }
 
-function fakeListingDoc(
-  rows: FakeEl[],
-  opts: { rowSelector?: string; withVisibleTabpanel?: boolean } = {},
-): Document {
-  const rowSelector = opts.rowSelector ?? '[data-testid="review-item"]';
-  const queryMap = new Map<string, FakeEl[]>([[rowSelector, rows]]);
-
-  // When withVisibleTabpanel is true, the document exposes a visible
-  // tabpanel element; the walker should scope inside it. The fake
-  // tabpanel proxies its querySelectorAll back to the rows map.
-  let tabpanel: FakeEl | null = null;
-  if (opts.withVisibleTabpanel) {
-    tabpanel = {
-      textContent: null,
-      attributes: {},
-      children: new Map([[rowSelector, rows]]),
-      getAttribute() {
-        return null;
-      },
-      querySelector(_sel) {
-        return null;
-      },
-      querySelectorAll(sel) {
-        return sel === rowSelector ? rows : [];
-      },
-    };
+function fakeDocLike(registry: Record<string, FakeEl | FakeEl[]>): Document {
+  const map = new Map<string, FakeEl[]>();
+  for (const [sel, kids] of Object.entries(registry)) {
+    map.set(sel, Array.isArray(kids) ? kids : [kids]);
   }
-
   return {
     querySelector(sel: string): FakeEl | null {
-      if (sel === '[role=tabpanel]:not([hidden])') return tabpanel;
-      const found = queryMap.get(sel);
+      const found = map.get(sel);
       return found && found.length > 0 ? (found[0] ?? null) : null;
     },
     querySelectorAll(sel: string): FakeEl[] {
-      return queryMap.get(sel) ?? [];
+      return map.get(sel) ?? [];
     },
   } as unknown as Document;
 }
 
+// ─── findOverlayContainer ───────────────────────────────────────────────
+
+describe('findOverlayContainer', () => {
+  it('finds the canonical [aria-modal=true][role=dialog].deep-dive-sheet element', () => {
+    const overlay = makeFakeElement({ attrs: { 'aria-modal': 'true', role: 'dialog' } });
+    const doc = fakeDocLike({
+      '[aria-modal="true"][role="dialog"].deep-dive-sheet': overlay,
+    });
+    assert.equal(findOverlayContainer(doc), overlay);
+  });
+  it('falls back to .deep-dive-sheet when the modal+role pair is absent', () => {
+    const overlay = makeFakeElement({});
+    const doc = fakeDocLike({ '.deep-dive-sheet': overlay });
+    assert.equal(findOverlayContainer(doc), overlay);
+  });
+  it('falls back to [aria-modal=true][role=dialog] as last resort', () => {
+    const overlay = makeFakeElement({});
+    const doc = fakeDocLike({ '[aria-modal="true"][role="dialog"]': overlay });
+    assert.equal(findOverlayContainer(doc), overlay);
+  });
+  it('returns null when no overlay element exists', () => {
+    const doc = fakeDocLike({});
+    assert.equal(findOverlayContainer(doc), null);
+  });
+});
+
+// ─── findReviewsContainer ───────────────────────────────────────────────
+
+describe('findReviewsContainer', () => {
+  it('finds [data-deep-dive-reviews-container="true"]', () => {
+    const container = makeFakeElement({});
+    const overlay = makeFakeElement({
+      registry: { '[data-deep-dive-reviews-container="true"]': container },
+    });
+    assert.equal(findReviewsContainer(overlay), container);
+  });
+  it('returns null when container absent', () => {
+    const overlay = makeFakeElement({});
+    assert.equal(findReviewsContainer(overlay), null);
+  });
+});
+
+// ─── findHistogramButton ────────────────────────────────────────────────
+
+describe('findHistogramButton', () => {
+  it('finds the histogram button for the given star rating', () => {
+    const btn3 = makeFakeElement({ tag: 'button', attrs: { 'data-rating-value': '3' } });
+    const overlay = makeFakeElement({
+      registry: {
+        '[data-reviews-histogram="true"] button[data-rating-value="3"]': btn3,
+      },
+    });
+    assert.equal(findHistogramButton(overlay, 3), btn3);
+  });
+  it('finds the histogram button for 1-star (director default selection includes 1★)', () => {
+    const btn1 = makeFakeElement({ tag: 'button', attrs: { 'data-rating-value': '1' } });
+    const overlay = makeFakeElement({
+      registry: {
+        '[data-reviews-histogram="true"] button[data-rating-value="1"]': btn1,
+      },
+    });
+    assert.equal(findHistogramButton(overlay, 1), btn1);
+  });
+  it('returns null when the histogram button is absent', () => {
+    const overlay = makeFakeElement({});
+    assert.equal(findHistogramButton(overlay, 3), null);
+  });
+});
+
+// ─── findNextPageButton ─────────────────────────────────────────────────
+
+describe('findNextPageButton', () => {
+  it('finds the button containing <span class="wt-screen-reader-only">Next</span>', () => {
+    const srOnly = makeFakeElement({
+      tag: 'span',
+      attrs: { class: 'wt-screen-reader-only' },
+      textContent: 'Next',
+    });
+    const nextBtn = makeFakeElement({
+      tag: 'button',
+      registry: { '.wt-screen-reader-only': srOnly },
+    });
+    const prevSrOnly = makeFakeElement({
+      tag: 'span',
+      attrs: { class: 'wt-screen-reader-only' },
+      textContent: 'Previous',
+    });
+    const prevBtn = makeFakeElement({
+      tag: 'button',
+      registry: { '.wt-screen-reader-only': prevSrOnly },
+    });
+    const nav = makeFakeElement({
+      tag: 'nav',
+      registry: { button: [prevBtn, nextBtn] },
+    });
+    const overlay = makeFakeElement({
+      registry: {
+        'nav[aria-label="Pagination of reviews"], nav[data-clg-id="WtPagination"]': nav,
+      },
+    });
+    assert.equal(findNextPageButton(overlay), nextBtn);
+  });
+  it('returns null when no pagination nav exists (single-page result)', () => {
+    const overlay = makeFakeElement({});
+    assert.equal(findNextPageButton(overlay), null);
+  });
+  it('returns null when nav exists but no button has Next screen-reader text', () => {
+    const someBtn = makeFakeElement({ tag: 'button' });
+    const nav = makeFakeElement({
+      tag: 'nav',
+      registry: { button: [someBtn] },
+    });
+    const overlay = makeFakeElement({
+      registry: {
+        'nav[aria-label="Pagination of reviews"], nav[data-clg-id="WtPagination"]': nav,
+      },
+    });
+    assert.equal(findNextPageButton(overlay), null);
+  });
+});
+
+// ─── findViewAllReviewsButton ───────────────────────────────────────────
+
+describe('findViewAllReviewsButton', () => {
+  it('finds a button with exact canonical text', () => {
+    const btn = makeFakeElement({
+      tag: 'button',
+      textContent: 'View all reviews for this item',
+    });
+    const doc = fakeDocLike({ 'button, a': [btn] });
+    assert.equal(findViewAllReviewsButton(doc), btn);
+  });
+  it('finds canonical text with surrounding whitespace', () => {
+    const btn = makeFakeElement({
+      tag: 'button',
+      textContent: '   View all reviews for this item   ',
+    });
+    const doc = fakeDocLike({ 'button, a': [btn] });
+    assert.equal(findViewAllReviewsButton(doc), btn);
+  });
+  it('is case-insensitive', () => {
+    const btn = makeFakeElement({
+      tag: 'button',
+      textContent: 'VIEW ALL REVIEWS FOR THIS ITEM',
+    });
+    const doc = fakeDocLike({ 'button, a': [btn] });
+    assert.equal(findViewAllReviewsButton(doc), btn);
+  });
+  it('falls back to "View all reviews" prefix for regional variants like "View all 107 reviews"', () => {
+    const btn = makeFakeElement({
+      tag: 'button',
+      textContent: 'View all reviews (107)',
+    });
+    const doc = fakeDocLike({ 'button, a': [btn] });
+    assert.equal(findViewAllReviewsButton(doc), btn);
+  });
+  it('returns null when no matching button or anchor exists', () => {
+    const btn = makeFakeElement({ tag: 'button', textContent: 'Some other action' });
+    const doc = fakeDocLike({ 'button, a': [btn] });
+    assert.equal(findViewAllReviewsButton(doc), null);
+  });
+  it('returns null when document has no buttons or anchors', () => {
+    const doc = fakeDocLike({});
+    assert.equal(findViewAllReviewsButton(doc), null);
+  });
+});
+
+// ─── extractReviewBody ──────────────────────────────────────────────────
+
 describe('extractReviewBody', () => {
-  it('extracts the canonical [data-testid="review-text"] text', () => {
-    const row = el({
-      '[data-testid="review-text"]': el({}, 'Beautiful product, great shop!'),
+  it('extracts the canonical .wt-text-body text (director-verified empirical selector)', () => {
+    const row = makeFakeElement({
+      registry: {
+        '.wt-text-body': makeFakeElement({ textContent: 'I think this is working, thank you!' }),
+      },
     });
     assert.equal(
       extractReviewBody(row as unknown as Element),
-      'Beautiful product, great shop!',
+      'I think this is working, thank you!',
     );
   });
-  it('falls back to .shop-review-card__text when data-testid missing', () => {
-    const row = el({
-      '.shop-review-card__text': el({}, 'Fallback path text'),
+  it('falls back to .shop-review-card__text when .wt-text-body missing', () => {
+    const row = makeFakeElement({
+      registry: {
+        '.shop-review-card__text': makeFakeElement({ textContent: 'Fallback path text' }),
+      },
     });
     assert.equal(
       extractReviewBody(row as unknown as Element),
@@ -438,208 +617,207 @@ describe('extractReviewBody', () => {
     );
   });
   it('returns empty string when no selector matches', () => {
-    const row = el({});
+    const row = makeFakeElement({});
     assert.equal(extractReviewBody(row as unknown as Element), '');
   });
 });
 
+// ─── extractReviewerName ────────────────────────────────────────────────
+
 describe('extractReviewerName', () => {
-  it('extracts the canonical [data-testid="review-reviewer-name"] text', () => {
-    const row = el({
-      '[data-testid="review-reviewer-name"]': el({}, 'CoolBuyer42'),
+  it('extracts text content from a[href*="/people/"] link (director-verified empirical selector)', () => {
+    const link = makeFakeElement({
+      tag: 'a',
+      attrs: { href: 'https://www.etsy.com/people/jembot?ref=l_review' },
+      textContent: 'Jenny',
     });
-    assert.equal(
-      extractReviewerName(row as unknown as Element),
-      'CoolBuyer42',
-    );
-  });
-  it('falls back to a[href*="/people/"] anchor text', () => {
-    const row = el({
-      'a[href*="/people/"]': el({}, 'AnchorBuyer'),
+    const row = makeFakeElement({
+      registry: { 'a[href*="/people/"]': link },
     });
-    assert.equal(
-      extractReviewerName(row as unknown as Element),
-      'AnchorBuyer',
-    );
+    assert.equal(extractReviewerName(row as unknown as Element), 'Jenny');
   });
-  it('returns null when no selector matches', () => {
-    const row = el({});
+  it('extracts "Etsy buyer" generic reviewer name (empirical case from director paste)', () => {
+    const link = makeFakeElement({
+      tag: 'a',
+      attrs: { href: 'https://www.etsy.com/people/melanielisa27?ref=l_review' },
+      textContent: 'Etsy buyer',
+    });
+    const row = makeFakeElement({
+      registry: { 'a[href*="/people/"]': link },
+    });
+    assert.equal(extractReviewerName(row as unknown as Element), 'Etsy buyer');
+  });
+  it('returns null when no /people/ link exists', () => {
+    const row = makeFakeElement({});
     assert.equal(extractReviewerName(row as unknown as Element), null);
   });
 });
 
-describe('extractReviewDate', () => {
-  it('extracts the canonical [data-testid="review-date"] text + parses as ISO', () => {
-    const row = el({
-      '[data-testid="review-date"]': el({}, 'Apr 12, 2024'),
+// ─── extractReviewStarRating ────────────────────────────────────────────
+
+describe('extractReviewStarRating', () => {
+  it('extracts the rating from [role="img"][aria-label^="Rating:"] (director-verified empirical shape)', () => {
+    const ratingEl = makeFakeElement({
+      attrs: { role: 'img', 'aria-label': 'Rating: 5 out of 5 stars' },
+    });
+    const row = makeFakeElement({
+      registry: { '[role="img"][aria-label^="Rating:"]': ratingEl },
+    });
+    assert.equal(extractReviewStarRating(row as unknown as Element), 5);
+  });
+  it('extracts 3-star rating', () => {
+    const ratingEl = makeFakeElement({
+      attrs: { role: 'img', 'aria-label': 'Rating: 3 out of 5 stars' },
+    });
+    const row = makeFakeElement({
+      registry: { '[role="img"][aria-label^="Rating:"]': ratingEl },
+    });
+    assert.equal(extractReviewStarRating(row as unknown as Element), 3);
+  });
+  it('falls back to generic [aria-label] for classic-view variants', () => {
+    const ratingEl = makeFakeElement({
+      attrs: { 'aria-label': '4 stars' },
+    });
+    const row = makeFakeElement({
+      registry: { '[aria-label]': [ratingEl] },
+    });
+    assert.equal(extractReviewStarRating(row as unknown as Element), 4);
+  });
+  it('returns null when no rating element matches', () => {
+    const row = makeFakeElement({});
+    assert.equal(extractReviewStarRating(row as unknown as Element), null);
+  });
+});
+
+// ─── extractReviewDate (fallback selector path; primary sibling-walk
+//     path is verified empirically by Phase 4 director walk) ─────────────
+
+describe('extractReviewDate (fallback selector paths)', () => {
+  it('extracts + parses date via .wt-text-body-small--tight.wt-sem-text-secondary fallback', () => {
+    const dateEl = makeFakeElement({ textContent: 'May 20, 2026' });
+    const row = makeFakeElement({
+      registry: {
+        '.wt-text-body-small--tight.wt-sem-text-secondary': dateEl,
+      },
     });
     const date = extractReviewDate(row as unknown as Element);
     assert.ok(date);
-    assert.equal(date?.slice(0, 10), '2024-04-12');
+    assert.equal(date?.slice(0, 10), '2026-05-20');
   });
-  it('falls back to the raw text when parsing fails', () => {
-    const row = el({
-      '[data-testid="review-date"]': el({}, 'Past month'),
+  it('falls back to raw text when date selector matches but parsing fails', () => {
+    const dateEl = makeFakeElement({ textContent: 'Past month' });
+    const row = makeFakeElement({
+      registry: {
+        '.wt-text-body-small--tight.wt-sem-text-secondary': dateEl,
+      },
     });
-    assert.equal(
-      extractReviewDate(row as unknown as Element),
-      'Past month',
-    );
+    assert.equal(extractReviewDate(row as unknown as Element), 'Past month');
   });
   it('returns null when no date selector matches', () => {
-    const row = el({});
+    const row = makeFakeElement({});
     assert.equal(extractReviewDate(row as unknown as Element), null);
   });
 });
 
-describe('extractReviewStarRating', () => {
-  it('extracts the rating from an aria-label containing "N out of 5 stars"', () => {
-    const row = el({
-      '[aria-label]': el({}, null, { 'aria-label': '5 out of 5 stars' }),
-    });
-    assert.equal(extractReviewStarRating(row as unknown as Element), 5);
-  });
-  it('extracts the rating from an aria-label containing "N stars"', () => {
-    const row = el({
-      '[aria-label]': el({}, null, { 'aria-label': '3 stars' }),
-    });
-    assert.equal(extractReviewStarRating(row as unknown as Element), 3);
-  });
-  it('returns null when no aria-label matches', () => {
-    const row = el({});
-    assert.equal(extractReviewStarRating(row as unknown as Element), null);
-  });
-  it('returns null when aria-label has no star-rating phrase', () => {
-    const row = el({
-      '[aria-label]': el({}, null, { 'aria-label': 'just some text' }),
-    });
-    assert.equal(extractReviewStarRating(row as unknown as Element), null);
-  });
-});
+// ─── extractReviewsFromOverlay ──────────────────────────────────────────
 
-describe('extractReviewsFromDocument', () => {
-  it('extracts rows from a basic listing document', () => {
-    const row = el({
-      '[data-testid="review-text"]': el({}, 'Great product!'),
-      '[data-testid="review-reviewer-name"]': el({}, 'Reviewer One'),
-      '[data-testid="review-date"]': el({}, 'Apr 12, 2024'),
+describe('extractReviewsFromOverlay', () => {
+  function makeReviewRow(opts: {
+    regionId: string;
+    body: string;
+    reviewerName?: string;
+    starText?: string;
+  }): FakeEl {
+    const registry: Record<string, FakeEl | FakeEl[]> = {
+      '.wt-text-body': makeFakeElement({ textContent: opts.body }),
+    };
+    if (opts.reviewerName) {
+      registry['a[href*="/people/"]'] = makeFakeElement({
+        tag: 'a',
+        attrs: { href: `https://www.etsy.com/people/${opts.reviewerName.toLowerCase()}?ref=l_review` },
+        textContent: opts.reviewerName,
+      });
+    }
+    if (opts.starText) {
+      registry['[role="img"][aria-label^="Rating:"]'] = makeFakeElement({
+        attrs: { role: 'img', 'aria-label': opts.starText },
+      });
+    }
+    return makeFakeElement({
+      attrs: { 'data-review-region': opts.regionId },
+      registry,
     });
-    const doc = fakeListingDoc([row]);
-    const rows = extractReviewsFromDocument(doc);
-    assert.equal(rows.length, 1);
-    assert.equal(rows[0]?.body, 'Great product!');
-    assert.equal(rows[0]?.reviewerName, 'Reviewer One');
-    assert.ok(rows[0]?.reviewDate);
+  }
+
+  it('extracts rows from the canonical overlay structure', () => {
+    const row1 = makeReviewRow({
+      regionId: '4979219644',
+      body: 'I think this is working, thank you!',
+      reviewerName: 'Jenny',
+      starText: 'Rating: 5 out of 5 stars',
+    });
+    const row2 = makeReviewRow({
+      regionId: '5011630937',
+      body: 'Thank you very much! ☺️',
+      reviewerName: 'Etsy buyer',
+      starText: 'Rating: 5 out of 5 stars',
+    });
+    const container = makeFakeElement({
+      registry: { '[data-review-region]': [row1, row2] },
+    });
+    const overlay = makeFakeElement({
+      registry: { '[data-deep-dive-reviews-container="true"]': container },
+    });
+    const rows = extractReviewsFromOverlay(overlay);
+    assert.equal(rows.length, 2);
+    assert.equal(rows[0]?.body, 'I think this is working, thank you!');
+    assert.equal(rows[0]?.reviewerName, 'Jenny');
+    assert.equal(rows[0]?.starRating, 5);
+    assert.equal(rows[0]?.reviewRegionId, '4979219644');
+    assert.equal(rows[1]?.body, 'Thank you very much! ☺️');
+    assert.equal(rows[1]?.reviewerName, 'Etsy buyer');
+    assert.equal(rows[1]?.reviewRegionId, '5011630937');
   });
-  it('skips rows with no body (defensive — Etsy occasionally emits empty placeholders)', () => {
-    const emptyRow = el({});
-    const fullRow = el({
-      '[data-testid="review-text"]': el({}, 'Valid body'),
+  it('skips rows with no body (defensive — Etsy may emit decorative placeholders)', () => {
+    const emptyRow = makeFakeElement({
+      attrs: { 'data-review-region': 'empty1' },
+      registry: {},
     });
-    const doc = fakeListingDoc([emptyRow, fullRow]);
-    const rows = extractReviewsFromDocument(doc);
+    const fullRow = makeReviewRow({
+      regionId: '4979219644',
+      body: 'Valid body',
+    });
+    const container = makeFakeElement({
+      registry: { '[data-review-region]': [emptyRow, fullRow] },
+    });
+    const overlay = makeFakeElement({
+      registry: { '[data-deep-dive-reviews-container="true"]': container },
+    });
+    const rows = extractReviewsFromOverlay(overlay);
     assert.equal(rows.length, 1);
     assert.equal(rows[0]?.body, 'Valid body');
   });
-  it('NEW Pattern (eBay FF#5 2026-05-30) — scopes walker to visible tabpanel when one exists', () => {
-    // When a visible tabpanel is present, the walker scopes INSIDE it
-    // rather than scanning the whole document — preventing the eBay-style
-    // capture-from-hidden-tabpanel bug from happening to Etsy too.
-    const row = el({
-      '[data-testid="review-text"]': el({}, 'In active tabpanel'),
+  it('returns empty array when reviews container is absent', () => {
+    const overlay = makeFakeElement({});
+    assert.deepEqual(extractReviewsFromOverlay(overlay), [] as EtsyReviewRow[]);
+  });
+  it('returns empty array when reviews container is present but has no rows', () => {
+    const container = makeFakeElement({
+      registry: { '[data-review-region]': [] },
     });
-    const doc = fakeListingDoc([row], { withVisibleTabpanel: true });
-    const rows = extractReviewsFromDocument(doc);
-    assert.equal(rows.length, 1);
-    assert.equal(rows[0]?.body, 'In active tabpanel');
-  });
-  it('returns empty array when no rows are present', () => {
-    const doc = fakeListingDoc([]);
-    assert.deepEqual(extractReviewsFromDocument(doc), [] as EtsyReviewRow[]);
+    const overlay = makeFakeElement({
+      registry: { '[data-deep-dive-reviews-container="true"]': container },
+    });
+    assert.deepEqual(extractReviewsFromOverlay(overlay), [] as EtsyReviewRow[]);
   });
 });
 
-// ─── JSON data-island shop name extraction (NEW Pattern from FF#5 2026-05-30) ─
-
-describe('extractShopNameFromListingHtml (NEW JSON data-island Pattern)', () => {
-  it('extracts shop name from "shop_name":"<value>" JSON pattern', () => {
-    const html = '<html><body><script>{"shop_name":"CoolShop","other":"ignored"}</script></body></html>';
-    assert.equal(extractShopNameFromListingHtml(html), 'CoolShop');
-  });
-  it('extracts shop name from "shopName":"<value>" camelCase JSON pattern', () => {
-    const html = '<html><body><script>{"shopName":"CamelShop"}</script></body></html>';
-    assert.equal(extractShopNameFromListingHtml(html), 'CamelShop');
-  });
-  it('extracts shop name from nested "shop":{"name":"<value>"} pattern', () => {
-    const html = '<html><body><script>{"shop":{"name":"NestedShop","id":123}}</script></body></html>';
-    assert.equal(extractShopNameFromListingHtml(html), 'NestedShop');
-  });
-  it('decodes \\uXXXX escapes in extracted shop names', () => {
-    // & is the JSON escape for &
-    const html = '<html><body><script>{"shop_name":"Hello\\u0026World"}</script></body></html>';
-    assert.equal(extractShopNameFromListingHtml(html), 'Hello&World');
-  });
-  it('returns null when no JSON shop-name pattern is present', () => {
-    const html = '<html><body><p>just regular markup</p></body></html>';
-    assert.equal(extractShopNameFromListingHtml(html), null);
-  });
-  it('returns null when shop name value is empty', () => {
-    const html = '<html><body><script>{"shop_name":""}</script></body></html>';
-    assert.equal(extractShopNameFromListingHtml(html), null);
-  });
-});
-
-describe('extractShopNameFromListingDocument (classic-view fallback)', () => {
-  it('extracts shop name from data-shop-name attribute', () => {
-    const doc = {
-      querySelector(sel: string) {
-        if (sel === '[data-shop-name]') {
-          return {
-            getAttribute(name: string) {
-              return name === 'data-shop-name' ? 'AttrShop' : null;
-            },
-            textContent: null,
-          };
-        }
-        return null;
-      },
-    } as unknown as Document;
-    assert.equal(extractShopNameFromListingDocument(doc), 'AttrShop');
-  });
-  it('falls back to .shop2-name-and-icon a text', () => {
-    const doc = {
-      querySelector(sel: string) {
-        if (sel === '[data-shop-name]') return null;
-        if (sel === '.shop2-name-and-icon a') {
-          return {
-            getAttribute() {
-              return null;
-            },
-            textContent: 'LinkShop',
-          };
-        }
-        return null;
-      },
-    } as unknown as Document;
-    assert.equal(extractShopNameFromListingDocument(doc), 'LinkShop');
-  });
-  it('returns null when no selector matches', () => {
-    const doc = {
-      querySelector() {
-        return null;
-      },
-    } as unknown as Document;
-    assert.equal(extractShopNameFromListingDocument(doc), null);
-  });
-});
-
-// ─── Type-level sanity check (compile-time only — no runtime assertions) ─
+// ─── Type-level sanity check ────────────────────────────────────────────
 
 describe('EtsyStarFilter type narrowing', () => {
   it('isEtsyStarFilter narrows numeric inputs to the EtsyStarFilter union', () => {
     const candidate: number = 3;
     if (isEtsyStarFilter(candidate)) {
-      // Inside the type guard, `candidate` is narrowed to EtsyStarFilter.
       const narrowed: EtsyStarFilter = candidate;
       assert.equal(narrowed, 3);
     } else {
