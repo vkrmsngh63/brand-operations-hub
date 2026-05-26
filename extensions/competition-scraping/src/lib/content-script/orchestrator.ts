@@ -40,6 +40,7 @@ import {
 } from './amazon-review-extractor.ts';
 import {
   buildEbayListingUrl,
+  downloadHtmlForDiagnostic,
   extractItemIdFromEbayUrl,
   extractSellerFromFeedbackUrl,
   extractSellerFromListingDocument,
@@ -1311,9 +1312,46 @@ if (msg.kind === 'enter-video-region-record-mode') {
             });
             if (resp.ok) {
               const html = await resp.text();
+              // FF#4 diagnostic — dump listing page HTML for offline analysis
+              // so I can write proper seller-card selectors in FF#5.
+              downloadHtmlForDiagnostic(
+                `plos-debug-ebay-listing-${itemId}.html`,
+                html,
+              );
               const parser = new DOMParser();
               const doc = parser.parseFromString(html, 'text/html');
               autoDetectedSeller = extractSellerFromListingDocument(doc);
+              const probe = (sel: string): number => {
+                try {
+                  return doc.querySelectorAll(sel).length;
+                } catch {
+                  return -1;
+                }
+              };
+              console.log('[PLOS DEBUG] eBay listing page', {
+                itemId,
+                url: buildEbayListingUrl(itemId),
+                httpStatus: resp.status,
+                htmlLength: html.length,
+                autoDetectedSeller,
+                usrLinks_scoped_sellercardAtf: probe(
+                  '[data-testid="x-sellercard-atf"] a[href*="/usr/"]',
+                ),
+                usrLinks_scoped_xSellercardInfo: probe(
+                  '.x-sellercard-atf__info a[href*="/usr/"]',
+                ),
+                usrLinks_any: probe('a[href*="/usr/"]'),
+                strLinks_any: probe('a[href*="/str/"]'),
+                sellerNameCandidates_xSellercardAtf: probe(
+                  '[data-testid="x-sellercard-atf"]',
+                ),
+                sellerNameCandidates_legacyClass: probe(
+                  '.x-sellercard-atf__about-seller',
+                ),
+                // First 2000 chars + sellerCard area excerpt to spot eBay's
+                // actual seller-card markup.
+                htmlSampleFirst2000: html.substring(0, 2000),
+              });
             }
           } catch (err) {
             console.warn('[PLOS] eBay seller-resolve fetch failed:', err);

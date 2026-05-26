@@ -37,6 +37,48 @@ import {
 } from './scrape-pagination.ts';
 import { openScrapeProgressIndicator } from './scrape-progress-indicator.ts';
 
+// FF#4 2026-05-30 — TEMPORARY DIAGNOSTIC INSTRUMENTATION (remove in FF#5
+// after director uploads the dumped HTML files + I write proper selectors
+// based on actual eBay DOM evidence). 3 speculative FFs (FF#1+#2 bundled,
+// FF#3 standalone) burned through without empirical access; per the
+// 2026-05-25 P-48 Session 2 antipattern Pattern + director's explicit
+// 2026-05-30 picker outcome, stop guessing + gather empirical evidence.
+//
+// What this instrumentation does:
+//   1. After each eBay fetch (listing page in orchestrator.ts AND feedback
+//      page 1 here), save the response HTML to director's Downloads folder
+//      via a programmatic <a download> click. Files named
+//      `plos-debug-ebay-<scope>-<key>.html`.
+//   2. Console.log a structured row-count breakdown per selector probe,
+//      to surface which selectors match against the real DOM + how many.
+// Director re-runs scrape → uploads HTML files from Downloads → I write
+// FF#5 with proper selectors + (likely) a different fetch strategy.
+export function downloadHtmlForDiagnostic(
+  filename: string,
+  html: string,
+): void {
+  try {
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => {
+      try {
+        URL.revokeObjectURL(url);
+      } catch {
+        // ignore — best-effort cleanup
+      }
+    }, 1000);
+  } catch (err) {
+    console.error('[PLOS DEBUG] HTML download failed:', err);
+  }
+}
+
 const EBAY_URL_PREFIX = /^https?:\/\/(www\.)?ebay\.com\//;
 const ITEM_PAGE_PATH = /\/itm\/(\d+)\b/;
 const FEEDBACK_PAGE_PATH = /\/fdbk\/mweb_profile\b/;
@@ -676,6 +718,42 @@ async function scrapeOneFilter(
       const parser = new DOMParser();
       currentDoc = parser.parseFromString(html, 'text/html');
       currentPageNumber = nextPageNumber;
+      // FF#4 diagnostic — dump page 1 HTML + log selector match counts so
+      // I can analyze the actual eBay DOM in FF#5.
+      if (nextPageNumber === 1) {
+        downloadHtmlForDiagnostic(
+          `plos-debug-ebay-feedback-${filter}-page1.html`,
+          html,
+        );
+        const probe = (sel: string): number => {
+          try {
+            return currentDoc?.querySelectorAll(sel).length ?? 0;
+          } catch {
+            return -1;
+          }
+        };
+        console.log('[PLOS DEBUG] eBay feedback page 1', {
+          filter,
+          url: nextUrl,
+          httpStatus: resp.status,
+          htmlLength: html.length,
+          rowsBy_fdbkContainerDetails: probe('.fdbk-container__details'),
+          rowsBy_feedbackListTableRow: probe('li.feedback-list-table-row'),
+          rowsBy_dataTestIdFeedbackItem: probe(
+            '[data-test-id*="feedback-item"]',
+          ),
+          // Probe modern eBay UI candidate selectors based on the 2026-05-30
+          // screenshot (Verified-purchase badge per row + star icon per row).
+          rowsBy_dataTestIdContainsFeedback: probe('[data-testid*="feedback"]'),
+          rowsBy_articleRole: probe('[role="article"]'),
+          rowsBy_listItem: probe('li'),
+          // "This Item" tab counter (the screenshot showed "This item (117)").
+          thisItemTabPresent: probe('button[aria-selected="true"]'),
+          allItemsTabPresent: probe('button[aria-selected="false"]'),
+          // First 800 chars to spot-check what eBay's server returned.
+          htmlSampleFirst800: html.substring(0, 800),
+        });
+      }
       const rowsOnPage = extractFeedbackFromDocument(currentDoc).length;
       if (rowsOnPage === 0) return false;
       return true;
