@@ -51,6 +51,16 @@ import {
   urlsMatchByItemId,
   type EbayFeedbackFilter,
 } from './ebay-review-extractor.ts';
+import {
+  ETSY_DEFAULT_SELECTED_STARS,
+  ETSY_STAR_FILTERS,
+  extractListingIdFromEtsyUrl,
+  isEtsyScrapableUrl,
+  isEtsyStarFilter,
+  runEtsyReviewScrape,
+  urlsMatchByListingId,
+  type EtsyStarFilter,
+} from './etsy-review-extractor.ts';
 import { openScrapeTriggerModal } from './scrape-trigger-modal.ts';
 import {
   getSelectedPlatform,
@@ -1425,10 +1435,106 @@ if (msg.kind === 'enter-video-region-record-mode') {
         sendResponse({ ok: true });
         return;
       }
-      // Future Etsy + Walmart sub-cluster sessions land here. For now,
-      // surface a friendly message rather than failing silently.
+      if (isEtsyScrapableUrl(pageUrl)) {
+        // Etsy path — sub-cluster Session 1. Accepts /listing/<id> listing
+        // pages (Etsy reviews live on the listing page itself, no separate
+        // review URL shape like Amazon /product-reviews/ or eBay /fdbk/).
+        // Per FF#1 symmetric helper Pattern from the 2026-05-28 Amazon
+        // deploy + extended at the 2026-05-30 eBay deploy.
+        const parent = savedCompetitorUrlRows.find((r) =>
+          urlsMatchByListingId(pageUrl, r.url),
+        );
+        if (!parent) {
+          showCaptureFailureToast(
+            "Couldn't find a saved Competitor URL for this Etsy listing. Open the listing page first and click + Add to save it, then come back here and re-run the scrape.",
+          );
+          sendResponse({ ok: false });
+          return;
+        }
+        const listingId = extractListingIdFromEtsyUrl(pageUrl);
+        if (!listingId) {
+          showCaptureFailureToast(
+            "Couldn't read the listing ID from this Etsy page. Try refreshing and re-running.",
+          );
+          sendResponse({ ok: false });
+          return;
+        }
+        const parentRef = parent;
+        const parentName = parentRef.productName;
+        const triggerInputs = {
+          scopeLabel: parentName
+            ? `Etsy reviews — ${parentName}`
+            : 'Etsy reviews',
+          defaultCapPerStar:
+            parentRef.reviewScrapeCap && parentRef.reviewScrapeCap > 0
+              ? parentRef.reviewScrapeCap
+              : 200,
+          // Etsy: director can opt into 4-star + 5-star captures via the
+          // modal but the default selection is 3+2+1 per the director-
+          // verbatim 2026-05-25 spec (negative + middling reviews are the
+          // most competitively informative bucket).
+          selectableStars: [...ETSY_STAR_FILTERS],
+          defaultSelectedStars: [...ETSY_DEFAULT_SELECTED_STARS],
+        };
+        void openScrapeTriggerModal(triggerInputs).then((triggerResult) => {
+          if (triggerResult === null) {
+            // Director cancelled at the trigger modal — no scrape dispatched.
+            return;
+          }
+          // Translate the modal's selectedStars (numeric 1..5) into
+          // EtsyStarFilter[]; skip any rating that doesn't map (defensive —
+          // the modal restricts to 1..5).
+          const starsToVisit: EtsyStarFilter[] = [];
+          for (const rating of triggerResult.selectedStars) {
+            if (isEtsyStarFilter(rating)) starsToVisit.push(rating);
+          }
+          if (starsToVisit.length === 0) {
+            showCaptureFailureToast(
+              'Pick at least one star rating to scrape.',
+            );
+            return;
+          }
+          const ctx = {
+            projectId,
+            competitorUrlId: parentRef.id,
+            listingId,
+            capPerStar: triggerResult.capPerStar,
+            starsToVisit,
+            scopeLabel: triggerInputs.scopeLabel,
+            async saveReview(input: {
+              clientId: string;
+              starRating: number;
+              body: string;
+              title: null;
+              reviewerName: string | null;
+              reviewDate: string | null;
+              helpfulCount: null;
+              platform: 'etsy';
+              source: 'extension-scrape';
+            }): Promise<void> {
+              await createCapturedReview(projectId, parentRef.id, {
+                clientId: input.clientId,
+                starRating: input.starRating,
+                body: input.body,
+                reviewerName: input.reviewerName ?? undefined,
+                reviewDate: input.reviewDate ?? undefined,
+                helpfulCount: input.helpfulCount ?? undefined,
+                platform: input.platform,
+                source: input.source,
+              });
+            },
+          };
+          void runEtsyReviewScrape(ctx).catch((err) => {
+            console.error('[PLOS] Etsy review scrape failed:', err);
+          });
+        });
+        sendResponse({ ok: true });
+        return;
+      }
+      // Future Walmart sub-cluster session lands here. For now, surface a
+      // friendly message rather than failing silently.
       showCaptureFailureToast(
-        'Review scraping is currently available on Amazon and eBay product pages. Etsy and Walmart ship in upcoming sessions.',
+        'Review scraping is currently available on Amazon, eBay, and Etsy product pages. Walmart ships in an upcoming session.',
       );
       sendResponse({ ok: false });
       return;
