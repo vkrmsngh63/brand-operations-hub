@@ -464,6 +464,18 @@ export async function runWalmartReviewScrape(
       ? ctx.starsToVisit
       : ([5, 4, 3, 2, 1] as readonly WalmartStarFilter[]);
 
+  // [PLOS WALMART DIAGNOSTIC] FF#2 2026-06-01 TEMPORARY — empirical diagnostic
+  // instrumentation per the now-validated Diagnostic-instrumentation FF Pattern
+  // (eBay FF#4 2026-05-30 + Etsy FF#2 2026-05-31). Removed in FF#3 after the
+  // dumped HTML reveals the empirical root cause of the 0-captures BUST.
+  console.log('[PLOS WALMART DIAGNOSTIC] runWalmartReviewScrape ENTRY', {
+    productId: ctx.productId,
+    starsToVisit: [...starsToVisit],
+    capPerStar,
+    scopeLabel: ctx.scopeLabel,
+    competitorUrlId: ctx.competitorUrlId,
+  });
+
   const insertedByStar: Partial<Record<WalmartStarFilter, number>> = {};
   let totalInserted = 0;
   let runningAbort: WalmartScrapeResult['abortReason'];
@@ -569,6 +581,19 @@ async function scrapeOneStar(
   let currentDoc: Document | null = null;
   let currentPageNumber = 1;
   let isFirstPage = true;
+  // [PLOS WALMART DIAGNOSTIC] FF#2 2026-06-01 TEMPORARY — track whether we
+  // already dumped HTML for THIS star so we only auto-download the FIRST
+  // page (don't spam Downloads with every page across every star).
+  let diagnosticHtmlDumped = false;
+
+  console.log(
+    `[PLOS WALMART DIAGNOSTIC] scrapeOneStar START — ${String(starFilter)}★`,
+    {
+      starFilter,
+      capPerStar,
+      productId: ctx.productId,
+    },
+  );
 
   // Cumulative-totals wrapper — page-loaded + row-saved events surface
   // session-wide totals across the cross-star scrape, not per-star.
@@ -613,7 +638,15 @@ async function scrapeOneStar(
     capRows: capPerStar,
     extractCurrentPageRows: () => {
       if (!currentDoc) return [];
-      return extractReviewsFromDocument(currentDoc);
+      const rows = extractReviewsFromDocument(currentDoc);
+      // [PLOS WALMART DIAGNOSTIC] FF#2 2026-06-01 TEMPORARY — log walker
+      // output per page so we can see exactly how many rows our selectors
+      // matched in the fetched HTML. 0 rows here = selectors missing OR
+      // server-rendered HTML lacks the reviews (React shell).
+      console.log(
+        `[PLOS WALMART DIAGNOSTIC] extractCurrentPageRows returned ${String(rows.length)} rows for ${String(starFilter)}★ page ${String(currentPageNumber)}`,
+      );
+      return rows;
     },
     advanceToNextPage: async () => {
       // FF#4 Pattern: build pagination URL directly via buildWalmartReviewUrl.
@@ -631,11 +664,19 @@ async function scrapeOneStar(
         starFilter,
         nextPageNumber,
       );
+      // [PLOS WALMART DIAGNOSTIC] FF#2 2026-06-01 TEMPORARY — log every fetch
+      // URL + status + size for empirical inspection.
+      console.log(
+        `[PLOS WALMART DIAGNOSTIC] FETCH ${String(starFilter)}★ page ${String(nextPageNumber)}: ${nextUrl}`,
+      );
       const resp = await fetch(nextUrl, {
         credentials: 'include',
         headers: { Accept: 'text/html' },
         signal: controller.signal,
       });
+      console.log(
+        `[PLOS WALMART DIAGNOSTIC] FETCH RESPONSE ${String(starFilter)}★ page ${String(nextPageNumber)}: status=${String(resp.status)} ok=${String(resp.ok)} contentType=${resp.headers.get('content-type') ?? '(missing)'}`,
+      );
       if (!resp.ok) {
         const err = new Error(
           `Walmart per-star fetch returned ${String(resp.status)} for ${String(starFilter)}★`,
@@ -644,8 +685,67 @@ async function scrapeOneStar(
         throw err;
       }
       const html = await resp.text();
+      // [PLOS WALMART DIAGNOSTIC] FF#2 2026-06-01 TEMPORARY — log HTML size
+      // + auto-download the FIRST page of the FIRST star to Downloads for
+      // empirical inspection (mirrors yesterday's Etsy FF#2 Pattern).
+      console.log(
+        `[PLOS WALMART DIAGNOSTIC] HTML received ${String(starFilter)}★ page ${String(nextPageNumber)}: ${String(html.length)} chars`,
+      );
+      if (!diagnosticHtmlDumped) {
+        diagnosticHtmlDumped = true;
+        try {
+          const blob = new Blob([html], { type: 'text/html' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `plos-walmart-diag-${ctx.productId}-${String(starFilter)}star-page${String(nextPageNumber)}.html`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          console.log(
+            `[PLOS WALMART DIAGNOSTIC] AUTO-DOWNLOAD triggered: ${a.download}`,
+          );
+        } catch (dumpErr) {
+          console.warn(
+            '[PLOS WALMART DIAGNOSTIC] auto-download failed:',
+            dumpErr,
+          );
+        }
+      }
       const parser = new DOMParser();
       currentDoc = parser.parseFromString(html, 'text/html');
+      // [PLOS WALMART DIAGNOSTIC] FF#2 2026-06-01 TEMPORARY — selector-presence
+      // probe. We log counts of candidate selectors to identify which Walmart
+      // testid / class names actually appear in the server-rendered HTML.
+      const SELECTOR_PROBES: readonly string[] = [
+        '[data-testid="reviews-list"]',
+        '[data-testid="reviews-section"]',
+        '[data-testid="review-card"]',
+        '[data-testid="review-body"]',
+        '[data-testid="review-title"]',
+        '[data-testid="review-date"]',
+        '[data-testid="review-reviewer"]',
+        '[data-product-review-id]',
+        '[data-automation-id*="review"]',
+        '[aria-label*="out of 5"]',
+        '.review-card',
+        '.review-content',
+        '.review-text',
+        '.review-title',
+      ];
+      const probeCounts: Record<string, number> = {};
+      for (const sel of SELECTOR_PROBES) {
+        try {
+          probeCounts[sel] = currentDoc.querySelectorAll(sel).length;
+        } catch {
+          probeCounts[sel] = -1;
+        }
+      }
+      console.log(
+        `[PLOS WALMART DIAGNOSTIC] SELECTOR PROBE ${String(starFilter)}★ page ${String(nextPageNumber)} (doc.title="${currentDoc.title}"):`,
+        probeCounts,
+      );
       currentPageNumber = nextPageNumber;
       const rowsOnPage = extractReviewsFromDocument(currentDoc).length;
       if (rowsOnPage === 0) return false;
