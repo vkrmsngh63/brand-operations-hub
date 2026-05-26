@@ -426,26 +426,56 @@ function fakeDocLike(registry: Record<string, FakeEl | FakeEl[]>): Document {
 
 // ─── findOverlayContainer ───────────────────────────────────────────────
 
-describe('findOverlayContainer', () => {
-  it('finds the canonical [aria-modal=true][role=dialog].deep-dive-sheet element', () => {
-    const overlay = makeFakeElement({ attrs: { 'aria-modal': 'true', role: 'dialog' } });
-    const doc = fakeDocLike({
-      '[aria-modal="true"][role="dialog"].deep-dive-sheet': overlay,
+describe('findOverlayContainer (FF#3 empirical-fix selector)', () => {
+  it('finds the visible .deep-dive-sheet element', () => {
+    const overlay = makeFakeElement({
+      attrs: { 'aria-modal': 'true', role: 'dialog', class: 'deep-dive-sheet center-sheet' },
     });
+    const doc = fakeDocLike({ '.deep-dive-sheet': [overlay] });
     assert.equal(findOverlayContainer(doc), overlay);
   });
-  it('falls back to .deep-dive-sheet when the modal+role pair is absent', () => {
-    const overlay = makeFakeElement({});
-    const doc = fakeDocLike({ '.deep-dive-sheet': overlay });
-    assert.equal(findOverlayContainer(doc), overlay);
+  it('rejects .deep-dive-sheet variants with aria-hidden="true" (defensive)', () => {
+    const hiddenOverlay = makeFakeElement({
+      attrs: { class: 'deep-dive-sheet', 'aria-hidden': 'true' },
+    });
+    const doc = fakeDocLike({ '.deep-dive-sheet': [hiddenOverlay] });
+    assert.equal(findOverlayContainer(doc), null);
   });
-  it('falls back to [aria-modal=true][role=dialog] as last resort', () => {
-    const overlay = makeFakeElement({});
-    const doc = fakeDocLike({ '[aria-modal="true"][role="dialog"]': overlay });
-    assert.equal(findOverlayContainer(doc), overlay);
+  it('rejects .deep-dive-sheet variants with wt-display-none class (defensive)', () => {
+    const hiddenOverlay = makeFakeElement({
+      attrs: { class: 'deep-dive-sheet wt-display-none' },
+    });
+    const doc = fakeDocLike({ '.deep-dive-sheet': [hiddenOverlay] });
+    assert.equal(findOverlayContainer(doc), null);
+  });
+  it('rejects .deep-dive-sheet variants with hidden attribute (defensive)', () => {
+    const hiddenOverlay = makeFakeElement({
+      attrs: { class: 'deep-dive-sheet', hidden: '' },
+    });
+    const doc = fakeDocLike({ '.deep-dive-sheet': [hiddenOverlay] });
+    assert.equal(findOverlayContainer(doc), null);
+  });
+  it('returns the first visible .deep-dive-sheet when multiple candidates exist (skips hidden ones)', () => {
+    const hiddenOverlay = makeFakeElement({
+      attrs: { class: 'deep-dive-sheet', 'aria-hidden': 'true' },
+    });
+    const visibleOverlay = makeFakeElement({
+      attrs: { class: 'deep-dive-sheet center-sheet' },
+    });
+    const doc = fakeDocLike({ '.deep-dive-sheet': [hiddenOverlay, visibleOverlay] });
+    assert.equal(findOverlayContainer(doc), visibleOverlay);
+  });
+  it('FF#3 regression — does NOT match non-deep-dive dialogs like #customer-photo-overlay-carousel', () => {
+    // FF#1 BUSTED because the over-broad [aria-modal="true"][role="dialog"]
+    // fallback selector matched Etsy's review-photo lightbox (a hidden
+    // dialog present in the DOM at page load). The empirical-fix restricts
+    // to .deep-dive-sheet — non-deep-dive dialogs no longer leak in.
+    // Empirical evidence: FF#2 diagnostic dump 2026-05-31.
+    const doc = fakeDocLike({ '.deep-dive-sheet': [] });
+    assert.equal(findOverlayContainer(doc), null);
   });
   it('returns null when no overlay element exists', () => {
-    const doc = fakeDocLike({});
+    const doc = fakeDocLike({ '.deep-dive-sheet': [] });
     assert.equal(findOverlayContainer(doc), null);
   });
 });

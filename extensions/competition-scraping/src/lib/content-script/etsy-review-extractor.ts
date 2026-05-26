@@ -172,22 +172,36 @@ export interface EtsyReviewRow {
 }
 
 /**
- * Returns the deep-dive review overlay element when present in the document.
- * The overlay is the dialog mounted when director clicks "View all reviews
- * for this item" on the listing page. Returns null when the overlay isn't
- * currently mounted.
+ * Returns the deep-dive review overlay element when present + visible in
+ * the document. The overlay is the dialog mounted when director clicks
+ * "View all reviews for this item" on the listing page. Returns null when
+ * the overlay isn't currently mounted OR exists only in a hidden state.
  *
- * Empirical: per director's 2026-05-31 HTML paste, the overlay is a
- * `<div aria-modal="true" role="dialog" class="deep-dive-sheet center-sheet
- * custom-width wt-sheet wt-sheet--position-bottom">`. The `aria-modal` +
- * `role` selector pair is the most stable identifier.
+ * FF#3 2026-05-31 — empirically-verified single selector. The earlier
+ * fallback to bare `[aria-modal="true"][role="dialog"]` BUSTED in Phase 4
+ * because Etsy listing pages also carry OTHER dialogs that match the bare
+ * modal+role pair — confirmed by the FF#2 diagnostic dump
+ * (`#customer-photo-overlay-carousel` — the review-photo lightbox, hidden
+ * by default via `aria-hidden="true"` + `wt-display-none` class but
+ * present in the DOM at page load). The scraper picked it up + looped
+ * against the wrong container, finding no histogram buttons inside it +
+ * silently skipping all 3 stars.
+ *
+ * `.deep-dive-sheet` is the canonical class for the review overlay per
+ * director's 2026-05-31 outerHTML paste. The hidden-state filter (aria-
+ * hidden, wt-display-none, .hidden attribute) defends against any future
+ * variant where Etsy might pre-render a hidden `.deep-dive-sheet`.
  */
 export function findOverlayContainer(doc: ParentNode): Element | null {
-  return (
-    doc.querySelector('[aria-modal="true"][role="dialog"].deep-dive-sheet') ??
-    doc.querySelector('.deep-dive-sheet') ??
-    doc.querySelector('[aria-modal="true"][role="dialog"]')
-  );
+  const candidates = Array.from(doc.querySelectorAll('.deep-dive-sheet'));
+  for (const el of candidates) {
+    if (el.getAttribute('aria-hidden') === 'true') continue;
+    const classes = el.getAttribute('class') ?? '';
+    if (classes.split(/\s+/).includes('wt-display-none')) continue;
+    if (el.hasAttribute('hidden')) continue;
+    return el;
+  }
+  return null;
 }
 
 /**
@@ -486,54 +500,6 @@ export function parseEtsyReviewDate(text: string): string | null {
   return d.toISOString();
 }
 
-// ─── DIAGNOSTIC INSTRUMENTATION (FF#2 2026-05-31 — TEMPORARY) ────────────
-//
-// Yesterday's eBay FF#4 Pattern applied to Etsy after FF#1 BUSTED silently
-// (scrape ended with 0 captures + no error message). This block instruments
-// every step of runEtsyReviewScrape so director can capture empirical
-// evidence in Chrome DevTools Console + download the overlay HTML at the
-// moment of histogram click. FF#3 will use that evidence to ship the
-// empirically-verified fix + remove this instrumentation.
-//
-// Per the diagnostic-instrumentation FF Pattern (CORRECTIONS_LOG §Entry
-// 2026-05-30 sub-observation a), this code is INTENTIONALLY loud +
-// noisy + has side effects (downloads). It is NOT production-quality.
-
-const DIAGNOSTIC_PREFIX = '[PLOS ETSY DIAGNOSTIC]';
-
-function diag(step: string, payload?: Record<string, unknown>): void {
-  if (payload) {
-    console.log(DIAGNOSTIC_PREFIX, step, payload);
-  } else {
-    console.log(DIAGNOSTIC_PREFIX, step);
-  }
-}
-
-function describeEl(el: Element | null, maxChars = 600): string {
-  if (!el) return '<null>';
-  const html = (el as HTMLElement).outerHTML ?? '';
-  if (html.length <= maxChars) return html;
-  return html.slice(0, maxChars) + `...[truncated, total ${String(html.length)} chars]`;
-}
-
-function downloadHtml(filename: string, content: string): void {
-  try {
-    const blob = new Blob([content], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.style.display = 'none';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    diag('HTML download fired', { filename, sizeChars: content.length });
-  } catch (err) {
-    diag('HTML download FAILED', { filename, err: String(err) });
-  }
-}
-
 // ─── Scrape orchestration (live-DOM driver) ──────────────────────────────
 
 export interface EtsyScrapeContext {
@@ -631,45 +597,14 @@ export async function runEtsyReviewScrape(
 
   onProgress({ kind: 'starting' });
 
-  // DIAGNOSTIC FF#2 — log entry-point context.
-  diag('runEtsyReviewScrape ENTRY', {
-    href: typeof window !== 'undefined' ? window.location.href : '<no window>',
-    listingId: ctx.listingId,
-    capPerStar,
-    starsToVisit: [...starsToVisit],
-    scopeLabel: ctx.scopeLabel,
-  });
-
   try {
     // Step 1: Open the overlay if not already open.
     let overlay = findOverlayContainer(liveDoc);
-    diag('findOverlayContainer (pre-trigger)', {
-      foundAtEntry: overlay !== null,
-      overlayHtml: describeEl(overlay, 400),
-    });
     if (!overlay) {
       const trigger = findViewAllReviewsButton(liveDoc);
-      diag('findViewAllReviewsButton', {
-        found: trigger !== null,
-        triggerHtml: describeEl(trigger, 400),
-        triggerTextContent: trigger?.textContent?.trim() ?? null,
-      });
       if (!trigger) {
-        // DIAGNOSTIC: dump the listing page HTML so FF#3 can probe what
-        // selectors should match the View-all-reviews trigger. Truncate
-        // to <head> + first 100KB of <body> to keep download manageable.
-        const fullHtml =
-          typeof document !== 'undefined'
-            ? document.documentElement.outerHTML
-            : '<no document>';
-        const trimmed =
-          fullHtml.length > 200000
-            ? fullHtml.slice(0, 200000) + '\n<!-- truncated at 200KB -->'
-            : fullHtml;
-        downloadHtml('plos-etsy-diag-listing-page.html', trimmed);
-        diag('listing-page HTML dumped (View-all-reviews trigger not found)');
         const msg =
-          "DIAGNOSTIC FF#2: Couldn't find the 'View all reviews for this item' button. Listing-page HTML was downloaded to your Downloads folder — upload it back so FF#3 can ship the right selector. Check Console for additional diagnostic output.";
+          "Couldn't find the 'View all reviews for this item' button on the listing page. Etsy may have changed the listing layout; re-load the page and try again.";
         onProgress({
           kind: 'aborted',
           reason: 'error',
@@ -684,39 +619,8 @@ export async function runEtsyReviewScrape(
           abortMessage: msg,
         };
       }
-      diag('clicking View-all-reviews button');
       clickElement(trigger);
-      diag('waitForOverlay START', { timeoutMs: OVERLAY_WAIT_TIMEOUT_MS });
-      try {
-        overlay = await waitForOverlay(liveDoc, controller.signal);
-        diag('waitForOverlay SUCCESS', {
-          overlayClasses: (overlay as HTMLElement).className,
-          overlayHtmlPreview: describeEl(overlay, 600),
-        });
-      } catch (waitErr) {
-        diag('waitForOverlay FAILED', { err: String(waitErr) });
-        // DIAGNOSTIC: dump full DOM so FF#3 can see what's actually there.
-        const fullHtml =
-          typeof document !== 'undefined'
-            ? document.documentElement.outerHTML
-            : '<no document>';
-        const trimmed =
-          fullHtml.length > 200000
-            ? fullHtml.slice(0, 200000) + '\n<!-- truncated at 200KB -->'
-            : fullHtml;
-        downloadHtml('plos-etsy-diag-after-trigger-click.html', trimmed);
-        throw waitErr;
-      }
-    }
-
-    // DIAGNOSTIC: dump the overlay's outerHTML once we have it — gives FF#3
-    // ground truth on the state director's scrape sees (which may differ
-    // from director's manual DevTools paste due to in-page React state).
-    if (overlay) {
-      downloadHtml(
-        'plos-etsy-diag-overlay-at-scrape-start.html',
-        (overlay as HTMLElement).outerHTML,
-      );
+      overlay = await waitForOverlay(liveDoc, controller.signal);
     }
 
     // Step 2: Cross-star loop driven by live histogram filter clicks.
@@ -734,18 +638,11 @@ export async function runEtsyReviewScrape(
         break;
       }
       onProgress({ kind: 'star-started', starRating: filter });
-      diag(`star ${String(filter)} START`, { filter });
 
       const histogramBtn = findHistogramButton(overlay, filter);
-      diag(`star ${String(filter)} findHistogramButton`, {
-        found: histogramBtn !== null,
-        histogramBtnHtml: describeEl(histogramBtn, 400),
-        isDisabled: histogramBtn ? isHistogramButtonDisabled(histogramBtn) : null,
-      });
       if (!histogramBtn) {
         // Histogram button missing entirely — atypical (Etsy renders all
         // 5 buttons even at 0%). Skip this star without error.
-        diag(`star ${String(filter)} SKIP (no histogram button)`);
         skippedStars.push(filter);
         onProgress({
           kind: 'star-completed',
@@ -758,7 +655,6 @@ export async function runEtsyReviewScrape(
       if (isHistogramButtonDisabled(histogramBtn)) {
         // No reviews exist for this star (e.g., 2-star bucket at 0%).
         // SKIP cleanly — no click, no wait, no error.
-        diag(`star ${String(filter)} SKIP (histogram button disabled)`);
         skippedStars.push(filter);
         onProgress({
           kind: 'star-completed',
@@ -772,7 +668,6 @@ export async function runEtsyReviewScrape(
       // Snapshot the current first-review ID so we can detect the AJAX
       // content swap that follows the click.
       const preClickFirstId = currentFirstReviewId(overlay);
-      diag(`star ${String(filter)} pre-click snapshot`, { preClickFirstId });
 
       // §A.15 random delay BEFORE the click so the inter-click gap is
       // the noisy human-like duration, not the deterministic settle.
@@ -782,20 +677,11 @@ export async function runEtsyReviewScrape(
         runningAbort = 'user-cancel';
         break;
       }
-      diag(`star ${String(filter)} clicking histogram button`);
       clickElement(histogramBtn);
 
       try {
         await waitForReviewsSwap(overlay, preClickFirstId, controller.signal);
-        diag(`star ${String(filter)} waitForReviewsSwap SUCCESS`, {
-          newFirstId: currentFirstReviewId(overlay),
-        });
       } catch (err) {
-        diag(`star ${String(filter)} waitForReviewsSwap FAILED`, {
-          err: String(err),
-          currentFirstId: currentFirstReviewId(overlay),
-          overlayPreview: describeEl(overlay, 600),
-        });
         if (controller.signal.aborted) {
           runningAbort = 'user-cancel';
           break;
@@ -804,16 +690,6 @@ export async function runEtsyReviewScrape(
         runningAbort = 'error';
         runningAbortMessage = `Etsy ${String(filter)}★ filter content didn't load: ${msg}`;
         break;
-      }
-
-      // DIAGNOSTIC FF#2: dump overlay state after the first histogram click
-      // so FF#3 has empirical evidence of how the AJAX response looks.
-      // (One dump per scrape — only fires on the first non-skipped star.)
-      if (Object.keys(insertedByStar).length === 0 && skippedStars.length === 0) {
-        downloadHtml(
-          `plos-etsy-diag-overlay-after-star-${String(filter)}-click.html`,
-          (overlay as HTMLElement).outerHTML,
-        );
       }
 
       // Pagination loop within this star.
@@ -832,17 +708,6 @@ export async function runEtsyReviewScrape(
           starContext: `${String(filter)}★`,
         });
         const rows = extractReviewsFromOverlay(overlay);
-        diag(`star ${String(filter)} page ${String(pageIndex)} extractReviewsFromOverlay`, {
-          rowCount: rows.length,
-          reviewsContainerFound: findReviewsContainer(overlay) !== null,
-          reviewsContainerHtml: describeEl(findReviewsContainer(overlay), 600),
-          firstRowSummary: rows.length > 0 ? {
-            reviewRegionId: rows[0]?.reviewRegionId,
-            bodyPreview: rows[0]?.body?.slice(0, 80),
-            reviewerName: rows[0]?.reviewerName,
-            starRating: rows[0]?.starRating,
-          } : null,
-        });
         onProgress({
           kind: 'page-loaded',
           pageIndex,
@@ -918,10 +783,6 @@ export async function runEtsyReviewScrape(
       }
 
       insertedByStar[filter] = rowsForThisStar;
-      diag(`star ${String(filter)} COMPLETED`, {
-        rowsForThisStar,
-        totalInsertedSoFar: totalInserted,
-      });
       onProgress({
         kind: 'star-completed',
         starRating: filter,
@@ -929,14 +790,6 @@ export async function runEtsyReviewScrape(
         totalRowsCaptured: totalInserted,
       });
     }
-
-    diag('runEtsyReviewScrape EXIT', {
-      totalInserted,
-      insertedByStar,
-      skippedStars,
-      runningAbort,
-      runningAbortMessage,
-    });
 
     if (runningAbort === undefined) {
       onProgress({ kind: 'completed', totalRowsCaptured: totalInserted });
