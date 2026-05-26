@@ -29,6 +29,10 @@ function makeRow(overrides: Partial<CapturedReviewRow> = {}): CapturedReviewRow 
     tags: [],
     analysis: {},
     source: 'manual',
+    // P-49 Workstream 2 (2026-05-26) — extension-scrape additive columns per §A.16.
+    sortRank: null,
+    helpfulCount: null,
+    platform: null,
     addedBy: 'u-1',
     addedAt: FROZEN_DATE,
     updatedAt: FROZEN_DATE,

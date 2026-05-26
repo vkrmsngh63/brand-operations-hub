@@ -44,6 +44,7 @@ const ROW_A: CompetitorUrl = {
   scrapingStatus: 'INCOMPLETE',
   overallCompetitorAnalysis: {},
   overallAnalyses: {},
+  reviewScrapeCap: 200,
   addedBy: 'user-1',
   addedAt: '2026-05-11T00:00:00.000Z',
   updatedAt: '2026-05-11T00:00:00.000Z',

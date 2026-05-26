@@ -13,10 +13,12 @@ import type {
   AcceptedVideoMimeType,
   CapturedImage,
   CapturedImageWithUrls,
+  CapturedReview,
   CapturedText,
   CapturedVideo,
   CapturedVideoWithUrls,
   CompetitorUrl,
+  CreateCapturedReviewRequest,
   CreateCapturedTextRequest,
   CreateCompetitorUrlRequest,
   CreateVocabularyEntryRequest,
@@ -597,6 +599,28 @@ export async function createCapturedText(
     },
   );
   return readJsonOrThrow<CapturedText>(res);
+}
+
+/**
+ * P-49 Workstream 2 Session 1 (2026-05-26) — per-review insert. Idempotent on
+ * clientId per the captured-* convention; on 200 (duplicate) the server
+ * returns the existing row unchanged. The per-platform extractor modules in
+ * content-script/ route through here via the background-proxy's
+ * `create-captured-review` BackgroundRequest.
+ */
+export async function createCapturedReview(
+  projectId: string,
+  urlId: string,
+  body: CreateCapturedReviewRequest,
+): Promise<CapturedReview> {
+  const res = await authedFetch(
+    `/api/projects/${encodeURIComponent(projectId)}/competition-scraping/urls/${encodeURIComponent(urlId)}/reviews`,
+    {
+      method: 'POST',
+      body: JSON.stringify(body),
+    },
+  );
+  return readJsonOrThrow<CapturedReview>(res);
 }
 
 /**

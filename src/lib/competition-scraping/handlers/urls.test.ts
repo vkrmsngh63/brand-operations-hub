@@ -53,6 +53,8 @@ function makeRow(overrides: Partial<CompetitorUrlRow> = {}): CompetitorUrlRow {
     scrapingStatus: 'INCOMPLETE',
     overallCompetitorAnalysis: {},
     overallAnalyses: {},
+    // P-49 Workstream 2 (2026-05-26) — per-URL review scrape cap per §A.4 + §A.16.
+    reviewScrapeCap: 200,
     addedBy: 'u-1',
     addedAt: FROZEN_DATE,
     updatedAt: FROZEN_DATE,

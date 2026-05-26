@@ -41,6 +41,7 @@
 import { supabase } from '../lib/supabase';
 import {
   PlosApiError,
+  createCapturedReview,
   createCapturedText,
   createCompetitorUrl,
   createVocabularyEntry,
@@ -118,6 +119,19 @@ const CONTEXT_MENU_VIDEO_TITLE = 'Add to PLOS — Captured Video';
 const CONTEXT_MENU_RECORD_VIDEO_ID = 'plos-add-record-video';
 const CONTEXT_MENU_RECORD_VIDEO_TITLE = 'Record video for PLOS';
 
+// P-49 Workstream 2 Session 1 (2026-05-26) — review-scrape context menu.
+// Fires on right-click anywhere on a recognized review page (Amazon's
+// /product-reviews/<ASIN>/ path for v1; eBay / Etsy / Walmart per-platform
+// modules land in their respective sub-cluster sessions). Routes the page
+// URL to the content-script orchestrator's start-review-scrape handler,
+// which resolves the parent CompetitorUrl and dispatches to the right
+// per-platform extractor. Uses `contexts: ['all']` so the menu appears on
+// any right-click target on a review page (rather than requiring a
+// link/image/etc. — the scrape orchestrates against the document, not a
+// specific DOM element).
+const CONTEXT_MENU_SCRAPE_REVIEWS_ID = 'plos-scrape-reviews-for-url';
+const CONTEXT_MENU_SCRAPE_REVIEWS_TITLE = 'Scrape reviews for this URL';
+
 export default defineBackground(() => {
   // P-16 (W#2 polish, 2026-05-19): SW global error handlers. Attach BEFORE
   // any other listener so they're live for the SW's full lifecycle —
@@ -185,6 +199,16 @@ export default defineBackground(() => {
         // screen, not a specific DOM element, so the menu fires from any
         // right-click context. The content-script orchestrator opens the
         // region-record overlay regardless of what was right-clicked.
+        contexts: ['all'],
+      });
+      chrome.contextMenus.create({
+        id: CONTEXT_MENU_SCRAPE_REVIEWS_ID,
+        title: CONTEXT_MENU_SCRAPE_REVIEWS_TITLE,
+        // P-49 Workstream 2 Session 1 (2026-05-26): `contexts: ['all']` —
+        // the scrape orchestrates against the whole review page, not a
+        // specific DOM element. The content-script orchestrator decides
+        // whether to actually run a scrape (based on URL pattern + matching
+        // saved CompetitorUrl) when the message arrives.
         contexts: ['all'],
       });
     });
@@ -260,6 +284,24 @@ export default defineBackground(() => {
       const message: ContentScriptMessage = {
         kind: 'open-video-capture-form',
         srcUrl,
+        pageUrl,
+      };
+      chrome.tabs.sendMessage(tabId, message).catch(() => {
+        /* content script not present on this page; no-op */
+      });
+      return;
+    }
+
+    if (info.menuItemId === CONTEXT_MENU_SCRAPE_REVIEWS_ID) {
+      // P-49 Workstream 2 Session 1 (2026-05-26): review-scrape gesture.
+      // The content-script orchestrator resolves which CompetitorUrl this
+      // page belongs to + routes to the per-platform extractor. pageUrl is
+      // the page director was on at the right-click moment; the orchestrator
+      // matches it against the saved-URL recognition cache.
+      const pageUrl =
+        typeof info.pageUrl === 'string' ? info.pageUrl : tab?.url ?? '';
+      const message: ContentScriptMessage = {
+        kind: 'start-review-scrape',
         pageUrl,
       };
       chrome.tabs.sendMessage(tabId, message).catch(() => {
@@ -349,6 +391,13 @@ async function handleBackgroundRequest(
   }
   if (req.kind === 'create-captured-text') {
     return createCapturedText(req.projectId, req.urlId, req.body);
+  }
+  if (req.kind === 'create-captured-review') {
+    // P-49 Workstream 2 Session 1 (2026-05-26) — per-review insert from the
+    // per-platform extractor. Background proxies to the existing url-reviews
+    // POST endpoint (shipped P-46 W2 Session 4, extended for new optional
+    // helpfulCount + platform fields in this session).
+    return createCapturedReview(req.projectId, req.urlId, req.body);
   }
   if (req.kind === 'list-vocabulary') {
     return listVocabularyEntries(req.projectId, req.vocabularyType);

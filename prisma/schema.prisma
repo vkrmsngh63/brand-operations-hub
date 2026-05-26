@@ -280,16 +280,22 @@ model CompetitorUrl {
   overallCompetitorAnalysis Json           @default("{}") // TipTap document JSON per §A.5
   overallAnalyses           Json           @default("{}") // bag: { "text": <TipTap>, "image": <TipTap>, "video": <TipTap>, "reviews": <TipTap> } per §A.11
 
+  // P-49 Workstream 2 (2026-05-26) — Reviews Phase 2 per docs/REVIEWS_PHASE_2_DESIGN.md §A.4 + §A.16.
+  // Per-URL review scrape cap; editable via click-to-edit cell from P-46 W3 Session 2; per-trigger override
+  // available in trigger popup. Default 200 reviews per star (or per filter, depending on platform).
+  reviewScrapeCap Int? @default(200)
+
   addedBy   String // userId
   addedAt   DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  projectWorkflow ProjectWorkflow  @relation(fields: [projectWorkflowId], references: [id], onDelete: Cascade)
+  projectWorkflow ProjectWorkflow    @relation(fields: [projectWorkflowId], references: [id], onDelete: Cascade)
   sizes           CompetitorSize[]
   capturedTexts   CapturedText[]
   capturedImages  CapturedImage[]
   capturedVideos  CapturedVideo[]
   capturedReviews CapturedReview[]
+  reviewAnalyses  ReviewAnalysis[]
 
   @@unique([projectWorkflowId, platform, url])
   @@index([projectWorkflowId, platform])
@@ -445,7 +451,10 @@ enum ScrapingStatus {
 
 // CapturedReview — one row per captured product review against a CompetitorUrl.
 // P-46 Workstream 1 (2026-05-24) per §A.1b. v1: source="manual" (vklf.com-side manual entry form).
-// Future per-platform extension capture gestures add other source values.
+// P-49 Workstream 2 (2026-05-26) — Reviews Phase 2 per docs/REVIEWS_PHASE_2_DESIGN.md §A.16.
+// Extension-extracted reviews use source="extension-scrape". New additive columns: sortRank for
+// drag-to-reorder (§A.5), helpfulCount for Amazon "X people found this helpful" (§A.16; null on
+// platforms without helpful-count signal), platform denormalized for cross-product queries.
 model CapturedReview {
   id              String    @id @default(uuid())
   clientId        String    @unique // UUIDv4 from client; idempotency key
@@ -456,7 +465,10 @@ model CapturedReview {
   reviewDate      DateTime?
   tags            Json      @default("[]") // string[]
   analysis        Json      @default("{}") // TipTap document JSON for per-item Analysis box per §A.11
-  source          String    @default("manual") // "manual" in v1; future per-platform values
+  source          String    @default("manual") // "manual" in v1; "extension-scrape" added P-49 W2; future per-platform values
+  sortRank        Int? // P-49 W4 — server-side drag-to-reorder per §A.5; null = insertion order
+  helpfulCount    Int? // P-49 W2 — Amazon-supplied "X people found this helpful"; null for eBay/Etsy/Walmart
+  platform        String? // P-49 W2 — denormalized from parent CompetitorUrl for cross-product queries
   addedBy         String // userId
   addedAt         DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
@@ -481,6 +493,48 @@ model ComprehensiveCompetitorAnalysis {
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId])
+}
+
+// ReviewAnalysis — one row per AI-generated review summary at one of three aggregation
+// levels per docs/REVIEWS_PHASE_2_DESIGN.md §A.10 + §A.16. Cached + re-runnable per §A.12.
+// Discriminated by level; scope fields populated based on level:
+//   PER_PRODUCT — urlId set, projectId/typeFilter null
+//   PER_TYPE    — projectId + typeFilter set, urlId null
+//   PER_PROJECT — projectId set, urlId/typeFilter null
+// P-49 Workstream 5 ships read+write code consuming this model; schema lands here in
+// W2 Amazon Session 1 (2026-05-26) as the foundation step per §A.13.
+model ReviewAnalysis {
+  id            String              @id @default(uuid())
+  level         ReviewAnalysisLevel
+  // Scope fields — exactly one combination set per level (validated at application layer):
+  urlId         String?
+  projectId     String?
+  typeFilter    String?
+  // Analysis payload + cache key per §A.9 + §A.12:
+  analysisJson  Json                @default("{}") // TipTap document JSON per §A.9
+  reviewsHash   String // SHA-256(sorted review IDs + modelVersion) per §A.12 fingerprint cache
+  modelVersion  String // "claude-opus-4-7" | "claude-opus-4-6" | future per §A.7
+  // Audit:
+  runAt         DateTime            @default(now())
+  runByUserId   String? // null if run by automation (not used in v1 per §A.11 manual-trigger lock)
+  costUsdMicros Int? // total cost in millionths of a dollar; nullable since some API responses omit cost
+
+  competitorUrl CompetitorUrl? @relation(fields: [urlId], references: [id], onDelete: Cascade)
+
+  @@index([urlId])
+  @@index([projectId, level])
+  @@index([projectId, typeFilter])
+  @@index([reviewsHash])
+}
+
+// ReviewAnalysisLevel — discriminator for ReviewAnalysis rows per docs/REVIEWS_PHASE_2_DESIGN.md §A.10.
+//   PER_PRODUCT — one analysis per CompetitorUrl (uses urlId scope).
+//   PER_TYPE    — one analysis per (projectId, typeFilter) pair pooling all products of that Type.
+//   PER_PROJECT — one analysis per projectId pooling all products in the Project (competitive landscape).
+enum ReviewAnalysisLevel {
+  PER_PRODUCT
+  PER_TYPE
+  PER_PROJECT
 }
 
 // UserTablePreferences — per-user-per-project UI preferences for the Competition Data table

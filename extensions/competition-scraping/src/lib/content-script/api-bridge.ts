@@ -25,10 +25,12 @@ import type {
   AcceptedVideoMimeType,
   CapturedImage,
   CapturedImageWithUrls,
+  CapturedReview,
   CapturedText,
   CapturedVideo,
   CapturedVideoWithUrls,
   CompetitorUrl,
+  CreateCapturedReviewRequest,
   CreateCapturedTextRequest,
   CreateCompetitorUrlRequest,
   CreateVocabularyEntryRequest,
@@ -175,6 +177,25 @@ export async function createCapturedText(
 ): Promise<CapturedText> {
   return send<CapturedText>({
     kind: 'create-captured-text',
+    projectId,
+    urlId,
+    body,
+  });
+}
+
+/**
+ * P-49 Workstream 2 Session 1 (2026-05-26) — per-review insert routed through
+ * the background-proxy. Used by the per-platform review extractor modules
+ * (amazon-review-extractor.ts; future eBay / Etsy / Walmart). Idempotent on
+ * clientId server-side per the captured-* convention.
+ */
+export async function createCapturedReview(
+  projectId: string,
+  urlId: string,
+  body: CreateCapturedReviewRequest,
+): Promise<CapturedReview> {
+  return send<CapturedReview>({
+    kind: 'create-captured-review',
     projectId,
     urlId,
     body,

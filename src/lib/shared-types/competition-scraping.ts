@@ -142,6 +142,10 @@ export interface CompetitorUrl {
   scrapingStatus: ScrapingStatus;
   overallCompetitorAnalysis: Record<string, unknown>; // TipTap document JSON per §A.5
   overallAnalyses: OverallAnalyses; // per-category TipTap bag per §A.11
+  // P-49 Workstream 2 (2026-05-26) — per-URL review scrape cap per docs/REVIEWS_PHASE_2_DESIGN.md
+  // §A.4 + §A.16. Default 200 (set at schema layer); editable via click-to-edit cell from P-46 W3 S2.
+  // Per-trigger override available in trigger popup (W2 Session 2+).
+  reviewScrapeCap: number | null;
   addedBy: string;
   addedAt: string;
   updatedAt: string;
@@ -212,6 +216,9 @@ export interface UpdateCompetitorUrlRequest {
   scrapingStatus?: ScrapingStatus;
   overallCompetitorAnalysis?: Record<string, unknown>;
   overallAnalyses?: Partial<OverallAnalyses>;
+  // P-49 Workstream 2 (2026-05-26) — wire shape only; PATCH-allowlist extension lands when the
+  // click-to-edit cell + per-trigger override UI start emitting this value.
+  reviewScrapeCap?: number | null;
 }
 
 // POST /api/projects/[projectId]/competition-scraping/urls — response.
@@ -942,10 +949,18 @@ export interface CapturedReview {
   // Per-item Analysis TipTap document JSON per §A.11 (same shape pattern as
   // CapturedText/Image/Video.analysis).
   analysis: Record<string, unknown>;
-  // 'manual' = vklf.com-side manual entry (v1). Future per-platform values:
-  // 'extension-amazon' | 'extension-ebay' | ... etc. once those polish
-  // sessions land. Open-ended string at the wire layer.
+  // 'manual' = vklf.com-side manual entry (v1). 'extension-scrape' = per-platform extension
+  // extraction (P-49 W2; 2026-05-26). Open-ended string at the wire layer.
   source: string;
+  // P-49 Workstream 4 (2026-05-26) — server-side drag-to-reorder per docs/REVIEWS_PHASE_2_DESIGN.md
+  // §A.5. Null = insertion order; set by Workstream 4's reorder PUT endpoint.
+  sortRank: number | null;
+  // P-49 Workstream 2 (2026-05-26) — Amazon "X people found this helpful" per §A.16.
+  // Null on platforms without helpful-count signal (eBay/Etsy/Walmart).
+  helpfulCount: number | null;
+  // P-49 Workstream 2 (2026-05-26) — denormalized from parent CompetitorUrl per §A.16 for
+  // cross-product queries (e.g., "all 1-star reviews on Amazon products in this Project").
+  platform: string | null;
   addedBy: string;
   addedAt: string;
   updatedAt: string;
@@ -963,6 +978,9 @@ export interface CreateCapturedReviewRequest {
   tags?: string[];
   analysis?: Record<string, unknown>;
   source?: string;
+  // P-49 Workstream 2 (2026-05-26) — Amazon helpful-count + denormalized platform per §A.16.
+  helpfulCount?: number;
+  platform?: string;
 }
 
 // PATCH .../reviews/[reviewId] — clientId is immutable per captured-* convention.
@@ -1089,6 +1107,37 @@ export function isTablePreferencesSortDirection(
   value: unknown
 ): value is 'asc' | 'desc' {
   return value === 'asc' || value === 'desc';
+}
+
+// ─── ReviewAnalysis (P-49 Workstream 5, 2026-05-26) ────────────────────
+// Wire shape for AI-generated review summaries per docs/REVIEWS_PHASE_2_DESIGN.md §A.10 + §A.16.
+// Discriminated by level; scope fields populated per level (validated at application layer):
+//   PER_PRODUCT — urlId set, projectId/typeFilter null
+//   PER_TYPE    — projectId + typeFilter set, urlId null
+//   PER_PROJECT — projectId set, urlId/typeFilter null
+// Schema lands in W2 Amazon Session 1 as the foundation step; W5 ships the read+write code.
+export type ReviewAnalysisLevel = 'PER_PRODUCT' | 'PER_TYPE' | 'PER_PROJECT';
+
+export interface ReviewAnalysis {
+  id: string;
+  level: ReviewAnalysisLevel;
+  urlId: string | null;
+  projectId: string | null;
+  typeFilter: string | null;
+  // TipTap document JSON per §A.9. Same shape pattern as CapturedText.analysis etc.
+  analysisJson: Record<string, unknown>;
+  // SHA-256(sorted review IDs + modelVersion) per §A.12 fingerprint cache.
+  reviewsHash: string;
+  // "claude-opus-4-7" | "claude-opus-4-6" | future Opus versions per §A.7.
+  modelVersion: string;
+  runAt: string;
+  runByUserId: string | null;
+  // Total cost in millionths of a dollar; nullable since some API responses omit cost.
+  costUsdMicros: number | null;
+}
+
+export function isReviewAnalysisLevel(value: unknown): value is ReviewAnalysisLevel {
+  return value === 'PER_PRODUCT' || value === 'PER_TYPE' || value === 'PER_PROJECT';
 }
 
 // ─── Generic error shape ────────────────────────────────────────────────

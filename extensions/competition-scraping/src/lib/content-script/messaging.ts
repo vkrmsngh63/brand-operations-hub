@@ -33,10 +33,12 @@ import type {
   AcceptedVideoMimeType,
   CapturedImage,
   CapturedImageWithUrls,
+  CapturedReview,
   CapturedText,
   CapturedVideo,
   CapturedVideoWithUrls,
   CompetitorUrl,
+  CreateCapturedReviewRequest,
   CreateCapturedTextRequest,
   CreateCompetitorUrlRequest,
   CreateVocabularyEntryRequest,
@@ -145,13 +147,29 @@ export interface EnterVideoRegionRecordModeMessage {
   pageUrl: string;
 }
 
+/**
+ * P-49 Workstream 2 Session 1 (2026-05-26) — right-click "Scrape reviews for
+ * this URL" fires this message at the active tab. The content-script
+ * orchestrator resolves the parent CompetitorUrl by matching the page URL
+ * against the saved-URL recognition cache, then drives the per-platform
+ * extractor (amazon-review-extractor.ts for Amazon URLs; future eBay /
+ * Etsy / Walmart sub-cluster modules for the other platforms). pageUrl is
+ * the page director was on when the menu fired — used both to match the
+ * parent CompetitorUrl and to route to the right per-platform module.
+ */
+export interface StartReviewScrapeMessage {
+  kind: 'start-review-scrape';
+  pageUrl: string;
+}
+
 export type ContentScriptMessage =
   | OpenUrlAddFormMessage
   | OpenTextCaptureFormMessage
   | OpenImageCaptureFormMessage
   | OpenVideoCaptureFormMessage
   | EnterRegionScreenshotModeMessage
-  | EnterVideoRegionRecordModeMessage;
+  | EnterVideoRegionRecordModeMessage
+  | StartReviewScrapeMessage;
 
 export function isContentScriptMessage(
   value: unknown,
@@ -182,6 +200,9 @@ export function isContentScriptMessage(
     return typeof msg.pageUrl === 'string';
   }
   if (msg.kind === 'enter-video-region-record-mode') {
+    return typeof msg.pageUrl === 'string';
+  }
+  if (msg.kind === 'start-review-scrape') {
     return typeof msg.pageUrl === 'string';
   }
   return false;
@@ -243,6 +264,21 @@ export interface CreateCapturedTextRequestMessage {
   projectId: string;
   urlId: string;
   body: CreateCapturedTextRequest;
+}
+
+/**
+ * P-49 Workstream 2 Session 1 (2026-05-26) — per-review insert request from
+ * the content-script extractor. Routed through the background's authedFetch
+ * (content-scripts can't reach vklf.com directly due to CORS). Idempotent on
+ * clientId per the captured-* convention. Each scraped review is one of
+ * these requests; for a 200-review scrape the content-script fires up to 200
+ * sequentially (driven by paginate's saveRow loop in scrape-pagination.ts).
+ */
+export interface CreateCapturedReviewRequestMessage {
+  kind: 'create-captured-review';
+  projectId: string;
+  urlId: string;
+  body: CreateCapturedReviewRequest;
 }
 
 export interface ListVocabularyRequest {
@@ -450,6 +486,7 @@ export type BackgroundRequest =
   | ListCapturedVideosRequest
   | CreateCompetitorUrlRequestMessage
   | CreateCapturedTextRequestMessage
+  | CreateCapturedReviewRequestMessage
   | ListVocabularyRequest
   | CreateVocabularyEntryRequestMessage
   | SubmitImageCaptureRequestMessage
@@ -486,6 +523,9 @@ export type CreateCompetitorUrlResponseEnvelope = BackgroundResponse<
 >;
 export type CreateCapturedTextResponseEnvelope = BackgroundResponse<
   CapturedText
+>;
+export type CreateCapturedReviewResponseEnvelope = BackgroundResponse<
+  CapturedReview
 >;
 export type ListVocabularyResponseEnvelope = BackgroundResponse<
   VocabularyEntry[]
@@ -562,6 +602,14 @@ export function isBackgroundRequest(
     );
   }
   if (msg.kind === 'create-captured-text') {
+    return (
+      typeof msg.projectId === 'string' &&
+      typeof msg.urlId === 'string' &&
+      typeof msg.body === 'object' &&
+      msg.body !== null
+    );
+  }
+  if (msg.kind === 'create-captured-review') {
     return (
       typeof msg.projectId === 'string' &&
       typeof msg.urlId === 'string' &&

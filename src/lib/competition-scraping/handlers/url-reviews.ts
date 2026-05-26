@@ -42,6 +42,10 @@ export type CapturedReviewRow = {
   tags: Prisma.JsonValue;
   analysis: Prisma.JsonValue;
   source: string;
+  // P-49 Workstream 2 (2026-05-26) — extension-scrape additive columns per §A.16.
+  sortRank: number | null;
+  helpfulCount: number | null;
+  platform: string | null;
   addedBy: string;
   addedAt: Date;
   updatedAt: Date;
@@ -88,6 +92,10 @@ export function toWireShape(row: CapturedReviewRow | null): CapturedReview | nul
     tags: (row.tags ?? []) as string[],
     analysis: (row.analysis ?? {}) as Record<string, unknown>,
     source: row.source,
+    // P-49 Workstream 2 (2026-05-26) — extension-scrape fields per §A.16.
+    sortRank: row.sortRank,
+    helpfulCount: row.helpfulCount,
+    platform: row.platform,
     addedBy: row.addedBy,
     addedAt: row.addedAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -224,6 +232,23 @@ export function makeUrlReviewsHandlers(deps: UrlReviewsHandlerDeps) {
     }
     const source = body.source ?? 'manual';
 
+    // P-49 Workstream 2 (2026-05-26) — accept extension-scrape additive fields per §A.16.
+    if (
+      body.helpfulCount !== undefined &&
+      (typeof body.helpfulCount !== 'number' || !Number.isInteger(body.helpfulCount) || body.helpfulCount < 0)
+    ) {
+      return {
+        status: 400,
+        body: { error: 'helpfulCount must be a non-negative integer' },
+      };
+    }
+    if (body.platform !== undefined && typeof body.platform !== 'string') {
+      return {
+        status: 400,
+        body: { error: 'platform must be a string' },
+      };
+    }
+
     const parent = await deps.withRetry(() =>
       deps.prisma.competitorUrl.findFirst({
         where: { id: urlId, projectWorkflowId },
@@ -249,6 +274,12 @@ export function makeUrlReviewsHandlers(deps: UrlReviewsHandlerDeps) {
       tags: body.tags ?? [],
       analysis: (body.analysis ?? {}) as Prisma.InputJsonValue,
       source,
+      // P-49 Workstream 2 (2026-05-26) — extension-scrape additive columns per §A.16.
+      helpfulCount: body.helpfulCount ?? null,
+      platform:
+        typeof body.platform === 'string' && body.platform.trim()
+          ? body.platform.trim()
+          : null,
       addedBy: userId,
     };
 

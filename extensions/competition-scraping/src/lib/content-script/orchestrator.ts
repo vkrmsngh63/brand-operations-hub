@@ -23,12 +23,18 @@
 //      right-click context-menu fallback; opens the URL-add form on demand.
 
 import {
+  createCapturedReview,
   listProjects,
   listCompetitorUrls,
   listCapturedImages,
   listCapturedTexts,
   listCapturedVideos,
 } from './api-bridge.ts';
+import {
+  isAmazonReviewPage,
+  runAmazonReviewScrape,
+  urlsMatchByAsin,
+} from './amazon-review-extractor.ts';
 import {
   getSelectedPlatform,
   getSelectedProjectId,
@@ -227,6 +233,18 @@ export async function runOrchestrator(): Promise<() => void> {
   // maybeShowDetailOverlay can fetch the saved CapturedImage list for the
   // current page when it matches a saved row.
   const urlIdByNormalized = new Map<string, string>();
+  // P-49 W2 (2026-05-26) — keep the saved rows for the review-scrape gesture.
+  // The scrape handler needs the parent row's URL (to match by ASIN against
+  // an Amazon review-page URL that's not necessarily in the recognition set
+  // directly) + the reviewScrapeCap value. Stored as a flat array since the
+  // matching walk is per-gesture (not per-mutation) so a Map keyed by
+  // canonical URL would add complexity without speedup.
+  let savedCompetitorUrlRows: Array<{
+    id: string;
+    url: string;
+    reviewScrapeCap: number | null;
+    productName: string | null;
+  }> = [];
   try {
     const rows = await listCompetitorUrls(projectId, platform as never);
     // P-21 (2026-05-18-c): symmetric canonicalize. Pass the active platform
@@ -246,6 +264,12 @@ export async function runOrchestrator(): Promise<() => void> {
       const normalized = normalizeUrlForRecognition(canonical);
       if (normalized !== '') urlIdByNormalized.set(normalized, row.id);
     }
+    savedCompetitorUrlRows = rows.map((r) => ({
+      id: r.id,
+      url: r.url,
+      reviewScrapeCap: r.reviewScrapeCap,
+      productName: r.productName,
+    }));
   } catch (err) {
     console.warn('[PLOS] could not load saved URLs for recognition', err);
   }
@@ -1120,6 +1144,78 @@ if (msg.kind === 'enter-video-region-record-mode') {
         },
       });
       sendResponse({ ok: true });
+      return;
+    }
+    if (msg.kind === 'start-review-scrape') {
+      // P-49 W2 Amazon Session 1 (2026-05-26): review-scrape gesture. The
+      // background dispatched us here from the "Scrape reviews for this URL"
+      // right-click. Steps:
+      //   1. Detect platform (Session 1: Amazon only — eBay / Etsy / Walmart
+      //      sub-cluster sessions land in their respective sessions).
+      //   2. Match against the saved CompetitorUrl rows by ASIN (Amazon's
+      //      product-reviews URL contains the same ASIN as the saved /dp/
+      //      product URL).
+      //   3. Drive the per-platform extractor, routing per-review inserts
+      //      through createCapturedReview() (background-proxied).
+      const pageUrl = msg.pageUrl;
+      if (!isAmazonReviewPage(pageUrl)) {
+        // Future sub-cluster sessions land here for eBay / Etsy / Walmart;
+        // for now surface a no-op friendly message rather than failing
+        // silently. The progress indicator's not yet mounted, so use the
+        // existing capture-failure toast.
+        showCaptureFailureToast(
+          'Review scraping is currently available on Amazon product-review pages only. Other platforms ship in upcoming sessions.',
+        );
+        sendResponse({ ok: false });
+        return;
+      }
+      const parent = savedCompetitorUrlRows.find((r) =>
+        urlsMatchByAsin(pageUrl, r.url),
+      );
+      if (!parent) {
+        showCaptureFailureToast(
+          "Couldn't find a saved Competitor URL for this Amazon product. Open the product page first and click + Add to save it, then come back here and re-run the scrape.",
+        );
+        sendResponse({ ok: false });
+        return;
+      }
+      const ctx = {
+        projectId,
+        competitorUrlId: parent.id,
+        cap: parent.reviewScrapeCap,
+        scopeLabel: parent.productName
+          ? `Amazon reviews — ${parent.productName}`
+          : 'Amazon reviews',
+        async saveReview(input: {
+          clientId: string;
+          starRating: number;
+          body: string;
+          title: string | null;
+          reviewerName: string | null;
+          reviewDate: string | null;
+          helpfulCount: number | null;
+          platform: 'amazon';
+        }): Promise<void> {
+          await createCapturedReview(projectId, parent.id, {
+            clientId: input.clientId,
+            starRating: input.starRating,
+            body: input.body,
+            reviewerName: input.reviewerName ?? undefined,
+            reviewDate: input.reviewDate ?? undefined,
+            helpfulCount: input.helpfulCount ?? undefined,
+            platform: input.platform,
+            source: 'extension-scrape',
+          });
+        },
+      };
+      // Fire-and-forget; the indicator owns the user-visible feedback. We
+      // don't await so the message handler returns immediately + Chrome
+      // doesn't keep the message port open for the full scrape duration.
+      void runAmazonReviewScrape(ctx).catch((err) => {
+        console.error('[PLOS] Amazon review scrape failed:', err);
+      });
+      sendResponse({ ok: true });
+      return;
     }
   };
   chrome.runtime.onMessage.addListener(onMessage);

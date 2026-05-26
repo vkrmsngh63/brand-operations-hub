@@ -69,6 +69,8 @@ export type CompetitorUrlRow = {
   scrapingStatus: string;
   overallCompetitorAnalysis: Prisma.JsonValue;
   overallAnalyses: Prisma.JsonValue;
+  // P-49 Workstream 2 (2026-05-26) — per-URL review scrape cap per §A.4 + §A.16.
+  reviewScrapeCap: number | null;
   addedBy: string;
   addedAt: Date;
   updatedAt: Date;
@@ -126,6 +128,8 @@ export function toWireShape(row: CompetitorUrlRow | null): CompetitorUrl | null 
       unknown
     >,
     overallAnalyses: (row.overallAnalyses ?? {}) as OverallAnalyses,
+    // P-49 Workstream 2 (2026-05-26) — per-URL review scrape cap per §A.4 + §A.16.
+    reviewScrapeCap: row.reviewScrapeCap,
     addedBy: row.addedBy,
     addedAt: row.addedAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),

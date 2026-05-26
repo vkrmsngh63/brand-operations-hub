@@ -58,6 +58,8 @@ function toWireShape(
       unknown
     >,
     overallAnalyses: (row.overallAnalyses ?? {}) as OverallAnalyses,
+    // P-49 Workstream 2 (2026-05-26) — per-URL review scrape cap per §A.4 + §A.16.
+    reviewScrapeCap: row.reviewScrapeCap,
     addedBy: row.addedBy,
     addedAt: row.addedAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),

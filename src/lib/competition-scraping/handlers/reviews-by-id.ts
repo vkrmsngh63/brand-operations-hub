@@ -46,6 +46,10 @@ export type CapturedReviewRow = {
   tags: Prisma.JsonValue;
   analysis: Prisma.JsonValue;
   source: string;
+  // P-49 Workstream 2 (2026-05-26) — extension-scrape additive columns per §A.16.
+  sortRank: number | null;
+  helpfulCount: number | null;
+  platform: string | null;
   addedBy: string;
   addedAt: Date;
   updatedAt: Date;
@@ -89,6 +93,10 @@ export function toWireShape(row: CapturedReviewRow | null): CapturedReview | nul
     tags: (row.tags ?? []) as string[],
     analysis: (row.analysis ?? {}) as Record<string, unknown>,
     source: row.source,
+    // P-49 Workstream 2 (2026-05-26) — extension-scrape fields per §A.16.
+    sortRank: row.sortRank,
+    helpfulCount: row.helpfulCount,
+    platform: row.platform,
     addedBy: row.addedBy,
     addedAt: row.addedAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
