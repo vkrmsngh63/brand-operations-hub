@@ -19,7 +19,22 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  DndContext,
+  DragEndEvent,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { authFetch } from '@/lib/authFetch';
 import { WorkflowTopbar } from '@/lib/workflow-components';
 import type {
@@ -46,6 +61,15 @@ import {
   EditableVocabularyField,
 } from './EditableField';
 import { CustomFieldsEditor } from './CustomFieldsEditor';
+import {
+  CUSTOMERS_SAY_SOURCE,
+  type ReviewSortKey,
+  compareReviews,
+  computeStarCounts,
+  filterByStarSelection,
+  spliceVisibleReorderIntoFull,
+  splitCustomersSay,
+} from '@/lib/competition-scraping/captured-reviews-helpers';
 import { CapturedTextAddModal } from '../../../components/CapturedTextAddModal';
 import { CapturedImageAddModal } from '../../../components/CapturedImageAddModal';
 import { CapturedReviewAddModal } from '../../../components/CapturedReviewAddModal';
@@ -395,6 +419,72 @@ export function UrlDetailContent({ project, urlId }: Props) {
     });
   }, []);
 
+  // P-49 Workstream 4 Session 1 — bulk-delete via the new batch-delete
+  // POST. Same optimistic-remove + rollback shape as the per-row delete
+  // above; one round-trip for the whole selected set per §A.6.
+  const handleReviewsBulkDeleted = useCallback(
+    async (reviewIds: string[]): Promise<void> => {
+      if (reviewIds.length === 0) return;
+      const prevList = reviewsSlot.data;
+      if (prevList) {
+        const idSet = new Set(reviewIds);
+        setReviewsSlot({
+          data: prevList.filter((r) => !idSet.has(r.id)),
+          error: reviewsSlot.error,
+        });
+      }
+      try {
+        const res = await authFetch(
+          `/api/projects/${project.id}/competition-scraping/reviews/batch-delete`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reviewIds }),
+          }
+        );
+        if (!res.ok) {
+          if (prevList) {
+            setReviewsSlot({ data: prevList, error: reviewsSlot.error });
+          }
+          const detail = await readErrorMessage(
+            res,
+            'Could not delete selected reviews'
+          );
+          throw new Error(detail);
+        }
+      } catch (err) {
+        if (prevList) {
+          setReviewsSlot({ data: prevList, error: reviewsSlot.error });
+        }
+        throw err instanceof Error ? err : new Error('Network error');
+      }
+    },
+    [project.id, reviewsSlot]
+  );
+
+  // P-49 Workstream 4 Session 1 — drag-reorder optimistic update. Assigns
+  // sortRanks based on the new full order; the PUT fires from the section's
+  // own debounced flush so a burst of drags collapses to one round-trip.
+  const handleReviewsReordered = useCallback(
+    (orderedIds: string[]): void => {
+      setReviewsSlot((prev) => {
+        if (!prev.data) return prev;
+        const byId = new Map(prev.data.map((r) => [r.id, r]));
+        const next: CapturedReview[] = [];
+        orderedIds.forEach((id, idx) => {
+          const row = byId.get(id);
+          if (row) {
+            next.push({ ...row, sortRank: idx });
+            byId.delete(id);
+          }
+        });
+        for (const row of byId.values()) next.push(row);
+        return { data: next, error: prev.error };
+      });
+    },
+    []
+  );
+
   // P-46 Workstream 2 Session 4 (2026-05-28) — manual-add captured-review
   // modal calls this with the newly-created row. POST is idempotent on
   // clientId; we dedup here to avoid double-listing on a retry.
@@ -511,6 +601,8 @@ export function UrlDetailContent({ project, urlId }: Props) {
               overallAnalysisInitial={urlSlot.data.overallAnalyses?.reviews ?? {}}
               onReviewAdded={handleReviewAdded}
               onReviewDeleted={handleReviewDeleted}
+              onReviewsBulkDeleted={handleReviewsBulkDeleted}
+              onReviewsReordered={handleReviewsReordered}
             />
             {/* P-46 Workstream 2 Session 3 (2026-05-27) — URL-level Overall
                 Competitor Analysis box at the bottom of the URL detail page.
@@ -1701,7 +1793,15 @@ function CapturedVideoCard({
 // enter through the manual-add modal only (no extension Reviews capture in
 // v1 per §A.1b). The Overall Reviews Analysis box at the bottom of the
 // section reuses Session 3's OverallAnalysisBox with category='reviews'.
-type ReviewSortKey = 'addedAt' | 'starRating';
+// P-49 Workstream 4 Session 1 — pure helpers + the `CUSTOMERS_SAY_SOURCE`
+// discriminator + the `ReviewSortKey` type live in
+// `@/lib/competition-scraping/captured-reviews-helpers` (loadable by
+// node:test without the React component tree). Imported at top of file.
+
+// Debounce window for the reorder PUT — collapses a burst of drag events
+// (e.g., dragging a card three slots before releasing) into one network
+// round-trip. Mirrors PREFS_DEBOUNCE_MS from CompetitionScrapingViewer.
+const REORDER_DEBOUNCE_MS = 500;
 
 function CapturedReviewsSection({
   slot,
@@ -1710,6 +1810,8 @@ function CapturedReviewsSection({
   overallAnalysisInitial,
   onReviewAdded,
   onReviewDeleted,
+  onReviewsBulkDeleted,
+  onReviewsReordered,
 }: {
   slot: FetchSlot<CapturedReview[]>;
   projectId: string;
@@ -1717,11 +1819,63 @@ function CapturedReviewsSection({
   overallAnalysisInitial: Record<string, unknown>;
   onReviewAdded: (row: CapturedReview) => void;
   onReviewDeleted: (reviewId: string) => Promise<void>;
+  onReviewsBulkDeleted: (reviewIds: string[]) => Promise<void>;
+  onReviewsReordered: (orderedIds: string[]) => void;
 }) {
   const [sortKey, setSortKey] = useState<ReviewSortKey>('addedAt');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [modalOpen, setModalOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<CapturedReview | null>(null);
+  // P-49 W4 S1 — star-count counter-bar filter state per §A.14. An empty set
+  // means "show all stars"; non-empty means OR semantics across selected.
+  const [selectedStars, setSelectedStars] = useState<Set<number>>(new Set());
+  // P-49 W4 S1 — bulk-select state per §A.6. Selection survives sort changes
+  // but is pruned to currently-visible reviews when filter shrinks the set.
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
+  const [bulkPending, setBulkPending] = useState(false);
+  const [bulkError, setBulkError] = useState<string | null>(null);
+
+  // P-49 W4 S1 — split Customers-say AI-summary rows out of the main list.
+  // These render as a separate banner above the counter-bar; they are not
+  // selectable, not reorderable, and not counted in the per-star bar.
+  const { customersSay: customersSayRows, main: mainReviews } = useMemo(() => {
+    return splitCustomersSay(slot.data ?? []);
+  }, [slot.data]);
+
+  // P-49 W4 S1 — per-star counts for the counter-bar. Counts come from the
+  // FULL mainReviews list (not the filtered set) so the bar always shows the
+  // product's full distribution regardless of what's currently filtered.
+  const starCounts = useMemo(
+    () => computeStarCounts(mainReviews),
+    [mainReviews]
+  );
+
+  const filtered = useMemo<CapturedReview[]>(
+    () => filterByStarSelection(mainReviews, selectedStars),
+    [mainReviews, selectedStars]
+  );
+
+  const sorted = useMemo<CapturedReview[]>(() => {
+    const copy = [...filtered];
+    copy.sort((a, b) => compareReviews(a, b, sortKey, sortDir));
+    return copy;
+  }, [filtered, sortKey, sortDir]);
+
+  // Prune any selectedIds that fall out of the visible set when the filter
+  // tightens. Without this, the "Delete N selected" toolbar would still
+  // report N counting rows the user can't see — confusing UX.
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      if (prev.size === 0) return prev;
+      const visibleIds = new Set(sorted.map((r) => r.id));
+      const pruned = new Set(
+        Array.from(prev).filter((id) => visibleIds.has(id))
+      );
+      if (pruned.size === prev.size) return prev;
+      return pruned;
+    });
+  }, [sorted]);
 
   const handleConfirmReviewDelete = async (): Promise<void> => {
     if (!pendingDelete) return;
@@ -1730,20 +1884,115 @@ function CapturedReviewsSection({
     setPendingDelete(null);
   };
 
-  const sorted = useMemo(() => {
-    if (!slot.data) return [];
-    const copy = [...slot.data];
-    copy.sort((a, b) => {
-      let cmp = 0;
-      if (sortKey === 'starRating') {
-        cmp = a.starRating - b.starRating;
-      } else {
-        cmp = a.addedAt.localeCompare(b.addedAt);
-      }
-      return sortDir === 'asc' ? cmp : -cmp;
+  const toggleStar = useCallback((star: number) => {
+    setSelectedStars((prev) => {
+      const next = new Set(prev);
+      if (next.has(star)) next.delete(star);
+      else next.add(star);
+      return next;
     });
-    return copy;
-  }, [slot.data, sortKey, sortDir]);
+  }, []);
+  const clearStarFilter = useCallback(() => {
+    setSelectedStars(new Set());
+  }, []);
+
+  const toggleReviewSelected = useCallback((reviewId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(reviewId)) next.delete(reviewId);
+      else next.add(reviewId);
+      return next;
+    });
+  }, []);
+  const selectAllVisible = useCallback(() => {
+    setSelectedIds(new Set(sorted.map((r) => r.id)));
+  }, [sorted]);
+  const clearSelection = useCallback(() => {
+    setSelectedIds(new Set());
+  }, []);
+
+  const handleBulkDeleteConfirm = useCallback(async () => {
+    if (selectedIds.size === 0) {
+      setBulkConfirmOpen(false);
+      return;
+    }
+    setBulkPending(true);
+    setBulkError(null);
+    try {
+      await onReviewsBulkDeleted(Array.from(selectedIds));
+      setSelectedIds(new Set());
+      setBulkConfirmOpen(false);
+    } catch (err) {
+      setBulkError(err instanceof Error ? err.message : 'Network error');
+    } finally {
+      setBulkPending(false);
+    }
+  }, [selectedIds, onReviewsBulkDeleted]);
+
+  // P-49 W4 S1 — debounced reorder PUT per §A.5. Reusing the
+  // P-46 W3 S3 (2026-05-23-f) shared debounced-mutation Pattern so a burst
+  // of drags collapses to one round-trip.
+  const reorderTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flushReorder = useCallback(
+    async (orderedIds: string[]) => {
+      const orderings = orderedIds.map((reviewId, idx) => ({
+        reviewId,
+        sortRank: idx,
+      }));
+      try {
+        await authFetch(
+          `/api/projects/${projectId}/competition-scraping/urls/${urlId}/reviews/reorder`,
+          {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ orderings }),
+          }
+        );
+      } catch {
+        // Silent failure; local state stays consistent with the optimistic
+        // update so the user sees their order. The next mutation retries.
+      }
+    },
+    [projectId, urlId]
+  );
+  useEffect(() => {
+    return () => {
+      if (reorderTimerRef.current) clearTimeout(reorderTimerRef.current);
+    };
+  }, []);
+
+  // P-49 W4 S1 — pointer sensor with a 4px activation distance prevents the
+  // drag handle from swallowing a tap (matches UrlTable's drag handle).
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } })
+  );
+
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event;
+      if (!over || active.id === over.id) return;
+      const oldIndex = sorted.findIndex((r) => r.id === active.id);
+      const newIndex = sorted.findIndex((r) => r.id === over.id);
+      if (oldIndex < 0 || newIndex < 0) return;
+      const newVisibleIds = arrayMove(sorted, oldIndex, newIndex).map(
+        (r) => r.id
+      );
+      const fullOrderedIds = spliceVisibleReorderIntoFull(
+        newVisibleIds,
+        mainReviews
+      );
+      onReviewsReordered(fullOrderedIds);
+      setSortKey('manual');
+      if (reorderTimerRef.current) clearTimeout(reorderTimerRef.current);
+      reorderTimerRef.current = setTimeout(() => {
+        void flushReorder(fullOrderedIds);
+      }, REORDER_DEBOUNCE_MS);
+    },
+    [sorted, mainReviews, onReviewsReordered, flushReorder]
+  );
+
+  const totalDisplayed = customersSayRows.length + mainReviews.length;
+  const showFilterEmpty = mainReviews.length > 0 && sorted.length === 0;
 
   return (
     <section
@@ -1767,7 +2016,7 @@ function CapturedReviewsSection({
                 fontWeight: 400,
               }}
             >
-              ({slot.data.length})
+              ({totalDisplayed})
             </span>
           ) : null}
         </h2>
@@ -1784,26 +2033,72 @@ function CapturedReviewsSection({
         <InlineMessage tone="error" body={slot.error} />
       ) : slot.data === null ? (
         <InlineMessage body="Loading captured reviews…" />
-      ) : slot.data.length === 0 ? (
+      ) : totalDisplayed === 0 ? (
         <InlineMessage body="No reviews captured for this URL yet. Click + Add review above to enter one manually." />
       ) : (
         <div>
-          <CapturedReviewSortControl
-            sortKey={sortKey}
-            sortDir={sortDir}
-            onSortKeyChange={setSortKey}
-            onSortDirChange={setSortDir}
-          />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {sorted.map((r) => (
-              <CapturedReviewCard
-                key={r.id}
-                row={r}
-                projectId={projectId}
-                onDeleteClick={() => setPendingDelete(r)}
-              />
-            ))}
-          </div>
+          {customersSayRows.length > 0 ? (
+            <CustomersSayBanner rows={customersSayRows} />
+          ) : null}
+          {mainReviews.length > 0 ? (
+            <StarCountCounterBar
+              counts={starCounts}
+              selected={selectedStars}
+              onToggle={toggleStar}
+              onClearAll={clearStarFilter}
+            />
+          ) : null}
+          {mainReviews.length > 0 ? (
+            <BulkSelectionToolbar
+              visibleCount={sorted.length}
+              selectedCount={selectedIds.size}
+              onSelectAll={selectAllVisible}
+              onClearSelection={clearSelection}
+              onBulkDeleteClick={() => {
+                setBulkError(null);
+                setBulkConfirmOpen(true);
+              }}
+            />
+          ) : null}
+          {mainReviews.length > 0 ? (
+            <CapturedReviewSortControl
+              sortKey={sortKey}
+              sortDir={sortDir}
+              onSortKeyChange={setSortKey}
+              onSortDirChange={setSortDir}
+            />
+          ) : null}
+          {showFilterEmpty ? (
+            <InlineMessage
+              body="No reviews match the current star filter. Click a highlighted star above (or Clear all) to widen the filter."
+            />
+          ) : (
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext
+                items={sorted.map((r) => r.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                <div
+                  style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
+                >
+                  {sorted.map((r) => (
+                    <CapturedReviewCard
+                      key={r.id}
+                      row={r}
+                      projectId={projectId}
+                      selected={selectedIds.has(r.id)}
+                      onToggleSelected={() => toggleReviewSelected(r.id)}
+                      onDeleteClick={() => setPendingDelete(r)}
+                    />
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
+          )}
         </div>
       )}
       {/* P-46 Workstream 2 Session 4 (2026-05-28) — per-category Overall
@@ -1839,26 +2134,286 @@ function CapturedReviewsSection({
         onConfirm={handleConfirmReviewDelete}
         variant={{ kind: 'plain' }}
       />
+      <ConfirmDeleteDialog
+        isOpen={bulkConfirmOpen}
+        title={`Delete ${selectedIds.size} selected review${selectedIds.size === 1 ? '' : 's'}?`}
+        message={
+          bulkError
+            ? `${bulkError} — try again or close this dialog.`
+            : bulkPending
+              ? 'Deleting…'
+              : 'This cannot be undone.'
+        }
+        confirmLabel={
+          bulkPending
+            ? 'Deleting…'
+            : `Delete ${selectedIds.size} review${selectedIds.size === 1 ? '' : 's'}`
+        }
+        onClose={() => {
+          if (bulkPending) return;
+          setBulkConfirmOpen(false);
+          setBulkError(null);
+        }}
+        onConfirm={handleBulkDeleteConfirm}
+        variant={{ kind: 'plain' }}
+      />
     </section>
+  );
+}
+
+// P-49 W4 S1 — per §A.14 counter-bar replacing the prior multi-select
+// dropdown shape. Each button shows the star count + the number of reviews
+// at that rating; clicking toggles a filter on the list. Active buttons are
+// visually highlighted. "Clear all" appears only when any star is active.
+function StarCountCounterBar({
+  counts,
+  selected,
+  onToggle,
+  onClearAll,
+}: {
+  counts: Record<1 | 2 | 3 | 4 | 5, number>;
+  selected: Set<number>;
+  onToggle: (star: number) => void;
+  onClearAll: () => void;
+}) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        gap: '8px',
+        marginBottom: '12px',
+      }}
+      data-testid="captured-review-star-counter-bar"
+    >
+      {([1, 2, 3, 4, 5] as const).map((star) => {
+        const active = selected.has(star);
+        return (
+          <button
+            type="button"
+            key={star}
+            onClick={() => onToggle(star)}
+            data-testid={`captured-review-star-bucket-${star}`}
+            aria-pressed={active}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '4px 10px',
+              borderRadius: '14px',
+              border: `1px solid ${active ? '#388bfd' : '#30363d'}`,
+              background: active ? '#1f6feb' : '#0d1117',
+              color: active ? '#ffffff' : '#c9d1d9',
+              fontSize: '12px',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            <span style={{ color: '#f9c74f' }}>★{star}</span>
+            <span style={{ color: active ? '#ffffff' : '#8b949e' }}>
+              ({counts[star]})
+            </span>
+          </button>
+        );
+      })}
+      {selected.size > 0 ? (
+        <button
+          type="button"
+          onClick={onClearAll}
+          data-testid="captured-review-star-clear"
+          style={{
+            padding: '4px 10px',
+            background: 'transparent',
+            border: '1px solid #30363d',
+            color: '#8b949e',
+            borderRadius: '14px',
+            fontSize: '12px',
+            cursor: 'pointer',
+          }}
+        >
+          Clear all
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+// P-49 W4 S1 — per §A.6 multi-select toolbar. Renders the select-all-visible
+// affordance + the bulk-delete trigger + a "clear selection" escape hatch.
+// Always visible whenever main reviews exist (mirrors the pattern in Captured
+// Text / Image sections where action affordances stay visible at zero so the
+// user discovers them).
+function BulkSelectionToolbar({
+  visibleCount,
+  selectedCount,
+  onSelectAll,
+  onClearSelection,
+  onBulkDeleteClick,
+}: {
+  visibleCount: number;
+  selectedCount: number;
+  onSelectAll: () => void;
+  onClearSelection: () => void;
+  onBulkDeleteClick: () => void;
+}) {
+  const allSelected = selectedCount > 0 && selectedCount === visibleCount;
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        gap: '12px',
+        marginBottom: '10px',
+        fontSize: '12px',
+        color: '#8b949e',
+      }}
+      data-testid="captured-review-bulk-toolbar"
+    >
+      <button
+        type="button"
+        onClick={allSelected ? onClearSelection : onSelectAll}
+        disabled={visibleCount === 0}
+        data-testid="captured-review-bulk-select-all"
+        style={{
+          padding: '4px 10px',
+          background: 'transparent',
+          border: '1px solid #30363d',
+          color: '#c9d1d9',
+          borderRadius: '4px',
+          fontSize: '12px',
+          cursor: visibleCount === 0 ? 'not-allowed' : 'pointer',
+          opacity: visibleCount === 0 ? 0.5 : 1,
+        }}
+      >
+        {allSelected ? 'Clear selection' : `Select all visible (${visibleCount})`}
+      </button>
+      {selectedCount > 0 ? (
+        <>
+          <span data-testid="captured-review-bulk-count">
+            {selectedCount} selected
+          </span>
+          <button
+            type="button"
+            onClick={onBulkDeleteClick}
+            data-testid="captured-review-bulk-delete-button"
+            style={{
+              padding: '4px 12px',
+              background: '#da3633',
+              border: '1px solid #f85149',
+              color: '#ffffff',
+              borderRadius: '4px',
+              fontSize: '12px',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            Delete {selectedCount} selected
+          </button>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+// P-49 W4 S1 — Customers-say banner rendered above the counter-bar per §A.14
+// trade-off resolution: AI-summary rows (source="extension-scrape:customers-say"
+// from W2 Session 2's `customersSay` capture, with starRating=5 sentinel) are
+// rendered separately so they neither inflate the 5-star bucket count nor
+// participate in drag-reorder / bulk-select.
+function CustomersSayBanner({ rows }: { rows: CapturedReview[] }) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '8px',
+        marginBottom: '12px',
+      }}
+      data-testid="captured-review-customers-say-banner"
+    >
+      {rows.map((row) => (
+        <article
+          key={row.id}
+          style={{
+            background: '#161b22',
+            border: '1px solid #1f6feb',
+            borderLeft: '4px solid #1f6feb',
+            borderRadius: '6px',
+            padding: '10px 12px',
+          }}
+        >
+          <div
+            style={{
+              fontSize: '11px',
+              color: '#58a6ff',
+              fontWeight: 700,
+              textTransform: 'uppercase',
+              letterSpacing: '0.5px',
+              marginBottom: '6px',
+            }}
+          >
+            Customers say (Amazon AI summary)
+          </div>
+          <div
+            style={{
+              fontSize: '13px',
+              color: '#e6edf3',
+              lineHeight: 1.5,
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+            }}
+          >
+            {row.body}
+          </div>
+        </article>
+      ))}
+    </div>
   );
 }
 
 function CapturedReviewCard({
   row,
   projectId,
+  selected,
+  onToggleSelected,
   onDeleteClick,
 }: {
   row: CapturedReview;
   projectId: string;
+  selected: boolean;
+  onToggleSelected: () => void;
   onDeleteClick: () => void;
 }) {
+  // P-49 W4 S1 — useSortable for drag-to-reorder. The transform style mirrors
+  // the @dnd-kit recipe + the UrlTable.tsx precedent from P-46 W3 S3
+  // (2026-05-23-f). The drag handle is the small ⋮⋮ glyph below; the rest of
+  // the card stays unaffected by drags.
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: row.id });
+  const dragStyle: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.65 : 1,
+    zIndex: isDragging ? 2 : 'auto',
+  };
   return (
     <article
+      ref={setNodeRef}
       style={{
         background: '#0d1117',
-        border: '1px solid #21262d',
+        border: `1px solid ${selected ? '#1f6feb' : '#21262d'}`,
         borderRadius: '8px',
         padding: '14px 16px',
+        ...dragStyle,
       }}
       data-testid="captured-review-card"
     >
@@ -1874,6 +2429,35 @@ function CapturedReviewCard({
         <div
           style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}
         >
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={onToggleSelected}
+            aria-label={selected ? 'Deselect review' : 'Select review'}
+            data-testid="captured-review-bulk-checkbox"
+            style={{ cursor: 'pointer' }}
+          />
+          <button
+            type="button"
+            ref={setActivatorNodeRef}
+            {...listeners}
+            {...attributes}
+            aria-label="Drag to reorder"
+            title="Drag to reorder"
+            data-testid="captured-review-drag-handle"
+            style={{
+              padding: '0 4px',
+              background: 'transparent',
+              border: 'none',
+              color: '#6e7681',
+              cursor: 'grab',
+              fontSize: '16px',
+              lineHeight: 1,
+              touchAction: 'none',
+            }}
+          >
+            ⋮⋮
+          </button>
           <StarRatingDisplay value={row.starRating} />
           {row.reviewerName ? (
             <span style={{ fontSize: '13px', color: '#c9d1d9', fontWeight: 600 }}>
@@ -1968,6 +2552,7 @@ function CapturedReviewSortControl({
   onSortKeyChange: (k: ReviewSortKey) => void;
   onSortDirChange: (d: 'asc' | 'desc') => void;
 }) {
+  const isManual = sortKey === 'manual';
   return (
     <div
       style={{
@@ -1988,16 +2573,25 @@ function CapturedReviewSortControl({
       >
         <option value="addedAt">Added on</option>
         <option value="starRating">Star rating</option>
+        {/* P-49 W4 S1 — only render the manual option when the section is
+            already in manual mode (drag-reorder already happened). Keeps
+            the picker uncluttered for users who haven't dragged yet. */}
+        {isManual ? <option value="manual">Manual (drag order)</option> : null}
       </select>
-      <select
-        value={sortDir}
-        onChange={(e) => onSortDirChange(e.target.value as 'asc' | 'desc')}
-        style={sortSelectStyle}
-        data-testid="captured-review-sort-dir"
-      >
-        <option value="asc">Asc</option>
-        <option value="desc">Desc</option>
-      </select>
+      {/* The asc/desc selector is meaningless in manual mode — the persisted
+          sortRank already encodes the user's chosen order. Hide it instead
+          of showing a no-op control. */}
+      {isManual ? null : (
+        <select
+          value={sortDir}
+          onChange={(e) => onSortDirChange(e.target.value as 'asc' | 'desc')}
+          style={sortSelectStyle}
+          data-testid="captured-review-sort-dir"
+        >
+          <option value="asc">Asc</option>
+          <option value="desc">Desc</option>
+        </select>
+      )}
     </div>
   );
 }
