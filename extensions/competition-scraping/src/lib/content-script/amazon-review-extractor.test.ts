@@ -25,6 +25,10 @@ import {
   sortByHelpfulCountDesc,
   starRatingForFilter,
   urlsMatchByAsin,
+  isAmazonProductPage,
+  isAmazonScrapableUrl,
+  extractAsinFromProductUrl,
+  extractAsinFromAmazonUrl,
   type AmazonReviewRow,
   type AmazonStarFilter,
 } from './amazon-review-extractor.ts';
@@ -72,6 +76,126 @@ describe('extractAsinFromReviewUrl', () => {
   });
 });
 
+describe('isAmazonProductPage (fix-forward #1 2026-05-28)', () => {
+  it('accepts the canonical /dp/<ASIN> shape', () => {
+    assert.equal(
+      isAmazonProductPage('https://www.amazon.com/dp/B0ABCDEFGH'),
+      true,
+    );
+  });
+  it('accepts /dp/<ASIN>/ with trailing path segments', () => {
+    assert.equal(
+      isAmazonProductPage(
+        'https://www.amazon.com/Some-Product-Name/dp/B0ABCDEFGH/ref=foo',
+      ),
+      true,
+    );
+  });
+  it('accepts the apex amazon.com host', () => {
+    assert.equal(
+      isAmazonProductPage('https://amazon.com/dp/B0ABCDEFGH'),
+      true,
+    );
+  });
+  it('rejects product-reviews pages (those go through isAmazonReviewPage)', () => {
+    assert.equal(
+      isAmazonProductPage('https://www.amazon.com/product-reviews/B0ABCDEFGH/'),
+      false,
+    );
+  });
+  it('rejects non-amazon URLs', () => {
+    assert.equal(
+      isAmazonProductPage('https://www.ebay.com/dp/B0ABCDEFGH'),
+      false,
+    );
+  });
+});
+
+describe('isAmazonScrapableUrl (fix-forward #1 2026-05-28)', () => {
+  it('accepts /dp/<ASIN> product pages', () => {
+    assert.equal(
+      isAmazonScrapableUrl('https://www.amazon.com/dp/B0ABCDEFGH'),
+      true,
+    );
+  });
+  it('accepts /product-reviews/<ASIN>/ review pages', () => {
+    assert.equal(
+      isAmazonScrapableUrl(
+        'https://www.amazon.com/product-reviews/B0ABCDEFGH/ref=...',
+      ),
+      true,
+    );
+  });
+  it('accepts /Some-Name/dp/<ASIN>/ shape used in Amazon search results', () => {
+    assert.equal(
+      isAmazonScrapableUrl(
+        'https://www.amazon.com/Some-Product-Name/dp/B0ABCDEFGH/ref=foo',
+      ),
+      true,
+    );
+  });
+  it('rejects Amazon URLs without ASIN segments', () => {
+    assert.equal(
+      isAmazonScrapableUrl('https://www.amazon.com/gp/cart/view.html'),
+      false,
+    );
+  });
+  it('rejects non-amazon URLs', () => {
+    assert.equal(
+      isAmazonScrapableUrl('https://www.ebay.com/itm/B0ABCDEFGH'),
+      false,
+    );
+  });
+});
+
+describe('extractAsinFromProductUrl (fix-forward #1 2026-05-28)', () => {
+  it('extracts ASIN from /dp/<ASIN>', () => {
+    assert.equal(
+      extractAsinFromProductUrl('https://www.amazon.com/dp/B0ABCDEFGH'),
+      'B0ABCDEFGH',
+    );
+  });
+  it('extracts ASIN from /Some-Name/dp/<ASIN>/', () => {
+    assert.equal(
+      extractAsinFromProductUrl(
+        'https://www.amazon.com/Some-Product-Name/dp/B0ABCDEFGH/ref=foo',
+      ),
+      'B0ABCDEFGH',
+    );
+  });
+  it('returns null when no /dp/ segment is present', () => {
+    assert.equal(
+      extractAsinFromProductUrl(
+        'https://www.amazon.com/product-reviews/B0ABCDEFGH/',
+      ),
+      null,
+    );
+  });
+});
+
+describe('extractAsinFromAmazonUrl (fix-forward #1 2026-05-28)', () => {
+  it('extracts ASIN from /product-reviews/<ASIN>/ (review shape preferred)', () => {
+    assert.equal(
+      extractAsinFromAmazonUrl(
+        'https://www.amazon.com/product-reviews/B0ABCDEFGH/',
+      ),
+      'B0ABCDEFGH',
+    );
+  });
+  it('extracts ASIN from /dp/<ASIN> (falls back to product shape)', () => {
+    assert.equal(
+      extractAsinFromAmazonUrl('https://www.amazon.com/dp/B0ABCDEFGH'),
+      'B0ABCDEFGH',
+    );
+  });
+  it('returns null on Amazon URLs without either shape', () => {
+    assert.equal(
+      extractAsinFromAmazonUrl('https://www.amazon.com/gp/cart/view.html'),
+      null,
+    );
+  });
+});
+
 describe('urlsMatchByAsin', () => {
   it('matches a review-page URL against a saved product-page URL with the same ASIN', () => {
     assert.equal(
@@ -98,6 +222,24 @@ describe('urlsMatchByAsin', () => {
         'https://www.amazon.com/dp/B0XXXXXXXX',
       ),
       false,
+    );
+  });
+  it('matches /dp/<ASIN> page URL against saved /dp/<ASIN> URL (fix-forward #1 2026-05-28)', () => {
+    assert.equal(
+      urlsMatchByAsin(
+        'https://www.amazon.com/Some-Product-Name/dp/B0ABCDEFGH/ref=foo',
+        'https://www.amazon.com/dp/B0ABCDEFGH',
+      ),
+      true,
+    );
+  });
+  it('matches /dp/<ASIN> page URL against saved /product-reviews/<ASIN>/ URL (fix-forward #1 2026-05-28)', () => {
+    assert.equal(
+      urlsMatchByAsin(
+        'https://www.amazon.com/Some-Product-Name/dp/B0ABCDEFGH/ref=foo',
+        'https://www.amazon.com/product-reviews/B0ABCDEFGH/ref=bar',
+      ),
+      true,
     );
   });
 });

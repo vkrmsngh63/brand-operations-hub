@@ -36,6 +36,7 @@ import { openScrapeProgressIndicator } from './scrape-progress-indicator.ts';
 
 const AMAZON_URL_PREFIX = /^https?:\/\/(www\.)?amazon\.com\//;
 const REVIEW_PAGE_PATH = /\/product-reviews\/([A-Z0-9]{10})\b/;
+const PRODUCT_PAGE_PATH = /\/dp\/([A-Z0-9]{10})\b/;
 
 const DEFAULT_CAP_PER_STAR = 200;
 
@@ -101,6 +102,22 @@ export function isAmazonReviewPage(url: string): boolean {
   return AMAZON_URL_PREFIX.test(url) && REVIEW_PAGE_PATH.test(url);
 }
 
+/** Returns true when the given URL is a recognized Amazon product-detail page (`/dp/<ASIN>`). */
+export function isAmazonProductPage(url: string): boolean {
+  return AMAZON_URL_PREFIX.test(url) && PRODUCT_PAGE_PATH.test(url);
+}
+
+/**
+ * Returns true when the given URL is any Amazon page the scrape can dispatch
+ * from — either the product-detail page (`/dp/<ASIN>`) OR the dedicated
+ * product-reviews page (`/product-reviews/<ASIN>/`). Post-Session-2 the
+ * cross-star loop fetches every page via fetch+DOMParser, so the starting
+ * page is just an ASIN source — any URL exposing the ASIN works.
+ */
+export function isAmazonScrapableUrl(url: string): boolean {
+  return isAmazonReviewPage(url) || isAmazonProductPage(url);
+}
+
 /**
  * Returns the ASIN from an Amazon product-reviews URL, or null if the URL
  * isn't a recognized review-page shape. Stable shape per the P-49 ROADMAP
@@ -111,20 +128,32 @@ export function extractAsinFromReviewUrl(url: string): string | null {
   return match ? (match[1] ?? null) : null;
 }
 
+/** Returns the ASIN from an Amazon product-detail URL (`/dp/<ASIN>`), or null. */
+export function extractAsinFromProductUrl(url: string): string | null {
+  const match = url.match(PRODUCT_PAGE_PATH);
+  return match ? (match[1] ?? null) : null;
+}
+
+/**
+ * Returns the ASIN from any Amazon URL exposing one — tries the review-page
+ * shape first, then the product-detail shape. Returns null when neither matches.
+ */
+export function extractAsinFromAmazonUrl(url: string): string | null {
+  return extractAsinFromReviewUrl(url) ?? extractAsinFromProductUrl(url);
+}
+
 /**
  * Returns true when the given Amazon URL matches the same ASIN as the
  * given CompetitorUrl's saved URL — used to find the parent CompetitorUrl
  * for the scrape. Defensive: both must parse to the same ASIN.
  */
-export function urlsMatchByAsin(reviewPageUrl: string, savedUrl: string): boolean {
-  // Saved URLs may be either product pages (/dp/<ASIN>) or review pages
-  // (/product-reviews/<ASIN>); accept both shapes for the match.
-  const reviewAsin = extractAsinFromReviewUrl(reviewPageUrl);
-  if (!reviewAsin) return false;
-  const dpMatch = savedUrl.match(/\/dp\/([A-Z0-9]{10})\b/);
-  const savedReviewMatch = savedUrl.match(/\/product-reviews\/([A-Z0-9]{10})\b/);
-  const savedAsin = dpMatch?.[1] ?? savedReviewMatch?.[1] ?? null;
-  return savedAsin === reviewAsin;
+export function urlsMatchByAsin(pageUrl: string, savedUrl: string): boolean {
+  // The starting pageUrl may be either a /dp/ product page OR a /product-reviews/
+  // page; the savedUrl may be the same. Both must parse to the same ASIN.
+  const pageAsin = extractAsinFromAmazonUrl(pageUrl);
+  if (!pageAsin) return false;
+  const savedAsin = extractAsinFromAmazonUrl(savedUrl);
+  return savedAsin === pageAsin;
 }
 
 // ─── DOM walkers (operate on any Document — current page OR fetched HTML) ─

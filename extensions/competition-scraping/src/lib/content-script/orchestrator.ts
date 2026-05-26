@@ -31,8 +31,8 @@ import {
   listCapturedVideos,
 } from './api-bridge.ts';
 import {
-  extractAsinFromReviewUrl,
-  isAmazonReviewPage,
+  extractAsinFromAmazonUrl,
+  isAmazonScrapableUrl,
   runAmazonReviewScrape,
   urlsMatchByAsin,
 } from './amazon-review-extractor.ts';
@@ -1160,13 +1160,16 @@ if (msg.kind === 'enter-video-region-record-mode') {
       //   3. Drive the per-platform extractor, routing per-review inserts
       //      through createCapturedReview() (background-proxied).
       const pageUrl = msg.pageUrl;
-      if (!isAmazonReviewPage(pageUrl)) {
+      if (!isAmazonScrapableUrl(pageUrl)) {
         // Future sub-cluster sessions land here for eBay / Etsy / Walmart;
         // for now surface a no-op friendly message rather than failing
         // silently. The progress indicator's not yet mounted, so use the
-        // existing capture-failure toast.
+        // existing capture-failure toast. Post-Session-2 fix-forward #1
+        // (2026-05-28): accepts /dp/<ASIN> + /product-reviews/<ASIN>/ both,
+        // since the cross-star loop fetches every page via fetch+DOMParser —
+        // the starting page is just an ASIN source.
         showCaptureFailureToast(
-          'Review scraping is currently available on Amazon product-review pages only. Other platforms ship in upcoming sessions.',
+          'Review scraping is currently available on Amazon product pages (/dp/<ASIN>) or product-review pages. Other platforms ship in upcoming sessions.',
         );
         sendResponse({ ok: false });
         return;
@@ -1181,10 +1184,10 @@ if (msg.kind === 'enter-video-region-record-mode') {
         sendResponse({ ok: false });
         return;
       }
-      const asin = extractAsinFromReviewUrl(pageUrl);
+      const asin = extractAsinFromAmazonUrl(pageUrl);
       if (!asin) {
         showCaptureFailureToast(
-          "Couldn't read the product code from this Amazon review URL. Try refreshing the page and re-running.",
+          "Couldn't read the product code from this Amazon page. Try refreshing and re-running.",
         );
         sendResponse({ ok: false });
         return;
