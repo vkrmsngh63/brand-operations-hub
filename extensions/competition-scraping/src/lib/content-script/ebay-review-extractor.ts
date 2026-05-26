@@ -78,12 +78,19 @@ export function feedbackFilterForStarRating(
 
 /**
  * Returns the canonical eBay seller-feedback URL for the given item_id +
- * seller username + filter + page number. Format per the director-supplied
- * 2026-05-25 spec preserved in the P-49 ROADMAP entry.
+ * seller username + filter + page number, narrowed to "This Item" via the
+ * `q=<itemId>` search query parameter.
  *
  * Pagination via the `_pgn=N` URL parameter (FF#4 URL-construction Pattern
  * from the 2026-05-28 Amazon deploy lesson: build pagination URLs directly
  * rather than scraping next-page links which evolve).
+ *
+ * Fix-forward #2 2026-05-30 — Phase 4 verification surfaced that
+ * `item_id=<ID>` alone is context-only on eBay's server side; without
+ * `q=<itemId>` + `filter=feedback_page:RECEIVED_AS_SELLER` the page renders
+ * ALL items' feedback rather than just this item's. The director's
+ * working feedback URL (the one eBay's UI renders for "This Item" view)
+ * carried both params; this URL builder now matches.
  */
 export function buildEbayFeedbackUrl(
   itemId: string,
@@ -95,6 +102,11 @@ export function buildEbayFeedbackUrl(
     fdbkType: 'FeedbackReceivedAsSeller',
     item_id: itemId,
     username: seller,
+    // FF#2 2026-05-30 — these two params are what actually narrow the
+    // feedback list to just this item; without them the page renders the
+    // seller's full feedback history regardless of item_id.
+    q: itemId,
+    filter: 'feedback_page:RECEIVED_AS_SELLER',
     overall_rating_item: filter,
     _pgn: String(pageNumber),
   });

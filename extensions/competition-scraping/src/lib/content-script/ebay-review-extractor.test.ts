@@ -364,6 +364,45 @@ describe('buildEbayFeedbackUrl', () => {
     const params = new URL(url).searchParams;
     assert.equal(params.get('username'), 'cool seller&foo');
   });
+  it('FF#2 2026-05-30: includes q=<itemId> search query for "This Item" filter', () => {
+    // Phase 4 verification surfaced that item_id=<ID> alone is context-only
+    // on eBay's server side; q=<itemId> is what actually narrows the
+    // feedback list. Without this, eBay returns ALL items' feedback.
+    const url = buildEbayFeedbackUrl(
+      '355823393241',
+      'hot.girls',
+      'NEUTRAL',
+    );
+    const params = new URL(url).searchParams;
+    assert.equal(params.get('q'), '355823393241');
+  });
+  it('FF#2 2026-05-30: includes filter=feedback_page:RECEIVED_AS_SELLER scope param', () => {
+    const url = buildEbayFeedbackUrl(
+      '355823393241',
+      'hot.girls',
+      'NEGATIVE',
+    );
+    const params = new URL(url).searchParams;
+    assert.equal(
+      params.get('filter'),
+      'feedback_page:RECEIVED_AS_SELLER',
+    );
+  });
+  it('FF#2 2026-05-30: q always equals item_id (not seller, not page)', () => {
+    // Verify q is item-keyed even when page > 1 — the search query stays
+    // the same across pagination; only _pgn changes.
+    for (const page of [1, 2, 5, 10]) {
+      const url = buildEbayFeedbackUrl(
+        '355823393241',
+        'hot.girls',
+        'NEUTRAL',
+        page,
+      );
+      const params = new URL(url).searchParams;
+      assert.equal(params.get('q'), '355823393241');
+      assert.equal(params.get('_pgn'), String(page));
+    }
+  });
 });
 
 describe('buildEbayListingUrl', () => {

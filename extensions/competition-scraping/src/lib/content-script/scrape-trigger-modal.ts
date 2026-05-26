@@ -43,6 +43,28 @@ export interface ScrapeTriggerModalOptions {
    * #2 2026-05-28.
    */
   defaultSelectedStars?: number[];
+  /**
+   * eBay-only — optional seller text input rendered above the cap field.
+   * When set, the modal shows a labeled text input pre-filled with
+   * `defaultValue` (typically the auto-detected seller, or blank when
+   * auto-detection failed). The Start button is also disabled while the
+   * seller input is empty. Director can paste/edit before Start.
+   *
+   * Fix-forward #1 2026-05-30 — Phase 4 verification surfaced that
+   * eBay's modern listing page DOM doesn't reliably expose the seller
+   * via the `/usr/<seller>` link we probed for. Without a confident
+   * selector update (Codespace IPs blocked from fetching eBay listing
+   * pages for diagnostic; speculative selector edits = the antipattern
+   * memorialized in CORRECTIONS_LOG 2026-05-25), the safest fix-forward
+   * is to surface the auto-detect attempt + let director confirm/override
+   * via a text input. Mirrors the per-trigger-override Pattern from §A.4.
+   */
+  sellerInput?: {
+    label: string;
+    defaultValue: string;
+    placeholder?: string;
+    hint?: string;
+  };
 }
 
 export interface ScrapeTriggerModalResult {
@@ -54,6 +76,12 @@ export interface ScrapeTriggerModalResult {
    * checkboxes are checked. Fix-forward #2 2026-05-28.
    */
   selectedStars: number[];
+  /**
+   * Director's entered seller username — present only when the modal was
+   * opened with `sellerInput` set. Always trimmed; never empty (Start
+   * button is disabled when the input is blank). Fix-forward #1 2026-05-30.
+   */
+  seller?: string;
 }
 
 /**
@@ -110,6 +138,33 @@ export function openScrapeTriggerModal(
         ? opts.defaultSelectedStars
         : selectableStars,
     );
+
+    // FF#1 2026-05-30 — optional seller text input (eBay-only). Rendered
+    // above the stars row so director sees seller-confirm before picking
+    // stars. The Start button is gated on both stars-checked + seller-
+    // non-empty when this input is present.
+    let sellerInputEl: HTMLInputElement | null = null;
+    if (opts.sellerInput) {
+      const sellerLabel = document.createElement('label');
+      sellerLabel.className = 'plos-cs-scrape-trigger-field-label';
+      sellerLabel.textContent = opts.sellerInput.label;
+      sellerInputEl = document.createElement('input');
+      sellerInputEl.className = 'plos-cs-scrape-trigger-input';
+      sellerInputEl.type = 'text';
+      sellerInputEl.value = opts.sellerInput.defaultValue;
+      sellerInputEl.setAttribute('aria-label', opts.sellerInput.label);
+      if (opts.sellerInput.placeholder) {
+        sellerInputEl.placeholder = opts.sellerInput.placeholder;
+      }
+      sellerLabel.appendChild(sellerInputEl);
+      card.appendChild(sellerLabel);
+      if (opts.sellerInput.hint) {
+        const sellerHint = document.createElement('div');
+        sellerHint.className = 'plos-cs-scrape-trigger-hint';
+        sellerHint.textContent = opts.sellerInput.hint;
+        card.appendChild(sellerHint);
+      }
+    }
 
     const starsLabel = document.createElement('div');
     starsLabel.className = 'plos-cs-scrape-trigger-field-label';
@@ -206,10 +261,20 @@ export function openScrapeTriggerModal(
       return out.sort((a, b) => a - b);
     }
 
+    function readSeller(): string {
+      // Always trim; treat whitespace-only as empty.
+      return sellerInputEl?.value.trim() ?? '';
+    }
+
     function syncStartEnabled(): void {
-      // Start disabled when zero stars checked — there's nothing to scrape.
+      // Start disabled when zero stars checked — nothing to scrape.
+      // FF#1 2026-05-30: also disabled when seller input is present + empty
+      // (eBay can't scrape without seller; modal prefilled with auto-detect
+      // when possible, blank otherwise — director must paste/edit).
       const anyChecked = readSelectedStars().length > 0;
-      if (anyChecked) {
+      const sellerOk = sellerInputEl === null || readSeller().length > 0;
+      const enabled = anyChecked && sellerOk;
+      if (enabled) {
         startBtn.removeAttribute('disabled');
         startBtn.style.opacity = '1';
         startBtn.style.cursor = 'pointer';
@@ -223,11 +288,21 @@ export function openScrapeTriggerModal(
     for (const cb of starCheckboxes.values()) {
       cb.addEventListener('change', syncStartEnabled);
     }
+    if (sellerInputEl) {
+      sellerInputEl.addEventListener('input', syncStartEnabled);
+    }
 
     function onStart(): void {
       const selectedStars = readSelectedStars();
       if (selectedStars.length === 0) return; // guard — Start disabled, but defensive
-      done({ capPerStar: readCap(), selectedStars });
+      const sellerValue = sellerInputEl ? readSeller() : undefined;
+      if (sellerInputEl && !sellerValue) return; // guard — Start disabled, but defensive
+      const result: ScrapeTriggerModalResult = {
+        capPerStar: readCap(),
+        selectedStars,
+      };
+      if (sellerValue) result.seller = sellerValue;
+      done(result);
     }
 
     function onCancel(): void {

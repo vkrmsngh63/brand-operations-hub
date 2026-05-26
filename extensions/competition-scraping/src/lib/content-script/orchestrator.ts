@@ -1284,6 +1284,41 @@ if (msg.kind === 'enter-video-region-record-mode') {
         }
         const parentRef = parent;
         const parentName = parentRef.productName;
+        // FF#1 2026-05-30 — wrap the seller-resolve + modal + scrape in an
+        // async IIFE since the seller-resolve step needs `await fetch(...)`
+        // and the onMessage listener itself returns void synchronously.
+        void (async () => {
+        // Resolve seller BEFORE opening the trigger modal so we can pre-fill
+        // the seller text input with the auto-detected value (or blank when
+        // auto-detection fails). Two resolution paths:
+        //   1. /fdbk/ trigger URL → extract `username` query param directly
+        //   2. /itm/ trigger URL → fetch the listing page + run
+        //      extractSellerFromListingDocument() against parsed DOM
+        // Phase 4 verification 2026-05-30 surfaced that path (2) often fails
+        // on modern eBay listing pages (the `/usr/<seller>` link selector
+        // probes don't match reliably). Falling through to a blank pre-fill
+        // is fine — director types the seller into the modal text input
+        // (visible in the URL bar when viewing the seller's feedback page).
+        let autoDetectedSeller: string | null = null;
+        if (isEbayFeedbackPage(pageUrl)) {
+          autoDetectedSeller = extractSellerFromFeedbackUrl(pageUrl);
+        }
+        if (!autoDetectedSeller) {
+          try {
+            const resp = await fetch(buildEbayListingUrl(itemId), {
+              credentials: 'include',
+              headers: { Accept: 'text/html' },
+            });
+            if (resp.ok) {
+              const html = await resp.text();
+              const parser = new DOMParser();
+              const doc = parser.parseFromString(html, 'text/html');
+              autoDetectedSeller = extractSellerFromListingDocument(doc);
+            }
+          } catch (err) {
+            console.warn('[PLOS] eBay seller-resolve fetch failed:', err);
+          }
+        }
         const triggerInputs = {
           scopeLabel: parentName
             ? `eBay feedback — ${parentName}`
@@ -1298,38 +1333,29 @@ if (msg.kind === 'enter-video-region-record-mode') {
           // mapping from the scope label ("eBay feedback — Product X").
           selectableStars: [1, 3],
           defaultSelectedStars: [1, 3],
+          // FF#1 2026-05-30 — eBay seller text input. Pre-filled with the
+          // auto-detected seller when available; otherwise blank (director
+          // types from the URL bar when viewing the seller's feedback page).
+          sellerInput: {
+            label: 'eBay seller username',
+            defaultValue: autoDetectedSeller ?? '',
+            placeholder: 'e.g. hot.girls',
+            hint: autoDetectedSeller
+              ? 'Auto-detected from this page — edit if wrong.'
+              : "Couldn't auto-detect from the listing page DOM — paste from the seller's feedback page URL (the `username=…` part).",
+          },
         };
-        void openScrapeTriggerModal(triggerInputs).then(async (triggerResult) => {
+        void openScrapeTriggerModal(triggerInputs).then((triggerResult) => {
           if (triggerResult === null) {
             // Director cancelled at the trigger modal — no scrape dispatched.
             return;
           }
-          // Resolve seller — either from the trigger URL's `username` param
-          // (when director triggered from a /fdbk/ page) or by fetching the
-          // /itm/<itemId> listing page and parsing the seller card.
-          let seller: string | null = null;
-          if (isEbayFeedbackPage(pageUrl)) {
-            seller = extractSellerFromFeedbackUrl(pageUrl);
-          }
-          if (!seller) {
-            try {
-              const resp = await fetch(buildEbayListingUrl(itemId), {
-                credentials: 'include',
-                headers: { Accept: 'text/html' },
-              });
-              if (resp.ok) {
-                const html = await resp.text();
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(html, 'text/html');
-                seller = extractSellerFromListingDocument(doc);
-              }
-            } catch (err) {
-              console.warn('[PLOS] eBay seller-resolve fetch failed:', err);
-            }
-          }
+          // Modal guarantees a non-empty seller when sellerInput is set
+          // (Start button is disabled while empty); defensive check anyway.
+          const seller = triggerResult.seller?.trim();
           if (!seller) {
             showCaptureFailureToast(
-              "Couldn't read the seller name from this eBay listing. Try opening the feedback page for this listing directly and re-running.",
+              'Enter the eBay seller name and try again.',
             );
             return;
           }
@@ -1386,6 +1412,7 @@ if (msg.kind === 'enter-video-region-record-mode') {
             console.error('[PLOS] eBay review scrape failed:', err);
           });
         });
+        })(); // close async IIFE wrapping seller-resolve + modal + scrape
         sendResponse({ ok: true });
         return;
       }
