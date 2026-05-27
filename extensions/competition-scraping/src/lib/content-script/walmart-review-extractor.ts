@@ -238,76 +238,69 @@ export function parseWalmartReviewDate(text: string): string | null {
 }
 
 /**
- * Returns the reviews list container element within the given parsed
- * document, or null when no canonical container can be found.
- *
- * Per the 2026-05-31 W2 Etsy FF#3 Pattern: single canonical-class selector
- * + hidden-state filter, NO progressively-broader fallbacks. If the
- * canonical container is renamed by Walmart in a future UI update, the
- * scraper fails fast + Phase 4 surfaces it — the diagnostic-instrumentation
- * FF Pattern picks up.
- *
- * `[data-testid="reviews-list"]` is the canonical Walmart reviews container
- * as of the 2026-05 timeframe. The hidden-state filter defends against any
- * variant where Walmart might pre-render a hidden duplicate list (e.g., a
- * skeleton placeholder shown during AJAX hydration).
- */
-export function findWalmartReviewsContainer(
-  doc: ParentNode,
-): Element | null {
-  const candidates = Array.from(
-    doc.querySelectorAll('[data-testid="reviews-list"]'),
-  );
-  for (const el of candidates) {
-    if (el.getAttribute('aria-hidden') === 'true') continue;
-    if (el.hasAttribute('hidden')) continue;
-    return el;
-  }
-  return null;
-}
-
-/**
  * Extracts review rows from a parsed Walmart reviews-page Document.
  *
- * Selector strategy per the 2026-05-31 W2 Etsy FF#3 Pattern: single
- * canonical-class row selector + per-row hidden-state filter. No
- * progressively-broader fallbacks.
+ * FF#3 (2026-06-01) — empirically-grounded selectors from director's
+ * 2026-06-01 Phase 4 HTML dumps (plos-walmart-diag-803154651-{1,2,3}star-page1.html).
+ * The FF#1-shipped selectors `[data-testid="reviews-section"]` etc. all
+ * returned 0 in the SELECTOR PROBE; the empirical evidence shows Walmart
+ * uses entirely different data-testid names:
+ *
+ *   • Per-review row anchor: `[data-testid="enhanced-review-content"]`
+ *     (10 instances per page, 1:1 with reviews; contains the body <p>)
+ *   • Per-review card root: `bodyEl.closest('.overflow-visible')` — the
+ *     review card has the class signature `overflow-visible b--none ...`
+ *     unique to review cards on the reviews page.
+ *   • Star rating: `<span class="ld_Ec">N out of 5 stars review</span>`
+ *     — Walmart's screen-reader-only span. Always present (10/10 reviews).
+ *   • Title: `<h3>` within the card. Only ~40% of reviews have titles —
+ *     6/10 reviews on the 3-star page were body-only. Null when missing.
+ *   • Body: `<p>` inside `enhanced-review-content`. The CSS `-webkit-line-clamp:3`
+ *     is truncation-only; the FULL text is in the DOM. The "View more"
+ *     expander is purely CSS — no AJAX call.
+ *   • Reviewer name: `aria-label` value on the reviewer block
+ *     `<div class="flex flex-column " aria-label="<Name>">`. The names
+ *     are the aria-label value itself, not textContent. Skip aria-labels
+ *     on buttons + those containing "review"/"purchase"/"rating"/etc.
+ *   • Date: first `.f7.gray` element inside the card. Formatted plain text
+ *     like "Oct 16, 2025".
+ *
+ * Per the 2026-05-31 W2 Etsy FF#3 Pattern: single canonical-class
+ * selectors, NO progressively-broader fallbacks. If Walmart renames a
+ * canonical attribute in the future, the scraper fails fast in Phase 4
+ * + the diagnostic-instrumentation FF Pattern picks up.
  *
  * Defensive: rows missing a star rating OR a body are skipped silently
- * (Walmart occasionally emits decorative placeholders / "no reviews"
- * empty-state markup that doesn't match the review shape).
+ * (some Walmart reviews are star-rating-only with no comment body).
  */
 export function extractReviewsFromDocument(
   doc: Document,
 ): WalmartReviewRow[] {
-  // Scope to the canonical reviews-list container when present; otherwise
-  // fall through to whole-document scope (Walmart's pre-hydration HTML
-  // sometimes renders reviews directly under <main> without the wrapper).
-  const scope: ParentNode = findWalmartReviewsContainer(doc) ?? doc;
-
-  // Canonical Walmart review row marker. `[data-testid="reviews-section"]`
-  // is the row-level data-testid pattern used by Walmart's review cards.
-  // Hidden-state filter applied per-row to reject any hydration-phase
-  // skeleton variants.
-  const rowEls = Array.from(
-    scope.querySelectorAll('[data-testid="reviews-section"]'),
-  ).filter((el) => {
-    if (el.getAttribute('aria-hidden') === 'true') return false;
-    if (el.hasAttribute('hidden')) return false;
-    return true;
-  });
+  // Anchor on the per-review body container (canonical, 1:1 with reviews).
+  const bodyEls = Array.from(
+    doc.querySelectorAll('[data-testid="enhanced-review-content"]'),
+  );
 
   const rows: WalmartReviewRow[] = [];
-  for (const el of rowEls) {
-    const starRating = extractWalmartReviewStarRating(el);
+  for (const bodyEl of bodyEls) {
+    // Walk up to the review card root via `.closest('.overflow-visible')`.
+    // The review card has the canonical class `overflow-visible b--none ...`;
+    // closest('.overflow-visible') returns the nearest ancestor div with
+    // that class, which is the card boundary. Skip rows whose ancestor
+    // chain doesn't include a card (defensive — shouldn't happen on the
+    // real reviews page but might in pre-hydration / decorative variants).
+    const card = bodyEl.closest('.overflow-visible');
+    if (!card) continue;
+
+    const starRating = extractWalmartReviewStarRating(card);
     if (starRating === null) continue;
 
-    const body = extractWalmartReviewBody(el);
+    const body = extractWalmartReviewBody(bodyEl);
     if (!body) continue;
 
-    const title = extractWalmartReviewTitle(el);
-    const reviewerName = extractWalmartReviewerName(el);
-    const reviewDate = extractWalmartReviewDate(el);
+    const title = extractWalmartReviewTitle(card);
+    const reviewerName = extractWalmartReviewerName(card);
+    const reviewDate = extractWalmartReviewDate(card);
 
     rows.push({ starRating, body, title, reviewerName, reviewDate });
   }
@@ -315,65 +308,96 @@ export function extractReviewsFromDocument(
 }
 
 /**
- * Extracts the star rating from a single Walmart review row element. Walmart
- * renders the star count as an aria-label on a stars-container element
- * (e.g., `<span aria-label="4 out of 5 stars">`). Returns null on parse
- * failure — the caller skips rows missing a star rating.
+ * Extracts the star rating from a single Walmart review card. Walmart
+ * renders a screen-reader-only span with the canonical text "N out of 5
+ * stars review" — always present even when the visible stars are SVG-only.
+ * FF#3 (2026-06-01) — empirical from director's HTML dump.
+ *
+ * Returns null on parse failure — the caller skips rows missing a star rating.
  */
-export function extractWalmartReviewStarRating(rowEl: Element): number | null {
-  const starsEl = rowEl.querySelector('[aria-label*="out of 5"]');
+export function extractWalmartReviewStarRating(cardEl: Element): number | null {
+  const starsEl = cardEl.querySelector('.ld_Ec');
   if (!starsEl) return null;
-  const label = starsEl.getAttribute('aria-label') ?? '';
-  return parseWalmartStarRating(label);
+  const text = starsEl.textContent ?? '';
+  return parseWalmartStarRating(text);
 }
 
 /**
- * Extracts the review title from a single Walmart review row element.
- * Walmart renders the title under `[data-testid="review-title"]`. Returns
- * null when the title is missing (Walmart reviews don't always have a
- * title — body-only reviews are common).
+ * Extracts the review title from a single Walmart review card. Walmart
+ * renders the title as an `<h3>` element within the right-column content
+ * area. Returns null when no title is present — many Walmart reviews are
+ * body-only (no title), and that's expected.
+ * FF#3 (2026-06-01) — empirical from director's HTML dump.
  */
-export function extractWalmartReviewTitle(rowEl: Element): string | null {
-  const titleEl = rowEl.querySelector('[data-testid="review-title"]');
+export function extractWalmartReviewTitle(cardEl: Element): string | null {
+  const titleEl = cardEl.querySelector('h3');
   const text = titleEl?.textContent?.trim() ?? '';
   return text.length > 0 ? text : null;
 }
 
 /**
- * Extracts the review body from a single Walmart review row element. Walmart
- * renders the body text under `[data-testid="review-body"]`. The full body
- * is in the server-rendered HTML — Walmart's "View more" expander is CSS
- * truncation only (no AJAX call for hidden text), so reading textContent
- * gives the full body even on long reviews.
+ * Extracts the review body from a Walmart `enhanced-review-content` body
+ * element. The body text lives in a `<p>` child inside the container; the
+ * CSS `-webkit-line-clamp:3` is truncation-only — the full text is in the
+ * DOM and textContent gives the full body even on long reviews.
+ * FF#3 (2026-06-01) — empirical from director's HTML dump.
  *
- * Returns empty string when no body element is found — the caller skips
- * such rows.
+ * Returns empty string when no body `<p>` is found — the caller skips
+ * such rows (star-rating-only reviews with no comment).
  */
-export function extractWalmartReviewBody(rowEl: Element): string {
-  const bodyEl = rowEl.querySelector('[data-testid="review-body"]');
-  return bodyEl?.textContent?.trim() ?? '';
+export function extractWalmartReviewBody(bodyEl: Element): string {
+  const p = bodyEl.querySelector('p');
+  return p?.textContent?.trim() ?? '';
 }
 
 /**
- * Extracts the reviewer name from a single Walmart review row element.
- * Walmart renders the reviewer display name under
- * `[data-testid="review-reviewer"]`. Returns null when the name element
- * is missing (Walmart anonymizes some accounts).
+ * Extracts the reviewer display name from a single Walmart review card.
+ * Walmart renders the reviewer name as an `aria-label` value on the
+ * reviewer block `<div class="flex flex-column " aria-label="<Name>">`.
+ * The name is in the ATTRIBUTE, not textContent. Examples from director's
+ * 2026-06-01 HTML dump: "Mimiofboys", "Stacia", "alexandra", "anonymous",
+ * "Walmart customer, Top Reviewer", "Pay", "A, Top Reviewer", etc.
+ * FF#3 (2026-06-01) — empirical from director's HTML dump.
+ *
+ * Selection strategy: scan all `[aria-label]` elements within the card;
+ * skip buttons + skip aria-labels that contain reserved keywords (review,
+ * purchase, rating, upvote, downvote — those are interaction-related, not
+ * reviewer names). The first remaining aria-label is the reviewer name.
+ *
+ * Returns null when no reviewer name can be found.
  */
-export function extractWalmartReviewerName(rowEl: Element): string | null {
-  const nameEl = rowEl.querySelector('[data-testid="review-reviewer"]');
-  const text = nameEl?.textContent?.trim() ?? '';
-  return text.length > 0 ? text : null;
+export function extractWalmartReviewerName(cardEl: Element): string | null {
+  // Word-boundary regex — matches "review" / "purchase" etc. as whole words,
+  // NOT as substrings of other words. Critical: "Walmart customer, Top Reviewer"
+  // is a real director-observed reviewer name (the "Top Reviewer" badge gets
+  // appended); the prior substring regex `/review/i` falsely filtered it
+  // because "Reviewer" contains "Review" as a substring. The `\b` anchors
+  // require the keyword to be a complete word (so "Review" matches alone but
+  // "Reviewer" does NOT).
+  const RESERVED_KEYWORDS = /\b(review|purchase|rating|upvote|downvote)\b/i;
+  const candidates = Array.from(cardEl.querySelectorAll('[aria-label]'));
+  for (const el of candidates) {
+    const tagName = el.tagName.toLowerCase();
+    if (tagName === 'button') continue;
+    const label = el.getAttribute('aria-label') ?? '';
+    if (!label) continue;
+    if (RESERVED_KEYWORDS.test(label)) continue;
+    return label;
+  }
+  return null;
 }
 
 /**
- * Extracts the review date from a single Walmart review row element.
- * Walmart renders the date under `[data-testid="review-date"]`. Returns
- * the parsed ISO 8601 string when the date is parseable; otherwise the raw
- * rendered text; null when no date element is found.
+ * Extracts the review date from a single Walmart review card. Walmart
+ * renders the date as plain text inside a `.f7.gray` div in the left meta
+ * column. Format examples from director's 2026-06-01 HTML dump: "Oct 16, 2025".
+ * FF#3 (2026-06-01) — empirical from director's HTML dump.
+ *
+ * Returns the parsed ISO 8601 string when the date is parseable;
+ * otherwise the raw rendered text; null when no date element is found.
  */
-export function extractWalmartReviewDate(rowEl: Element): string | null {
-  const dateEl = rowEl.querySelector('[data-testid="review-date"]');
+export function extractWalmartReviewDate(cardEl: Element): string | null {
+  const dateEl = cardEl.querySelector('.f7.gray');
   const text = dateEl?.textContent?.trim() ?? '';
   if (text.length === 0) return null;
   const iso = parseWalmartReviewDate(text);
@@ -463,18 +487,6 @@ export async function runWalmartReviewScrape(
     ctx.starsToVisit && ctx.starsToVisit.length > 0
       ? ctx.starsToVisit
       : ([5, 4, 3, 2, 1] as readonly WalmartStarFilter[]);
-
-  // [PLOS WALMART DIAGNOSTIC] FF#2 2026-06-01 TEMPORARY — empirical diagnostic
-  // instrumentation per the now-validated Diagnostic-instrumentation FF Pattern
-  // (eBay FF#4 2026-05-30 + Etsy FF#2 2026-05-31). Removed in FF#3 after the
-  // dumped HTML reveals the empirical root cause of the 0-captures BUST.
-  console.log('[PLOS WALMART DIAGNOSTIC] runWalmartReviewScrape ENTRY', {
-    productId: ctx.productId,
-    starsToVisit: [...starsToVisit],
-    capPerStar,
-    scopeLabel: ctx.scopeLabel,
-    competitorUrlId: ctx.competitorUrlId,
-  });
 
   const insertedByStar: Partial<Record<WalmartStarFilter, number>> = {};
   let totalInserted = 0;
@@ -581,19 +593,6 @@ async function scrapeOneStar(
   let currentDoc: Document | null = null;
   let currentPageNumber = 1;
   let isFirstPage = true;
-  // [PLOS WALMART DIAGNOSTIC] FF#2 2026-06-01 TEMPORARY — track whether we
-  // already dumped HTML for THIS star so we only auto-download the FIRST
-  // page (don't spam Downloads with every page across every star).
-  let diagnosticHtmlDumped = false;
-
-  console.log(
-    `[PLOS WALMART DIAGNOSTIC] scrapeOneStar START — ${String(starFilter)}★`,
-    {
-      starFilter,
-      capPerStar,
-      productId: ctx.productId,
-    },
-  );
 
   // Cumulative-totals wrapper — page-loaded + row-saved events surface
   // session-wide totals across the cross-star scrape, not per-star.
@@ -638,15 +637,7 @@ async function scrapeOneStar(
     capRows: capPerStar,
     extractCurrentPageRows: () => {
       if (!currentDoc) return [];
-      const rows = extractReviewsFromDocument(currentDoc);
-      // [PLOS WALMART DIAGNOSTIC] FF#2 2026-06-01 TEMPORARY — log walker
-      // output per page so we can see exactly how many rows our selectors
-      // matched in the fetched HTML. 0 rows here = selectors missing OR
-      // server-rendered HTML lacks the reviews (React shell).
-      console.log(
-        `[PLOS WALMART DIAGNOSTIC] extractCurrentPageRows returned ${String(rows.length)} rows for ${String(starFilter)}★ page ${String(currentPageNumber)}`,
-      );
-      return rows;
+      return extractReviewsFromDocument(currentDoc);
     },
     advanceToNextPage: async () => {
       // FF#4 Pattern: build pagination URL directly via buildWalmartReviewUrl.
@@ -664,19 +655,11 @@ async function scrapeOneStar(
         starFilter,
         nextPageNumber,
       );
-      // [PLOS WALMART DIAGNOSTIC] FF#2 2026-06-01 TEMPORARY — log every fetch
-      // URL + status + size for empirical inspection.
-      console.log(
-        `[PLOS WALMART DIAGNOSTIC] FETCH ${String(starFilter)}★ page ${String(nextPageNumber)}: ${nextUrl}`,
-      );
       const resp = await fetch(nextUrl, {
         credentials: 'include',
         headers: { Accept: 'text/html' },
         signal: controller.signal,
       });
-      console.log(
-        `[PLOS WALMART DIAGNOSTIC] FETCH RESPONSE ${String(starFilter)}★ page ${String(nextPageNumber)}: status=${String(resp.status)} ok=${String(resp.ok)} contentType=${resp.headers.get('content-type') ?? '(missing)'}`,
-      );
       if (!resp.ok) {
         const err = new Error(
           `Walmart per-star fetch returned ${String(resp.status)} for ${String(starFilter)}★`,
@@ -685,67 +668,8 @@ async function scrapeOneStar(
         throw err;
       }
       const html = await resp.text();
-      // [PLOS WALMART DIAGNOSTIC] FF#2 2026-06-01 TEMPORARY — log HTML size
-      // + auto-download the FIRST page of the FIRST star to Downloads for
-      // empirical inspection (mirrors yesterday's Etsy FF#2 Pattern).
-      console.log(
-        `[PLOS WALMART DIAGNOSTIC] HTML received ${String(starFilter)}★ page ${String(nextPageNumber)}: ${String(html.length)} chars`,
-      );
-      if (!diagnosticHtmlDumped) {
-        diagnosticHtmlDumped = true;
-        try {
-          const blob = new Blob([html], { type: 'text/html' });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `plos-walmart-diag-${ctx.productId}-${String(starFilter)}star-page${String(nextPageNumber)}.html`;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
-          console.log(
-            `[PLOS WALMART DIAGNOSTIC] AUTO-DOWNLOAD triggered: ${a.download}`,
-          );
-        } catch (dumpErr) {
-          console.warn(
-            '[PLOS WALMART DIAGNOSTIC] auto-download failed:',
-            dumpErr,
-          );
-        }
-      }
       const parser = new DOMParser();
       currentDoc = parser.parseFromString(html, 'text/html');
-      // [PLOS WALMART DIAGNOSTIC] FF#2 2026-06-01 TEMPORARY — selector-presence
-      // probe. We log counts of candidate selectors to identify which Walmart
-      // testid / class names actually appear in the server-rendered HTML.
-      const SELECTOR_PROBES: readonly string[] = [
-        '[data-testid="reviews-list"]',
-        '[data-testid="reviews-section"]',
-        '[data-testid="review-card"]',
-        '[data-testid="review-body"]',
-        '[data-testid="review-title"]',
-        '[data-testid="review-date"]',
-        '[data-testid="review-reviewer"]',
-        '[data-product-review-id]',
-        '[data-automation-id*="review"]',
-        '[aria-label*="out of 5"]',
-        '.review-card',
-        '.review-content',
-        '.review-text',
-        '.review-title',
-      ];
-      const probeCounts: Record<string, number> = {};
-      for (const sel of SELECTOR_PROBES) {
-        try {
-          probeCounts[sel] = currentDoc.querySelectorAll(sel).length;
-        } catch {
-          probeCounts[sel] = -1;
-        }
-      }
-      console.log(
-        `[PLOS WALMART DIAGNOSTIC] SELECTOR PROBE ${String(starFilter)}★ page ${String(nextPageNumber)} (doc.title="${currentDoc.title}"):`,
-        probeCounts,
-      );
       currentPageNumber = nextPageNumber;
       const rowsOnPage = extractReviewsFromDocument(currentDoc).length;
       if (rowsOnPage === 0) return false;

@@ -25,7 +25,6 @@ import {
   extractWalmartReviewStarRating,
   extractWalmartReviewTitle,
   extractWalmartReviewerName,
-  findWalmartReviewsContainer,
   isWalmartListingPage,
   isWalmartReviewsPage,
   isWalmartScrapableUrl,
@@ -493,19 +492,24 @@ describe('parseWalmartReviewDate', () => {
 });
 
 // ─── DOM walker tests — hand-built fake Document ─────────────────────────
+//
+// FF#3 (2026-06-01) — fixtures rewritten to match the empirically-grounded
+// walker shape. The walker anchors on [data-testid="enhanced-review-content"]
+// + walks up to the review card via closest('.overflow-visible'). FakeEl
+// extended with closest() support + a parent link so the closest() walk-up
+// terminates correctly.
 
-// Minimal element stub satisfying the small subset of NodeList/Element used
-// by the walker (textContent, getAttribute, querySelector, querySelectorAll,
-// hasAttribute). Mirrors the existing content-script test Pattern (no JSDOM).
 interface FakeEl {
   tagName: string;
   textContent: string | null;
   attributes: Record<string, string>;
   children: Map<string, FakeEl[]>;
+  parent: FakeEl | null;
   getAttribute(name: string): string | null;
   hasAttribute(name: string): boolean;
   querySelector(sel: string): FakeEl | null;
   querySelectorAll(sel: string): FakeEl[];
+  closest(sel: string): FakeEl | null;
 }
 
 function el(
@@ -518,11 +522,12 @@ function el(
   for (const [sel, kids] of Object.entries(childMap)) {
     children.set(sel, Array.isArray(kids) ? kids : [kids]);
   }
-  return {
+  const self: FakeEl = {
     tagName,
     textContent,
     attributes: { ...attrs },
     children,
+    parent: null,
     getAttribute(name) {
       return name in this.attributes ? (this.attributes[name] ?? null) : null;
     },
@@ -536,23 +541,38 @@ function el(
     querySelectorAll(sel) {
       return this.children.get(sel) ?? [];
     },
+    closest(sel) {
+      // Only supports `.className` selectors (sufficient for the walker's
+      // single closest() call site `closest('.overflow-visible')`). Walks
+      // up the parent chain checking each element's `class` attribute.
+      if (!sel.startsWith('.')) return null;
+      const wanted = sel.slice(1);
+      let cur: FakeEl | null = this;
+      while (cur) {
+        const classes = (cur.getAttribute('class') ?? '').split(/\s+/);
+        if (classes.includes(wanted)) return cur;
+        cur = cur.parent;
+      }
+      return null;
+    },
   };
+  return self;
+}
+
+/** Wires `parent` links from each child up to the parent FakeEl. */
+function setParent(parent: FakeEl, ...children: FakeEl[]): void {
+  for (const c of children) c.parent = parent;
 }
 
 interface FakeDocOptions {
-  /** Elements returned for `[data-testid="reviews-list"]` query. */
-  containers?: FakeEl[];
-  /** Elements returned for `[data-testid="reviews-section"]` query at doc scope. */
-  rowsAtDocScope?: FakeEl[];
+  /** Elements returned for `[data-testid="enhanced-review-content"]` query at doc scope. */
+  bodyEls?: FakeEl[];
 }
 
 function fakeDoc(opts: FakeDocOptions): Document {
   const queryMap = new Map<string, FakeEl[]>();
-  if (opts.containers) {
-    queryMap.set('[data-testid="reviews-list"]', opts.containers);
-  }
-  if (opts.rowsAtDocScope) {
-    queryMap.set('[data-testid="reviews-section"]', opts.rowsAtDocScope);
+  if (opts.bodyEls) {
+    queryMap.set('[data-testid="enhanced-review-content"]', opts.bodyEls);
   }
   return {
     querySelector(sel: string): FakeEl | null {
@@ -565,286 +585,306 @@ function fakeDoc(opts: FakeDocOptions): Document {
   } as unknown as Document;
 }
 
-describe('findWalmartReviewsContainer (single canonical selector per Etsy FF#3 Pattern)', () => {
-  it('returns the canonical [data-testid="reviews-list"] container', () => {
-    const container = el('div', {}, null, { 'data-testid': 'reviews-list' });
-    const doc = fakeDoc({ containers: [container] });
-    assert.equal(findWalmartReviewsContainer(doc), container);
-  });
-  it('rejects containers with aria-hidden="true"', () => {
-    const hidden = el('div', {}, null, {
-      'data-testid': 'reviews-list',
-      'aria-hidden': 'true',
+// ─── extractWalmartReviewStarRating — card.querySelector('.ld_Ec') ──────
+
+describe('extractWalmartReviewStarRating (FF#3 — anchors on .ld_Ec screen-reader text)', () => {
+  it('parses "3 out of 5 stars review" from the .ld_Ec child', () => {
+    const card = el('div', {
+      '.ld_Ec': el('span', {}, '3 out of 5 stars review'),
     });
-    const doc = fakeDoc({ containers: [hidden] });
-    assert.equal(findWalmartReviewsContainer(doc), null);
+    assert.equal(extractWalmartReviewStarRating(card as unknown as Element), 3);
   });
-  it('rejects containers with hidden attribute', () => {
-    const hidden = el('div', {}, null, {
-      'data-testid': 'reviews-list',
-      hidden: '',
+  it('parses 5-star reviews', () => {
+    const card = el('div', {
+      '.ld_Ec': el('span', {}, '5 out of 5 stars review'),
     });
-    const doc = fakeDoc({ containers: [hidden] });
-    assert.equal(findWalmartReviewsContainer(doc), null);
+    assert.equal(extractWalmartReviewStarRating(card as unknown as Element), 5);
   });
-  it('picks the first visible candidate when multiple are present', () => {
-    const hidden = el('div', {}, null, {
-      'data-testid': 'reviews-list',
-      'aria-hidden': 'true',
+  it('returns null when .ld_Ec is missing', () => {
+    const card = el('div');
+    assert.equal(extractWalmartReviewStarRating(card as unknown as Element), null);
+  });
+  it('returns null when .ld_Ec text is unparseable', () => {
+    const card = el('div', {
+      '.ld_Ec': el('span', {}, 'no rating here'),
     });
-    const visible = el('div', {}, null, { 'data-testid': 'reviews-list' });
-    const doc = fakeDoc({ containers: [hidden, visible] });
-    assert.equal(findWalmartReviewsContainer(doc), visible);
-  });
-  it('returns null when no container is found', () => {
-    const doc = fakeDoc({ containers: [] });
-    assert.equal(findWalmartReviewsContainer(doc), null);
+    assert.equal(extractWalmartReviewStarRating(card as unknown as Element), null);
   });
 });
 
-describe('extractWalmartReviewStarRating', () => {
-  it('parses the star rating from a [aria-label*="out of 5"] child', () => {
-    const row = el('div', {
-      '[aria-label*="out of 5"]': el('span', {}, '', {
-        'aria-label': '4 out of 5 stars',
-      }),
+// ─── extractWalmartReviewTitle — card.querySelector('h3') ───────────────
+
+describe('extractWalmartReviewTitle (FF#3 — anchors on <h3>)', () => {
+  it('returns the text of the h3 child', () => {
+    const card = el('div', {
+      h3: el('h3', {}, 'Busted in box. Good product'),
     });
-    assert.equal(extractWalmartReviewStarRating(row as unknown as Element), 4);
+    assert.equal(
+      extractWalmartReviewTitle(card as unknown as Element),
+      'Busted in box. Good product',
+    );
   });
-  it('returns null when no stars element is found', () => {
-    const row = el('div');
-    assert.equal(extractWalmartReviewStarRating(row as unknown as Element), null);
+  it('returns null when no h3 is present (body-only reviews are common)', () => {
+    const card = el('div');
+    assert.equal(extractWalmartReviewTitle(card as unknown as Element), null);
   });
-  it('returns null when the aria-label is unparseable', () => {
-    const row = el('div', {
-      '[aria-label*="out of 5"]': el('span', {}, '', {
-        'aria-label': 'no rating here',
-      }),
+  it('returns null when the h3 text is empty/whitespace', () => {
+    const card = el('div', {
+      h3: el('h3', {}, '   '),
     });
-    assert.equal(extractWalmartReviewStarRating(row as unknown as Element), null);
+    assert.equal(extractWalmartReviewTitle(card as unknown as Element), null);
   });
 });
 
-describe('extractWalmartReviewTitle', () => {
-  it('returns the text of the [data-testid="review-title"] child', () => {
-    const row = el('div', {
-      '[data-testid="review-title"]': el('span', {}, 'Great product!'),
-    });
-    assert.equal(extractWalmartReviewTitle(row as unknown as Element), 'Great product!');
-  });
-  it('returns null when no title is found', () => {
-    const row = el('div');
-    assert.equal(extractWalmartReviewTitle(row as unknown as Element), null);
-  });
-  it('returns null when the title text is empty', () => {
-    const row = el('div', {
-      '[data-testid="review-title"]': el('span', {}, '   '),
-    });
-    assert.equal(extractWalmartReviewTitle(row as unknown as Element), null);
-  });
-});
+// ─── extractWalmartReviewBody — bodyEl.querySelector('p') ───────────────
 
-describe('extractWalmartReviewBody', () => {
-  it('returns the text of the [data-testid="review-body"] child', () => {
-    const row = el('div', {
-      '[data-testid="review-body"]': el(
-        'span',
+describe('extractWalmartReviewBody (FF#3 — anchors on <p> inside enhanced-review-content)', () => {
+  it('returns the trimmed textContent of the <p> child', () => {
+    const bodyEl = el('div', {
+      p: el(
+        'p',
         {},
-        'Long detailed review with the full text visible since Walmart View more is CSS truncation only',
+        'Made my skin break out worse than before- is this the 2-4 week purge they talk about?',
       ),
     });
     assert.equal(
-      extractWalmartReviewBody(row as unknown as Element),
-      'Long detailed review with the full text visible since Walmart View more is CSS truncation only',
+      extractWalmartReviewBody(bodyEl as unknown as Element),
+      'Made my skin break out worse than before- is this the 2-4 week purge they talk about?',
     );
   });
-  it('returns empty string when no body is found', () => {
-    const row = el('div');
-    assert.equal(extractWalmartReviewBody(row as unknown as Element), '');
+  it('returns empty string when no <p> is found', () => {
+    const bodyEl = el('div');
+    assert.equal(extractWalmartReviewBody(bodyEl as unknown as Element), '');
   });
   it('trims surrounding whitespace', () => {
-    const row = el('div', {
-      '[data-testid="review-body"]': el('span', {}, '  Trimmed body.  '),
+    const bodyEl = el('div', {
+      p: el('p', {}, '  Trimmed body text.  '),
     });
-    assert.equal(extractWalmartReviewBody(row as unknown as Element), 'Trimmed body.');
+    assert.equal(
+      extractWalmartReviewBody(bodyEl as unknown as Element),
+      'Trimmed body text.',
+    );
   });
 });
 
-describe('extractWalmartReviewerName', () => {
-  it('returns the text of the [data-testid="review-reviewer"] child', () => {
-    const row = el('div', {
-      '[data-testid="review-reviewer"]': el('span', {}, 'Jane D.'),
-    });
-    assert.equal(extractWalmartReviewerName(row as unknown as Element), 'Jane D.');
+// ─── extractWalmartReviewerName — aria-label on a non-button div ────────
+
+describe('extractWalmartReviewerName (FF#3 — anchors on [aria-label] non-button div)', () => {
+  it('returns the aria-label value of the reviewer block', () => {
+    const reviewerDiv = el('div', {}, null, { 'aria-label': 'Stacia' });
+    const card = el('div', { '[aria-label]': [reviewerDiv] });
+    assert.equal(
+      extractWalmartReviewerName(card as unknown as Element),
+      'Stacia',
+    );
   });
-  it('returns null when no reviewer element is found', () => {
-    const row = el('div');
-    assert.equal(extractWalmartReviewerName(row as unknown as Element), null);
-  });
-  it('returns null when the name text is empty', () => {
-    const row = el('div', {
-      '[data-testid="review-reviewer"]': el('span', {}, ''),
+  it('returns the empirical "Walmart customer, Top Reviewer" value verbatim', () => {
+    const reviewerDiv = el('div', {}, null, {
+      'aria-label': 'Walmart customer, Top Reviewer',
     });
-    assert.equal(extractWalmartReviewerName(row as unknown as Element), null);
+    const card = el('div', { '[aria-label]': [reviewerDiv] });
+    assert.equal(
+      extractWalmartReviewerName(card as unknown as Element),
+      'Walmart customer, Top Reviewer',
+    );
+  });
+  it('skips button elements (thumbs-up/down/report all have aria-labels)', () => {
+    const thumbsButton = el('button', {}, null, {
+      'aria-label': 'Upvote Stacia review. Total upvote review - 0',
+    });
+    const reviewerDiv = el('div', {}, null, { 'aria-label': 'Stacia' });
+    const card = el('div', {
+      '[aria-label]': [thumbsButton, reviewerDiv],
+    });
+    assert.equal(
+      extractWalmartReviewerName(card as unknown as Element),
+      'Stacia',
+    );
+  });
+  it('skips aria-labels containing reserved keywords (review/purchase/rating/upvote/downvote)', () => {
+    const verifiedDiv = el('div', {}, null, {
+      'aria-label': 'Verified Purchase information',
+    });
+    const ratingDiv = el('div', {}, null, {
+      'aria-label': '3 out of 5 stars rating',
+    });
+    const reviewerDiv = el('div', {}, null, { 'aria-label': 'alexandra' });
+    const card = el('div', {
+      '[aria-label]': [verifiedDiv, ratingDiv, reviewerDiv],
+    });
+    assert.equal(
+      extractWalmartReviewerName(card as unknown as Element),
+      'alexandra',
+    );
+  });
+  it('returns null when no eligible reviewer aria-label is found', () => {
+    const card = el('div');
+    assert.equal(extractWalmartReviewerName(card as unknown as Element), null);
   });
 });
 
-describe('extractWalmartReviewDate', () => {
-  it('returns the parsed ISO date when the text is parseable', () => {
-    const row = el('div', {
-      '[data-testid="review-date"]': el('span', {}, 'April 12, 2024'),
+// ─── extractWalmartReviewDate — card.querySelector('.f7.gray') ──────────
+
+describe('extractWalmartReviewDate (FF#3 — anchors on .f7.gray)', () => {
+  it('returns the parsed ISO date for "Oct 16, 2025"', () => {
+    const card = el('div', {
+      '.f7.gray': el('div', {}, 'Oct 16, 2025'),
     });
-    const iso = extractWalmartReviewDate(row as unknown as Element);
+    const iso = extractWalmartReviewDate(card as unknown as Element);
     assert.ok(iso);
-    assert.ok(iso?.startsWith('2024-04-12'));
+    assert.ok(iso?.startsWith('2025-10-16'));
   });
-  it('returns the raw text when parsing fails', () => {
-    const row = el('div', {
-      '[data-testid="review-date"]': el('span', {}, 'recently'),
+  it('returns the raw text when the date is unparseable', () => {
+    const card = el('div', {
+      '.f7.gray': el('div', {}, 'recently'),
     });
-    assert.equal(extractWalmartReviewDate(row as unknown as Element), 'recently');
+    assert.equal(
+      extractWalmartReviewDate(card as unknown as Element),
+      'recently',
+    );
   });
-  it('returns null when no date element is found', () => {
-    const row = el('div');
-    assert.equal(extractWalmartReviewDate(row as unknown as Element), null);
+  it('returns null when no .f7.gray element is found', () => {
+    const card = el('div');
+    assert.equal(extractWalmartReviewDate(card as unknown as Element), null);
   });
 });
 
-describe('extractReviewsFromDocument', () => {
-  function buildReviewRow(opts: {
-    starsAriaLabel?: string;
+// ─── extractReviewsFromDocument — full walker integration ────────────────
+
+describe('extractReviewsFromDocument (FF#3 — anchors on enhanced-review-content + closest)', () => {
+  /**
+   * Build a full review card with its enhanced-review-content body child.
+   * The card has the canonical "overflow-visible b--none mt4-l ma0 dark-gray"
+   * class signature; the body is parented to the card so closest() walks up
+   * cleanly during extraction.
+   */
+  function buildCardWithBody(opts: {
+    starsLdEcText?: string;
     title?: string;
-    body?: string;
-    reviewer?: string;
-    date?: string;
-    ariaHidden?: boolean;
-    hidden?: boolean;
-  }): FakeEl {
-    const childMap: Record<string, FakeEl> = {};
-    if (opts.starsAriaLabel !== undefined) {
-      childMap['[aria-label*="out of 5"]'] = el('span', {}, '', {
-        'aria-label': opts.starsAriaLabel,
-      });
+    bodyP?: string;
+    reviewerAriaLabel?: string;
+    dateText?: string;
+  }): { card: FakeEl; bodyEl: FakeEl } {
+    const cardChildren: Record<string, FakeEl | FakeEl[]> = {};
+    if (opts.starsLdEcText !== undefined) {
+      cardChildren['.ld_Ec'] = el('span', {}, opts.starsLdEcText);
     }
     if (opts.title !== undefined) {
-      childMap['[data-testid="review-title"]'] = el('span', {}, opts.title);
+      cardChildren.h3 = el('h3', {}, opts.title);
     }
-    if (opts.body !== undefined) {
-      childMap['[data-testid="review-body"]'] = el('span', {}, opts.body);
+    if (opts.reviewerAriaLabel !== undefined) {
+      cardChildren['[aria-label]'] = [
+        el('div', {}, null, { 'aria-label': opts.reviewerAriaLabel }),
+      ];
     }
-    if (opts.reviewer !== undefined) {
-      childMap['[data-testid="review-reviewer"]'] = el(
-        'span',
-        {},
-        opts.reviewer,
-      );
+    if (opts.dateText !== undefined) {
+      cardChildren['.f7.gray'] = el('div', {}, opts.dateText);
     }
-    if (opts.date !== undefined) {
-      childMap['[data-testid="review-date"]'] = el('span', {}, opts.date);
-    }
-    const attrs: Record<string, string> = { 'data-testid': 'reviews-section' };
-    if (opts.ariaHidden) attrs['aria-hidden'] = 'true';
-    if (opts.hidden) attrs.hidden = '';
-    return el('div', childMap, null, attrs);
+    const card = el('div', cardChildren, null, {
+      class: 'overflow-visible b--none mt4-l ma0 dark-gray',
+    });
+    const bodyEl = el(
+      'div',
+      opts.bodyP !== undefined ? { p: el('p', {}, opts.bodyP) } : {},
+      null,
+      { 'data-testid': 'enhanced-review-content' },
+    );
+    setParent(card, bodyEl);
+    return { card, bodyEl };
   }
 
-  it('walks a well-formed review row', () => {
-    const row = buildReviewRow({
-      starsAriaLabel: '5 out of 5 stars',
-      title: 'Loved it',
-      body: 'Best purchase I made this year.',
-      reviewer: 'Jane D.',
-      date: 'April 12, 2024',
+  it('walks a well-formed review with stars + title + body + reviewer + date', () => {
+    const { bodyEl } = buildCardWithBody({
+      starsLdEcText: '3 out of 5 stars review',
+      title: 'Be Careful When Using!',
+      bodyP: 'Made my skin break out worse than before.',
+      reviewerAriaLabel: 'Stacia',
+      dateText: 'Oct 16, 2025',
     });
-    const doc = fakeDoc({ rowsAtDocScope: [row] });
+    const doc = fakeDoc({ bodyEls: [bodyEl] });
     const rows = extractReviewsFromDocument(doc);
     assert.equal(rows.length, 1);
     const r = rows[0]!;
-    assert.equal(r.starRating, 5);
-    assert.equal(r.title, 'Loved it');
-    assert.equal(r.body, 'Best purchase I made this year.');
-    assert.equal(r.reviewerName, 'Jane D.');
-    assert.ok(r.reviewDate?.startsWith('2024-04-12'));
+    assert.equal(r.starRating, 3);
+    assert.equal(r.title, 'Be Careful When Using!');
+    assert.equal(r.body, 'Made my skin break out worse than before.');
+    assert.equal(r.reviewerName, 'Stacia');
+    assert.ok(r.reviewDate?.startsWith('2025-10-16'));
   });
 
-  it('skips rows missing a star rating', () => {
-    const row = buildReviewRow({
-      body: 'No star here',
+  it('skips rows whose body element has no ancestor card matching .overflow-visible', () => {
+    const orphanBody = el(
+      'div',
+      { p: el('p', {}, 'orphan body') },
+      null,
+      { 'data-testid': 'enhanced-review-content' },
+    );
+    // No parent set → closest('.overflow-visible') returns null
+    const doc = fakeDoc({ bodyEls: [orphanBody] });
+    const rows = extractReviewsFromDocument(doc);
+    assert.equal(rows.length, 0);
+  });
+
+  it('skips rows missing a star rating (.ld_Ec absent)', () => {
+    const { bodyEl } = buildCardWithBody({
+      bodyP: 'Body present but no stars.',
     });
-    const doc = fakeDoc({ rowsAtDocScope: [row] });
+    const doc = fakeDoc({ bodyEls: [bodyEl] });
     const rows = extractReviewsFromDocument(doc);
     assert.equal(rows.length, 0);
   });
 
   it('skips rows with an unparseable star rating', () => {
-    const row = buildReviewRow({
-      starsAriaLabel: 'no parseable rating here',
-      body: 'Body present',
+    const { bodyEl } = buildCardWithBody({
+      starsLdEcText: 'gibberish',
+      bodyP: 'Body present.',
     });
-    const doc = fakeDoc({ rowsAtDocScope: [row] });
+    const doc = fakeDoc({ bodyEls: [bodyEl] });
     const rows = extractReviewsFromDocument(doc);
     assert.equal(rows.length, 0);
   });
 
-  it('skips rows missing a body', () => {
-    const row = buildReviewRow({
-      starsAriaLabel: '5 out of 5 stars',
-      title: 'Has title but no body',
+  it('skips rows missing a body <p>', () => {
+    const { bodyEl } = buildCardWithBody({
+      starsLdEcText: '5 out of 5 stars review',
+      title: 'Title with no body',
     });
-    const doc = fakeDoc({ rowsAtDocScope: [row] });
+    const doc = fakeDoc({ bodyEls: [bodyEl] });
     const rows = extractReviewsFromDocument(doc);
     assert.equal(rows.length, 0);
   });
 
-  it('skips rows with aria-hidden="true"', () => {
-    const row = buildReviewRow({
-      starsAriaLabel: '5 out of 5 stars',
-      body: 'Hidden review',
-      ariaHidden: true,
+  it('handles body-only reviews (no title — 6/10 reviews in the empirical 3-star dump)', () => {
+    const { bodyEl } = buildCardWithBody({
+      starsLdEcText: '3 out of 5 stars review',
+      bodyP: 'Body-only review (no title).',
+      reviewerAriaLabel: 'Mimiofboys',
+      dateText: 'Oct 1, 2025',
     });
-    const doc = fakeDoc({ rowsAtDocScope: [row] });
-    const rows = extractReviewsFromDocument(doc);
-    assert.equal(rows.length, 0);
-  });
-
-  it('skips rows with hidden attribute', () => {
-    const row = buildReviewRow({
-      starsAriaLabel: '5 out of 5 stars',
-      body: 'Hidden review',
-      hidden: true,
-    });
-    const doc = fakeDoc({ rowsAtDocScope: [row] });
-    const rows = extractReviewsFromDocument(doc);
-    assert.equal(rows.length, 0);
-  });
-
-  it('handles a row with null title (Walmart reviews can have body-only)', () => {
-    const row = buildReviewRow({
-      starsAriaLabel: '3 out of 5 stars',
-      body: 'Body-only review with no title',
-    });
-    const doc = fakeDoc({ rowsAtDocScope: [row] });
+    const doc = fakeDoc({ bodyEls: [bodyEl] });
     const rows = extractReviewsFromDocument(doc);
     assert.equal(rows.length, 1);
     const r = rows[0]!;
     assert.equal(r.title, null);
     assert.equal(r.starRating, 3);
+    assert.equal(r.body, 'Body-only review (no title).');
+    assert.equal(r.reviewerName, 'Mimiofboys');
   });
 
-  it('walks multiple rows preserving order', () => {
-    const rowA = buildReviewRow({
-      starsAriaLabel: '5 out of 5 stars',
-      body: 'First',
+  it('walks multiple rows preserving document order', () => {
+    const a = buildCardWithBody({
+      starsLdEcText: '5 out of 5 stars review',
+      bodyP: 'First',
     });
-    const rowB = buildReviewRow({
-      starsAriaLabel: '4 out of 5 stars',
-      body: 'Second',
+    const b = buildCardWithBody({
+      starsLdEcText: '4 out of 5 stars review',
+      bodyP: 'Second',
     });
-    const rowC = buildReviewRow({
-      starsAriaLabel: '3 out of 5 stars',
-      body: 'Third',
+    const c = buildCardWithBody({
+      starsLdEcText: '3 out of 5 stars review',
+      bodyP: 'Third',
     });
-    const doc = fakeDoc({ rowsAtDocScope: [rowA, rowB, rowC] });
+    const doc = fakeDoc({ bodyEls: [a.bodyEl, b.bodyEl, c.bodyEl] });
     const rows = extractReviewsFromDocument(doc);
     assert.equal(rows.length, 3);
     assert.equal(rows[0]!.body, 'First');
@@ -852,10 +892,22 @@ describe('extractReviewsFromDocument', () => {
     assert.equal(rows[2]!.body, 'Third');
   });
 
-  it('returns empty array when no rows are present', () => {
-    const doc = fakeDoc({ rowsAtDocScope: [] });
+  it('returns empty array when no body elements are present', () => {
+    const doc = fakeDoc({ bodyEls: [] });
     const rows = extractReviewsFromDocument(doc);
     assert.equal(rows.length, 0);
+  });
+
+  it('handles the empirical edge-case reviewer name "Walmart customer, Top Reviewer"', () => {
+    const { bodyEl } = buildCardWithBody({
+      starsLdEcText: '3 out of 5 stars review',
+      bodyP: 'Body text.',
+      reviewerAriaLabel: 'Walmart customer, Top Reviewer',
+    });
+    const doc = fakeDoc({ bodyEls: [bodyEl] });
+    const rows = extractReviewsFromDocument(doc);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0]!.reviewerName, 'Walmart customer, Top Reviewer');
   });
 });
 
