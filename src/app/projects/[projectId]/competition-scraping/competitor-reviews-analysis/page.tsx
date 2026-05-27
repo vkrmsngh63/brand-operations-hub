@@ -553,7 +553,15 @@ function ReviewsList({
             <span style={{ color: '#8b949e' }}>
               {r.reviewDate ? r.reviewDate.slice(0, 10) : '—'}
             </span>
-            <span style={{ color: summary ? '#e6edf3' : '#6e7681' }}>
+            <span
+              style={{
+                color: summary ? '#e6edf3' : '#6e7681',
+                // v2 prompt emits "- bullet\n- bullet" newline-separated
+                // strings; pre-wrap preserves the line breaks so each
+                // bullet shows on its own line.
+                whiteSpace: 'pre-wrap',
+              }}
+            >
               {summary ? (
                 <>
                   {summary.summary}

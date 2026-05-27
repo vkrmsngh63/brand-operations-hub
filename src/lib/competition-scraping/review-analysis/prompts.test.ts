@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 
 import type { BatchableReview } from './batch-sizer.ts';
 import {
+  PER_REVIEW_SUMMARIZE_PROMPT_VERSION,
   PER_REVIEW_SUMMARIZE_SYSTEM_PROMPT,
   buildPerReviewBatchUserMessage,
   validatePerReviewBatchOutput,
@@ -26,14 +27,34 @@ function makeReview(
   };
 }
 
-test('PER_REVIEW_SUMMARIZE_SYSTEM_PROMPT is non-empty and stable', () => {
-  // Tripwire — any whitespace edit invalidates the prompt cache for every
-  // in-flight summary. If this fails, intentionally bump the cache.
+test('PER_REVIEW_SUMMARIZE_PROMPT_VERSION is set to v2 (post-Phase-4-redirect)', () => {
+  // Tripwire — when bumping prompt version, update this test + the
+  // version history comment in prompts.ts.
+  assert.equal(PER_REVIEW_SUMMARIZE_PROMPT_VERSION, 'v2');
+});
+
+test('PER_REVIEW_SUMMARIZE_SYSTEM_PROMPT v2 is non-empty + carries bulleted-list + critical-only directives', () => {
+  // Tripwire — any whitespace edit invalidates the prompt prefix cache
+  // for in-flight runs. Content edits MUST also bump
+  // PER_REVIEW_SUMMARIZE_PROMPT_VERSION so the per-review DB cache key
+  // changes + stale v1 summaries don't get served.
   assert.ok(PER_REVIEW_SUMMARIZE_SYSTEM_PROMPT.length > 500);
-  assert.match(PER_REVIEW_SUMMARIZE_SYSTEM_PROMPT, /1-2 sentences/);
+  assert.match(PER_REVIEW_SUMMARIZE_SYSTEM_PROMPT, /bulleted list/);
+  assert.match(PER_REVIEW_SUMMARIZE_SYSTEM_PROMPT, /critical/i);
+  assert.match(PER_REVIEW_SUMMARIZE_SYSTEM_PROMPT, /LEAVE OUT non-critical filler/);
   assert.match(PER_REVIEW_SUMMARIZE_SYSTEM_PROMPT, /Third-person neutral/);
   assert.match(PER_REVIEW_SUMMARIZE_SYSTEM_PROMPT, /Echo each review's reviewId/);
   assert.match(PER_REVIEW_SUMMARIZE_SYSTEM_PROMPT, /Return ONLY the JSON object/);
+  assert.match(PER_REVIEW_SUMMARIZE_SYSTEM_PROMPT, /no critical signal/);
+});
+
+test('PER_REVIEW_SUMMARIZE_SYSTEM_PROMPT v2 does NOT carry deprecated v1 directives', () => {
+  // Defends against accidental partial revert to v1 style during
+  // future iterations. v1 said "1-2 sentences" + "No bullets" + "Plain
+  // prose" — all explicitly contradicted by v2.
+  assert.doesNotMatch(PER_REVIEW_SUMMARIZE_SYSTEM_PROMPT, /1-2 sentences/);
+  assert.doesNotMatch(PER_REVIEW_SUMMARIZE_SYSTEM_PROMPT, /No bullets/);
+  assert.doesNotMatch(PER_REVIEW_SUMMARIZE_SYSTEM_PROMPT, /Plain prose/);
 });
 
 test('buildPerReviewBatchUserMessage emits header + per-review body with reviewId echo', () => {

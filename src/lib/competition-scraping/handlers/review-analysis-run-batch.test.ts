@@ -10,6 +10,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 
 import type { AnthropicClientLike } from '../review-analysis/client.ts';
 import { computeReviewsHash } from '../review-analysis/cache.ts';
+import { PER_REVIEW_SUMMARIZE_PROMPT_VERSION } from '../review-analysis/prompts.ts';
 
 import {
   SUPPORTED_FLOWS,
@@ -461,7 +462,12 @@ test('POST 200 on a fresh batch — one AI call, N persisted rows, summaries ret
 
 test('POST 200 fully from cache — no AI call, no DB writes', async () => {
   const reviews = [sampleReview('rev-a')];
-  const cachedHash = computeReviewsHash([{ id: 'rev-a' }], 'claude-opus-4-7');
+  // Cache key must mirror the handler: modelVersion | promptVersion.
+  // If this drifts, cache lookups won't match + the test loses its coverage.
+  const cachedHash = computeReviewsHash(
+    [{ id: 'rev-a' }],
+    `claude-opus-4-7|${PER_REVIEW_SUMMARIZE_PROMPT_VERSION}`
+  );
   const { prisma, state: prismaState } = makePrisma({
     reviews,
     cachedRows: [
@@ -507,7 +513,10 @@ test('POST 200 fully from cache — no AI call, no DB writes', async () => {
 
 test('POST 200 with partial cache — one fresh AI call, only fresh rows persisted', async () => {
   const reviews = [sampleReview('rev-a'), sampleReview('rev-b')];
-  const cachedHashB = computeReviewsHash([{ id: 'rev-b' }], 'claude-opus-4-7');
+  const cachedHashB = computeReviewsHash(
+    [{ id: 'rev-b' }],
+    `claude-opus-4-7|${PER_REVIEW_SUMMARIZE_PROMPT_VERSION}`
+  );
   const { prisma, state: prismaState } = makePrisma({
     reviews,
     cachedRows: [

@@ -44,6 +44,7 @@ import {
   toCostUsdMicros,
 } from '../review-analysis/pricing.ts';
 import {
+  PER_REVIEW_SUMMARIZE_PROMPT_VERSION,
   PER_REVIEW_SUMMARIZE_SYSTEM_PROMPT,
   buildPerReviewBatchUserMessage,
   validatePerReviewBatchOutput,
@@ -402,13 +403,17 @@ export function makeReviewAnalysisRunBatchHandlers(
     }
 
     // Compute the per-review cache hash for each reviewId. The hash
-    // includes modelVersion so re-running with a different model
-    // produces a fresh cache entry (and re-running with the same model
-    // hits cache).
+    // includes modelVersion AND the prompt version so re-running with
+    // a different model OR a different prompt version produces a fresh
+    // cache entry (and re-running with the same model + prompt hits
+    // cache). The prompt version lives next to modelVersion in the
+    // hash input — the DB still persists just modelVersion (no schema
+    // change); prompt-version drift is implicit in the hash itself.
+    const cacheKeyVersion = `${modelVersion}|${PER_REVIEW_SUMMARIZE_PROMPT_VERSION}`;
     const hashByReviewId = new Map<string, string>();
     const reviewIdByHash = new Map<string, string>();
     for (const id of reviewIds) {
-      const hash = computeReviewsHash([{ id }], modelVersion);
+      const hash = computeReviewsHash([{ id }], cacheKeyVersion);
       hashByReviewId.set(id, hash);
       reviewIdByHash.set(hash, id);
     }
