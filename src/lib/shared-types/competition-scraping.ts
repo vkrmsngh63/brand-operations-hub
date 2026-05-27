@@ -1112,11 +1112,14 @@ export function isTablePreferencesSortDirection(
 // ─── ReviewAnalysis (P-49 Workstream 5, 2026-05-26) ────────────────────
 // Wire shape for AI-generated review summaries per docs/REVIEWS_PHASE_2_DESIGN.md §A.10 + §A.16.
 // Discriminated by level; scope fields populated per level (validated at application layer):
-//   PER_PRODUCT — urlId set, projectId/typeFilter null
-//   PER_TYPE    — projectId + typeFilter set, urlId null
-//   PER_PROJECT — projectId set, urlId/typeFilter null
+//   PER_REVIEW   — urlId set + per-review identifier in analysisJson; per-review summary cache (Flow 1)
+//   PER_PRODUCT  — urlId set, projectId/typeFilter null; per-competitor comprehensive (Flows 2 + 3)
+//   PER_CATEGORY — projectId + typeFilter (reused for category name) set, urlId null; per-category comprehensive (Flows 4 + 5)
+//   PER_TYPE     — projectId + typeFilter set, urlId null; per-type comprehensive (Flows 6 + 7)
+//   PER_PROJECT  — projectId set, urlId/typeFilter null; reserved for future cross-Project landscape
 // Schema lands in W2 Amazon Session 1 as the foundation step; W5 ships the read+write code.
-export type ReviewAnalysisLevel = 'PER_PRODUCT' | 'PER_TYPE' | 'PER_PROJECT';
+// PER_REVIEW + PER_CATEGORY added 2026-05-27 by the Reviews Phase 3 expansion (the 3-table + 7-flow design).
+export type ReviewAnalysisLevel = 'PER_REVIEW' | 'PER_PRODUCT' | 'PER_CATEGORY' | 'PER_TYPE' | 'PER_PROJECT';
 
 export interface ReviewAnalysis {
   id: string;
@@ -1137,7 +1140,13 @@ export interface ReviewAnalysis {
 }
 
 export function isReviewAnalysisLevel(value: unknown): value is ReviewAnalysisLevel {
-  return value === 'PER_PRODUCT' || value === 'PER_TYPE' || value === 'PER_PROJECT';
+  return (
+    value === 'PER_REVIEW' ||
+    value === 'PER_PRODUCT' ||
+    value === 'PER_CATEGORY' ||
+    value === 'PER_TYPE' ||
+    value === 'PER_PROJECT'
+  );
 }
 
 // ─── Generic error shape ────────────────────────────────────────────────

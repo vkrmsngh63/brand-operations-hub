@@ -527,12 +527,26 @@ model ReviewAnalysis {
   @@index([reviewsHash])
 }
 
-// ReviewAnalysisLevel — discriminator for ReviewAnalysis rows per docs/REVIEWS_PHASE_2_DESIGN.md §A.10.
-//   PER_PRODUCT — one analysis per CompetitorUrl (uses urlId scope).
-//   PER_TYPE    — one analysis per (projectId, typeFilter) pair pooling all products of that Type.
-//   PER_PROJECT — one analysis per projectId pooling all products in the Project (competitive landscape).
+// ReviewAnalysisLevel — discriminator for ReviewAnalysis rows.
+// Initial spec: docs/REVIEWS_PHASE_2_DESIGN.md §A.10 (PER_PRODUCT/PER_TYPE/PER_PROJECT).
+// Extended 2026-06-XX by the Reviews Phase 3 expansion §B entry — PER_REVIEW + PER_CATEGORY
+// added to cover the 7-flow per-review + per-competitor + per-category + per-type analysis
+// surfaces described in the new 3-table top-toggle design.
+//   PER_REVIEW  — one analysis per CapturedReview (uses urlId + reviewId scope via a JSON ref);
+//                 cache key for Flow 1 "Auto-Summarize Reviews" per-review bullet summaries.
+//   PER_PRODUCT — one analysis per CompetitorUrl (uses urlId scope); covers Flows 2 + 3
+//                 (per-competitor comprehensive bulleted + non-bulleted).
+//   PER_CATEGORY — one analysis per (projectId, category) pair pooling all products in that
+//                  category; covers Flows 4 + 5 (per-category comprehensive bulleted + non-bulleted).
+//                  Stores category name in typeFilter column (reused; rename deferred to future).
+//   PER_TYPE    — one analysis per (projectId, typeFilter) pair pooling all products of that Type;
+//                 covers Flows 6 + 7 (per-type comprehensive bulleted + non-bulleted).
+//   PER_PROJECT — reserved for future cross-Project competitive landscape analysis (no flow ships
+//                 in the current 7-flow expansion).
 enum ReviewAnalysisLevel {
+  PER_REVIEW
   PER_PRODUCT
+  PER_CATEGORY
   PER_TYPE
   PER_PROJECT
 }

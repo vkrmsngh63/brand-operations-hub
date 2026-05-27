@@ -90,7 +90,7 @@ export type CapturedReviewForAnalysisRow = {
 
 export type ReviewAnalysisRow = {
   id: string;
-  level: 'PER_PRODUCT' | 'PER_TYPE' | 'PER_PROJECT';
+  level: 'PER_REVIEW' | 'PER_PRODUCT' | 'PER_CATEGORY' | 'PER_TYPE' | 'PER_PROJECT';
   urlId: string | null;
   projectId: string | null;
   typeFilter: string | null;
