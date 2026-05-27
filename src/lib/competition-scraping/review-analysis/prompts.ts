@@ -196,13 +196,21 @@ export function findReviewIdMismatch(
 //        individual signals; ~8-15 bullets total. Drifted from director's
 //        intent — included positive signals + use-case prose that
 //        diluted focus on competitor critiques.
-//   v2 (2026-05-27-d, current): critique-only — drops Positive signals
-//        + Use cases entirely; restructures Negative signals into four
-//        critique-category headings (Product / Fulfillment / Company-
-//        seller / Other notable); ~5-12 bullets total. Directly maps
-//        director's verbatim Phase 4 redirect: "focus to remain on the
-//        critiques of the company, product, fulfillment claims, etc."
-export const PER_COMPETITOR_BULLETED_PROMPT_VERSION = 'v2';
+//   v2 (2026-05-27-d, retired same day after director's second redirect):
+//        critique-only with 4 FIXED theme headings (Product / Fulfillment /
+//        Company-seller / Other notable). Director read the 4 fixed
+//        headings as restrictive — critiques outside those 3 example
+//        categories got dropped or jammed into "Other".
+//   v3 (2026-05-27-e, current): critique-only, theme-emergent. Lists
+//        Product / Fulfillment / Company-seller as COMMON examples but
+//        explicitly instructs the model to INVENT new theme headings
+//        (Pricing / Documentation / Compatibility / Safety / Customer
+//        support / etc.) when the data calls for them. ~5-15 bullets
+//        total. Maps director's verbatim Phase 4 redirect: "I want all
+//        negative signals related to the product and company to be
+//        part of the summaries even if they are not part of the
+//        examples I provided."
+export const PER_COMPETITOR_BULLETED_PROMPT_VERSION = 'v3';
 
 export const PER_COMPETITOR_BULLETED_SYSTEM_PROMPT = `You are an expert competitive-research analyst extracting CRITIQUES from customer reviews of ONE competitor's product for a brand owner. Your task: aggregate the critique signals across every review into a single theme-grouped bulleted summary the brand owner can scan in under a minute.
 
@@ -216,12 +224,24 @@ Return a JSON object with the shape:
 
 Rules for the "summary" field:
 
-- Format as theme-grouped bullets under up to four section headings, in this order:
-    "## Product critiques" — complaints about the product itself (build quality, materials, durability, features, design choices, performance issues, defects, sizing, fit).
-    "## Fulfillment critiques" — complaints about shipping, packaging, delivery time, order accuracy, items arriving damaged or wrong, missing parts, packaging quality.
+- Organize critique bullets under markdown H2 theme headings ("## Theme name"). Each heading describes a coherent critique category surfaced by the actual review data.
+- Use these COMMON theme categories where they apply:
+    "## Product critiques" — complaints about the product itself (build quality, materials, durability, features, design choices, performance, defects, sizing, fit).
+    "## Fulfillment / shipping critiques" — complaints about shipping, packaging, delivery time, order accuracy, items arriving damaged or wrong, missing parts, packaging quality.
     "## Company / seller critiques" — complaints about customer service, returns, warranty handling, refund issues, seller communication, responsiveness, listing accuracy vs. delivered product.
-    "## Other notable critiques" — specific critique patterns or failure modes that don't fit the above categories but are worth surfacing. Use sparingly — most critiques fit Product / Fulfillment / Company.
-- Each heading is a markdown H2 ("## Heading") on its own line, followed by a blank line, then its bullets, then a blank line before the next heading. Empty themes OMIT their heading entirely (do not emit an empty section). Sections may appear in fewer than four headings if the corpus has no critique signal for a theme.
+- DO NOT limit critiques to those three categories. If reviewers raise critique patterns that don't fit them, INVENT a new theme heading rather than dropping the critique or jamming it into "Other". These are EXAMPLES of valid emergent themes — use any of them when warranted by the data, AND invent new ones beyond this list as the data calls for:
+    "## Pricing / value critiques" (price-to-quality ratio complaints, hidden fees)
+    "## Documentation / instructions critiques" (missing manual, confusing setup, poor labeling)
+    "## Compatibility / interoperability critiques" (doesn't work with X, integration failures)
+    "## Safety / reliability concerns" (injuries, malfunctions, safety hazards)
+    "## Software / firmware critiques" (app issues, update failures, OS support)
+    "## Customer support critiques" (response time, agent quality, escalation issues — distinct from "Company / seller critiques" when the corpus has enough volume to warrant a separate theme)
+    "## Longevity / durability critiques" (failures after N months, premature wear)
+    "## Marketing accuracy critiques" (advertising vs. reality, misleading claims)
+    "## Accessibility / usability critiques" (hard to use, ergonomic issues)
+    — and any other coherent critique category emerging from the actual data.
+- "## Other notable critiques" remains available as a fallback for true one-off complaints that don't fit any theme. Use sparingly — prefer to invent a specific theme over jamming into "Other".
+- Empty themes OMIT their heading entirely (do not emit an empty section). Sections appear ONLY if they have at least one critique bullet.
 - Each bullet starts with "- " and lives on its own line. Each bullet is one short sentence (one main idea). No sub-bullets. No paragraphs.
 - Include ONLY critical negative signals the brand owner could act on. Critical = patterns that recur across reviews OR singular complaints strong enough to surface (e.g., "Multiple reviewers note the strap breaks within 3 months" / "One reviewer reports the battery swelling after 6 months").
 - EXCLUDE entirely:
@@ -231,7 +251,7 @@ Rules for the "summary" field:
     - Parenthetical asides, mild observations the reviewer themselves dismissed.
     - Repeated points across reviews — surface each critique pattern only once.
 - Volume cues when useful: "Multiple reviewers report X" / "Several mention Y" / "A few note Z" / "One reviewer reports W". Use these to communicate how widespread a critique is. Avoid exact counts unless they're load-bearing.
-- Length target: typically 5-12 critique bullets total across all themes combined. Some products legitimately have fewer (sparse corpora, mostly positive reviews) — emit fewer. Some legitimately have more — go up to ~20 if there's genuine critique density. Do not pad.
+- Length target: typically 5-15 critique bullets total across all themes combined. Some products legitimately have fewer (sparse corpora, mostly positive reviews) — emit fewer. Some legitimately have more — go up to ~25 if there's genuine critique density across multiple themes. Do not pad.
 - Third-person neutral analyst voice. Do NOT use first person ("I"); do NOT address the reader directly ("you").
 - Use the product name when relevant; do not invent attributes not present in any review.
 - Quote sparingly — short fragments only, in double quotes, never whole sentences.

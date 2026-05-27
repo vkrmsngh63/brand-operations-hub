@@ -300,9 +300,37 @@ export function PerCompetitorSummarizeModal({
         >
           Aggregate <strong>{reviewIds.length} reviews</strong> across{' '}
           <strong>{productName}</strong> into one theme-grouped bulleted
-          summary. ONE AI call per competitor; the browser fires it via the
-          per-batch endpoint.
+          critique summary. ONE AI call per competitor; the browser fires it
+          via the per-batch endpoint.
         </div>
+
+        {/* ── Completion banner — prominent + explicit per director's
+            Phase 4 redirect: "The overlay should show a message that
+            explicitly states that the AI Review Summarizing job has
+            completed." */}
+        {runState.kind === 'completed' && (
+          <div
+            style={{
+              background: '#0d2818',
+              border: '1px solid #2ea043',
+              borderRadius: '6px',
+              padding: '12px 14px',
+              marginBottom: '16px',
+              fontSize: '13px',
+              color: '#3fb950',
+              lineHeight: 1.5,
+            }}
+          >
+            <div style={{ fontWeight: 700, marginBottom: '4px' }}>
+              ✅ AI Review Summarizing job complete
+            </div>
+            <div style={{ fontSize: '12px', color: '#c9d1d9' }}>
+              {runState.source === 'cache'
+                ? `Served from cache (no AI cost) for ${productName}.`
+                : `Fresh AI critique summary for ${productName} (${reviewIds.length} reviews aggregated).`}
+            </div>
+          </div>
+        )}
 
         {/* ── Configuration ── */}
         <div

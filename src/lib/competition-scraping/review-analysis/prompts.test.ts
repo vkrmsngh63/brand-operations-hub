@@ -221,51 +221,65 @@ test('findReviewIdMismatch surfaces all three failure modes together', () => {
 // ────────────────────────────────────────────────────────────────────
 // Per-Competitor Comprehensive (bulleted) — W5 Session 3.
 
-test('PER_COMPETITOR_BULLETED_PROMPT_VERSION is set to v2 (post-Phase-4-redirect)', () => {
+test('PER_COMPETITOR_BULLETED_PROMPT_VERSION is set to v3 (post-second-Phase-4-redirect)', () => {
   // Tripwire — when bumping prompt version (e.g., after a Phase 4
   // redirect), update this test + the version history comment in
-  // prompts.ts. v1 retired same day after director's Phase 4 redirect:
-  // "focus to remain on the critiques of the company, product,
-  // fulfillment claims, etc." Same versioning Pattern as W5 Session 2 FF#3.
-  assert.equal(PER_COMPETITOR_BULLETED_PROMPT_VERSION, 'v2');
+  // prompts.ts. v2 retired same day after director's second redirect:
+  // "I want all negative signals related to the product and company
+  // to be part of the summaries even if they are not part of the
+  // examples I provided." Same versioning Pattern as W5 Session 2 FF#3.
+  assert.equal(PER_COMPETITOR_BULLETED_PROMPT_VERSION, 'v3');
 });
 
-test('PER_COMPETITOR_BULLETED_SYSTEM_PROMPT v2 carries critique-only directives + 4 critique-category headings', () => {
+test('PER_COMPETITOR_BULLETED_SYSTEM_PROMPT v3 carries critique-only + theme-emergent directives', () => {
   assert.ok(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT.length > 500);
-  // v2 critique-category headings (replaces v1's positive/negative/
-  // use-cases/notable structure):
+  // v3 keeps the 3 common critique-category headings as EXAMPLES (but
+  // now also accepts emergent themes invented by the model):
   assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /## Product critiques/);
-  assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /## Fulfillment critiques/);
+  assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /## Fulfillment \/ shipping critiques/);
   assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /## Company \/ seller critiques/);
-  assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /## Other notable critiques/);
-  // Critique-only directive (explicit positives exclusion):
+  // v3 explicit theme-emergent directive (the core change from v2):
+  assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /INVENT a new theme heading/);
+  assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /DO NOT limit critiques to those three categories/);
+  // Sample emergent themes listed (model should recognize these as
+  // valid + invent further themes beyond them):
+  assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /Pricing \/ value critiques/);
+  assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /Documentation \/ instructions critiques/);
+  assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /Safety \/ reliability concerns/);
+  // Critique-only directive (carries from v2):
   assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /Focus EXCLUSIVELY on critiques/);
   assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /Positive signals of any kind/);
-  // Empty-themes-omit directive carries from v1:
+  // Empty-themes-omit directive carries from v2:
   assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /Empty themes OMIT their heading/);
   // Bulleted-critical inherits from Per-Review v2:
   assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /critical/i);
-  // Volume cues + new length target (5-12, tightened from v1's 8-15):
+  // Volume cues + new length target (5-15, loosened from v2's 5-12 to
+  // accommodate emergent themes):
   assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /Multiple reviewers/);
-  assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /5-12/);
-  // Tone + output rules carried from v1:
+  assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /5-15/);
+  // Tone + output rules carried from v2:
   assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /Third-person neutral/);
   assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /Return ONLY the JSON object/);
-  // No-critiques fallback bullet:
+  // No-critiques fallback bullet carries from v2:
   assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /no critiques surfaced across the corpus/);
 });
 
-test('PER_COMPETITOR_BULLETED_SYSTEM_PROMPT v2 does NOT carry deprecated v1 headings (positives + use cases)', () => {
-  // Defends against accidental partial revert to v1 structure during
-  // future iterations. v1 had "## Positive signals" + "## Use cases"
-  // + "## Negative signals" + "## Notable individual signals"; v2
-  // replaces those entirely with critique-category headings.
+test('PER_COMPETITOR_BULLETED_SYSTEM_PROMPT v3 does NOT carry deprecated v1/v2 restrictive phrasings', () => {
+  // Defends against accidental partial revert to v1 (positives) or
+  // v2 (rigid 4-theme cap) during future iterations.
+  // v1 phrasings:
   assert.doesNotMatch(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /## Positive signals/);
   assert.doesNotMatch(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /## Use cases/);
   assert.doesNotMatch(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /## Negative signals/);
-  assert.doesNotMatch(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /## Notable individual signals/);
-  // v1's length target (8-15) replaced by v2's 5-12:
-  assert.doesNotMatch(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /8-15 bullets/);
+  // v2 restrictive phrasings (v2 said "up to four section headings" +
+  // capped themes at the fixed 4 — v3 explicitly removes this cap):
+  assert.doesNotMatch(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /up to four section headings/);
+  assert.doesNotMatch(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /in fewer than four headings/);
+  // v2's "Fulfillment critiques" heading renamed to "Fulfillment /
+  // shipping critiques" in v3 (more descriptive):
+  assert.doesNotMatch(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /## Fulfillment critiques\b/);
+  // v2 length target (5-12) replaced by v3's 5-15:
+  assert.doesNotMatch(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /5-12 critique bullets/);
 });
 
 test('PER_COMPETITOR_BULLETED_SYSTEM_PROMPT does NOT carry Per-Review-specific directives', () => {
