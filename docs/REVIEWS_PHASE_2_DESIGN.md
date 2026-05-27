@@ -1388,6 +1388,89 @@ FF#3 also removed `findWalmartReviewsContainer` (was wrong — replaced by the `
 
 ---
 
+## §B 2026-06-02 — `session_2026-06-02_p49-w5-session-1-foundation-shipped-output-shape-deferred` — Workstream 5 AI review analysis Session 1 — foundation primitives + plumbing handler SHIPPED at code level via build commit `04f74cf` (19 files +2968/-1) on `workflow-2-competition-scraping`; v1 prompt content + UI placement re-confirmation + first live end-to-end run all DEFERRED to next session per director's explicit mid-session directive to plan the per-product analysis output shape FIRST before writing prompt code; FIRST W5 §B entry in this design doc (EIGHTH build/deploy-session §B entry per Rule 18 — closes the gap left at the end of yesterday's Walmart DEPLOY entry which noted "the next §B entry will land at the W5 AI review analysis Session 1 close"); NEW reusable Pattern memorialized via NEW memory file `feedback_plan_output_shape_before_building.md` — "Plan AI-output shape (prompts + UI placement) with director BEFORE writing prompt code, even when launch prompt says ship-and-iterate"; W5 architecturally diverges from W#1 on the AI-infrastructure axis (W5: `@anthropic-ai/sdk ^0.98.1` + real pre-flight cost-cap enforcement + real pre-flight token counting via `client.messages.countTokens`; W#1: raw `fetch()` + post-facto cost logging + response-usage token reads); ZERO Rule 9 deploy gates fired this session (pure BUILD session); Schema-change-in-flight flag STAYS NO entire session.
+
+**Why this entry exists separately from a future W5 DEPLOY §B entry:** Today's session was the OPENING session in the W5 implementation arc. The launch prompt + §C.5 implementation outline anticipated a "ship-foundation-primitives + v1-prompt + first-live-run-on-small-corpus" single-session shape mirroring P-46 W1's Schema-only session. Reality diverged mid-session via director's free-text Rule 14f redirect — the foundation primitives + plumbing handler shipped at code level, but the v1 prompt content + UI placement re-confirmation + first live end-to-end run all DEFERRED to next session (a.102) per the new memory file's meta-pattern. **This §B entry captures the foundation-only shape so the next session (W5 Session 1.5 — director-driven output-shape planning) has a clean canonical reference for what code is in place + what design conversations need to happen + which §A sections need re-confirmation or pivot.**
+
+**Build commit `04f74cf` (19 files +2968/-1) — code shipped at this session:**
+
+- NEW `src/lib/competition-scraping/review-analysis/` directory with **7 modules**:
+  1. `client.ts` (~85 LOC) — Anthropic SDK seam + supported-model registry (Opus 4.7 default + Sonnet 4.5 selectable + Haiku 4 selectable per §A.7) + dual-key precedence (`ANTHROPIC_API_KEY` then `CLAUDE_API_KEY`); DI-seam factory `createReviewAnalysisClient()` returns the production SDK instance, test-mode factory returns a stub.
+  2. `pricing.ts` (~60 LOC) — per-model per-million-token input/output/cache-write/cache-read cost math + `estimateBatchCost()` helper.
+  3. `cache.ts` (~75 LOC) — SHA-256 `computeReviewsHash()` over the per-product corpus (sorted reviewId list + bodyHashes; deterministic) + `isStale()` against existing `ReviewAnalysis.reviewsHash` per §A.12 fingerprint-cache spec.
+  4. `cost-cap.ts` (~95 LOC) — preventive per-run cap (refuses pre-flight if estimate exceeds threshold) + per-Project monthly running-total cap (queries `ReviewAnalysis` table sum over current calendar month) per §A.7; returns structured `CostCapDecision` (allow + soft-warn + hard-deny) for the handler to act on.
+  5. `token-counter.ts` (~90 LOC) — pre-flight `client.messages.countTokens` wrapper (authoritative Anthropic count) + char/3.6 heuristic fallback when network unavailable; **architectural divergence from W#1** (W#1 reads response.usage post-call; W5 counts pre-call).
+  6. `batch-sizer.ts` (~125 LOC) — adaptive batching to ~80K-token budget per batch per §A.8 (Claude's 200K context with 80K reserved for system + tools + output headroom); chunks the per-product review corpus into batches that fit the budget; sticky per-batch starRating headers for two-sweep prompt context.
+  7. `prompts.ts` (~90 LOC PLACEHOLDER) — v1 per-product two-sweep prompt scaffold; **PLACEHOLDER CONTENT** to be rewritten next session per director's planning conversation; current scaffold ships a minimal "summarize key themes + complaints + praise" prompt that runs end-to-end but is NOT the canonical v1 per §A.7-§A.9 — flagged in source comments as `// TODO(W5-Session-1.5): rewrite per director's planning conversation`.
+
+- **6 test files** (~47 new node:test cases): `client.test.ts` (4) + `pricing.test.ts` (6) + `cache.test.ts` (10) + `cost-cap.test.ts` (10) + `token-counter.test.ts` (9) + `batch-sizer.test.ts` (8).
+
+- NEW `src/lib/competition-scraping/handlers/review-analysis-run.ts` (~430 LOC DI-seam POST handler) — orchestrates: auth via existing session helper → load Project + competitor URL + filtered `CapturedReview` rows by `urlId` → compute `reviewsHash` → check staleness against existing `ReviewAnalysis` → batch via `batch-sizer.ts` → pre-flight cost estimate via `token-counter.ts` + `pricing.ts` → gate via `cost-cap.ts` → two-sweep Anthropic call with prompt caching on system block per §A.7 → parse JSON output via tolerant `extractJsonFromModelText` helper (handles ```json ``` fences + raw object + trailing chatter) → persist `ReviewAnalysis` row via Prisma upsert.
+
+- NEW `review-analysis-run.test.ts` (~14 cases) — 5 `extractJsonFromModelText` unit tests + auth-required + missing-Project-404 + cache-hit-short-circuit + cost-cap-rejection + single-batch happy path + multi-batch happy path + Anthropic-API-error path + Prisma-upsert-error path.
+
+- NEW thin API route shim at `src/app/api/projects/[projectId]/competition-scraping/review-analysis/run/route.ts` — re-exports the DI-seam handler with production deps (real `prisma` + real `createReviewAnalysisClient`) per the per-record handler DI-seam Pattern from W2 Amazon Session 1 §B 2026-05-26.
+
+- NEW `scripts/test-w5-end-to-end.mjs` — standalone Node script with `--dry-run` (no Anthropic API call; verifies primitives + handler wiring end-to-end against a real Project + corpus; PASSED this session) and `--live` (placeholder for next session's first live run; currently exits with "DEFERRED to next session per output-shape planning" message). `--dry-run` PASSED this session.
+
+- MODIFY `package.json` + `package-lock.json` for NEW dependency `@anthropic-ai/sdk ^0.98.1` (~3 MB).
+
+**Pre-build /scoreboard 5/5 GREEN at entry baselines:** root tsc clean / extension tsc clean / **910 ext** / **838 src/lib** / **64 routes**; Check 6 Playwright SKIPPED per Rule 27 picker.
+
+**Post-build /scoreboard 5/5 GREEN at new src/lib baseline:** src/lib `npm test` = **899/899** (+61 cumulative from 838 — 47 from primitives + 14 from handler); `npm run build` = **65 routes** (+1 for new review-analysis/run shim); extension `npm test` = **910/910** UNCHANGED; Check 6 SKIPPED per Rule 27.
+
+**NEW baseline locked: src/lib `npm test` = 899/899** (+61 from 838 entry baseline); routes = **65** (+1).
+
+**TWO Rule 14f forced-pickers fired this session:**
+
+- **Picker #1 (ANSWERED) — W5 architecture-decision picker:** "Install `@anthropic-ai/sdk` + build real pre-flight cost-cap module + use real pre-flight token counting (RECOMMENDED) — OR — mirror W#1's pattern of raw fetch + no separate cost-cap module + heuristic-only token estimation?" Director picked Recommended Yes. **1/1 = 100% on the picker that was answered.** This locked W5's architectural divergence from W#1 on the AI-infrastructure axis (see "Architecture divergence" section below).
+- **Picker #2 (REDIRECTED) — "Fire live end-to-end run now?":** framed as 3 options (Yes Recommended + Defer to next session + Spend more session on prompt iteration before going live). Director REDIRECTED via free-text escape-hatch with the verbatim message: *"You didn't ask me how I wanted to approach the analysis of the reviews. I want to first plan out how the analysis of the reviews should be done and where the output should be posted. i want you to wrap this session and begin the next session by you asking me for the suggestions i have for the review analysis function and once i provide it, i want you to plug as much of that into the 6 dimensions of plan you have identified and then if anything is still missing, i want you to ask me specific questions to help clarify those hazy areas."* This **REDIRECTED** the picker (not chosen-from-options) — positive calibration data point for Rule 14f free-text escape-hatch design.
+
+**ZERO Rule 9 deploy gates fired this session** — pure BUILD session; build commit `04f74cf` stays on `workflow-2-competition-scraping` until W5 deploy session ~5-10 sessions from now per §C.5 outline.
+
+**Schema-change-in-flight flag STAYS NO entire session** (entry NO + exit NO; `ReviewAnalysis` model + `ReviewAnalysisLevel` enum schema already shipped via W2 Amazon Session 1's `prisma db push` 2026-05-26 + deployed 2026-05-28; W5 Session 1 reads + writes against the post-migration schema).
+
+**Architecture divergence from W#1 on the AI-infrastructure axis (memorialized for future-sessions reference; supersedes the "mirror W#1" framing in §C.5):**
+
+| Axis | W5 (this session) | W#1 |
+|------|---|---|
+| SDK dependency | `@anthropic-ai/sdk ^0.98.1` (~3 MB; new in `package.json`) | None — raw `fetch()` with hand-rolled request shape |
+| Cost-cap enforcement | Real pre-flight enforcement (`cost-cap.ts` rejects requests pre-flight if estimated cost exceeds per-run or per-Project monthly cap) | Post-facto cost logging only (reads response.usage and logs after call returns) |
+| Token counting | Real pre-flight count via `client.messages.countTokens` (authoritative Anthropic count) | Response-usage read-back (post-call, not pre-flight) |
+
+**Justification for the divergence:** the per-product review-analysis surface ships consequential AI cost (each per-product analysis processes large per-platform corpora at potentially Opus 4.7 pricing; cost-cap enforcement matters more than for W#1's smaller keyword-clustering workloads). The "mirror W#1's cost-cap pattern" framing in the launch prompt + §C.5 contained a factual problem worth recording here: the W#1 cost-cap "module" referenced in §C.5 (pointing to `docs/MODEL_QUALITY_SCORING.md`) does not exist — `MODEL_QUALITY_SCORING.md` is about a stability-score algorithm for keyword clustering, NOT cost caps. Future workstreams reading W#1 precedents should re-verify W#1's actual architecture before mirroring; don't trust launch-prompt summaries of "mirror W#1's Pattern" without re-reading the W#1 doc. **§C.5 will be updated next session to capture W5's actual architecture choices replacing the "mirror W#1" framing.**
+
+**6 design dimensions identified mid-session for next session's planning conversation (per the new memory file):**
+
+1. **Audience & purpose** — who reads the per-product analysis + to what end? (e.g., spot product gaps to inform Brand Vibe Library, share with product team for roadmap decisions, weekly tracking against a baseline)
+2. **Sections & topics** — what the analysis covers? (e.g., praise/complaints/quotes vs. things-to-copy/things-to-avoid/pricing-signals vs. JTBD/friction/delight)
+3. **Depth & length** — short bullet summary for 10-second scan vs. paragraph-per-section for 1-2 min vs. exhaustive for 5 min?
+4. **Perspective & tone** — neutral analyst vs. brand-owner-actionable vs. customer-voice-aggregation?
+5. **UI placement** — re-confirm §A.10 (URL detail page below Captured Reviews) or pivot to a tab/sidebar/modal placement?
+6. **Interaction** — re-confirm §A.11 (manual button → modal → progress → inline) + §A.12 (stale badge + re-run affordance) or change?
+
+**Affected §A sections (informational — §A is frozen per Rule 18; these are sections the next session's planning conversation will re-confirm or pivot):**
+
+- **§A.7 (model + cost guards)** — re-confirmed by this session's architecture-decision picker outcome (SDK + pre-flight cost-cap + pre-flight token-counter). No pivot needed; just document W5's actual implementation choices in §C.5 next session.
+- **§A.8 (adaptive batching)** — implementation now shipped in `batch-sizer.ts` at the ~80K-token budget level. No pivot needed.
+- **§A.9 (TipTap output)** — TipTap rendering of the analysis output is shipped at the §C.4 W4 layer (Captured Reviews UI extensions 2026-05-29). v1 per-product prompt's JSON output will be transformed to TipTap server-side per §A.9 spec. **Re-confirmation needed** that the v1 output shape matches the TipTap rendering layer expectations.
+- **§A.10 (UI placement — URL detail page below Captured Reviews)** — design dimension #5 above; next session's planning conversation will re-confirm or pivot.
+- **§A.11 (manual trigger flow)** — design dimension #6 above; next session's planning conversation will re-confirm or pivot.
+- **§A.12 (fingerprint cache)** — implementation now shipped in `cache.ts` at the SHA-256 reviewsHash level. No pivot needed.
+
+**Per Rule 23 Change Impact Audit:** PLOS-SIDE handler + src/lib module surface (new W5 review-analysis primitives + new DI-seam handler + new thin shim route + new dev script + new dependency `@anthropic-ai/sdk`; no schema; no API contract changes since the new route is purely additive; no extension-side changes). No data risk to existing rows (additive only; `ReviewAnalysis` table empty until first live run fires next session). Zero downstream W#1 cross-tool impact.
+
+**Cross-references:**
+
+- `docs/CORRECTIONS_LOG.md` §Entry 2026-06-02 — captures the same outcome from the meta-pattern perspective (NEW reusable Pattern + 5 sub-observations including W5-vs-W#1 architecture divergence + P-43 cwd-leak Pattern Class reproduced ~1-2 more times this session running tally ~20+ + Rule 14f free-text escape-hatch calibration data point).
+- `feedback_plan_output_shape_before_building.md` — NEW memory file capturing the meta-pattern; PRIMARY directive for next session's session-start protocol.
+- `docs/REVIEWS_PHASE_2_DESIGN.md` §A.7-§A.12 (UX + interaction spec) + §C.5 (implementation outline; will be updated next session to capture W5's actual architecture choices).
+- `docs/COMPETITION_SCRAPING_DESIGN.md` — UNCHANGED this session (W5 is PLOS-side AI infrastructure, not extension-side; no cross-reference pointer needed).
+
+**Closing line:** P-49 W5 AI review analysis Session 1 shipped foundation primitives + plumbing handler + thin API route shim + 61 src/lib node:test cases + standalone e2e script + new `@anthropic-ai/sdk` dependency at code level via build commit `04f74cf` on `workflow-2-competition-scraping`. v1 prompt content + UI placement re-confirmation + first live end-to-end run DEFERRED to next session per director's explicit mid-session directive (verbatim) to plan the per-product analysis output shape FIRST. ZERO Rule 9 deploy gates fired (pure BUILD session). 1 Rule 14f picker answered (architecture-decision Yes-to-Recommended) + 1 Rule 14f picker REDIRECTED by director via free-text escape-hatch (output-shape planning). Schema-change-in-flight flag STAYS NO entire session. NEW baseline locked: src/lib `npm test` = **899/899** (+61 cumulative from 838 entry baseline); npm run build = **65 routes** (+1). W5 architecturally diverges from W#1 on the AI-infrastructure axis (W5: SDK + pre-flight cost-cap + pre-flight token-counter; W#1: raw fetch + post-facto cost logging + response-usage token reads) — divergence justified for W5's consequential per-product analysis cost surface; future workstreams reading W#1 precedents should re-verify W#1's actual architecture before mirroring. NEW reusable Pattern memorialized via NEW memory file `feedback_plan_output_shape_before_building.md` — "Plan AI-output shape with director BEFORE writing prompt code, even when launch prompt says ship-and-iterate." Closes (a.101) PARTIALLY; opens (a.102) RECOMMENDED-NEXT = **P-49 W5 Session 1.5 — director-driven planning of the per-product analysis output shape** on `workflow-2-competition-scraping` per the new memory file. **EIGHTH build/deploy-session §B entry per Rule 18 — first W5 entry in this design doc.** The next §B entry will land at the W5 Session 1.5 close (capturing director's planning conversation outcome + the rewrite of `prompts.ts` PLACEHOLDER + first live end-to-end run on a small product corpus).
+
+---
+
 ---
 
 END OF DOCUMENT
