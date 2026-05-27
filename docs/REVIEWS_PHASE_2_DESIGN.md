@@ -1471,6 +1471,104 @@ FF#3 also removed `findWalmartReviewsContainer` (was wrong — replaced by the `
 
 ---
 
+## §B 2026-05-27 — `session_2026-05-27_p49-w5-session-1.5-reviews-phase-3-design-lock` — Workstream 5 Session 1.5 — Reviews Phase 3 design lock (3-table + 7-flow + browser-first execution + 7 v1 prompts + 4-option toggle expansion) + schema enum extension + shared ExecutionModeSelect component SHIPPED at code level via build commit `252e1dd` (6 files +181/-10) on `workflow-2-competition-scraping`; per-batch server endpoint scaffold + `prompts.ts` rewrite + Table 2 page + first live end-to-end run DEFERRED to next W5 session in a deliberately narrow code-mechanics scope cut; NINTH build/deploy-session §B entry per Rule 18 — FIRST W5 Session 1.5 entry; **supersedes §A.10 + §A.11 + §A.12 substantially** (per Rule 18 §A frozen; new locked decisions captured here); NEW reusable Pattern memorialized via NEW memory file `feedback_browser_first_ai_with_server_migration.md`
+
+**Closes (a.102) RECOMMENDED-NEXT** = P-49 W5 Session 1.5 director-driven output-shape planning ✅ DONE 2026-05-27 at code level via build commit `252e1dd`. **Opens (a.103) RECOMMENDED-NEXT** = P-49 W5 Session 2 — per-batch server endpoint scaffold + delete shipped per-product two-sweep handler + rewrite `prompts.ts` with 7 flow-specific builders + start Table 2 page + Per-Review Summarize button + modal + browser batch loop + first live end-to-end run on `workflow-2-competition-scraping`.
+
+**Director-driven Reviews Phase 3 design lock conversation:** at session start director surfaced a comprehensive expansion directive — a much bigger vision than what §A.10/§A.11/§A.12 had locked. The new locked design:
+
+1. **A 4-option toggle at the top of the Competition Scraping page** giving the user access to four surface views (the existing two surfaces + two new tables). Position: at the top of the page above the existing Competitor URLs surface. Locked via Round-1 placement picker (Recommended Yes-to-Yes).
+
+2. **Three brand-new tables** reachable via that toggle:
+   - **Table 2 — Competitor Reviews Analysis Table** with per-review nested rows: one outer row per competitor + per-product nested rows + per-review inner-nested rows. Columns include the existing per-review fields (star + title + body + reviewer + date) PLUS new AI-output columns (Per-Review Summarize result + per-competitor comprehensive bulleted + non-bulleted summaries spanning a competitor's products).
+   - **Table 3 — By Category** with one row per competitor grouped by Category. **Round 2 row-structure picker REDIRECTED by director via free-text** with *"Thanks for identifying this oversight. I want you to not include the Reviews and Stars columns in these tables"* — Tables 3 + 4 drop Stars + Reviews Summary columns (those columns are per-product not per-competitor-per-grouping; the AI flows on Tables 3 + 4 are comprehensive-per-grouping rather than per-product per-review-aggregation).
+   - **Table 4 — By Type** with one row per competitor grouped by Type. Same column structure as Table 3 (Stars + Reviews Summary columns dropped per Round 2 redirect).
+
+3. **Seven AI run flows** across the three tables:
+   - **Table 2 (per-review level):** (1) Per-Review Summarize — one AI call per review producing a 1-2 sentence summary for the per-review row.
+   - **Table 2 (per-product level):** (2) Per-Competitor-Per-Product Comprehensive (bulleted) + (3) Per-Competitor-Per-Product Comprehensive (non-bulleted) — two AI flows producing per-product comprehensive analyses (the bulleted/non-bulleted split lets the user choose presentation form at run time).
+   - **Table 3 (per-category level):** (4) Per-Category Comprehensive (bulleted) + (5) Per-Category Comprehensive (non-bulleted) — same bulleted/non-bulleted split at the Category aggregation level.
+   - **Table 4 (per-type level):** (6) Per-Type Comprehensive (bulleted) + (7) Per-Type Comprehensive (non-bulleted) — same split at the Type aggregation level.
+
+4. **Browser-first execution mirroring W#1's existing pattern** — locked via the **mid-planning architectural redirect** from director after Claude had proposed a Vercel-suspend-resume server-side worker pattern to deal with Vercel's per-request time limit. Director surfaced *"If keeping things server-side significantly constrains us, we can run things on the browser side and have the option to move things server-side when things scale up..."* — this redirect pivoted the architecture to W#1's existing pattern at `src/app/projects/[projectId]/keyword-clustering/components/AutoAnalyze.tsx`: a browser-side BatchObj queue + localStorage checkpoint + per-batch server endpoint for the Anthropic call. The browser orchestrates the queue + handles pause/resume/cancel + tracks running cost tally; the server endpoint receives one batch at a time + makes one Anthropic call + returns the result, well within Vercel's per-request time limit. **NEW reusable Pattern memorialized in NEW memory file `feedback_browser_first_ai_with_server_migration.md`** — "Default new AI batch flows to browser-side execution (W#1's existing pattern); add execution-mode dropdown now for seamless future server-side migration; mirror dropdown into W#1's existing modal at the same time so both workflows can migrate together."
+
+5. **Execution-mode dropdown** added NOW to all future modals — a controlled `<select>` exposing two options: Browser (default; Recommended) + Server (future). The Server option's wiring is deferred until W#2 hits production scale that necessitates server-side migration off Vercel; the dropdown is in place now so the future migration is a label flip + endpoint swap rather than a UI refactor. Mirror the dropdown into W#1's existing AutoAnalyze modal at the same time so both workflows can migrate together. (W#1 AutoAnalyze refactor DEFERRED to opportunistic future session when AutoAnalyze.tsx is being touched anyway; today's scope cut skipped this to avoid mid-build edits to W#1's working modal.)
+
+6. **Seven v1 prompts drafted + locked** during the planning conversation — flat-bullet structured / third-person neutral analyst tone / soft length targets / echoed IDs for redundancy. Prompt content drafted in conversation; rewrite into `src/lib/competition-scraping/review-analysis/prompts.ts` DEFERRED to next W5 session (the prompts.ts PLACEHOLDER from W5 Session 1 stays until next session's rewrite).
+
+7. **No cost caps** — locked via the **Round 3 cost-caps picker REDIRECTED by director via free-text** with *"I don't want any caps"*. Existing §A.7 cost-cap framing is now reduced to **transparency only**: pre-flight cost estimate displayed in the modal before the user starts a run + running cost tally during the run; both are informational only with no enforcement. The `cost-cap.ts` module from W5 Session 1 stays in place at code level but its caps default to effectively infinite for the new flows (per-flow caps + per-Project monthly caps both unenforced); the module is preserved for any future flows that DO need enforcement.
+
+8. **One flow at a time per Project** — locked via Round-4 concurrency picker (Recommended Yes-to-Yes). Cells lock with a pending badge during a run; pause = preserve cells + resume from cursor; cancel = keep partial.
+
+9. **Excel export / drag-reorder / click-to-edit / show-hide columns** — all locked as Table-feature scope across all 3 new tables (and existing Captured Reviews surface as a tail extension where applicable). Implementation deferred to opportunistic future W5 sessions (most are mechanical; @dnd-kit + xlsx libraries already in use elsewhere).
+
+**~20 Rule 14f forced-pickers fired across the planning conversation:**
+
+- Rounds 1-5 design-lock pickers (placement / row structure / cost caps / concurrency / + others) — 16 answered Yes-to-Recommended + 2 free-text redirects (Round 2 + Round 3) + 1 final go/no-go.
+- 1 final summary picker = director re-confirmed the locked design summary.
+- 1 export-columns sub-picker for Tables 3 + 4 (answered Yes-to-Recommended).
+- **19/19 = 100% Yes-to-Recommended on the pickers answered + 2 free-text redirects** (positive calibration data points for Rule 14f's free-text escape-hatch design — both redirects produced superior outcomes vs the offered picker options).
+
+**Code mechanics — deliberately narrow scope cut:**
+
+After design lock, Claude proposed a much broader code-mechanics scope (per-batch endpoint scaffold + prompts.ts rewrite + Table 2 page start + W#1 AutoAnalyze refactor) but **director's directive to cleanly close this session** at the design-lock + small-shippable-code-mechanics boundary led to the scope cut. Today's build commit covered ONLY:
+
+- **MODIFY `prisma/schema.prisma`** — `ReviewAnalysisLevel` enum extended with `PER_REVIEW` + `PER_CATEGORY`; comment block rewritten to document all 5 values (PER_REVIEW + PER_PRODUCT + PER_CATEGORY + PER_TYPE + CROSS_EVERYTHING) mapped to the 7 flows. `npx prisma db push` completed cleanly in 1.19s (additive only; zero data loss; **schema-change-in-flight flag FLIPPED NO → YES** at completion).
+- **MODIFY `src/lib/shared-types/competition-scraping.ts`** — `ReviewAnalysisLevel` union widened to all 5 values + `isReviewAnalysisLevel` validator narrowed against all 5 values + comment block expanded to document the 7-flow mapping.
+- **MODIFY `src/lib/competition-scraping/handlers/review-analysis-run.ts`** — `ReviewAnalysisRow.level` union widened to all 5 values to keep tsc green (the W5 Session 1 handler is scheduled for replacement by the per-batch endpoint in next W5 session; widening the union here is a stop-gap for type-safety during this session's build commit only).
+- **NEW `src/lib/workflow-components/execution-mode.ts`** — type + constants + `isExecutionMode` validator. Browser/server mode labels match W#1's verbatim text at `src/app/projects/[projectId]/keyword-clustering/components/AutoAnalyze.tsx` lines 2094-2099 (Claude grep'd W#1's source for the exact label strings to ensure future migration is text-perfect).
+- **NEW `src/lib/workflow-components/execution-mode-select.tsx`** — controlled `<select>` React component for modal consumption (W#2's future modals + future W#1 refactor).
+- **NEW `src/lib/workflow-components/execution-mode.test.ts`** — 7 node:test cases pinning labels to W#1's verbatim text + validator semantics (so any drift in W#1's labels would fail the W#2-side test).
+
+**Scoreboard verification:**
+
+| Check | Pre-build (entry) | Post-build (new baseline) | Delta |
+|---|---|---|---|
+| Root tsc clean | ✅ | ✅ | unchanged |
+| Extension tsc clean | ✅ | ✅ | unchanged |
+| Extension `npm test` | 910/910 | 910/910 | UNCHANGED |
+| src/lib `node:test` | 899/899 | **906/906** | **+7 — exact match with 7 new cases in `execution-mode.test.ts`** |
+| `npm run build` routes | 65 | 65 | UNCHANGED |
+| Check 6 Playwright | SKIPPED per Rule 27 | SKIPPED per Rule 27 | unchanged |
+
+**NEW baseline locked from this session:** src/lib `node:test` = **906/906** (+7 from 899); routes = **65 UNCHANGED**; extension = **910/910 UNCHANGED**.
+
+**Schema-change-in-flight transition:**
+
+- Entry: NO (carrying from W5 Session 1 which kept it NO)
+- Mid-session: NO → YES at `npx prisma db push` completion (PER_REVIEW + PER_CATEGORY enum values added)
+- Exit: YES (stays YES until next W5 deploy session ff-merges to main + Vercel auto-redeploys)
+
+**§A sections superseded by this entry (per Rule 18 §A is frozen; the new locked decisions live here):**
+
+- **§A.10 "UI surfaces"** — original locked decision was per-product analysis on the URL detail page below Captured Reviews + per-Type and cross-everything on the existing Comprehensive Competitor Analysis page. Superseded: the 4-option toggle + 3 brand-new tables (Table 2 / Table 3 / Table 4) become the new surface. Future build sessions touching the per-product analysis UI should reference §B 2026-05-27 for the new locked surface, NOT §A.10. The existing Comprehensive Competitor Analysis page from P-46 W4 is unaffected by this supersedence (it remains the home for any P-46-era surfaces; the new W5 tables live separately under the new toggle).
+- **§A.11 "Interaction model"** — original locked decision was manual button + model dropdown + cost preview modal. Superseded: the modal now also includes the new execution-mode dropdown (Browser default / Server future) + the cost preview is now transparency-only (no enforcement) per §A.7 supersedence. Pause/resume/cancel semantics are NEW (locked at Round-4 concurrency picker): cells lock with pending badge during run; pause preserves cells + resumes from cursor; cancel keeps partial. Future build sessions touching the run-modal UI should reference §B 2026-05-27 for the new locked interaction model.
+- **§A.12 "Cache + freshness"** — original locked decision was a fingerprint cache (review-IDs + model version) + "out of date" badge + explicit re-run. Superseded for the new flows: cache is now per-flow not just per-product (each of the 7 flows produces its own ReviewAnalysis row keyed by level + projectId + competitorId + optional categoryId/typeId); the cache.ts module from W5 Session 1 stays in place at code level but its keyspace expands to all 5 enum values. Future build sessions touching cache invalidation should reference §B 2026-05-27 for the expanded keyspace.
+- **§A.7 "Cost caps"** — original locked decision was per-run + per-Project monthly caps with enforcement. Superseded: caps are now **transparency-only** (pre-flight estimate + running tally displayed; no enforcement) per Round 3 free-text redirect. The `cost-cap.ts` module from W5 Session 1 stays in place at code level but its enforcement defaults to effectively infinite for the new flows.
+
+**TaskList sweep this session (Rule 26):** 14 tasks created across the session — 8 completed (planning + verification + schema + ExecutionModeSelect + scope cut decision); 4 marked `DEFERRED:` with destinations noted per `feedback_deferred_items_registry.md` registry pattern:
+
+- **DEFERRED: Per-batch server endpoint scaffold** → next session (a.103)
+- **DEFERRED: Rewrite prompts.ts with 7 v1 prompt builders** → next session (a.103)
+- **DEFERRED: Refactor W#1 AutoAnalyze to use shared ExecutionModeSelect** → future opportunistic session (when AutoAnalyze.tsx is being touched anyway; today's scope cut skipped this to avoid mid-build edits to W#1's working modal)
+- **PENDING: Update REVIEWS_PHASE_2_DESIGN.md §B with new locked decisions** → handled by this doc-batch (this §B 2026-05-27 entry IS that update)
+
+ZERO open `DEFERRED:` items at session end after this doc-batch lands.
+
+**Per Rule 23 Change Impact Audit:** PLOS-SIDE schema + handler + src/lib module surface (schema enum extension — additive only, zero data loss + handler row type widening + new shared ExecutionModeSelect component module). No data risk to existing rows (additive only; existing PER_PRODUCT / PER_TYPE / CROSS_EVERYTHING enum values untouched; ReviewAnalysis table empty pending first live run). Zero downstream W#1 cross-tool impact (the new shared component lives at `src/lib/workflow-components/`; W#1's existing modal at AutoAnalyze.tsx UNCHANGED this session — refactor to consume shared component DEFERRED to opportunistic future session).
+
+**Cross-references:**
+
+- `docs/CORRECTIONS_LOG.md` §Entry 2026-05-27 — captures the same outcome from the meta-pattern perspective (NEW reusable Pattern + 4 sub-observations including the Rule 14f free-text escape-hatch calibration data point + the P-43 cwd-leak Pattern Class reproduction running tally ~22+ + the supersedence of §A.10/§A.11/§A.12).
+- `feedback_browser_first_ai_with_server_migration.md` — NEW memory file capturing the meta-pattern; PRIMARY directive for next W5 session's per-batch endpoint scaffold + browser batch loop implementation.
+- `feedback_plan_output_shape_before_building.md` — predecessor memory file from W5 Session 1 2026-06-02; the planning conversation today executed the protocol from that memory file.
+- `docs/COMPETITION_SCRAPING_DESIGN.md` §B 2026-05-27 — extension-side cross-reference pointer entry (one-line pointer to this §B 2026-05-27 per Rule 18 cross-doc precedent).
+- §B 2026-06-02 above — W5 Session 1 foundation primitives + plumbing handler entry; today's Session 1.5 design lock + schema enum extension + shared ExecutionModeSelect builds on that foundation.
+
+**Closing line:** P-49 W5 Session 1.5 Reviews Phase 3 design lock + schema enum extension + shared ExecutionModeSelect component shipped at code level via build commit `252e1dd` (6 files +181/-10) on `workflow-2-competition-scraping`. Design lock covers 3-table + 7-flow + browser-first execution + 7 v1 prompts + 4-option toggle expansion via ~20 Rule 14f forced-pickers (19/19 = 100% Yes-to-Recommended on pickers answered + 2 free-text redirects). Mid-planning architectural redirect from server-side worker pattern to W#1's browser-first execution pattern memorialized as NEW reusable Pattern via NEW memory file `feedback_browser_first_ai_with_server_migration.md`. Schema enum `ReviewAnalysisLevel` extended with PER_REVIEW + PER_CATEGORY; schema-change-in-flight flag FLIPPED NO → YES mid-session at `npx prisma db push` completion; STAYS YES until next W5 deploy session. ZERO Rule 9 deploy gates fired this session (pure BUILD session). NEW baseline locked: src/lib `node:test` = **906/906** (+7); routes UNCHANGED at 65; extension UNCHANGED at 910/910. **Supersedes REVIEWS_PHASE_2_DESIGN.md §A.10 + §A.11 + §A.12 substantially** per Rule 18 (§A frozen; new locked decisions captured here in §B 2026-05-27). Closes (a.102) RECOMMENDED-NEXT = P-49 W5 Session 1.5 director-driven output-shape planning ✅ DONE 2026-05-27. Opens (a.103) RECOMMENDED-NEXT = **P-49 W5 Session 2 — per-batch server endpoint scaffold + delete shipped per-product two-sweep handler + rewrite `prompts.ts` with 7 flow-specific builders + start Table 2 page + Per-Review Summarize button + modal + browser batch loop + first live end-to-end run** on `workflow-2-competition-scraping`. **NINTH build/deploy-session §B entry per Rule 18 — FIRST W5 Session 1.5 entry in this design doc.** The next §B entry will land at the W5 Session 2 close (capturing per-batch endpoint scaffold + 7 flow-specific prompts + Table 2 page start + first live end-to-end run on a small product corpus).
+
+---
+
 ---
 
 END OF DOCUMENT

@@ -3842,6 +3842,18 @@ This W2 Walmart sub-cluster DEPLOY session is the FOURTH + FINAL per-platform DE
 
 ---
 
+## §B 2026-05-27 — `session_2026-05-27_p49-w5-session-1.5-reviews-phase-3-design-lock` — cross-reference pointer entry per Rule 18 — canonical W5 Session 1.5 Reviews Phase 3 design lock + schema enum extension + shared ExecutionModeSelect component build-session entry lives in `docs/REVIEWS_PHASE_2_DESIGN.md` §B 2026-05-27
+
+This session's W5 Session 1.5 design-lock + build work is **PLOS-side AI infrastructure**, not extension-side. The canonical §B entry for the session lives in `docs/REVIEWS_PHASE_2_DESIGN.md` §B 2026-05-27 per the W5 Session 1 2026-06-02 cross-doc precedent (W5 sessions are PLOS-side; per-platform extension sessions like W2 Amazon/eBay/Etsy/Walmart land cross-reference pointers here in `COMPETITION_SCRAPING_DESIGN.md`).
+
+**No new extension-side architecture decisions this session.** Today's build commit `252e1dd` (6 files +181/-10) touched ONLY PLOS-side files (`prisma/schema.prisma` + `src/lib/shared-types/competition-scraping.ts` + `src/lib/competition-scraping/handlers/review-analysis-run.ts` + NEW `src/lib/workflow-components/execution-mode.ts` + NEW `src/lib/workflow-components/execution-mode-select.tsx` + NEW `src/lib/workflow-components/execution-mode.test.ts`). The extension-side per-platform extractors (`amazon-review-extractor.ts` + `ebay-review-extractor.ts` + `etsy-review-extractor.ts` + `walmart-review-extractor.ts`) are UNCHANGED; the existing extension build (`910/910` UNCHANGED) carries forward.
+
+**Forward-looking note for future extension-side cross-references:** when W5 Session 2+ wires the new Tables 2/3/4 surface (per the design lock in `docs/REVIEWS_PHASE_2_DESIGN.md` §B 2026-05-27), the Per-Review Summarize button + modal + browser batch loop will live PLOS-side; the existing extension-side per-platform extractors continue to feed `CapturedReview` rows that the new W5 surface consumes. No extension-side changes are expected through the W5 Sessions 2-10 arc unless director surfaces new per-platform extraction requirements.
+
+**Cross-reference:** the canonical W5 Session 1.5 entry — including the full Reviews Phase 3 design lock (3-table + 7-flow + browser-first execution + 7 v1 prompts + 4-option toggle expansion) + the ~20 Rule 14f forced-pickers calibration data + the mid-planning architectural redirect from server-side worker pattern to W#1's browser-first execution pattern + the supersedence of §A.10 + §A.11 + §A.12 + the new schema enum values (PER_REVIEW + PER_CATEGORY) + the shared ExecutionModeSelect component + the NEW reusable Pattern memorialized via NEW memory file `feedback_browser_first_ai_with_server_migration.md` — lives in `docs/REVIEWS_PHASE_2_DESIGN.md` §B 2026-05-27.
+
+---
+
 ---
 
 END OF DOCUMENT
