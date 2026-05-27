@@ -10,7 +10,10 @@ import type Anthropic from '@anthropic-ai/sdk';
 
 import type { AnthropicClientLike } from '../review-analysis/client.ts';
 import { computeReviewsHash } from '../review-analysis/cache.ts';
-import { PER_REVIEW_SUMMARIZE_PROMPT_VERSION } from '../review-analysis/prompts.ts';
+import {
+  PER_REVIEW_SUMMARIZE_PROMPT_VERSION,
+  PER_COMPETITOR_BULLETED_PROMPT_VERSION,
+} from '../review-analysis/prompts.ts';
 
 import {
   SUPPORTED_FLOWS,
@@ -22,6 +25,7 @@ import {
   type CapturedReviewForBatchRow,
   type CompetitorUrlForBatchRow,
   type Ctx,
+  type PerCompetitorBulletedResponseBody,
   type PerReviewBatchResponseBody,
   type RequestLike,
   type ReviewAnalysisCachedRow,
@@ -140,12 +144,29 @@ function makePrisma(opts: {
       findMany: async () => opts.reviews ?? [],
     },
     reviewAnalysis: {
-      findMany: async () => {
+      findMany: async (args) => {
         state.cacheFindManyCalls++;
         if (opts.cachedFindManyThrows !== undefined) {
           throw opts.cachedFindManyThrows;
         }
-        return opts.cachedRows ?? [];
+        // Filter cached rows the same way real Prisma would — by the
+        // reviewsHash IN-clause + the level discriminator. This lets
+        // cache-key-mismatch tests fail cleanly (a row with a wrong-
+        // version hash misses the lookup, and the handler does a fresh
+        // AI call).
+        const wantedHashes = new Set(args.where.reviewsHash.in);
+        const wantedLevel = args.where.level;
+        return (opts.cachedRows ?? []).filter(
+          (row) =>
+            wantedHashes.has(row.reviewsHash) &&
+            // The stub doesn't track level on the row — we treat the
+            // test's seeded rows as level-agnostic so tests can seed
+            // either PER_REVIEW or PER_PRODUCT shapes. Real Prisma
+            // would filter by level too; the level discriminator is
+            // tested separately via the analysisJson shape on the
+            // create call.
+            (wantedLevel === 'PER_REVIEW' || wantedLevel === 'PER_PRODUCT')
+        );
       },
       create: async (args) => {
         state.createCalls.push(args);
@@ -199,9 +220,13 @@ test('SUPPORTED_FLOWS contains all 7 flows from §B 2026-05-27', () => {
   assert.ok(SUPPORTED_FLOWS.includes('per-type-nonbulleted'));
 });
 
-test('SHIPPED_FLOWS in Session 2 contains only per-review-summarize', () => {
-  assert.equal(SHIPPED_FLOWS.size, 1);
+test('SHIPPED_FLOWS in Session 3 contains per-review-summarize + per-competitor-bulleted', () => {
+  assert.equal(SHIPPED_FLOWS.size, 2);
   assert.ok(SHIPPED_FLOWS.has('per-review-summarize'));
+  assert.ok(SHIPPED_FLOWS.has('per-competitor-bulleted'));
+  // The other 5 flows from §B 2026-05-27 land in later sessions.
+  assert.equal(SHIPPED_FLOWS.has('per-competitor-nonbulleted'), false);
+  assert.equal(SHIPPED_FLOWS.has('per-category-bulleted'), false);
 });
 
 test('isReviewAnalysisFlow narrows known values', () => {
@@ -297,6 +322,8 @@ test('POST 400 when flow is missing or unknown', async () => {
 test('POST 400 when flow is recognized but not yet shipped', async () => {
   const deps = makeDeps();
   const { POST } = makeReviewAnalysisRunBatchHandlers(deps);
+  // per-category-bulleted is still unshipped as of Session 3 (lands in
+  // a later session); use it as the unshipped tripwire.
   const r = await POST(
     makeRequest({
       flow: 'per-category-bulleted',
@@ -743,4 +770,237 @@ test('POST honors modelVersion override', async () => {
   );
   const createInput = clientState.createCalls[0] as { model: string };
   assert.equal(createInput.model, 'claude-opus-4-6');
+});
+
+// ────────────────────────────────────────────────────────────────────
+// Per-Competitor Comprehensive (bulleted) — W5 Session 3.
+// One AI call per URL → one persisted PER_PRODUCT row → one summary
+// returned. Cache key is a single corpus hash over all reviewIds +
+// modelVersion + PROMPT_VERSION.
+
+test('per-competitor 200 fresh — one AI call, ONE persisted PER_PRODUCT row, summary returned', async () => {
+  const reviews = [
+    sampleReview('rev-a'),
+    sampleReview('rev-b'),
+    sampleReview('rev-c'),
+  ];
+  const { prisma, state: prismaState } = makePrisma({ reviews });
+  const modelResponse = makeAnthropicMessage(
+    JSON.stringify({
+      summary:
+        '## Positive signals\n- Multiple reviewers praise durability\n- Build quality holds up\n\n## Negative signals\n- One reviewer notes sizing runs small',
+    })
+  );
+  const { client, state: clientState } = makeAnthropicClient({
+    createResult: modelResponse,
+  });
+  const deps = makeDeps({ prisma, anthropicClient: client });
+  const { POST } = makeReviewAnalysisRunBatchHandlers(deps);
+  const r = await POST(
+    makeRequest({
+      flow: 'per-competitor-bulleted',
+      urlId: 'url-1',
+      reviewIds: ['rev-a', 'rev-b', 'rev-c'],
+    }),
+    makeCtx('proj-1')
+  );
+  assert.equal(r.status, 200);
+  const body = r.body as PerCompetitorBulletedResponseBody;
+  assert.equal(body.flow, 'per-competitor-bulleted');
+  assert.equal(body.source, 'fresh');
+  assert.match(body.summary, /## Positive signals/);
+  assert.match(body.summary, /Multiple reviewers praise durability/);
+  // Exactly one Anthropic create call.
+  assert.equal(clientState.createCalls.length, 1);
+  // EXACTLY ONE persisted row (not N like per-review).
+  assert.equal(prismaState.createCalls.length, 1);
+  // Persisted row is level=PER_PRODUCT (not PER_REVIEW).
+  const persisted = prismaState.createCalls[0].data;
+  assert.equal(persisted.level, 'PER_PRODUCT');
+  assert.equal(persisted.urlId, 'url-1');
+  // analysisJson holds just { summary } (no reviewId).
+  const written = persisted.analysisJson as {
+    summary: string;
+    reviewId?: string;
+  };
+  assert.match(written.summary, /## Positive signals/);
+  assert.equal(written.reviewId, undefined);
+});
+
+test('per-competitor 200 from cache — no AI call, no DB writes', async () => {
+  const reviews = [sampleReview('rev-a'), sampleReview('rev-b')];
+  // Cache key mirrors the handler: sorted reviewIds + modelVersion + promptVersion.
+  // If this drifts, the cache lookup won't match + the test loses its coverage.
+  const corpusHash = computeReviewsHash(
+    [{ id: 'rev-a' }, { id: 'rev-b' }],
+    `claude-opus-4-7|${PER_COMPETITOR_BULLETED_PROMPT_VERSION}`
+  );
+  const { prisma, state: prismaState } = makePrisma({
+    reviews,
+    cachedRows: [
+      {
+        id: 'analysis-cached-pc',
+        reviewsHash: corpusHash,
+        analysisJson: {
+          summary:
+            '## Positive signals\n- Cached competitor summary for url-1',
+        } as Prisma.JsonValue,
+        modelVersion: 'claude-opus-4-7',
+      },
+    ],
+  });
+  const { client, state: clientState } = makeAnthropicClient({});
+  const deps = makeDeps({ prisma, anthropicClient: client });
+  const { POST } = makeReviewAnalysisRunBatchHandlers(deps);
+  const r = await POST(
+    makeRequest({
+      flow: 'per-competitor-bulleted',
+      urlId: 'url-1',
+      reviewIds: ['rev-a', 'rev-b'],
+    }),
+    makeCtx('proj-1')
+  );
+  assert.equal(r.status, 200);
+  const body = r.body as PerCompetitorBulletedResponseBody;
+  assert.equal(body.source, 'cache');
+  assert.match(body.summary, /Cached competitor summary/);
+  assert.equal(body.usage.actualCostUsd, 0);
+  // No AI calls.
+  assert.equal(clientState.createCalls.length, 0);
+  // No new DB writes (cache hit).
+  assert.equal(prismaState.createCalls.length, 0);
+});
+
+test('per-competitor cache is keyed by corpus order-invariantly (sorted reviewIds)', async () => {
+  // Reviews in different input order produce the SAME cache hash since
+  // computeReviewsHash sorts by reviewId before hashing.
+  const reviews = [sampleReview('rev-z'), sampleReview('rev-a')];
+  const sortedCorpusHash = computeReviewsHash(
+    [{ id: 'rev-a' }, { id: 'rev-z' }],
+    `claude-opus-4-7|${PER_COMPETITOR_BULLETED_PROMPT_VERSION}`
+  );
+  const { prisma } = makePrisma({
+    reviews,
+    cachedRows: [
+      {
+        id: 'analysis-cached-pc',
+        reviewsHash: sortedCorpusHash,
+        analysisJson: {
+          summary: '## Positive signals\n- Order-invariant cache hit',
+        } as Prisma.JsonValue,
+        modelVersion: 'claude-opus-4-7',
+      },
+    ],
+  });
+  const { client, state: clientState } = makeAnthropicClient({});
+  const deps = makeDeps({ prisma, anthropicClient: client });
+  const { POST } = makeReviewAnalysisRunBatchHandlers(deps);
+  // Send IDs in unsorted order — should still hit cache.
+  const r = await POST(
+    makeRequest({
+      flow: 'per-competitor-bulleted',
+      urlId: 'url-1',
+      reviewIds: ['rev-z', 'rev-a'],
+    }),
+    makeCtx('proj-1')
+  );
+  assert.equal(r.status, 200);
+  const body = r.body as PerCompetitorBulletedResponseBody;
+  assert.equal(body.source, 'cache');
+  assert.equal(clientState.createCalls.length, 0);
+});
+
+test('per-competitor 502 on malformed model JSON output', async () => {
+  const reviews = [sampleReview('rev-a')];
+  const { prisma } = makePrisma({ reviews });
+  const { client } = makeAnthropicClient({
+    // Model returns an object but missing the required `summary` field.
+    createResult: makeAnthropicMessage(
+      JSON.stringify({ not_summary: 'wrong shape' })
+    ),
+  });
+  const deps = makeDeps({ prisma, anthropicClient: client });
+  const { POST } = makeReviewAnalysisRunBatchHandlers(deps);
+  const r = await POST(
+    makeRequest({
+      flow: 'per-competitor-bulleted',
+      urlId: 'url-1',
+      reviewIds: ['rev-a'],
+    }),
+    makeCtx('proj-1')
+  );
+  assert.equal(r.status, 502);
+  assert.match(
+    JSON.stringify(r.body),
+    /did not match the per-competitor schema/
+  );
+});
+
+test('per-competitor 502 when AI call throws', async () => {
+  const reviews = [sampleReview('rev-a')];
+  const { prisma } = makePrisma({ reviews });
+  const { client } = makeAnthropicClient({
+    createThrows: new Error('Upstream rate limit'),
+  });
+  const deps = makeDeps({ prisma, anthropicClient: client });
+  const { POST } = makeReviewAnalysisRunBatchHandlers(deps);
+  const r = await POST(
+    makeRequest({
+      flow: 'per-competitor-bulleted',
+      urlId: 'url-1',
+      reviewIds: ['rev-a'],
+    }),
+    makeCtx('proj-1')
+  );
+  assert.equal(r.status, 502);
+  assert.match(JSON.stringify(r.body), /Upstream rate limit/);
+});
+
+test('per-competitor does NOT use the per-review prompt version in its cache key', async () => {
+  // Regression guard: if a future refactor accidentally reuses the
+  // per-review prompt version for per-competitor cache keys, this test
+  // catches it by seeding a row with the per-REVIEW prompt version
+  // hash and verifying the handler does NOT hit it.
+  const reviews = [sampleReview('rev-a')];
+  const wrongVersionHash = computeReviewsHash(
+    [{ id: 'rev-a' }],
+    `claude-opus-4-7|${PER_REVIEW_SUMMARIZE_PROMPT_VERSION}`
+  );
+  const { prisma, state: prismaState } = makePrisma({
+    reviews,
+    cachedRows: [
+      {
+        id: 'wrong-version-row',
+        reviewsHash: wrongVersionHash,
+        analysisJson: {
+          summary: 'WRONG — this row was hashed with per-review prompt version',
+        } as Prisma.JsonValue,
+        modelVersion: 'claude-opus-4-7',
+      },
+    ],
+  });
+  const { client, state: clientState } = makeAnthropicClient({
+    createResult: makeAnthropicMessage(
+      JSON.stringify({
+        summary: '## Positive signals\n- Fresh per-competitor summary',
+      })
+    ),
+  });
+  const deps = makeDeps({ prisma, anthropicClient: client });
+  const { POST } = makeReviewAnalysisRunBatchHandlers(deps);
+  const r = await POST(
+    makeRequest({
+      flow: 'per-competitor-bulleted',
+      urlId: 'url-1',
+      reviewIds: ['rev-a'],
+    }),
+    makeCtx('proj-1')
+  );
+  assert.equal(r.status, 200);
+  const body = r.body as PerCompetitorBulletedResponseBody;
+  // Cache MISS — fresh call happened, fresh row persisted.
+  assert.equal(body.source, 'fresh');
+  assert.match(body.summary, /Fresh per-competitor summary/);
+  assert.equal(clientState.createCalls.length, 1);
+  assert.equal(prismaState.createCalls.length, 1);
 });

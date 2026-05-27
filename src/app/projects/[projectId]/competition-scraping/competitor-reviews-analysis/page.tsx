@@ -1,25 +1,32 @@
 'use client';
 
-// W#2 P-49 Workstream 5 Session 2 — Table 2 Competitor Reviews Analysis
-// page per docs/REVIEWS_PHASE_2_DESIGN.md §B 2026-05-27 (Reviews Phase
-// 3 design lock).
+// W#2 P-49 Workstream 5 Sessions 2-3 — Table 2 Competitor Reviews
+// Analysis page per docs/REVIEWS_PHASE_2_DESIGN.md §B 2026-05-27
+// (Reviews Phase 3 design lock) + §B 2026-05-27-b (Session 2) +
+// §B 2026-05-27-c (Session 3 Per-Competitor flow).
 //
 // Route: /projects/[projectId]/competition-scraping/competitor-reviews-analysis
 //
-// First version ships the per-review nested-rows table + the Per-Review
-// Summarize button + modal (browser batch loop firing the new per-batch
-// server endpoint). The 6 other AI flows (per-competitor / per-category
-// / per-type comprehensive bulleted/non-bulleted) land in Session 3+.
+// Session 2 (shipped 2026-05-27) — per-review nested-rows table +
+// Per-Review Summarize button + modal (browser batch loop firing the
+// per-batch server endpoint).
+// Session 3 (this session) — Per-Competitor Summarize button + modal
+// + summary banner row showing the theme-grouped bulleted aggregate
+// output per URL. ONE Anthropic call per click; output is a single
+// summary string for the URL's full review corpus.
+// Later sessions will add per-category + per-type comprehensive flows
+// (Tables 3 + 4 under the "By Category-Type" toggle option).
 //
 // Data model:
 //   - Page loads all CompetitorUrls for the Project on mount.
 //   - When a URL row expands, fetches that URL's CapturedReviews.
-//   - Summary cells populate live as Per-Review Summarize batches return.
-//   - Summaries are persisted server-side (via the per-batch endpoint's
-//     ReviewAnalysis PER_REVIEW rows) but are NOT re-loaded on page
-//     refresh in this v1 — that bulk-load endpoint ships in Session 3+.
-//     For the first live run, summaries are visible during the session
-//     they're generated in; future sessions add the read-back path.
+//   - Per-review summary cells populate live as Per-Review Summarize
+//     batches return.
+//   - Per-Competitor summary banners populate live as the single AI
+//     call returns; visible at the URL row level without expanding.
+//   - Summaries are persisted server-side (PER_REVIEW + PER_PRODUCT
+//     rows in ReviewAnalysis) but are NOT re-loaded on page refresh
+//     in this version — bulk-load read-back ships in a later session.
 
 import { useEffect, useState } from 'react';
 import type { JSX } from 'react';
@@ -32,6 +39,7 @@ import type {
 } from '@/lib/shared-types/competition-scraping';
 import { CompetitionScrapingSurfaceNav } from '../components/CompetitionScrapingSurfaceNav';
 import { PerReviewSummarizeModal } from './components/PerReviewSummarizeModal';
+import { PerCompetitorSummarizeModal } from './components/PerCompetitorSummarizeModal';
 
 const WORKFLOW_SLUG = 'competition-scraping';
 
@@ -67,10 +75,17 @@ export default function CompetitorReviewsAnalysisPage() {
   const [summaryByReviewId, setSummaryByReviewId] = useState<
     Record<string, { summary: string; source: 'cache' | 'fresh' }>
   >({});
+  // per-urlId Per-Competitor summary cache (populated by Session 3+
+  // Per-Competitor Summarize runs). One aggregated summary per URL.
+  const [competitorSummaryByUrlId, setCompetitorSummaryByUrlId] = useState<
+    Record<string, { summary: string; source: 'cache' | 'fresh' }>
+  >({});
 
-  // Modal state — when set, opens the Per-Review Summarize modal for
-  // the URL whose reviews are queued.
+  // Modal state — Table 2 hosts two AI flows so we track which is open.
+  // Only one modal open at a time; the other slot is null when the first
+  // is shown.
   const [modalUrl, setModalUrl] = useState<CompetitorUrl | null>(null);
+  const [competitorModalUrl, setCompetitorModalUrl] = useState<CompetitorUrl | null>(null);
 
   // Load all URLs for the Project on mount.
   useEffect(() => {
@@ -168,6 +183,32 @@ export default function CompetitorReviewsAnalysisPage() {
     setSummaryByReviewId((prev) => ({ ...prev, [reviewId]: { summary, source } }));
   }
 
+  function handleCompetitorSummary(
+    urlId: string,
+    summary: string,
+    source: 'cache' | 'fresh'
+  ) {
+    setCompetitorSummaryByUrlId((prev) => ({
+      ...prev,
+      [urlId]: { summary, source },
+    }));
+  }
+
+  // Helper for the Per-Competitor button — we need the FULL review
+  // corpus loaded before we can fire the AI call (the browser-side
+  // prompt preview needs review bodies; the wire call needs reviewIds).
+  // If reviews aren't loaded yet, kick off the load + open the modal
+  // once they arrive; the modal will start in idle state and director
+  // can hit Start.
+  async function openCompetitorModal(u: CompetitorUrl) {
+    if (!projectId) return;
+    const existing = reviewsByUrl[u.id];
+    if (!existing || existing.kind !== 'loaded') {
+      await ensureReviewsLoaded(u.id);
+    }
+    setCompetitorModalUrl(u);
+  }
+
   if (ctx.loading || !ctx.project) {
     return (
       <FullPageState
@@ -240,11 +281,13 @@ export default function CompetitorReviewsAnalysisPage() {
             lineHeight: 1.6,
           }}
         >
-          Per-review summaries powered by Claude. Expand a competitor to view
-          its reviews, then click <strong>Summarize reviews</strong> to
-          generate one-sentence summaries via the browser batch loop. Session
-          2 ships the Per-Review Summarize flow only; per-competitor /
-          per-category / per-type comprehensive flows land in Session 3+.
+          AI summaries powered by Claude.{' '}
+          <strong>Summarize competitor</strong> aggregates ALL reviews under
+          one URL into a theme-grouped bulleted summary (one Anthropic call
+          per click). Expand a competitor and click{' '}
+          <strong>Summarize reviews</strong> to also generate per-review
+          bullet summaries via the browser batch loop. Per-category and
+          per-type comprehensive flows land in later sessions.
         </p>
 
         {urlsState.kind === 'loading' && (
@@ -266,8 +309,10 @@ export default function CompetitorReviewsAnalysisPage() {
             expanded={expanded}
             reviewsByUrl={reviewsByUrl}
             summaryByReviewId={summaryByReviewId}
+            competitorSummaryByUrlId={competitorSummaryByUrlId}
             onToggle={toggleExpand}
             onOpenSummarizeModal={(u) => setModalUrl(u)}
+            onOpenCompetitorModal={openCompetitorModal}
           />
         )}
       </div>
@@ -281,6 +326,17 @@ export default function CompetitorReviewsAnalysisPage() {
           reviews={getLoadedReviews(reviewsByUrl[modalUrl.id])}
           onClose={() => setModalUrl(null)}
           onSummary={handleSummary}
+        />
+      )}
+      {competitorModalUrl && (
+        <PerCompetitorSummarizeModal
+          projectId={projectId}
+          urlId={competitorModalUrl.id}
+          productName={competitorModalUrl.productName || competitorModalUrl.url}
+          platform={competitorModalUrl.platform}
+          reviews={getLoadedReviews(reviewsByUrl[competitorModalUrl.id])}
+          onClose={() => setCompetitorModalUrl(null)}
+          onSummary={handleCompetitorSummary}
         />
       )}
     </div>
@@ -299,17 +355,26 @@ interface UrlsTableProps {
   expanded: Record<string, boolean>;
   reviewsByUrl: Record<string, ReviewsLoadState>;
   summaryByReviewId: Record<string, { summary: string; source: 'cache' | 'fresh' }>;
+  competitorSummaryByUrlId: Record<string, { summary: string; source: 'cache' | 'fresh' }>;
   onToggle: (urlId: string) => void;
   onOpenSummarizeModal: (url: CompetitorUrl) => void;
+  onOpenCompetitorModal: (url: CompetitorUrl) => void;
 }
+
+// Grid template shared between the header row + each URL row so columns
+// align cleanly. Two action buttons (Summarize competitor /
+// Summarize reviews) live in a single right-side column stacked vertically.
+const URL_ROW_GRID = '36px 1fr 110px 130px 180px';
 
 function UrlsTable({
   urls,
   expanded,
   reviewsByUrl,
   summaryByReviewId,
+  competitorSummaryByUrlId,
   onToggle,
   onOpenSummarizeModal,
+  onOpenCompetitorModal,
 }: UrlsTableProps): JSX.Element {
   return (
     <div
@@ -323,7 +388,7 @@ function UrlsTable({
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: '36px 1fr 120px 140px 160px',
+          gridTemplateColumns: URL_ROW_GRID,
           fontSize: '11px',
           fontWeight: 600,
           textTransform: 'uppercase',
@@ -338,7 +403,7 @@ function UrlsTable({
         <span>Competitor / Product</span>
         <span>Platform</span>
         <span>Reviews</span>
-        <span></span>
+        <span>Actions</span>
       </div>
 
       {urls.map((u) => {
@@ -346,16 +411,19 @@ function UrlsTable({
         const reviewsState = reviewsByUrl[u.id];
         const reviewsCount =
           reviewsState?.kind === 'loaded' ? reviewsState.reviews.length : null;
+        const competitorSummary = competitorSummaryByUrlId[u.id];
         return (
           <div key={u.id}>
             {/* URL row */}
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: '36px 1fr 120px 140px 160px',
+                gridTemplateColumns: URL_ROW_GRID,
                 alignItems: 'center',
                 padding: '12px 14px',
-                borderBottom: '1px solid #21262d',
+                borderBottom: competitorSummary
+                  ? '1px solid #161b22'
+                  : '1px solid #21262d',
                 cursor: 'pointer',
               }}
               onClick={() => onToggle(u.id)}
@@ -399,19 +467,42 @@ function UrlsTable({
                   ? `${reviewsCount} loaded`
                   : 'expand to load'}
               </span>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (!isExpanded) onToggle(u.id);
-                  onOpenSummarizeModal(u);
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '6px',
+                  alignItems: 'flex-start',
                 }}
-                disabled={reviewsState?.kind === 'loading'}
-                style={summarizeButtonStyle(reviewsState?.kind)}
+                onClick={(e) => e.stopPropagation()}
               >
-                Summarize reviews
-              </button>
+                <button
+                  type="button"
+                  onClick={() => onOpenCompetitorModal(u)}
+                  disabled={reviewsState?.kind === 'loading'}
+                  style={competitorButtonStyle(reviewsState?.kind)}
+                >
+                  Summarize competitor
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!isExpanded) onToggle(u.id);
+                    onOpenSummarizeModal(u);
+                  }}
+                  disabled={reviewsState?.kind === 'loading'}
+                  style={summarizeButtonStyle(reviewsState?.kind)}
+                >
+                  Summarize reviews
+                </button>
+              </div>
             </div>
+
+            {/* Per-Competitor summary banner row (visible without expanding)
+                — shows the theme-grouped bulleted output for the URL. */}
+            {competitorSummary && (
+              <CompetitorSummaryBanner summary={competitorSummary} />
+            )}
 
             {/* Expanded review rows */}
             {isExpanded && (
@@ -427,6 +518,58 @@ function UrlsTable({
   );
 }
 
+// ─── CompetitorSummaryBanner ────────────────────────────────────────
+
+function CompetitorSummaryBanner({
+  summary,
+}: {
+  summary: { summary: string; source: 'cache' | 'fresh' };
+}): JSX.Element {
+  return (
+    <div
+      style={{
+        background: '#0a1320',
+        borderBottom: '1px solid #21262d',
+        padding: '12px 14px 14px 50px',
+      }}
+    >
+      <div
+        style={{
+          fontSize: '10px',
+          textTransform: 'uppercase',
+          letterSpacing: '0.05em',
+          color: '#8b949e',
+          fontWeight: 700,
+          marginBottom: '6px',
+        }}
+      >
+        Per-Competitor Summary
+        {summary.source === 'cache' && (
+          <span
+            style={{
+              marginLeft: '6px',
+              fontSize: '9px',
+              color: '#6e7681',
+            }}
+          >
+            (cached)
+          </span>
+        )}
+      </div>
+      <div
+        style={{
+          fontSize: '12px',
+          color: '#e6edf3',
+          lineHeight: 1.6,
+          whiteSpace: 'pre-wrap',
+        }}
+      >
+        {summary.summary}
+      </div>
+    </div>
+  );
+}
+
 function summarizeButtonStyle(
   state: ReviewsLoadState['kind'] | undefined
 ): React.CSSProperties {
@@ -438,6 +581,26 @@ function summarizeButtonStyle(
     background: loading ? '#21262d' : '#1f6feb',
     color: '#fff',
     border: '1px solid #388bfd',
+    borderRadius: '6px',
+    cursor: loading ? 'wait' : 'pointer',
+    opacity: loading ? 0.7 : 1,
+  };
+}
+
+function competitorButtonStyle(
+  state: ReviewsLoadState['kind'] | undefined
+): React.CSSProperties {
+  const loading = state === 'loading';
+  return {
+    padding: '6px 12px',
+    fontSize: '11px',
+    fontWeight: 600,
+    // Distinct color from "Summarize reviews" (blue) so director can
+    // tell the two actions apart at a glance: green = competitor-level
+    // aggregation, blue = per-review batch loop.
+    background: loading ? '#21262d' : '#238636',
+    color: '#fff',
+    border: '1px solid #2ea043',
     borderRadius: '6px',
     cursor: loading ? 'wait' : 'pointer',
     opacity: loading ? 0.7 : 1,

@@ -171,3 +171,109 @@ export function findReviewIdMismatch(
   }
   return { missing, extra, duplicated };
 }
+
+// ────────────────────────────────────────────────────────────────────
+// Per-Competitor Comprehensive (bulleted) — W5 Session 3, first of the
+// six remaining flows from §B 2026-05-27. Director-confirmed at session
+// start (per feedback_plan_output_shape_before_building.md):
+//   - Theme-grouped bullets under 4 headings (Positive signals /
+//     Negative signals / Use cases / Notable individual signals).
+//   - Empty themes omit their heading entirely.
+//   - ~8-15 bullets total across themes.
+//   - Volume cues ("Multiple reviewers" / "Several mention" / "One
+//     reviewer notes") where useful.
+//   - Bulleted-critical format mirroring W5 Session 2's Per-Review v2:
+//     each bullet one short sentence, filler stripped, no first person.
+//   - Raw review bodies as input (direct one-shot), not pre-summarized
+//     bullets — preserves tone, sarcasm, context.
+//   - ONE Anthropic call per competitor URL (no batching since the
+//     output is one summary per URL).
+
+// Bump on substantive prompt changes; included in the cache hash so old
+// summaries don't get served when the prompt's semantic shape changes.
+//
+// History:
+//   v1 (2026-05-27-b, current): theme-grouped bullets under 4 headings,
+//        bulleted-critical filler-stripped, ~8-15 bullets total.
+export const PER_COMPETITOR_BULLETED_PROMPT_VERSION = 'v1';
+
+export const PER_COMPETITOR_BULLETED_SYSTEM_PROMPT = `You are an expert competitive-research analyst summarizing all the customer reviews of ONE competitor's product for a brand owner. Your task: aggregate the CRITICAL signals across every review into a single theme-grouped bulleted summary the brand owner can scan in under a minute.
+
+Return a JSON object with the shape:
+
+{
+  "summary": "<theme-grouped bulleted list as a single string>"
+}
+
+Rules for the "summary" field:
+
+- Format as theme-grouped bullets under up to four section headings, in this order:
+    "## Positive signals" — what reviewers consistently praise about this product.
+    "## Negative signals" — what reviewers consistently criticize about this product.
+    "## Use cases" — who uses it and how (user types, primary use cases, contexts).
+    "## Notable individual signals" — specific complaints, praise, or experience patterns that stand out even from a single reviewer (e.g., durability failures after N months, niche use cases, specific named comparisons to other products).
+- Each heading is a markdown H2 ("## Heading") on its own line, followed by a blank line, then its bullets, then a blank line before the next heading. Empty themes OMIT their heading entirely (do not emit an empty section). Sections may appear in fewer than four headings if the corpus has no signal for a theme.
+- Each bullet starts with "- " and lives on its own line. Each bullet is one short sentence (one main idea). No sub-bullets. No paragraphs.
+- Include ONLY critical information the brand owner could act on. Critical = patterns that recur across reviews OR singular signals strong enough to surface (e.g., "Multiple reviewers note the strap breaks within 3 months" / "One reviewer reports the battery swelling after 6 months").
+- LEAVE OUT non-critical filler: generic positive/negative comments not tied to a specific signal, parenthetical asides, mild observations the reviewer themselves dismissed, repeated points across reviews (mention each pattern only once).
+- Volume cues when useful: "Multiple reviewers report X" / "Several mention Y" / "A few note Z" / "One reviewer reports W". Use these to communicate how widespread a signal is. Avoid exact counts unless they're load-bearing.
+- Length target: typically 8-15 bullets total across all themes combined. Some products legitimately have fewer (sparse corpora, very uniform feedback) — emit fewer. Some legitimately have more — go up to ~20 if the corpus has genuine signal density. Do not pad.
+- Third-person neutral analyst voice. Do NOT use first person ("I"); do NOT address the reader directly ("you").
+- Use the product name when relevant; do not invent attributes not present in any review.
+- Quote sparingly — short fragments only, in double quotes, never whole sentences.
+- If the entire corpus contains zero critical signals (rare — usually means very few reviews or all reviews are non-substantive), emit a single bullet under no heading: "- (no critical signals across the corpus)".
+
+Output rules:
+
+- Return ONLY the JSON object. No prose preamble. No \`\`\`json fences. No trailing commentary.
+- The "summary" field is a single string containing newline-separated headings + bullets (rendered with whiteSpace: pre-wrap on the client side).`;
+
+export type BuildPerCompetitorBulletedPromptInput = {
+  productName: string;
+  platform: string;
+  reviews: ReadonlyArray<BatchableReview>;
+};
+
+export function buildPerCompetitorBulletedUserMessage({
+  productName,
+  platform,
+  reviews,
+}: BuildPerCompetitorBulletedPromptInput): string {
+  const header =
+    `Product: ${productName}\n` +
+    `Platform: ${platform}\n` +
+    `Reviews in corpus: ${reviews.length}\n\n` +
+    `Aggregate the critical signals across all reviews below into one theme-grouped bulleted summary for the brand owner.\n\n`;
+
+  const body = reviews
+    .map((r, i) => {
+      const meta: string[] = [];
+      if (r.starRating != null) meta.push(`${r.starRating}/5 stars`);
+      if (r.reviewerName) meta.push(r.reviewerName);
+      if (r.reviewDate) meta.push(r.reviewDate.toISOString().slice(0, 10));
+      const metaLine = meta.length > 0 ? ` (${meta.join(', ')})` : '';
+      return `--- Review ${i + 1}${metaLine} ---\n${r.body}\n`;
+    })
+    .join('\n');
+
+  return header + body;
+}
+
+// Validated output shape — ONE summary per call (not an array, since
+// the output is one aggregated summary per competitor URL).
+export interface PerCompetitorBulletedOutput {
+  summary: string;
+}
+
+export function validatePerCompetitorBulletedOutput(
+  parsed: unknown
+): PerCompetitorBulletedOutput | null {
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return null;
+  }
+  const obj = parsed as { summary?: unknown };
+  if (typeof obj.summary !== 'string' || !obj.summary.trim()) {
+    return null;
+  }
+  return { summary: obj.summary };
+}

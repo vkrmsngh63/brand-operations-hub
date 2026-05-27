@@ -50,6 +50,10 @@ import {
   validatePerReviewBatchOutput,
   findReviewIdMismatch,
   type PerReviewSummaryEntry,
+  PER_COMPETITOR_BULLETED_PROMPT_VERSION,
+  PER_COMPETITOR_BULLETED_SYSTEM_PROMPT,
+  buildPerCompetitorBulletedUserMessage,
+  validatePerCompetitorBulletedOutput,
 } from '../review-analysis/prompts.ts';
 import { countMessageTokens } from '../review-analysis/token-counter.ts';
 
@@ -68,9 +72,11 @@ export type {
 
 const WORKFLOW = 'competition-scraping';
 
-// Flow registry — all 7 flows from §B 2026-05-27. Session 2 ships only
-// 'per-review-summarize'; the other 6 reject with 400 + a "coming in
-// Session 3+" message until their prompt builders land.
+// Flow registry — all 7 flows from §B 2026-05-27.
+// Session 2 (2026-05-27) shipped 'per-review-summarize'.
+// Session 3 (this session) ships 'per-competitor-bulleted'.
+// The remaining 5 reject with 400 + a "not yet shipped" message until
+// their prompt builders land in later sessions.
 export const SUPPORTED_FLOWS = [
   'per-review-summarize',
   'per-competitor-bulleted',
@@ -84,6 +90,7 @@ export type ReviewAnalysisFlow = (typeof SUPPORTED_FLOWS)[number];
 
 export const SHIPPED_FLOWS = new Set<ReviewAnalysisFlow>([
   'per-review-summarize',
+  'per-competitor-bulleted',
 ]);
 
 export function isReviewAnalysisFlow(v: unknown): v is ReviewAnalysisFlow {
@@ -149,10 +156,14 @@ export type ReviewAnalysisRunBatchPrismaLike = {
     }): Promise<CapturedReviewForBatchRow[]>;
   };
   reviewAnalysis: {
+    // Per-review flow queries by reviewsHash[] (one hash per reviewId);
+    // per-competitor flow queries by a single corpus hash. Both pass a
+    // `reviewsHash: { in: [...] }` filter — singular case just sends a
+    // one-element array. The `level` field is the discriminator.
     findMany(args: {
       where: {
         urlId: string;
-        level: 'PER_REVIEW';
+        level: 'PER_REVIEW' | 'PER_PRODUCT';
         reviewsHash: { in: string[] };
       };
       select: {
@@ -202,6 +213,22 @@ export interface PerReviewBatchResponseBody {
   usage: PerReviewBatchUsage;
 }
 
+// Per-Competitor wire shape — ONE summary per call (output is a single
+// aggregated theme-grouped bulleted summary for the entire URL's review
+// corpus). source = 'cache' when the (urlId, reviewIds-set, model,
+// prompt-version) tuple already has a stored ReviewAnalysis PER_PRODUCT
+// row.
+export interface PerCompetitorBulletedResponseBody {
+  flow: 'per-competitor-bulleted';
+  summary: string;
+  source: 'cache' | 'fresh';
+  usage: PerReviewBatchUsage;
+}
+
+export type RunBatchResponseBody =
+  | PerReviewBatchResponseBody
+  | PerCompetitorBulletedResponseBody;
+
 // Pull the concatenated text content out of a messages.create response.
 function extractTextFromContent(
   content: Anthropic.ContentBlock[] | unknown
@@ -244,7 +271,19 @@ function buildSystemBlocks(): Anthropic.TextBlockParam[] {
   ];
 }
 
-// Pull a summary string out of a PER_REVIEW row's stored analysisJson.
+function buildPerCompetitorSystemBlocks(): Anthropic.TextBlockParam[] {
+  return [
+    {
+      type: 'text',
+      text: PER_COMPETITOR_BULLETED_SYSTEM_PROMPT,
+      cache_control: { type: 'ephemeral' },
+    },
+  ];
+}
+
+// Pull a summary string out of a stored analysisJson. Used by both
+// PER_REVIEW and PER_PRODUCT cache reads since both store the summary
+// as { summary: string, ... } in the JSON column.
 // Returns null when the JSON column doesn't match the expected shape
 // (defensive — shouldn't happen since we control the persistence path,
 // but JSON columns can drift across schema migrations).
@@ -296,7 +335,7 @@ export function makeReviewAnalysisRunBatchHandlers(
       return {
         status: 400,
         body: {
-          error: `flow '${flow}' is not yet shipped; only 'per-review-summarize' is supported in Session 2 (other 6 land in Session 3+).`,
+          error: `flow '${flow}' is not yet shipped; supported flows: ${[...SHIPPED_FLOWS].join(', ')}.`,
         },
       };
     }
@@ -400,6 +439,210 @@ export function makeReviewAnalysisRunBatchHandlers(
           missing,
         },
       };
+    }
+
+    // ─── Per-Competitor Comprehensive (bulleted) dispatch ───────────
+    //
+    // Output is ONE aggregated summary across the full review corpus
+    // for this CompetitorUrl. Persisted as ONE ReviewAnalysis row with
+    // level='PER_PRODUCT' (per schema.prisma:537 — "one analysis per
+    // CompetitorUrl"). Cache key is a SINGLE corpus hash over the
+    // sorted reviewIds + modelVersion + prompt-version.
+    if (flow === 'per-competitor-bulleted') {
+      // Reorder loaded reviews to match the input reviewIds order so
+      // the user message presents reviews in the same order the
+      // browser supplied them. This is mostly cosmetic since the
+      // model aggregates across all reviews anyway, but it keeps
+      // prompt-text deterministic for cache + replay purposes.
+      const reviewById = new Map(reviews.map((r) => [r.id, r]));
+      const orderedReviews = reviewIds
+        .map((id) => reviewById.get(id))
+        .filter((r): r is CapturedReviewForBatchRow => r != null);
+
+      const corpusCacheKeyVersion = `${modelVersion}|${PER_COMPETITOR_BULLETED_PROMPT_VERSION}`;
+      const corpusHash = computeReviewsHash(
+        reviewIds.map((id) => ({ id })),
+        corpusCacheKeyVersion
+      );
+
+      let cachedRows: ReviewAnalysisCachedRow[];
+      try {
+        cachedRows = await withRetry(() =>
+          prisma.reviewAnalysis.findMany({
+            where: {
+              urlId,
+              level: 'PER_PRODUCT',
+              reviewsHash: { in: [corpusHash] },
+            },
+            select: {
+              id: true,
+              reviewsHash: true,
+              analysisJson: true,
+              modelVersion: true,
+            },
+          })
+        );
+      } catch (error) {
+        recordFlake('POST per-competitor-bulleted cache lookup', error, {
+          projectId,
+          urlId,
+        });
+        cachedRows = [];
+      }
+
+      const cachedSummary = cachedRows
+        .map((r) => summaryFromCachedJson(r.analysisJson))
+        .find((s): s is string => !!s);
+
+      if (cachedSummary) {
+        const cachedResponse: PerCompetitorBulletedResponseBody = {
+          flow: 'per-competitor-bulleted',
+          summary: cachedSummary,
+          source: 'cache',
+          usage: {
+            inputTokens: 0,
+            outputTokens: 0,
+            cacheCreationInputTokens: 0,
+            cacheReadInputTokens: 0,
+            actualCostUsd: 0,
+            estimatedCostUsd: 0,
+          },
+        };
+        return { status: 200, body: cachedResponse };
+      }
+
+      const productName = url.productName ?? 'Unknown product';
+      const userText = buildPerCompetitorBulletedUserMessage({
+        productName,
+        platform: url.platform,
+        reviews: orderedReviews.map((r) => ({
+          id: r.id,
+          body: r.body,
+          reviewerName: r.reviewerName,
+          starRating: r.starRating,
+          reviewDate: r.reviewDate,
+        })),
+      });
+
+      let estimatedInputTokensPC = 0;
+      try {
+        estimatedInputTokensPC = await countMessageTokens({
+          client: anthropicClient,
+          model: modelVersion,
+          system: PER_COMPETITOR_BULLETED_SYSTEM_PROMPT,
+          messages: [{ role: 'user', content: userText }],
+        });
+      } catch (error) {
+        recordFlake('POST per-competitor-bulleted countTokens', error, {
+          projectId,
+          urlId,
+        });
+      }
+      // Per-competitor output is a single aggregated summary (~8-15
+      // bullets × ~20 tokens/bullet ≈ ~200-400 output tokens). Headroom
+      // factor of ~10× covers theme-heading overhead + outlier corpora.
+      const estimatedOutputTokensPC = 4_000;
+      const estimatedCostUsdPC = estimateCostUsd(
+        modelVersion,
+        estimatedInputTokensPC,
+        estimatedOutputTokensPC
+      );
+
+      let responsePC: Anthropic.Message;
+      try {
+        responsePC = await anthropicClient.messages.create({
+          model: modelVersion,
+          max_tokens: PER_BATCH_MAX_OUTPUT_TOKENS,
+          system: buildPerCompetitorSystemBlocks(),
+          messages: [{ role: 'user', content: userText }],
+        });
+      } catch (error) {
+        recordFlake('POST per-competitor-bulleted messages.create', error, {
+          projectId,
+          urlId,
+          corpusSize: orderedReviews.length,
+        });
+        return {
+          status: 502,
+          body: {
+            error: `AI call failed: ${error instanceof Error ? error.message : 'unknown error'}`,
+          },
+        };
+      }
+
+      const textPC = extractTextFromContent(responsePC.content);
+      let parsedPC: unknown;
+      try {
+        parsedPC = extractJsonFromModelText(textPC);
+      } catch (error) {
+        recordFlake('POST per-competitor-bulleted parse JSON', error, {
+          projectId,
+          urlId,
+        });
+        return {
+          status: 502,
+          body: { error: 'AI returned malformed JSON' },
+        };
+      }
+      const validatedPC = validatePerCompetitorBulletedOutput(parsedPC);
+      if (!validatedPC) {
+        return {
+          status: 502,
+          body: { error: 'AI output did not match the per-competitor schema' },
+        };
+      }
+
+      try {
+        await withRetry(() =>
+          prisma.reviewAnalysis.create({
+            data: {
+              level: 'PER_PRODUCT',
+              urlId,
+              projectId,
+              typeFilter: null,
+              analysisJson: {
+                summary: validatedPC.summary,
+              } as Prisma.InputJsonValue,
+              reviewsHash: corpusHash,
+              modelVersion,
+              runByUserId: userId,
+              costUsdMicros: null,
+            },
+            select: { id: true },
+          })
+        );
+      } catch (error) {
+        recordFlake('POST per-competitor-bulleted persist', error, {
+          projectId,
+          urlId,
+        });
+        // Soft-fail — return the fresh summary to the browser since the
+        // AI call already cost money. Re-run will either hit cache (if
+        // a parallel call persisted) or re-pay.
+      }
+
+      const actualCostUsdPC = calculateCostUsd(modelVersion, {
+        inputTokens: responsePC.usage.input_tokens,
+        outputTokens: responsePC.usage.output_tokens,
+        cacheCreationInputTokens: responsePC.usage.cache_creation_input_tokens ?? 0,
+        cacheReadInputTokens: responsePC.usage.cache_read_input_tokens ?? 0,
+      });
+      void toCostUsdMicros;
+
+      const freshResponse: PerCompetitorBulletedResponseBody = {
+        flow: 'per-competitor-bulleted',
+        summary: validatedPC.summary,
+        source: 'fresh',
+        usage: {
+          inputTokens: responsePC.usage.input_tokens,
+          outputTokens: responsePC.usage.output_tokens,
+          cacheCreationInputTokens: responsePC.usage.cache_creation_input_tokens ?? 0,
+          cacheReadInputTokens: responsePC.usage.cache_read_input_tokens ?? 0,
+          actualCostUsd: actualCostUsdPC,
+          estimatedCostUsd: estimatedCostUsdPC,
+        },
+      };
+      return { status: 200, body: freshResponse };
     }
 
     // Compute the per-review cache hash for each reviewId. The hash
