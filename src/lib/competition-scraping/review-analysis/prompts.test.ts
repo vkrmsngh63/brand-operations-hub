@@ -221,31 +221,51 @@ test('findReviewIdMismatch surfaces all three failure modes together', () => {
 // ────────────────────────────────────────────────────────────────────
 // Per-Competitor Comprehensive (bulleted) — W5 Session 3.
 
-test('PER_COMPETITOR_BULLETED_PROMPT_VERSION is set to v1', () => {
+test('PER_COMPETITOR_BULLETED_PROMPT_VERSION is set to v2 (post-Phase-4-redirect)', () => {
   // Tripwire — when bumping prompt version (e.g., after a Phase 4
   // redirect), update this test + the version history comment in
-  // prompts.ts. Same versioning Pattern as W5 Session 2 FF#3.
-  assert.equal(PER_COMPETITOR_BULLETED_PROMPT_VERSION, 'v1');
+  // prompts.ts. v1 retired same day after director's Phase 4 redirect:
+  // "focus to remain on the critiques of the company, product,
+  // fulfillment claims, etc." Same versioning Pattern as W5 Session 2 FF#3.
+  assert.equal(PER_COMPETITOR_BULLETED_PROMPT_VERSION, 'v2');
 });
 
-test('PER_COMPETITOR_BULLETED_SYSTEM_PROMPT carries theme-grouped + bulleted-critical directives', () => {
+test('PER_COMPETITOR_BULLETED_SYSTEM_PROMPT v2 carries critique-only directives + 4 critique-category headings', () => {
   assert.ok(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT.length > 500);
-  // Theme-grouped under 4 headings (director-locked spec):
-  assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /## Positive signals/);
-  assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /## Negative signals/);
-  assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /## Use cases/);
-  assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /## Notable individual signals/);
-  // Empty-themes-omit directive:
+  // v2 critique-category headings (replaces v1's positive/negative/
+  // use-cases/notable structure):
+  assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /## Product critiques/);
+  assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /## Fulfillment critiques/);
+  assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /## Company \/ seller critiques/);
+  assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /## Other notable critiques/);
+  // Critique-only directive (explicit positives exclusion):
+  assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /Focus EXCLUSIVELY on critiques/);
+  assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /Positive signals of any kind/);
+  // Empty-themes-omit directive carries from v1:
   assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /Empty themes OMIT their heading/);
   // Bulleted-critical inherits from Per-Review v2:
   assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /critical/i);
-  assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /LEAVE OUT non-critical filler/);
-  // Volume cues + length target:
+  // Volume cues + new length target (5-12, tightened from v1's 8-15):
   assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /Multiple reviewers/);
-  assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /8-15 bullets/);
-  // Tone + output rules carried from Per-Review v2:
+  assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /5-12/);
+  // Tone + output rules carried from v1:
   assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /Third-person neutral/);
   assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /Return ONLY the JSON object/);
+  // No-critiques fallback bullet:
+  assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /no critiques surfaced across the corpus/);
+});
+
+test('PER_COMPETITOR_BULLETED_SYSTEM_PROMPT v2 does NOT carry deprecated v1 headings (positives + use cases)', () => {
+  // Defends against accidental partial revert to v1 structure during
+  // future iterations. v1 had "## Positive signals" + "## Use cases"
+  // + "## Negative signals" + "## Notable individual signals"; v2
+  // replaces those entirely with critique-category headings.
+  assert.doesNotMatch(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /## Positive signals/);
+  assert.doesNotMatch(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /## Use cases/);
+  assert.doesNotMatch(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /## Negative signals/);
+  assert.doesNotMatch(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /## Notable individual signals/);
+  // v1's length target (8-15) replaced by v2's 5-12:
+  assert.doesNotMatch(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /8-15 bullets/);
 });
 
 test('PER_COMPETITOR_BULLETED_SYSTEM_PROMPT does NOT carry Per-Review-specific directives', () => {

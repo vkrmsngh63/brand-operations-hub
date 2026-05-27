@@ -40,6 +40,7 @@ import type {
 import { CompetitionScrapingSurfaceNav } from '../components/CompetitionScrapingSurfaceNav';
 import { PerReviewSummarizeModal } from './components/PerReviewSummarizeModal';
 import { PerCompetitorSummarizeModal } from './components/PerCompetitorSummarizeModal';
+import { GlobalCompetitorSummarizeModal } from './components/GlobalCompetitorSummarizeModal';
 
 const WORKFLOW_SLUG = 'competition-scraping';
 
@@ -77,15 +78,21 @@ export default function CompetitorReviewsAnalysisPage() {
   >({});
   // per-urlId Per-Competitor summary cache (populated by Session 3+
   // Per-Competitor Summarize runs). One aggregated summary per URL.
+  // analysisId is the ReviewAnalysis row id — required for the Edit
+  // affordance's PATCH call.
   const [competitorSummaryByUrlId, setCompetitorSummaryByUrlId] = useState<
-    Record<string, { summary: string; source: 'cache' | 'fresh' }>
+    Record<
+      string,
+      { analysisId: string; summary: string; source: 'cache' | 'fresh' }
+    >
   >({});
 
-  // Modal state — Table 2 hosts two AI flows so we track which is open.
-  // Only one modal open at a time; the other slot is null when the first
-  // is shown.
+  // Modal state — Table 2 hosts three AI flow surfaces so we track
+  // which is open. Only one modal open at a time; the other slots are
+  // null when the first is shown.
   const [modalUrl, setModalUrl] = useState<CompetitorUrl | null>(null);
   const [competitorModalUrl, setCompetitorModalUrl] = useState<CompetitorUrl | null>(null);
+  const [globalModalOpen, setGlobalModalOpen] = useState<boolean>(false);
 
   // Load all URLs for the Project on mount.
   useEffect(() => {
@@ -185,13 +192,30 @@ export default function CompetitorReviewsAnalysisPage() {
 
   function handleCompetitorSummary(
     urlId: string,
+    analysisId: string,
     summary: string,
     source: 'cache' | 'fresh'
   ) {
     setCompetitorSummaryByUrlId((prev) => ({
       ...prev,
-      [urlId]: { summary, source },
+      [urlId]: { analysisId, summary, source },
     }));
+  }
+
+  // Called by CompetitorSummaryBanner after a successful PATCH so the
+  // local Table 2 state reflects the edit immediately.
+  function handleCompetitorSummaryEdited(urlId: string, summary: string) {
+    setCompetitorSummaryByUrlId((prev) => {
+      const existing = prev[urlId];
+      if (!existing) return prev;
+      // Edited summaries are treated as 'cache' source going forward —
+      // they're persisted to the DB row, so subsequent reloads see them
+      // from cache.
+      return {
+        ...prev,
+        [urlId]: { ...existing, summary, source: 'cache' },
+      };
+    });
   }
 
   // Helper for the Per-Competitor button — we need the FULL review
@@ -277,18 +301,43 @@ export default function CompetitorReviewsAnalysisPage() {
           style={{
             fontSize: '13px',
             color: '#8b949e',
-            margin: '0 0 20px',
+            margin: '0 0 16px',
             lineHeight: 1.6,
           }}
         >
-          AI summaries powered by Claude.{' '}
-          <strong>Summarize competitor</strong> aggregates ALL reviews under
-          one URL into a theme-grouped bulleted summary (one Anthropic call
-          per click). Expand a competitor and click{' '}
-          <strong>Summarize reviews</strong> to also generate per-review
-          bullet summaries via the browser batch loop. Per-category and
-          per-type comprehensive flows land in later sessions.
+          AI summaries powered by Claude. Click{' '}
+          <strong>Summarize Reviews for All Competitors</strong> to run the
+          critique extractor across every URL with at least 2 reviews
+          sequentially.{' '}
+          <strong>Summarize Competitor Reviews</strong> aggregates ALL
+          reviews under one URL into a theme-grouped bulleted critique
+          summary (one Anthropic call per click). Expand a competitor and
+          click <strong>Summarize reviews</strong> to also generate
+          per-review bullet summaries via the browser batch loop. Per-
+          category and per-type comprehensive flows land in later sessions.
         </p>
+
+        {/* Global Summarize-All button */}
+        {urlsState.kind === 'loaded' && urlsState.urls.length > 0 && (
+          <div style={{ marginBottom: '20px' }}>
+            <button
+              type="button"
+              onClick={() => setGlobalModalOpen(true)}
+              style={{
+                padding: '8px 16px',
+                fontSize: '12px',
+                fontWeight: 600,
+                background: '#238636',
+                color: '#fff',
+                border: '1px solid #2ea043',
+                borderRadius: '6px',
+                cursor: 'pointer',
+              }}
+            >
+              Summarize Reviews for All Competitors
+            </button>
+          </div>
+        )}
 
         {urlsState.kind === 'loading' && (
           <div style={{ fontSize: '13px', color: '#8b949e' }}>Loading competitors…</div>
@@ -305,6 +354,7 @@ export default function CompetitorReviewsAnalysisPage() {
 
         {urlsState.kind === 'loaded' && urlsState.urls.length > 0 && (
           <UrlsTable
+            projectId={projectId}
             urls={urlsState.urls}
             expanded={expanded}
             reviewsByUrl={reviewsByUrl}
@@ -313,6 +363,7 @@ export default function CompetitorReviewsAnalysisPage() {
             onToggle={toggleExpand}
             onOpenSummarizeModal={(u) => setModalUrl(u)}
             onOpenCompetitorModal={openCompetitorModal}
+            onCompetitorSummaryEdited={handleCompetitorSummaryEdited}
           />
         )}
       </div>
@@ -339,6 +390,14 @@ export default function CompetitorReviewsAnalysisPage() {
           onSummary={handleCompetitorSummary}
         />
       )}
+      {globalModalOpen && urlsState.kind === 'loaded' && (
+        <GlobalCompetitorSummarizeModal
+          projectId={projectId}
+          urls={urlsState.urls}
+          onClose={() => setGlobalModalOpen(false)}
+          onSummary={handleCompetitorSummary}
+        />
+      )}
     </div>
   );
 }
@@ -351,14 +410,19 @@ function getLoadedReviews(state: ReviewsLoadState | undefined): CapturedReview[]
 // ─── UrlsTable ──────────────────────────────────────────────────────
 
 interface UrlsTableProps {
+  projectId: string;
   urls: CompetitorUrl[];
   expanded: Record<string, boolean>;
   reviewsByUrl: Record<string, ReviewsLoadState>;
   summaryByReviewId: Record<string, { summary: string; source: 'cache' | 'fresh' }>;
-  competitorSummaryByUrlId: Record<string, { summary: string; source: 'cache' | 'fresh' }>;
+  competitorSummaryByUrlId: Record<
+    string,
+    { analysisId: string; summary: string; source: 'cache' | 'fresh' }
+  >;
   onToggle: (urlId: string) => void;
   onOpenSummarizeModal: (url: CompetitorUrl) => void;
   onOpenCompetitorModal: (url: CompetitorUrl) => void;
+  onCompetitorSummaryEdited: (urlId: string, summary: string) => void;
 }
 
 // Grid template shared between the header row + each URL row so columns
@@ -367,6 +431,7 @@ interface UrlsTableProps {
 const URL_ROW_GRID = '36px 1fr 110px 130px 180px';
 
 function UrlsTable({
+  projectId,
   urls,
   expanded,
   reviewsByUrl,
@@ -375,6 +440,7 @@ function UrlsTable({
   onToggle,
   onOpenSummarizeModal,
   onOpenCompetitorModal,
+  onCompetitorSummaryEdited,
 }: UrlsTableProps): JSX.Element {
   return (
     <div
@@ -482,7 +548,7 @@ function UrlsTable({
                   disabled={reviewsState?.kind === 'loading'}
                   style={competitorButtonStyle(reviewsState?.kind)}
                 >
-                  Summarize competitor
+                  Summarize Competitor Reviews
                 </button>
                 <button
                   type="button"
@@ -499,9 +565,15 @@ function UrlsTable({
             </div>
 
             {/* Per-Competitor summary banner row (visible without expanding)
-                — shows the theme-grouped bulleted output for the URL. */}
+                — shows the theme-grouped bulleted output for the URL +
+                Edit affordance to override the AI text inline. */}
             {competitorSummary && (
-              <CompetitorSummaryBanner summary={competitorSummary} />
+              <CompetitorSummaryBanner
+                projectId={projectId}
+                urlId={u.id}
+                summary={competitorSummary}
+                onEdited={onCompetitorSummaryEdited}
+              />
             )}
 
             {/* Expanded review rows */}
@@ -520,11 +592,88 @@ function UrlsTable({
 
 // ─── CompetitorSummaryBanner ────────────────────────────────────────
 
+interface CompetitorSummaryBannerProps {
+  projectId: string;
+  urlId: string;
+  summary: { analysisId: string; summary: string; source: 'cache' | 'fresh' };
+  onEdited: (urlId: string, summary: string) => void;
+}
+
 function CompetitorSummaryBanner({
+  projectId,
+  urlId,
   summary,
-}: {
-  summary: { summary: string; source: 'cache' | 'fresh' };
-}): JSX.Element {
+  onEdited,
+}: CompetitorSummaryBannerProps): JSX.Element {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(summary.summary);
+  const [saveState, setSaveState] = useState<
+    | { kind: 'idle' }
+    | { kind: 'saving' }
+    | { kind: 'error'; message: string }
+  >({ kind: 'idle' });
+
+  function startEdit() {
+    setDraft(summary.summary);
+    setSaveState({ kind: 'idle' });
+    setEditing(true);
+  }
+
+  function cancelEdit() {
+    setEditing(false);
+    setSaveState({ kind: 'idle' });
+  }
+
+  async function saveEdit() {
+    const trimmed = draft.trim();
+    if (!trimmed) {
+      setSaveState({
+        kind: 'error',
+        message: 'Summary cannot be empty.',
+      });
+      return;
+    }
+    if (!summary.analysisId) {
+      setSaveState({
+        kind: 'error',
+        message:
+          'This summary cannot be edited (no row id — re-run Summarize Competitor Reviews to persist it).',
+      });
+      return;
+    }
+    setSaveState({ kind: 'saving' });
+    try {
+      const res = await authFetch(
+        `/api/projects/${projectId}/competition-scraping/review-analysis/${summary.analysisId}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ summary: trimmed }),
+        }
+      );
+      if (!res.ok) {
+        let detail = `HTTP ${res.status}`;
+        try {
+          const body = (await res.json()) as { error?: string };
+          if (body?.error) detail = body.error;
+        } catch {
+          // ignore
+        }
+        setSaveState({ kind: 'error', message: detail });
+        return;
+      }
+      const body = (await res.json()) as { id: string; summary: string };
+      onEdited(urlId, body.summary);
+      setEditing(false);
+      setSaveState({ kind: 'idle' });
+    } catch (err) {
+      setSaveState({
+        kind: 'error',
+        message: err instanceof Error ? err.message : 'Network error',
+      });
+    }
+  }
+
   return (
     <div
       style={{
@@ -535,40 +684,147 @@ function CompetitorSummaryBanner({
     >
       <div
         style={{
-          fontSize: '10px',
-          textTransform: 'uppercase',
-          letterSpacing: '0.05em',
-          color: '#8b949e',
-          fontWeight: 700,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
           marginBottom: '6px',
         }}
       >
-        Per-Competitor Summary
-        {summary.source === 'cache' && (
-          <span
-            style={{
-              marginLeft: '6px',
-              fontSize: '9px',
-              color: '#6e7681',
-            }}
+        <div
+          style={{
+            fontSize: '10px',
+            textTransform: 'uppercase',
+            letterSpacing: '0.05em',
+            color: '#8b949e',
+            fontWeight: 700,
+          }}
+        >
+          Per-Competitor Summary
+          {summary.source === 'cache' && (
+            <span
+              style={{
+                marginLeft: '6px',
+                fontSize: '9px',
+                color: '#6e7681',
+              }}
+            >
+              (cached)
+            </span>
+          )}
+        </div>
+        {!editing && summary.analysisId && (
+          <button
+            type="button"
+            onClick={startEdit}
+            style={editButtonStyle}
           >
-            (cached)
-          </span>
+            Edit
+          </button>
         )}
       </div>
-      <div
-        style={{
-          fontSize: '12px',
-          color: '#e6edf3',
-          lineHeight: 1.6,
-          whiteSpace: 'pre-wrap',
-        }}
-      >
-        {summary.summary}
-      </div>
+      {editing ? (
+        <>
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            disabled={saveState.kind === 'saving'}
+            style={{
+              width: '100%',
+              minHeight: '160px',
+              fontSize: '12px',
+              color: '#e6edf3',
+              background: '#0d1117',
+              border: '1px solid #30363d',
+              borderRadius: '6px',
+              padding: '10px 12px',
+              lineHeight: 1.6,
+              fontFamily: "'IBM Plex Sans', sans-serif",
+              resize: 'vertical',
+              whiteSpace: 'pre-wrap',
+            }}
+          />
+          <div
+            style={{
+              display: 'flex',
+              gap: '8px',
+              marginTop: '8px',
+              alignItems: 'center',
+            }}
+          >
+            <button
+              type="button"
+              onClick={saveEdit}
+              disabled={saveState.kind === 'saving'}
+              style={{
+                ...savePrimaryStyle,
+                opacity: saveState.kind === 'saving' ? 0.7 : 1,
+                cursor: saveState.kind === 'saving' ? 'wait' : 'pointer',
+              }}
+            >
+              {saveState.kind === 'saving' ? 'Saving…' : 'Save'}
+            </button>
+            <button
+              type="button"
+              onClick={cancelEdit}
+              disabled={saveState.kind === 'saving'}
+              style={cancelButtonStyle}
+            >
+              Cancel
+            </button>
+            {saveState.kind === 'error' && (
+              <span style={{ fontSize: '11px', color: '#f85149' }}>
+                {saveState.message}
+              </span>
+            )}
+          </div>
+        </>
+      ) : (
+        <div
+          style={{
+            fontSize: '12px',
+            color: '#e6edf3',
+            lineHeight: 1.6,
+            whiteSpace: 'pre-wrap',
+          }}
+        >
+          {summary.summary}
+        </div>
+      )}
     </div>
   );
 }
+
+const editButtonStyle: React.CSSProperties = {
+  background: 'transparent',
+  color: '#58a6ff',
+  border: '1px solid #30363d',
+  borderRadius: '6px',
+  padding: '4px 10px',
+  fontSize: '11px',
+  cursor: 'pointer',
+  fontWeight: 600,
+};
+
+const savePrimaryStyle: React.CSSProperties = {
+  background: '#238636',
+  color: '#fff',
+  border: '1px solid #2ea043',
+  borderRadius: '6px',
+  padding: '6px 14px',
+  fontSize: '11px',
+  fontWeight: 600,
+};
+
+const cancelButtonStyle: React.CSSProperties = {
+  background: 'transparent',
+  color: '#e6edf3',
+  border: '1px solid #30363d',
+  borderRadius: '6px',
+  padding: '6px 14px',
+  fontSize: '11px',
+  fontWeight: 500,
+  cursor: 'pointer',
+};
 
 function summarizeButtonStyle(
   state: ReviewsLoadState['kind'] | undefined

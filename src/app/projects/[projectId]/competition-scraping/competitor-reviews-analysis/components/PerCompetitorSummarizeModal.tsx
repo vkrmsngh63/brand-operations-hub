@@ -41,7 +41,14 @@ export interface PerCompetitorSummarizeModalProps {
   onClose: () => void;
   // Called once when the call returns successfully so the parent can
   // paint the new summary into the Table 2 URL row immediately.
-  onSummary: (urlId: string, summary: string, source: 'cache' | 'fresh') => void;
+  // analysisId is the ReviewAnalysis row id — needed for the in-banner
+  // Edit affordance's PATCH call.
+  onSummary: (
+    urlId: string,
+    analysisId: string,
+    summary: string,
+    source: 'cache' | 'fresh'
+  ) => void;
 }
 
 interface CallUsage {
@@ -187,6 +194,7 @@ export function PerCompetitorSummarizeModal({
 
     let body: {
       flow: 'per-competitor-bulleted';
+      analysisId: string;
       summary: string;
       source: 'cache' | 'fresh';
       usage: CallUsage & {
@@ -212,7 +220,7 @@ export function PerCompetitorSummarizeModal({
       cacheReadInputTokens: body.usage.cacheReadInputTokens,
       actualCostUsd: body.usage.actualCostUsd,
     });
-    onSummary(urlId, body.summary, body.source);
+    onSummary(urlId, body.analysisId, body.summary, body.source);
     setRunState({
       kind: 'completed',
       summary: body.summary,

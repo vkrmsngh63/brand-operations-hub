@@ -217,9 +217,11 @@ export interface PerReviewBatchResponseBody {
 // aggregated theme-grouped bulleted summary for the entire URL's review
 // corpus). source = 'cache' when the (urlId, reviewIds-set, model,
 // prompt-version) tuple already has a stored ReviewAnalysis PER_PRODUCT
-// row.
+// row. analysisId is the row's id — the client uses it to PATCH the
+// stored summary when director edits it via the in-page Edit affordance.
 export interface PerCompetitorBulletedResponseBody {
   flow: 'per-competitor-bulleted';
+  analysisId: string;
   summary: string;
   source: 'cache' | 'fresh';
   usage: PerReviewBatchUsage;
@@ -490,14 +492,21 @@ export function makeReviewAnalysisRunBatchHandlers(
         cachedRows = [];
       }
 
-      const cachedSummary = cachedRows
-        .map((r) => summaryFromCachedJson(r.analysisJson))
-        .find((s): s is string => !!s);
+      // Pair each cached row with its summary so we can return the row
+      // id alongside the summary text (the client needs both for the
+      // Edit affordance).
+      const cachedHit = cachedRows
+        .map((r) => ({
+          id: r.id,
+          summary: summaryFromCachedJson(r.analysisJson),
+        }))
+        .find((entry): entry is { id: string; summary: string } => !!entry.summary);
 
-      if (cachedSummary) {
+      if (cachedHit) {
         const cachedResponse: PerCompetitorBulletedResponseBody = {
           flow: 'per-competitor-bulleted',
-          summary: cachedSummary,
+          analysisId: cachedHit.id,
+          summary: cachedHit.summary,
           source: 'cache',
           usage: {
             inputTokens: 0,
@@ -592,8 +601,9 @@ export function makeReviewAnalysisRunBatchHandlers(
         };
       }
 
+      let persistedId: string | null = null;
       try {
-        await withRetry(() =>
+        const created = await withRetry(() =>
           prisma.reviewAnalysis.create({
             data: {
               level: 'PER_PRODUCT',
@@ -611,6 +621,7 @@ export function makeReviewAnalysisRunBatchHandlers(
             select: { id: true },
           })
         );
+        persistedId = created.id;
       } catch (error) {
         recordFlake('POST per-competitor-bulleted persist', error, {
           projectId,
@@ -618,7 +629,9 @@ export function makeReviewAnalysisRunBatchHandlers(
         });
         // Soft-fail — return the fresh summary to the browser since the
         // AI call already cost money. Re-run will either hit cache (if
-        // a parallel call persisted) or re-pay.
+        // a parallel call persisted) or re-pay. The client gets an
+        // empty analysisId, which disables the Edit affordance for
+        // this run (best effort vs. lying about a non-existent id).
       }
 
       const actualCostUsdPC = calculateCostUsd(modelVersion, {
@@ -631,6 +644,7 @@ export function makeReviewAnalysisRunBatchHandlers(
 
       const freshResponse: PerCompetitorBulletedResponseBody = {
         flow: 'per-competitor-bulleted',
+        analysisId: persistedId ?? '',
         summary: validatedPC.summary,
         source: 'fresh',
         usage: {

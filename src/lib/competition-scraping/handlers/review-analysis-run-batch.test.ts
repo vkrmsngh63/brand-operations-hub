@@ -109,10 +109,19 @@ function makeAnthropicClient(opts: {
   return { client, state };
 }
 
+// Internal stub-only row type — extends the production
+// ReviewAnalysisCachedRow with a `level` field so the stub can filter
+// by level the way real Prisma would. Production never selects `level`
+// back (the WHERE clause filters before select), but the stub needs to
+// know each seeded row's level to mirror real lookups.
+type StubCachedRow = ReviewAnalysisCachedRow & {
+  level: 'PER_REVIEW' | 'PER_PRODUCT';
+};
+
 function makePrisma(opts: {
   url?: CompetitorUrlForBatchRow | null;
   reviews?: CapturedReviewForBatchRow[];
-  cachedRows?: ReviewAnalysisCachedRow[];
+  cachedRows?: StubCachedRow[];
   cachedFindManyThrows?: unknown;
   createThrows?: unknown;
 }): {
@@ -152,20 +161,13 @@ function makePrisma(opts: {
         // Filter cached rows the same way real Prisma would — by the
         // reviewsHash IN-clause + the level discriminator. This lets
         // cache-key-mismatch tests fail cleanly (a row with a wrong-
-        // version hash misses the lookup, and the handler does a fresh
-        // AI call).
+        // version hash OR a wrong-level row misses the lookup, and
+        // the handler does a fresh AI call).
         const wantedHashes = new Set(args.where.reviewsHash.in);
         const wantedLevel = args.where.level;
         return (opts.cachedRows ?? []).filter(
           (row) =>
-            wantedHashes.has(row.reviewsHash) &&
-            // The stub doesn't track level on the row — we treat the
-            // test's seeded rows as level-agnostic so tests can seed
-            // either PER_REVIEW or PER_PRODUCT shapes. Real Prisma
-            // would filter by level too; the level discriminator is
-            // tested separately via the analysisJson shape on the
-            // create call.
-            (wantedLevel === 'PER_REVIEW' || wantedLevel === 'PER_PRODUCT')
+            wantedHashes.has(row.reviewsHash) && row.level === wantedLevel
         );
       },
       create: async (args) => {
@@ -506,6 +508,7 @@ test('POST 200 fully from cache — no AI call, no DB writes', async () => {
           summary: 'Previously generated summary for A.',
         } as Prisma.JsonValue,
         modelVersion: 'claude-opus-4-7',
+        level: 'PER_REVIEW',
       },
     ],
   });
@@ -555,6 +558,7 @@ test('POST 200 with partial cache — one fresh AI call, only fresh rows persist
           summary: 'B previously summarized.',
         } as Prisma.JsonValue,
         modelVersion: 'claude-opus-4-7',
+        level: 'PER_REVIEW',
       },
     ],
   });
@@ -788,7 +792,7 @@ test('per-competitor 200 fresh — one AI call, ONE persisted PER_PRODUCT row, s
   const modelResponse = makeAnthropicMessage(
     JSON.stringify({
       summary:
-        '## Positive signals\n- Multiple reviewers praise durability\n- Build quality holds up\n\n## Negative signals\n- One reviewer notes sizing runs small',
+        '## Product critiques\n- Multiple reviewers report strap breaks within 3 months\n- Sizing runs small\n\n## Fulfillment critiques\n- Several mention damaged packaging on arrival',
     })
   );
   const { client, state: clientState } = makeAnthropicClient({
@@ -808,8 +812,10 @@ test('per-competitor 200 fresh — one AI call, ONE persisted PER_PRODUCT row, s
   const body = r.body as PerCompetitorBulletedResponseBody;
   assert.equal(body.flow, 'per-competitor-bulleted');
   assert.equal(body.source, 'fresh');
-  assert.match(body.summary, /## Positive signals/);
-  assert.match(body.summary, /Multiple reviewers praise durability/);
+  assert.match(body.summary, /## Product critiques/);
+  assert.match(body.summary, /Multiple reviewers report strap breaks/);
+  // analysisId returned so client can PATCH the row on edit.
+  assert.equal(body.analysisId, 'analysis-1');
   // Exactly one Anthropic create call.
   assert.equal(clientState.createCalls.length, 1);
   // EXACTLY ONE persisted row (not N like per-review).
@@ -823,7 +829,7 @@ test('per-competitor 200 fresh — one AI call, ONE persisted PER_PRODUCT row, s
     summary: string;
     reviewId?: string;
   };
-  assert.match(written.summary, /## Positive signals/);
+  assert.match(written.summary, /## Product critiques/);
   assert.equal(written.reviewId, undefined);
 });
 
@@ -843,9 +849,10 @@ test('per-competitor 200 from cache — no AI call, no DB writes', async () => {
         reviewsHash: corpusHash,
         analysisJson: {
           summary:
-            '## Positive signals\n- Cached competitor summary for url-1',
+            '## Product critiques\n- Cached competitor summary for url-1',
         } as Prisma.JsonValue,
         modelVersion: 'claude-opus-4-7',
+        level: 'PER_PRODUCT',
       },
     ],
   });
@@ -865,6 +872,8 @@ test('per-competitor 200 from cache — no AI call, no DB writes', async () => {
   assert.equal(body.source, 'cache');
   assert.match(body.summary, /Cached competitor summary/);
   assert.equal(body.usage.actualCostUsd, 0);
+  // analysisId returned from the cached row so client can PATCH edits.
+  assert.equal(body.analysisId, 'analysis-cached-pc');
   // No AI calls.
   assert.equal(clientState.createCalls.length, 0);
   // No new DB writes (cache hit).
@@ -886,9 +895,10 @@ test('per-competitor cache is keyed by corpus order-invariantly (sorted reviewId
         id: 'analysis-cached-pc',
         reviewsHash: sortedCorpusHash,
         analysisJson: {
-          summary: '## Positive signals\n- Order-invariant cache hit',
+          summary: '## Product critiques\n- Order-invariant cache hit',
         } as Prisma.JsonValue,
         modelVersion: 'claude-opus-4-7',
+        level: 'PER_PRODUCT',
       },
     ],
   });
@@ -973,9 +983,14 @@ test('per-competitor does NOT use the per-review prompt version in its cache key
         id: 'wrong-version-row',
         reviewsHash: wrongVersionHash,
         analysisJson: {
-          summary: 'WRONG — this row was hashed with per-review prompt version',
+          summary: 'WRONG — this row was hashed with per-review prompt version + stored at per-review level',
         } as Prisma.JsonValue,
         modelVersion: 'claude-opus-4-7',
+        // Stored at PER_REVIEW level — per-competitor lookup queries
+        // level=PER_PRODUCT so the level discriminator MUST cause a
+        // cache miss here regardless of whether the hash happens to
+        // coincide (which it does when both prompt versions are 'v2').
+        level: 'PER_REVIEW',
       },
     ],
   });
