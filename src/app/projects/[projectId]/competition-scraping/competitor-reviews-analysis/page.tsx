@@ -277,7 +277,8 @@ export default function CompetitorReviewsAnalysisPage() {
           projectId={projectId}
           urlId={modalUrl.id}
           productName={modalUrl.productName || modalUrl.url}
-          reviewIds={getLoadedReviewIds(reviewsByUrl[modalUrl.id])}
+          platform={modalUrl.platform}
+          reviews={getLoadedReviews(reviewsByUrl[modalUrl.id])}
           onClose={() => setModalUrl(null)}
           onSummary={handleSummary}
         />
@@ -286,9 +287,9 @@ export default function CompetitorReviewsAnalysisPage() {
   );
 }
 
-function getLoadedReviewIds(state: ReviewsLoadState | undefined): string[] {
+function getLoadedReviews(state: ReviewsLoadState | undefined): CapturedReview[] {
   if (!state || state.kind !== 'loaded') return [];
-  return state.reviews.map((r) => r.id);
+  return state.reviews;
 }
 
 // ─── UrlsTable ──────────────────────────────────────────────────────

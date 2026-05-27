@@ -10,7 +10,7 @@
 // Each batch holds ~20 reviews; one Anthropic call per batch, well
 // under Vercel's per-request time limit.
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { JSX } from 'react';
 import { authFetch } from '@/lib/authFetch';
 import {
@@ -19,6 +19,11 @@ import {
   type ExecutionMode,
 } from '@/lib/workflow-components/execution-mode';
 import { ExecutionModeSelect } from '@/lib/workflow-components/execution-mode-select';
+import {
+  PER_REVIEW_SUMMARIZE_SYSTEM_PROMPT,
+  buildPerReviewBatchUserMessage,
+} from '@/lib/competition-scraping/review-analysis/prompts';
+import type { CapturedReview } from '@/lib/shared-types/competition-scraping';
 
 // Default batch size for v1. Conservative — each review averages ~150
 // input tokens + ~100 output tokens, so 20 reviews per batch yields
@@ -36,7 +41,15 @@ export interface PerReviewSummarizeModalProps {
   projectId: string;
   urlId: string;
   productName: string;
-  reviewIds: ReadonlyArray<string>;
+  // platform comes from the parent CompetitorUrl (e.g., 'amazon', 'ebay');
+  // shown verbatim in the user message so the model can disambiguate
+  // platform-specific signals (Prime shipping vs Etsy handmade lead time).
+  platform: string;
+  // Full review rows for the URL — modal uses them to render the prompt
+  // preview AND to derive the reviewIds it sends per batch. The batch
+  // loop only ships reviewIds across the wire; the server fetches review
+  // bodies from the DB again per-batch.
+  reviews: ReadonlyArray<CapturedReview>;
   onClose: () => void;
   // Called once for each fresh-from-AI summary; the parent uses this to
   // update the Table 2 row state in real time as batches complete.
@@ -90,10 +103,12 @@ export function PerReviewSummarizeModal({
   projectId,
   urlId,
   productName,
-  reviewIds,
+  platform,
+  reviews,
   onClose,
   onSummary,
 }: PerReviewSummarizeModalProps): JSX.Element {
+  const reviewIds = useMemo(() => reviews.map((r) => r.id), [reviews]);
   const [modelVersion, setModelVersion] = useState<ModelVersion>('claude-opus-4-7');
   const [batchSize, setBatchSize] = useState<number>(DEFAULT_BATCH_SIZE);
   // Server mode = browser → Vercel → Anthropic (server's API key, per-
@@ -113,8 +128,34 @@ export function PerReviewSummarizeModal({
   const [cacheHits, setCacheHits] = useState<number>(0);
   const [freshCount, setFreshCount] = useState<number>(0);
 
+  const [showPrompts, setShowPrompts] = useState<boolean>(false);
   const abortRef = useRef<AbortController | null>(null);
   const cancelledRef = useRef(false);
+
+  // Build a preview of the FIRST batch's user message using actual
+  // review data. Shown verbatim in the View-prompts panel so director
+  // sees exactly what's going to the model.
+  const previewBatch = useMemo(
+    () => reviews.slice(0, Math.max(1, batchSize)),
+    [reviews, batchSize]
+  );
+  const totalBatchesPreview = Math.max(1, Math.ceil(reviews.length / Math.max(1, batchSize)));
+  const previewUserMessage = useMemo(() => {
+    if (previewBatch.length === 0) return '';
+    return buildPerReviewBatchUserMessage({
+      productName,
+      platform,
+      batchNumber: 1,
+      totalBatches: totalBatchesPreview,
+      reviews: previewBatch.map((r) => ({
+        id: r.id,
+        body: r.body,
+        reviewerName: r.reviewerName,
+        starRating: r.starRating,
+        reviewDate: r.reviewDate ? new Date(r.reviewDate) : null,
+      })),
+    });
+  }, [previewBatch, productName, platform, totalBatchesPreview]);
 
   useEffect(() => {
     return () => {
@@ -402,6 +443,101 @@ export function PerReviewSummarizeModal({
             disabled={isRunning || isDone}
             className="prs-execmode"
           />
+        </div>
+
+        {/* ── View prompts (transparency panel) ── */}
+        <div style={{ marginBottom: '16px' }}>
+          <button
+            type="button"
+            onClick={() => setShowPrompts((v) => !v)}
+            style={{
+              background: 'transparent',
+              color: '#58a6ff',
+              border: '1px solid #30363d',
+              borderRadius: '6px',
+              padding: '6px 12px',
+              fontSize: '11px',
+              cursor: 'pointer',
+              fontWeight: 600,
+            }}
+          >
+            {showPrompts ? '▾ Hide prompts' : '▸ View prompts (system + first-batch preview)'}
+          </button>
+          {showPrompts && (
+            <div
+              style={{
+                marginTop: '10px',
+                background: '#0a0d12',
+                border: '1px solid #21262d',
+                borderRadius: '6px',
+                padding: '10px 12px',
+                fontSize: '11px',
+                lineHeight: 1.55,
+                color: '#c9d1d9',
+              }}
+            >
+              <div
+                style={{
+                  fontSize: '10px',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                  color: '#8b949e',
+                  fontWeight: 700,
+                  marginBottom: '6px',
+                }}
+              >
+                System prompt (cached across batches)
+              </div>
+              <pre
+                style={{
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                  background: '#161b22',
+                  padding: '8px 10px',
+                  borderRadius: '4px',
+                  fontFamily: "'IBM Plex Mono', monospace",
+                  fontSize: '10px',
+                  margin: '0 0 12px',
+                  maxHeight: '220px',
+                  overflow: 'auto',
+                }}
+              >
+                {PER_REVIEW_SUMMARIZE_SYSTEM_PROMPT}
+              </pre>
+              <div
+                style={{
+                  fontSize: '10px',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                  color: '#8b949e',
+                  fontWeight: 700,
+                  marginBottom: '6px',
+                }}
+              >
+                User message — Batch 1 preview (first {previewBatch.length} of {reviews.length} reviews)
+              </div>
+              <pre
+                style={{
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                  background: '#161b22',
+                  padding: '8px 10px',
+                  borderRadius: '4px',
+                  fontFamily: "'IBM Plex Mono', monospace",
+                  fontSize: '10px',
+                  margin: 0,
+                  maxHeight: '240px',
+                  overflow: 'auto',
+                }}
+              >
+                {previewUserMessage || '(no reviews available to preview)'}
+              </pre>
+              <div style={{ fontSize: '10px', color: '#6e7681', marginTop: '8px' }}>
+                Subsequent batches use the SAME system prompt + the same user-message
+                shape with different reviews (Batch 2 of {totalBatchesPreview}, etc.).
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ── Progress / cost tally ── */}
