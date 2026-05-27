@@ -93,8 +93,11 @@ export default function CompetitorReviewsAnalysisPage() {
           setUrlsState({ kind: 'error', message: detail });
           return;
         }
-        const body = (await res.json()) as { items: CompetitorUrl[] };
-        const items = Array.isArray(body?.items) ? body.items : [];
+        // GET /urls returns the bare CompetitorUrl[] array (not
+        // wrapped in { items }). Mirror the existing CompetitionScrapingViewer
+        // shape so this stays consistent if the wrap convention ever changes.
+        const body = (await res.json()) as CompetitorUrl[];
+        const items = Array.isArray(body) ? body : [];
         setUrlsState({ kind: 'loaded', urls: items });
       } catch (err) {
         if (cancelled) return;
@@ -133,8 +136,9 @@ export default function CompetitorReviewsAnalysisPage() {
         }));
         return;
       }
-      const body = (await res.json()) as { items: CapturedReview[] };
-      const items = Array.isArray(body?.items) ? body.items : [];
+      // GET /urls/[urlId]/reviews also returns the bare array.
+      const body = (await res.json()) as CapturedReview[];
+      const items = Array.isArray(body) ? body : [];
       setReviewsByUrl((prev) => ({
         ...prev,
         [urlId]: { kind: 'loaded', reviews: items },
