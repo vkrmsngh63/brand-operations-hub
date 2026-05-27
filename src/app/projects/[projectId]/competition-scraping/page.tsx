@@ -41,6 +41,7 @@ import {
   WorkflowTopbar,
 } from '@/lib/workflow-components';
 import { CompetitionScrapingViewer } from './components/CompetitionScrapingViewer';
+import { CompetitionScrapingSurfaceNav } from './components/CompetitionScrapingSurfaceNav';
 import { DetailedUserGuide } from './components/DetailedUserGuide';
 
 const WORKFLOW_SLUG = 'competition-scraping';
@@ -145,6 +146,12 @@ export default function CompetitionScrapingPage() {
       />
 
       <main style={{ maxWidth: '100%', padding: '24px 24px 64px' }}>
+        {/* P-49 W5 Session 2 — 4-option surface toggle per §B 2026-05-27. */}
+        <CompetitionScrapingSurfaceNav
+          projectId={ctx.project.id}
+          active="competitor-urls"
+        />
+
         {/* Status row — badge + worker-completion button. */}
         <section
           style={{

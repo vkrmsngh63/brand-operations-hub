@@ -1,67 +1,61 @@
-// W#2 P-49 Workstream 5 — v1 per-product analysis prompts per §A.7-A.9.
+// W#2 P-49 Workstream 5 — v1 Per-Review Summarize prompt per
+// REVIEWS_PHASE_2_DESIGN.md §B 2026-05-27 (Reviews Phase 3 design lock).
 //
-// Two sweeps per product (§A.8):
-//   1. First sweep — one Claude call per batch of reviews. Emits a
-//      TipTap-doc per-batch summary highlighting pros / cons / common
-//      complaints / common praise / notable quotes.
-//   2. Second sweep — one Claude call that takes the per-batch summaries
-//      as input and emits the final consolidated per-product summary.
+// Of the 7 flows locked yesterday (per-review summarize + per-competitor
+// per-product comprehensive bulleted/non-bulleted + per-category bulleted/
+// non-bulleted + per-type bulleted/non-bulleted), Session 2 ships ONLY
+// the Per-Review Summarize builder. The other 6 flow builders land in
+// Sessions 3+ following the same single-call-per-batch shape so the
+// per-batch endpoint scaffolded today carries forward unchanged.
 //
-// v1 intentionally minimal per launch prompt directive: ship-not-gold-
-// plated; iterate via real-output Phase 4 walks like W#1 did across
-// V1→V4. Don't pre-bake a long system prompt before we see real outputs.
+// Locked meta-style across all 7 flows (per §B 2026-05-27):
+//   - flat-bullet structured
+//   - third-person neutral analyst tone
+//   - soft length targets
+//   - echoed IDs for redundancy
 //
-// Output shape: TipTap document JSON per §A.9. The model is instructed
-// to return a JSON object with shape `{ type: "doc", content: [...] }`.
-// The application-layer validator (isValidAnalysisPayload from W4) will
-// reject any malformed output and surface a 500 to the caller.
+// Per-Review Summarize specific shape (director-confirmed at the start
+// of Session 2):
+//   - 1-2 sentence plain prose per review (no bullets at per-review
+//     level; bullets are for the comprehensive flows in Sessions 3+).
+//   - Returns one JSON object per batch with summaries[] indexed by
+//     reviewId. One Anthropic call per batch, NOT per review.
+//   - Echoed reviewId defends against reorderings / drops / merges.
 
 import type { BatchableReview } from './batch-sizer.ts';
 
-// Frozen system prompt — same string across every call so the prompt
-// cache (cache_control: ephemeral) hits on second + later batches in a
-// sweep. ANY edit to this string invalidates the cache; treat as locked
-// until v2.
-export const PER_PRODUCT_SYSTEM_PROMPT = `You are an expert competitive-research analyst helping a brand owner
-understand what customers say about a competitor product. You read
-product reviews carefully and surface signal that informs the brand's
-own product, positioning, and customer-experience decisions.
+// Frozen system prompt — the cache_control: ephemeral header lets the
+// SDK keep this string in the 5-minute prefix cache across batches in
+// a sweep. ANY edit invalidates the cache; treat as locked until v2.
+export const PER_REVIEW_SUMMARIZE_SYSTEM_PROMPT = `You are an expert competitive-research analyst summarizing customer reviews for a brand owner researching a competitor's product. Your task: read each review carefully and write a concise neutral summary that surfaces the strongest signal for the brand owner's later analysis.
 
-For each task, you receive a batch of customer reviews for ONE
-competitor product. You return a JSON object — TipTap document shape —
-that summarizes the batch:
+Return a JSON object with the shape:
 
 {
-  "type": "doc",
-  "content": [
-    { "type": "heading", "attrs": { "level": 2 }, "content": [{ "type": "text", "text": "..." }] },
-    { "type": "bulletList", "content": [{ "type": "listItem", "content": [...] }, ...] },
-    { "type": "paragraph", "content": [...] }
+  "summaries": [
+    { "reviewId": "<the input reviewId>", "summary": "<1-2 sentence summary>" },
+    ...
   ]
 }
 
-Sections to include in every batch summary (use level-2 headings):
+Rules for each summary:
 
-- "Common praise" — what reviewers consistently like (bullet list)
-- "Common complaints" — what reviewers consistently dislike (bullet list)
-- "Notable quotes" — 2-4 short verbatim quotes that capture the strongest signal
-- "Returns / quality issues" — any pattern of defects, sizing problems, or returns
-- "Use-case fit" — who the product works well for and who it doesn't
+- 1-2 sentences. No bullets. No headings. Plain prose.
+- Third-person neutral analyst voice. Do NOT use first person ("I"); do NOT address the reviewer directly ("you").
+- Capture the reviewer's overall stance (positive / mixed / negative) AND the strongest specific signal — what they praised, what they complained about, the use case they describe, or what stood out.
+- Use the product name when relevant; do not invent attributes not present in the review body.
+- Quote sparingly — short fragments only, in double quotes, never whole sentences.
+- Echo each review's reviewId VERBATIM in the output entry so the caller can match summaries back to reviews. Do not invent reviewIds. Do not drop or merge reviews.
 
-Rules:
+Output rules:
 
-- Return ONLY the JSON object. No prose preamble, no \`\`\`json fences.
-- Do not invent details not present in the reviews.
-- Quote sparingly — pull short fragments, not whole paragraphs.
-- If a section has no signal in this batch, emit the heading with a
-  single paragraph saying "No clear pattern in this batch." Do NOT
-  omit the heading — the second-sweep merge depends on consistent shape.`;
+- Return ONLY the JSON object. No prose preamble. No \`\`\`json fences. No trailing commentary.
+- Include exactly one entry per input review, in the same order they were provided.`;
 
-// Per-batch user message. The product name + platform contextualize the
-// reviews so the model knows whether a complaint about "shipping" is
-// about Amazon Prime delivery vs Etsy hand-made lead time. Batch
-// numbering ("batch 3 of 7") lets the model self-pace summary length.
-export type BuildPerProductBatchPromptInput = {
+// Per-batch user message. Identical product+platform context across all
+// per-review batches for a given CompetitorUrl so the model can
+// distinguish "shipping = Amazon Prime" from "shipping = Etsy handmade".
+export type BuildPerReviewBatchPromptInput = {
   productName: string;
   platform: string;
   batchNumber: number;
@@ -69,18 +63,18 @@ export type BuildPerProductBatchPromptInput = {
   reviews: ReadonlyArray<BatchableReview>;
 };
 
-export function buildPerProductBatchUserMessage({
+export function buildPerReviewBatchUserMessage({
   productName,
   platform,
   batchNumber,
   totalBatches,
   reviews,
-}: BuildPerProductBatchPromptInput): string {
+}: BuildPerReviewBatchPromptInput): string {
   const header =
     `Product: ${productName}\n` +
     `Platform: ${platform}\n` +
     `Batch ${batchNumber} of ${totalBatches}, ${reviews.length} reviews.\n\n` +
-    `Reviews:\n\n`;
+    `Summarize each review below. Echo each reviewId verbatim in the output.\n\n`;
 
   const body = reviews
     .map((r, i) => {
@@ -89,45 +83,71 @@ export function buildPerProductBatchUserMessage({
       if (r.reviewerName) meta.push(r.reviewerName);
       if (r.reviewDate) meta.push(r.reviewDate.toISOString().slice(0, 10));
       const metaLine = meta.length > 0 ? ` (${meta.join(', ')})` : '';
-      return `Review ${i + 1}${metaLine}:\n${r.body}\n`;
+      return `--- Review ${i + 1}${metaLine} ---\nreviewId: ${r.id}\n${r.body}\n`;
     })
     .join('\n');
 
   return header + body;
 }
 
-// Second-sweep merge — combines per-batch summaries into a single
-// consolidated per-product summary. Input is the array of TipTap docs
-// returned by the first sweep.
-export type BuildSecondSweepPromptInput = {
-  productName: string;
-  platform: string;
-  totalReviewsAnalyzed: number;
-  batchSummariesJson: ReadonlyArray<unknown>;
-};
+// Validated output shape returned by the per-batch endpoint after JSON
+// parsing + structural validation. The handler maps malformed responses
+// to a 502; the browser never sees an unvalidated payload.
+export interface PerReviewSummaryEntry {
+  reviewId: string;
+  summary: string;
+}
 
-export function buildSecondSweepUserMessage({
-  productName,
-  platform,
-  totalReviewsAnalyzed,
-  batchSummariesJson,
-}: BuildSecondSweepPromptInput): string {
-  const summariesText = batchSummariesJson
-    .map((s, i) => `--- Batch ${i + 1} summary ---\n${JSON.stringify(s, null, 2)}`)
-    .join('\n\n');
+export interface PerReviewBatchOutput {
+  summaries: PerReviewSummaryEntry[];
+}
 
-  return (
-    `Product: ${productName}\n` +
-    `Platform: ${platform}\n` +
-    `Total reviews analyzed across batches: ${totalReviewsAnalyzed}\n` +
-    `Number of per-batch summaries: ${batchSummariesJson.length}\n\n` +
-    `Each batch summary below is a TipTap JSON doc that summarized a slice ` +
-    `of the reviews. Merge them into ONE consolidated TipTap doc using the ` +
-    `same section headings (Common praise / Common complaints / Notable ` +
-    `quotes / Returns / quality issues / Use-case fit). Deduplicate, weight ` +
-    `signals by how often they appear across batches, and preserve the ` +
-    `strongest verbatim quotes.\n\n` +
-    `Return ONLY the merged JSON object. No preamble, no fences.\n\n` +
-    summariesText
-  );
+// Structural validator — accepts any JSON value, returns the typed
+// shape on success or null on rejection. Caller surfaces a 502 with a
+// "model returned malformed JSON" message on null.
+export function validatePerReviewBatchOutput(
+  parsed: unknown
+): PerReviewBatchOutput | null {
+  if (!parsed || typeof parsed !== 'object') return null;
+  const obj = parsed as { summaries?: unknown };
+  if (!Array.isArray(obj.summaries)) return null;
+  const summaries: PerReviewSummaryEntry[] = [];
+  for (const entry of obj.summaries) {
+    if (!entry || typeof entry !== 'object') return null;
+    const e = entry as { reviewId?: unknown; summary?: unknown };
+    if (typeof e.reviewId !== 'string' || !e.reviewId) return null;
+    if (typeof e.summary !== 'string') return null;
+    summaries.push({ reviewId: e.reviewId, summary: e.summary });
+  }
+  return { summaries };
+}
+
+// Defensive cross-check: every input reviewId must have exactly one
+// matching output summary, and there must be no extra summaries with
+// reviewIds the model invented. Returns the missing + extra ids when
+// the model misbehaved; null when alignment is clean.
+export function findReviewIdMismatch(
+  inputReviewIds: ReadonlyArray<string>,
+  output: PerReviewBatchOutput
+): { missing: string[]; extra: string[]; duplicated: string[] } | null {
+  const inputSet = new Set(inputReviewIds);
+  const seen = new Set<string>();
+  const duplicated: string[] = [];
+  const extra: string[] = [];
+  for (const s of output.summaries) {
+    if (!inputSet.has(s.reviewId)) {
+      extra.push(s.reviewId);
+      continue;
+    }
+    if (seen.has(s.reviewId)) {
+      duplicated.push(s.reviewId);
+      continue;
+    }
+    seen.add(s.reviewId);
+  }
+  const missing = inputReviewIds.filter((id) => !seen.has(id));
+  if (missing.length === 0 && extra.length === 0 && duplicated.length === 0) {
+    return null;
+  }
+  return { missing, extra, duplicated };
 }

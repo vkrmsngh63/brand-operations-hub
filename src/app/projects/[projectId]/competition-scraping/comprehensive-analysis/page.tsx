@@ -24,6 +24,7 @@ import { useWorkflowContext } from '@/lib/workflow-components';
 import type { ComprehensiveCompetitorAnalysis } from '@/lib/shared-types/competition-scraping';
 import { AnalysisEditor } from './components/AnalysisEditor';
 import { AnalysisReadView } from './components/AnalysisReadView';
+import { CompetitionScrapingSurfaceNav } from '../components/CompetitionScrapingSurfaceNav';
 
 const WORKFLOW_SLUG = 'competition-scraping';
 
@@ -118,6 +119,12 @@ export default function ComprehensiveAnalysisPage() {
       }}
     >
       <div style={{ maxWidth: '960px', margin: '0 auto', padding: '24px' }}>
+        {/* P-49 W5 Session 2 — 4-option surface toggle per §B 2026-05-27. */}
+        <CompetitionScrapingSurfaceNav
+          projectId={projectId}
+          active="comprehensive-analysis"
+        />
+
         <button
           type="button"
           onClick={() => router.push(backHref)}
