@@ -35,6 +35,41 @@
 >
 > Note that during all AI runs for all the functionalities mentioned above, the tables in user's view should be updated in real-time as the AI updates the data in those tables.
 
+**2026-05-30 — director's verbatim ADDENDUM: restructure the 'Overall Analysis — Captured Reviews' box into a 3-column traceability table (NEW feature; captured for Fix Session D — see §3):**
+
+> I want to add a new feature to the 'Overall Analysis — Captured Reviews' box on the details pages for competitors. Currently, when the AI model produces an output, that output has all the negative signals from the reviews listed as bullet points organized under common categories. [example output preserved below]
+>
+> Instead of all these bullet points and common categories being pasted into a text box, I want them organized into a table where the categories are listed in one column and the individual bullet points associated with them in the next column and then I want a third column that lists all those reviews that the bullet point refers to. For example, if the bullet point is 'Multiple reviewers feel misled by positive reviews and product claims, expressing that the product did not deliver on expectations of pain or bruise relief.', then this third column should list all those reviews within the competitor's captured reviews (not some, all) that are associated with that claim. Make sure you include the star count for each of those reviews as well.
+>
+> I believe this would mean that the AI prompt that results in the output which gets pasted into the 'Overall Analysis — Captured Reviews' box will need to change as well because not only will it need to reference the review summaries that lead to the bullet point being added, the system will need to then figure out which specific captured review for that product is associated with that review summary and then paste that review in that third column in the 'Overall Analysis — Captured Reviews' box.
+>
+> Example of the current free-text output the director wants restructured:
+>
+> ```
+> ## Product critiques
+> - The overwhelming majority of reviewers report the tablets had no noticeable effect on pain, swelling, or bruising even after following directions for a week or more.
+> - Multiple reviewers specifically note no reduction in bruise discoloration after extended use.
+> - Several reviewers describe the product as unable to compete with conventional pain relievers, with one noting they had to switch to Advil for adequate relief.
+> - One reviewer reports the tablets caused extreme nausea, bad headaches, and chest pains.
+> - One reviewer reports stomach upset from taking the tablets.
+> - Multiple reviewers describe feeling as though they are "taking nothing" — no perceptible physiological effect of any kind.
+>
+> ## Safety / reliability concerns
+> - One reviewer warns there is no label caution about potential interactions with thyroid medication, calling it "quite dangerous" for those with compromised thyroid function.
+> - One reviewer raises concern that arnica is "not meant to be ingested," citing adverse symptoms experienced after oral use.
+> - A separate reviewer flags unspecified side effects and urges caution.
+>
+> ## Dosing / directions critiques
+> - One reviewer finds the dosing regimen confusing and excessive — "take two, every hour for 3 hours, then 2 more, 6 hours later" — and questions its practicality.
+>
+> ## Marketing accuracy critiques
+> - Multiple reviewers feel misled by positive reviews and product claims, expressing that the product did not deliver on expectations of pain or bruise relief.
+> - One reviewer explicitly states they felt "very misled by the reviews for this product."
+>
+> ## Pricing / value critiques
+> - Several reviewers describe the purchase as a waste of money given the lack of results.
+> ```
+
 ---
 
 ## §2 — Joint-discussion adjustments (append-only, chronological)
@@ -302,9 +337,26 @@ Scope:
 
 Schema-change-in-flight = YES this session (new column).
 
-**After Fix Sessions A+B+C complete**, the Reviews Analysis Table page is fully compliant with §1 verbatim. Then Category page corrective rebuild Sessions 1-3 + Type page Sessions 4-5 (per `docs/polish-item-specs/P-49-W5-S4-category-page.md` and `P-49-W5-S5-type-page.md`).
+**Fix Session D — NEW: 'Overall Analysis — Captured Reviews' box → 3-column traceability table + per-competitor bulleted prompt redesign (captured 2026-05-30 from director's §1 addendum; slotted AFTER Fix Session C per director's 2026-05-30 sequencing picker).**
 
-**Full P-49 W5 corrective work ahead = 8 sessions:** Fix A + Fix B + Fix C (Reviews Analysis Table) + Category 1 + Category 2 + Category 3 + Type 4 + Type 5.
+Goal: replace the free-text bulleted output in the "Overall Analysis — Captured Reviews" box on the URL detail page with a 3-column table:
+- **Column 1 — Category** (e.g., "Product critiques", "Safety / reliability concerns", "Marketing accuracy critiques").
+- **Column 2 — Bullet-point critique** (the individual de-duplicated complaint, as today).
+- **Column 3 — Source captured reviews** — **ALL** (not some) of the competitor's captured reviews associated with that bullet, **each with its star count**.
+
+Scope (NOTE: real output-shape + prompt design happens jointly with director at session start per `feedback_plan_output_shape_before_building.md` — this is the captured intent, not a locked design):
+1. **Redesign the per-competitor bulleted AI prompt** to emit STRUCTURED output (category → bullet → the specific source review IDs that support each bullet), not free text. PROMPT_VERSION bump (cache invalidation). The model already receives the per-review summaries; it must now also return, per bullet, which review(s) the bullet traces back to.
+2. **Review-ID resolution step:** the system maps each bullet's referenced review summaries → the specific `CapturedReview` rows for that product → renders the full review text + star count in Column 3. (Open design Q: the AI maps bullet→review-summary; the system must then map review-summary→CapturedReview. Decide the join key — PER_REVIEW `ReviewAnalysis.analysisJson.reviewId` already links a summary to its `CapturedReview`, so the chain is bullet → reviewId(s) → CapturedReview.body+starRating.)
+3. **Storage shape change:** per-competitor `analysisJson` changes from `{ summary: string }` to a structured `{ categories: [{ name, bullets: [{ text, reviewIds: string[] }] }] }` (or similar). Migration/back-compat for existing string-shaped rows.
+4. **Box rendering change:** the "Overall Analysis — Captured Reviews" box renders the 3-column table (read from the structured shape) instead of a TipTap free-text editor. Decide editability + how this coexists with the "append, never overwrite" directive (the box may also hold director-typed content + non-bulleted prose).
+5. **Knock-on:** Column 10 (non-bulleted) input + the Category/Type page aggregation flows read the per-competitor bulleted output — confirm they still work against the new structured shape (or keep a flattened string view for them).
+6. /scoreboard + deploy decision Rule 14f.
+
+**Open design questions for Fix Session D (resolve at session start):** structured output schema shape; how Column 3 dedups when one review supports multiple bullets; whether Column 3 shows full review body or the title+body merge; table editability; back-compat for existing free-text rows; coexistence with director-typed box content + the non-bulleted prose append. Schema-change-in-flight: likely NO (the structured shape lives in the existing `ReviewAnalysis.analysisJson` Json column) — confirm at planning.
+
+**After Fix Sessions A+B+C complete**, the Reviews Analysis Table page is functionally compliant with §1 verbatim; **Fix Session D** then adds the NEW traceability-table feature from the 2026-05-30 addendum. Then Category page corrective rebuild Sessions 1-3 + Type page Sessions 4-5 (per `docs/polish-item-specs/P-49-W5-S4-category-page.md` and `P-49-W5-S5-type-page.md`).
+
+**Full P-49 W5 corrective work ahead = 9 sessions:** Fix A ✅ + Fix B ✅ + Fix C + **Fix D (NEW)** (Reviews Analysis Table) + Category 1 + Category 2 + Category 3 + Type 4 + Type 5.
 
 ---
 
