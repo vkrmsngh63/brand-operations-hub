@@ -84,9 +84,64 @@ CONTEXT_PREFIX="🟢 RESUME-FLOW POINTER — content follows (source: $POINTER_S
 
 "
 
+# Mechanical read-guarantee for polish-item spec docs per HANDOFF_PROTOCOL Rule 31
+# (NEW 2026-05-28-b mechanical-layer closure):
+#
+# Scan POINTER_CONTENT for any "P-NN" references and emit a Rule-31 mandatory-read
+# block listing matching docs/polish-item-specs/P-NN-*.md files. This ensures
+# Claude reads the spec docs for every polish item the upcoming session touches —
+# closing the gap surfaced 2026-05-28-b where today's session narrowly followed
+# the launch prompt's Category-page scope without auditing the shipped Reviews
+# Analysis Table page on the same workstream.
+SPEC_DOCS_DIR="$REPO_ROOT/docs/polish-item-specs"
+RULE31_BLOCK=""
+if [ -d "$SPEC_DOCS_DIR" ]; then
+    # Extract unique P-NN tokens from the pointer content (e.g., P-49, P-50, P-51).
+    # Sort+uniq for de-dup; tr to normalize.
+    P_TOKENS=$(printf '%s' "$POINTER_CONTENT" | grep -oE 'P-[0-9]+' | sort -u || true)
+    if [ -n "$P_TOKENS" ]; then
+        MATCHED_DOCS=""
+        for token in $P_TOKENS; do
+            # Glob for any spec doc starting with this token
+            for f in "$SPEC_DOCS_DIR"/${token}-*.md "$SPEC_DOCS_DIR"/${token}.md; do
+                if [ -f "$f" ]; then
+                    # Strip REPO_ROOT prefix for cleanliness
+                    rel_path="${f#$REPO_ROOT/}"
+                    MATCHED_DOCS="${MATCHED_DOCS}- ${rel_path}
+"
+                fi
+            done
+            # Also catch master/cluster files like P-49-W5-reviews-phase-2-master-spec.md
+            for f in "$SPEC_DOCS_DIR"/${token}-W*-*.md; do
+                if [ -f "$f" ]; then
+                    rel_path="${f#$REPO_ROOT/}"
+                    # Avoid double-listing if already added above
+                    if ! printf '%s' "$MATCHED_DOCS" | grep -qF -- "$rel_path"; then
+                        MATCHED_DOCS="${MATCHED_DOCS}- ${rel_path}
+"
+                    fi
+                fi
+            done
+        done
+        if [ -n "$MATCHED_DOCS" ]; then
+            RULE31_BLOCK="
+
+---
+
+🔵 RULE 31 MANDATORY READ — POLISH-ITEM SPEC DOCS (auto-detected from P-NN references in the pointer above):
+
+Per HANDOFF_PROTOCOL.md Rule 31 (Polish-item spec capture), Claude MUST read §3 of every spec doc below at session start — these are the source-of-truth for the polish items this session touches. §1 (verbatim director instructions) + §2 (joint-discussion adjustments) read as needed to verify §3 hasn't drifted. §4 (open questions) MUST be read BEFORE any code lands.
+
+${MATCHED_DOCS}
+If a polish item is mentioned in the pointer but no spec doc exists yet (file missing), CREATE the spec doc as the first artifact of the session per Rule 31 — capture the director's verbatim instructions in §1 BEFORE any joint-discussion or code work begins.
+"
+        fi
+    fi
+fi
+
 # JSON-escape the combined string for the additionalContext field.
 # Use python3 if available for robust JSON escaping; fall back to jq if python3 missing.
-FULL_CONTEXT="${CONTEXT_PREFIX}${POINTER_CONTENT}"
+FULL_CONTEXT="${CONTEXT_PREFIX}${POINTER_CONTENT}${RULE31_BLOCK}"
 
 if command -v python3 >/dev/null 2>&1; then
     ESCAPED=$(printf '%s' "$FULL_CONTEXT" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')

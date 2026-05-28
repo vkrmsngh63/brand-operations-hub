@@ -110,7 +110,10 @@ Additionally — Type-page-specific:
 
 ## §5 — Cross-references
 
-- **Sibling spec:** `docs/polish-item-specs/P-49-W5-S4-category-page.md` — Category page (the canonical implementation; Type page mirrors it).
+- **Master spec doc (NEW 2026-05-28-b):** `docs/polish-item-specs/P-49-W5-reviews-phase-2-master-spec.md` — the verbatim FULL re-paste covering all 3 Reviews Phase 2 pages + cross-cutting joint-discussion decisions. This Type page spec inherits its §1 verbatim from the master.
+- **Sibling specs:**
+  - `docs/polish-item-specs/P-49-W5-S4-category-page.md` — Category page (the canonical implementation; Type page mirrors it).
+  - `docs/polish-item-specs/P-49-W5-S2-S3-competitor-reviews-analysis.md` — Reviews Analysis Table page (the upstream Per-Competitor Comprehensive cells feed Column 10 of this Type page).
 - **ROADMAP entry:** `docs/ROADMAP.md` P-49 polish-backlog entry (same parent polish item as Category page).
 - **Related polish-item spec:** `docs/polish-item-specs/P-51-comprehensive-analysis-ai-summary.md`.
 - **Design doc §B entries:** same as Category spec (`docs/REVIEWS_PHASE_2_DESIGN.md` §B 2026-05-27 + §B 2026-05-27-c).

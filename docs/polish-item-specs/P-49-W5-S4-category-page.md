@@ -159,8 +159,10 @@
 
 ## §5 — Cross-references
 
-- **ROADMAP entry:** `docs/ROADMAP.md` P-49 W5 Session 4 entry (header section line 4-onwards + the P-49 polish-backlog entry).
+- **Master spec doc (NEW 2026-05-28-b):** `docs/polish-item-specs/P-49-W5-reviews-phase-2-master-spec.md` — the verbatim FULL re-paste covering all 3 Reviews Phase 2 pages + cross-cutting joint-discussion decisions. This Category page spec inherits its §1 verbatim from the master.
+- **ROADMAP entry:** `docs/ROADMAP.md` P-49 polish-backlog entry (with cross-reference to master + per-page specs).
 - **Related polish-item specs:**
+  - `docs/polish-item-specs/P-49-W5-S2-S3-competitor-reviews-analysis.md` — sibling Reviews Analysis Table page (the upstream Per-Competitor Comprehensive cells feed Column 10 of this Category page).
   - `docs/polish-item-specs/P-49-W5-S5-type-page.md` — sibling Type page, mostly parameterized off this spec.
   - `docs/polish-item-specs/P-51-comprehensive-analysis-ai-summary.md` — separate but related (cross-everything PER_PROJECT level vs this PER_CATEGORY level).
 - **Design doc §B entries:**

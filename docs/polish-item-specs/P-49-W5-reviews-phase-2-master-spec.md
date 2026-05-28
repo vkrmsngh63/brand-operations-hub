@@ -1,0 +1,179 @@
+# P-49 W5 Reviews Phase 2 — MASTER SPEC
+
+**Polish-item ID:** P-49 W5 Reviews Phase 2 (the canonical source-of-truth for the 4-option Competition Scraping toggle + the 3 new tables and their AI flows)
+**Created:** 2026-05-28-b
+**Session that captured §1 (re-paste):** `session_2026-05-28-b_p49-w5-reviews-phase-2-master-spec-backfill-and-page-2-divergence-fix-plan`
+**Status:** SPEC LOCKED at §1 level (verbatim master re-paste from director); §2 + §3 carry CROSS-CUTTING joint adjustments; per-page specs carry surface-specific §2 + §3 + §4 content.
+
+---
+
+## §1 — Original director instructions (VERBATIM, append-only)
+
+**2026-05-28-b — director's re-paste of the FULL original instruction set for all 3 Reviews Phase 2 pages + the parent 4-option Competition Scraping toggle. This re-paste was triggered by today's discovery that (a) the `/competitor-reviews-analysis` page already shipped at code level has multiple divergences from this verbatim spec, and (b) yesterday's wrong-spec build of the Category page (commit `5fa1f53`, hard-reverted via `958ccf8`) also originated from a partial / interpretive reading of these instructions. Rule 31 mandated this verbatim re-capture as the structural backstop.**
+
+> Right now, on vklf.com under 'the 'Competition Scraping' card, we have a table with data plus each url has more data shown in the details page. The competition scraping page that has the table should have a toggle at the very top that is prominently shown that has four options - 'Competitor Content Table', 'Competitor Reviews Analysis Table', 'Reviews Analysis By Competitor Category Table' and 'Reviews Analysis By Competitor Type Table'.
+>
+> - The 'Competitor Content Table' should be selected by default and when the toggle is on this selection, it should show the table that is currently shown on the competition scraping page.
+>
+>
+> COMPETITOR REVIEWS ANALYSIS TABLE:
+>
+> - When the toggle is on 'Competitor Reviews Analysis Table', then the user should be taken to the 'Competitor Reviews Analysis Table' page where the header is the same as the competition scraping page, however below that should be a table that has the following columns mentioned in order of leftmost going right:
+>
+>   -- Platform, Category, Type, Product Name, Results Rank, Competition Score, URL, Competitor Reviews Summary, Competitor Comprehensive Reviews Analysis (bulleted), Competitor Comprehensive Reviews Analysis (non-bulleted).
+>
+>   The way the data should be posted into this table is that the each competitor url and its associated data should be in posted into a single row and then each individual captured review and the captured review's star count should be posted started from that row going down in such a way that each review is in its own row. If a review for a platform has a title and a review description, simply merge the two such that the title comes first followed by a period (if there isn't one at the end of the title), followed by the review itself. So, if there is any more than one review associated with a competitor url, it will be in the rows below the row in which the competitor details such as platform, category, etc are listed.
+>
+> There should be check boxes to show/hide each of the columns in the table just the way there are checkboxes to do the same in the 'Competitor Content Table'. The user should also be able to grab and move a main competitor row within the table relative to other main competitor rows and the reviews associated with the main competitor row should move accordingly to maintain its association in the table. Also, the user should be able to move reviews associated with a competitor relative to each other to modify the order in which they are listed. All cells should be editable by clicking them.
+>
+> There should also be a 'Auto-Summarize Reviews' button with that text. When this button is clicked, an overlay should open that should allow the user to select the AI model (Sonnet 4.6, Opus 4.7), select the batch count of how many reviews to analyze per chat session, the main prompt (which we should come up with together) and any other prompt input boxes for additional instructions the model might need (which we should discuss). The way the AI analysis should happen is that the model should be given the structure of the 'Competitor Reviews Analysis Table' and then the AI model should analyze the review in the 'Review' column and then come up with a bullet point list that captures the essence of the entire review. The review analysis should isolate the critiques about the product, company, the product claims, fulfillment process, etc. Essentially, this list is meant to serve as precise targets that we can use to better our competitive approach by addressing each of these issues head on. Once a review is analyzed, its bullet list summary should be posted in the cell in the 'Competitor Reviews Summary' column in the same row. The way the AI tool should be designed is that it should know which cells to analyze next without losing track and which cells to paste the data into without making a mistake. There should be redundancies to ensure the data is always pasted into the correct cell and that no cell is mistakenly skipped. There should be a progress bar to show where we are in the process and a running tally of the cost and the total cost of the AI run. User should also be able to pause, resume or cancel the run. Note that we did something very similar in Workflow #1 so you may want to check those documents to maintain consistency. Note that this bullet list should also be added to the 'Your Analysis' box under the review in the url's details page.
+>
+>
+> Next to the 'Auto-Summarize Reviews' button, should be the 'Auto-create Competitor Comprehensive Reviews Analysis (bulleted)' button with that text. When this button is clicked, an overlay should open that should allow the user to select the AI model (Sonnet 4.6, Opus 4.7), the main prompt (which we should come up with together) and any other prompt input boxes for additional instructions the model might need (which we should discuss). The way the AI analysis should happen is that the model should be given the structure of the 'Competitor Reviews Analysis Table' and then the AI model should analyze the review summaries in 'Competitor Reviews Summary'. The way this should happen is that each chat should be assigned a single competitor url so that it can analyze all the review summary cells associated with it. Then the AI model should come up with a single comprehensive bulleted list that encompasses all the critical reviews while removing redundancies between the review summaries so that the new bulleted list of critical reviews contains all the critical review components without the same components mentioned more than once. This comprehensive bullet list is not just a merging of all the individual review summary bullets, it is essentially the act of removing redundant complaints while still keeping the individual unique complaints intact. Then this comprehensive bullet list should be pasted into the cell in the 'Competitor Comprehensive Reviews Analysis (bulleted)' column in the same row as the main competitor url row for which the AI model performed the comprehensive review analysis. The way the AI tool should be designed is that it should know which competitor reviews to analyze next without losing track and which cells to paste the data into without making a mistake. There should be redundancies to ensure the data is always pasted into the correct cell and that no cell is mistakenly skipped. There should be a progress bar to show where we are in the process and a running tally of the cost and the total cost of the AI run. User should also be able to pause, resume or cancel the run. Note that we did something very similar in Workflow #1 so you may want to check those documents to maintain consistency. Note that this bullet list should also be added to the 'Overall Analysis — Captured Reviews' box under the review in the url's details page.
+>
+>
+> Next to the 'Auto-create Competitor Comprehensive Reviews Analysis (bulleted)' button, should be the 'Auto-create Competitor Comprehensive Reviews Analysis (non-bulleted)' button with that text. When this button is clicked, an overlay should open that should allow the user to select the AI model (Sonnet 4.6, Opus 4.7), the main prompt (which we should come up with together) and any other prompt input boxes for additional instructions the model might need (which we should discuss). The way the AI analysis should happen is that the model should be given the structure of the 'Competitor Reviews Analysis Table' and then the AI model should analyze the review summaries in 'Comprehensive Review (bulleted) column. The way this should happen is that each chat should be assigned a single competitor url so that it can analyze the data in the cell in the 'Competitor Comprehensive Reviews Analysis (bulleted)' column associated with that competitor url. Then the AI model should come up with a detailed analysis of the bullet list and presented in a paragraphs manner that paints a clear picture of the competitor's shortcomings in a way that can be used to effectively critique the competitor on a product comparison website. Then this comprehensive analysis should be pasted into the cell in the 'Competitor Comprehensive Reviews Analysis (non-bulleted) column in the same row as the main competitor url row for which the AI model performed the comprehensive review analysis. The way the AI tool should be designed is that it should know which competitor reviews to analyze next without losing track and which cells to paste the data into without making a mistake. There should be redundancies to ensure the data is always pasted into the correct cell and that no cell is mistakenly skipped. There should be a progress bar to show where we are in the process and a running tally of the cost and the total cost of the AI run. User should also be able to pause, resume or cancel the run. Note that we did something very similar in Workflow #1 so you may want to check those documents to maintain consistency. Note that this bullet list should also be added to the 'Overall Analysis — Captured Reviews' box under the review in the url's details page. Since there may already be data in that box, make sure the new data is merged into that box by adding it to the very bottom so that no data that was previously in the box is overwritten.
+>
+> At the top, there should also be a 'Export Table' button that allows the user to export the table data of the 'Competitor Reviews Analysis Table' in an excel file format.
+>
+>
+>
+> REVIEWS ANALYSIS BY COMPETITOR CATEGORY TABLE:
+>
+>
+> - When the toggle is on 'Reviews Analysis By Competitor Category Table', then the user should be taken to the 'Reviews Analysis By Competitor Category Table' page where the header is the same as the competition scraping page, however below that should be a table that has the following columns mentioned in order of leftmost going right:
+>
+>   -- Category, Platform, Type, Product Name, Results Rank, Competition Score, URL, Reviews Summary from the 'Competitor Reviews Analysis Table', Competitor Comprehensive Reviews Analysis (bulleted), Competitor Comprehensive Reviews Analysis (non-bulleted), Category Comprehensive Reviews Analysis (bulleted), Category Comprehensive Reviews Analysis (non-bulleted).
+>
+>   The way the data should be posted into this table is that essentially the data from the 'Competitor Reviews Analysis Table' should be reorganized by common Categories in the category table in the following manner... The table should first list a category in a row and a competitor data that is associated with that category (data taken from the 'Competitor Reviews Analysis Table') should be added to that row. Then the next competitor's data that is associated with the same category should be added to the next row but the cell in the 'Category' column in that row should be empty to signal that the competitor is associated with that same category as the first row above it that has data in the 'Category' column. This pattern should repeat until all the competitor's associated with that specific category are listed in individual rows. Then the next category should be listed in the category column and the competitors associated with that category should be listed in individual rows in the same manner. In this way all the data from the 'Competitor Reviews Analysis Table' should be re-listed into the 'Reviews Analysis By Competitor Category Table' such that no categories and no competitors are skipped.
+>
+>
+> There should be check boxes to show/hide each of the columns in the table just the way there are checkboxes to do the same in the 'Competitor Content Table'. The user should also be able to grab and move a main category row within the table relative to other main category rows and the competitor details rows associated with the main category row should move accordingly to maintain its association in the table. Also, the user should be able to move competitor details rows associated with a category relative to each other to modify the order in which they are listed. All cells should be editable by clicking them.
+>
+>
+> There should also be an 'Auto-create Category Comprehensive Reviews Analysis (bulleted)' button with that text. When this button is clicked, an overlay should open that should allow the user to select the AI model (Sonnet 4.6, Opus 4.7), the main prompt (which we should come up with together) and any other prompt input boxes for additional instructions the model might need (which we should discuss). The way the AI analysis should happen is that the model should be given the structure of the 'Reviews Analysis By Competitor Category Table' and then the AI model should analyze the review summaries in 'Competitor Comprehensive Reviews Analysis (bulleted)' column. The way this should happen is that each chat should be assigned a single category so that it can analyze all the 'Competitor Comprehensive Reviews Analysis (bulleted)' column cells associated with it. Then the AI model should come up with a single comprehensive bulleted list that encompasses all the critical reviews while removing redundancies between the review summaries so that the new bulleted list of critical reviews contains all the critical review components without the same components mentioned more than once. This comprehensive bullet list is not just a merging of all the individual review summary bullets, it is essentially the act of removing redundant complaints while still keeping the individual unique complaints intact. Then this comprehensive bullet list should be pasted into the cell in the 'Category Comprehensive Reviews Analysis (bulleted)' column in the cell in the same row as the main category row where the category being analyzed is listed in the 'Reviews Analysis By Competitor Category Table'. The way the AI tool should be designed is that it should know which cells to analyze next without losing track and which cells to paste the data into without making a mistake. There should be redundancies to ensure the data is always pasted into the correct cell and that no cell is mistakenly skipped. There should be a progress bar to show where we are in the process and a running tally of the cost and the total cost of the AI run. User should also be able to pause, resume or cancel the run. Note that we did something very similar in Workflow #1 so you may want to check those documents to maintain consistency.
+>
+>
+> Next to the 'Auto-create Category Comprehensive Reviews Analysis (bulleted)' button, should be the 'Auto-create Category Comprehensive Reviews Analysis (non-bulleted)' button with that text. When this button is clicked, an overlay should open that should allow the user to select the AI model (Sonnet 4.6, Opus 4.7), the main prompt (which we should come up with together) and any other prompt input boxes for additional instructions the model might need (which we should discuss). The way the AI analysis should happen is that the model should be given the structure of the 'Reviews Analysis By Competitor Category Table' and then the AI model should analyze the review summaries in 'Category Comprehensive Reviews Analysis (bulleted)' column. The way this should happen is that each chat should be assigned a single category so that it can analyze the data in the cell in the 'Category Comprehensive Reviews Analysis (bulleted)' column associated with that category. Then the AI model should come up with a detailed analysis of the bullet list and presented in a paragraphs manner that paints a clear picture of the competitor's shortcomings in that category in a way that can be used to effectively critique the competitors in that category on a product comparison website. The idea is to challenge entire categories of products by targeting their common issues. Then this comprehensive analysis should be pasted into the cell in the 'Category Comprehensive Reviews Analysis (non-bulleted)' column in the same row as the main category row for which the AI model performed the comprehensive review analysis.
+>
+> The way the AI tool should be designed is that it should know which cell to analyze next without losing track and which cell to paste the data into without making a mistake. There should be redundancies to ensure the data is always pasted into the correct cell and that no cell is mistakenly skipped. There should be a progress bar to show where we are in the process and a running tally of the cost and the total cost of the AI run. User should also be able to pause, resume or cancel the run. Note that we did something very similar in Workflow #1 so you may want to check those documents to maintain consistency. Note that this bullet list should also be added to the 'Overall Analysis — Captured Reviews' box under the review in the url's details page. Since there may already be data in that box, make sure the new data is merged into that box by adding it to the very bottom so that no data that was previously in the box is overwritten.
+>
+> At the top, there should also be a 'Export Table' button that allows the user to export the table data of the 'Reviews Analysis By Competitor Category Table' in an excel file format.
+>
+>
+>
+> REVIEWS ANALYSIS BY COMPETITOR TYPE TABLE:
+>
+> - When the toggle is on 'Reviews Analysis By Competitor Type Table', then the user should be taken to the 'Reviews Analysis By Competitor Type Table' page where the header is the same as the competition scraping page, however below that should be a table that has the following columns mentioned in order of leftmost going right:
+>
+>   -- Type, Platform, Category, Product Name, Results Rank, Competition Score, URL, Reviews Summary from the 'Competitor Reviews Analysis Table', Competitor Comprehensive Reviews Analysis (bulleted), Competitor Comprehensive Reviews Analysis (non-bulleted), Type Comprehensive Reviews Analysis (bulleted), Type Comprehensive Reviews Analysis (non-bulleted).
+>
+>   The way the data should be posted into this table is that essentially the data from the 'Competitor Reviews Analysis Table' should be reorganized by common Type in the Type table in the following manner... The table should first list a 'Type' in a row and a competitor data that is associated with that 'Type' (data taken from the 'Competitor Reviews Analysis Table') should be added to that row. Then the next competitor's data that is associated with the same 'Type' should be added to the next row but the cell in the 'Type' column in that row should be empty to signal that the competitor is associated with that same 'Type' as the first row above it that has data in the 'Type' column. This pattern should repeat until all the competitor's associated with that specific 'Type' are listed in individual rows. Then the next 'Type' should be listed in the 'Type' column and the competitors associated with that 'Type' should be listed in individual rows in the same manner. In this way all the data from the 'Competitor Reviews Analysis Table' should be re-listed into the 'Reviews Analysis By Competitor Type Table' such that no 'Type' and no competitors are skipped.
+>
+>
+> There should be check boxes to show/hide each of the columns in the table just the way there are checkboxes to do the same in the 'Competitor Content Table'. The user should also be able to grab and move a main 'Type' row within the table relative to other main 'Type' rows and the competitor details rows associated with the main 'Type' row should move accordingly to maintain its association in the table. Also, the user should be able to move competitor details rows associated with a 'Type' relative to each other to modify the order in which they are listed. All cells should be editable by clicking them.
+>
+>
+> There should also be an 'Auto-create Type Comprehensive Reviews Analysis (bulleted)' button with that text. When this button is clicked, an overlay should open that should allow the user to select the AI model (Sonnet 4.6, Opus 4.7), the main prompt (which we should come up with together) and any other prompt input boxes for additional instructions the model might need (which we should discuss). The way the AI analysis should happen is that the model should be given the structure of the 'Reviews Analysis By Competitor Type Table' and then the AI model should analyze the review summaries in 'Competitor Comprehensive Reviews Analysis (bulleted)' column. The way this should happen is that each chat should be assigned a single 'Type' so that it can analyze all the 'Competitor Comprehensive Reviews Analysis (bulleted)' column cells associated with it. Then the AI model should come up with a single comprehensive bulleted list that encompasses all the critical reviews while removing redundancies between the review summaries so that the new bulleted list of critical reviews contains all the critical review components without the same components mentioned more than once. This comprehensive bullet list is not just a merging of all the individual review summary bullets, it is essentially the act of removing redundant complaints while still keeping the individual unique complaints intact. Then this comprehensive bullet list should be pasted into the cell in the 'Type Comprehensive Reviews Analysis (bulleted)' column in the cell in the same row as the main 'Type' row where the 'Type' being analyzed is listed in the 'Reviews Analysis By Competitor Type Table'. The way the AI tool should be designed is that it should know which cells to analyze next without losing track and which cells to paste the data into without making a mistake. There should be redundancies to ensure the data is always pasted into the correct cell and that no cell is mistakenly skipped. There should be a progress bar to show where we are in the process and a running tally of the cost and the total cost of the AI run. User should also be able to pause, resume or cancel the run. Note that we did something very similar in Workflow #1 so you may want to check those documents to maintain consistency.
+>
+>
+> Next to the 'Auto-create Type Comprehensive Reviews Analysis (bulleted)' button, should be the 'Auto-create Type Comprehensive Reviews Analysis (non-bulleted)' button with that text. When this button is clicked, an overlay should open that should allow the user to select the AI model (Sonnet 4.6, Opus 4.7), the main prompt (which we should come up with together) and any other prompt input boxes for additional instructions the model might need (which we should discuss). The way the AI analysis should happen is that the model should be given the structure of the 'Reviews Analysis By Competitor Type Table' and then the AI model should analyze the review summaries in 'Type Comprehensive Reviews Analysis (bulleted)' column. The way this should happen is that each chat should be assigned a single 'Type' so that it can analyze the data in the cell in the 'Type Comprehensive Reviews Analysis (bulleted)' column associated with that 'Type'. Then the AI model should come up with a detailed analysis of the bullet list and presented in a paragraphs manner that paints a clear picture of the competitor's shortcomings in that 'Type' in a way that can be used to effectively critique the competitors in that 'Type' on a product comparison website. The idea is to challenge entire Types of products by targeting their common issues. Then this comprehensive analysis should be pasted into the cell in the 'Type Comprehensive Reviews Analysis (non-bulleted)' column in the same row as the main 'Type' row for which the AI model performed the comprehensive review analysis.
+>
+> The way the AI tool should be designed is that it should know which cell to analyze next without losing track and which cell to paste the data into without making a mistake. There should be redundancies to ensure the data is always pasted into the correct cell and that no cell is mistakenly skipped. There should be a progress bar to show where we are in the process and a running tally of the cost and the total cost of the AI run. User should also be able to pause, resume or cancel the run. Note that we did something very similar in Workflow #1 so you may want to check those documents to maintain consistency. Note that this bullet list should also be added to the 'Overall Analysis — Captured Reviews' box under the review in the url's details page. Since there may already be data in that box, make sure the new data is merged into that box by adding it to the very bottom so that no data that was previously in the box is overwritten.
+>
+> At the top, there should also be a 'Export Table' button that allows the user to export the table data of the 'Reviews Analysis By Competitor Type Table' in an excel file format.
+>
+>
+> Note that during all AI runs for all the functionalities mentioned above, the tables in user's view should be updated in real-time as the AI updates the data in those tables.
+
+---
+
+## §2 — Joint-discussion adjustments (append-only, chronological) — CROSS-CUTTING (applies to ALL 3 pages)
+
+**2026-05-27 (W5 Session 1.5 design lock) — pre-Rule-31 cross-cutting decisions, retroactively recorded here from `docs/REVIEWS_PHASE_2_DESIGN.md` §B 2026-05-27:**
+
+- **Architecture — execution model — server-side per-batch endpoint.** Per director's verbatim spec line: *"Everything should be done server-side."* The browser orchestrates the per-batch loop (queue + pause/resume/cancel); the server fires ONE Anthropic call per batch with the API key staying server-side. Reuses `src/lib/competition-scraping/handlers/review-analysis-run-batch.ts`. This SUPERSEDES the pre-existing `feedback_browser_first_ai_with_server_migration.md` default for THESE specific AI flows.
+- **Model options — Opus 4.6 + Opus 4.7** across all AI flows on this workflow (NOT Sonnet 4.6 as the verbatim §1 spec mentioned; the "Sonnet 4.6" reference in §1 is treated as an oversight, confirmed by director 2026-05-28).
+- **Cache key — SHA-256(input + modelVersion + PROMPT_VERSION).** Same pattern as already shipped in W5 Sessions 2 + 3. Re-runs return cached results if the input + model + prompt version haven't changed.
+
+**2026-05-28 (W5 Session 4 rollback) — cross-cutting decisions retroactively recorded here from `docs/CORRECTIONS_LOG.md` §Entry 2026-05-28 + the Category page spec doc §2:**
+
+- **Category column data source:** `CompetitorUrl.competitionCategory`. URLs with null/empty `competitionCategory` bucket into `(Uncategorized)`.
+- **Type column data source:** `CompetitorUrl.type` (added in P-46 W1 2026-05-24). URLs with null/empty `type` bucket into `(Untyped)`.
+- **The 4-option toggle replaces the existing nav. Per director's verbatim §1:** the toggle should have FOUR options matching the names "Competitor Content Table", "Competitor Reviews Analysis Table", "Reviews Analysis By Competitor Category Table", "Reviews Analysis By Competitor Type Table". The current 5th option "Comprehensive Analysis" is NOT in this verbatim spec; disposition TBD per cross-cutting open question CQ-1 below.
+
+**2026-05-28-b (THIS session — Reviews Phase 2 master spec backfill + page 2 divergence fix plan) — cross-cutting decisions from this session:**
+
+- **Rule 31 escalation.** The verbatim re-paste above is now the canonical archive for all 3 pages. Per-page spec docs in `docs/polish-item-specs/` derive their §1 from this master + carry their own §2 + §3 + §4 + §5. Future joint-discussion adjustments that touch ALL 3 pages append to THIS master's §2. Surface-specific adjustments append to the per-page spec's §2.
+
+---
+
+## §3 — Current consolidated spec — POINTER TABLE
+
+**This master file is a verbatim archive + cross-cutting joint-decisions log. Per-page consolidated specs live in the per-page spec docs:**
+
+| Page | Status | Per-page spec doc | Sessions |
+|---|---|---|---|
+| **Competitor Content Table** (default toggle option) | ✅ SHIPPED (lives at `/competition-scraping`); pre-dates Reviews Phase 2 | n/a — no per-page spec doc (pre-Rule-31 surface) | already shipped (P-46 W3) |
+| **Competitor Reviews Analysis Table** | 🔴 PARTIAL — shipped at W5 Sessions 2 + 3 with multiple divergences from §1 (see backfilled per-page spec doc for full divergence list) | `docs/polish-item-specs/P-49-W5-S2-S3-competitor-reviews-analysis.md` (NEW today 2026-05-28-b) | W5 Sessions 2 + 3 SHIPPED PARTIAL; corrective-fix Sessions TBD (likely 2-3) |
+| **Reviews Analysis By Competitor Category Table** | 🟡 SPEC LOCKED; wrong-spec build SHIPPED + REVERTED 2026-05-28; corrective rebuild planned | `docs/polish-item-specs/P-49-W5-S4-category-page.md` (created 2026-05-28) | corrective rebuild Sessions 1-3 of 5-session plan |
+| **Reviews Analysis By Competitor Type Table** | 🟢 SPEC LOCKED; not yet shipped | `docs/polish-item-specs/P-49-W5-S5-type-page.md` (created 2026-05-28) | corrective rebuild Sessions 4-5 of 5-session plan |
+
+**Cross-cutting design facts (apply to ALL 3 Reviews Phase 2 pages):**
+
+- **Header:** same as the existing competition-scraping page header (project name + 4-option nav toggle).
+- **Server-side execution.** Browser orchestrates queue + pause/resume/cancel; server fires ONE Anthropic call per batch.
+- **Per-batch endpoint:** `src/lib/competition-scraping/handlers/review-analysis-run-batch.ts`. New flow values added per AI flow.
+- **Persistence:** `ReviewAnalysis` table (existing). Levels: `PER_REVIEW` / `PER_PRODUCT` (existing); will need `PER_CATEGORY` / `PER_TYPE` (already in the enum from W5 Session 1.5).
+- **Cache key:** SHA-256(input + modelVersion + PROMPT_VERSION). Already-cached runs return prior result.
+- **Cost telemetry:** `costUsdMicros` column on `ReviewAnalysis`. Running totals in the per-flow modal.
+- **Overlay UI primitives** mirror W#1 AutoAnalyze pattern: progress bar / per-batch status / cost tally / pause / resume / cancel.
+- **Real-time table painting** during AI runs — as each batch returns, the corresponding cell updates without page refresh.
+- **Click-to-edit on all cells** (with platform-wide single-source-of-truth where the cell maps to a shared CompetitorUrl column).
+- **Drag-to-reorder** at two levels: main rows (URL / Category / Type) drag relative to each other; child rows (review rows within a URL; competitor rows within a Category or Type) drag relative to each other within their group.
+- **Excel export** at the top of each of the 3 Reviews Phase 2 pages. Library + file naming TBD per cross-cutting open question CQ-7.
+- **Write-back to URL detail page** (cross-cutting; specific surfaces depend on the page):
+  - Per-review summary (from Competitor Reviews Analysis Table page) → "Your Analysis" box per review on URL detail page (backed by `CapturedReview.analysis`).
+  - Per-competitor bulleted + non-bulleted (from Competitor Reviews Analysis Table page) → "Overall Analysis — Captured Reviews" box on URL detail page (backed by `CompetitorUrl.overallAnalyses.reviews`). Bulleted writes first; non-bulleted **appends at the bottom** of the same box per director's "merge, never overwrite" verbatim.
+  - Per-category non-bulleted (from Category Table page) → "Overall Analysis — Captured Reviews" box on URL detail page for EACH URL in the category. Append at bottom; merge with existing content.
+  - Per-type non-bulleted (from Type Table page) → "Overall Analysis — Captured Reviews" box on URL detail page for EACH URL in the type. Append at bottom; merge with existing content.
+
+---
+
+## §4 — Cross-cutting open questions (still under discussion)
+
+Per-page open questions live in the per-page spec docs' §4.
+
+**Cross-cutting CQ-1 + CQ-7 RESOLVED 2026-05-28-b** (folded into §2 above):
+
+- CQ-1 → A: Toggle keeps "Comprehensive Analysis" as 5th option (5 options total: 4 spec-named + Comprehensive Analysis).
+- CQ-7 → A: Excel export uses `xlsx` library + word-wrap on AI cells + file naming `{page-slug}-{project-slug}-{YYYY-MM-DD}.xlsx`.
+
+No remaining cross-cutting open questions at this time. (Future cross-cutting items append here per Rule 31.)
+
+---
+
+## §5 — Cross-references
+
+- **Per-page spec docs:**
+  - `docs/polish-item-specs/P-49-W5-S2-S3-competitor-reviews-analysis.md` — Competitor Reviews Analysis Table page (NEW today; backfilled).
+  - `docs/polish-item-specs/P-49-W5-S4-category-page.md` — Reviews Analysis By Competitor Category Table page.
+  - `docs/polish-item-specs/P-49-W5-S5-type-page.md` — Reviews Analysis By Competitor Type Table page.
+- **Related polish-item specs:**
+  - `docs/polish-item-specs/P-51-comprehensive-analysis-ai-summary.md` — Project-level competitive landscape AI summary (a separate AI flow; piggybacks on the same per-batch architecture).
+- **ROADMAP entry:** `docs/ROADMAP.md` P-49 polish-backlog entry (with cross-reference to this master spec + the 3 per-page specs).
+- **Design doc:** `docs/REVIEWS_PHASE_2_DESIGN.md` — §A frozen at Workflow Requirements Interview close (2026-05-25-b); §B append-only build/deploy-session entries; §C per-workstream implementation outlines.
+- **HANDOFF_PROTOCOL Rule 31** — Polish-item spec capture (NEW 2026-05-28 — the rule established yesterday that requires this master spec doc).
+- **CORRECTIONS_LOG entries:**
+  - §Entry 2026-05-28 (HIGH) — Category page wrong-spec rollback + Rule 31 establishment.
+  - §Entry 2026-05-28-b (HIGH, pending) — Competitor Reviews Analysis Table divergence discovery + master spec backfill + Rule 31 mechanical read-guarantee additions.
+- **Canonical code references** (for the corrective-fix Sessions on the Reviews Analysis Table page):
+  - `src/app/projects/[projectId]/competition-scraping/competitor-reviews-analysis/page.tsx` — the page to fix.
+  - `src/app/projects/[projectId]/competition-scraping/components/CompetitionScrapingSurfaceNav.tsx` — the toggle to rename.
+  - `src/lib/competition-scraping/handlers/review-analysis-run-batch.ts` — the AI flow handler (KEEP MECHANICS; ADD write-back hooks).
+  - `src/lib/competition-scraping/handlers/review-analysis-update.ts` — the PATCH handler (EXTEND to PER_REVIEW edits + cell-level edits on URL row data).
+  - `src/app/projects/[projectId]/competition-scraping/url/[urlId]/page.tsx` + `UrlDetailContent.tsx` — the URL detail page (needs new "Overall Analysis — Captured Reviews" box rendering + write-back integration).
+  - `prisma/schema.prisma` — `ReviewAnalysis` model (no changes expected; the enum + columns already cover Reviews Phase 2 scope); `CompetitorUrl.overallAnalyses["reviews"]` slot (already exists; just needs UI rendering + handler write-backs).
+- **Reverted commits (forensic audit trail):**
+  - `5fa1f53` — wrong-spec Category page build (REVERTED).
+  - `958ccf8` — revert of `5fa1f53`.

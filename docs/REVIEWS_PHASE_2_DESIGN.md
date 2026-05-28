@@ -1842,6 +1842,133 @@ No net code surface touched this session — the build commit `5fa1f53` was reve
 
 ---
 
+## §B 2026-05-28-b — `session_2026-05-28-b_p49-w5-reviews-phase-2-master-spec-backfill-and-page-2-divergence-fix-plan` — Workstream 5 Sessions 2 + 3 page divergence discovery + master spec backfill + 3-session corrective-fix plan locked — PURE-PLANNING + DOC-ONLY SESSION on `workflow-2-competition-scraping` — NO code, NO builds, NO deploys this session — 12 divergence findings (D-1 through D-12) on the shipped Reviews Analysis Table page (W5 Sessions 2 + 3) catalogued + 3-session corrective-fix plan Fix A + Fix B + Fix C locked + NEW master spec doc + NEW backfilled Reviews Analysis Table spec doc + NEW Rule 31 mechanical read-guarantee + audit-shipped-state mandate sub-sections + 2 NEW reusable PATTERNS memorialized — THIRTEENTH build/deploy-session §B entry per Rule 18; FIFTH W5 entry; SECOND W5 entry covering a non-deploy session (the FIRST was W5 Session 1.5 design lock 2026-05-27)
+
+**Closes (a.106) RECOMMENDED-NEXT** = P-49 W5 corrective rebuild Block 1 planning resume — REDIRECTED to Reviews Analysis Table master-spec-backfill + page-2 divergence-discovery + 3-session corrective-fix plan locked. **Opens (a.107) RECOMMENDED-NEXT = P-49 W5 Reviews Analysis Table Fix Session A** on `workflow-2-competition-scraping` per `docs/polish-item-specs/P-49-W5-S2-S3-competitor-reviews-analysis.md` §3 "Fix Session A" sub-section.
+
+### Session shape — pure-planning, NO code
+
+Session opened per yesterday's NEXT_SESSION.md pointer scoping "P-49 W5 corrective rebuild Block 1 planning resume + (likely) Session 1 Category page scaffold". Claude completed start-of-session routine (branch verify ✅ / Group A doc reads / Rule 31 §3 read of Category + Type spec docs / drift check / Step 7b plain-terms summary) and awaited go-ahead.
+
+Director redirected immediately at session-start with a MAJOR scope correction NOT covered by the launch prompt: the previously-shipped `/competitor-reviews-analysis` page (W5 Sessions 2 + 3, deployed 2026-05-27 + 2026-05-27-c per §B 2026-05-27-b + §B 2026-05-27-c above) has multiple divergences from director's original verbatim spec. Director re-pasted the FULL original instruction set covering all 3 Reviews Phase 2 pages and asked Claude to (a) audit shipped state vs verbatim spec, (b) surface clarifying questions, (c) propose prevention mechanism, (d) propose forward path.
+
+Director picked Rule 14f Option A "Planning + spec backfill only today. NO code today." over alternative pickers (B: Plan + scaffold + ship Phase 1 of one corrective fix today; C: Plan + ship a quick patch to bring page closer to spec while planning the rest). Session became 100%-planning.
+
+### 12-divergence finding on the shipped Reviews Analysis Table page
+
+Code-truth audit of `src/app/projects/[projectId]/competition-scraping/competitor-reviews-analysis/page.tsx` + URL detail page surface + `CompetitionScrapingSurfaceNav.tsx` + `review-analysis-run-batch.ts` + `review-analysis-update.ts` + prisma schema produced 12 divergence findings (D-1 through D-12). Full list reproduced verbatim from `docs/polish-item-specs/P-49-W5-S2-S3-competitor-reviews-analysis.md` §2 + `docs/CORRECTIONS_LOG.md` §Entry 2026-05-28-b §(a):
+
+- **D-1** — Toggle labels truncated; 5th toggle option missing (the master spec introduces a NEW top-level page "Competitor Comprehensive Reviews Analysis Table").
+- **D-2** — Only 4 of 10 spec columns shipped on URL row; missing 6 (Platform / Category / Type / Product Name / Results Rank / Competition Score).
+- **D-3** — Only 1 of 4 top-of-page buttons shipped (no non-bulleted Auto-create button, no Export Table button).
+- **D-4** — No click-to-edit on URL-row data cells.
+- **D-5** — No show/hide column checkboxes.
+- **D-6** — No drag-to-reorder.
+- **D-7** — No Excel export affordance.
+- **D-8** — Per-review summary persistence-on-refresh bug.
+- **D-9** — NO write-back to `CapturedReview.analysis` ("Your Analysis" box).
+- **D-10** — NO write-back to `CompetitorUrl.overallAnalyses["reviews"]` ("Overall Analysis — Captured Reviews" box).
+- **D-11** — The "Overall Analysis — Captured Reviews" box itself NOT EVEN RENDERED on URL detail page.
+- **D-12** — Per-review Edit affordance rejected as out-of-scope-for-now (revisited in Fix Session B).
+
+The Sonnet 4.6 mention in director's verbatim spec was corrected at implementation time — Opus 4.6 + Opus 4.7 already in production model picker (verified in modal source code).
+
+### 7-question + 7-answer cluster — 7/7 = 100% Yes-to-Recommended
+
+7 clarifying questions answered Yes-to-Recommended via 2 AskUserQuestion batches (4 + 3 = 7). Answers folded into §2 + §3 of the new Reviews Analysis Table spec doc + into master spec §2 (cross-cutting CQ-1 + CQ-7). The 7 questions covered the architecture of the 5-option toggle, the column layout, the click-to-edit propagation Pattern, the write-back semantics, the Excel export library choice, and the corrective-fix-plan decomposition into 3 sessions.
+
+3 NEW open questions emerged from today's discussion (captured in §4 of the new spec doc; resolved at start of corresponding Fix Sessions):
+
+- **Q8** — Flow-value naming convention for NEW per-competitor non-bulleted (Fix Session C concern).
+- **Q9** — Per-review summary Edit UI pattern (Fix Session B concern).
+- **Q10** — Display format for "N of M summarized" count cell (Fix Session A concern; resolved at start of THIS upcoming session).
+
+Running cumulative across recent 10 sessions: 82/85 + 7/7 = **89/92 = 96.7% Yes-to-Recommended**.
+
+### 3-session corrective-fix plan Fix A + Fix B + Fix C locked
+
+Captured in `docs/polish-item-specs/P-49-W5-S2-S3-competitor-reviews-analysis.md` §3 with full sub-bullet decomposition (summary reproduced from CORRECTIONS_LOG §Entry 2026-05-28-b §(e)):
+
+- **Fix Session A (BUILD by default; 0-1 Rule 9 deploy gates)** — toggle rename to 5 options + URL-row column population (10 columns left-to-right) + title+description display-time merge on review-row body + Column 8 "N of M summarized" count display + ColumnVisibilityBar show/hide for 10 columns + click-to-edit on URL-row cells 1-7 (via existing CompetitorUrl PATCH; single source of truth) + click-to-edit on review-row body/star/reviewer/date cells (via existing CapturedReview PATCH; single source of truth). NO drag, NO new AI flows, NO write-backs, NO Excel.
+- **Fix Session B (BUILD by default; 0-1 Rule 9 deploy gates)** — drag-to-reorder URL rows + drag-to-reorder review rows within URL group + per-review Edit affordance. NO Excel, NO write-backs, NO new AI flows.
+- **Fix Session C (BUILD by default; 0-1 Rule 9 deploy gates; 1 schema change)** — NEW `Auto-create Competitor Comprehensive Reviews Analysis (non-bulleted)` flow + Excel export button + write-back to `CapturedReview.analysis` + write-back to `CompetitorUrl.overallAnalyses["reviews"]` (merge, not overwrite) + render the "Overall Analysis — Captured Reviews" box on URL detail page if not yet rendered + 1 NEW column `CapturedReview.sortRankInReviewsTable` for review-row drag persistence (schema change; will fire `npx prisma db push` + flip Schema-change-in-flight flag NO→YES mid-session).
+
+After Fix Sessions A + B + C complete, Category page Sessions 1-3 + Type page Sessions 4-5 from yesterday's 5-session corrective rebuild plan (§B 2026-05-28 above) resume.
+
+### 2 NEW reusable PATTERNS memorialized
+
+- **PATTERN: "Master-spec-plus-per-page-specs structure for multi-page polish items"** — when a polish item covers N pages with shared cross-cutting decisions, create ONE master spec doc (verbatim full re-paste + cross-cutting joint decisions) + N per-page spec docs (each deriving §1 from master + carrying surface-specific §2 + §3 + §4). Canonical reference implementation: today's `docs/polish-item-specs/P-49-W5-reviews-phase-2-master-spec.md` + the 3 per-page specs.
+
+- **PATTERN: "Backfill spec doc for already-shipped pre-Rule-31 polish items as discovery surfaces divergence"** — when Rule 31 establishes mid-arc, already-shipped surfaces may have spec gaps. When divergence on a shipped surface is surfaced, backfill the spec doc IMMEDIATELY at that moment — NOT retroactively at a future cleanup session. The backfill itself catalogues divergences as §2 entries, feeding directly into the corrective-fix plan in §3. Canonical reference: today's `docs/polish-item-specs/P-49-W5-S2-S3-competitor-reviews-analysis.md` backfill.
+
+### NEW Rule 31 sub-sections cross-reference
+
+NEW sub-sections added inline to `docs/HANDOFF_PROTOCOL.md` under existing Rule 31 (no new top-level rule number — these are extensions):
+
+- **"Mechanical read-guarantee (NEW 2026-05-28-b)"** — the SessionStart hook `.claude/hooks/inject-next-session-pointer.sh` now auto-detects `P-NN` token references in the resume-flow pointer content + emits a "🔵 RULE 31 MANDATORY READ — POLISH-ITEM SPEC DOCS" block listing every matching `docs/polish-item-specs/P-NN-*.md` file. Tested working: for today's pointer content referencing P-43/P-46/P-49/P-50/P-51, the hook emits all 5 matching files.
+
+- **"Audit-shipped-state mandate for in-flight workstreams (NEW 2026-05-28-b)"** — Claude MUST audit every shipped sister surface on an in-flight workstream against the master verbatim spec at session start — NOT just the surface the launch prompt is steering toward. Today's incident is the trigger.
+
+### Scoreboard verification
+
+/scoreboard NOT RUN this session — pure-doc work; Check 6 SKIPPED per Rule 27 standing precedent for pure-doc sessions; baselines UNCHANGED from W5 Session 4 (= W5 Session 3 baselines):
+
+| Check | Entry baseline (from W5 Session 4 exit) | Post-session (UNCHANGED — no code shipped) |
+|---|---|---|
+| Root tsc | clean | clean |
+| Extension tsc | clean | clean |
+| Extension `npm test` | 910/910 | **910/910 UNCHANGED** |
+| src/lib `node:test` | 950/950 | **950/950 UNCHANGED** |
+| `npm run build` routes | 67 | **67 UNCHANGED** |
+| Check 6 Playwright | SKIPPED Rule 27 | SKIPPED |
+
+**NEW baselines locked from this session:** UNCHANGED from W5 Session 4 (since no code shipped).
+
+### Schema-change-in-flight transitions
+
+STAYS NO entire session. Entry NO. No schema work. The corrective-fix plan introduces 1 new column `CapturedReview.sortRankInReviewsTable` in Fix Session C — NOT this session. Final state at session end: NO.
+
+### §A sections affected by this entry
+
+- **§A.7 (cost-cap framing)**, **§A.10 + §A.11 + §A.12** remain superseded by §B 2026-05-27 (W5 Session 1.5 design lock).
+- **§A.13 prompt content + the §B 2026-05-27 line-1474 reference to "7 v1 prompts locked during planning"** remain superseded by §B 2026-05-27-b.
+- **No new §A supersedences in this entry** — today's master-spec backfill captures cross-cutting decisions that supplement (not supersede) §A's frozen content; the divergence findings + corrective-fix plan are surface-specific to the already-shipped Reviews Analysis Table page (W5 Sessions 2 + 3 ship state) and live in §3 of the per-page spec doc, not in §A.
+
+### TaskList sweep this session (Rule 26)
+
+7 in-session tasks; all 7 completed cleanly (start-of-session routine ✅ / master spec doc ✅ / Reviews Analysis Table backfill spec doc ✅ / 7 clarifying questions ✅ / Category + Type §5 cross-refs ✅ / multi-session fix plan locked ✅ / Rule 31 mechanical-layer + audit-shipped-state extensions ✅ / ROADMAP cross-references ✅ / end-of-session in_progress.) ZERO open `DEFERRED:` tasks at session end; ZERO open `in_progress` tasks at session end (apart from the end-of-session doc-batch fire itself); Fix Session A IS the next-session task per (a.107), not a Claude-defer.
+
+### Per Rule 23 Change Impact Audit
+
+ZERO code surface touched this session — doc + spec + operational-hook only (2 NEW spec docs + 2 MODIFIED spec docs §5 cross-refs + 5 MODIFIED Group A docs + 1 MODIFIED Group B doc + 1 MODIFIED operational hook + NEW Rule 31 sub-sections in HANDOFF_PROTOCOL.md). No data risk. No schema work. Zero downstream W#1 cross-tool impact.
+
+### Architecture preserved across the corrective fix
+
+- **Per-batch endpoint architecture from §B 2026-05-27-b (W5 Session 2 ship)** — PRESERVED. Fix Session A reuses the existing `/api/projects/[projectId]/competition-scraping/review-analysis/run-batch/route.ts` thin shim + `review-analysis-run-batch.ts` handler dispatch shape; Fix Sessions B + C extend the handler dispatch with new flow values without modifying the architecture.
+- **v3 critique-only theme-emergent prompt shape from §B 2026-05-27-c (W5 Session 3 ship)** — PRESERVED for the Per-Competitor input column (Column 9 of the corrective-fix Reviews Analysis Table; Column 10 of the corrective-rebuild Category page).
+- **PATCH endpoint at `/api/projects/[projectId]/competition-scraping/review-analysis/[analysisId]/route.ts` from §B 2026-05-27-c (W5 Session 3 ship)** — PRESERVED. Fix Sessions A + C reuse this for cell-level edits via Edit affordance; Fix Session B extends it for per-review Edit (Q9 resolved at start of Fix Session B).
+- **The 5-session corrective rebuild plan from §B 2026-05-28** — Category page Sessions 1-3 + Type page Sessions 4-5 STILL VALID; pushed back behind Fix Sessions A + B + C. Yesterday's wrong-spec build commit `5fa1f53` + revert `958ccf8` already memorialized in §B 2026-05-28; not duplicated here.
+
+### Cross-references
+
+- `docs/CORRECTIONS_LOG.md` §Entry 2026-05-28-b (HIGH) — captures the same outcome from the meta-pattern perspective (with the 12-divergence finding + root cause + NEW Rule 31 extensions + 2 NEW reusable PATTERNS + 3-session corrective-fix plan + 7-of-7 clarifying-question cluster + sub-observations).
+- `docs/HANDOFF_PROTOCOL.md` Rule 31 (NEW sub-sections this session) — the protocol mandate extension for mechanical read-guarantee + audit-shipped-state.
+- `docs/polish-item-specs/P-49-W5-reviews-phase-2-master-spec.md` — NEW master spec doc; the canonical cross-cutting source-of-truth for the entire P-49 W5 Reviews Phase 2.
+- `docs/polish-item-specs/P-49-W5-S2-S3-competitor-reviews-analysis.md` — NEW backfilled spec doc for the already-shipped Reviews Analysis Table page; covers W5 Sessions 2 + 3 ship state + 12 divergence findings + 4 chronological joint-discussion entries + 3-session corrective-fix plan Fix A + Fix B + Fix C + Q8/Q9/Q10 open + §5 cross-references.
+- `docs/polish-item-specs/P-49-W5-S4-category-page.md` §5 — UPDATED with cross-reference to master spec doc; the canonical reference for Category page Sessions 1-3 of the corrective rebuild (pushed back behind Fix Sessions A + B + C).
+- `docs/polish-item-specs/P-49-W5-S5-type-page.md` §5 — UPDATED with cross-reference to master spec doc; the canonical reference for Type page Sessions 4-5 of the corrective rebuild.
+- `docs/polish-item-specs/P-51-comprehensive-analysis-ai-summary.md` — UNCHANGED this session; the canonical reference for the P-51 dedicated build session.
+- `.claude/hooks/inject-next-session-pointer.sh` — EXTENDED to auto-detect `P-NN` token references + emit Rule 31 mandatory-read block.
+- §B 2026-05-27 above (W5 Session 1.5 design lock) — predecessor entry; today's master spec doc carries the FULL verbatim re-paste covering the 3 Reviews Phase 2 pages whose surface architecture §B 2026-05-27 had locked at the high-level; the master spec doc + per-page specs are the structural backstop per NEW Rule 31.
+- §B 2026-05-27-b above (W5 Session 2 per-batch endpoint + Per-Review Summarize ship) — predecessor entry; the per-batch endpoint architecture from that ship is PRESERVED across the corrective fix.
+- §B 2026-05-27-c above (W5 Session 3 Per-Competitor deploy + 2-FF cycles) — predecessor entry; the v3 critique-only theme-emergent prompt shape + the PATCH endpoint from that ship are PRESERVED across the corrective fix.
+- §B 2026-05-28 above (W5 Session 4 scope-misread rollback + corrective planning) — immediate predecessor entry; yesterday's wrong-spec build commit `5fa1f53` + revert `958ccf8` already memorialized there; not duplicated here. Today's session is the first major test of yesterday's NEW Rule 31 structural backstop + surfaces the audit-shipped-state gap that NEW Rule 31's audit-shipped-state mandate extension addresses.
+- `feedback_plan_output_shape_before_building.md` — the related procedural memory; today's session reinforces that Rule 31 + the spec-doc mechanism + the mechanical read-guarantee + the audit-shipped-state mandate are the structural backstops for the same intent.
+
+**Closing line:** P-49 W5 Reviews Phase 2 master-spec-backfill + page-2 (Competitor Reviews Analysis Table) divergence-discovery + 3-session corrective-fix plan locked on `workflow-2-competition-scraping`. PURE-PLANNING + DOC-ONLY session: ZERO code changes; ZERO Rule 9 deploy gates fired; ZERO schema changes; ZERO new routes. 12 divergence findings (D-1 through D-12) catalogued on the shipped Reviews Analysis Table page; NEW master spec doc + NEW backfilled Reviews Analysis Table spec doc + NEW Rule 31 sub-sections (mechanical read-guarantee + audit-shipped-state mandate) + EXTENDED SessionStart hook + 2 NEW reusable PATTERNS memorialized + 3-session corrective-fix plan Fix A + Fix B + Fix C locked. 8/8 = 100% Yes-to-Recommended this session (1 session-shape picker + 7 clarifying questions); running cumulative 89/92 = 96.7%. Schema-change-in-flight flag STAYS NO entire session. NEW baselines UNCHANGED from W5 Session 4 (since no code shipped). **Closes (a.106) RECOMMENDED-NEXT** = P-49 W5 corrective rebuild Block 1 planning resume — REDIRECTED. **Opens (a.107) RECOMMENDED-NEXT = P-49 W5 Reviews Analysis Table Fix Session A** on `workflow-2-competition-scraping`. **THIRTEENTH build/deploy-session §B entry per Rule 18 — FIFTH W5 entry; SECOND W5 entry covering a non-deploy session.** The next §B entry will land at the close of Fix Session A of the corrective fix (Reviews Analysis Table 10-column shape + show/hide + click-to-edit + Column 8 count display per `docs/polish-item-specs/P-49-W5-S2-S3-competitor-reviews-analysis.md` §3 "Fix Session A" sub-section).
+
+---
+
 ---
 
 END OF DOCUMENT
