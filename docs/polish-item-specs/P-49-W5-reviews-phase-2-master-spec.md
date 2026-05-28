@@ -3,7 +3,7 @@
 **Polish-item ID:** P-49 W5 Reviews Phase 2 (the canonical source-of-truth for the 4-option Competition Scraping toggle + the 3 new tables and their AI flows)
 **Created:** 2026-05-28-b
 **Session that captured §1 (re-paste):** `session_2026-05-28-b_p49-w5-reviews-phase-2-master-spec-backfill-and-page-2-divergence-fix-plan`
-**Status:** SPEC LOCKED at §1 level (verbatim master re-paste from director); §2 + §3 carry CROSS-CUTTING joint adjustments; per-page specs carry surface-specific §2 + §3 + §4 content.
+**Status:** SPEC LOCKED at §1 level (verbatim master re-paste from director); §2 + §3 carry CROSS-CUTTING joint adjustments; per-page specs carry surface-specific §2 + §3 + §4 content. **§3 pointer table UPDATED 2026-05-29 — Reviews Analysis Table page status flipped from 🔴 PARTIAL to 🟡 PARTIAL after Fix Session A ✅ DEPLOYED-AND-VERIFIED 2026-05-29 with 4 bundled fix-forward cycles.**
 
 ---
 
@@ -115,7 +115,7 @@
 | Page | Status | Per-page spec doc | Sessions |
 |---|---|---|---|
 | **Competitor Content Table** (default toggle option) | ✅ SHIPPED (lives at `/competition-scraping`); pre-dates Reviews Phase 2 | n/a — no per-page spec doc (pre-Rule-31 surface) | already shipped (P-46 W3) |
-| **Competitor Reviews Analysis Table** | 🔴 PARTIAL — shipped at W5 Sessions 2 + 3 with multiple divergences from §1 (see backfilled per-page spec doc for full divergence list) | `docs/polish-item-specs/P-49-W5-S2-S3-competitor-reviews-analysis.md` (NEW today 2026-05-28-b) | W5 Sessions 2 + 3 SHIPPED PARTIAL; corrective-fix Sessions TBD (likely 2-3) |
+| **Competitor Reviews Analysis Table** | 🟡 PARTIAL — Fix Session A ✅ DEPLOYED-AND-VERIFIED 2026-05-29 (5 deploys + 18 Phase-4 redirects bundled across 4 FFs in one verification day; D-1 through D-7 closed; D-8 PARTIALLY closed in FF2 lifted forward from Fix Session B); Fix Sessions B + C remaining (Fix B = write-backs + per-review Edit + persistence re-verify + Q3 schema gap carry-over; Fix C = NEW per-competitor non-bulleted flow + Excel + drag + drag-row schema column) | `docs/polish-item-specs/P-49-W5-S2-S3-competitor-reviews-analysis.md` (NEW 2026-05-28-b; UPDATED 2026-05-29) | W5 Sessions 2 + 3 SHIPPED PARTIAL; Fix Session A ✅ DEPLOYED 2026-05-29 (commits `8708343` + `0b21c09` + `31c54a0` + `12c042c` + `3fbe12e`); Fix Sessions B + C remaining |
 | **Reviews Analysis By Competitor Category Table** | 🟡 SPEC LOCKED; wrong-spec build SHIPPED + REVERTED 2026-05-28; corrective rebuild planned | `docs/polish-item-specs/P-49-W5-S4-category-page.md` (created 2026-05-28) | corrective rebuild Sessions 1-3 of 5-session plan |
 | **Reviews Analysis By Competitor Type Table** | 🟢 SPEC LOCKED; not yet shipped | `docs/polish-item-specs/P-49-W5-S5-type-page.md` (created 2026-05-28) | corrective rebuild Sessions 4-5 of 5-session plan |
 

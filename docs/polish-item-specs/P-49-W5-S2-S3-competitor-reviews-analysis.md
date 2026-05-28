@@ -3,7 +3,7 @@
 **Polish-item ID:** P-49 W5 Sessions 2 + 3 (page already shipped with multiple divergences from spec; corrective-fix Sessions TBD)
 **Created:** 2026-05-28-b
 **Session that captured §1 (re-paste):** `session_2026-05-28-b_p49-w5-reviews-phase-2-master-spec-backfill-and-page-2-divergence-fix-plan`
-**Status:** SPEC LOCKED at §1 level (verbatim); §2 carries today's divergence findings + joint-discussion adjustments; §3 partial (consolidated fix-spec to be populated as clarifying-question answers land); §4 carries 7 open clarifying questions.
+**Status:** SPEC LOCKED at §1 level (verbatim); §2 + §3 + §4 updated through Fix Session A 2026-05-29 deploy + 4 bundled FF cycles; **Fix Session A SHIPPED-AND-VERIFIED 2026-05-29 — D-1 through D-7 closed; D-8 PARTIALLY closed in FF2 (lifted forward from Fix Session B per director directive); D-9/D-10/D-11 + Q3 schema gap carried to Fix Session B**; Q10 RESOLVED at Fix Session A planning; §4 reduced to Q8 + Q9 open + Q10 RESOLVED note.
 
 > **Background:** This spec doc is a BACKFILL. The Competitor Reviews Analysis Table page (`/projects/[projectId]/competition-scraping/competitor-reviews-analysis`) was shipped in W5 Session 2 (2026-05-27) and W5 Session 3 (2026-05-27-c) BEFORE Rule 31 was established (2026-05-28). The verbatim director instructions for this page were never captured into a stable doc at that time. Today's session (2026-05-28-b) backfills the verbatim spec + a divergence list documenting where the shipped page falls short of the verbatim text. The fix-scope is decomposed into a multi-session plan in §3 below.
 
@@ -100,6 +100,25 @@ NEW OPEN QUESTIONS EMERGED FROM THIS DISCUSSION:
 - **Q8 (new) — per-batch endpoint flow-value naming convention for the NEW per-competitor non-bulleted flow.** Two options: (a) `flow=per-competitor-nonbulleted`; (b) `flow=per-product-nonbulleted` (since the existing PER_PRODUCT bulleted flow uses `flow=per-competitor-bulleted` — both flows live at the same enum level so consistency matters). Decide at start of Fix-Session C.
 - **Q9 (new) — does the per-review summary edit affordance need the same Edit-button UI pattern as the per-competitor banner row?** Likely yes per Rule 14a Read-It-Back (the spec line "All cells should be editable by clicking them" implies the same UX). Confirm at start of Fix-Session B.
 - **Q10 (new) — display format for the "N of M summarized" count on URL-row Column 8.** Plain text? Small badge / pill style? Clickable to expand the URL row? Pick at Fix-Session A planning.
+
+**2026-05-29 (Fix Session A ✅ DEPLOYED-AND-VERIFIED end-to-end on vklf.com via `workflow-2-competition-scraping` → `main`):**
+
+Initial build commit `8708343` (5 files +973/-183) shipped the smallest verifiable unit (toggle rename to 5 verbatim options + URL row expanded to 10 spec columns + ColumnVisibilityBar with show/hide + Column 8 "N of M summarized" plain-text count [Q10 → A] + click-to-edit on URL-row cells 1-7 + click-to-edit on review-row body/star/reviewer/date). After deploy, director surfaced FOUR rounds of Phase 4 verification with 18 redirects bundled into 4 FF commits (FF1 `0b21c09` 8 redirects + FF2 `31c54a0` 5 redirects + FF3 `12c042c` 4 redirects + FF4 `3fbe12e` 1 redirect = 18 total redirects across 4 FFs in one Phase 4 verification day — NEW RECORD beating the prior 3-FF max for the Same-day Phase 4 multi-redirect bundling Pattern). Director Phase 4 verbatim PASS verdict on FF4: "everything passed". 7/7 = 100% Yes-to-Recommended pickers this session.
+
+KEY DECISIONS THIS SESSION:
+
+- **Q10 → A RESOLVED:** Plain text "N of M summarized" format on URL-row Column 8. No badge/pill, no click-to-expand. Matches the existing count-cell style on the Competitor URLs sibling page. Reversible later.
+- **D-8 PARTIALLY closed in FF2** (lifted forward from Fix Session B per director directive): per-review + per-competitor summary persistence-on-refresh via NEW `GET /api/projects/[projectId]/competition-scraping/review-analysis` route + NEW handler `src/lib/competition-scraping/handlers/review-analysis-list.ts`. Re-confirmation post-Q3-schema-change at Fix Session B start.
+- **Q3 schema-gap discovery during build + DEFERRED to Fix Session B** (NEW positive pattern): mid-build code-truth audit at the orchestrator's `saveReview` adapter (`orchestrator.ts:1254-1275`) revealed `CapturedReview` prisma model has only a single `body` column; extractors (`amazon-review-extractor.ts:283`, `walmart-review-extractor.ts:305`) DO capture `title` separately but the adapter silently DROPS the title before persisting via `createCapturedReview`. The Q3 → A title+description display-time merge CAN'T ship without a schema migration. Director-approved Rule 14f mid-build picker (4-option) — director picked Recommended (Defer to Fix Session B + preserve Fix Session A's NO-schema-change scope intact). Q3 carry-over fully captured into §3 Fix Session B item 6 below.
+- **Drag-to-resize column widths via NEW shared `ColumnResizeHandle`** (FF1): EXTRACTED from `UrlTable.tsx` into `src/app/projects/[projectId]/competition-scraping/components/ColumnResizeHandle.tsx`. Now used by BOTH sibling tables.
+- **CSS grid → HTML `<table>` + `<colgroup>`** (FF1) to fix overlapping columns.
+- **NEW Platforms filter chips** above the table (FF1).
+- **Edge-to-edge table + sticky header + viewport-locked horizontal scrollbar via full-viewport flex-column page restructure** (FF1 + FF2 + FF3).
+- **Column widths + visibility persist server-side via existing `/table-preferences` endpoint with `reviewsTable:` key prefix namespace** (FF2; NO schema change — extends existing JSON value shape).
+- **Column 8 + Column 9 cells become expand/collapse triggers with state-aware text** (FF4): split single `expanded` state into `reviewsExpanded` + `bannerExpanded`; leftmost ▸/▾ cell becomes "expand both" master toggle; auto-expand on per-URL AI run kickoff + on fresh in-session per-competitor summary land. NEW pure helpers `computeReviewsSummaryCellAffordance` + `computeBannerCellAffordance` in the helper module with +9 new node:test cases. **NEW reusable PATTERN memorialized in CORRECTIONS_LOG §Entry 2026-05-29 + REVIEWS_PHASE_2_DESIGN.md §B 2026-05-29: "Cell-level click handlers + state-aware text affordance Pattern".**
+- **3 button text renames** (FF1): per-URL "Summarize all reviews within this product" + per-URL "Summarize each individual review under this product" + top-of-page "Summarize All Reviews From All Competitors".
+- **Blue "Summarize each individual review" button moved ABOVE green "Summarize all reviews within this product" button** (FF3).
+- **Scoreboard deltas post-FF4**: src/lib `node:test` 950 → **984** (+34 net; +18 initial + +2 FF1 + +5 FF2 + +9 FF4; FF3 was layout-only); `npm run build` 67 → **68** (+1 NEW GET /review-analysis route in FF2); extension `npm test` = **910/910 UNCHANGED** (PLOS-side only session).
 
 ---
 
@@ -212,21 +231,33 @@ Per-URL inline buttons KEEP per Q4 → A. Existing per-URL "Summarize reviews" +
 
 ### MULTI-SESSION CORRECTIVE-FIX PLAN — 3 SESSIONS LOCKED 2026-05-28-b
 
-**Fix Session A — Toggle rename + URL-row column population + UI fixes (NO write-back work, NO new AI flow, NO Excel export, NO drag).**
+**Fix Session A — ✅ SHIPPED-AND-VERIFIED 2026-05-29 — Toggle rename + URL-row column population + UI fixes (NO write-back work, NO new AI flow, NO Excel export, NO drag — preserved as scoped; Q3 schema gap DEFERRED to Fix Session B per director-approved Rule 14f mid-build picker).**
+
+Initial build commit `8708343` + 4 fix-forward commits (`0b21c09` + `31c54a0` + `12c042c` + `3fbe12e`) bundling 18 Phase-4 redirects within one verification day — NEW RECORD for the Same-day Phase 4 multi-redirect bundling Pattern. Director Phase 4 verbatim PASS verdict on FF4: "everything passed".
 
 Scope:
-1. Rename `CompetitionScrapingSurfaceNav.tsx` labels to spec verbatim (5 options per Q1 — preserving Comprehensive Analysis as 5th).
-2. Expand the URL-row of the Reviews Analysis Table to all 10 spec columns left-to-right. Show Category, Type, Product Name, Results Rank, Competition Score, URL as own columns (currently merged into "Competitor / Product" or missing entirely).
+1. ✅ DONE — Rename `CompetitionScrapingSurfaceNav.tsx` labels to spec verbatim (5 options per Q1 — preserving Comprehensive Analysis as 5th).
+2. ✅ DONE — Expand the URL-row of the Reviews Analysis Table to all 10 spec columns left-to-right. Show Category, Type, Product Name, Results Rank, Competition Score, URL as own columns (currently merged into "Competitor / Product" or missing entirely).
 3. ~~Implement title+description display-time merge on review-row body (Q3).~~ **DEFERRED to Fix Session B 2026-05-29** — discovery during Fix Session A build: `CapturedReview` prisma model has only a single `body` column; no separate `title` + `description` columns exist. Extractors (`amazon-review-extractor.ts:283`, `walmart-review-extractor.ts:305`) DO capture `title` separately but orchestrator's `saveReview` adapter at `orchestrator.ts:1254-1275` silently DROPS the title before persisting via `createCapturedReview`. Schema work belongs in Fix Session B alongside the other write-back schema work (additive nullable `title` column + orchestrator wire-up + PATCH endpoint extension + display-time merge implementation).
-4. Implement Column 8 "N of M summarized" count display on URL row (Q2 → B; Q10 → A RESOLVED 2026-05-29 at Fix Session A planning — plain text format, no badge/pill, no click-to-expand; matches existing count-cell style on the Competitor URLs sibling page).
-5. Add `ColumnVisibilityBar` checkbox bar above the table for show/hide of the 10 columns (mirroring Competitor Content Table pattern).
-6. Add click-to-edit on URL-row cells 1–7 (Platform / Category / Type / Product Name / Results Rank / Competition Score / URL) propagating to `CompetitorUrl` columns via existing PATCH endpoint (Q6 → A).
-7. Add click-to-edit on review-row body / star / reviewer / date cells propagating to `CapturedReview` columns via existing PATCH endpoint (Q6 → A).
-8. /scoreboard + deploy decision Rule 14f.
+4. ✅ DONE — Implement Column 8 "N of M summarized" count display on URL row (Q2 → B; Q10 → A RESOLVED 2026-05-29 at Fix Session A planning — plain text format, no badge/pill, no click-to-expand; matches existing count-cell style on the Competitor URLs sibling page).
+5. ✅ DONE — Add `ColumnVisibilityBar` checkbox bar above the table for show/hide of the 10 columns (mirroring Competitor Content Table pattern). Per-user persistence shipped server-side in FF2 via existing `/table-preferences` endpoint with `reviewsTable:` key prefix namespace.
+6. ✅ DONE — Add click-to-edit on URL-row cells 1–7 (Platform / Category / Type / Product Name / Results Rank / Competition Score / URL) propagating to `CompetitorUrl` columns via existing PATCH endpoint (Q6 → A).
+7. ✅ DONE — Add click-to-edit on review-row body / star / reviewer / date cells propagating to `CapturedReview` columns via existing PATCH endpoint (Q6 → A).
+8. ✅ DONE — /scoreboard + deploy decision Rule 14f (5 Rule 9 deploy gates fired across initial + 4 FFs; all director-Yes; NEW baselines locked: src/lib `node:test` = **984/984** + `npm run build` = **68 routes** + extension = **910/910 UNCHANGED**).
 
-NO drag in Fix Session A. NO new AI flows. NO write-backs. NO Excel. Smallest verifiable unit to lock the table primitive against spec.
+**BONUS lifted forward from Fix Session B per director directive (FF2):** ✅ DONE — D-8 PARTIALLY closed via NEW `GET /api/projects/[projectId]/competition-scraping/review-analysis` route + NEW handler `src/lib/competition-scraping/handlers/review-analysis-list.ts` providing per-review + per-competitor summary persistence-on-refresh.
 
-Schema-change-in-flight = NO this session.
+**ALSO shipped (beyond the spec doc §3 Fix Session A scope, added during Phase 4 cascade):**
+- ✅ Drag-to-resize column widths via NEW shared `ColumnResizeHandle` (FF1) — EXTRACTED from `UrlTable.tsx`; both sibling tables now share.
+- ✅ CSS grid → HTML `<table>` + `<colgroup>` with `tableLayout:fixed` (FF1) to fix overlapping columns.
+- ✅ NEW Platforms filter chips above the table (FF1).
+- ✅ Edge-to-edge table + sticky header + viewport-locked horizontal scrollbar via full-viewport flex-column page restructure (FF1 + FF2 + FF3).
+- ✅ 3 button text renames (FF1) + button reorder (FF3).
+- ✅ Column 8 + Column 9 cells become expand/collapse triggers with state-aware text (FF4) — split single `expanded` state into `reviewsExpanded` + `bannerExpanded`; NEW pure helpers `computeReviewsSummaryCellAffordance` + `computeBannerCellAffordance` + 9 new node:test cases. **NEW reusable PATTERN memorialized.**
+
+NO drag-to-reorder rows in Fix Session A. NO new AI flows. NO write-backs. NO Excel. Smallest verifiable unit to lock the table primitive against spec.
+
+Schema-change-in-flight = NO this session (preserved per director-approved Rule 14f mid-build deferral of the Q3 schema-gap discovery to Fix Session B).
 
 **Fix Session B — Write-back to URL detail page + per-review edit + persistence-on-refresh bug + title schema column (Q3 carry-over from Fix Session A).**
 
@@ -301,3 +332,9 @@ Schema-change-in-flight = YES this session (new column).
   - `ecf292d` + `d713712` + `cd6478b` — W5 Session 2 fix-forwards.
   - `b9d232e` (2026-05-27-c) — W5 Session 3 per-competitor bulleted end-to-end.
   - `1cd6e3b` + `7f19aca` — W5 Session 3 fix-forwards (4 + 2 Phase-4 redirects).
+- **Shipped commits for Fix Session A (2026-05-29 — this fix):**
+  - `8708343` — Initial build (5 files +973/-183) — toggle rename to 5 verbatim options + URL row expanded to 10 spec columns + ColumnVisibilityBar + Column 8 "N of M summarized" plain-text count + click-to-edit on URL-row cells 1-7 + click-to-edit on review-row body/star/reviewer/date + NEW `src/lib/competition-scraping/reviews-analysis-table-columns.ts` helper module.
+  - `0b21c09` — FF1 (5 files +936/-517) — 8 redirects bundled: NEW Platforms filter chips + visible cell borders + CSS grid → HTML `<table>` + drag-to-resize via NEW shared `ColumnResizeHandle` extracted from `UrlTable.tsx` + 3 button text renames.
+  - `31c54a0` — FF2 (5 files +466/-6) — 5 redirects bundled: full-length drag handles + sticky header + viewport-locked scrollbar + column widths + visibility persist server-side via existing /table-preferences (NO schema change) + per-review + per-competitor summary persistence-on-refresh via NEW `GET /api/projects/[projectId]/competition-scraping/review-analysis` route + NEW `src/lib/competition-scraping/handlers/review-analysis-list.ts` (closes D-8 — lifted forward from Fix Session B per director directive).
+  - `12c042c` — FF3 (2 files +97/-33) — 4 redirects bundled: colspan off-by-one + click-to-expand Column 8 + viewport-floating scrollbar via full-viewport flex-column page restructure + button reorder.
+  - `3fbe12e` — FF4 (3 files +308/-55) — Column 8 + Column 9 cells become expand/collapse triggers with state-aware text via NEW pure helpers `computeReviewsSummaryCellAffordance` + `computeBannerCellAffordance` + 9 new node:test cases. NEW reusable PATTERN memorialized: Cell-level click handlers + state-aware text affordance Pattern.

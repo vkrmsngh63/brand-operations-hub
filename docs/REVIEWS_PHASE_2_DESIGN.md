@@ -1969,6 +1969,160 @@ ZERO code surface touched this session — doc + spec + operational-hook only (2
 
 ---
 
+## §B 2026-05-29 — `session_2026-05-29_p49-w5-reviews-analysis-table-fix-session-a-shipped-with-4-bundled-ff-cycles` — Workstream 5 Reviews Analysis Table Fix Session A ✅ DEPLOYED-AND-VERIFIED 2026-05-29 end-to-end on vklf.com via `workflow-2-competition-scraping` → `main` — the first of the 3-session corrective-fix plan locked 2026-05-28-b — initial build commit `8708343` (5 files +973/-183) plus FOUR fix-forward commits (FF1 `0b21c09` 5 files +936/-517 bundling 8 Phase-4 redirects + FF2 `31c54a0` 5 files +466/-6 bundling 5 Phase-4 redirects + FF3 `12c042c` 2 files +97/-33 bundling 4 Phase-4 redirects + FF4 `3fbe12e` 3 files +308/-55 bundling 1 Phase-4 redirect = 18 total redirects across 4 FFs in one Phase 4 verification day) all ff-merged to main under 5 Rule 9 deploy gates within ONE Phase 4 verification day — FOURTEENTH build/deploy-session §B entry per Rule 18; SIXTH W5 entry — director Phase 4 verbatim PASS verdict on FF4: "everything passed"; NEW RECORD for the Same-day Phase 4 multi-redirect bundling Pattern beating the prior 3-FF max (Etsy 2026-05-31 + Walmart 2026-06-01 had 3 FFs each per §B 2026-05-31 + §B 2026-06-01 above); Q3 schema-gap discovery during build DEFERRED to Fix Session B per director-approved Rule 14f picker preserving Fix Session A's NO-schema-change scope intact; NEW reusable PATTERN memorialized — Cell-level click handlers + state-aware text affordance Pattern (FF4)
+
+**Closes (a.107) RECOMMENDED-NEXT** = P-49 W5 Reviews Analysis Table Fix Session A ✅ DEPLOYED-AND-VERIFIED 2026-05-29 with 4 bundled fix-forward cycles. **Opens (a.108) RECOMMENDED-NEXT = P-49 W5 Reviews Analysis Table Fix Session B** on `workflow-2-competition-scraping` per `docs/polish-item-specs/P-49-W5-S2-S3-competitor-reviews-analysis.md` §3 "Fix Session B" sub-section (with Q3 schema gap carry-over).
+
+### Session shape — DEPLOY with 5 ff-merges across 5 Rule 9 deploy gates within one Phase 4 verification day
+
+Session opened per yesterday's NEXT_SESSION.md pointer scoping "P-49 W5 Reviews Analysis Table Fix Session A" per the 3-session corrective-fix plan locked 2026-05-28-b (Fix A this session + Fix B + Fix C). Claude completed start-of-session routine (branch verify ✅ / Group A doc reads / Rule 31 §3 read of the 2 P-49-W5 spec docs auto-loaded by the SessionStart hook / audit-shipped-state confirmation of the live `/competitor-reviews-analysis` page state per the 2026-05-28-b 12-divergence finding / Step 7b plain-terms summary) and awaited director's go-ahead.
+
+Phase 1 (Q10 resolution) — director picked Recommended (plain text "N of M summarized" format on URL-row Column 8; matches existing count-cell style on the Competitor URLs sibling page; reversible later if richer affordance preferred).
+
+Phase 2 (initial build) shipped 7 of the Fix Session A sub-items per spec doc §3:
+
+1. **Toggle nav renamed** to the 5 verbatim labels (Competitor Content Table + Competitor Reviews Analysis Table + Reviews Analysis By Competitor Category Table + Reviews Analysis By Competitor Type Table + Comprehensive Analysis preserved as 5th per Q1 → A from 2026-05-28-b).
+2. **URL row expanded to all 10 spec columns** left-to-right (Platform / Category / Type / Product Name / Results Rank / Competition Score / URL / Reviews Summary / Bulleted / Non-Bulleted).
+3. **Column 8 "Reviews Summary" plain-text "N of M summarized" count display** on the URL row (Q2 → B + Q10 → A).
+4. **NEW `ColumnVisibilityBar` checkbox bar** above the table for show/hide of the 10 columns (mirroring the Competitor Content Table pattern).
+5. **Click-to-edit on URL-row cells 1-7** propagating to `CompetitorUrl` columns via the existing PATCH endpoint (single source of truth across sibling tables per Q6 → A).
+6. **Click-to-edit on review-row body / star / reviewer / date** cells propagating to `CapturedReview` columns via the existing PATCH endpoint (single source of truth across URL detail page per Q6 → A).
+7. **NEW pure helper module** `src/lib/competition-scraping/reviews-analysis-table-columns.ts` carrying the 10-column shape constants + width helpers + count-display helper + 18 new node:test cases pinning the table primitive against spec.
+
+**Q3 schema-gap discovery during build.** Mid-build code-truth audit at the orchestrator's `saveReview` adapter (`orchestrator.ts:1254-1275`) revealed: `CapturedReview` prisma model has only a single `body` column; extractors (`amazon-review-extractor.ts:283`, `walmart-review-extractor.ts:305`) DO capture `title` separately but the adapter silently DROPS the title before persisting via `createCapturedReview`. The Q3 → A title+description display-time merge from 2026-05-28-b CAN'T ship without a schema migration. Director-approved Rule 14f mid-build picker (4-option) — director picked Recommended (Defer to Fix Session B + preserve Fix Session A's NO-schema-change scope intact). Q3 carry-over fully captured into the spec doc §3 Fix Session B item 6 + §4 RESOLVED-via-deferral note.
+
+Phase 3 (initial-build deploy decision Rule 14f picker) — director picked Recommended (Deploy `8708343` to main). Initial deploy fired; ff-merge `fc24d38..8708343 main -> main` under Rule 9 deploy gate #1.
+
+Phase 4 (initial-build director real-Chrome verification) — surfaced 8 redirects bundled into FF1 (see below).
+
+### 4 FF cycles — 18 redirects bundled across one Phase 4 verification day
+
+**FF1 `0b21c09` — 8 redirects bundled:**
+
+- NEW Platforms filter chips above the table (mirrors Competitor Content Table chip strip).
+- Visible cell borders on all 10 columns + the expand-toggle column.
+- Fix overlapping columns (CSS grid layout → HTML `<table>` + `<colgroup>` with `tableLayout: fixed`).
+- Edge-to-edge table (1280px maxWidth removed from outer page wrapper).
+- Drag-to-resize column widths via NEW shared `ColumnResizeHandle` EXTRACTED from `UrlTable.tsx` into `src/app/projects/[projectId]/competition-scraping/components/ColumnResizeHandle.tsx`. Now used by BOTH the Competitor URLs sibling table + the Reviews Analysis Table.
+- 3 button text renames (per-URL "Summarize all reviews within this product" + per-URL "Summarize each individual review under this product" + top-of-page "Summarize All Reviews From All Competitors").
+- Helper module changes: `width: string` → `defaultWidth: number`; NEW `MIN/MAX_REVIEWS_COLUMN_WIDTH` + `resolveReviewsColumnWidth`.
+- +2 new node:test cases for `resolveReviewsColumnWidth`.
+
+Rule 9 deploy gate #2 — director Yes-to-Recommended. ff-merge `8708343..0b21c09 main -> main`. Phase 4 surfaced 5 more redirects bundled into FF2.
+
+**FF2 `31c54a0` — 5 redirects bundled:**
+
+- Drag handles work along the full length of the column header (removed `overflow: hidden` from `thStyle`).
+- Sticky table header (CSS `position: sticky; top: 0`).
+- Horizontal scrollbar locked to viewport (`maxHeight: calc(100vh - 280px)` on the outer table div).
+- Column widths + visibility persist server-side via the existing `/table-preferences` endpoint with `reviewsTable:` key prefix namespace (**NO schema change** — extends the existing JSON value shape per spec doc directive).
+- Right edge of table draggable via `ColumnResizeHandle` on the Actions column header (key `__actions__`).
+- Per-review + per-competitor summary persistence-on-refresh via NEW `GET /api/projects/[projectId]/competition-scraping/review-analysis` route + NEW handler `src/lib/competition-scraping/handlers/review-analysis-list.ts` (closes D-8 — lifted forward from Fix Session B per director directive).
+- +5 new node:test cases for `resolveActionsColumnWidth`.
+- +1 NEW API route in `npm run build` count (67 → 68).
+
+Rule 9 deploy gate #3 — director Yes-to-Recommended. ff-merge `0b21c09..31c54a0 main -> main`. Phase 4 surfaced 4 more redirects bundled into FF3.
+
+**FF3 `12c042c` — 4 redirects bundled:**
+
+- Colspan off-by-one fix (`tableColspan` corrected; explicit `border: none` on banner + ReviewsList `<td>`s).
+- Click-to-expand on Column 8 cell now works (removed `<td>`-level `stopPropagation`; InlineCell components carry their own internal `stopPropagation`).
+- Horizontal scrollbar now floats at viewport bottom via full-viewport flex-column page restructure (`height: 100vh` + `display: flex; flexDirection: column` + `overflow: hidden` on outer page wrapper; table region takes `flex: 1` of remaining viewport with `minHeight: 0`).
+- Blue "Summarize each individual review" button moved ABOVE green "Summarize all reviews within this product" button.
+- `ColumnResizeHandle` gained NEW `showRestingLine` prop (default true for URLs page; set false on Reviews Analysis Table so the full-height column lines don't bleed into the expanded sub-rows).
+
+Rule 9 deploy gate #4 — director Yes-to-Recommended. ff-merge `31c54a0..12c042c main -> main`. Phase 4 surfaced 1 more redirect bundled into FF4.
+
+**FF4 `3fbe12e` — Column 8 + Column 9 cells become expand/collapse triggers with state-aware text:**
+
+- Split single `expanded` state into `reviewsExpanded` (Column 8 toggle) + `bannerExpanded` (Column 9 toggle).
+- Leftmost ▸/▾ cell becomes "expand both" master toggle.
+- Auto-expand on per-URL AI run kickoff + on fresh in-session per-competitor summary land.
+- NEW pure helpers `computeReviewsSummaryCellAffordance` + `computeBannerCellAffordance` in the helper module.
+- +9 new node:test cases pinning text states + clickability semantics.
+
+Rule 9 deploy gate #5 — director Yes-to-Recommended. ff-merge `12c042c..3fbe12e main -> main`. **Director Phase 4 verbatim PASS verdict on FF4: "everything passed".**
+
+### Scoreboard verification
+
+Pre-deploy /scoreboard 5/5 GREEN at entry baselines = W5 Session 4 exit = 2026-05-27-c locked:
+
+| Check | Entry baseline (W5 Session 4 exit) | Mid-session (post-initial `8708343`) | Mid-session (post-FF1 + FF2) | Post-FF4 (FINAL) |
+|---|---|---|---|---|
+| Root tsc | clean | clean | clean | clean |
+| Extension tsc | clean | clean | clean | clean |
+| Extension `npm test` | 910/910 | **910/910 UNCHANGED** | **910/910 UNCHANGED** | **910/910 UNCHANGED** |
+| src/lib `node:test` | 950/950 | **968/968** (+18 initial reviews-analysis-table-columns tests) | **975/975** (+7 cumulative across FF1 + FF2 = +2 `resolveReviewsColumnWidth` + +5 `resolveActionsColumnWidth`) | **984/984** (+9 FF4 affordance helper tests; FF3 was layout-only) |
+| `npm run build` routes | 67 | 67 UNCHANGED | **68** (+1 NEW GET /review-analysis route in FF2) | **68 UNCHANGED** |
+| Check 6 Playwright | SKIPPED Rule 27 | SKIPPED | SKIPPED | SKIPPED |
+
+**NEW baselines locked from this session:** src/lib `node:test` = **984/984** + `npm run build` = **68 routes** + extension `npm test` = **910/910 UNCHANGED**.
+
+### Schema-change-in-flight transitions
+
+STAYS NO entire session. Entry NO. No schema work shipped this session. Q3 schema-gap discovery during build led to director-approved Rule 14f deferral to Fix Session B — Fix Session A's NO-schema-change scope preserved intact. Final state at session end: NO. Fix Session B entry state: YES (Q3 schema migration carried over — additive nullable `CapturedReview.title String?` column).
+
+### Calibration data point — 7/7 = 100% Yes-to-Recommended this session
+
+The 7 pickers this session: 1 Q10 resolution picker (plain text Recommended) + 1 Q3 schema-gap discovery picker (Defer to Fix Session B Recommended) + 5 Rule 9 deploy gates (initial + FF1 + FF2 + FF3 + FF4 all Recommended). Running cumulative across recent 10 sessions: **96/99 = 97.0% Yes-to-Recommended** (was 89/92 = 96.7% at session entry).
+
+### NEW reusable PATTERN memorialized — Cell-level click handlers + state-aware text affordance Pattern (FF4)
+
+**Pattern statement.** When a table cell needs to toggle a sub-surface (expand/collapse a sub-row group, open a detail panel, etc.) AND the cell's text needs to reflect the current state of that sub-surface, do BOTH of the following together:
+
+1. **Split single boolean state into per-toggle state** — instead of one `expanded` flag, model each toggle as its own state (e.g., `reviewsExpanded` + `bannerExpanded`). Each cell click reads + flips its own state independently.
+2. **Extract pure helper(s) that compute the cell's text + clickability based on current state** — e.g., `computeReviewsSummaryCellAffordance(state, hasContent, count)` returns `{ text, clickable }`. Pin the text states + clickability semantics in node:test cases so the cell rendering stays correct as state grows.
+
+**Canonical reference:** FF4 `3fbe12e` split `expanded` → `reviewsExpanded` + `bannerExpanded` on the Reviews Analysis Table, made Column 8 + Column 9 cells expand/collapse triggers with state-aware text. NEW pure helpers `computeReviewsSummaryCellAffordance` + `computeBannerCellAffordance` in `src/lib/competition-scraping/reviews-analysis-table-columns.ts` with +9 new node:test cases.
+
+**Why it's reusable.** Any table with sub-row groups (Reviews Analysis Table, future Category/Type tables with expandable competitor groups) benefits. The pure-helper extraction also feeds directly into node:test coverage with NO React component instantiation overhead.
+
+**Cross-reference:** complements the "Pure helpers extracted from .tsx component file for node:test coverage" Pattern from §B 2026-05-29 W4 Captured Reviews UI Session 1 above (the W4 session extracted pure helpers from `.tsx` for node:test coverage; today's Fix Session A FF4 extends the precedent by also using the extracted helpers to drive state-aware UI text).
+
+### NEW positive pattern — Q3 schema-gap discovery during build + director-approved Rule 14f deferral preserves session scope
+
+Mid-build code-truth audit surfaced a schema gap that would have un-scoped Fix Session A (which was deliberately NO-schema-change). Rule 14f mid-build picker offered 4 options including "Defer to Fix Session B" Recommended; director picked Recommended. The Q3 carry-over was captured cleanly into the spec doc §3 Fix Session B item 6 + §4 RESOLVED-via-deferral note. Rule 14f's mid-build use here is a CONFIRMING data point for the rule's design — the picker's "I have a question first" escape-hatch + the 4-option shape made the deferral decision easy to surface without un-scoping Fix Session A.
+
+### §A sections affected by this entry
+
+- **§A.7 (cost-cap framing)**, **§A.10 + §A.11 + §A.12** remain superseded by §B 2026-05-27 (W5 Session 1.5 design lock).
+- **§A.13 prompt content + the §B 2026-05-27 line-1474 reference to "7 v1 prompts locked during planning"** remain superseded by §B 2026-05-27-b.
+- **No new §A supersedences in this entry** — Fix Session A is a corrective fix on the already-shipped Reviews Analysis Table page surface and re-uses the per-batch endpoint architecture from §B 2026-05-27-b + the v3 critique-only theme-emergent prompt shape from §B 2026-05-27-c + the PATCH endpoint from §B 2026-05-27-c (all PRESERVED). The new behaviors (5-toggle nav + 10 columns + show/hide + click-to-edit + Column 8 plain-text count + drag-to-resize via shared `ColumnResizeHandle` + sticky header + viewport-floating scrollbar + persistence-on-refresh via NEW GET endpoint + Column 8/9 expand-collapse with state-aware text) live in §3 of the per-page spec doc, not in §A.
+
+### TaskList sweep this session (Rule 26)
+
+~15 in-session tasks; all completed cleanly. The Q3 schema-gap carry-over was captured DIRECTLY into the spec doc §3 Fix Session B item 6 + §4 RESOLVED-via-deferral note — NOT into the TaskList per Rule 14e (spec-doc captures for cross-session work). ZERO open `DEFERRED:` tasks at session end. ZERO open `in_progress` tasks at session end (apart from the end-of-session doc-batch fire itself). Fix Session B IS the next-session task per (a.108).
+
+### Per Rule 23 Change Impact Audit
+
+PLOS-side UI + src/lib module surface + 1 NEW API route (`GET /api/projects/[projectId]/competition-scraping/review-analysis` in FF2) + 1 NEW shared component (`ColumnResizeHandle` in FF1) + 1 NEW helper module (`reviews-analysis-table-columns.ts`). No data risk to existing rows (FF2's GET endpoint is read-only over existing `ReviewAnalysis` rows; table-preferences extension reuses existing JSON value shape; no schema work this session per the Q3 deferral). Zero downstream W#1 cross-tool impact.
+
+### Architecture preserved across the corrective fix
+
+- **Per-batch endpoint architecture from §B 2026-05-27-b (W5 Session 2 ship)** — PRESERVED across all 5 deploys this session. Fix Session A re-used the existing `/api/projects/[projectId]/competition-scraping/review-analysis/run-batch/route.ts` thin shim + `review-analysis-run-batch.ts` handler dispatch shape.
+- **v3 critique-only theme-emergent prompt shape from §B 2026-05-27-c (W5 Session 3 ship)** — PRESERVED across Fix Session A. No prompt iteration this session.
+- **PATCH endpoint at `/api/projects/[projectId]/competition-scraping/review-analysis/[analysisId]/route.ts` from §B 2026-05-27-c (W5 Session 3 ship)** — PRESERVED across Fix Session A. Reuse for cell-level edits via Edit affordance. Fix Session B will extend it to ACCEPT PER_REVIEW edits (currently rejected at line 181-193) per the Q9 + D-11 fix scope.
+- **NEW shared `ColumnResizeHandle` component (FF1)** — extracted from `UrlTable.tsx`; both sibling tables now share. Reusable for future Category + Type pages in the corrective rebuild.
+
+### Cross-references
+
+- `docs/CORRECTIONS_LOG.md` §Entry 2026-05-29 (INFORMATIONAL) — captures the same outcome from the meta-pattern perspective (with the 4 observations + NEW reusable PATTERN memorialized + Q3 schema-gap discovery NEW positive pattern + P-43 cwd-leak Pattern Class running tally update).
+- `docs/HANDOFF_PROTOCOL.md` Rule 31 + Rule 9 + Rule 14f + Rule 18 + Rule 23 + Rule 26 + Rule 27 + Rule 30 — all standing rules; no new rules drafted this session.
+- `docs/polish-item-specs/P-49-W5-reviews-phase-2-master-spec.md` — §3 pointer table UPDATED — Reviews Analysis Table page status flipped from "🔴 PARTIAL — shipped at W5 Sessions 2 + 3 with multiple divergences" to "🟡 PARTIAL — Fix Session A ✅ DEPLOYED-AND-VERIFIED 2026-05-29; Fix Sessions B + C remaining".
+- `docs/polish-item-specs/P-49-W5-S2-S3-competitor-reviews-analysis.md` — Status field flipped to "Fix Session A SHIPPED-AND-VERIFIED 2026-05-29 — D-1 through D-7 closed; D-8 PARTIALLY closed in FF2 (lifted forward from Fix Session B); D-9/D-10/D-11 + Q3 schema gap carried to Fix Session B" + §3 Fix Session A items marked ✅ DONE + Q10 → A RESOLVED + §3 Fix Session B item 6 added carrying Q3 schema gap + §4 reduced to Q8 + Q9 open + Q10 RESOLVED note.
+- `docs/polish-item-specs/P-49-W5-S4-category-page.md` UNCHANGED this session (Category page work pushed back behind Fix Sessions A + B + C).
+- `docs/polish-item-specs/P-49-W5-S5-type-page.md` UNCHANGED this session (Type page work pushed back behind Fix Sessions A + B + C + Category Sessions 1-3).
+- `docs/polish-item-specs/P-51-comprehensive-analysis-ai-summary.md` UNCHANGED this session.
+- §B 2026-05-28-b above (W5 Reviews Phase 2 master-spec-backfill + 3-session corrective-fix plan locked) — immediate predecessor entry; the 3-session plan's Fix Session A is what this entry executes + ships. Fix Session B + C remain queued.
+- §B 2026-05-28 above (W5 Session 4 scope-misread rollback + corrective planning) — the original 5-session corrective rebuild plan; Category + Type Sessions still pushed back behind Fix Sessions B + C.
+- §B 2026-05-27-c above (W5 Session 3 Per-Competitor deploy + 2-FF cycles) — the same-day multi-redirect bundling Pattern's original §Entry; today's 4-FF / 18-redirect ceiling extends the Pattern.
+- §B 2026-05-27-b above (W5 Session 2 per-batch endpoint + Per-Review Summarize ship) — the per-batch endpoint architecture PRESERVED across Fix Session A.
+- §B 2026-05-27 above (W5 Session 1.5 design lock) — predecessor entry; partially superseded by the 3-session corrective-fix plan on the Reviews Analysis Table page surface.
+
+**Closing line:** P-49 W5 Reviews Analysis Table Fix Session A ✅ DEPLOYED-AND-VERIFIED 2026-05-29 with 4 bundled fix-forward cycles on `workflow-2-competition-scraping`. 5 deploys + 18 Phase-4 redirects bundled within one verification day — NEW RECORD for the Same-day Phase 4 multi-redirect bundling Pattern beating the prior 3-FF max. Q3 schema-gap discovery during build led to director-approved Rule 14f deferral to Fix Session B (NEW positive pattern preserving session scope). NEW reusable PATTERN memorialized: Cell-level click handlers + state-aware text affordance Pattern. 7/7 = 100% Yes-to-Recommended this session; running cumulative 96/99 = 97.0%. Schema-change-in-flight flag STAYS NO entire session. NEW baselines: src/lib `node:test` = **984/984** + `npm run build` = **68 routes** + extension = 910/910 UNCHANGED. **Closes (a.107) RECOMMENDED-NEXT** = P-49 W5 Reviews Analysis Table Fix Session A ✅ DEPLOYED-AND-VERIFIED 2026-05-29. **Opens (a.108) RECOMMENDED-NEXT = P-49 W5 Reviews Analysis Table Fix Session B** on `workflow-2-competition-scraping` (with Q3 schema gap carry-over). **FOURTEENTH build/deploy-session §B entry per Rule 18 — SIXTH W5 entry.** The next §B entry will land at the close of Fix Session B (write-backs + per-review Edit + persistence-on-refresh re-verify + Q3 schema migration shipped per spec doc §3 "Fix Session B" sub-section).
+
+---
+
 ---
 
 END OF DOCUMENT
