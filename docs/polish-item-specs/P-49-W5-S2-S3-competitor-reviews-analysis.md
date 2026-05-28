@@ -217,8 +217,8 @@ Per-URL inline buttons KEEP per Q4 → A. Existing per-URL "Summarize reviews" +
 Scope:
 1. Rename `CompetitionScrapingSurfaceNav.tsx` labels to spec verbatim (5 options per Q1 — preserving Comprehensive Analysis as 5th).
 2. Expand the URL-row of the Reviews Analysis Table to all 10 spec columns left-to-right. Show Category, Type, Product Name, Results Rank, Competition Score, URL as own columns (currently merged into "Competitor / Product" or missing entirely).
-3. Implement title+description display-time merge on review-row body (Q3).
-4. Implement Column 8 "N of M summarized" count display on URL row (Q2 → B; format TBD per Q10 — plain text default, decide pill vs link at session-start planning).
+3. ~~Implement title+description display-time merge on review-row body (Q3).~~ **DEFERRED to Fix Session B 2026-05-29** — discovery during Fix Session A build: `CapturedReview` prisma model has only a single `body` column; no separate `title` + `description` columns exist. Extractors (`amazon-review-extractor.ts:283`, `walmart-review-extractor.ts:305`) DO capture `title` separately but orchestrator's `saveReview` adapter at `orchestrator.ts:1254-1275` silently DROPS the title before persisting via `createCapturedReview`. Schema work belongs in Fix Session B alongside the other write-back schema work (additive nullable `title` column + orchestrator wire-up + PATCH endpoint extension + display-time merge implementation).
+4. Implement Column 8 "N of M summarized" count display on URL row (Q2 → B; Q10 → A RESOLVED 2026-05-29 at Fix Session A planning — plain text format, no badge/pill, no click-to-expand; matches existing count-cell style on the Competitor URLs sibling page).
 5. Add `ColumnVisibilityBar` checkbox bar above the table for show/hide of the 10 columns (mirroring Competitor Content Table pattern).
 6. Add click-to-edit on URL-row cells 1–7 (Platform / Category / Type / Product Name / Results Rank / Competition Score / URL) propagating to `CompetitorUrl` columns via existing PATCH endpoint (Q6 → A).
 7. Add click-to-edit on review-row body / star / reviewer / date cells propagating to `CapturedReview` columns via existing PATCH endpoint (Q6 → A).
@@ -228,7 +228,7 @@ NO drag in Fix Session A. NO new AI flows. NO write-backs. NO Excel. Smallest ve
 
 Schema-change-in-flight = NO this session.
 
-**Fix Session B — Write-back to URL detail page + per-review edit + persistence-on-refresh bug.**
+**Fix Session B — Write-back to URL detail page + per-review edit + persistence-on-refresh bug + title schema column (Q3 carry-over from Fix Session A).**
 
 Scope:
 1. Render the NEW "Overall Analysis — Captured Reviews" box on URL detail page (`UrlDetailContent.tsx`) using the existing `OverallAnalysisBox` component pattern. Backed by `CompetitorUrl.overallAnalyses["reviews"]` (schema slot already exists).
@@ -236,11 +236,12 @@ Scope:
 3. Wire per-competitor bulleted WRITE-BACK to `CompetitorUrl.overallAnalyses["reviews"]`. Append-merge at bottom (D-10 fix; bulleted half).
 4. Extend `review-analysis-update.ts` PATCH endpoint to ACCEPT PER_REVIEW edits (currently rejected at line 181-193). Wire UI Edit button on per-review summary cells on review rows (D-11 fix; Q9 — same Edit-button UI pattern as banner row).
 5. Fix persistence-on-refresh bug: page loader fetches existing PER_REVIEW `ReviewAnalysis` rows and hydrates them into table state (D-8 fix). Re-verify PER_PRODUCT bulleted loads correctly post-fix.
-6. /scoreboard + deploy decision Rule 14f.
+6. **Q3 schema gap (NEW carry-over from Fix Session A 2026-05-29):** add `CapturedReview.title String?` column (additive, nullable, zero data loss) + wire orchestrator's `saveReview` adapter (`orchestrator.ts:1254-1275`) to pass title through to `createCapturedReview` + extend wire shape + extend PATCH endpoint to accept title + implement title+description display-time merge on the review-row body cell of the Reviews Analysis Table page (per Q3 → A from 2026-05-28-b: 'title' + period-if-missing + ' ' + 'body').
+7. /scoreboard + deploy decision Rule 14f.
 
 NO new AI flows. NO Excel. NO drag.
 
-Schema-change-in-flight = NO this session (UrlDetailContent.tsx UI add + JSON-bag writes; no schema migrations).
+Schema-change-in-flight = **YES** this session (Q3 schema migration carried over from Fix Session A — additive only; CapturedReview.title nullable).
 
 **Fix Session C — NEW per-competitor non-bulleted flow + Auto-create non-bulleted button + Excel Export + Drag-to-reorder.**
 
@@ -267,11 +268,11 @@ Schema-change-in-flight = YES this session (new column).
 
 ## §4 — Open questions (still under discussion)
 
-**Q1 through Q7 RESOLVED 2026-05-28-b** (answers folded into §2 + §3 above). Three NEW open questions emerged during today's discussion:
+**Q1 through Q7 RESOLVED 2026-05-28-b + Q10 RESOLVED 2026-05-29 at Fix Session A planning** (answers folded into §2 + §3 above). Two remaining open questions:
 
 - **Q8 — per-batch endpoint flow-value naming convention for the NEW per-competitor non-bulleted flow.** Options: (a) `flow=per-competitor-nonbulleted` (mirrors existing `per-competitor-bulleted` shipped W5 Session 3); (b) `flow=per-product-nonbulleted` (matches enum level `PER_PRODUCT` for clarity). Decide at start of Fix Session C.
 - **Q9 — per-review summary Edit UI: same Edit-button pattern as banner row?** Likely yes per Rule 14a Read-It-Back (the §1 spec line "All cells should be editable by clicking them" implies the same UX). Confirm at start of Fix Session B.
-- **Q10 — display format for the "N of M summarized" count on URL-row Column 8.** Plain text vs small badge / pill style vs clickable-to-expand. Pick at Fix Session A planning.
+- **Q10 RESOLVED 2026-05-29 → A:** Plain text "N of M summarized" format on URL-row Column 8. No badge/pill, no click-to-expand. Matches the existing count-cell style on the Competitor URLs sibling page. (Reversible later if richer affordance preferred.)
 
 ---
 

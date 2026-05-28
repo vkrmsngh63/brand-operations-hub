@@ -1,30 +1,28 @@
 'use client';
 
-// W#2 P-49 Workstream 5 Session 2 — shared 4-option toggle for the
-// Competition Scraping page per docs/REVIEWS_PHASE_2_DESIGN.md §B
-// 2026-05-27 (Reviews Phase 3 design lock).
+// W#2 P-49 Workstream 5 — shared 5-option nav toggle for the Competition
+// Scraping page surfaces per docs/polish-item-specs/P-49-W5-S2-S3-competitor-reviews-analysis.md
+// §3 (Fix Session A item 1) — replaces the previously-shipped 4-option
+// toggle whose labels diverged from director's verbatim spec (D-1 in the
+// divergence audit). Q1 → A (2026-05-28-b): 5 options total — 4 spec
+// verbatim names + Comprehensive Analysis preserved as the 5th option.
 //
-// Per §B 2026-05-27 the design lock surfaced a 4-option toggle giving
-// access to four surface views:
-//   1. Competitor URLs            (existing /competition-scraping)
-//   2. Comprehensive Analysis     (existing /competition-scraping/comprehensive-analysis)
-//   3. Competitor Reviews Analysis (NEW Table 2 per-review nested rows)
-//   4. By Category / By Type      (DEFERRED to Session 3+ — disabled here)
-//
-// This component renders nav links via Next.js Link so each surface is
-// its own page route. The fourth option is intentionally disabled in
-// Session 2 because Tables 3 + 4 (By Category / By Type) ship in
-// Session 3+; the option exists in the toggle today to surface the
-// final shape of the navigation to the user.
+// Order per Q1 → A (left-to-right):
+//   1. Competitor Content Table              (existing /competition-scraping)
+//   2. Competitor Reviews Analysis Table     (existing /competition-scraping/competitor-reviews-analysis)
+//   3. Reviews Analysis By Competitor Category Table (NEW route — Fix Session C+ — disabled for now)
+//   4. Reviews Analysis By Competitor Type Table     (NEW route — Fix Session C+ — disabled for now)
+//   5. Comprehensive Analysis                (existing /competition-scraping/comprehensive-analysis)
 
 import Link from 'next/link';
 import type { JSX } from 'react';
 
 export type Surface =
   | 'competitor-urls'
-  | 'comprehensive-analysis'
   | 'competitor-reviews-analysis'
-  | 'by-group';
+  | 'reviews-analysis-by-category'
+  | 'reviews-analysis-by-type'
+  | 'comprehensive-analysis';
 
 interface SurfaceEntry {
   key: Surface;
@@ -37,28 +35,36 @@ interface SurfaceEntry {
 const SURFACES: ReadonlyArray<SurfaceEntry> = [
   {
     key: 'competitor-urls',
-    label: 'Competitor URLs',
+    label: 'Competitor Content Table',
     href: (projectId) => `/projects/${projectId}/competition-scraping`,
+  },
+  {
+    key: 'competitor-reviews-analysis',
+    label: 'Competitor Reviews Analysis Table',
+    href: (projectId) =>
+      `/projects/${projectId}/competition-scraping/competitor-reviews-analysis`,
+  },
+  {
+    key: 'reviews-analysis-by-category',
+    label: 'Reviews Analysis By Competitor Category Table',
+    href: (projectId) =>
+      `/projects/${projectId}/competition-scraping/reviews-analysis-by-category`,
+    disabled: true,
+    disabledNote: 'Coming in P-49 W5 Category page Sessions 1-3 (after Fix Session C)',
+  },
+  {
+    key: 'reviews-analysis-by-type',
+    label: 'Reviews Analysis By Competitor Type Table',
+    href: (projectId) =>
+      `/projects/${projectId}/competition-scraping/reviews-analysis-by-type`,
+    disabled: true,
+    disabledNote: 'Coming in P-49 W5 Type page Sessions 4-5 (after Category page)',
   },
   {
     key: 'comprehensive-analysis',
     label: 'Comprehensive Analysis',
     href: (projectId) =>
       `/projects/${projectId}/competition-scraping/comprehensive-analysis`,
-  },
-  {
-    key: 'competitor-reviews-analysis',
-    label: 'Competitor Reviews Analysis',
-    href: (projectId) =>
-      `/projects/${projectId}/competition-scraping/competitor-reviews-analysis`,
-  },
-  {
-    key: 'by-group',
-    label: 'By Category / By Type',
-    href: (projectId) =>
-      `/projects/${projectId}/competition-scraping/by-group`,
-    disabled: true,
-    disabledNote: 'Coming in Session 3+ (Tables 3 + 4 per §B 2026-05-27)',
   },
 ];
 

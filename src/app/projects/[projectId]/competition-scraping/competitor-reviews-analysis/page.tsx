@@ -28,7 +28,7 @@
 //     rows in ReviewAnalysis) but are NOT re-loaded on page refresh
 //     in this version — bulk-load read-back ships in a later session.
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { JSX } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { authFetch } from '@/lib/authFetch';
@@ -36,8 +36,26 @@ import { useWorkflowContext } from '@/lib/workflow-components';
 import type {
   CapturedReview,
   CompetitorUrl,
+  Platform,
+  UpdateCapturedReviewRequest,
+  UpdateCapturedReviewResponse,
+  UpdateCompetitorUrlRequest,
 } from '@/lib/shared-types/competition-scraping';
+import { PLATFORMS } from '@/lib/shared-types/competition-scraping';
 import { CompetitionScrapingSurfaceNav } from '../components/CompetitionScrapingSurfaceNav';
+import {
+  InlineEnumCell,
+  InlineNumberCell,
+  InlineTextCell,
+} from '../components/InlineCells';
+import { PLATFORM_LABELS } from '../components/url-table-columns';
+import {
+  REVIEWS_TABLE_COLUMNS,
+  buildUrlRowGrid,
+  computeReviewsSummaryCount,
+  isReviewsColumnVisible,
+  type ReviewsTableColumnDef,
+} from '@/lib/competition-scraping/reviews-analysis-table-columns';
 import { PerReviewSummarizeModal } from './components/PerReviewSummarizeModal';
 import { PerCompetitorSummarizeModal } from './components/PerCompetitorSummarizeModal';
 import { GlobalCompetitorSummarizeModal } from './components/GlobalCompetitorSummarizeModal';
@@ -93,6 +111,102 @@ export default function CompetitorReviewsAnalysisPage() {
   const [modalUrl, setModalUrl] = useState<CompetitorUrl | null>(null);
   const [competitorModalUrl, setCompetitorModalUrl] = useState<CompetitorUrl | null>(null);
   const [globalModalOpen, setGlobalModalOpen] = useState<boolean>(false);
+
+  // P-49 W5 Fix Session A (2026-05-29) — per-user column visibility for
+  // the 10 spec columns. Default empty map → all visible (the
+  // isColumnVisible helper treats missing keys as visible). Persistence
+  // to UserTablePreferences ships in Fix Session B alongside the other
+  // PATCH-endpoint extensions — until then the visibility resets on
+  // refresh (acceptable for Fix Session A's "smallest verifiable unit"
+  // scope per spec §3).
+  const [columnVisibility, setColumnVisibility] = useState<
+    Record<string, boolean>
+  >({});
+
+  // P-49 W5 Fix Session A (2026-05-29) — click-to-edit save handlers
+  // wired to the existing PATCH endpoints (Q6 → A single source of
+  // truth). URL-row cell edits target /urls/[urlId]; review-row cell
+  // edits target /reviews/[reviewId]. Both throw on PATCH failure so
+  // the inline cell can render its error pill.
+  const handleUrlCellSave = useCallback(
+    async (urlId: string, patch: UpdateCompetitorUrlRequest): Promise<void> => {
+      if (!projectId) throw new Error('Project id missing.');
+      const res = await authFetch(
+        `/api/projects/${projectId}/competition-scraping/urls/${urlId}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(patch),
+        }
+      );
+      if (!res.ok) {
+        let detail = `HTTP ${res.status}`;
+        try {
+          const body = (await res.json()) as { error?: string };
+          if (body && typeof body.error === 'string') detail = body.error;
+        } catch {
+          // ignore
+        }
+        throw new Error(detail);
+      }
+      const updated = (await res.json()) as CompetitorUrl;
+      setUrlsState((prev) => {
+        if (prev.kind !== 'loaded') return prev;
+        const idx = prev.urls.findIndex((u) => u.id === updated.id);
+        if (idx < 0) return prev;
+        const next = [...prev.urls];
+        next[idx] = updated;
+        return { kind: 'loaded', urls: next };
+      });
+    },
+    [projectId]
+  );
+
+  const handleReviewCellSave = useCallback(
+    async (
+      urlId: string,
+      reviewId: string,
+      patch: UpdateCapturedReviewRequest
+    ): Promise<void> => {
+      if (!projectId) throw new Error('Project id missing.');
+      const res = await authFetch(
+        `/api/projects/${projectId}/competition-scraping/reviews/${reviewId}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(patch),
+        }
+      );
+      if (!res.ok) {
+        let detail = `HTTP ${res.status}`;
+        try {
+          const body = (await res.json()) as { error?: string };
+          if (body && typeof body.error === 'string') detail = body.error;
+        } catch {
+          // ignore
+        }
+        throw new Error(detail);
+      }
+      const updated = (await res.json()) as UpdateCapturedReviewResponse;
+      setReviewsByUrl((prev) => {
+        const state = prev[urlId];
+        if (!state || state.kind !== 'loaded') return prev;
+        const idx = state.reviews.findIndex((r) => r.id === updated.id);
+        if (idx < 0) return prev;
+        const nextReviews = [...state.reviews];
+        nextReviews[idx] = updated;
+        return {
+          ...prev,
+          [urlId]: { kind: 'loaded', reviews: nextReviews },
+        };
+      });
+    },
+    [projectId]
+  );
+
+  const handleToggleColumn = useCallback((columnId: string, visible: boolean) => {
+    setColumnVisibility((prev) => ({ ...prev, [columnId]: visible }));
+  }, []);
 
   // Load all URLs for the Project on mount.
   useEffect(() => {
@@ -353,18 +467,27 @@ export default function CompetitorReviewsAnalysisPage() {
         )}
 
         {urlsState.kind === 'loaded' && urlsState.urls.length > 0 && (
-          <UrlsTable
-            projectId={projectId}
-            urls={urlsState.urls}
-            expanded={expanded}
-            reviewsByUrl={reviewsByUrl}
-            summaryByReviewId={summaryByReviewId}
-            competitorSummaryByUrlId={competitorSummaryByUrlId}
-            onToggle={toggleExpand}
-            onOpenSummarizeModal={(u) => setModalUrl(u)}
-            onOpenCompetitorModal={openCompetitorModal}
-            onCompetitorSummaryEdited={handleCompetitorSummaryEdited}
-          />
+          <>
+            <ReviewsTableColumnControls
+              visibility={columnVisibility}
+              onToggle={handleToggleColumn}
+            />
+            <UrlsTable
+              projectId={projectId}
+              urls={urlsState.urls}
+              expanded={expanded}
+              reviewsByUrl={reviewsByUrl}
+              summaryByReviewId={summaryByReviewId}
+              competitorSummaryByUrlId={competitorSummaryByUrlId}
+              columnVisibility={columnVisibility}
+              onToggle={toggleExpand}
+              onOpenSummarizeModal={(u) => setModalUrl(u)}
+              onOpenCompetitorModal={openCompetitorModal}
+              onCompetitorSummaryEdited={handleCompetitorSummaryEdited}
+              onUrlCellSave={handleUrlCellSave}
+              onReviewCellSave={handleReviewCellSave}
+            />
+          </>
         )}
       </div>
 
@@ -407,6 +530,92 @@ function getLoadedReviews(state: ReviewsLoadState | undefined): CapturedReview[]
   return state.reviews;
 }
 
+// ─── ReviewsTableColumnControls ─────────────────────────────────────
+//
+// W#2 P-49 W5 Fix Session A (2026-05-29) — per-spec show/hide bar for
+// the 10 Reviews Analysis Table columns (§3 item 5). Mirrors the
+// Competitor URLs sibling page's ColumnVisibilityBar pattern but
+// drops the platform-filter chip group (this page doesn't filter by
+// platform). Per-user persistence to UserTablePreferences ships in
+// Fix Session B alongside the other PATCH-endpoint extensions.
+
+interface ReviewsTableColumnControlsProps {
+  visibility: Record<string, boolean>;
+  onToggle: (columnId: string, visible: boolean) => void;
+}
+
+function ReviewsTableColumnControls({
+  visibility,
+  onToggle,
+}: ReviewsTableColumnControlsProps): JSX.Element {
+  return (
+    <div
+      aria-label="Column visibility controls"
+      data-testid="reviews-table-column-controls"
+      style={{
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: '12px',
+        padding: '12px 14px',
+        background: '#0d1117',
+        border: '1px solid #30363d',
+        borderRadius: '8px',
+        marginBottom: '12px',
+        flexWrap: 'wrap',
+      }}
+    >
+      <span
+        style={{
+          fontSize: '11px',
+          fontWeight: 600,
+          color: '#8b949e',
+          textTransform: 'uppercase',
+          letterSpacing: '0.05em',
+          paddingTop: '4px',
+        }}
+      >
+        Columns
+      </span>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+        {REVIEWS_TABLE_COLUMNS.map((col) => {
+          const visible = isReviewsColumnVisible(visibility, col.id);
+          return (
+            <label
+              key={col.id}
+              title={`Show or hide the ${col.label} column`}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '4px 10px',
+                background: visible ? '#1f6feb22' : '#161b22',
+                border: '1px solid',
+                borderColor: visible ? '#1f6feb55' : '#30363d',
+                borderRadius: '999px',
+                color: visible ? '#e6edf3' : '#c9d1d9',
+                fontSize: '12px',
+                cursor: 'pointer',
+                userSelect: 'none',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={visible}
+                onChange={() => onToggle(col.id, !visible)}
+                style={{ margin: 0, cursor: 'pointer' }}
+                aria-label={`Show ${col.label} column`}
+                data-testid={`reviews-table-column-toggle-${col.id}`}
+              />
+              <span>{col.label}</span>
+            </label>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ─── UrlsTable ──────────────────────────────────────────────────────
 
 interface UrlsTableProps {
@@ -419,16 +628,24 @@ interface UrlsTableProps {
     string,
     { analysisId: string; summary: string; source: 'cache' | 'fresh' }
   >;
+  columnVisibility: Record<string, boolean>;
   onToggle: (urlId: string) => void;
   onOpenSummarizeModal: (url: CompetitorUrl) => void;
   onOpenCompetitorModal: (url: CompetitorUrl) => void;
   onCompetitorSummaryEdited: (urlId: string, summary: string) => void;
+  onUrlCellSave: (
+    urlId: string,
+    patch: UpdateCompetitorUrlRequest
+  ) => Promise<void>;
+  onReviewCellSave: (
+    urlId: string,
+    reviewId: string,
+    patch: UpdateCapturedReviewRequest
+  ) => Promise<void>;
 }
 
-// Grid template shared between the header row + each URL row so columns
-// align cleanly. Two action buttons (Summarize competitor /
-// Summarize reviews) live in a single right-side column stacked vertically.
-const URL_ROW_GRID = '36px 1fr 110px 130px 180px';
+const PLATFORM_OPTIONS: ReadonlyArray<{ value: Platform; label: string }> =
+  PLATFORMS.map((p) => ({ value: p, label: PLATFORM_LABELS[p] }));
 
 function UrlsTable({
   projectId,
@@ -437,157 +654,334 @@ function UrlsTable({
   reviewsByUrl,
   summaryByReviewId,
   competitorSummaryByUrlId,
+  columnVisibility,
   onToggle,
   onOpenSummarizeModal,
   onOpenCompetitorModal,
   onCompetitorSummaryEdited,
+  onUrlCellSave,
+  onReviewCellSave,
 }: UrlsTableProps): JSX.Element {
+  const gridTemplate = buildUrlRowGrid(columnVisibility);
+  const visibleColumns = REVIEWS_TABLE_COLUMNS.filter((c) =>
+    isReviewsColumnVisible(columnVisibility, c.id)
+  );
   return (
     <div
       style={{
         border: '1px solid #30363d',
         borderRadius: '8px',
-        overflow: 'hidden',
+        overflow: 'auto',
         background: '#0d1117',
       }}
     >
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: URL_ROW_GRID,
-          fontSize: '11px',
-          fontWeight: 600,
-          textTransform: 'uppercase',
-          letterSpacing: '0.04em',
-          color: '#8b949e',
-          background: '#161b22',
-          padding: '10px 14px',
-          borderBottom: '1px solid #30363d',
-        }}
-      >
-        <span></span>
-        <span>Competitor / Product</span>
-        <span>Platform</span>
-        <span>Reviews</span>
-        <span>Actions</span>
-      </div>
+      <div style={{ minWidth: 'fit-content' }}>
+        {/* Header row */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: gridTemplate,
+            fontSize: '11px',
+            fontWeight: 600,
+            textTransform: 'uppercase',
+            letterSpacing: '0.04em',
+            color: '#8b949e',
+            background: '#161b22',
+            padding: '10px 14px',
+            borderBottom: '1px solid #30363d',
+          }}
+        >
+          <span></span>
+          {visibleColumns.map((col) => (
+            <span key={col.id}>{col.label}</span>
+          ))}
+          <span style={{ textAlign: 'left' }}>Actions</span>
+        </div>
 
-      {urls.map((u) => {
-        const isExpanded = !!expanded[u.id];
-        const reviewsState = reviewsByUrl[u.id];
-        const reviewsCount =
-          reviewsState?.kind === 'loaded' ? reviewsState.reviews.length : null;
-        const competitorSummary = competitorSummaryByUrlId[u.id];
-        return (
-          <div key={u.id}>
-            {/* URL row */}
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: URL_ROW_GRID,
-                alignItems: 'center',
-                padding: '12px 14px',
-                borderBottom: competitorSummary
-                  ? '1px solid #161b22'
-                  : '1px solid #21262d',
-                cursor: 'pointer',
-              }}
-              onClick={() => onToggle(u.id)}
-            >
-              <span
-                style={{ fontSize: '12px', color: '#8b949e' }}
-                aria-label={isExpanded ? 'Collapse' : 'Expand'}
-              >
-                {isExpanded ? '▾' : '▸'}
-              </span>
-              <div style={{ minWidth: 0 }}>
-                <div
-                  style={{
-                    fontSize: '13px',
-                    fontWeight: 600,
-                    color: '#e6edf3',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {u.productName || '(unnamed product)'}
-                </div>
-                <div
-                  style={{
-                    fontSize: '11px',
-                    color: '#8b949e',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {u.url}
-                </div>
-              </div>
-              <span style={{ fontSize: '12px', color: '#e6edf3' }}>
-                {u.platform || '—'}
-              </span>
-              <span style={{ fontSize: '12px', color: '#e6edf3' }}>
-                {reviewsCount != null
-                  ? `${reviewsCount} loaded`
-                  : 'expand to load'}
-              </span>
+        {urls.map((u) => {
+          const isExpanded = !!expanded[u.id];
+          const reviewsState = reviewsByUrl[u.id];
+          const reviewsLoaded =
+            reviewsState?.kind === 'loaded' ? reviewsState.reviews : null;
+          const totalReviews = reviewsLoaded ? reviewsLoaded.length : null;
+          const summarizedReviews = reviewsLoaded
+            ? reviewsLoaded.reduce(
+                (acc, r) => acc + (summaryByReviewId[r.id] ? 1 : 0),
+                0
+              )
+            : null;
+          const competitorSummary = competitorSummaryByUrlId[u.id];
+          return (
+            <div key={u.id}>
+              {/* URL row — 10 spec cells + auxiliary Actions */}
               <div
                 style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '6px',
-                  alignItems: 'flex-start',
+                  display: 'grid',
+                  gridTemplateColumns: gridTemplate,
+                  alignItems: 'center',
+                  padding: '12px 14px',
+                  borderBottom: competitorSummary
+                    ? '1px solid #161b22'
+                    : '1px solid #21262d',
+                  cursor: 'pointer',
                 }}
-                onClick={(e) => e.stopPropagation()}
+                onClick={() => onToggle(u.id)}
               >
-                <button
-                  type="button"
-                  onClick={() => onOpenCompetitorModal(u)}
-                  disabled={reviewsState?.kind === 'loading'}
-                  style={competitorButtonStyle(reviewsState?.kind)}
+                <span
+                  style={{ fontSize: '12px', color: '#8b949e' }}
+                  aria-label={isExpanded ? 'Collapse' : 'Expand'}
                 >
-                  Summarize Competitor Reviews
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!isExpanded) onToggle(u.id);
-                    onOpenSummarizeModal(u);
+                  {isExpanded ? '▾' : '▸'}
+                </span>
+
+                {/* Render each visible spec column in order */}
+                {visibleColumns.map((col) =>
+                  renderUrlRowCell({
+                    col,
+                    url: u,
+                    onUrlCellSave,
+                    summarizedReviews,
+                    totalReviews,
+                    competitorSummary,
+                  })
+                )}
+
+                {/* Actions column — per-URL inline AI-flow buttons.
+                    Auxiliary (NOT in the 10 spec columns; not in the
+                    column-visibility checkbox set). Per Q4 → A: both
+                    top-of-page global buttons AND per-URL inline
+                    buttons remain. */}
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '6px',
+                    alignItems: 'flex-start',
                   }}
-                  disabled={reviewsState?.kind === 'loading'}
-                  style={summarizeButtonStyle(reviewsState?.kind)}
+                  onClick={(e) => e.stopPropagation()}
                 >
-                  Summarize reviews
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => onOpenCompetitorModal(u)}
+                    disabled={reviewsState?.kind === 'loading'}
+                    style={competitorButtonStyle(reviewsState?.kind)}
+                    title="Summarize Competitor Reviews"
+                  >
+                    Competitor
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!isExpanded) onToggle(u.id);
+                      onOpenSummarizeModal(u);
+                    }}
+                    disabled={reviewsState?.kind === 'loading'}
+                    style={summarizeButtonStyle(reviewsState?.kind)}
+                    title="Summarize reviews"
+                  >
+                    Reviews
+                  </button>
+                </div>
               </div>
+
+              {/* Per-Competitor summary banner row (visible without
+                  expanding) — shows the theme-grouped bulleted output
+                  for the URL + Edit affordance to override the AI text
+                  inline. */}
+              {competitorSummary && (
+                <CompetitorSummaryBanner
+                  projectId={projectId}
+                  urlId={u.id}
+                  summary={competitorSummary}
+                  onEdited={onCompetitorSummaryEdited}
+                />
+              )}
+
+              {/* Expanded review rows */}
+              {isExpanded && (
+                <ReviewsList
+                  urlId={u.id}
+                  state={reviewsState}
+                  summaryByReviewId={summaryByReviewId}
+                  onReviewCellSave={onReviewCellSave}
+                />
+              )}
             </div>
-
-            {/* Per-Competitor summary banner row (visible without expanding)
-                — shows the theme-grouped bulleted output for the URL +
-                Edit affordance to override the AI text inline. */}
-            {competitorSummary && (
-              <CompetitorSummaryBanner
-                projectId={projectId}
-                urlId={u.id}
-                summary={competitorSummary}
-                onEdited={onCompetitorSummaryEdited}
-              />
-            )}
-
-            {/* Expanded review rows */}
-            {isExpanded && (
-              <ReviewsList
-                state={reviewsState}
-                summaryByReviewId={summaryByReviewId}
-              />
-            )}
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
+}
+
+// ─── URL row cell rendering ─────────────────────────────────────────
+//
+// Each visible column on the URL row maps to one of:
+//   - InlineEnumCell for `platform` (single source of truth — PATCH
+//     propagates to CompetitorUrl.platform; same edit reflects on the
+//     Competitor URLs sibling page).
+//   - InlineTextCell for `competitionCategory`, `type`, `productName`,
+//     `url` (PATCH targets the same field on CompetitorUrl).
+//   - InlineNumberCell for `resultsPageRank`, `competitionScore`.
+//   - Plain-text non-editable display for `reviewsSummaryCount` (Q10
+//     → A — "N of M summarized" computed from current state; not
+//     editable since it's a computed cell, not a stored field).
+//   - Plain-text non-editable display for `compBulleted` (the per-
+//     competitor bulleted summary already lives in the existing
+//     CompetitorSummaryBanner row below the URL row — this URL-row
+//     Column 9 cell shows a compact preview / empty state. The
+//     editable surface stays the banner row's Edit button per Q9
+//     deferred to Fix Session B).
+//   - Empty placeholder for `compNonBulleted` (column ships in Fix
+//     Session C when the per-competitor non-bulleted flow lands).
+
+interface UrlRowCellArgs {
+  col: ReviewsTableColumnDef;
+  url: CompetitorUrl;
+  onUrlCellSave: (urlId: string, patch: UpdateCompetitorUrlRequest) => Promise<void>;
+  summarizedReviews: number | null;
+  totalReviews: number | null;
+  competitorSummary:
+    | { analysisId: string; summary: string; source: 'cache' | 'fresh' }
+    | undefined;
+}
+
+function renderUrlRowCell({
+  col,
+  url,
+  onUrlCellSave,
+  summarizedReviews,
+  totalReviews,
+  competitorSummary,
+}: UrlRowCellArgs): JSX.Element {
+  const cellWrapper = (children: React.ReactNode) => (
+    <span
+      key={col.id}
+      style={{ fontSize: '12px', color: '#e6edf3', minWidth: 0 }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {children}
+    </span>
+  );
+
+  switch (col.id) {
+    case 'platform':
+      return cellWrapper(
+        <InlineEnumCell<Platform>
+          value={url.platform}
+          options={PLATFORM_OPTIONS}
+          onSave={(next) => onUrlCellSave(url.id, { platform: next })}
+        />
+      );
+    case 'competitionCategory':
+      return cellWrapper(
+        <InlineTextCell
+          value={url.competitionCategory}
+          onSave={(next) => onUrlCellSave(url.id, { competitionCategory: next })}
+        />
+      );
+    case 'type':
+      return cellWrapper(
+        <InlineTextCell
+          value={url.type}
+          onSave={(next) => onUrlCellSave(url.id, { type: next })}
+        />
+      );
+    case 'productName':
+      return cellWrapper(
+        <InlineTextCell
+          value={url.productName}
+          onSave={(next) => onUrlCellSave(url.id, { productName: next })}
+        />
+      );
+    case 'resultsPageRank':
+      return cellWrapper(
+        <InlineNumberCell
+          value={url.resultsPageRank}
+          onSave={(next) => onUrlCellSave(url.id, { resultsPageRank: next })}
+          integer
+          min={1}
+          align="right"
+        />
+      );
+    case 'competitionScore':
+      return cellWrapper(
+        <InlineNumberCell
+          value={url.competitionScore}
+          onSave={(next) => onUrlCellSave(url.id, { competitionScore: next })}
+          integer
+          align="right"
+        />
+      );
+    case 'url':
+      return cellWrapper(
+        <InlineTextCell
+          value={url.url}
+          onSave={(next) =>
+            onUrlCellSave(url.id, { url: next ?? undefined })
+          }
+          formatRead={(raw) =>
+            raw ? (
+              <span
+                style={{
+                  color: '#58a6ff',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  display: 'inline-block',
+                  maxWidth: '100%',
+                }}
+              >
+                {raw}
+              </span>
+            ) : null
+          }
+        />
+      );
+    case 'reviewsSummaryCount': {
+      // Q10 → A — plain text "N of M summarized". When reviews haven't
+      // been loaded yet for this URL, surface a passive hint instead of
+      // 0/? since the actual numbers materialize once the row expands.
+      // Branch logic lives in the pure helper for node:test coverage.
+      const cell = computeReviewsSummaryCount(summarizedReviews, totalReviews);
+      let display: React.ReactNode;
+      if (cell.kind === 'not-loaded') {
+        display = (
+          <span style={{ color: '#6e7681', fontStyle: 'italic' }}>
+            expand to load
+          </span>
+        );
+      } else if (cell.kind === 'no-reviews') {
+        display = <span style={{ color: '#6e7681' }}>no reviews</span>;
+      } else {
+        display = cell.text;
+      }
+      return cellWrapper(display);
+    }
+    case 'compBulleted': {
+      // The full Per-Competitor Summary text lives in the banner row
+      // below the URL row (with the Edit button). The URL-row Column 9
+      // cell shows whether a summary exists for the URL — once Fix
+      // Session B opens click-to-edit on this cell, the affordance
+      // surfaces here.
+      if (competitorSummary) {
+        return cellWrapper(
+          <span style={{ color: '#8b949e' }}>summary below</span>
+        );
+      }
+      return cellWrapper(<span style={{ color: '#6e7681' }}>—</span>);
+    }
+    case 'compNonBulleted':
+      // Ships in Fix Session C alongside the NEW per-competitor non-
+      // bulleted AI flow + Auto-create non-bulleted button.
+      return cellWrapper(
+        <span style={{ color: '#6e7681', fontStyle: 'italic' }}>
+          (Fix Session C)
+        </span>
+      );
+    default:
+      return cellWrapper(<span style={{ color: '#6e7681' }}>—</span>);
+  }
 }
 
 // ─── CompetitorSummaryBanner ────────────────────────────────────────
@@ -864,15 +1258,37 @@ function competitorButtonStyle(
 }
 
 // ─── ReviewsList ────────────────────────────────────────────────────
+//
+// W#2 P-49 W5 Fix Session A (2026-05-29) — review-row click-to-edit on
+// star / reviewer / date / body cells per spec §3 item 7 + Q6 → A
+// (single source of truth — PATCH propagates to CapturedReview columns
+// reflected on the URL detail page's reviews surface).
+//
+// Per-review summary cell (the "Summary" column) STAYS read-only in
+// Fix Session A. Click-to-edit on per-review summary cells lands in
+// Fix Session B alongside the PATCH endpoint extension to accept
+// PER_REVIEW edits (D-11 fix; currently rejected at
+// review-analysis-update.ts:181-193) and the Q9 Edit-button UI
+// pattern decision.
+
+const REVIEW_ROW_GRID = '50px 80px 1fr 140px 110px 1fr';
 
 interface ReviewsListProps {
+  urlId: string;
   state: ReviewsLoadState | undefined;
   summaryByReviewId: Record<string, { summary: string; source: 'cache' | 'fresh' }>;
+  onReviewCellSave: (
+    urlId: string,
+    reviewId: string,
+    patch: UpdateCapturedReviewRequest
+  ) => Promise<void>;
 }
 
 function ReviewsList({
+  urlId,
   state,
   summaryByReviewId,
+  onReviewCellSave,
 }: ReviewsListProps): JSX.Element {
   if (!state || state.kind === 'idle' || state.kind === 'loading') {
     return (
@@ -922,7 +1338,7 @@ function ReviewsList({
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: '50px 60px 1fr 140px 100px 1fr',
+          gridTemplateColumns: REVIEW_ROW_GRID,
           fontSize: '10px',
           fontWeight: 600,
           textTransform: 'uppercase',
@@ -941,12 +1357,16 @@ function ReviewsList({
       </div>
       {state.reviews.map((r) => {
         const summary = summaryByReviewId[r.id];
+        // Per-review save bound to this row's id so each cell only needs
+        // to pass its single-field patch.
+        const saveCell = (patch: UpdateCapturedReviewRequest) =>
+          onReviewCellSave(urlId, r.id, patch);
         return (
           <div
             key={r.id}
             style={{
               display: 'grid',
-              gridTemplateColumns: '50px 60px 1fr 140px 100px 1fr',
+              gridTemplateColumns: REVIEW_ROW_GRID,
               padding: '10px 14px 10px 50px',
               borderBottom: '1px solid #161b22',
               alignItems: 'flex-start',
@@ -957,20 +1377,62 @@ function ReviewsList({
           >
             <span></span>
             <span style={{ color: '#f0b341' }}>
-              {r.starRating != null ? '★'.repeat(r.starRating) : '—'}
+              <InlineNumberCell
+                value={r.starRating}
+                onSave={(next) =>
+                  next == null
+                    ? Promise.reject(new Error('Star required'))
+                    : saveCell({ starRating: next })
+                }
+                integer
+                min={1}
+                max={5}
+                align="left"
+                formatRead={(raw) =>
+                  raw == null ? null : (
+                    <span style={{ color: '#f0b341' }}>{'★'.repeat(raw)}</span>
+                  )
+                }
+              />
             </span>
             <span
               style={{
                 whiteSpace: 'pre-wrap',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
+                color: '#e6edf3',
               }}
             >
-              {r.body}
+              <InlineTextCell
+                value={r.body}
+                onSave={(next) =>
+                  next == null
+                    ? Promise.reject(new Error('Body required'))
+                    : saveCell({ body: next })
+                }
+                multiline
+              />
             </span>
-            <span style={{ color: '#8b949e' }}>{r.reviewerName ?? '—'}</span>
             <span style={{ color: '#8b949e' }}>
-              {r.reviewDate ? r.reviewDate.slice(0, 10) : '—'}
+              <InlineTextCell
+                value={r.reviewerName}
+                onSave={(next) =>
+                  saveCell({
+                    reviewerName: next ?? undefined,
+                  })
+                }
+              />
+            </span>
+            <span style={{ color: '#8b949e' }}>
+              <InlineTextCell
+                value={r.reviewDate ? r.reviewDate.slice(0, 10) : null}
+                onSave={(next) =>
+                  saveCell({
+                    reviewDate: next ?? undefined,
+                  })
+                }
+                placeholder="YYYY-MM-DD"
+              />
             </span>
             <span
               style={{
