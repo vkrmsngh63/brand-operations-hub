@@ -10,12 +10,18 @@
 // node:test runner doesn't resolve tsconfig path aliases that cross
 // into src/app). The page .tsx imports the const + helpers from this
 // module and renders them inside React components.
+//
+// 2026-05-29 Fix Session A FF — column widths converted from CSS-grid
+// string syntax to numeric pixel `defaultWidth`s. The table is now an
+// HTML `<table>` + `<colgroup>` (mirroring the sibling Competitor URLs
+// table's Pattern) which lets us add visible cell borders + drag-to-
+// resize via the shared ColumnResizeHandle component, plus eliminates
+// the CSS-grid `1fr` overlap behavior that was squishing cells together
+// at the post-deploy 2026-05-29 verification.
 
 // Stable column-id strings double as keys in the per-user visibility
 // map. Missing keys default to visible per the existing
-// `isColumnVisible` helper on ColumnVisibilityBar.tsx — renaming an id
-// silently flips that column to visible in everyone's prefs (the
-// missing-key default). The order here = the spec's verbatim
+// `isReviewsColumnVisible` helper. The order here = the spec's verbatim
 // left-to-right order from
 // `docs/polish-item-specs/P-49-W5-S2-S3-competitor-reviews-analysis.md`
 // §1 — Platform / Category / Type / Product Name / Results Rank /
@@ -24,28 +30,37 @@
 export interface ReviewsTableColumnDef {
   id: string;
   label: string;
-  width: string;
+  defaultWidth: number; // pixels
 }
 
 export const REVIEWS_TABLE_COLUMNS: ReadonlyArray<ReviewsTableColumnDef> = [
-  { id: 'platform', label: 'Platform', width: '120px' },
-  { id: 'competitionCategory', label: 'Category', width: '140px' },
-  { id: 'type', label: 'Type', width: '120px' },
-  { id: 'productName', label: 'Product Name', width: 'minmax(160px, 1fr)' },
-  { id: 'resultsPageRank', label: 'Results Rank', width: '100px' },
-  { id: 'competitionScore', label: 'Comp. Score', width: '100px' },
-  { id: 'url', label: 'URL', width: 'minmax(180px, 1fr)' },
-  { id: 'reviewsSummaryCount', label: 'Reviews Summary', width: '160px' },
-  { id: 'compBulleted', label: 'Comprehensive (bulleted)', width: '260px' },
-  { id: 'compNonBulleted', label: 'Comprehensive (non-bulleted)', width: '260px' },
+  { id: 'platform', label: 'Platform', defaultWidth: 130 },
+  { id: 'competitionCategory', label: 'Category', defaultWidth: 150 },
+  { id: 'type', label: 'Type', defaultWidth: 130 },
+  { id: 'productName', label: 'Product Name', defaultWidth: 220 },
+  { id: 'resultsPageRank', label: 'Results Rank', defaultWidth: 110 },
+  { id: 'competitionScore', label: 'Comp. Score', defaultWidth: 110 },
+  { id: 'url', label: 'URL', defaultWidth: 260 },
+  { id: 'reviewsSummaryCount', label: 'Reviews Summary', defaultWidth: 170 },
+  { id: 'compBulleted', label: 'Comprehensive (bulleted)', defaultWidth: 280 },
+  { id: 'compNonBulleted', label: 'Comprehensive (non-bulleted)', defaultWidth: 280 },
 ];
 
-export const EXPAND_TOGGLE_WIDTH = '36px';
-export const ACTIONS_COL_WIDTH = '110px';
+// Width bounds for the drag-to-resize handles. Match the sibling
+// Competitor URLs table's MIN/MAX so behavior feels identical across
+// the two surfaces.
+export const MIN_REVIEWS_COLUMN_WIDTH = 60;
+export const MAX_REVIEWS_COLUMN_WIDTH = 600;
 
-// Missing keys default to visible (matches `isColumnVisible` semantics
-// on ColumnVisibilityBar.tsx). Duplicated here so this module stays
-// self-contained for the node:test runner without pulling in the
+// Fixed widths for the auxiliary columns (NOT user-resizable — they
+// hold structural UI, not data). Expand toggle on the left; Actions
+// (per-URL inline AI-flow buttons) on the right.
+export const EXPAND_TOGGLE_WIDTH = 36;
+export const ACTIONS_COL_WIDTH = 280;
+
+// Missing keys default to visible (matches sibling `isColumnVisible`
+// semantics on ColumnVisibilityBar.tsx). Duplicated here so this module
+// stays self-contained for the node:test runner without pulling in the
 // 'use client' page component.
 export function isReviewsColumnVisible(
   map: Record<string, boolean>,
@@ -55,19 +70,18 @@ export function isReviewsColumnVisible(
   return true;
 }
 
-// Compute the CSS grid `gridTemplateColumns` value given the current
-// column-visibility map. Hidden columns are dropped from the template
-// entirely so the table doesn't carry empty placeholder widths. The
-// fixed expand-toggle column lives at the start; the fixed Actions
-// column (auxiliary UI; not in the spec's 10-column set, holds the
-// per-URL inline AI-flow buttons) lives at the end.
-export function buildUrlRowGrid(visibility: Record<string, boolean>): string {
-  const parts: string[] = [EXPAND_TOGGLE_WIDTH];
-  for (const col of REVIEWS_TABLE_COLUMNS) {
-    if (isReviewsColumnVisible(visibility, col.id)) parts.push(col.width);
+// Resolve the rendered width for a column: per-user override first,
+// then the column's defaultWidth seed. Mirrors `resolveColumnWidth`
+// on `url-table-columns.ts` (different column registry — same shape).
+export function resolveReviewsColumnWidth(
+  columnWidths: Record<string, number>,
+  column: ReviewsTableColumnDef
+): number {
+  const override = columnWidths[column.id];
+  if (typeof override === 'number' && override > 0) {
+    return override;
   }
-  parts.push(ACTIONS_COL_WIDTH);
-  return parts.join(' ');
+  return column.defaultWidth;
 }
 
 // Compute the "N of M summarized" display string for a given URL row's

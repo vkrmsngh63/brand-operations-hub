@@ -13,8 +13,10 @@ import {
   REVIEWS_TABLE_COLUMNS,
   EXPAND_TOGGLE_WIDTH,
   ACTIONS_COL_WIDTH,
+  MIN_REVIEWS_COLUMN_WIDTH,
+  MAX_REVIEWS_COLUMN_WIDTH,
   isReviewsColumnVisible,
-  buildUrlRowGrid,
+  resolveReviewsColumnWidth,
   computeReviewsSummaryCount,
 } from './reviews-analysis-table-columns.ts';
 
@@ -56,20 +58,31 @@ test('REVIEWS_TABLE_COLUMNS — labels match spec text', () => {
   ]);
 });
 
-test('REVIEWS_TABLE_COLUMNS — every entry has non-empty id, label, width', () => {
+test('REVIEWS_TABLE_COLUMNS — every entry has non-empty id, label, positive numeric defaultWidth', () => {
   for (const col of REVIEWS_TABLE_COLUMNS) {
     assert.equal(typeof col.id, 'string');
     assert.ok(col.id.length > 0, `column id should be non-empty (got "${col.id}")`);
     assert.equal(typeof col.label, 'string');
     assert.ok(col.label.length > 0, `column label should be non-empty (got "${col.label}")`);
-    assert.equal(typeof col.width, 'string');
-    assert.ok(col.width.length > 0, `column width should be non-empty (got "${col.width}")`);
+    assert.equal(typeof col.defaultWidth, 'number');
+    assert.ok(
+      col.defaultWidth >= MIN_REVIEWS_COLUMN_WIDTH &&
+        col.defaultWidth <= MAX_REVIEWS_COLUMN_WIDTH,
+      `defaultWidth ${col.defaultWidth} for "${col.id}" should be in [${MIN_REVIEWS_COLUMN_WIDTH}, ${MAX_REVIEWS_COLUMN_WIDTH}]`
+    );
   }
 });
 
 test('REVIEWS_TABLE_COLUMNS — column ids are unique (no accidental dupes)', () => {
   const ids = REVIEWS_TABLE_COLUMNS.map((c) => c.id);
   assert.equal(new Set(ids).size, ids.length);
+});
+
+test('Auxiliary widths — expand + actions are positive numeric pixels', () => {
+  assert.equal(typeof EXPAND_TOGGLE_WIDTH, 'number');
+  assert.ok(EXPAND_TOGGLE_WIDTH > 0);
+  assert.equal(typeof ACTIONS_COL_WIDTH, 'number');
+  assert.ok(ACTIONS_COL_WIDTH > 0);
 });
 
 // ─── isReviewsColumnVisible ─────────────────────────────────────────
@@ -93,48 +106,34 @@ test('isReviewsColumnVisible — other keys do not affect the lookup', () => {
   assert.equal(isReviewsColumnVisible(map, 'platform'), false);
 });
 
-// ─── buildUrlRowGrid ─────────────────────────────────────────────────
+// ─── resolveReviewsColumnWidth ──────────────────────────────────────
 
-test('buildUrlRowGrid — empty map → all 10 columns + expand + actions = 12 parts', () => {
-  const grid = buildUrlRowGrid({});
-  const parts = grid.split(' ').reduce<string[]>((acc, p) => {
-    // The minmax() entries contain a comma but the split-on-space still
-    // keeps them as 2 parts; we count by joining and matching the
-    // expected total length.
-    acc.push(p);
-    return acc;
-  }, []);
-  // 36px + 10 column widths (some are minmax(A, B) which the naive split
-  // breaks into 2 parts each — 2 such columns = +2 extra parts) +
-  // ACTIONS_COL_WIDTH = 36px + (8 + 2*2) + 110px = 14 parts via the
-  // naive split. Easier assertion: the rendered string starts with the
-  // expand width + ends with the actions width.
-  assert.ok(grid.startsWith(EXPAND_TOGGLE_WIDTH));
-  assert.ok(grid.endsWith(ACTIONS_COL_WIDTH));
+test('resolveReviewsColumnWidth — empty override map → returns column defaultWidth', () => {
+  const col = REVIEWS_TABLE_COLUMNS[0];
+  assert.equal(resolveReviewsColumnWidth({}, col), col.defaultWidth);
 });
 
-test('buildUrlRowGrid — single column hidden → that column dropped from template', () => {
-  const visible = buildUrlRowGrid({});
-  const hidden = buildUrlRowGrid({ platform: false });
-  // The hidden grid must be shorter (one column removed).
-  assert.ok(hidden.length < visible.length);
-  // The hidden grid must NOT contain the 120px platform width as a
-  // dedicated token between expand and category — verify by checking
-  // that one '120px' instance is absent (we still have '100px' columns
-  // for results rank / comp score, so just count '120px').
-  // Platform width = 120px; type width = 120px → grid with both visible
-  // contains 120px twice. Hiding platform → contains 120px once.
-  const visible120 = (visible.match(/120px/g) ?? []).length;
-  const hidden120 = (hidden.match(/120px/g) ?? []).length;
-  assert.equal(visible120, 2);
-  assert.equal(hidden120, 1);
+test('resolveReviewsColumnWidth — positive override → returns override', () => {
+  const col = REVIEWS_TABLE_COLUMNS[0];
+  assert.equal(resolveReviewsColumnWidth({ [col.id]: 200 }, col), 200);
 });
 
-test('buildUrlRowGrid — all columns hidden → only expand + actions remain', () => {
-  const allHidden: Record<string, boolean> = {};
-  for (const col of REVIEWS_TABLE_COLUMNS) allHidden[col.id] = false;
-  const grid = buildUrlRowGrid(allHidden);
-  assert.equal(grid, `${EXPAND_TOGGLE_WIDTH} ${ACTIONS_COL_WIDTH}`);
+test('resolveReviewsColumnWidth — zero / negative override → falls back to default', () => {
+  // Defensive: clamped at the drag-handle site to MIN/MAX so this
+  // branch shouldn't fire in practice, but the helper is conservative.
+  const col = REVIEWS_TABLE_COLUMNS[0];
+  assert.equal(resolveReviewsColumnWidth({ [col.id]: 0 }, col), col.defaultWidth);
+  assert.equal(resolveReviewsColumnWidth({ [col.id]: -10 }, col), col.defaultWidth);
+});
+
+test('resolveReviewsColumnWidth — non-numeric override → falls back to default', () => {
+  const col = REVIEWS_TABLE_COLUMNS[0];
+  // The handler validates inputs at the trust boundary; an
+  // unexpectedly stringified value coming back from a stale JSON
+  // payload should fall through to the default rather than crash.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const widths = { [col.id]: '200' as any };
+  assert.equal(resolveReviewsColumnWidth(widths, col), col.defaultWidth);
 });
 
 // ─── computeReviewsSummaryCount (Q10 → A plain text) ────────────────
@@ -183,12 +182,6 @@ test('computeReviewsSummaryCount — fully summarized → N === M', () => {
 });
 
 // ─── Negative tests — Fix Session A scope guards ────────────────────
-//
-// These assertions pin that Fix Session A did NOT accidentally expand
-// scope into Fix Session B (write-backs + per-review edit + persistence)
-// or Fix Session C (new flow + Excel + drag + schema). The presence of
-// REVIEWS_TABLE_COLUMNS shouldn't accidentally light up surfaces that
-// haven't shipped yet.
 
 test('Fix Session A scope guard — no "stars" / "starRating" column id on URL row registry', () => {
   // Stars are a per-REVIEW row concept, not a URL-row column. A "stars"
