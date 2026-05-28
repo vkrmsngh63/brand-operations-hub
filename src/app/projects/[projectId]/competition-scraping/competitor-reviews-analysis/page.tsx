@@ -609,15 +609,25 @@ export default function CompetitorReviewsAnalysisPage() {
   const backHref = `/projects/${projectId}/competition-scraping`;
 
   return (
+    // FF3 2026-05-29 — full-viewport flex-column layout so the table's
+    // horizontal scrollbar stays at the BOTTOM of the viewport regardless
+    // of how tall the table is (director report round-3 verification:
+    // "the window needs to be scrolled down to see the horizontal scroll
+    // of the table at the bottom"). Page itself never scrolls; the table
+    // region takes the remaining viewport height + scrolls internally.
     <div
       style={{
-        minHeight: '100vh',
+        height: '100vh',
         background: '#0d1117',
         color: '#e6edf3',
         fontFamily: "'IBM Plex Sans', sans-serif",
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
       }}
     >
-      <div style={{ maxWidth: '100%', padding: '24px 24px 64px' }}>
+      {/* Top chrome — fixed height; never shrinks. */}
+      <div style={{ flex: '0 0 auto', padding: '24px 24px 0' }}>
         <CompetitionScrapingSurfaceNav
           projectId={projectId}
           active="competitor-reviews-analysis"
@@ -708,7 +718,22 @@ export default function CompetitorReviewsAnalysisPage() {
           </div>
         )}
 
-        {urlsState.kind === 'loaded' && urlsState.urls.length > 0 && (
+      </div>
+
+      {/* Table region — fills remaining viewport (flex: 1) and bounds
+          the table's internal scrolling. The horizontal scrollbar
+          inside lives at the BOTTOM of this region, which is the
+          BOTTOM of the viewport (minus the 24px bottom padding). */}
+      {urlsState.kind === 'loaded' && urlsState.urls.length > 0 && (
+        <div
+          style={{
+            flex: '1 1 auto',
+            minHeight: 0,
+            padding: '0 24px 24px',
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
           <ReviewsAnalysisTableSection
             projectId={projectId}
             urls={urlsState.urls}
@@ -730,8 +755,8 @@ export default function CompetitorReviewsAnalysisPage() {
             onUrlCellSave={handleUrlCellSave}
             onReviewCellSave={handleReviewCellSave}
           />
-        )}
-      </div>
+        </div>
+      )}
 
       {modalUrl && (
         <PerReviewSummarizeModal
@@ -1181,7 +1206,14 @@ function UrlsTable({
     ) +
     resolveActionsColumnWidth(columnWidths);
 
-  const colspanForBanner = 2 + visibleColumns.length;
+  // FF3 2026-05-29 — total table column count for banner + ReviewsList
+  // colSpan. Off-by-one in FF1/FF2 (+1 too many) caused a phantom extra
+  // column slot at the table's right edge where the URL-row borders
+  // showed through onto the banner area (director report round-3
+  // verification: "the existing column borders of the table are visible
+  // over the area where the review summaries are pasted").
+  // Total = 1 (expand toggle) + visibleColumns + 1 (Actions).
+  const tableColspan = 2 + visibleColumns.length;
 
   return (
     <div
@@ -1190,17 +1222,15 @@ function UrlsTable({
         borderRadius: '8px',
         overflow: 'auto',
         background: '#0d1117',
-        // FF2 2026-05-29 — cap the outer scroll container's height so
-        // the sticky <thead> stays at the top of the viewport AND the
-        // horizontal scrollbar (which sits at the bottom of THIS
-        // container) stays at the bottom of the viewport regardless
-        // of where the user scrolls. Without this cap, the table can
-        // grow taller than the viewport and the page scrollbar takes
-        // over — moving header + horizontal scrollbar off-screen.
-        // Calc: viewport height minus rough page-chrome offset
-        // (header / nav toggle / title / description / controls bar).
-        maxHeight: 'calc(100vh - 280px)',
-        minHeight: '200px',
+        // FF3 2026-05-29 — the page is now a 100vh flex-column. This
+        // outer table div takes flex: 1 1 auto + minHeight: 0 so it
+        // fills the remaining viewport between the page chrome above
+        // and the bottom of the screen. Horizontal scrollbar lives at
+        // the bottom of THIS div, which is always at the bottom of the
+        // viewport (closing the round-3 redirect "the window needs to
+        // be scrolled down to see the horizontal scroll").
+        flex: '1 1 auto',
+        minHeight: 0,
       }}
     >
       <table
@@ -1238,6 +1268,7 @@ function UrlsTable({
                   minWidth={MIN_REVIEWS_COLUMN_WIDTH}
                   maxWidth={MAX_REVIEWS_COLUMN_WIDTH}
                   tableHeight={tableHeight}
+                  showRestingLine={false}
                   onCommit={(w) => onColumnResize(col.id, w)}
                 />
               </th>
@@ -1254,6 +1285,7 @@ function UrlsTable({
                 minWidth={MIN_REVIEWS_COLUMN_WIDTH}
                 maxWidth={MAX_REVIEWS_COLUMN_WIDTH}
                 tableHeight={tableHeight}
+                showRestingLine={false}
                 onCommit={(w) => onColumnResize('__actions__', w)}
               />
             </th>
@@ -1306,6 +1338,11 @@ function UrlsTable({
                     style={tdActionsStyle}
                     onClick={(e) => e.stopPropagation()}
                   >
+                    {/* FF3 2026-05-29 — director directive (round-3): blue
+                        per-review button on TOP; green per-competitor
+                        button below. Per-review is the more granular /
+                        more-frequently-clicked surface so it lives
+                        first in the read order. */}
                     <div
                       style={{
                         display: 'flex',
@@ -1314,14 +1351,6 @@ function UrlsTable({
                         alignItems: 'stretch',
                       }}
                     >
-                      <button
-                        type="button"
-                        onClick={() => onOpenCompetitorModal(u)}
-                        disabled={reviewsState?.kind === 'loading'}
-                        style={competitorButtonStyle(reviewsState?.kind)}
-                      >
-                        Summarize all reviews within this product
-                      </button>
                       <button
                         type="button"
                         onClick={() => {
@@ -1333,12 +1362,20 @@ function UrlsTable({
                       >
                         Summarize each individual review under this product
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => onOpenCompetitorModal(u)}
+                        disabled={reviewsState?.kind === 'loading'}
+                        style={competitorButtonStyle(reviewsState?.kind)}
+                      >
+                        Summarize all reviews within this product
+                      </button>
                     </div>
                   </td>
                 </tr>
                 {competitorSummary && (
                   <tr>
-                    <td colSpan={colspanForBanner + 1} style={{ padding: 0 }}>
+                    <td colSpan={tableColspan} style={{ padding: 0, border: 'none' }}>
                       <CompetitorSummaryBanner
                         projectId={projectId}
                         urlId={u.id}
@@ -1350,7 +1387,7 @@ function UrlsTable({
                 )}
                 {isExpanded && (
                   <tr>
-                    <td colSpan={colspanForBanner + 1} style={{ padding: 0 }}>
+                    <td colSpan={tableColspan} style={{ padding: 0, border: 'none' }}>
                       <ReviewsList
                         urlId={u.id}
                         state={reviewsState}
@@ -1468,10 +1505,18 @@ function renderUrlRowCell({
   totalReviews,
   competitorSummary,
 }: UrlRowCellArgs): JSX.Element {
+  // FF3 2026-05-29 — td no longer stops propagation. The previous copy
+  // ate the row-toggle click — clicking anywhere on a data cell
+  // (including the "expand to load" hint on Column 8) failed to expand
+  // the row (director report round-3 verification). InlineCell
+  // components carry their own internal stopPropagation on click
+  // handlers + edit-mode inputs, so click-to-edit still works without
+  // bubbling. Non-editable cells (count display + banner placeholder +
+  // Fix-Session-C placeholder) bubble naturally so clicking them now
+  // toggles row expand/collapse.
   const tdProps = {
     key: col.id,
     style: tdBaseStyle,
-    onClick: (e: React.MouseEvent) => e.stopPropagation(),
   };
 
   switch (col.id) {

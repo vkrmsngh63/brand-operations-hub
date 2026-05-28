@@ -26,6 +26,18 @@ export interface ColumnResizeHandleProps {
   maxWidth: number;
   tableHeight: number;
   onCommit: (width: number) => void;
+  // 2026-05-29 FF3 (Reviews Analysis Table) — toggle the faint vertical
+  // line the handle draws when NOT actively dragging. The Competitor
+  // URLs sibling table keeps the line (default `true`) since each row
+  // is single-line and the line aligns perfectly with the URL row's
+  // column edges. The Reviews Analysis Table sets this `false` because
+  // its expanded sub-rows (per-competitor banner + per-review list)
+  // don't share the URL row's column structure — a full-height line
+  // would visually bleed across those sub-rows into the summary area
+  // (director report round-3 verification). Drag affordance is still
+  // there via cursor:col-resize on hover; the line itself just isn't
+  // painted at rest.
+  showRestingLine?: boolean;
 }
 
 export function ColumnResizeHandle({
@@ -35,6 +47,7 @@ export function ColumnResizeHandle({
   maxWidth,
   tableHeight,
   onCommit,
+  showRestingLine = true,
 }: ColumnResizeHandleProps) {
   const [isDragging, setIsDragging] = useState(false);
 
@@ -85,14 +98,15 @@ export function ColumnResizeHandle({
       aria-orientation="vertical"
       data-testid="column-resize-handle"
       onPointerDown={onPointerDown}
-      style={resizeHandleStyle(isDragging, effectiveHeight)}
+      style={resizeHandleStyle(isDragging, effectiveHeight, showRestingLine)}
     />
   );
 }
 
 function resizeHandleStyle(
   isDragging: boolean,
-  fullHeight: number
+  fullHeight: number,
+  showRestingLine: boolean
 ): React.CSSProperties {
   return {
     position: 'absolute',
@@ -105,11 +119,16 @@ function resizeHandleStyle(
        from the parent's ResizeObserver bleeds beyond the th's box. */
     height: `${fullHeight}px`,
     cursor: 'col-resize',
-    /* Faint full-height column line is visible by default so users see
-       where columns end; turns solid blue while actively dragging. */
+    /* Faint full-height column line visible by default; suppressed via
+       showRestingLine={false} on consumers (Reviews Analysis Table)
+       whose expanded sub-rows would visually conflict with a full-
+       height line. Turns solid blue while actively dragging in either
+       case so the user gets clear in-drag feedback. */
     borderRight: isDragging
       ? '2px solid #1f6feb'
-      : '1px solid #21262d',
+      : showRestingLine
+        ? '1px solid #21262d'
+        : 'none',
     background: isDragging ? 'rgba(31, 111, 235, 0.15)' : 'transparent',
     touchAction: 'none',
     transition: 'background 80ms ease-in-out',
