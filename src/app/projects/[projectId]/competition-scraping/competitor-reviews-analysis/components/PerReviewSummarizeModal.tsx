@@ -53,7 +53,12 @@ export interface PerReviewSummarizeModalProps {
   onClose: () => void;
   // Called once for each fresh-from-AI summary; the parent uses this to
   // update the Table 2 row state in real time as batches complete.
-  onSummary: (reviewId: string, summary: string, source: 'cache' | 'fresh') => void;
+  onSummary: (
+    reviewId: string,
+    summary: string,
+    source: 'cache' | 'fresh',
+    analysisId: string,
+  ) => void;
 }
 
 interface BatchUsage {
@@ -279,6 +284,9 @@ export function PerReviewSummarizeModal({
           reviewId: string;
           summary: string;
           source: 'cache' | 'fresh';
+          // P-49 W5 Fix Session B (2026-05-30; D-11) — PER_REVIEW row id for
+          // the per-review Edit affordance. '' when persist soft-failed.
+          analysisId?: string;
         }>;
         freshCount: number;
         cachedCount: number;
@@ -300,7 +308,7 @@ export function PerReviewSummarizeModal({
 
       // Push summaries to the parent immediately so cells populate.
       for (const s of body.summaries) {
-        onSummary(s.reviewId, s.summary, s.source);
+        onSummary(s.reviewId, s.summary, s.source, s.analysisId ?? '');
       }
 
       doneCount += body.summaries.length;

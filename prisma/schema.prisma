@@ -460,6 +460,7 @@ model CapturedReview {
   clientId        String    @unique // UUIDv4 from client; idempotency key
   competitorUrlId String
   starRating      Int // 1-5; range validated at application layer per §A.1b
+  title           String?   @db.Text // P-49 W5 Reviews Phase 2 Fix Session B (2026-05-30) — review headline; extractors capture it, orchestrator now passes it through. Nullable: pre-2026-05-30 rows + body-only reviews (eBay/Etsy + ~60% of Walmart) carry null. Table renders 'title. body' merge at display time.
   body            String    @db.Text
   reviewerName    String?
   reviewDate      DateTime?

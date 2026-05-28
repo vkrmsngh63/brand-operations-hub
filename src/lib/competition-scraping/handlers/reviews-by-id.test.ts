@@ -23,6 +23,7 @@ function makeRow(overrides: Partial<CapturedReviewRow> = {}): CapturedReviewRow 
     clientId: 'client-1',
     competitorUrlId: 'url-1',
     starRating: 5,
+    title: null,
     body: 'great product',
     reviewerName: null,
     reviewDate: null,
@@ -64,6 +65,9 @@ function makeFakePrisma(opts: {
     }) => {
       const updated = makeRow();
       if (typeof data.starRating === 'number') updated.starRating = data.starRating;
+      if (data.title === null || typeof data.title === 'string') {
+        updated.title = data.title as string | null;
+      }
       if (typeof data.body === 'string') updated.body = data.body;
       if (data.reviewerName === null || typeof data.reviewerName === 'string') {
         updated.reviewerName = data.reviewerName as string | null;
@@ -249,6 +253,46 @@ test('PATCH 200 happy path — updates allowlisted fields', async () => {
   const updateData = state.updateCalls[0].data as Record<string, unknown>;
   assert.equal(updateData.starRating, 3);
   assert.deepEqual(updateData.tags, ['fit']);
+});
+
+// P-49 W5 Fix Session B (2026-05-30; Q3) — title edit on the PATCH endpoint.
+test('PATCH 200 updates title (trims) + clears to null on blank', async () => {
+  const { prisma, state } = makeFakePrisma();
+  const deps: ReviewsByIdHandlerDeps = {
+    prisma,
+    verifyAuth: authOk,
+    markWorkflowActive: async () => {},
+    recordFlake: () => {},
+    withRetry: (fn) => fn(),
+  };
+  const { PATCH } = makeReviewsByIdHandlers(deps);
+  const r1 = await PATCH(makeReq({ body: { title: '  New headline  ' } }), ctx);
+  assert.equal(r1.status, 200);
+  assert.equal((state.updateCalls[0].data as Record<string, unknown>).title, 'New headline');
+  assert.equal((r1.body as { title: string | null }).title, 'New headline');
+
+  const r2 = await PATCH(makeReq({ body: { title: '   ' } }), ctx);
+  assert.equal(r2.status, 200);
+  assert.equal((state.updateCalls[1].data as Record<string, unknown>).title, null);
+
+  const r3 = await PATCH(makeReq({ body: { title: null } }), ctx);
+  assert.equal(r3.status, 200);
+  assert.equal((state.updateCalls[2].data as Record<string, unknown>).title, null);
+});
+
+test('PATCH 400 when title is a non-string non-null value', async () => {
+  const { prisma } = makeFakePrisma();
+  const deps: ReviewsByIdHandlerDeps = {
+    prisma,
+    verifyAuth: authOk,
+    markWorkflowActive: async () => {},
+    recordFlake: () => {},
+    withRetry: (fn) => fn(),
+  };
+  const { PATCH } = makeReviewsByIdHandlers(deps);
+  const r = await PATCH(makeReq({ body: { title: 42 } }), ctx);
+  assert.equal(r.status, 400);
+  assert.match(JSON.stringify(r.body), /title must be a string or null/);
 });
 
 test('PATCH 200 when only analysis is updated (trust-boundary happy path)', async () => {

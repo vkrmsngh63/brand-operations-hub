@@ -46,11 +46,13 @@ function makePrisma(opts: {
   state: {
     findUniqueCalls: number;
     updateCalls: Array<{ id: string; analysisJson: Prisma.InputJsonValue }>;
+    reviewUpdateCalls: Array<{ id: string; analysis: Prisma.InputJsonValue }>;
   };
 } {
   const state = {
     findUniqueCalls: 0,
     updateCalls: [] as Array<{ id: string; analysisJson: Prisma.InputJsonValue }>,
+    reviewUpdateCalls: [] as Array<{ id: string; analysis: Prisma.InputJsonValue }>,
   };
   const prisma: ReviewAnalysisUpdatePrismaLike = {
     reviewAnalysis: {
@@ -83,6 +85,15 @@ function makePrisma(opts: {
           id: args.where.id,
           analysisJson: args.data.analysisJson as Prisma.JsonValue,
         };
+      },
+    },
+    capturedReview: {
+      update: async (args) => {
+        state.reviewUpdateCalls.push({
+          id: args.where.id,
+          analysis: args.data.analysis,
+        });
+        return { id: args.where.id };
       },
     },
   };
@@ -214,7 +225,10 @@ test('PATCH 404 when row belongs to a different project', async () => {
   assert.equal(state.updateCalls.length, 0);
 });
 
-test('PATCH 400 when row level is not PER_PRODUCT (Per-Review edit not yet supported)', async () => {
+// P-49 W5 Fix Session B (2026-05-30; D-11) — PER_REVIEW edits are now
+// accepted (Q9 → same Edit-button pattern as the banner) and also sync the
+// review's "Your Analysis" box (CapturedReview.analysis).
+test('PATCH 200 on PER_REVIEW edit — updates row + writes back to CapturedReview.analysis (D-11)', async () => {
   const { prisma, state } = makePrisma({
     row: {
       id: 'an-1',
@@ -231,12 +245,46 @@ test('PATCH 400 when row level is not PER_PRODUCT (Per-Review edit not yet suppo
   const deps = makeDeps({ prisma });
   const { PATCH } = makeReviewAnalysisUpdateHandlers(deps);
   const r = await PATCH(
+    makeRequest({ summary: '- edited bullet' }),
+    makeCtx('proj-1', 'an-1')
+  );
+  assert.equal(r.status, 200);
+  // ReviewAnalysis row updated with the new summary (reviewId preserved).
+  assert.equal(state.updateCalls.length, 1);
+  const writtenJson = state.updateCalls[0].analysisJson as {
+    summary?: string;
+    reviewId?: string;
+  };
+  assert.match(writtenJson.summary ?? '', /edited bullet/);
+  assert.equal(writtenJson.reviewId, 'rev-a');
+  // Write-back to CapturedReview.analysis (TipTap doc) targeting the reviewId.
+  assert.equal(state.reviewUpdateCalls.length, 1);
+  assert.equal(state.reviewUpdateCalls[0].id, 'rev-a');
+  const doc = state.reviewUpdateCalls[0].analysis as { type?: string };
+  assert.equal(doc.type, 'doc');
+});
+
+test('PATCH 400 when row level is an unsupported aggregation level (PER_CATEGORY)', async () => {
+  const { prisma, state } = makePrisma({
+    row: {
+      id: 'an-1',
+      level: 'PER_CATEGORY',
+      urlId: 'url-1',
+      projectId: 'proj-1',
+      analysisJson: { summary: 'A category-level summary' } as Prisma.JsonValue,
+      competitorUrl: { projectWorkflowId: 'pw-1' },
+    },
+  });
+  const deps = makeDeps({ prisma });
+  const { PATCH } = makeReviewAnalysisUpdateHandlers(deps);
+  const r = await PATCH(
     makeRequest({ summary: 'edited' }),
     makeCtx('proj-1', 'an-1')
   );
   assert.equal(r.status, 400);
-  assert.match(JSON.stringify(r.body), /Edit not supported for level=PER_REVIEW/);
+  assert.match(JSON.stringify(r.body), /Edit not supported for level=PER_CATEGORY/);
   assert.equal(state.updateCalls.length, 0);
+  assert.equal(state.reviewUpdateCalls.length, 0);
 });
 
 // ─── Happy path ─────────────────────────────────────────────────────

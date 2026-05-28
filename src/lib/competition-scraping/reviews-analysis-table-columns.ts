@@ -198,3 +198,30 @@ export function computeBannerCellAffordance(
     clickable: true,
   };
 }
+
+// ─── Title + body display-time merge (P-49 W5 Fix Session B, 2026-05-30) ───
+//
+// Q3 → A (2026-05-28-b): the review-row body cell renders the captured review
+// headline followed by the body. The verbatim merge rule is
+//   'title' + period-if-missing + ' ' + 'body'
+// — i.e. join the headline and body with a single space, and if the headline
+// doesn't already end with sentence-ending punctuation (. ! ?), insert a
+// period after it so the two read as one block.
+//
+// Null/empty title (eBay/Etsy reviews, ~60% of Walmart, all pre-2026-05-30
+// rows) → render the body alone, unchanged from today's behavior. Null/empty
+// body is defensively tolerated (returns the title alone) though the schema
+// requires a non-empty body on create.
+const SENTENCE_END_PUNCT = /[.!?]$/;
+
+export function mergeTitleAndBody(
+  title: string | null | undefined,
+  body: string | null | undefined
+): string {
+  const t = (title ?? '').trim();
+  const b = (body ?? '').trim();
+  if (!t) return b;
+  if (!b) return t;
+  const headline = SENTENCE_END_PUNCT.test(t) ? t : `${t}.`;
+  return `${headline} ${b}`;
+}

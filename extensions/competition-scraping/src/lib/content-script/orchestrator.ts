@@ -1265,6 +1265,9 @@ if (msg.kind === 'enter-video-region-record-mode') {
               await createCapturedReview(projectId, parentRef.id, {
                 clientId: input.clientId,
                 starRating: input.starRating,
+                // P-49 W5 Fix Session B (2026-05-30) — pass the captured
+                // headline through (previously dropped before persist).
+                title: input.title ?? undefined,
                 body: input.body,
                 reviewerName: input.reviewerName ?? undefined,
                 reviewDate: input.reviewDate ?? undefined,
@@ -1429,6 +1432,9 @@ if (msg.kind === 'enter-video-region-record-mode') {
               await createCapturedReview(projectId, parentRef.id, {
                 clientId: input.clientId,
                 starRating: input.starRating,
+                // P-49 W5 Fix Session B (2026-05-30) — pass the captured
+                // headline through (previously dropped before persist).
+                title: input.title ?? undefined,
                 body: input.body,
                 reviewerName: input.reviewerName ?? undefined,
                 reviewDate: input.reviewDate ?? undefined,
@@ -1526,6 +1532,9 @@ if (msg.kind === 'enter-video-region-record-mode') {
               await createCapturedReview(projectId, parentRef.id, {
                 clientId: input.clientId,
                 starRating: input.starRating,
+                // P-49 W5 Fix Session B (2026-05-30) — pass the captured
+                // headline through (previously dropped before persist).
+                title: input.title ?? undefined,
                 body: input.body,
                 reviewerName: input.reviewerName ?? undefined,
                 reviewDate: input.reviewDate ?? undefined,
@@ -1622,6 +1631,9 @@ if (msg.kind === 'enter-video-region-record-mode') {
               await createCapturedReview(projectId, parentRef.id, {
                 clientId: input.clientId,
                 starRating: input.starRating,
+                // P-49 W5 Fix Session B (2026-05-30) — pass the captured
+                // headline through (previously dropped before persist).
+                title: input.title ?? undefined,
                 body: input.body,
                 reviewerName: input.reviewerName ?? undefined,
                 reviewDate: input.reviewDate ?? undefined,

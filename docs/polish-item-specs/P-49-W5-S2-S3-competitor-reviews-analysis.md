@@ -225,7 +225,7 @@ Per-URL inline buttons KEEP per Q4 → A. Existing per-URL "Summarize reviews" +
 - **EXISTING** `CompetitorUrl.sortRank Int?` — single source of truth for URL-row drag order (Q5).
 - **EXISTING** `CapturedReview.analysis` (TipTap JSON) — write target for per-review summary write-back (D-9 fix).
 - **EXISTING** `CompetitorUrl.overallAnalyses["reviews"]` (TipTap JSON) — write target for per-competitor bulleted + non-bulleted write-backs (D-10 fix). UI box must be added to URL detail page first.
-- **EXISTING** `CapturedReview.title` + `CapturedReview.description` — keep as separate columns per Q3. Table renders the merge at display time.
+- **CORRECTED 2026-05-30 (Fix Session B build — supersedes the prior stale line that assumed two existing columns):** `CapturedReview` has only a single `body String @db.Text` column — there is **NO** existing `title` and **NO** existing `description` column. The "description" in the §1 verbatim spec maps to the existing `body` column. Q3 adds the missing **`CapturedReview.title String?`** column this session (additive, nullable, zero data loss). The extension extractors (`amazon-review-extractor.ts`, `walmart-review-extractor.ts`) already capture `title`, but the extension orchestrator `saveReview` adapters (`extensions/competition-scraping/src/lib/content-script/orchestrator.ts` lines 1254/1418/1515/1611) drop it before calling `createCapturedReview`, and the PLOS POST handler (`url-reviews.ts`) never read it. Fix Session B closes this end-to-end. Table renders the merge ('title' + period-if-missing + ' ' + 'body') at display time on the review-row body cell.
 
 ---
 
@@ -262,7 +262,7 @@ Schema-change-in-flight = NO this session (preserved per director-approved Rule 
 **Fix Session B — Write-back to URL detail page + per-review edit + persistence-on-refresh bug + title schema column (Q3 carry-over from Fix Session A).**
 
 Scope:
-1. Render the NEW "Overall Analysis — Captured Reviews" box on URL detail page (`UrlDetailContent.tsx`) using the existing `OverallAnalysisBox` component pattern. Backed by `CompetitorUrl.overallAnalyses["reviews"]` (schema slot already exists).
+1. ~~Render the NEW "Overall Analysis — Captured Reviews" box on URL detail page.~~ **AUDIT FINDING 2026-05-30 (Fix Session B build, Rule 31 audit-shipped-state mandate): the box ALREADY RENDERS** at `UrlDetailContent.tsx` (CapturedReviewsSection, ~line 2109) — shipped P-46 Workstream 2 Session 4 (2026-05-28) with `field={{ kind: 'overallAnalyses', category: 'reviews' }}`, label "Overall Analysis — Captured Reviews", testId `overall-analysis-reviews`, `initialContent={overallAnalyses?.reviews ?? {}}`. D-10's "box does NOT currently render" claim was **stale**. The real D-10 gap was only the per-competitor WRITE-BACK into that box's slot, closed in item 3 below. No UI change needed here.
 2. Wire per-review summary WRITE-BACK to `CapturedReview.analysis`. Path: when `run-batch.ts` saves a PER_REVIEW `ReviewAnalysis` row, ALSO update the corresponding `CapturedReview.analysis` field with the same bullet-list TipTap doc (D-9 fix).
 3. Wire per-competitor bulleted WRITE-BACK to `CompetitorUrl.overallAnalyses["reviews"]`. Append-merge at bottom (D-10 fix; bulleted half).
 4. Extend `review-analysis-update.ts` PATCH endpoint to ACCEPT PER_REVIEW edits (currently rejected at line 181-193). Wire UI Edit button on per-review summary cells on review rows (D-11 fix; Q9 — same Edit-button UI pattern as banner row).
@@ -299,10 +299,11 @@ Schema-change-in-flight = YES this session (new column).
 
 ## §4 — Open questions (still under discussion)
 
-**Q1 through Q7 RESOLVED 2026-05-28-b + Q10 RESOLVED 2026-05-29 at Fix Session A planning** (answers folded into §2 + §3 above). Two remaining open questions:
+**Q1 through Q7 RESOLVED 2026-05-28-b + Q10 RESOLVED 2026-05-29 at Fix Session A planning + Q3 & Q9 RESOLVED 2026-05-30 at Fix Session B planning** (answers folded into §2 + §3 above). One remaining open question:
 
 - **Q8 — per-batch endpoint flow-value naming convention for the NEW per-competitor non-bulleted flow.** Options: (a) `flow=per-competitor-nonbulleted` (mirrors existing `per-competitor-bulleted` shipped W5 Session 3); (b) `flow=per-product-nonbulleted` (matches enum level `PER_PRODUCT` for clarity). Decide at start of Fix Session C.
-- **Q9 — per-review summary Edit UI: same Edit-button pattern as banner row?** Likely yes per Rule 14a Read-It-Back (the §1 spec line "All cells should be editable by clicking them" implies the same UX). Confirm at start of Fix Session B.
+- **Q9 RESOLVED 2026-05-30 → A (same Edit-button pattern as banner row):** per-review summary cells reuse the existing Edit-button affordance shipped for the per-competitor banner / summary cell. One consistent edit UX across the table per §1 "all cells should be editable by clicking them."
+- **Q3 RESOLVED 2026-05-30 → A (add the title column this session):** add additive nullable `CapturedReview.title String?` column (zero data loss; old rows get NULL title → body-only render unchanged) + wire the extension orchestrator `saveReview` adapters + `createCapturedReview` api-client to stop dropping title + extend PLOS POST/PATCH handlers + wire shape + display-time merge ('title' + period-if-missing + ' ' + 'body') on the review-row body cell. Schema-change-in-flight = YES this session → NO at deploy.
 - **Q10 RESOLVED 2026-05-29 → A:** Plain text "N of M summarized" format on URL-row Column 8. No badge/pill, no click-to-expand. Matches the existing count-cell style on the Competitor URLs sibling page. (Reversible later if richer affordance preferred.)
 
 ---

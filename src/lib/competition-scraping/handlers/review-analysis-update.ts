@@ -21,6 +21,7 @@
 
 import type { Prisma } from '@prisma/client';
 
+import { summaryStringToTipTapDoc } from '../../rich-text/tiptap-helpers.ts';
 import type {
   HandlerResult,
   RequestLike,
@@ -67,6 +68,15 @@ export type ReviewAnalysisUpdatePrismaLike = {
       data: { analysisJson: Prisma.InputJsonValue };
       select: { id: true; analysisJson: true };
     }): Promise<{ id: string; analysisJson: Prisma.JsonValue }>;
+  };
+  // P-49 W5 Fix Session B (2026-05-30; D-11) — editing a PER_REVIEW summary
+  // also syncs the review's "Your Analysis" box (CapturedReview.analysis) so
+  // the table cell + URL-detail box stay a single source of truth (Q6 → A).
+  capturedReview: {
+    update(args: {
+      where: { id: string };
+      data: { analysis: Prisma.InputJsonValue };
+    }): Promise<{ id: string }>;
   };
 };
 
@@ -178,16 +188,17 @@ export function makeReviewAnalysisUpdateHandlers(
       };
     }
 
-    // Session 3 ships PATCH support for level=PER_PRODUCT only (the
-    // Per-Competitor banner is the only surface with an Edit button
-    // today). Per-Review row edits land later if director asks; for
-    // now reject with a clear message instead of silently editing
-    // something the UI doesn't yet support.
-    if (row.level !== 'PER_PRODUCT') {
+    // PATCH support: level=PER_PRODUCT (Per-Competitor banner; Session 3) +
+    // level=PER_REVIEW (per-review summary cells; P-49 W5 Fix Session B
+    // 2026-05-30, D-11 + Q9 → same Edit-button pattern as the banner row).
+    // Other aggregation levels (PER_CATEGORY / PER_TYPE / PER_PROJECT) have
+    // no Edit surface yet — reject with a clear message rather than silently
+    // editing something the UI doesn't support.
+    if (row.level !== 'PER_PRODUCT' && row.level !== 'PER_REVIEW') {
       return {
         status: 400,
         body: {
-          error: `Edit not supported for level=${row.level}; only PER_PRODUCT (per-competitor) rows are editable in this version.`,
+          error: `Edit not supported for level=${row.level}; only PER_PRODUCT (per-competitor) and PER_REVIEW rows are editable in this version.`,
         },
       };
     }
@@ -223,6 +234,40 @@ export function makeReviewAnalysisUpdateHandlers(
         status: 500,
         body: { error: 'Failed to persist edit' },
       };
+    }
+
+    // P-49 W5 Fix Session B (2026-05-30; D-11) — when a PER_REVIEW summary is
+    // edited, sync the review's "Your Analysis" box (CapturedReview.analysis)
+    // so the table cell + URL-detail box don't diverge (single source of
+    // truth per Q6 → A). reviewId lives on the PER_REVIEW analysisJson.
+    // Soft-fail: the ReviewAnalysis edit already persisted + returns to the
+    // client regardless; a divergent box is recoverable on the next AI run.
+    if (row.level === 'PER_REVIEW') {
+      const reviewId =
+        existingJson &&
+        typeof (existingJson as { reviewId?: unknown }).reviewId === 'string'
+          ? (existingJson as { reviewId: string }).reviewId
+          : null;
+      if (reviewId) {
+        try {
+          await withRetry(() =>
+            prisma.capturedReview.update({
+              where: { id: reviewId },
+              data: {
+                analysis: summaryStringToTipTapDoc(
+                  summary
+                ) as Prisma.InputJsonValue,
+              },
+            })
+          );
+        } catch (error) {
+          recordFlake('PATCH review-analysis-update per-review writeback', error, {
+            projectId,
+            analysisId: trimmedAnalysisId,
+            reviewId,
+          });
+        }
+      }
     }
 
     const updatedSummary =

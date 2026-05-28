@@ -91,6 +91,115 @@ export function isValidAnalysisPayload(
   );
 }
 
+// ─── Plain-summary → TipTap doc conversion (P-49 W5 Fix Session B, 2026-05-30) ───
+//
+// The per-review + per-competitor AI flows persist their summaries as plain
+// strings on ReviewAnalysis.analysisJson.summary. Fix Session B also writes
+// those summaries BACK into the TipTap-doc surfaces the director edits:
+//   • per-review summary  → CapturedReview.analysis        ("Your Analysis" box)
+//   • per-competitor bulleted → CompetitorUrl.overallAnalyses["reviews"]
+//     ("Overall Analysis — Captured Reviews" box) — append-merged at the bottom.
+//
+// These helpers convert a plain summary string into the ProseMirror doc JSON
+// the editor + read-only renderer expect, WITHOUT pulling in @tiptap/* (kept
+// node:test-friendly per this file's top-of-file constraint).
+
+const BULLET_LINE = /^\s*[-*•]\s+(.*)$/;
+
+function textNode(text: string): Record<string, unknown> {
+  return { type: 'text', text };
+}
+
+function paragraphNode(text: string): Record<string, unknown> {
+  return { type: 'paragraph', content: [textNode(text)] };
+}
+
+function listItemNode(text: string): Record<string, unknown> {
+  return { type: 'listItem', content: [paragraphNode(text)] };
+}
+
+/**
+ * Converts a plain summary string into TipTap doc content nodes. Lines that
+ * begin with a bullet marker (-, *, •) are grouped into consecutive
+ * `bulletList` nodes; other non-blank lines become `paragraph` nodes; blank
+ * lines are skipped (they only act as group separators). Returns the content
+ * array (not the wrapping doc) so callers can append-merge.
+ */
+export function summaryStringToContentNodes(
+  summary: string
+): Array<Record<string, unknown>> {
+  const lines = (summary ?? '').split(/\r?\n/);
+  const nodes: Array<Record<string, unknown>> = [];
+  let pendingBullets: Array<Record<string, unknown>> | null = null;
+
+  const flushBullets = () => {
+    if (pendingBullets && pendingBullets.length > 0) {
+      nodes.push({ type: 'bulletList', content: pendingBullets });
+    }
+    pendingBullets = null;
+  };
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (line.length === 0) {
+      flushBullets();
+      continue;
+    }
+    const bulletMatch = BULLET_LINE.exec(rawLine);
+    if (bulletMatch) {
+      const itemText = bulletMatch[1].trim();
+      if (itemText.length === 0) continue;
+      if (!pendingBullets) pendingBullets = [];
+      pendingBullets.push(listItemNode(itemText));
+    } else {
+      flushBullets();
+      nodes.push(paragraphNode(line));
+    }
+  }
+  flushBullets();
+  return nodes;
+}
+
+/**
+ * Wraps a plain summary string into a full TipTap doc. Empty/whitespace-only
+ * input yields the canonical empty doc so the editor never explodes.
+ */
+export function summaryStringToTipTapDoc(
+  summary: string
+): Record<string, unknown> {
+  const content = summaryStringToContentNodes(summary);
+  if (content.length === 0) return { ...EMPTY_TIPTAP_DOC };
+  return { type: 'doc', content };
+}
+
+/**
+ * Append-merges a plain summary onto an existing TipTap doc, adding the new
+ * content at the very bottom so nothing previously in the box is overwritten
+ * (per the director's verbatim "added to the very bottom" directive for the
+ * "Overall Analysis — Captured Reviews" box). When the existing doc is empty
+ * (schema-default `{}` / canonical empty paragraph) the result is just the
+ * summary doc — we don't preserve a leading empty paragraph.
+ */
+export function appendSummaryToTipTapDoc(
+  existing: unknown,
+  summary: string
+): Record<string, unknown> {
+  const additions = summaryStringToContentNodes(summary);
+  if (additions.length === 0) {
+    // Nothing to add — return the existing doc normalized (or empty).
+    const normalized = normalizeTipTapInput(existing);
+    return { ...normalized };
+  }
+  if (isEmptyTipTapDoc(existing)) {
+    return { type: 'doc', content: additions };
+  }
+  const base = existing as Record<string, unknown>;
+  const baseContent = Array.isArray(base.content)
+    ? (base.content as Array<Record<string, unknown>>)
+    : [];
+  return { type: 'doc', content: [...baseContent, ...additions] };
+}
+
 // Known categories for CompetitorUrl.overallAnalyses (P-46 Workstream 1's
 // schema-additions list per §A.11). Mirrors the `OverallAnalyses`
 // interface in src/lib/shared-types/competition-scraping.ts. Kept in this

@@ -21,6 +21,7 @@ function makeReview(overrides: Partial<CapturedReview> = {}): CapturedReview {
     clientId: 'client-1',
     competitorUrlId: 'url-1',
     starRating: 5,
+    title: null,
     body: 'great product',
     reviewerName: null,
     reviewDate: null,

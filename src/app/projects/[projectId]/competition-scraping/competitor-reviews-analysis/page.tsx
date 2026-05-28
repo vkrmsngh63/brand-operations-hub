@@ -58,6 +58,7 @@ import {
   computeBannerCellAffordance,
   computeReviewsSummaryCellAffordance,
   isReviewsColumnVisible,
+  mergeTitleAndBody,
   resolveActionsColumnWidth,
   resolveReviewsColumnWidth,
   type ReviewsTableColumnDef,
@@ -107,9 +108,15 @@ export default function CompetitorReviewsAnalysisPage() {
   const [reviewsByUrl, setReviewsByUrl] = useState<
     Record<string, ReviewsLoadState>
   >({});
-  // per-reviewId summary cache (populated by AI runs in-session)
+  // per-reviewId summary cache (populated by AI runs in-session + hydration).
+  // analysisId is the PER_REVIEW ReviewAnalysis row id — required for the
+  // per-review Edit affordance's PATCH call (D-11; Fix Session B 2026-05-30).
+  // null when the row id is unknown (legacy / failed persist) → Edit hidden.
   const [summaryByReviewId, setSummaryByReviewId] = useState<
-    Record<string, { summary: string; source: 'cache' | 'fresh' }>
+    Record<
+      string,
+      { analysisId: string | null; summary: string; source: 'cache' | 'fresh' }
+    >
   >({});
   // per-urlId Per-Competitor summary cache (populated by Session 3+
   // Per-Competitor Summarize runs). One aggregated summary per URL.
@@ -418,7 +425,7 @@ export default function CompetitorReviewsAnalysisPage() {
         if (!Array.isArray(body.items)) return;
         const nextSummaryByReviewId: Record<
           string,
-          { summary: string; source: 'cache' | 'fresh' }
+          { analysisId: string | null; summary: string; source: 'cache' | 'fresh' }
         > = {};
         const nextCompetitorSummaryByUrlId: Record<
           string,
@@ -435,7 +442,11 @@ export default function CompetitorReviewsAnalysisPage() {
           if (item.level === 'PER_REVIEW') {
             const reviewId = typeof aj.reviewId === 'string' ? aj.reviewId : null;
             if (reviewId) {
-              nextSummaryByReviewId[reviewId] = { summary, source: 'cache' };
+              nextSummaryByReviewId[reviewId] = {
+                analysisId: item.id,
+                summary,
+                source: 'cache',
+              };
             }
           } else if (item.level === 'PER_PRODUCT' && item.urlId) {
             nextCompetitorSummaryByUrlId[item.urlId] = {
@@ -574,9 +585,29 @@ export default function CompetitorReviewsAnalysisPage() {
   function handleSummary(
     reviewId: string,
     summary: string,
-    source: 'cache' | 'fresh'
+    source: 'cache' | 'fresh',
+    analysisId: string
   ) {
-    setSummaryByReviewId((prev) => ({ ...prev, [reviewId]: { summary, source } }));
+    setSummaryByReviewId((prev) => ({
+      ...prev,
+      [reviewId]: { analysisId: analysisId || null, summary, source },
+    }));
+  }
+
+  // Called by the per-review summary cell after a successful PATCH so the
+  // local Table 2 state reflects the edit immediately (D-11; Q9 → same
+  // Edit-button pattern as the per-competitor banner row).
+  function handleReviewSummaryEdited(reviewId: string, summary: string) {
+    setSummaryByReviewId((prev) => {
+      const existing = prev[reviewId];
+      if (!existing) return prev;
+      // Edited summaries are treated as 'cache' source going forward (matches
+      // the banner's handleCompetitorSummaryEdited semantics).
+      return {
+        ...prev,
+        [reviewId]: { ...existing, summary, source: 'cache' },
+      };
+    });
   }
 
   function handleCompetitorSummary(
@@ -805,6 +836,7 @@ export default function CompetitorReviewsAnalysisPage() {
               void openCompetitorModal(u);
             }}
             onCompetitorSummaryEdited={handleCompetitorSummaryEdited}
+            onReviewSummaryEdited={handleReviewSummaryEdited}
             onUrlCellSave={handleUrlCellSave}
             onReviewCellSave={handleReviewCellSave}
           />
@@ -878,7 +910,10 @@ interface ReviewsAnalysisTableSectionProps {
   reviewsExpanded: Record<string, boolean>;
   bannerExpanded: Record<string, boolean>;
   reviewsByUrl: Record<string, ReviewsLoadState>;
-  summaryByReviewId: Record<string, { summary: string; source: 'cache' | 'fresh' }>;
+  summaryByReviewId: Record<
+    string,
+    { analysisId: string | null; summary: string; source: 'cache' | 'fresh' }
+  >;
   competitorSummaryByUrlId: Record<
     string,
     { analysisId: string; summary: string; source: 'cache' | 'fresh' }
@@ -893,6 +928,7 @@ interface ReviewsAnalysisTableSectionProps {
   onOpenSummarizeModal: (url: CompetitorUrl) => void;
   onOpenCompetitorModal: (url: CompetitorUrl) => void;
   onCompetitorSummaryEdited: (urlId: string, summary: string) => void;
+  onReviewSummaryEdited: (reviewId: string, summary: string) => void;
   onUrlCellSave: (urlId: string, patch: UpdateCompetitorUrlRequest) => Promise<void>;
   onReviewCellSave: (
     urlId: string,
@@ -982,6 +1018,7 @@ function ReviewsAnalysisTableSection(
           onOpenSummarizeModal={props.onOpenSummarizeModal}
           onOpenCompetitorModal={props.onOpenCompetitorModal}
           onCompetitorSummaryEdited={props.onCompetitorSummaryEdited}
+          onReviewSummaryEdited={props.onReviewSummaryEdited}
           onUrlCellSave={props.onUrlCellSave}
           onReviewCellSave={props.onReviewCellSave}
         />
@@ -1194,7 +1231,10 @@ interface UrlsTableProps {
   reviewsExpanded: Record<string, boolean>;
   bannerExpanded: Record<string, boolean>;
   reviewsByUrl: Record<string, ReviewsLoadState>;
-  summaryByReviewId: Record<string, { summary: string; source: 'cache' | 'fresh' }>;
+  summaryByReviewId: Record<
+    string,
+    { analysisId: string | null; summary: string; source: 'cache' | 'fresh' }
+  >;
   competitorSummaryByUrlId: Record<
     string,
     { analysisId: string; summary: string; source: 'cache' | 'fresh' }
@@ -1208,6 +1248,7 @@ interface UrlsTableProps {
   onOpenSummarizeModal: (url: CompetitorUrl) => void;
   onOpenCompetitorModal: (url: CompetitorUrl) => void;
   onCompetitorSummaryEdited: (urlId: string, summary: string) => void;
+  onReviewSummaryEdited: (reviewId: string, summary: string) => void;
   onUrlCellSave: (
     urlId: string,
     patch: UpdateCompetitorUrlRequest
@@ -1239,6 +1280,7 @@ function UrlsTable({
   onOpenSummarizeModal,
   onOpenCompetitorModal,
   onCompetitorSummaryEdited,
+  onReviewSummaryEdited,
   onUrlCellSave,
   onReviewCellSave,
 }: UrlsTableProps): JSX.Element {
@@ -1469,10 +1511,12 @@ function UrlsTable({
                   <tr>
                     <td colSpan={tableColspan} style={{ padding: 0, border: 'none' }}>
                       <ReviewsList
+                        projectId={projectId}
                         urlId={u.id}
                         state={reviewsState}
                         summaryByReviewId={summaryByReviewId}
                         onReviewCellSave={onReviewCellSave}
+                        onReviewSummaryEdited={onReviewSummaryEdited}
                       />
                     </td>
                   </tr>
@@ -1991,6 +2035,203 @@ const savePrimaryStyle: React.CSSProperties = {
   fontWeight: 600,
 };
 
+// ─── PerReviewSummaryCell (P-49 W5 Fix Session B, 2026-05-30; D-11) ────────
+//
+// The review-row "Summary" cell. Read-only display of the per-review AI
+// summary + an Edit affordance mirroring the per-competitor banner (Q9 → A:
+// same Edit-button pattern). Editable only when an analysisId is known
+// (live run / page hydration); a missing id hides Edit (re-run to persist).
+// Save PATCHes the PER_REVIEW ReviewAnalysis row via the same endpoint the
+// banner uses; the handler also syncs CapturedReview.analysis so the URL
+// detail "Your Analysis" box stays consistent (single source of truth).
+interface PerReviewSummaryCellProps {
+  projectId: string;
+  reviewId: string;
+  summary:
+    | { analysisId: string | null; summary: string; source: 'cache' | 'fresh' }
+    | undefined;
+  onEdited: (reviewId: string, summary: string) => void;
+}
+
+function PerReviewSummaryCell({
+  projectId,
+  reviewId,
+  summary,
+  onEdited,
+}: PerReviewSummaryCellProps): JSX.Element {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(summary?.summary ?? '');
+  const [saveState, setSaveState] = useState<
+    | { kind: 'idle' }
+    | { kind: 'saving' }
+    | { kind: 'error'; message: string }
+  >({ kind: 'idle' });
+
+  function startEdit() {
+    setDraft(summary?.summary ?? '');
+    setSaveState({ kind: 'idle' });
+    setEditing(true);
+  }
+
+  function cancelEdit() {
+    setEditing(false);
+    setSaveState({ kind: 'idle' });
+  }
+
+  async function saveEdit() {
+    const trimmed = draft.trim();
+    if (!trimmed) {
+      setSaveState({ kind: 'error', message: 'Summary cannot be empty.' });
+      return;
+    }
+    const analysisId = summary?.analysisId;
+    if (!analysisId) {
+      setSaveState({
+        kind: 'error',
+        message:
+          'This summary cannot be edited yet (no row id — re-run Summarize to persist it).',
+      });
+      return;
+    }
+    setSaveState({ kind: 'saving' });
+    try {
+      const res = await authFetch(
+        `/api/projects/${projectId}/competition-scraping/review-analysis/${analysisId}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ summary: trimmed }),
+        }
+      );
+      if (!res.ok) {
+        let detail = `HTTP ${res.status}`;
+        try {
+          const body = (await res.json()) as { error?: string };
+          if (body?.error) detail = body.error;
+        } catch {
+          // ignore
+        }
+        setSaveState({ kind: 'error', message: detail });
+        return;
+      }
+      const body = (await res.json()) as { id: string; summary: string };
+      onEdited(reviewId, body.summary);
+      setEditing(false);
+      setSaveState({ kind: 'idle' });
+    } catch (err) {
+      setSaveState({
+        kind: 'error',
+        message: err instanceof Error ? err.message : 'Network error',
+      });
+    }
+  }
+
+  if (editing) {
+    return (
+      <span style={{ display: 'block' }}>
+        <textarea
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          disabled={saveState.kind === 'saving'}
+          style={{
+            width: '100%',
+            minHeight: '90px',
+            fontSize: '12px',
+            color: '#e6edf3',
+            background: '#0d1117',
+            border: '1px solid #30363d',
+            borderRadius: '6px',
+            padding: '8px 10px',
+            lineHeight: 1.5,
+            fontFamily: "'IBM Plex Sans', sans-serif",
+            resize: 'vertical',
+            whiteSpace: 'pre-wrap',
+          }}
+        />
+        <span
+          style={{
+            display: 'flex',
+            gap: '6px',
+            marginTop: '6px',
+            alignItems: 'center',
+          }}
+        >
+          <button
+            type="button"
+            onClick={saveEdit}
+            disabled={saveState.kind === 'saving'}
+            style={{
+              ...savePrimaryStyle,
+              opacity: saveState.kind === 'saving' ? 0.7 : 1,
+              cursor: saveState.kind === 'saving' ? 'wait' : 'pointer',
+            }}
+          >
+            {saveState.kind === 'saving' ? 'Saving…' : 'Save'}
+          </button>
+          <button
+            type="button"
+            onClick={cancelEdit}
+            disabled={saveState.kind === 'saving'}
+            style={cancelButtonStyle}
+          >
+            Cancel
+          </button>
+          {saveState.kind === 'error' && (
+            <span style={{ fontSize: '10px', color: '#f85149' }}>
+              {saveState.message}
+            </span>
+          )}
+        </span>
+      </span>
+    );
+  }
+
+  if (!summary) {
+    return (
+      <span style={{ color: '#6e7681', fontStyle: 'italic' }}>
+        not summarized
+      </span>
+    );
+  }
+
+  return (
+    <span
+      style={{
+        color: '#e6edf3',
+        // v2 prompt emits "- bullet\n- bullet" newline-separated strings;
+        // pre-wrap preserves the line breaks so each bullet shows on its
+        // own line.
+        whiteSpace: 'pre-wrap',
+        display: 'block',
+      }}
+    >
+      {summary.summary}
+      {summary.source === 'cache' && (
+        <span
+          style={{
+            marginLeft: '6px',
+            fontSize: '9px',
+            color: '#6e7681',
+            textTransform: 'uppercase',
+            letterSpacing: '0.05em',
+          }}
+        >
+          (cached)
+        </span>
+      )}
+      {summary.analysisId && (
+        <button
+          type="button"
+          onClick={startEdit}
+          style={{ ...editButtonStyle, marginLeft: '8px', padding: '2px 8px' }}
+        >
+          Edit
+        </button>
+      )}
+    </span>
+  );
+}
+
 const cancelButtonStyle: React.CSSProperties = {
   background: 'transparent',
   color: '#e6edf3',
@@ -2046,31 +2287,37 @@ function competitorButtonStyle(
 // (single source of truth — PATCH propagates to CapturedReview columns
 // reflected on the URL detail page's reviews surface).
 //
-// Per-review summary cell (the "Summary" column) STAYS read-only in
-// Fix Session A. Click-to-edit on per-review summary cells lands in
-// Fix Session B alongside the PATCH endpoint extension to accept
-// PER_REVIEW edits (D-11 fix; currently rejected at
-// review-analysis-update.ts:181-193) and the Q9 Edit-button UI
-// pattern decision.
+// Per-review summary cell (the "Summary" column) is click-to-edit as of
+// Fix Session B (2026-05-30; D-11) — same Edit-button pattern as the per-
+// competitor banner (Q9 → A). The PATCH endpoint now accepts PER_REVIEW
+// edits (review-analysis-update.ts) and syncs the review's "Your Analysis"
+// box. Editable only when an analysisId is known (live run / hydration).
 
 const REVIEW_ROW_GRID = '50px 80px 1fr 140px 110px 1fr';
 
 interface ReviewsListProps {
+  projectId: string;
   urlId: string;
   state: ReviewsLoadState | undefined;
-  summaryByReviewId: Record<string, { summary: string; source: 'cache' | 'fresh' }>;
+  summaryByReviewId: Record<
+    string,
+    { analysisId: string | null; summary: string; source: 'cache' | 'fresh' }
+  >;
   onReviewCellSave: (
     urlId: string,
     reviewId: string,
     patch: UpdateCapturedReviewRequest
   ) => Promise<void>;
+  onReviewSummaryEdited: (reviewId: string, summary: string) => void;
 }
 
 function ReviewsList({
+  projectId,
   urlId,
   state,
   summaryByReviewId,
   onReviewCellSave,
+  onReviewSummaryEdited,
 }: ReviewsListProps): JSX.Element {
   if (!state || state.kind === 'idle' || state.kind === 'loading') {
     return (
@@ -2193,6 +2440,13 @@ function ReviewsList({
                     : saveCell({ body: next })
                 }
                 multiline
+                // P-49 W5 Fix Session B (2026-05-30; Q3 → A) — read-mode
+                // shows the captured headline merged with the body
+                // ('title' + period-if-missing + ' ' + 'body'). Editing
+                // still targets `body` only (draft seeds from value=r.body),
+                // so the merge is display-time and never corrupts the
+                // separate title column. Null/empty title → body alone.
+                formatRead={() => mergeTitleAndBody(r.title, r.body)}
               />
             </span>
             <span style={{ color: '#8b949e' }}>
@@ -2216,36 +2470,12 @@ function ReviewsList({
                 placeholder="YYYY-MM-DD"
               />
             </span>
-            <span
-              style={{
-                color: summary ? '#e6edf3' : '#6e7681',
-                // v2 prompt emits "- bullet\n- bullet" newline-separated
-                // strings; pre-wrap preserves the line breaks so each
-                // bullet shows on its own line.
-                whiteSpace: 'pre-wrap',
-              }}
-            >
-              {summary ? (
-                <>
-                  {summary.summary}
-                  {summary.source === 'cache' && (
-                    <span
-                      style={{
-                        marginLeft: '6px',
-                        fontSize: '9px',
-                        color: '#6e7681',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.05em',
-                      }}
-                    >
-                      (cached)
-                    </span>
-                  )}
-                </>
-              ) : (
-                <span style={{ fontStyle: 'italic' }}>not summarized</span>
-              )}
-            </span>
+            <PerReviewSummaryCell
+              projectId={projectId}
+              reviewId={r.id}
+              summary={summary}
+              onEdited={onReviewSummaryEdited}
+            />
           </div>
         );
       })}

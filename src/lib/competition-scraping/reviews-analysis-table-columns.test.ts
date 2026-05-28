@@ -22,6 +22,7 @@ import {
   computeReviewsSummaryCount,
   computeReviewsSummaryCellAffordance,
   computeBannerCellAffordance,
+  mergeTitleAndBody,
 } from './reviews-analysis-table-columns.ts';
 
 // ─── REVIEWS_TABLE_COLUMNS shape ────────────────────────────────────
@@ -313,4 +314,51 @@ test('Fix Session A scope guard — no "category-bulleted" / "type-bulleted" col
       `${forbidden} belongs on the Category/Type page registries, not this one`
     );
   }
+});
+
+// ─── mergeTitleAndBody (P-49 W5 Fix Session B, 2026-05-30; Q3 → A) ──────
+
+test('mergeTitleAndBody — title + body, period inserted when title lacks one', () => {
+  assert.equal(
+    mergeTitleAndBody('Great product', 'Held up for years.'),
+    'Great product. Held up for years.'
+  );
+});
+
+test('mergeTitleAndBody — title already ends with punctuation → no double period', () => {
+  assert.equal(
+    mergeTitleAndBody('Broke fast!', 'Returned it.'),
+    'Broke fast! Returned it.'
+  );
+  assert.equal(
+    mergeTitleAndBody('Why?', 'No idea.'),
+    'Why? No idea.'
+  );
+  assert.equal(
+    mergeTitleAndBody('Done.', 'Final.'),
+    'Done. Final.'
+  );
+});
+
+test('mergeTitleAndBody — null/empty title → body alone (legacy + body-only reviews)', () => {
+  assert.equal(mergeTitleAndBody(null, 'Just a body.'), 'Just a body.');
+  assert.equal(mergeTitleAndBody(undefined, 'Just a body.'), 'Just a body.');
+  assert.equal(mergeTitleAndBody('   ', 'Just a body.'), 'Just a body.');
+});
+
+test('mergeTitleAndBody — empty body → title alone (defensive)', () => {
+  assert.equal(mergeTitleAndBody('Only title', ''), 'Only title');
+  assert.equal(mergeTitleAndBody('Only title', null), 'Only title');
+});
+
+test('mergeTitleAndBody — both empty → empty string', () => {
+  assert.equal(mergeTitleAndBody(null, null), '');
+  assert.equal(mergeTitleAndBody('', ''), '');
+});
+
+test('mergeTitleAndBody — trims surrounding whitespace on both parts', () => {
+  assert.equal(
+    mergeTitleAndBody('  Title  ', '  Body.  '),
+    'Title. Body.'
+  );
 });

@@ -16,6 +16,9 @@ import {
   normalizeTipTapInput,
   isValidAnalysisPayload,
   isValidOverallAnalysesBag,
+  summaryStringToContentNodes,
+  summaryStringToTipTapDoc,
+  appendSummaryToTipTapDoc,
 } from './tiptap-helpers.ts';
 
 /* ── isEmptyTipTapDoc ──────────────────────────────────────────────── */
@@ -298,4 +301,88 @@ test('isValidOverallAnalysesBag: bag with known key + primitive value → false'
     isValidOverallAnalysesBag({ text: 'just a string' }),
     false
   );
+});
+
+/* ── summaryStringToContentNodes (P-49 W5 Fix Session B) ─────────────── */
+
+test('summaryStringToContentNodes: bullet lines group into one bulletList', () => {
+  const nodes = summaryStringToContentNodes('- one\n- two\n- three');
+  assert.equal(nodes.length, 1);
+  assert.equal(nodes[0].type, 'bulletList');
+  const items = (nodes[0] as { content: unknown[] }).content;
+  assert.equal(items.length, 3);
+});
+
+test('summaryStringToContentNodes: accepts -, *, • bullet markers', () => {
+  const nodes = summaryStringToContentNodes('- a\n* b\n• c');
+  assert.equal(nodes.length, 1);
+  assert.equal((nodes[0] as { content: unknown[] }).content.length, 3);
+});
+
+test('summaryStringToContentNodes: plain lines become paragraphs', () => {
+  const nodes = summaryStringToContentNodes('Intro line\nSecond line');
+  assert.equal(nodes.length, 2);
+  assert.equal(nodes[0].type, 'paragraph');
+  assert.equal(nodes[1].type, 'paragraph');
+});
+
+test('summaryStringToContentNodes: blank line splits two bullet groups', () => {
+  const nodes = summaryStringToContentNodes('- a\n- b\n\n- c');
+  assert.equal(nodes.length, 2);
+  assert.equal(nodes[0].type, 'bulletList');
+  assert.equal(nodes[1].type, 'bulletList');
+});
+
+test('summaryStringToContentNodes: empty string → no nodes', () => {
+  assert.deepEqual(summaryStringToContentNodes('   \n  '), []);
+});
+
+test('summaryStringToContentNodes: leading paragraph then bullets preserves order', () => {
+  const nodes = summaryStringToContentNodes('Theme A\n- pt1\n- pt2');
+  assert.equal(nodes.length, 2);
+  assert.equal(nodes[0].type, 'paragraph');
+  assert.equal(nodes[1].type, 'bulletList');
+});
+
+/* ── summaryStringToTipTapDoc ────────────────────────────────────────── */
+
+test('summaryStringToTipTapDoc: wraps content in a doc node', () => {
+  const doc = summaryStringToTipTapDoc('- a\n- b');
+  assert.equal(doc.type, 'doc');
+  assert.equal((doc.content as unknown[]).length, 1);
+});
+
+test('summaryStringToTipTapDoc: empty input → canonical empty doc', () => {
+  assert.equal(isEmptyTipTapDoc(summaryStringToTipTapDoc('')), true);
+});
+
+/* ── appendSummaryToTipTapDoc ────────────────────────────────────────── */
+
+test('appendSummaryToTipTapDoc: empty existing → just the summary doc', () => {
+  const out = appendSummaryToTipTapDoc({}, '- new bullet');
+  assert.equal(out.type, 'doc');
+  assert.equal((out.content as unknown[]).length, 1);
+  assert.equal((out.content as { type: string }[])[0].type, 'bulletList');
+});
+
+test('appendSummaryToTipTapDoc: appends at bottom, preserves existing content', () => {
+  const existing = {
+    type: 'doc',
+    content: [{ type: 'paragraph', content: [{ type: 'text', text: 'old' }] }],
+  };
+  const out = appendSummaryToTipTapDoc(existing, 'new para');
+  const content = out.content as Array<{ type: string }>;
+  assert.equal(content.length, 2);
+  // Existing node stays first; new content appended after.
+  assert.equal(content[0].type, 'paragraph');
+  assert.equal(content[1].type, 'paragraph');
+});
+
+test('appendSummaryToTipTapDoc: empty summary → existing returned unchanged', () => {
+  const existing = {
+    type: 'doc',
+    content: [{ type: 'paragraph', content: [{ type: 'text', text: 'keep' }] }],
+  };
+  const out = appendSummaryToTipTapDoc(existing, '   ');
+  assert.deepEqual(out.content, existing.content);
 });

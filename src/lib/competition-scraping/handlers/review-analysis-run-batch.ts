@@ -39,6 +39,10 @@ import {
 } from '../review-analysis/client.ts';
 import { computeReviewsHash } from '../review-analysis/cache.ts';
 import {
+  appendSummaryToTipTapDoc,
+  summaryStringToTipTapDoc,
+} from '../../rich-text/tiptap-helpers.ts';
+import {
   calculateCostUsd,
   estimateCostUsd,
   toCostUsdMicros,
@@ -141,6 +145,17 @@ export type ReviewAnalysisRunBatchPrismaLike = {
       where: { id: string; projectWorkflowId: string };
       select: { id: true; projectWorkflowId: true; platform: true; productName: true };
     }): Promise<CompetitorUrlForBatchRow | null>;
+    // P-49 W5 Fix Session B (2026-05-30) — read-modify-write of the
+    // overallAnalyses bag for the per-competitor bulleted write-back into
+    // the "Overall Analysis — Captured Reviews" box (append-merge at bottom).
+    findUnique(args: {
+      where: { id: string };
+      select: { overallAnalyses: true };
+    }): Promise<{ overallAnalyses: Prisma.JsonValue } | null>;
+    update(args: {
+      where: { id: string };
+      data: { overallAnalyses: Prisma.InputJsonValue };
+    }): Promise<{ id: string }>;
   };
   capturedReview: {
     findMany(args: {
@@ -154,6 +169,12 @@ export type ReviewAnalysisRunBatchPrismaLike = {
         reviewDate: true;
       };
     }): Promise<CapturedReviewForBatchRow[]>;
+    // P-49 W5 Fix Session B (2026-05-30) — per-review summary write-back into
+    // the review's "Your Analysis" box (CapturedReview.analysis TipTap doc).
+    update(args: {
+      where: { id: string };
+      data: { analysis: Prisma.InputJsonValue };
+    }): Promise<{ id: string }>;
   };
   reviewAnalysis: {
     // Per-review flow queries by reviewsHash[] (one hash per reviewId);
@@ -194,6 +215,11 @@ export interface PerReviewBatchResponseEntry {
   reviewId: string;
   summary: string;
   source: 'cache' | 'fresh';
+  // P-49 W5 Fix Session B (2026-05-30; D-11) — the PER_REVIEW ReviewAnalysis
+  // row id, so the client can PATCH the summary via the Edit affordance
+  // (same as the per-competitor banner's analysisId). Empty string when the
+  // row failed to persist (soft-fail) — disables Edit for that entry.
+  analysisId: string;
 }
 
 export interface PerReviewBatchUsage {
@@ -634,6 +660,53 @@ export function makeReviewAnalysisRunBatchHandlers(
         // this run (best effort vs. lying about a non-existent id).
       }
 
+      // P-49 W5 Fix Session B (2026-05-30; D-10 bulleted half) — write the
+      // bulleted summary BACK into this URL's "Overall Analysis — Captured
+      // Reviews" box (overallAnalyses["reviews"]), append-merged at the very
+      // bottom so nothing previously in the box is overwritten (director's
+      // verbatim directive). Read-modify-write of the bag. Only runs on a
+      // FRESH persist — cache hits returned earlier (line ~520) — so re-runs
+      // with the same corpus do NOT duplicate the appended block. Soft-fail:
+      // the summary already persisted + returns to the browser regardless.
+      if (persistedId) {
+        try {
+          const existingUrl = await withRetry(() =>
+            prisma.competitorUrl.findUnique({
+              where: { id: urlId },
+              select: { overallAnalyses: true },
+            })
+          );
+          const bag =
+            existingUrl &&
+            existingUrl.overallAnalyses &&
+            typeof existingUrl.overallAnalyses === 'object' &&
+            !Array.isArray(existingUrl.overallAnalyses)
+              ? (existingUrl.overallAnalyses as Record<string, unknown>)
+              : {};
+          const mergedReviewsDoc = appendSummaryToTipTapDoc(
+            bag.reviews,
+            validatedPC.summary
+          );
+          await withRetry(() =>
+            prisma.competitorUrl.update({
+              where: { id: urlId },
+              data: {
+                overallAnalyses: {
+                  ...bag,
+                  reviews: mergedReviewsDoc,
+                } as Prisma.InputJsonValue,
+              },
+            })
+          );
+        } catch (error) {
+          recordFlake(
+            'POST per-competitor-bulleted overallAnalyses write-back',
+            error,
+            { projectId, urlId }
+          );
+        }
+      }
+
       const actualCostUsdPC = calculateCostUsd(modelVersion, {
         inputTokens: responsePC.usage.input_tokens,
         outputTokens: responsePC.usage.output_tokens,
@@ -703,11 +776,13 @@ export function makeReviewAnalysisRunBatchHandlers(
     }
 
     const cachedByReviewId = new Map<string, string>(); // reviewId → summary
+    const cachedAnalysisIdByReviewId = new Map<string, string>(); // reviewId → row id
     for (const row of cachedRows) {
       const summary = summaryFromCachedJson(row.analysisJson);
       const reviewId = reviewIdByHash.get(row.reviewsHash);
       if (summary && reviewId) {
         cachedByReviewId.set(reviewId, summary);
+        cachedAnalysisIdByReviewId.set(reviewId, row.id);
       }
     }
 
@@ -724,6 +799,7 @@ export function makeReviewAnalysisRunBatchHandlers(
         reviewId: id,
         summary: cachedByReviewId.get(id) ?? '',
         source: 'cache',
+        analysisId: cachedAnalysisIdByReviewId.get(id) ?? '',
       }));
       const responseBody: PerReviewBatchResponseBody = {
         flow: flow as 'per-review-summarize',
@@ -853,11 +929,12 @@ export function makeReviewAnalysisRunBatchHandlers(
     }
 
     const persistErrors: Array<{ reviewId: string; error: unknown }> = [];
+    const freshAnalysisIdByReviewId = new Map<string, string>();
     for (const entry of validated.summaries) {
       const hash = hashByReviewId.get(entry.reviewId);
       if (!hash) continue; // alignment check above guarantees this; defensive
       try {
-        await withRetry(() =>
+        const createdReview = await withRetry(() =>
           prisma.reviewAnalysis.create({
             data: {
               level: 'PER_REVIEW',
@@ -877,6 +954,21 @@ export function makeReviewAnalysisRunBatchHandlers(
               costUsdMicros: null,
             },
             select: { id: true },
+          })
+        );
+        freshAnalysisIdByReviewId.set(entry.reviewId, createdReview.id);
+        // P-49 W5 Fix Session B (2026-05-30; D-9) — write the per-review
+        // summary BACK into the review's "Your Analysis" box
+        // (CapturedReview.analysis TipTap doc). Only fresh (uncached) reviews
+        // reach this loop, so re-runs don't re-write unchanged summaries.
+        await withRetry(() =>
+          prisma.capturedReview.update({
+            where: { id: entry.reviewId },
+            data: {
+              analysis: summaryStringToTipTapDoc(
+                entry.summary
+              ) as Prisma.InputJsonValue,
+            },
           })
         );
       } catch (error) {
@@ -908,10 +1000,20 @@ export function makeReviewAnalysisRunBatchHandlers(
     const summaries: PerReviewBatchResponseEntry[] = reviewIds.map((id) => {
       const cached = cachedByReviewId.get(id);
       if (cached !== undefined) {
-        return { reviewId: id, summary: cached, source: 'cache' as const };
+        return {
+          reviewId: id,
+          summary: cached,
+          source: 'cache' as const,
+          analysisId: cachedAnalysisIdByReviewId.get(id) ?? '',
+        };
       }
       const fresh = freshByReviewId.get(id) ?? '';
-      return { reviewId: id, summary: fresh, source: 'fresh' as const };
+      return {
+        reviewId: id,
+        summary: fresh,
+        source: 'fresh' as const,
+        analysisId: freshAnalysisIdByReviewId.get(id) ?? '',
+      };
     });
 
     const responseBody: PerReviewBatchResponseBody = {

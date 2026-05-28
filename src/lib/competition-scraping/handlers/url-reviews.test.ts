@@ -23,6 +23,7 @@ function makeRow(overrides: Partial<CapturedReviewRow> = {}): CapturedReviewRow 
     clientId: 'client-1',
     competitorUrlId: 'url-1',
     starRating: 5,
+    title: null,
     body: 'great product',
     reviewerName: null,
     reviewDate: null,
@@ -67,6 +68,7 @@ function makeFakePrisma(opts: {
         clientId: data.clientId,
         competitorUrlId: data.competitorUrlId,
         starRating: data.starRating as number,
+        title: (data.title as string | null | undefined) ?? null,
         body: data.body as string,
         reviewerName: (data.reviewerName as string | null | undefined) ?? null,
         reviewDate: (data.reviewDate as Date | null | undefined) ?? null,
@@ -312,6 +314,78 @@ test('POST 201 happy path — default source manual', async () => {
   assert.deepEqual(wire.tags, ['shipping', 'quality']);
   assert.equal(state.createCalls.length, 1);
   assert.equal(state.createCalls[0].data.source, 'manual');
+});
+
+// P-49 W5 Fix Session B (2026-05-30; Q3) — review title pass-through.
+test('POST 201 persists title when provided + trims it; returns it on the wire', async () => {
+  const { prisma, state } = makeFakePrisma();
+  const deps: UrlReviewsHandlerDeps = {
+    prisma,
+    verifyAuth: authOk,
+    markWorkflowActive: async () => {},
+    recordFlake: () => {},
+    withRetry: (fn) => fn(),
+  };
+  const { POST } = makeUrlReviewsHandlers(deps);
+  const r = await POST(
+    makeReq({
+      body: {
+        clientId: 'c1',
+        starRating: 4,
+        title: '  Great headline  ',
+        body: 'good product',
+      },
+    }),
+    ctx
+  );
+  assert.equal(r.status, 201);
+  assert.equal(state.createCalls[0].data.title, 'Great headline');
+  const wire = r.body as { title: string | null };
+  assert.equal(wire.title, 'Great headline');
+});
+
+test('POST 201 stores title as null when omitted or blank', async () => {
+  const { prisma, state } = makeFakePrisma();
+  const deps: UrlReviewsHandlerDeps = {
+    prisma,
+    verifyAuth: authOk,
+    markWorkflowActive: async () => {},
+    recordFlake: () => {},
+    withRetry: (fn) => fn(),
+  };
+  const { POST } = makeUrlReviewsHandlers(deps);
+  const r1 = await POST(
+    makeReq({ body: { clientId: 'c1', starRating: 4, body: 'b' } }),
+    ctx
+  );
+  assert.equal(r1.status, 201);
+  assert.equal(state.createCalls[0].data.title, null);
+  const r2 = await POST(
+    makeReq({ body: { clientId: 'c2', starRating: 4, title: '   ', body: 'b' } }),
+    ctx
+  );
+  assert.equal(r2.status, 201);
+  assert.equal(state.createCalls[1].data.title, null);
+});
+
+test('POST 400 when title is a non-string non-null value', async () => {
+  const { prisma } = makeFakePrisma();
+  const deps: UrlReviewsHandlerDeps = {
+    prisma,
+    verifyAuth: authOk,
+    markWorkflowActive: async () => {},
+    recordFlake: () => {},
+    withRetry: (fn) => fn(),
+  };
+  const { POST } = makeUrlReviewsHandlers(deps);
+  const r = await POST(
+    makeReq({
+      body: { clientId: 'c1', starRating: 4, body: 'b', title: 123 },
+    }),
+    ctx
+  );
+  assert.equal(r.status, 400);
+  assert.match(JSON.stringify(r.body), /title must be a string or null/);
 });
 
 test('POST 200 idempotent on P2002 — returns existing row by clientId', async () => {

@@ -124,11 +124,15 @@ function makePrisma(opts: {
   cachedRows?: StubCachedRow[];
   cachedFindManyThrows?: unknown;
   createThrows?: unknown;
+  existingOverallAnalyses?: Prisma.JsonValue;
 }): {
   prisma: ReviewAnalysisRunBatchPrismaLike;
   state: {
     createCalls: Array<{ data: Prisma.ReviewAnalysisUncheckedCreateInput }>;
     cacheFindManyCalls: number;
+    // P-49 W5 Fix Session B write-back call captures.
+    urlUpdateCalls: Array<{ overallAnalyses: Prisma.InputJsonValue }>;
+    reviewUpdateCalls: Array<{ id: string; analysis: Prisma.InputJsonValue }>;
   };
 } {
   const state = {
@@ -136,6 +140,11 @@ function makePrisma(opts: {
       data: Prisma.ReviewAnalysisUncheckedCreateInput;
     }>,
     cacheFindManyCalls: 0,
+    urlUpdateCalls: [] as Array<{ overallAnalyses: Prisma.InputJsonValue }>,
+    reviewUpdateCalls: [] as Array<{
+      id: string;
+      analysis: Prisma.InputJsonValue;
+    }>,
   };
   const prisma: ReviewAnalysisRunBatchPrismaLike = {
     competitorUrl: {
@@ -148,9 +157,23 @@ function makePrisma(opts: {
               productName: 'Stub Product',
             }
           : opts.url,
+      findUnique: async () => ({
+        overallAnalyses: opts.existingOverallAnalyses ?? {},
+      }),
+      update: async (args) => {
+        state.urlUpdateCalls.push({ overallAnalyses: args.data.overallAnalyses });
+        return { id: args.where.id };
+      },
     },
     capturedReview: {
       findMany: async () => opts.reviews ?? [],
+      update: async (args) => {
+        state.reviewUpdateCalls.push({
+          id: args.where.id,
+          analysis: args.data.analysis,
+        });
+        return { id: args.where.id };
+      },
     },
     reviewAnalysis: {
       findMany: async (args) => {
@@ -485,6 +508,81 @@ test('POST 200 on a fresh batch — one AI call, N persisted rows, summaries ret
     summary: string;
   };
   assert.equal(firstWrite.reviewId, 'rev-a');
+});
+
+// ─── Fix Session B (2026-05-30) — per-review write-back + analysisId ─────
+
+test('per-review fresh — writes summary back to CapturedReview.analysis (D-9) + returns analysisId (D-11)', async () => {
+  const reviews = [sampleReview('rev-a'), sampleReview('rev-b')];
+  const { prisma, state: prismaState } = makePrisma({ reviews });
+  const modelResponse = makeAnthropicMessage(
+    JSON.stringify({
+      summaries: [
+        { reviewId: 'rev-a', summary: '- durable\n- comfy' },
+        { reviewId: 'rev-b', summary: '- runs small' },
+      ],
+    })
+  );
+  const { client } = makeAnthropicClient({ createResult: modelResponse });
+  const deps = makeDeps({ prisma, anthropicClient: client });
+  const { POST } = makeReviewAnalysisRunBatchHandlers(deps);
+  const r = await POST(
+    makeRequest({
+      flow: 'per-review-summarize',
+      urlId: 'url-1',
+      reviewIds: ['rev-a', 'rev-b'],
+    }),
+    makeCtx('proj-1')
+  );
+  assert.equal(r.status, 200);
+  const body = r.body as PerReviewBatchResponseBody;
+  // D-11: each entry carries the analysisId from the freshly-created row.
+  assert.equal(body.summaries[0].analysisId, 'analysis-1');
+  assert.equal(body.summaries[1].analysisId, 'analysis-2');
+  // D-9: one CapturedReview.analysis write-back per fresh review.
+  assert.equal(prismaState.reviewUpdateCalls.length, 2);
+  assert.equal(prismaState.reviewUpdateCalls[0].id, 'rev-a');
+  // The write-back is a TipTap doc (not the raw string).
+  const doc = prismaState.reviewUpdateCalls[0].analysis as { type?: string };
+  assert.equal(doc.type, 'doc');
+});
+
+test('per-review cache hit — analysisId comes from the cached row id', async () => {
+  const reviews = [sampleReview('rev-a')];
+  const cachedHash = computeReviewsHash(
+    [{ id: 'rev-a' }],
+    `claude-opus-4-7|${PER_REVIEW_SUMMARIZE_PROMPT_VERSION}`
+  );
+  const { prisma } = makePrisma({
+    reviews,
+    cachedRows: [
+      {
+        id: 'analysis-cached-xyz',
+        reviewsHash: cachedHash,
+        analysisJson: {
+          reviewId: 'rev-a',
+          summary: 'cached summary',
+        } as Prisma.JsonValue,
+        modelVersion: 'claude-opus-4-7',
+        level: 'PER_REVIEW',
+      },
+    ],
+  });
+  const { client } = makeAnthropicClient({});
+  const deps = makeDeps({ prisma, anthropicClient: client });
+  const { POST } = makeReviewAnalysisRunBatchHandlers(deps);
+  const r = await POST(
+    makeRequest({
+      flow: 'per-review-summarize',
+      urlId: 'url-1',
+      reviewIds: ['rev-a'],
+    }),
+    makeCtx('proj-1')
+  );
+  assert.equal(r.status, 200);
+  const body = r.body as PerReviewBatchResponseBody;
+  assert.equal(body.summaries[0].source, 'cache');
+  assert.equal(body.summaries[0].analysisId, 'analysis-cached-xyz');
 });
 
 // ─── Cache-hit path — no AI call needed ─────────────────────────────
@@ -831,6 +929,82 @@ test('per-competitor 200 fresh — one AI call, ONE persisted PER_PRODUCT row, s
   };
   assert.match(written.summary, /## Product critiques/);
   assert.equal(written.reviewId, undefined);
+});
+
+// ─── Fix Session B (2026-05-30) — per-competitor bulleted write-back ─────
+
+test('per-competitor fresh — appends summary to overallAnalyses.reviews (D-10), preserving existing content', async () => {
+  const reviews = [sampleReview('rev-a'), sampleReview('rev-b')];
+  const { prisma, state: prismaState } = makePrisma({
+    reviews,
+    // The box already has a director-written paragraph — append must keep it.
+    existingOverallAnalyses: {
+      reviews: {
+        type: 'doc',
+        content: [
+          { type: 'paragraph', content: [{ type: 'text', text: 'prior note' }] },
+        ],
+      },
+    } as Prisma.JsonValue,
+  });
+  const modelResponse = makeAnthropicMessage(
+    JSON.stringify({ summary: '## Themes\n- strap breaks\n- runs small' })
+  );
+  const { client } = makeAnthropicClient({ createResult: modelResponse });
+  const deps = makeDeps({ prisma, anthropicClient: client });
+  const { POST } = makeReviewAnalysisRunBatchHandlers(deps);
+  const r = await POST(
+    makeRequest({
+      flow: 'per-competitor-bulleted',
+      urlId: 'url-1',
+      reviewIds: ['rev-a', 'rev-b'],
+    }),
+    makeCtx('proj-1')
+  );
+  assert.equal(r.status, 200);
+  // One overallAnalyses write-back.
+  assert.equal(prismaState.urlUpdateCalls.length, 1);
+  const bag = prismaState.urlUpdateCalls[0].overallAnalyses as {
+    reviews: { type: string; content: Array<{ type: string }> };
+  };
+  // Prior content preserved at the top; new content appended below.
+  assert.equal(bag.reviews.type, 'doc');
+  assert.ok(bag.reviews.content.length >= 2);
+  assert.equal(bag.reviews.content[0].type, 'paragraph'); // the prior note
+});
+
+test('per-competitor cache hit — no overallAnalyses write-back (no duplicate append)', async () => {
+  const reviews = [sampleReview('rev-a'), sampleReview('rev-b')];
+  const corpusHash = computeReviewsHash(
+    [{ id: 'rev-a' }, { id: 'rev-b' }],
+    `claude-opus-4-7|${PER_COMPETITOR_BULLETED_PROMPT_VERSION}`
+  );
+  const { prisma, state: prismaState } = makePrisma({
+    reviews,
+    cachedRows: [
+      {
+        id: 'pc-cached',
+        reviewsHash: corpusHash,
+        analysisJson: { summary: 'cached competitor summary' } as Prisma.JsonValue,
+        modelVersion: 'claude-opus-4-7',
+        level: 'PER_PRODUCT',
+      },
+    ],
+  });
+  const { client } = makeAnthropicClient({});
+  const deps = makeDeps({ prisma, anthropicClient: client });
+  const { POST } = makeReviewAnalysisRunBatchHandlers(deps);
+  const r = await POST(
+    makeRequest({
+      flow: 'per-competitor-bulleted',
+      urlId: 'url-1',
+      reviewIds: ['rev-a', 'rev-b'],
+    }),
+    makeCtx('proj-1')
+  );
+  assert.equal(r.status, 200);
+  // Cache hit → NO write-back (re-runs must not duplicate the appended block).
+  assert.equal(prismaState.urlUpdateCalls.length, 0);
 });
 
 test('per-competitor 200 from cache — no AI call, no DB writes', async () => {

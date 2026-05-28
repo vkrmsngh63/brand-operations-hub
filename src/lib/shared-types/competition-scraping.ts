@@ -942,6 +942,11 @@ export interface CapturedReview {
   clientId: string;
   competitorUrlId: string;
   starRating: number; // 1-5; range validated at application layer
+  // P-49 Workstream 5 Reviews Phase 2 Fix Session B (2026-05-30) — review headline.
+  // Extractors (amazon/walmart) capture it; the orchestrator saveReview adapters now
+  // pass it through (previously dropped). Null for pre-2026-05-30 rows + body-only
+  // reviews (eBay/Etsy + ~60% of Walmart). Table renders 'title. body' at display time.
+  title: string | null;
   body: string;
   reviewerName: string | null;
   reviewDate: string | null; // ISO date string when present
@@ -973,6 +978,9 @@ export interface CreateCapturedReviewRequest {
   clientId: string;
   starRating: number; // 1-5
   body: string;
+  // P-49 W5 Fix Session B (2026-05-30) — optional review headline passed through
+  // from the extension extractors. Omit / null for body-only reviews.
+  title?: string | null;
   reviewerName?: string;
   reviewDate?: string; // ISO date string
   tags?: string[];

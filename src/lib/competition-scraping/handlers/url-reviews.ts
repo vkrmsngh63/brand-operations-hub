@@ -36,6 +36,7 @@ export type CapturedReviewRow = {
   clientId: string;
   competitorUrlId: string;
   starRating: number;
+  title: string | null; // P-49 W5 Fix Session B (2026-05-30)
   body: string;
   reviewerName: string | null;
   reviewDate: Date | null;
@@ -86,6 +87,7 @@ export function toWireShape(row: CapturedReviewRow | null): CapturedReview | nul
     clientId: row.clientId,
     competitorUrlId: row.competitorUrlId,
     starRating: row.starRating,
+    title: row.title,
     body: row.body,
     reviewerName: row.reviewerName,
     reviewDate: row.reviewDate ? row.reviewDate.toISOString() : null,
@@ -264,10 +266,25 @@ export function makeUrlReviewsHandlers(deps: UrlReviewsHandlerDeps) {
         ? body.reviewerName.trim()
         : null;
 
+    // P-49 W5 Fix Session B (2026-05-30) — review headline. Trim + collapse
+    // empty to null so body-only reviews carry null (matches reviewerName).
+    if (
+      body.title !== undefined &&
+      body.title !== null &&
+      typeof body.title !== 'string'
+    ) {
+      return { status: 400, body: { error: 'title must be a string or null' } };
+    }
+    const title =
+      typeof body.title === 'string' && body.title.trim()
+        ? body.title.trim()
+        : null;
+
     const createData: Prisma.CapturedReviewUncheckedCreateInput = {
       clientId,
       competitorUrlId: urlId,
       starRating: body.starRating,
+      title,
       body: body.body,
       reviewerName,
       reviewDate: parsedReviewDate.date,
