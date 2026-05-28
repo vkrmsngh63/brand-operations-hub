@@ -1742,6 +1742,106 @@ Running cumulative across recent sessions adds 8/8 to the prior 70/73 = **78/81 
 
 ---
 
+## §B 2026-05-28 — `session_2026-05-28_p49-w5-session-4-scope-misread-rollback-and-corrective-planning` — Workstream 5 Session 4 — SCOPE-MISREAD ROLLBACK + CORRECTIVE-PLANNING SESSION — wrong-spec build commit `5fa1f53` (8 files +2705/-54) shipped to vklf.com and was HARD-REVERTED mid-Phase-4 via revert commit `958ccf8` (8 files +54/-2705); director established NEW Rule 31 (polish-item spec capture) + Claude backfilled 3 NEW spec docs in NEW `docs/polish-item-specs/` directory; 5-session corrective rebuild plan locked; Block 1 planning paused mid-way with 6 open questions — TWELFTH build/deploy-session §B entry per Rule 18 — FOURTH W5 entry; FIRST W5 entry covering a revert; first major divergence-incident under the post-`feedback_plan_output_shape_before_building.md` regime (the rule shipped 2026-06-02 W5 Session 1 and was meant to prevent exactly this class of failure; the 2026-05-28 incident is a RE-VIOLATION; NEW Rule 31 + the spec-doc mechanism are the structural backstop going forward).
+
+**Closes (a.105) RECOMMENDED-NEXT** = P-49 W5 Session 4 wrong-spec build SHIPPED + HARD-REVERTED. **Opens (a.106) RECOMMENDED-NEXT** = **P-49 W5 corrective rebuild — Block 1 planning resume (answer the 6 open questions) + (likely) Session 1 Category page scaffold per `docs/polish-item-specs/P-49-W5-S4-category-page.md` §3** on `workflow-2-competition-scraping`.
+
+### Scope-misread + rollback summary
+
+The launch prompt for this session (`docs/NEXT_SESSION.md` written 2026-05-27-c) directed Claude to build "P-49 W5 Session 4 — Per-Category Comprehensive (bulleted) flow + NEW 'By Category-Type' page (Table 3 scaffold)". Claude framed a pre-build joint-confirmation per `feedback_plan_output_shape_before_building.md` pinning the high-level shape: "one row per category with rows collapsing competitors that share the category; browser-side execution per the W#1 Pattern; one bulleted flow first; deploy after Phase 4 PASSES". Director approved with "all good as proposed". Claude built + scoreboard-verified + ff-merged to main + Vercel auto-redeployed.
+
+During the live Phase 4 walkthrough on vklf.com, director surfaced a **MAJOR scope misread**. The director's actual spec (preserved verbatim in the new spec doc at `docs/polish-item-specs/P-49-W5-S4-category-page.md` §1) required TWO separate pages (Category page + Type page) + flat 13-column tables (not card-style grouping) + first-row-carries-label grouping (subsequent rows in a category group leave Column 1 EMPTY) + per-batch endpoint architecture (server-side, mirroring W5 Sessions 2-3) + 4 AI flows (Category bulleted + non-bulleted × Category page + Type page) + click-to-edit on populated cells + drag-to-reorder (two-level — main category rows + competitor rows within a category) + Excel export + write-back to URL detail's "Overall Analysis — Captured Reviews" box (merge, never overwrite). Claude had built ONE combined page + card-style grouping + browser-side execution + 1 AI flow + none of the other surfaces.
+
+The full divergence table is reproduced verbatim in `docs/CORRECTIONS_LOG.md` §Entry 2026-05-28 §(a).
+
+**Root cause:** the pre-build joint-confirmation step DID fire this session BUT pinned the **high-level shape** without pinning the **concrete particulars** — concrete column list (director's spec named 13 specific columns; the proposal said "essential columns"), concrete button labels (director's spec named four specific buttons; the proposal said "Summarize button"), concrete AI-flow counts (director's spec was four; the proposal was one), concrete execution-model semantics (director's spec was server-side per-batch; the proposal was browser-side per `feedback_browser_first_ai_with_server_migration.md` default without checking whether director's verbatim spec contradicted that default). Director's "all good as proposed" approved an abstract proposal that diverged from the concrete spec in director's mind. **This is a RE-VIOLATION of `feedback_plan_output_shape_before_building.md`** — the rule already existed and Claude executed the protocol's surface form (proposal + confirmation) without the protocol's intent (every load-bearing concrete detail confirmed). NEW Rule 31 + the spec-doc mechanism are the structural backstop going forward.
+
+Director picked the hard-revert picker option (a) over leave-tab-live-and-patch-later (b) and quick-patch-hide-tab-only (c). Revert commit `958ccf8` deleted all 8 files from the build commit + the NEW P-51 ROADMAP skeleton entry that landed in the same build commit. Build commit `5fa1f53` remains in git history on both `main` and `workflow-2-competition-scraping` for forensic audit trail. Live site returned to W5 Session 3 deploy state. No data lost since no `prisma db push` fired this session.
+
+### 5-session corrective rebuild plan locked (per director Q4 "play the expert, safe + thorough")
+
+- **Session 1** = Category page scaffold (route + 13-column flat table + first-row-carries-label grouping + column show/hide checkboxes + click-to-edit cells; NO drag, NO AI, NO Excel; smallest verifiable unit to lock the table primitive against director's spec before stacking interactions atop it).
+- **Session 2** = Category page two AI flows (bulleted dedup + non-bulleted prose) + real-time per-cell painting as each per-category Anthropic call returns + write-back to URL detail's "Overall Analysis — Captured Reviews" box for the non-bulleted flow (merge, never overwrite).
+- **Session 3** = Category page two-level drag-to-reorder + drag persistence + Excel export with `.xlsx` library (TBD between `xlsx` and `exceljs` during session planning).
+- **Session 4** = Type page scaffold + drag + Excel together (compressed since pattern proven by Category page Sessions 1 + 3 by then; Type page is structurally identical to Category page so the scaffold + drag + Excel ship in one Type-page session).
+- **Session 5** = Type page two AI flows (mirror Session 2 with Type/type substituted for Category/category).
+
+The two canonical reference docs for the corrective rebuild:
+- `docs/polish-item-specs/P-49-W5-S4-category-page.md` §3 — Category page consolidated source-of-truth (Sessions 1-3).
+- `docs/polish-item-specs/P-49-W5-S5-type-page.md` §3 — Type page consolidated source-of-truth (Sessions 4-5).
+
+### Block 1 planning paused mid-way — 6 open questions awaiting director answers
+
+These 6 questions are captured in `docs/polish-item-specs/P-49-W5-S4-category-page.md` §4 and reproduced in the launch prompt of `docs/NEXT_SESSION.md` for next session pickup:
+
+- **Q-A** — Column 8 "Stars" semantics (per-review breakdown vs URL-level rating).
+- **Q-B** — Column 9 "Reviews Summary" data source + rendering (per-review summarization output stacked list vs count + click-to-expand).
+- **Q-C** — Column 11 "Competitor Comprehensive Reviews Analysis (non-bulleted)" — NOT yet a shipped flow at per-competitor level; drop column / placeholder + per-row Generate button firing NEW per-competitor non-bulleted flow / piggyback on Session 2 non-bulleted flow.
+- **1b-i** — Visual treatment of first-row-carries-label grouping (literal empty cell vs subtle visual signal like thin top-border + indent + "↑ same as above" hint).
+- **1b-ii** — Drag handle placement (dedicated leftmost column / hover-anywhere-in-row / hover-on-first-column-cell).
+- **1b-iii** — Uncategorized bucket placement + Auto-create button disabled state.
+
+### NEW Rule 31 cross-reference
+
+NEW Rule 31 added inline to `docs/HANDOFF_PROTOCOL.md` at line 936 — "Whenever the director introduces a NEW polish item with detailed instructions — OR adds substantial new scope to an existing polish item — the responsible Claude session MUST IMMEDIATELY (same session) create or extend a spec doc at `docs/polish-item-specs/<item-id>-<slug>.md` capturing the director's verbatim instructions." Standardized 5-section structure: §1 verbatim append-only / §2 joint-discussion append-only / §3 consolidated source-of-truth / §4 open questions / §5 cross-references. The §3 read is mandatory at session start for every session that touches a polish item with a spec doc. Director's verbatim 2026-05-28 standing directive (Rule 31 source quotation): *"I want us to make a note of this huge disparity in what I had instructed and what you developed and put something in the documentation that will prevent such a thing from happening in the future..."*
+
+### Backfill artifacts created this session
+
+THREE NEW spec docs in NEW `docs/polish-item-specs/` directory:
+
+1. **`docs/polish-item-specs/P-49-W5-S4-category-page.md`** (25 KB) — Category page; §1 verbatim director instructions + §2 Block-0 architecture decisions resolved in mid-session Q&A + §3 consolidated spec rolled-up + §4 6 open questions for Block 1 + §5 cross-references.
+2. **`docs/polish-item-specs/P-49-W5-S5-type-page.md`** (15 KB) — Type page; structurally mirrors Category; the canonical reference for Sessions 4-5 of the corrective rebuild.
+3. **`docs/polish-item-specs/P-51-comprehensive-analysis-ai-summary.md`** (7 KB) — SKELETON PLACEHOLDER per director's "Q&A at start of P-51 session" directive; §2-§4 to be filled during the dedicated P-51 build session.
+
+### Scoreboard verification
+
+| Check | Pre-deploy (entry — from W5 Session 3 close) | Mid-session (post-build `5fa1f53`, pre-deploy) | Post-revert (current LOCKED — UNCHANGED from W5 Session 3 exit) |
+|---|---|---|---|
+| Root tsc | clean | clean | clean |
+| Extension tsc | clean | clean | clean |
+| Extension `npm test` | 910/910 | 910/910 UNCHANGED | **910/910 UNCHANGED** |
+| src/lib `node:test` | 950/950 | 968/968 (+18 — new per-category-type prompt + handler + modal tests) | **950/950 (back to entry baseline)** |
+| `npm run build` routes | 67 | 68 (+1 — new by-category-type page) | **67 (back to entry baseline)** |
+| Check 6 Playwright | SKIPPED Rule 27 | SKIPPED | SKIPPED |
+
+**NEW baselines locked from this session:** UNCHANGED from W5 Session 3 exit (since the build was hard-reverted): src/lib `node:test` = **950/950** + `npm run build` = **67 routes** + extension `npm test` = **910/910 UNCHANGED**.
+
+### Schema-change-in-flight transitions
+
+STAYS NO entire session. Entry NO (PER_PROJECT enum value already in production from W5 Session 1.5 schema push 2026-05-27). STAYS NO through the build (no `prisma db push` fired; the wrong-spec build reused existing PER_PRODUCT + PER_CATEGORY enum values). STAYS NO through the revert. Final state at session end: NO. The corrective rebuild plan also does NOT require schema changes (existing PER_PRODUCT + PER_CATEGORY + PER_TYPE + PER_PROJECT enum values cover all upcoming work; existing `ReviewAnalysis` model is sufficient; existing `CompetitorUrl.competitionCategory` + `.type` + `.overallAnalyses` columns cover all data sources).
+
+### §A sections affected by this entry
+
+- **§A.10 + §A.11 + §A.12** remain superseded by §B 2026-05-27 (per Rule 18 §A frozen since W5 Session 1.5 design lock).
+- **§A.13 prompt content + the §B 2026-05-27 line-1474 reference to "7 v1 prompts locked during planning"** remain superseded by §B 2026-05-27-b.
+- **The 7-flow modal-per-flow surface architecture from §B 2026-05-27 design lock** is partially superseded for the Category + Type aggregation flows by today's 5-session corrective rebuild plan (TWO separate pages with flat 13-column tables vs the 7-flow modal-per-flow architecture); the **cache-key + per-batch endpoint architecture from §B 2026-05-27-b (W5 Session 2)** and the **v3 critique-only theme-emergent prompt shape from §B 2026-05-27-c (W5 Session 3)** are PRESERVED for the per-competitor input column (Column 10 of the Category page reads cached PER_PRODUCT rows produced by the W5 Session 3 Per-Competitor bulleted flow with the v3 prompt). §A frozen per Rule 18; this supersedence is captured in §B only.
+- **No new §A supersedences in this entry** beyond the surface-architecture-of-Category-and-Type-pages note above.
+
+### TaskList sweep this session (Rule 26)
+
+7 in-session tasks; all 7 completed cleanly. Task #5 (`DEFERRED: corrective rebuild — TWO separate surfaces`) → COMPLETED. Destination = the two new spec docs `docs/polish-item-specs/P-49-W5-S4-category-page.md` + `docs/polish-item-specs/P-49-W5-S5-type-page.md` + the ROADMAP P-49 cross-reference to those spec docs. Task #6 (`DEFERRED: Capture CORRECTIONS_LOG entry — HIGH-importance scope-misread`) → COMPLETED via the new CORRECTIONS_LOG §Entry 2026-05-28 in this doc-batch. Task #7 (`Backfill polish-item-specs directory + Rule 31 + 3 spec docs`) → COMPLETED earlier in session. ZERO open `DEFERRED:` tasks at session end; ZERO open `in_progress` tasks at session end; W5 corrective rebuild Block 1 planning resume IS the next-session task per (a.106), not a Claude-defer.
+
+### Per Rule 23 Change Impact Audit
+
+No net code surface touched this session — the build commit `5fa1f53` was reverted in `958ccf8`; only persistent surface changes this session are doc-only (NEW directory `docs/polish-item-specs/` with 3 NEW spec docs + NEW Rule 31 in HANDOFF_PROTOCOL.md line 936 + ROADMAP P-49 + P-51 entry cross-reference updates). No data risk. No schema work. Zero downstream W#1 cross-tool impact.
+
+### Cross-references
+
+- `docs/CORRECTIONS_LOG.md` §Entry 2026-05-28 (HIGH) — captures the same outcome from the meta-pattern perspective (with the divergence-table reproduced verbatim) + root cause + NEW Rule 31 + 5-session corrective rebuild plan + 6 open Block 1 questions paused mid-way + 3 sub-observations.
+- `docs/HANDOFF_PROTOCOL.md` Rule 31 (NEW this session, line 936) — the protocol mandate for polish-item spec capture.
+- `docs/polish-item-specs/P-49-W5-S4-category-page.md` — Category page spec; the canonical reference for Sessions 1-3 of the corrective rebuild.
+- `docs/polish-item-specs/P-49-W5-S5-type-page.md` — Type page spec; the canonical reference for Sessions 4-5 of the corrective rebuild.
+- `docs/polish-item-specs/P-51-comprehensive-analysis-ai-summary.md` — P-51 skeleton placeholder.
+- `feedback_plan_output_shape_before_building.md` — the related procedural memory (rule shipped 2026-06-02 W5 Session 1); today's incident is a RE-VIOLATION of this rule; Rule 31 + the spec-doc mechanism are the structural backstop.
+- §B 2026-05-27 above (W5 Session 1.5 design lock) — predecessor entry; today's corrective rebuild plan supersedes its surface architecture for the Category + Type aggregation flows.
+- §B 2026-05-27-b above (W5 Session 2 per-batch endpoint + Per-Review Summarize) — predecessor entry; the cache-key + per-batch endpoint architecture from that entry is PRESERVED in the corrective rebuild.
+- §B 2026-05-27-c above (W5 Session 3 Per-Competitor deploy + 2-FF cycles) — predecessor entry; the v3 critique-only theme-emergent prompt shape from that entry is PRESERVED for the per-competitor input column (Column 10) of the corrective-rebuild Category page.
+- Commits `5fa1f53` (wrong-spec build SHIPPED + then REVERTED) + `958ccf8` (revert; CURRENT HEAD on both `main` and `workflow-2-competition-scraping`) — forensic audit trail of the scope-misread incident.
+
+**Closing line:** P-49 W5 Session 4 SCOPE-MISREAD ROLLBACK + CORRECTIVE-PLANNING SESSION on `workflow-2-competition-scraping`. Wrong-spec build commit `5fa1f53` (8 files +2705/-54 — single combined "By Category-Type" page + card-style grouping + browser-side execution + 1 AI flow + NEW P-51 ROADMAP skeleton) SHIPPED to vklf.com via ff-merge to main + Vercel auto-redeploy and was HARD-REVERTED mid-Phase-4 via revert commit `958ccf8` (8 files +54/-2705); net live-site change = ZERO since the revert returned the site to the W5 Session 3 deploy state. NEW Rule 31 added inline to HANDOFF_PROTOCOL.md line 936 — Polish-item spec capture: verbatim director instructions checked into `docs/polish-item-specs/<item-id>-<slug>.md` per the standardized 5-section structure. THREE NEW spec docs backfilled in NEW `docs/polish-item-specs/` directory. 5-session corrective rebuild plan locked; Block 1 planning paused mid-way with 6 open questions awaiting director answers at next session start. THREE Rule 14f forced-pickers fired this session — 3/3 = 100% Yes-to-Recommended. TWO Rule 9 deploy gates fired (build deploy + hard-revert deploy). Schema-change-in-flight flag STAYS NO entire session. NEW baselines UNCHANGED from W5 Session 3 exit. **Closes (a.105) RECOMMENDED-NEXT** = P-49 W5 Session 4 wrong-spec build SHIPPED + HARD-REVERTED. **Opens (a.106) RECOMMENDED-NEXT = P-49 W5 corrective rebuild — Block 1 planning resume + (likely) Session 1 Category page scaffold per `docs/polish-item-specs/P-49-W5-S4-category-page.md` §3** on `workflow-2-competition-scraping`. **TWELFTH build/deploy-session §B entry per Rule 18 — FOURTH W5 entry; FIRST W5 entry covering a revert.** The next §B entry will land at the close of Session 1 of the corrective rebuild (Category page scaffold per `docs/polish-item-specs/P-49-W5-S4-category-page.md` §3 — route + 13-column flat table + first-row-carries-label grouping + column show/hide + click-to-edit; NO drag, NO AI, NO Excel).
+
+---
+
 ---
 
 END OF DOCUMENT
