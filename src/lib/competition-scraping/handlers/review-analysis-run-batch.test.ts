@@ -13,7 +13,6 @@ import { computeReviewsHash } from '../review-analysis/cache.ts';
 import {
   PER_REVIEW_SUMMARIZE_PROMPT_VERSION,
   PER_COMPETITOR_BULLETED_PROMPT_VERSION,
-  PER_CATEGORY_BULLETED_PROMPT_VERSION,
 } from '../review-analysis/prompts.ts';
 
 import {
@@ -26,7 +25,6 @@ import {
   type CapturedReviewForBatchRow,
   type CompetitorUrlForBatchRow,
   type Ctx,
-  type PerCategoryBulletedResponseBody,
   type PerCompetitorBulletedResponseBody,
   type PerReviewBatchResponseBody,
   type RequestLike,
@@ -115,18 +113,9 @@ function makeAnthropicClient(opts: {
 // ReviewAnalysisCachedRow with a `level` field so the stub can filter
 // by level the way real Prisma would. Production never selects `level`
 // back (the WHERE clause filters before select), but the stub needs to
-// know each seeded row's level to mirror real lookups. PER_CATEGORY
-// rows additionally carry a `typeFilter` so the stub can mirror the
-// typeFilter discriminator from real Prisma.
+// know each seeded row's level to mirror real lookups.
 type StubCachedRow = ReviewAnalysisCachedRow & {
-  level: 'PER_REVIEW' | 'PER_PRODUCT' | 'PER_CATEGORY';
-  typeFilter?: string | null;
-};
-
-// Per-Category stub URL row — carries competitionCategory so the
-// stub can mirror the category-mismatch defense check.
-type StubCategoryUrlRow = CompetitorUrlForBatchRow & {
-  competitionCategory: string | null;
+  level: 'PER_REVIEW' | 'PER_PRODUCT';
 };
 
 function makePrisma(opts: {
@@ -135,17 +124,11 @@ function makePrisma(opts: {
   cachedRows?: StubCachedRow[];
   cachedFindManyThrows?: unknown;
   createThrows?: unknown;
-  // Per-Category stubs:
-  categoryUrls?: StubCategoryUrlRow[];
-  categoryUrlsThrows?: unknown;
-  categoryReviewsThrows?: unknown;
 }): {
   prisma: ReviewAnalysisRunBatchPrismaLike;
   state: {
     createCalls: Array<{ data: Prisma.ReviewAnalysisUncheckedCreateInput }>;
     cacheFindManyCalls: number;
-    categoryUrlsCalls: number;
-    categoryReviewsCalls: number;
   };
 } {
   const state = {
@@ -153,8 +136,6 @@ function makePrisma(opts: {
       data: Prisma.ReviewAnalysisUncheckedCreateInput;
     }>,
     cacheFindManyCalls: 0,
-    categoryUrlsCalls: 0,
-    categoryReviewsCalls: 0,
   };
   const prisma: ReviewAnalysisRunBatchPrismaLike = {
     competitorUrl: {
@@ -167,39 +148,9 @@ function makePrisma(opts: {
               productName: 'Stub Product',
             }
           : opts.url,
-      findMany: async (args) => {
-        state.categoryUrlsCalls++;
-        if (opts.categoryUrlsThrows !== undefined) {
-          throw opts.categoryUrlsThrows;
-        }
-        const wantedIds = new Set(args.where.id.in);
-        return (opts.categoryUrls ?? []).filter((u) => wantedIds.has(u.id));
-      },
     },
     capturedReview: {
-      findMany: async (args) => {
-        // Per-Category path uses { competitorUrlId: { in: [...] } } —
-        // detect that shape via duck typing and surface a separate
-        // throw hook for category-specific tests.
-        const where = args.where as {
-          competitorUrlId?: { in: string[] } | string;
-        };
-        if (
-          where.competitorUrlId &&
-          typeof where.competitorUrlId === 'object' &&
-          'in' in where.competitorUrlId
-        ) {
-          state.categoryReviewsCalls++;
-          if (opts.categoryReviewsThrows !== undefined) {
-            throw opts.categoryReviewsThrows;
-          }
-          const wantedUrlIds = new Set(where.competitorUrlId.in);
-          return (opts.reviews ?? []).filter((r) =>
-            wantedUrlIds.has(r.competitorUrlId)
-          );
-        }
-        return opts.reviews ?? [];
-      },
+      findMany: async () => opts.reviews ?? [],
     },
     reviewAnalysis: {
       findMany: async (args) => {
@@ -208,21 +159,16 @@ function makePrisma(opts: {
           throw opts.cachedFindManyThrows;
         }
         // Filter cached rows the same way real Prisma would — by the
-        // reviewsHash IN-clause + the level discriminator (+ typeFilter
-        // for PER_CATEGORY). Cache-key-mismatch tests fail cleanly
-        // when any discriminator drifts.
+        // reviewsHash IN-clause + the level discriminator. This lets
+        // cache-key-mismatch tests fail cleanly (a row with a wrong-
+        // version hash OR a wrong-level row misses the lookup, and
+        // the handler does a fresh AI call).
         const wantedHashes = new Set(args.where.reviewsHash.in);
         const wantedLevel = args.where.level;
-        const wantedTypeFilter =
-          'typeFilter' in args.where ? args.where.typeFilter : undefined;
-        return (opts.cachedRows ?? []).filter((row) => {
-          if (!wantedHashes.has(row.reviewsHash)) return false;
-          if (row.level !== wantedLevel) return false;
-          if (wantedTypeFilter !== undefined) {
-            if ((row.typeFilter ?? null) !== wantedTypeFilter) return false;
-          }
-          return true;
-        });
+        return (opts.cachedRows ?? []).filter(
+          (row) =>
+            wantedHashes.has(row.reviewsHash) && row.level === wantedLevel
+        );
       },
       create: async (args) => {
         state.createCalls.push(args);
@@ -276,16 +222,13 @@ test('SUPPORTED_FLOWS contains all 7 flows from §B 2026-05-27', () => {
   assert.ok(SUPPORTED_FLOWS.includes('per-type-nonbulleted'));
 });
 
-test('SHIPPED_FLOWS in Session 4 contains per-review-summarize + per-competitor-bulleted + per-category-bulleted', () => {
-  assert.equal(SHIPPED_FLOWS.size, 3);
+test('SHIPPED_FLOWS in Session 3 contains per-review-summarize + per-competitor-bulleted', () => {
+  assert.equal(SHIPPED_FLOWS.size, 2);
   assert.ok(SHIPPED_FLOWS.has('per-review-summarize'));
   assert.ok(SHIPPED_FLOWS.has('per-competitor-bulleted'));
-  assert.ok(SHIPPED_FLOWS.has('per-category-bulleted'));
-  // The remaining 4 flows from §B 2026-05-27 land in later sessions.
+  // The other 5 flows from §B 2026-05-27 land in later sessions.
   assert.equal(SHIPPED_FLOWS.has('per-competitor-nonbulleted'), false);
-  assert.equal(SHIPPED_FLOWS.has('per-category-nonbulleted'), false);
-  assert.equal(SHIPPED_FLOWS.has('per-type-bulleted'), false);
-  assert.equal(SHIPPED_FLOWS.has('per-type-nonbulleted'), false);
+  assert.equal(SHIPPED_FLOWS.has('per-category-bulleted'), false);
 });
 
 test('isReviewAnalysisFlow narrows known values', () => {
@@ -381,11 +324,11 @@ test('POST 400 when flow is missing or unknown', async () => {
 test('POST 400 when flow is recognized but not yet shipped', async () => {
   const deps = makeDeps();
   const { POST } = makeReviewAnalysisRunBatchHandlers(deps);
-  // per-type-bulleted is still unshipped as of Session 4 (lands in a
-  // later session); use it as the unshipped tripwire.
+  // per-category-bulleted is still unshipped as of Session 3 (lands in
+  // a later session); use it as the unshipped tripwire.
   const r = await POST(
     makeRequest({
-      flow: 'per-type-bulleted',
+      flow: 'per-category-bulleted',
       urlId: 'url-1',
       reviewIds: ['r1'],
     }),
@@ -1075,404 +1018,4 @@ test('per-competitor does NOT use the per-review prompt version in its cache key
   assert.match(body.summary, /Fresh per-competitor summary/);
   assert.equal(clientState.createCalls.length, 1);
   assert.equal(prismaState.createCalls.length, 1);
-});
-
-// ─── Per-Category (bulleted) dispatch tests — Session 4 ─────────────
-
-function sampleCategoryUrl(
-  id: string,
-  category: string,
-  productName = 'Stub Product'
-): StubCategoryUrlRow {
-  return {
-    id,
-    projectWorkflowId: 'pw-1',
-    platform: 'amazon',
-    productName,
-    competitionCategory: category,
-  };
-}
-
-function sampleCategoryReview(
-  id: string,
-  urlId: string,
-  bodyChars = 100
-): CapturedReviewForBatchRow {
-  return {
-    id,
-    competitorUrlId: urlId,
-    starRating: 4,
-    body: 'review-body-' + 'x'.repeat(bodyChars - 12),
-    reviewerName: 'Stub',
-    reviewDate: new Date('2026-01-15T00:00:00Z'),
-  };
-}
-
-test('per-category 400 when categoryName is missing', async () => {
-  const deps = makeDeps();
-  const { POST } = makeReviewAnalysisRunBatchHandlers(deps);
-  const r = await POST(
-    makeRequest({
-      flow: 'per-category-bulleted',
-      urlIds: ['url-1'],
-    }),
-    makeCtx('proj-1')
-  );
-  assert.equal(r.status, 400);
-  assert.match(JSON.stringify(r.body), /categoryName is required/);
-});
-
-test('per-category 400 when urlIds is missing or empty', async () => {
-  const deps = makeDeps();
-  const { POST } = makeReviewAnalysisRunBatchHandlers(deps);
-  const r1 = await POST(
-    makeRequest({ flow: 'per-category-bulleted', categoryName: 'Foo' }),
-    makeCtx('proj-1')
-  );
-  assert.equal(r1.status, 400);
-  assert.match(JSON.stringify(r1.body), /urlIds must be a non-empty array/);
-
-  const r2 = await POST(
-    makeRequest({
-      flow: 'per-category-bulleted',
-      categoryName: 'Foo',
-      urlIds: [],
-    }),
-    makeCtx('proj-1')
-  );
-  assert.equal(r2.status, 400);
-});
-
-test('per-category 400 when urlIds contains duplicates', async () => {
-  const deps = makeDeps();
-  const { POST } = makeReviewAnalysisRunBatchHandlers(deps);
-  const r = await POST(
-    makeRequest({
-      flow: 'per-category-bulleted',
-      categoryName: 'Foo',
-      urlIds: ['url-a', 'url-a'],
-    }),
-    makeCtx('proj-1')
-  );
-  assert.equal(r.status, 400);
-  assert.match(JSON.stringify(r.body), /contains a duplicate/);
-});
-
-test('per-category 404 when some urlIds are missing in scope', async () => {
-  const { prisma } = makePrisma({
-    categoryUrls: [sampleCategoryUrl('url-a', 'Cat A')],
-  });
-  const deps = makeDeps({ prisma });
-  const { POST } = makeReviewAnalysisRunBatchHandlers(deps);
-  const r = await POST(
-    makeRequest({
-      flow: 'per-category-bulleted',
-      categoryName: 'Cat A',
-      urlIds: ['url-a', 'url-missing'],
-    }),
-    makeCtx('proj-1')
-  );
-  assert.equal(r.status, 404);
-  assert.match(JSON.stringify(r.body), /url-missing/);
-});
-
-test('per-category 409 when a urlId belongs to a different category (stale tab defense)', async () => {
-  // url-b has category "Cat B" but client claims "Cat A" — handler
-  // refuses rather than persisting a wrong-category summary.
-  const { prisma } = makePrisma({
-    categoryUrls: [
-      sampleCategoryUrl('url-a', 'Cat A'),
-      sampleCategoryUrl('url-b', 'Cat B'),
-    ],
-  });
-  const deps = makeDeps({ prisma });
-  const { POST } = makeReviewAnalysisRunBatchHandlers(deps);
-  const r = await POST(
-    makeRequest({
-      flow: 'per-category-bulleted',
-      categoryName: 'Cat A',
-      urlIds: ['url-a', 'url-b'],
-    }),
-    makeCtx('proj-1')
-  );
-  assert.equal(r.status, 409);
-  assert.match(JSON.stringify(r.body), /no longer belong to category/);
-});
-
-test('per-category 400 when no reviews are captured for any URL', async () => {
-  const { prisma } = makePrisma({
-    categoryUrls: [sampleCategoryUrl('url-a', 'Cat A')],
-    reviews: [], // empty — no captured reviews
-  });
-  const deps = makeDeps({ prisma });
-  const { POST } = makeReviewAnalysisRunBatchHandlers(deps);
-  const r = await POST(
-    makeRequest({
-      flow: 'per-category-bulleted',
-      categoryName: 'Cat A',
-      urlIds: ['url-a'],
-    }),
-    makeCtx('proj-1')
-  );
-  assert.equal(r.status, 400);
-  assert.match(JSON.stringify(r.body), /No reviews captured/);
-});
-
-test('per-category 200 fresh — one AI call, ONE persisted PER_CATEGORY row with categoryName in typeFilter', async () => {
-  const urls = [
-    sampleCategoryUrl('url-a', 'Bath', 'Foaming Wash'),
-    sampleCategoryUrl('url-b', 'Bath', 'Acne Bar'),
-  ];
-  const reviews = [
-    sampleCategoryReview('rev-a1', 'url-a'),
-    sampleCategoryReview('rev-a2', 'url-a'),
-    sampleCategoryReview('rev-b1', 'url-b'),
-  ];
-  const { prisma, state: prismaState } = makePrisma({
-    categoryUrls: urls,
-    reviews,
-  });
-  const modelResponse = makeAnthropicMessage(
-    JSON.stringify({
-      summary:
-        '## Product critiques\n- Across multiple products in this category, reviewers report dryness\n\n## Fulfillment critiques\n- Several mention damaged caps on arrival',
-    })
-  );
-  const { client, state: clientState } = makeAnthropicClient({
-    createResult: modelResponse,
-  });
-  const deps = makeDeps({ prisma, anthropicClient: client });
-  const { POST } = makeReviewAnalysisRunBatchHandlers(deps);
-  const r = await POST(
-    makeRequest({
-      flow: 'per-category-bulleted',
-      categoryName: 'Bath',
-      urlIds: ['url-a', 'url-b'],
-    }),
-    makeCtx('proj-1')
-  );
-  assert.equal(r.status, 200);
-  const body = r.body as PerCategoryBulletedResponseBody;
-  assert.equal(body.flow, 'per-category-bulleted');
-  assert.equal(body.source, 'fresh');
-  assert.match(body.summary, /## Product critiques/);
-  assert.match(body.summary, /Across multiple products/);
-  // analysisId returned so client can PATCH the row on edit.
-  assert.equal(body.analysisId, 'analysis-1');
-  // EXACTLY one Anthropic call.
-  assert.equal(clientState.createCalls.length, 1);
-  // EXACTLY one persisted row.
-  assert.equal(prismaState.createCalls.length, 1);
-  const persisted = prismaState.createCalls[0].data;
-  assert.equal(persisted.level, 'PER_CATEGORY');
-  assert.equal(persisted.urlId, null);
-  assert.equal(persisted.projectId, 'proj-1');
-  // typeFilter carries the categoryName per schema comment line 539-541.
-  assert.equal(persisted.typeFilter, 'Bath');
-  const written = persisted.analysisJson as { summary: string };
-  assert.match(written.summary, /## Product critiques/);
-});
-
-test('per-category 200 from cache — no AI call, no DB writes', async () => {
-  const urls = [sampleCategoryUrl('url-a', 'Bath')];
-  const reviews = [
-    sampleCategoryReview('rev-a1', 'url-a'),
-    sampleCategoryReview('rev-a2', 'url-a'),
-  ];
-  // Cache key must mirror the handler's computation exactly.
-  const corpusHash = computeReviewsHash(
-    [{ id: 'rev-a1' }, { id: 'rev-a2' }],
-    `claude-opus-4-7|${PER_CATEGORY_BULLETED_PROMPT_VERSION}|category=Bath`
-  );
-  const { prisma, state: prismaState } = makePrisma({
-    categoryUrls: urls,
-    reviews,
-    cachedRows: [
-      {
-        id: 'analysis-cached-cat',
-        reviewsHash: corpusHash,
-        analysisJson: {
-          summary: '## Product critiques\n- Cached category summary',
-        } as Prisma.JsonValue,
-        modelVersion: 'claude-opus-4-7',
-        level: 'PER_CATEGORY',
-        typeFilter: 'Bath',
-      },
-    ],
-  });
-  const { client, state: clientState } = makeAnthropicClient({});
-  const deps = makeDeps({ prisma, anthropicClient: client });
-  const { POST } = makeReviewAnalysisRunBatchHandlers(deps);
-  const r = await POST(
-    makeRequest({
-      flow: 'per-category-bulleted',
-      categoryName: 'Bath',
-      urlIds: ['url-a'],
-    }),
-    makeCtx('proj-1')
-  );
-  assert.equal(r.status, 200);
-  const body = r.body as PerCategoryBulletedResponseBody;
-  assert.equal(body.source, 'cache');
-  assert.match(body.summary, /Cached category summary/);
-  assert.equal(body.analysisId, 'analysis-cached-cat');
-  assert.equal(body.usage.actualCostUsd, 0);
-  assert.equal(clientState.createCalls.length, 0);
-  assert.equal(prismaState.createCalls.length, 0);
-});
-
-test('per-category cache miss when categoryName differs — discriminator isolation', async () => {
-  // Regression guard: cache row at categoryName="Bath" must NOT be
-  // served when the request asks for categoryName="Skincare", even if
-  // the reviewIds + modelVersion coincide. The typeFilter discriminator
-  // must isolate categories from each other.
-  const urls = [sampleCategoryUrl('url-a', 'Skincare')];
-  const reviews = [sampleCategoryReview('rev-a1', 'url-a')];
-  // Seed a cached row at category="Bath" with the SAME reviewIds.
-  // Without typeFilter filtering the handler would serve it; with
-  // typeFilter the lookup misses and a fresh AI call fires.
-  const bathHash = computeReviewsHash(
-    [{ id: 'rev-a1' }],
-    `claude-opus-4-7|${PER_CATEGORY_BULLETED_PROMPT_VERSION}|category=Bath`
-  );
-  const { prisma, state: prismaState } = makePrisma({
-    categoryUrls: urls,
-    reviews,
-    cachedRows: [
-      {
-        id: 'wrong-category-row',
-        reviewsHash: bathHash,
-        analysisJson: {
-          summary: 'WRONG — wrong category',
-        } as Prisma.JsonValue,
-        modelVersion: 'claude-opus-4-7',
-        level: 'PER_CATEGORY',
-        typeFilter: 'Bath',
-      },
-    ],
-  });
-  const { client, state: clientState } = makeAnthropicClient({
-    createResult: makeAnthropicMessage(
-      JSON.stringify({
-        summary: '## Product critiques\n- Fresh skincare summary',
-      })
-    ),
-  });
-  const deps = makeDeps({ prisma, anthropicClient: client });
-  const { POST } = makeReviewAnalysisRunBatchHandlers(deps);
-  const r = await POST(
-    makeRequest({
-      flow: 'per-category-bulleted',
-      categoryName: 'Skincare',
-      urlIds: ['url-a'],
-    }),
-    makeCtx('proj-1')
-  );
-  assert.equal(r.status, 200);
-  const body = r.body as PerCategoryBulletedResponseBody;
-  // Cache MISS — fresh call happened (different categoryName even
-  // though the cached row's reviewsHash uses a different category
-  // suffix; the typeFilter discriminator also isolates).
-  assert.equal(body.source, 'fresh');
-  assert.match(body.summary, /Fresh skincare summary/);
-  assert.equal(clientState.createCalls.length, 1);
-  assert.equal(prismaState.createCalls.length, 1);
-});
-
-test('per-category 502 on malformed model JSON output', async () => {
-  const { prisma } = makePrisma({
-    categoryUrls: [sampleCategoryUrl('url-a', 'Bath')],
-    reviews: [sampleCategoryReview('rev-a1', 'url-a')],
-  });
-  const { client } = makeAnthropicClient({
-    createResult: makeAnthropicMessage(
-      JSON.stringify({ not_summary: 'wrong shape' })
-    ),
-  });
-  const deps = makeDeps({ prisma, anthropicClient: client });
-  const { POST } = makeReviewAnalysisRunBatchHandlers(deps);
-  const r = await POST(
-    makeRequest({
-      flow: 'per-category-bulleted',
-      categoryName: 'Bath',
-      urlIds: ['url-a'],
-    }),
-    makeCtx('proj-1')
-  );
-  assert.equal(r.status, 502);
-  assert.match(
-    JSON.stringify(r.body),
-    /did not match the per-category schema/
-  );
-});
-
-test('per-category 502 when AI call throws', async () => {
-  const { prisma } = makePrisma({
-    categoryUrls: [sampleCategoryUrl('url-a', 'Bath')],
-    reviews: [sampleCategoryReview('rev-a1', 'url-a')],
-  });
-  const { client } = makeAnthropicClient({
-    createThrows: new Error('Upstream rate limit'),
-  });
-  const deps = makeDeps({ prisma, anthropicClient: client });
-  const { POST } = makeReviewAnalysisRunBatchHandlers(deps);
-  const r = await POST(
-    makeRequest({
-      flow: 'per-category-bulleted',
-      categoryName: 'Bath',
-      urlIds: ['url-a'],
-    }),
-    makeCtx('proj-1')
-  );
-  assert.equal(r.status, 502);
-  assert.match(JSON.stringify(r.body), /Upstream rate limit/);
-});
-
-test('per-category does NOT use the per-review prompt version in its cache key', async () => {
-  // Regression guard: even if the per-review and per-category prompt
-  // versions coincidentally land at the same string, the cache key
-  // strings differ because per-category appends "|category=<name>".
-  const urls = [sampleCategoryUrl('url-a', 'Bath')];
-  const reviews = [sampleCategoryReview('rev-a1', 'url-a')];
-  const perReviewVersionedHash = computeReviewsHash(
-    [{ id: 'rev-a1' }],
-    `claude-opus-4-7|${PER_REVIEW_SUMMARIZE_PROMPT_VERSION}`
-  );
-  const { prisma } = makePrisma({
-    categoryUrls: urls,
-    reviews,
-    cachedRows: [
-      {
-        id: 'wrong-version-row',
-        reviewsHash: perReviewVersionedHash,
-        analysisJson: {
-          summary: 'WRONG — hashed at per-review level',
-        } as Prisma.JsonValue,
-        modelVersion: 'claude-opus-4-7',
-        level: 'PER_REVIEW',
-      },
-    ],
-  });
-  const { client, state: clientState } = makeAnthropicClient({
-    createResult: makeAnthropicMessage(
-      JSON.stringify({
-        summary: '## Product critiques\n- Fresh per-category summary',
-      })
-    ),
-  });
-  const deps = makeDeps({ prisma, anthropicClient: client });
-  const { POST } = makeReviewAnalysisRunBatchHandlers(deps);
-  const r = await POST(
-    makeRequest({
-      flow: 'per-category-bulleted',
-      categoryName: 'Bath',
-      urlIds: ['url-a'],
-    }),
-    makeCtx('proj-1')
-  );
-  assert.equal(r.status, 200);
-  const body = r.body as PerCategoryBulletedResponseBody;
-  assert.equal(body.source, 'fresh');
-  assert.match(body.summary, /Fresh per-category summary/);
-  assert.equal(clientState.createCalls.length, 1);
 });

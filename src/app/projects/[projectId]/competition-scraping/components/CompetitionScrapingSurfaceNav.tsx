@@ -1,6 +1,6 @@
 'use client';
 
-// W#2 P-49 Workstream 5 Sessions 2-4 — shared 4-option toggle for the
+// W#2 P-49 Workstream 5 Session 2 — shared 4-option toggle for the
 // Competition Scraping page per docs/REVIEWS_PHASE_2_DESIGN.md §B
 // 2026-05-27 (Reviews Phase 3 design lock).
 //
@@ -8,15 +8,14 @@
 // access to four surface views:
 //   1. Competitor URLs            (existing /competition-scraping)
 //   2. Comprehensive Analysis     (existing /competition-scraping/comprehensive-analysis)
-//   3. Competitor Reviews Analysis (Table 2 per-review nested rows; Sessions 2-3)
-//   4. By Category-Type           (Tables 3+4 grouping by Category / Type)
-//
-// Session 4 (this session) enables the 4th option + builds the page
-// at /by-category-type with Per-Category surface live; the Per-Type
-// surface ships in Session 5 as an in-page sub-toggle on the same page.
+//   3. Competitor Reviews Analysis (NEW Table 2 per-review nested rows)
+//   4. By Category / By Type      (DEFERRED to Session 3+ — disabled here)
 //
 // This component renders nav links via Next.js Link so each surface is
-// its own page route.
+// its own page route. The fourth option is intentionally disabled in
+// Session 2 because Tables 3 + 4 (By Category / By Type) ship in
+// Session 3+; the option exists in the toggle today to surface the
+// final shape of the navigation to the user.
 
 import Link from 'next/link';
 import type { JSX } from 'react';
@@ -25,7 +24,7 @@ export type Surface =
   | 'competitor-urls'
   | 'comprehensive-analysis'
   | 'competitor-reviews-analysis'
-  | 'by-category-type';
+  | 'by-group';
 
 interface SurfaceEntry {
   key: Surface;
@@ -54,10 +53,12 @@ const SURFACES: ReadonlyArray<SurfaceEntry> = [
       `/projects/${projectId}/competition-scraping/competitor-reviews-analysis`,
   },
   {
-    key: 'by-category-type',
-    label: 'By Category-Type',
+    key: 'by-group',
+    label: 'By Category / By Type',
     href: (projectId) =>
-      `/projects/${projectId}/competition-scraping/by-category-type`,
+      `/projects/${projectId}/competition-scraping/by-group`,
+    disabled: true,
+    disabledNote: 'Coming in Session 3+ (Tables 3 + 4 per §B 2026-05-27)',
   },
 ];
 
