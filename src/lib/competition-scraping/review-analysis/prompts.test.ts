@@ -16,6 +16,10 @@ import {
   PER_COMPETITOR_BULLETED_SYSTEM_PROMPT,
   buildPerCompetitorBulletedUserMessage,
   validatePerCompetitorBulletedOutput,
+  PER_CATEGORY_BULLETED_PROMPT_VERSION,
+  PER_CATEGORY_BULLETED_SYSTEM_PROMPT,
+  buildPerCategoryBulletedUserMessage,
+  validatePerCategoryBulletedOutput,
 } from './prompts.ts';
 
 function makeReview(
@@ -367,6 +371,162 @@ test('validatePerCompetitorBulletedOutput rejects malformed shapes', () => {
   // the wrong validator).
   assert.equal(
     validatePerCompetitorBulletedOutput({
+      summaries: [{ reviewId: 'r', summary: 'x' }],
+    }),
+    null
+  );
+});
+
+// ─── Per-Category Comprehensive (bulleted) — W5 Session 4 ───────────
+
+test('PER_CATEGORY_BULLETED_PROMPT_VERSION is v1 (fresh Session 4 builder)', () => {
+  // Tripwire — bump this assertion when the prompt content shifts. The
+  // cache-key embeds the version so a content change without a version
+  // bump would silently serve stale summaries.
+  assert.equal(PER_CATEGORY_BULLETED_PROMPT_VERSION, 'v1');
+});
+
+test('PER_CATEGORY_BULLETED_SYSTEM_PROMPT carries cross-product convergence + theme-emergent directives', () => {
+  const p = PER_CATEGORY_BULLETED_SYSTEM_PROMPT;
+  assert.ok(p.length > 200);
+  // Cross-product framing — distinguishes Per-Category from
+  // Per-Competitor's single-product input.
+  assert.match(p, /POOLED ACROSS MULTIPLE/);
+  assert.match(p, /share the same Category/i);
+  assert.match(p, /cross-product convergence/i);
+  assert.match(p, /Across multiple products in this category/);
+  // Theme-emergent directives inherited from v3 Per-Competitor.
+  assert.match(p, /INVENT a new theme heading/);
+  assert.match(p, /## Product critiques/);
+  assert.match(p, /## Fulfillment \/ shipping critiques/);
+  assert.match(p, /## Company \/ seller critiques/);
+  // NEW Per-Category-specific emergent theme.
+  assert.match(p, /## Category-wide structural critiques/);
+  // 9 example emergent themes (inherited from v3) still present.
+  assert.match(p, /## Pricing \/ value critiques/);
+  assert.match(p, /## Documentation \/ instructions critiques/);
+  assert.match(p, /## Compatibility \/ interoperability critiques/);
+  assert.match(p, /## Safety \/ reliability concerns/);
+  assert.match(p, /## Software \/ firmware critiques/);
+  assert.match(p, /## Customer support critiques/);
+  assert.match(p, /## Longevity \/ durability critiques/);
+  assert.match(p, /## Marketing accuracy critiques/);
+  assert.match(p, /## Accessibility \/ usability critiques/);
+  // Output JSON contract.
+  assert.match(p, /Return a JSON object with the shape/);
+  assert.match(p, /"summary"/);
+  // Voice + length guards inherited from v3.
+  assert.match(p, /Third-person neutral analyst voice/);
+  assert.match(p, /Do NOT use first person/);
+});
+
+test('PER_CATEGORY_BULLETED_SYSTEM_PROMPT excludes per-review reviewId-echo directives', () => {
+  // Per-Category emits ONE summary, NOT per-review entries — the
+  // reviewId-echo machinery from Per-Review must not leak into this
+  // prompt or the cache-mismatch defense fires false positives.
+  const p = PER_CATEGORY_BULLETED_SYSTEM_PROMPT;
+  assert.doesNotMatch(p, /Echo each review's reviewId/);
+  assert.doesNotMatch(p, /summaries.*reviewId/);
+  // And NOT the Per-Competitor single-product framing.
+  assert.doesNotMatch(p, /reviews of ONE competitor's product/);
+});
+
+test('buildPerCategoryBulletedUserMessage emits category header + per-product breakdown + tagged review bodies', () => {
+  const msg = buildPerCategoryBulletedUserMessage({
+    categoryName: 'Bath',
+    products: [
+      { productLabel: 'Foaming Wash (amazon)', platform: 'amazon', reviewCount: 2 },
+      { productLabel: 'Acne Bar (etsy)', platform: 'etsy', reviewCount: 1 },
+    ],
+    reviews: [
+      {
+        id: 'rev-1',
+        body: 'Worked great for clearing breakouts.',
+        reviewerName: 'Alice',
+        starRating: 5,
+        reviewDate: new Date('2026-04-12T00:00:00Z'),
+        productLabel: 'Foaming Wash (amazon)',
+      },
+      {
+        id: 'rev-2',
+        body: 'Dried out my skin badly.',
+        reviewerName: 'Bob',
+        starRating: 2,
+        reviewDate: new Date('2026-04-13T00:00:00Z'),
+        productLabel: 'Foaming Wash (amazon)',
+      },
+      {
+        id: 'rev-3',
+        body: 'Soap bar fell apart in shower after 4 days.',
+        reviewerName: 'Cara',
+        starRating: 1,
+        reviewDate: new Date('2026-04-14T00:00:00Z'),
+        productLabel: 'Acne Bar (etsy)',
+      },
+    ],
+  });
+  // Category header.
+  assert.match(msg, /Category: Bath/);
+  assert.match(msg, /Products in this category: 2/);
+  // Per-product breakdown with review counts.
+  assert.match(msg, /- Foaming Wash \(amazon\) \(amazon, 2 reviews\)/);
+  assert.match(msg, /- Acne Bar \(etsy\) \(etsy, 1 review\)/); // singular 'review'
+  assert.match(msg, /Total reviews in corpus: 3/);
+  // Cross-product directive in the trailing instruction.
+  assert.match(msg, /Surface cross-product convergence/);
+  // Each review body tagged with productLabel.
+  assert.match(msg, /--- Review 1 \[Foaming Wash \(amazon\)\]/);
+  assert.match(msg, /--- Review 2 \[Foaming Wash \(amazon\)\]/);
+  assert.match(msg, /--- Review 3 \[Acne Bar \(etsy\)\]/);
+  // Review bodies present.
+  assert.match(msg, /Worked great for clearing breakouts/);
+  assert.match(msg, /Dried out my skin badly/);
+  assert.match(msg, /Soap bar fell apart/);
+});
+
+test('buildPerCategoryBulletedUserMessage handles single-product single-review minimum cleanly', () => {
+  const msg = buildPerCategoryBulletedUserMessage({
+    categoryName: 'Skincare',
+    products: [
+      { productLabel: 'Mystery Cream (amazon)', platform: 'amazon', reviewCount: 1 },
+    ],
+    reviews: [
+      {
+        id: 'rev-x',
+        body: 'Body text.',
+        reviewerName: null,
+        starRating: null,
+        reviewDate: null,
+        productLabel: 'Mystery Cream (amazon)',
+      },
+    ],
+  });
+  assert.match(msg, /Products in this category: 1/);
+  assert.match(msg, /- Mystery Cream \(amazon\) \(amazon, 1 review\)/);
+  assert.match(msg, /Total reviews in corpus: 1/);
+  // No meta parens since reviewer/star/date are all null.
+  assert.match(msg, /--- Review 1 \[Mystery Cream \(amazon\)\] ---\nBody text/);
+});
+
+test('validatePerCategoryBulletedOutput accepts well-formed shape + rejects malformed', () => {
+  // Accept.
+  const ok = validatePerCategoryBulletedOutput({
+    summary:
+      '## Product critiques\n- Across multiple products, reviewers report dryness',
+  });
+  assert.ok(ok);
+  assert.match(ok.summary, /Across multiple products/);
+
+  // Reject malformed.
+  assert.equal(validatePerCategoryBulletedOutput(null), null);
+  assert.equal(validatePerCategoryBulletedOutput([]), null);
+  assert.equal(validatePerCategoryBulletedOutput({}), null);
+  assert.equal(validatePerCategoryBulletedOutput({ summary: 42 }), null);
+  assert.equal(validatePerCategoryBulletedOutput({ summary: '' }), null);
+  assert.equal(validatePerCategoryBulletedOutput({ summary: '   ' }), null);
+  // Per-Review shape rejected.
+  assert.equal(
+    validatePerCategoryBulletedOutput({
       summaries: [{ reviewId: 'r', summary: 'x' }],
     }),
     null

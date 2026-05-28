@@ -54,6 +54,10 @@ import {
   PER_COMPETITOR_BULLETED_SYSTEM_PROMPT,
   buildPerCompetitorBulletedUserMessage,
   validatePerCompetitorBulletedOutput,
+  PER_CATEGORY_BULLETED_PROMPT_VERSION,
+  PER_CATEGORY_BULLETED_SYSTEM_PROMPT,
+  buildPerCategoryBulletedUserMessage,
+  validatePerCategoryBulletedOutput,
 } from '../review-analysis/prompts.ts';
 import { countMessageTokens } from '../review-analysis/token-counter.ts';
 
@@ -91,6 +95,7 @@ export type ReviewAnalysisFlow = (typeof SUPPORTED_FLOWS)[number];
 export const SHIPPED_FLOWS = new Set<ReviewAnalysisFlow>([
   'per-review-summarize',
   'per-competitor-bulleted',
+  'per-category-bulleted',
 ]);
 
 export function isReviewAnalysisFlow(v: unknown): v is ReviewAnalysisFlow {
@@ -141,10 +146,33 @@ export type ReviewAnalysisRunBatchPrismaLike = {
       where: { id: string; projectWorkflowId: string };
       select: { id: true; projectWorkflowId: true; platform: true; productName: true };
     }): Promise<CompetitorUrlForBatchRow | null>;
+    // Per-Category dispatch needs to resolve N URLs by id within the
+    // project scope (multi-id IN-clause + projectWorkflowId guard).
+    // Selects competitionCategory too so the handler can verify every
+    // requested URL actually belongs to the supplied categoryName.
+    findMany(args: {
+      where: {
+        id: { in: string[] };
+        projectWorkflowId: string;
+      };
+      select: {
+        id: true;
+        projectWorkflowId: true;
+        platform: true;
+        productName: true;
+        competitionCategory: true;
+      };
+    }): Promise<CompetitorUrlForCategoryRow[]>;
   };
   capturedReview: {
     findMany(args: {
-      where: { id: { in: string[] }; competitorUrlId: string };
+      where:
+        | { id: { in: string[] }; competitorUrlId: string }
+        // Per-Category dispatch fetches all reviews for N URLs in one
+        // call. Returns ALL reviews per URL (no per-review id list since
+        // the client doesn't enumerate them — the server pools everything
+        // under the supplied URLs).
+        | { competitorUrlId: { in: string[] } };
       select: {
         id: true;
         competitorUrlId: true;
@@ -156,16 +184,22 @@ export type ReviewAnalysisRunBatchPrismaLike = {
     }): Promise<CapturedReviewForBatchRow[]>;
   };
   reviewAnalysis: {
-    // Per-review flow queries by reviewsHash[] (one hash per reviewId);
-    // per-competitor flow queries by a single corpus hash. Both pass a
-    // `reviewsHash: { in: [...] }` filter — singular case just sends a
-    // one-element array. The `level` field is the discriminator.
+    // Per-review + per-competitor queries pass urlId; per-category
+    // queries pass projectId + typeFilter (no urlId since the row spans
+    // multiple URLs). The `level` field is the discriminator.
     findMany(args: {
-      where: {
-        urlId: string;
-        level: 'PER_REVIEW' | 'PER_PRODUCT';
-        reviewsHash: { in: string[] };
-      };
+      where:
+        | {
+            urlId: string;
+            level: 'PER_REVIEW' | 'PER_PRODUCT';
+            reviewsHash: { in: string[] };
+          }
+        | {
+            projectId: string;
+            level: 'PER_CATEGORY';
+            typeFilter: string;
+            reviewsHash: { in: string[] };
+          };
       select: {
         id: true;
         reviewsHash: true;
@@ -178,6 +212,18 @@ export type ReviewAnalysisRunBatchPrismaLike = {
       select: { id: true };
     }): Promise<ReviewAnalysisCreatedRow>;
   };
+};
+
+// Per-Category needs the competitionCategory field too so the handler
+// can verify every supplied urlId belongs to the supplied categoryName
+// (defense against a stale browser tab posting URLs from a different
+// category after a Category edit).
+export type CompetitorUrlForCategoryRow = {
+  id: string;
+  projectWorkflowId: string;
+  platform: string;
+  productName: string | null;
+  competitionCategory: string | null;
 };
 
 export type ReviewAnalysisRunBatchHandlerDeps = {
@@ -227,9 +273,22 @@ export interface PerCompetitorBulletedResponseBody {
   usage: PerReviewBatchUsage;
 }
 
+// Per-Category wire shape — same shape as Per-Competitor (one summary
+// per call + analysisId for the Edit affordance + cache/fresh source).
+// Differs only in the persistence level (PER_CATEGORY vs PER_PRODUCT)
+// and the request body shape (categoryName + urlIds vs urlId + reviewIds).
+export interface PerCategoryBulletedResponseBody {
+  flow: 'per-category-bulleted';
+  analysisId: string;
+  summary: string;
+  source: 'cache' | 'fresh';
+  usage: PerReviewBatchUsage;
+}
+
 export type RunBatchResponseBody =
   | PerReviewBatchResponseBody
-  | PerCompetitorBulletedResponseBody;
+  | PerCompetitorBulletedResponseBody
+  | PerCategoryBulletedResponseBody;
 
 // Pull the concatenated text content out of a messages.create response.
 function extractTextFromContent(
@@ -283,6 +342,16 @@ function buildPerCompetitorSystemBlocks(): Anthropic.TextBlockParam[] {
   ];
 }
 
+function buildPerCategorySystemBlocks(): Anthropic.TextBlockParam[] {
+  return [
+    {
+      type: 'text',
+      text: PER_CATEGORY_BULLETED_SYSTEM_PROMPT,
+      cache_control: { type: 'ephemeral' },
+    },
+  ];
+}
+
 // Pull a summary string out of a stored analysisJson. Used by both
 // PER_REVIEW and PER_PRODUCT cache reads since both store the summary
 // as { summary: string, ... } in the JSON column.
@@ -295,6 +364,402 @@ function summaryFromCachedJson(value: Prisma.JsonValue): string | null {
   }
   const obj = value as { summary?: unknown };
   return typeof obj.summary === 'string' ? obj.summary : null;
+}
+
+// Per-Category dispatch context bundle. Captures everything the helper
+// needs from the outer handler closure so it can live as a free
+// function (easier to read + maintain than a deeply-nested branch
+// inside makeReviewAnalysisRunBatchHandlers).
+type PerCategoryHandlerCtx = {
+  projectId: string;
+  projectWorkflowId: string;
+  userId: string;
+  body: {
+    categoryName?: unknown;
+    urlIds?: unknown;
+  };
+  modelVersion: string;
+  prisma: ReviewAnalysisRunBatchPrismaLike;
+  anthropicClient: AnthropicClientLike;
+  recordFlake: (op: string, err: unknown, ctx: object) => void;
+  withRetry: <T>(fn: () => Promise<T>) => Promise<T>;
+};
+
+async function handlePerCategoryBulleted(
+  ctx: PerCategoryHandlerCtx
+): Promise<HandlerResult> {
+  const {
+    projectId,
+    projectWorkflowId,
+    userId,
+    body,
+    modelVersion,
+    prisma,
+    anthropicClient,
+    recordFlake,
+    withRetry,
+  } = ctx;
+
+  // ── Validate categoryName ──
+  const categoryName =
+    typeof body.categoryName === 'string' ? body.categoryName.trim() : '';
+  if (!categoryName) {
+    return {
+      status: 400,
+      body: { error: 'categoryName is required for per-category-bulleted' },
+    };
+  }
+
+  // ── Validate urlIds ──
+  if (!Array.isArray(body.urlIds) || body.urlIds.length === 0) {
+    return {
+      status: 400,
+      body: { error: 'urlIds must be a non-empty array of strings' },
+    };
+  }
+  const urlIds: string[] = [];
+  const seenUrlIds = new Set<string>();
+  for (const id of body.urlIds) {
+    if (typeof id !== 'string' || !id.trim()) {
+      return {
+        status: 400,
+        body: { error: 'urlIds must contain only non-empty strings' },
+      };
+    }
+    const trimmed = id.trim();
+    if (seenUrlIds.has(trimmed)) {
+      return {
+        status: 400,
+        body: { error: `urlIds contains a duplicate: ${trimmed}` },
+      };
+    }
+    seenUrlIds.add(trimmed);
+    urlIds.push(trimmed);
+  }
+
+  // ── Resolve URLs ──
+  let urls: CompetitorUrlForCategoryRow[];
+  try {
+    urls = await withRetry(() =>
+      prisma.competitorUrl.findMany({
+        where: { id: { in: urlIds }, projectWorkflowId },
+        select: {
+          id: true,
+          projectWorkflowId: true,
+          platform: true,
+          productName: true,
+          competitionCategory: true,
+        },
+      })
+    );
+  } catch (error) {
+    recordFlake('POST per-category-bulleted urls.findMany', error, {
+      projectId,
+      urlCount: urlIds.length,
+    });
+    return {
+      status: 500,
+      body: { error: 'Failed to load competitor URLs for category' },
+    };
+  }
+
+  // Verify every supplied urlId resolved (scope check).
+  if (urls.length !== urlIds.length) {
+    const foundIds = new Set(urls.map((u) => u.id));
+    const missing = urlIds.filter((id) => !foundIds.has(id));
+    return {
+      status: 404,
+      body: {
+        error: `Some urlIds not found in this project: ${missing.join(', ')}`,
+        missing,
+      },
+    };
+  }
+
+  // Defense in depth — every URL must actually have competitionCategory
+  // === categoryName. Catches stale browser tabs that hold URLs whose
+  // Category was edited between page load + Summarize click.
+  const wrongCategory = urls.filter(
+    (u) => (u.competitionCategory ?? '') !== categoryName
+  );
+  if (wrongCategory.length > 0) {
+    return {
+      status: 409,
+      body: {
+        error:
+          `Some urlIds no longer belong to category "${categoryName}". ` +
+          `Refresh the page and try again.`,
+        mismatched: wrongCategory.map((u) => u.id),
+      },
+    };
+  }
+
+  // ── Resolve reviews ──
+  let reviews: CapturedReviewForBatchRow[];
+  try {
+    reviews = await withRetry(() =>
+      prisma.capturedReview.findMany({
+        where: { competitorUrlId: { in: urlIds } },
+        select: {
+          id: true,
+          competitorUrlId: true,
+          starRating: true,
+          body: true,
+          reviewerName: true,
+          reviewDate: true,
+        },
+      })
+    );
+  } catch (error) {
+    recordFlake('POST per-category-bulleted reviews.findMany', error, {
+      projectId,
+      urlCount: urlIds.length,
+    });
+    return {
+      status: 500,
+      body: { error: 'Failed to load reviews for category' },
+    };
+  }
+  if (reviews.length === 0) {
+    return {
+      status: 400,
+      body: {
+        error:
+          'No reviews captured for any URL in this category. ' +
+          'Capture reviews first, then re-run the summary.',
+      },
+    };
+  }
+
+  // ── Cache lookup ──
+  //
+  // Corpus hash combines sorted reviewIds + modelVersion + prompt-version
+  // + categoryName so the cache key isolates per-category runs from
+  // other levels and surfaces a miss when the URL set in the Category
+  // changes (adding/removing a URL shifts the resolved reviewIds set).
+  const corpusCacheKeyVersion = `${modelVersion}|${PER_CATEGORY_BULLETED_PROMPT_VERSION}|category=${categoryName}`;
+  const corpusHash = computeReviewsHash(
+    reviews.map((r) => ({ id: r.id })),
+    corpusCacheKeyVersion
+  );
+
+  let cachedRows: ReviewAnalysisCachedRow[];
+  try {
+    cachedRows = await withRetry(() =>
+      prisma.reviewAnalysis.findMany({
+        where: {
+          projectId,
+          level: 'PER_CATEGORY',
+          typeFilter: categoryName,
+          reviewsHash: { in: [corpusHash] },
+        },
+        select: {
+          id: true,
+          reviewsHash: true,
+          analysisJson: true,
+          modelVersion: true,
+        },
+      })
+    );
+  } catch (error) {
+    recordFlake('POST per-category-bulleted cache lookup', error, {
+      projectId,
+      categoryName,
+    });
+    cachedRows = [];
+  }
+
+  const cachedHit = cachedRows
+    .map((r) => ({ id: r.id, summary: summaryFromCachedJson(r.analysisJson) }))
+    .find((entry): entry is { id: string; summary: string } => !!entry.summary);
+
+  if (cachedHit) {
+    const cachedResponse: PerCategoryBulletedResponseBody = {
+      flow: 'per-category-bulleted',
+      analysisId: cachedHit.id,
+      summary: cachedHit.summary,
+      source: 'cache',
+      usage: {
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheCreationInputTokens: 0,
+        cacheReadInputTokens: 0,
+        actualCostUsd: 0,
+        estimatedCostUsd: 0,
+      },
+    };
+    return { status: 200, body: cachedResponse };
+  }
+
+  // ── Build user message ──
+  //
+  // Each review gets tagged with its product label so the model can
+  // detect cross-product convergence. Product label uses productName
+  // when available + platform; falls back to platform-only when name
+  // is missing.
+  const urlById = new Map(urls.map((u) => [u.id, u]));
+  const productLabelByUrlId = new Map<string, string>();
+  const reviewCountByUrlId = new Map<string, number>();
+  for (const u of urls) {
+    const label = u.productName?.trim()
+      ? `${u.productName.trim()} (${u.platform})`
+      : `Unnamed product (${u.platform})`;
+    productLabelByUrlId.set(u.id, label);
+    reviewCountByUrlId.set(u.id, 0);
+  }
+  for (const r of reviews) {
+    reviewCountByUrlId.set(
+      r.competitorUrlId,
+      (reviewCountByUrlId.get(r.competitorUrlId) ?? 0) + 1
+    );
+  }
+
+  const productsHeader = urls.map((u) => ({
+    productLabel: productLabelByUrlId.get(u.id) ?? '(unknown product)',
+    platform: u.platform,
+    reviewCount: reviewCountByUrlId.get(u.id) ?? 0,
+  }));
+
+  const userText = buildPerCategoryBulletedUserMessage({
+    categoryName,
+    products: productsHeader,
+    reviews: reviews.map((r) => ({
+      id: r.id,
+      body: r.body,
+      reviewerName: r.reviewerName,
+      starRating: r.starRating,
+      reviewDate: r.reviewDate,
+      productLabel:
+        productLabelByUrlId.get(r.competitorUrlId) ?? '(unknown product)',
+    })),
+  });
+
+  let estimatedInputTokensPC = 0;
+  try {
+    estimatedInputTokensPC = await countMessageTokens({
+      client: anthropicClient,
+      model: modelVersion,
+      system: PER_CATEGORY_BULLETED_SYSTEM_PROMPT,
+      messages: [{ role: 'user', content: userText }],
+    });
+  } catch (error) {
+    recordFlake('POST per-category-bulleted countTokens', error, {
+      projectId,
+      categoryName,
+    });
+  }
+  // Per-category output is a single aggregated summary; expect slightly
+  // higher output volume than per-competitor because cross-product
+  // convergence + per-product callouts mean more bullets. Reuse the
+  // same 4_000-token estimate ceiling; final cost is measured from the
+  // actual usage block returned by Anthropic.
+  const estimatedOutputTokensPC = 4_000;
+  const estimatedCostUsdPC = estimateCostUsd(
+    modelVersion,
+    estimatedInputTokensPC,
+    estimatedOutputTokensPC
+  );
+
+  // ── AI call ──
+  let response: Anthropic.Message;
+  try {
+    response = await anthropicClient.messages.create({
+      model: modelVersion,
+      max_tokens: PER_BATCH_MAX_OUTPUT_TOKENS,
+      system: buildPerCategorySystemBlocks(),
+      messages: [{ role: 'user', content: userText }],
+    });
+  } catch (error) {
+    recordFlake('POST per-category-bulleted messages.create', error, {
+      projectId,
+      categoryName,
+      corpusSize: reviews.length,
+    });
+    return {
+      status: 502,
+      body: {
+        error: `AI call failed: ${error instanceof Error ? error.message : 'unknown error'}`,
+      },
+    };
+  }
+
+  const text = extractTextFromContent(response.content);
+  let parsed: unknown;
+  try {
+    parsed = extractJsonFromModelText(text);
+  } catch (error) {
+    recordFlake('POST per-category-bulleted parse JSON', error, {
+      projectId,
+      categoryName,
+    });
+    return { status: 502, body: { error: 'AI returned malformed JSON' } };
+  }
+  const validated = validatePerCategoryBulletedOutput(parsed);
+  if (!validated) {
+    return {
+      status: 502,
+      body: { error: 'AI output did not match the per-category schema' },
+    };
+  }
+
+  // ── Persist ──
+  let persistedId: string | null = null;
+  try {
+    const created = await withRetry(() =>
+      prisma.reviewAnalysis.create({
+        data: {
+          level: 'PER_CATEGORY',
+          urlId: null,
+          projectId,
+          typeFilter: categoryName,
+          analysisJson: {
+            summary: validated.summary,
+          } as Prisma.InputJsonValue,
+          reviewsHash: corpusHash,
+          modelVersion,
+          runByUserId: userId,
+          costUsdMicros: null,
+        },
+        select: { id: true },
+      })
+    );
+    persistedId = created.id;
+  } catch (error) {
+    recordFlake('POST per-category-bulleted persist', error, {
+      projectId,
+      categoryName,
+    });
+    // Soft-fail — return the fresh summary to the browser since the AI
+    // call already cost money. Re-run will either hit cache (if a
+    // parallel call persisted) or re-pay. Empty analysisId disables
+    // the Edit affordance for this run.
+  }
+
+  const actualCostUsd = calculateCostUsd(modelVersion, {
+    inputTokens: response.usage.input_tokens,
+    outputTokens: response.usage.output_tokens,
+    cacheCreationInputTokens: response.usage.cache_creation_input_tokens ?? 0,
+    cacheReadInputTokens: response.usage.cache_read_input_tokens ?? 0,
+  });
+  void toCostUsdMicros;
+  // urlById intentionally unused outside cache pop; suppress the lint.
+  void urlById;
+
+  const freshResponse: PerCategoryBulletedResponseBody = {
+    flow: 'per-category-bulleted',
+    analysisId: persistedId ?? '',
+    summary: validated.summary,
+    source: 'fresh',
+    usage: {
+      inputTokens: response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens,
+      cacheCreationInputTokens: response.usage.cache_creation_input_tokens ?? 0,
+      cacheReadInputTokens: response.usage.cache_read_input_tokens ?? 0,
+      actualCostUsd,
+      estimatedCostUsd: estimatedCostUsdPC,
+    },
+  };
+  return { status: 200, body: freshResponse };
 }
 
 export function makeReviewAnalysisRunBatchHandlers(
@@ -320,6 +785,8 @@ export function makeReviewAnalysisRunBatchHandlers(
     const body = rawBody as {
       flow?: unknown;
       urlId?: unknown;
+      urlIds?: unknown;
+      categoryName?: unknown;
       reviewIds?: unknown;
       modelVersion?: unknown;
     };
@@ -340,6 +807,43 @@ export function makeReviewAnalysisRunBatchHandlers(
           error: `flow '${flow}' is not yet shipped; supported flows: ${[...SHIPPED_FLOWS].join(', ')}.`,
         },
       };
+    }
+
+    const modelVersionFromBody =
+      typeof body.modelVersion === 'string' && body.modelVersion.trim()
+        ? body.modelVersion.trim()
+        : DEFAULT_MODEL_VERSION;
+    if (!isSupportedModelVersion(modelVersionFromBody)) {
+      return {
+        status: 400,
+        body: {
+          error: `modelVersion must be one of: claude-opus-4-7, claude-opus-4-6`,
+        },
+      };
+    }
+
+    // ─── Per-Category Comprehensive (bulleted) dispatch ─────────────
+    //
+    // Per-Category has a different request shape than the other two
+    // shipped flows: { flow, categoryName, urlIds[], modelVersion }.
+    // The server resolves all reviews under those URLs and pools them.
+    // Persisted as ONE ReviewAnalysis row with level=PER_CATEGORY +
+    // typeFilter=<categoryName> + urlId=null + projectId=<projectId>
+    // (per schema comment line 539-541 "Stores category name in typeFilter
+    // column"). Cache key is a SINGLE corpus hash over the sorted
+    // resolved reviewIds + modelVersion + prompt-version + categoryName.
+    if (flow === 'per-category-bulleted') {
+      return await handlePerCategoryBulleted({
+        projectId,
+        projectWorkflowId,
+        userId,
+        body,
+        modelVersion: modelVersionFromBody,
+        prisma,
+        anthropicClient,
+        recordFlake,
+        withRetry,
+      });
     }
 
     const urlId = typeof body.urlId === 'string' ? body.urlId.trim() : '';
@@ -373,18 +877,9 @@ export function makeReviewAnalysisRunBatchHandlers(
       reviewIds.push(trimmed);
     }
 
-    const modelVersion =
-      typeof body.modelVersion === 'string' && body.modelVersion.trim()
-        ? body.modelVersion.trim()
-        : DEFAULT_MODEL_VERSION;
-    if (!isSupportedModelVersion(modelVersion)) {
-      return {
-        status: 400,
-        body: {
-          error: `modelVersion must be one of: claude-opus-4-7, claude-opus-4-6`,
-        },
-      };
-    }
+    // modelVersion is validated above (before the per-category early-
+    // return) so it's safe to reuse here without re-checking.
+    const modelVersion = modelVersionFromBody;
 
     let url: CompetitorUrlForBatchRow | null;
     let reviews: CapturedReviewForBatchRow[];
