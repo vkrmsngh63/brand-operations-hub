@@ -173,6 +173,49 @@ export function summaryStringToTipTapDoc(
 }
 
 /**
+ * Flattens a TipTap doc (or any nested node tree) into a single whitespace-
+ * collapsed plain-text string by concatenating every `text` leaf. Used by the
+ * per-competitor write-back to test whether a summary is ALREADY present in
+ * the box before appending (idempotency guard — re-running a summarize on the
+ * same corpus must not duplicate the appended block). Whitespace is collapsed
+ * so newline/spacing differences between the stored doc and the candidate
+ * summary don't defeat the substring check.
+ */
+export function tipTapDocToPlainText(value: unknown): string {
+  const parts: string[] = [];
+  const walk = (node: unknown): void => {
+    if (!node || typeof node !== 'object') return;
+    const obj = node as Record<string, unknown>;
+    if (typeof obj.text === 'string') parts.push(obj.text);
+    if (Array.isArray(obj.content)) {
+      for (const child of obj.content) walk(child);
+    }
+  };
+  walk(value);
+  return parts.join(' ').replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * True when `summary`'s text content already appears in `existing` (whitespace-
+ * collapsed substring match). Empty summaries count as "already present" (no
+ * append needed).
+ *
+ * The needle is run through the SAME doc→plain-text pipeline the summary goes
+ * through when appended (summaryStringToContentNodes strips bullet markers like
+ * "- " into list items), so the comparison is apples-to-apples — otherwise the
+ * raw "- bullet" markers in the candidate would never match the marker-stripped
+ * text already stored in the box, and every run would re-append.
+ */
+export function tipTapDocContainsSummary(
+  existing: unknown,
+  summary: string
+): boolean {
+  const needle = tipTapDocToPlainText(summaryStringToTipTapDoc(summary));
+  if (!needle) return true;
+  return tipTapDocToPlainText(existing).includes(needle);
+}
+
+/**
  * Append-merges a plain summary onto an existing TipTap doc, adding the new
  * content at the very bottom so nothing previously in the box is overwritten
  * (per the director's verbatim "added to the very bottom" directive for the

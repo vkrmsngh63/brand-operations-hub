@@ -585,6 +585,43 @@ test('per-review cache hit — analysisId comes from the cached row id', async (
   assert.equal(body.summaries[0].analysisId, 'analysis-cached-xyz');
 });
 
+test('per-review cache hit — also writes the cached summary back to CapturedReview.analysis (FF1)', async () => {
+  const reviews = [sampleReview('rev-a')];
+  const cachedHash = computeReviewsHash(
+    [{ id: 'rev-a' }],
+    `claude-opus-4-7|${PER_REVIEW_SUMMARIZE_PROMPT_VERSION}`
+  );
+  const { prisma, state: prismaState } = makePrisma({
+    reviews,
+    cachedRows: [
+      {
+        id: 'analysis-cached-xyz',
+        reviewsHash: cachedHash,
+        analysisJson: {
+          reviewId: 'rev-a',
+          summary: '- cached point',
+        } as Prisma.JsonValue,
+        modelVersion: 'claude-opus-4-7',
+        level: 'PER_REVIEW',
+      },
+    ],
+  });
+  const { client } = makeAnthropicClient({});
+  const deps = makeDeps({ prisma, anthropicClient: client });
+  const { POST } = makeReviewAnalysisRunBatchHandlers(deps);
+  await POST(
+    makeRequest({
+      flow: 'per-review-summarize',
+      urlId: 'url-1',
+      reviewIds: ['rev-a'],
+    }),
+    makeCtx('proj-1')
+  );
+  // FF1: cache hit now syncs the review's "Your Analysis" box too.
+  assert.equal(prismaState.reviewUpdateCalls.length, 1);
+  assert.equal(prismaState.reviewUpdateCalls[0].id, 'rev-a');
+});
+
 // ─── Cache-hit path — no AI call needed ─────────────────────────────
 
 test('POST 200 fully from cache — no AI call, no DB writes', async () => {
@@ -973,23 +1010,26 @@ test('per-competitor fresh — appends summary to overallAnalyses.reviews (D-10)
   assert.equal(bag.reviews.content[0].type, 'paragraph'); // the prior note
 });
 
-test('per-competitor cache hit — no overallAnalyses write-back (no duplicate append)', async () => {
-  const reviews = [sampleReview('rev-a'), sampleReview('rev-b')];
+function makeCompetitorCacheRow() {
   const corpusHash = computeReviewsHash(
     [{ id: 'rev-a' }, { id: 'rev-b' }],
     `claude-opus-4-7|${PER_COMPETITOR_BULLETED_PROMPT_VERSION}`
   );
+  return {
+    id: 'pc-cached',
+    reviewsHash: corpusHash,
+    analysisJson: { summary: '## Themes\n- cached competitor point' } as Prisma.JsonValue,
+    modelVersion: 'claude-opus-4-7',
+    level: 'PER_PRODUCT' as const,
+  };
+}
+
+test('per-competitor cache hit — writes back to an EMPTY box (FF1: pre-deploy summaries surface)', async () => {
+  const reviews = [sampleReview('rev-a'), sampleReview('rev-b')];
   const { prisma, state: prismaState } = makePrisma({
     reviews,
-    cachedRows: [
-      {
-        id: 'pc-cached',
-        reviewsHash: corpusHash,
-        analysisJson: { summary: 'cached competitor summary' } as Prisma.JsonValue,
-        modelVersion: 'claude-opus-4-7',
-        level: 'PER_PRODUCT',
-      },
-    ],
+    cachedRows: [makeCompetitorCacheRow()],
+    // Box empty (default {}) — the summary predates the write-back feature.
   });
   const { client } = makeAnthropicClient({});
   const deps = makeDeps({ prisma, anthropicClient: client });
@@ -1003,7 +1043,52 @@ test('per-competitor cache hit — no overallAnalyses write-back (no duplicate a
     makeCtx('proj-1')
   );
   assert.equal(r.status, 200);
-  // Cache hit → NO write-back (re-runs must not duplicate the appended block).
+  // Cache hit now DOES write back when the box doesn't already have it.
+  assert.equal(prismaState.urlUpdateCalls.length, 1);
+});
+
+test('per-competitor cache hit — does NOT duplicate when summary already in the box', async () => {
+  const reviews = [sampleReview('rev-a'), sampleReview('rev-b')];
+  const { prisma, state: prismaState } = makePrisma({
+    reviews,
+    cachedRows: [makeCompetitorCacheRow()],
+    // Box already contains the summary text (flattened: heading + bullet).
+    existingOverallAnalyses: {
+      reviews: {
+        type: 'doc',
+        content: [
+          { type: 'paragraph', content: [{ type: 'text', text: '## Themes' }] },
+          {
+            type: 'bulletList',
+            content: [
+              {
+                type: 'listItem',
+                content: [
+                  {
+                    type: 'paragraph',
+                    content: [{ type: 'text', text: 'cached competitor point' }],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    } as Prisma.JsonValue,
+  });
+  const { client } = makeAnthropicClient({});
+  const deps = makeDeps({ prisma, anthropicClient: client });
+  const { POST } = makeReviewAnalysisRunBatchHandlers(deps);
+  const r = await POST(
+    makeRequest({
+      flow: 'per-competitor-bulleted',
+      urlId: 'url-1',
+      reviewIds: ['rev-a', 'rev-b'],
+    }),
+    makeCtx('proj-1')
+  );
+  assert.equal(r.status, 200);
+  // Already present → idempotent → no write-back.
   assert.equal(prismaState.urlUpdateCalls.length, 0);
 });
 

@@ -41,6 +41,7 @@ import { computeReviewsHash } from '../review-analysis/cache.ts';
 import {
   appendSummaryToTipTapDoc,
   summaryStringToTipTapDoc,
+  tipTapDocContainsSummary,
 } from '../../rich-text/tiptap-helpers.ts';
 import {
   calculateCostUsd,
@@ -518,6 +519,56 @@ export function makeReviewAnalysisRunBatchHandlers(
         cachedRows = [];
       }
 
+      // FF1 2026-05-30 — shared per-competitor write-back into the URL's
+      // "Overall Analysis — Captured Reviews" box (overallAnalyses["reviews"]),
+      // append-merged at the bottom. Append-IF-ABSENT (content-dedup) so it's
+      // idempotent across both fresh + cache-hit runs: a summary already in the
+      // box is never duplicated, and a summary not yet in the box (e.g. one
+      // generated before this deploy) gets appended on the next run. Soft-fail.
+      const writeBackPerCompetitorReviews = async (
+        summaryText: string
+      ): Promise<void> => {
+        try {
+          const existingUrl = await withRetry(() =>
+            prisma.competitorUrl.findUnique({
+              where: { id: urlId },
+              select: { overallAnalyses: true },
+            })
+          );
+          const bag =
+            existingUrl &&
+            existingUrl.overallAnalyses &&
+            typeof existingUrl.overallAnalyses === 'object' &&
+            !Array.isArray(existingUrl.overallAnalyses)
+              ? (existingUrl.overallAnalyses as Record<string, unknown>)
+              : {};
+          if (tipTapDocContainsSummary(bag.reviews, summaryText)) {
+            return; // already present — no duplicate append
+          }
+          const mergedReviewsDoc = appendSummaryToTipTapDoc(
+            bag.reviews,
+            summaryText
+          );
+          await withRetry(() =>
+            prisma.competitorUrl.update({
+              where: { id: urlId },
+              data: {
+                overallAnalyses: {
+                  ...bag,
+                  reviews: mergedReviewsDoc,
+                } as Prisma.InputJsonValue,
+              },
+            })
+          );
+        } catch (error) {
+          recordFlake(
+            'POST per-competitor-bulleted overallAnalyses write-back',
+            error,
+            { projectId, urlId }
+          );
+        }
+      };
+
       // Pair each cached row with its summary so we can return the row
       // id alongside the summary text (the client needs both for the
       // Edit affordance).
@@ -529,6 +580,12 @@ export function makeReviewAnalysisRunBatchHandlers(
         .find((entry): entry is { id: string; summary: string } => !!entry.summary);
 
       if (cachedHit) {
+        // FF1 2026-05-30 — write-back on cache hit too. The original Fix
+        // Session B build only wrote back on fresh persists, so summaries
+        // generated before this deploy (always cache hits now) never landed
+        // in the "Overall Analysis — Captured Reviews" box. Append-if-absent
+        // keeps it idempotent across repeated cache-hit runs.
+        await writeBackPerCompetitorReviews(cachedHit.summary);
         const cachedResponse: PerCompetitorBulletedResponseBody = {
           flow: 'per-competitor-bulleted',
           analysisId: cachedHit.id,
@@ -662,50 +719,10 @@ export function makeReviewAnalysisRunBatchHandlers(
 
       // P-49 W5 Fix Session B (2026-05-30; D-10 bulleted half) — write the
       // bulleted summary BACK into this URL's "Overall Analysis — Captured
-      // Reviews" box (overallAnalyses["reviews"]), append-merged at the very
-      // bottom so nothing previously in the box is overwritten (director's
-      // verbatim directive). Read-modify-write of the bag. Only runs on a
-      // FRESH persist — cache hits returned earlier (line ~520) — so re-runs
-      // with the same corpus do NOT duplicate the appended block. Soft-fail:
-      // the summary already persisted + returns to the browser regardless.
-      if (persistedId) {
-        try {
-          const existingUrl = await withRetry(() =>
-            prisma.competitorUrl.findUnique({
-              where: { id: urlId },
-              select: { overallAnalyses: true },
-            })
-          );
-          const bag =
-            existingUrl &&
-            existingUrl.overallAnalyses &&
-            typeof existingUrl.overallAnalyses === 'object' &&
-            !Array.isArray(existingUrl.overallAnalyses)
-              ? (existingUrl.overallAnalyses as Record<string, unknown>)
-              : {};
-          const mergedReviewsDoc = appendSummaryToTipTapDoc(
-            bag.reviews,
-            validatedPC.summary
-          );
-          await withRetry(() =>
-            prisma.competitorUrl.update({
-              where: { id: urlId },
-              data: {
-                overallAnalyses: {
-                  ...bag,
-                  reviews: mergedReviewsDoc,
-                } as Prisma.InputJsonValue,
-              },
-            })
-          );
-        } catch (error) {
-          recordFlake(
-            'POST per-competitor-bulleted overallAnalyses write-back',
-            error,
-            { projectId, urlId }
-          );
-        }
-      }
+      // Reviews" box via the shared append-if-absent helper (idempotent;
+      // see definition above). Soft-fail: the summary already persisted +
+      // returns to the browser regardless.
+      await writeBackPerCompetitorReviews(validatedPC.summary);
 
       const actualCostUsdPC = calculateCostUsd(modelVersion, {
         inputTokens: responsePC.usage.input_tokens,
@@ -783,6 +800,33 @@ export function makeReviewAnalysisRunBatchHandlers(
       if (summary && reviewId) {
         cachedByReviewId.set(reviewId, summary);
         cachedAnalysisIdByReviewId.set(reviewId, row.id);
+      }
+    }
+
+    // FF1 2026-05-30 — write-back on cache hit too (D-9). The original Fix
+    // Session B build only wrote back to CapturedReview.analysis on fresh
+    // persists, so per-review summaries generated before this deploy (now
+    // always cache hits) never landed in the review's "Your Analysis" box.
+    // The write-back is a REPLACE (analysis = summary doc) so re-applying it
+    // on every cache hit is idempotent. Soft-fail — never blocks the response.
+    for (const [reviewId, summaryText] of cachedByReviewId) {
+      try {
+        await withRetry(() =>
+          prisma.capturedReview.update({
+            where: { id: reviewId },
+            data: {
+              analysis: summaryStringToTipTapDoc(
+                summaryText
+              ) as Prisma.InputJsonValue,
+            },
+          })
+        );
+      } catch (error) {
+        recordFlake('POST review-analysis-run-batch cached writeback', error, {
+          projectId,
+          urlId,
+          reviewId,
+        });
       }
     }
 

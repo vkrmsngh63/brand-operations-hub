@@ -19,6 +19,8 @@ import {
   summaryStringToContentNodes,
   summaryStringToTipTapDoc,
   appendSummaryToTipTapDoc,
+  tipTapDocToPlainText,
+  tipTapDocContainsSummary,
 } from './tiptap-helpers.ts';
 
 /* ── isEmptyTipTapDoc ──────────────────────────────────────────────── */
@@ -385,4 +387,32 @@ test('appendSummaryToTipTapDoc: empty summary → existing returned unchanged', 
   };
   const out = appendSummaryToTipTapDoc(existing, '   ');
   assert.deepEqual(out.content, existing.content);
+});
+
+/* ── tipTapDocToPlainText + tipTapDocContainsSummary (FF1 dedup guard) ── */
+
+test('tipTapDocToPlainText: flattens nested text leaves, collapses whitespace', () => {
+  const doc = summaryStringToTipTapDoc('## Theme\n- one\n- two');
+  assert.equal(tipTapDocToPlainText(doc), '## Theme one two');
+});
+
+test('tipTapDocToPlainText: empty/garbage → empty string', () => {
+  assert.equal(tipTapDocToPlainText({}), '');
+  assert.equal(tipTapDocToPlainText(null), '');
+});
+
+test('tipTapDocContainsSummary: true when the box already holds the summary (marker-agnostic)', () => {
+  // The box stores the summary appended earlier (bullet markers stripped).
+  const box = appendSummaryToTipTapDoc({}, '- alpha\n- beta');
+  // The candidate is the RAW summary string with "- " markers — must match.
+  assert.equal(tipTapDocContainsSummary(box, '- alpha\n- beta'), true);
+});
+
+test('tipTapDocContainsSummary: false when summary not present → would append', () => {
+  const box = appendSummaryToTipTapDoc({}, '- alpha');
+  assert.equal(tipTapDocContainsSummary(box, '- gamma'), false);
+});
+
+test('tipTapDocContainsSummary: empty summary counts as present (no append)', () => {
+  assert.equal(tipTapDocContainsSummary({}, '   '), true);
 });
