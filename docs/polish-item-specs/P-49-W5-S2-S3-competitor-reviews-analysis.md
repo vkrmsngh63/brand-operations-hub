@@ -3,7 +3,7 @@
 **Polish-item ID:** P-49 W5 Sessions 2 + 3 (page already shipped with multiple divergences from spec; corrective-fix Sessions TBD)
 **Created:** 2026-05-28-b
 **Session that captured §1 (re-paste):** `session_2026-05-28-b_p49-w5-reviews-phase-2-master-spec-backfill-and-page-2-divergence-fix-plan`
-**Status:** SPEC LOCKED at §1 level (verbatim); §2 + §3 + §4 updated through Fix Session A 2026-05-29 deploy + 4 bundled FF cycles; **Fix Session A SHIPPED-AND-VERIFIED 2026-05-29 — D-1 through D-7 closed; D-8 PARTIALLY closed in FF2 (lifted forward from Fix Session B per director directive); D-9/D-10/D-11 + Q3 schema gap carried to Fix Session B**; Q10 RESOLVED at Fix Session A planning; §4 reduced to Q8 + Q9 open + Q10 RESOLVED note.
+**Status:** SPEC LOCKED at §1 level (verbatim); **Fix Session A SHIPPED-AND-VERIFIED 2026-05-29** (D-1 through D-7) + **Fix Session B SHIPPED-AND-VERIFIED 2026-05-30** (D-8 + D-9 + D-10 bulleted half + D-11 + Q3 schema gap; build `351342a` + FF1 `add00ad`; director PASS "Both worked now, everything passed"). **Fix Session C remaining** — D-6 drag-to-reorder + D-7 Excel + D-10 non-bulleted half + the NEW per-competitor non-bulleted AI flow + `CapturedReview.sortRankInReviewsTable` schema column + Q8. Q3 + Q9 + Q10 RESOLVED; §4 reduced to Q8 (Fix Session C).
 
 > **Background:** This spec doc is a BACKFILL. The Competitor Reviews Analysis Table page (`/projects/[projectId]/competition-scraping/competitor-reviews-analysis`) was shipped in W5 Session 2 (2026-05-27) and W5 Session 3 (2026-05-27-c) BEFORE Rule 31 was established (2026-05-28). The verbatim director instructions for this page were never captured into a stable doc at that time. Today's session (2026-05-28-b) backfills the verbatim spec + a divergence list documenting where the shipped page falls short of the verbatim text. The fix-scope is decomposed into a multi-session plan in §3 below.
 
@@ -38,6 +38,15 @@
 ---
 
 ## §2 — Joint-discussion adjustments (append-only, chronological)
+
+**2026-05-30 (Fix Session B ✅ DEPLOYED-AND-VERIFIED end-to-end on vklf.com via `workflow-2-competition-scraping` → `main`):**
+
+- **Q9 → A RESOLVED:** per-review summary cells use the SAME Edit-button pattern as the per-competitor banner row (one consistent edit UX; §1 "all cells should be editable").
+- **Q3 → A RESOLVED + shipped:** added additive nullable `CapturedReview.title String?` (zero data loss). Extension orchestrator `saveReview` adapters stopped dropping the captured title; PLOS POST/PATCH + wire shape + shared-types carry it; review-row body cell renders 'title. body' display-merge.
+- **Build `351342a` (19 files +1115/-63):** Q3 title plumbing end-to-end + per-review write-back to `CapturedReview.analysis` (D-9) + per-competitor bulleted write-back appended to `overallAnalyses["reviews"]` (D-10 bulleted half) + PATCH accepts PER_REVIEW edits + syncs analysis (D-11) + NEW `PerReviewSummaryCell` + analysisId threaded through batch response + hydration + persistence-on-refresh confirmed (D-8). NEW pure helpers: `mergeTitleAndBody`, `summaryStringToContentNodes`/`summaryStringToTipTapDoc`/`appendSummaryToTipTapDoc`.
+- **FF1 `add00ad` (4 files +257/-55) — Phase 4 redirect:** per-review + per-competitor summaries generated BEFORE the deploy never appeared on the URL detail page because the initial build only wrote back on FRESH AI persists (cache hits returned early + skipped the write-back). FF1 fires both write-backs on cache hits too — per-review REPLACE is idempotent; per-competitor APPEND guarded by NEW `tipTapDocContainsSummary` content-dedup so re-runs don't duplicate. Director Phase 4 PASS: "Both worked now, everything passed".
+- **AUDIT FINDING (Rule 31 audit-shipped-state):** the "Overall Analysis — Captured Reviews" box already rendered on the URL detail page (shipped P-46 W2 Session 4 2026-05-28) — D-10's "box missing" sub-claim was stale; only the write-back was the real gap.
+- **Schema-change-in-flight:** YES entry → FLIPPED NO at the initial deploy push (`351342a` → main). `db push` applied `CapturedReview.title` in 1.50s.
 
 **2026-05-27 (W5 Session 1.5 design lock; pre-Rule-31; retroactively recorded here):**
 
@@ -259,20 +268,22 @@ NO drag-to-reorder rows in Fix Session A. NO new AI flows. NO write-backs. NO Ex
 
 Schema-change-in-flight = NO this session (preserved per director-approved Rule 14f mid-build deferral of the Q3 schema-gap discovery to Fix Session B).
 
-**Fix Session B — Write-back to URL detail page + per-review edit + persistence-on-refresh bug + title schema column (Q3 carry-over from Fix Session A).**
+**Fix Session B — ✅ DEPLOYED-AND-VERIFIED 2026-05-30 — Write-back to URL detail page + per-review edit + persistence-on-refresh bug + title schema column (Q3 carry-over from Fix Session A).**
+
+Initial build commit `351342a` (19 files +1115/-63) + FF1 `add00ad` (4 files +257/-55) deployed end-to-end on vklf.com via `workflow-2-competition-scraping` → `main`. Director Phase 4 verbatim PASS verdict: "Both worked now, everything passed". 2 Rule 9 deploy gates (initial + FF1). Closes D-8 + D-9 + D-10 (bulleted half) + D-11 + Q3 schema gap.
 
 Scope:
-1. ~~Render the NEW "Overall Analysis — Captured Reviews" box on URL detail page.~~ **AUDIT FINDING 2026-05-30 (Fix Session B build, Rule 31 audit-shipped-state mandate): the box ALREADY RENDERS** at `UrlDetailContent.tsx` (CapturedReviewsSection, ~line 2109) — shipped P-46 Workstream 2 Session 4 (2026-05-28) with `field={{ kind: 'overallAnalyses', category: 'reviews' }}`, label "Overall Analysis — Captured Reviews", testId `overall-analysis-reviews`, `initialContent={overallAnalyses?.reviews ?? {}}`. D-10's "box does NOT currently render" claim was **stale**. The real D-10 gap was only the per-competitor WRITE-BACK into that box's slot, closed in item 3 below. No UI change needed here.
-2. Wire per-review summary WRITE-BACK to `CapturedReview.analysis`. Path: when `run-batch.ts` saves a PER_REVIEW `ReviewAnalysis` row, ALSO update the corresponding `CapturedReview.analysis` field with the same bullet-list TipTap doc (D-9 fix).
-3. Wire per-competitor bulleted WRITE-BACK to `CompetitorUrl.overallAnalyses["reviews"]`. Append-merge at bottom (D-10 fix; bulleted half).
-4. Extend `review-analysis-update.ts` PATCH endpoint to ACCEPT PER_REVIEW edits (currently rejected at line 181-193). Wire UI Edit button on per-review summary cells on review rows (D-11 fix; Q9 — same Edit-button UI pattern as banner row).
-5. Fix persistence-on-refresh bug: page loader fetches existing PER_REVIEW `ReviewAnalysis` rows and hydrates them into table state (D-8 fix). Re-verify PER_PRODUCT bulleted loads correctly post-fix.
-6. **Q3 schema gap (NEW carry-over from Fix Session A 2026-05-29):** add `CapturedReview.title String?` column (additive, nullable, zero data loss) + wire orchestrator's `saveReview` adapter (`orchestrator.ts:1254-1275`) to pass title through to `createCapturedReview` + extend wire shape + extend PATCH endpoint to accept title + implement title+description display-time merge on the review-row body cell of the Reviews Analysis Table page (per Q3 → A from 2026-05-28-b: 'title' + period-if-missing + ' ' + 'body').
-7. /scoreboard + deploy decision Rule 14f.
+1. ✅ DONE (audit finding — no work needed) — ~~Render the NEW "Overall Analysis — Captured Reviews" box on URL detail page.~~ **AUDIT FINDING 2026-05-30 (Rule 31 audit-shipped-state mandate): the box ALREADY RENDERS** at `UrlDetailContent.tsx` (CapturedReviewsSection, ~line 2109) — shipped P-46 Workstream 2 Session 4 (2026-05-28) with `field={{ kind: 'overallAnalyses', category: 'reviews' }}`, label "Overall Analysis — Captured Reviews", testId `overall-analysis-reviews`. D-10's "box does NOT currently render" claim was **stale**. The real D-10 gap was only the per-competitor WRITE-BACK into that box's slot (item 3).
+2. ✅ DONE (D-9) — Per-review summary WRITE-BACK to `CapturedReview.analysis` in `review-analysis-run-batch.ts`. Each review's "Your Analysis" box (PerItemAnalysisBox at `UrlDetailContent.tsx:2519`) reads this. Stored as a TipTap doc via NEW `summaryStringToTipTapDoc` helper.
+3. ✅ DONE (D-10 bulleted half) — Per-competitor bulleted WRITE-BACK to `CompetitorUrl.overallAnalyses["reviews"]`, append-merged at bottom via NEW `appendSummaryToTipTapDoc` helper. **FF1: write-backs now fire on cache hits too** (the initial build only wrote back on fresh AI persists, so summaries generated before the deploy — always cache hits — never landed in the boxes; FF1's content-dedup guard `tipTapDocContainsSummary` keeps the per-competitor append idempotent across re-runs).
+4. ✅ DONE (D-11; Q9 → A same Edit-button as banner) — `review-analysis-update.ts` PATCH now accepts PER_REVIEW edits + syncs `CapturedReview.analysis` on edit (single source of truth, Q6). NEW `PerReviewSummaryCell` component + `analysisId` threaded through the per-review batch response + page hydration so cells are editable live + post-refresh.
+5. ✅ DONE (D-8) — persistence-on-refresh confirmed (hydration loader reads PER_REVIEW + PER_PRODUCT rows via GET /review-analysis incl. `id` for the Edit affordance).
+6. ✅ DONE (Q3 schema gap) — added `CapturedReview.title String?` (additive, nullable, `db push` 1.50s, zero data loss) + extension orchestrator `saveReview` adapters (amazon/ebay/etsy/walmart) now pass title through to `createCapturedReview` (previously dropped) + PLOS POST/PATCH accept + persist + wire shape + shared-types carry it + display-time merge ('title' + period-if-missing + ' ' + 'body') via NEW pure `mergeTitleAndBody` helper on the review-row body cell (`formatRead`; editing still targets `body` only).
+7. ✅ DONE — /scoreboard 5/5 GREEN (root+ext tsc clean / ext `npm test` 910/910 UNCHANGED / src/lib `node:test` **1018/1018** +34 from 984 entry / `npm run build` **68 routes** UNCHANGED) + 2 Rule 9 deploy gates.
 
 NO new AI flows. NO Excel. NO drag.
 
-Schema-change-in-flight = **YES** this session (Q3 schema migration carried over from Fix Session A — additive only; CapturedReview.title nullable).
+Schema-change-in-flight = **YES → NO** (Q3 `CapturedReview.title` migration; FLIPPED YES → NO at the initial deploy push `351342a` to main).
 
 **Fix Session C — NEW per-competitor non-bulleted flow + Auto-create non-bulleted button + Excel Export + Drag-to-reorder.**
 

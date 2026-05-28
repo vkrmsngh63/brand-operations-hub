@@ -2123,6 +2123,72 @@ PLOS-side UI + src/lib module surface + 1 NEW API route (`GET /api/projects/[pro
 
 ---
 
+## §B 2026-05-30 — `session_2026-05-30_p49-w5-reviews-analysis-table-fix-session-b` — Workstream 5 Reviews Analysis Table Fix Session B ✅ DEPLOYED-AND-VERIFIED 2026-05-30 end-to-end on vklf.com via `workflow-2-competition-scraping` → `main` — the SECOND of the 3-session corrective-fix plan locked 2026-05-28-b — initial build commit `351342a` (19 files +1115/-63) plus ONE fix-forward commit FF1 `add00ad` (4 files +257/-55 — the only Phase-4 redirect) all ff-merged to main under 2 Rule 9 deploy gates — FIFTEENTH build/deploy-session §B entry per Rule 18; SEVENTH W5 entry — director Phase 4 verbatim PASS verdict: "Both worked now, everything passed"; closes D-8 + D-9 + D-10 (bulleted half) + D-11 + the Q3 schema-gap carry-over from Fix Session A; Q3 schema-change-in-flight YES entry → FLIPPED YES → NO at the initial deploy push; NEW reusable PATTERN memorialized — "Write-back-on-cache-hit gap"; AUDIT FINDING (Rule 31 audit-shipped-state) — the "Overall Analysis — Captured Reviews" box already rendered (shipped P-46 W2 Session 4), so D-10's "box missing" sub-claim was stale, only the write-back was the real gap
+
+**Closes (a.108) RECOMMENDED-NEXT** = P-49 W5 Reviews Analysis Table Fix Session B ✅ DEPLOYED-AND-VERIFIED 2026-05-30 (build `351342a` + FF1 `add00ad`). **Opens (a.109) RECOMMENDED-NEXT = P-49 W5 Reviews Analysis Table Fix Session C** on `workflow-2-competition-scraping` per `docs/polish-item-specs/P-49-W5-S2-S3-competitor-reviews-analysis.md` §3 "Fix Session C" sub-section (NEW per-competitor non-bulleted AI flow + Auto-create non-bulleted button + Excel export D-7 + drag-to-reorder review rows D-6 + NEW `CapturedReview.sortRankInReviewsTable Int?` schema column + Q8 flow-naming; Schema-change-in-flight YES entry).
+
+### Session shape — DEPLOY with 2 ff-merges across 2 Rule 9 deploy gates
+
+Session opened per yesterday's NEXT_SESSION.md pointer scoping "P-49 W5 Reviews Analysis Table Fix Session B" per the 3-session corrective-fix plan. Claude completed the start-of-session routine (branch verify / Group A doc reads / Rule 31 §3 read of the 2 P-49-W5 spec docs auto-loaded by the SessionStart hook / audit-shipped-state confirmation of the live `/competitor-reviews-analysis` page + URL detail page state) and awaited director go-ahead.
+
+**Phase 1 (Q9 + Q3 resolutions).** Q9 (per-review summary Edit UI) — director picked Recommended (same Edit-button pattern as the banner row). Q3 (schema-change shape) — director picked Recommended (add the column this session); a free-text "explain in simpler terms" interjection landed on Q3 before a re-framed plain-terms picker resolved Recommended (a positive director-comprehension data point, NOT a redirect — the framing was clarified, not reversed). Schema-change-in-flight FLIPPED NO → YES at session entry per the Q3 carry-over.
+
+**Phase 2 (build) — `351342a` (19 files +1115/-63):**
+
+1. **Q3 schema column** — NEW additive nullable `CapturedReview.title` column (`prisma db push` 1.50s, zero data loss). Extension orchestrator `saveReview` adapters (amazon/ebay/etsy/walmart) now pass the captured title through to `createCapturedReview` (previously silently dropped). PLOS POST (`url-reviews.ts`) + PATCH (`reviews-by-id.ts`) + wire shape + shared-types accept/persist title. Review-row body cell renders `'title. body'` display-merge via NEW pure `mergeTitleAndBody` helper (formatRead; editing targets the body column only — never corrupts the title column).
+2. **D-9** — per-review (PER_REVIEW) AI run writes summary back to `CapturedReview.analysis` (TipTap doc).
+3. **D-10 (bulleted half)** — per-competitor (PER_PRODUCT bulleted) AI run appends summary to the bottom of `CompetitorUrl.overallAnalyses["reviews"]`.
+4. **D-11** — `review-analysis-update.ts` PATCH now accepts PER_REVIEW edits + syncs `CapturedReview.analysis` on edit (single source of truth, Q6). NEW `PerReviewSummaryCell` component + `analysisId` threaded through the per-review batch response + page hydration so cells are editable live + post-refresh.
+5. **D-8** — persistence-on-refresh confirmed.
+6. NEW pure helpers: `mergeTitleAndBody` (reviews-analysis-table-columns.ts); `summaryStringToContentNodes` / `summaryStringToTipTapDoc` / `appendSummaryToTipTapDoc` (tiptap-helpers.ts).
+
+**Audit finding during Phase 2 (Rule 31 audit-shipped-state mandate paid off).** The "Overall Analysis — Captured Reviews" box on the URL detail page ALREADY rendered — it shipped in P-46 W2 Session 4. So D-10's "box doesn't render" sub-claim from the 2026-05-28-b divergence catalogue was stale; only the write-back was the real gap. Auditing the shipped state first saved building a box that already existed.
+
+**Phase 3 (initial-build deploy decision).** Director picked Recommended (Deploy `351342a` to main). Initial deploy fired; ff-merge to main under Rule 9 deploy gate #1. Schema-change-in-flight FLIPPED YES → NO at this push.
+
+**Phase 4 (initial-build director real-Chrome verification) — surfaced 1 redirect bundled into FF1.**
+
+### FF1 `add00ad` — the only Phase-4 redirect — NEW reusable PATTERN "Write-back-on-cache-hit gap"
+
+**Symptom.** Per-review + per-competitor summaries generated BEFORE the deploy never appeared on the URL detail page after the build shipped.
+
+**Root cause.** The initial build only wrote back on FRESH AI persists. When the per-batch handler took a cache HIT (a summary already existed in the `ReviewAnalysis` cache from a pre-deploy run), it returned early and skipped the write-back to `CapturedReview.analysis` / `CompetitorUrl.overallAnalyses["reviews"]`. So any data summarized before the write-back code existed stayed invisible.
+
+**Fix (FF1 `add00ad`, 4 files +257/-55).** Fire both write-backs on cache hits too. Per-review REPLACE is idempotent. Per-competitor APPEND is guarded by NEW `tipTapDocContainsSummary` content-dedup so re-runs don't duplicate. Factored into one shared `writeBackPerCompetitorReviews` helper. NEW helpers: `tipTapDocToPlainText` + `tipTapDocContainsSummary`. Ff-merged to main under Rule 9 deploy gate #2.
+
+**The reusable Pattern.** When an AI-run side effect (write-back, notification, downstream sync) is wired ONLY into the fresh-persist branch, it silently skips already-cached data. Prevention: fire the side effect on cache hits too; for append-semantics targets, add a content-dedup guard so the side effect stays idempotent across re-runs. Complements the "Edit affordance for cached AI output Pattern" (§B 2026-05-27-c) — both treat the cache-hit branch as a first-class path.
+
+**Director's verbatim Phase 4 verification result on FF1: "Both worked now, everything passed".**
+
+### Scoreboard
+
+Entry baselines = Fix Session A exit = 2026-05-29 locked (root tsc clean / extension tsc clean / **910 ext** / **984 src/lib** / **68 routes**). Post-FF1 /scoreboard 5/5 GREEN at NEW LOCKED baseline:
+
+| Check | Entry | Exit | Delta |
+| --- | --- | --- | --- |
+| Root tsc | clean | clean | unchanged |
+| Extension tsc | clean | clean | unchanged |
+| Extension `npm test` | 910/910 | 910/910 | UNCHANGED (PLOS-side + extension orchestrator change; no extension test delta) |
+| src/lib `node:test` | 984/984 | **1018/1018** | **+34** (mergeTitleAndBody 7 + tiptap summary/append helpers 12 + tiptap plaintext/contains 5 + run-batch write-back + cache 6 + review-analysis-update PER_REVIEW 2 + url-reviews title 3 + reviews-by-id title 2, minus 1 replaced test) |
+| `npm run build` | 68 routes | **68 routes** | UNCHANGED (PATCH reuses existing [analysisId] route; GET /review-analysis already existed) |
+| Playwright | — | SKIPPED | per Rule 27 (build/deploy session) |
+
+### Affected §A sections (informational — §A FROZEN per Rule 18)
+
+- §A.16 schema — the NEW `CapturedReview.title String?` column is additive + nullable + zero data loss; it complements the existing `body` / `analysis` / `sortRank` columns. §A is frozen; this supersedence note lives in §B only.
+- The per-review + per-competitor write-back targets (`CapturedReview.analysis` + `CompetitorUrl.overallAnalyses["reviews"]`) were already specified in the master verbatim spec; this entry records that both write-back paths are now WIRED (D-9 + D-10 bulleted half).
+
+### Cross-references
+
+- §B 2026-05-29 above (W5 Fix Session A deploy + 4-FF cascade) — the predecessor entry; Q3 schema-gap was DISCOVERED there + DEFERRED to this session, now CLOSED.
+- §B 2026-05-27-c above (W5 Session 3 Per-Competitor deploy) — the "Edit affordance for cached AI output Pattern" + the per-batch flow-dispatch architecture that this session's write-back hooks extend.
+- `docs/CORRECTIONS_LOG.md` §Entry 2026-05-30 — the INFORMATIONAL entry capturing the "Write-back-on-cache-hit gap" Pattern + the audit-shipped-state positive win + the P-43 running tally.
+- `docs/polish-item-specs/P-49-W5-S2-S3-competitor-reviews-analysis.md` §3 Fix Session B (now ✅ DONE) + §4 (reduced to Q8); `docs/polish-item-specs/P-49-W5-reviews-phase-2-master-spec.md` §3 pointer table (Reviews Analysis Table page flipped to "Fix Sessions A + B ✅ DEPLOYED-AND-VERIFIED; Fix Session C remaining").
+
+**Closing line:** P-49 W5 Reviews Analysis Table Fix Session B ✅ DEPLOYED-AND-VERIFIED 2026-05-30 (build `351342a` + FF1 `add00ad`) under 2 Rule 9 deploy gates on `workflow-2-competition-scraping`. Closes D-8 + D-9 + D-10 (bulleted half) + D-11 + the Q3 schema-gap carry-over. NEW reusable PATTERN memorialized: "Write-back-on-cache-hit gap". Rule 31 audit-shipped-state mandate paid off (caught D-10's stale "box missing" sub-claim). Schema-change-in-flight YES → NO at deploy. 5/5 = 100% Yes-to-Recommended this session; running cumulative 101/104 = 97.1%. NEW baselines: src/lib `node:test` = **1018/1018** + `npm run build` = **68 routes UNCHANGED** + extension = 910/910 UNCHANGED. **Closes (a.108) RECOMMENDED-NEXT.** **Opens (a.109) RECOMMENDED-NEXT = P-49 W5 Reviews Analysis Table Fix Session C.** **FIFTEENTH build/deploy-session §B entry per Rule 18 — SEVENTH W5 entry.** The next §B entry will land at the close of Fix Session C (NEW per-competitor non-bulleted AI flow + Excel export + drag-to-reorder review rows + `CapturedReview.sortRankInReviewsTable Int?` schema column per spec doc §3 "Fix Session C" sub-section).
+
+---
+
 ---
 
 END OF DOCUMENT
