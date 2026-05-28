@@ -84,6 +84,24 @@ export function resolveReviewsColumnWidth(
   return column.defaultWidth;
 }
 
+// FF2 2026-05-29 — the auxiliary Actions column (per-URL inline AI-flow
+// buttons; NOT in the 10 spec columns) is also drag-to-resize. Its
+// width is stored under a distinct key so it doesn't collide with any
+// of the 10 column ids. Director directive: "the right edge of the
+// table is not draggable either, which it should be" — the Actions
+// column owns the right edge.
+export const ACTIONS_COL_KEY = '__actions__';
+
+export function resolveActionsColumnWidth(
+  columnWidths: Record<string, number>
+): number {
+  const override = columnWidths[ACTIONS_COL_KEY];
+  if (typeof override === 'number' && override > 0) {
+    return override;
+  }
+  return ACTIONS_COL_WIDTH;
+}
+
 // Compute the "N of M summarized" display string for a given URL row's
 // Reviews Summary count cell (spec §3 Column 8; Q10 → A — plain text).
 //

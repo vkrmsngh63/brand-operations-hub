@@ -13,9 +13,11 @@ import {
   REVIEWS_TABLE_COLUMNS,
   EXPAND_TOGGLE_WIDTH,
   ACTIONS_COL_WIDTH,
+  ACTIONS_COL_KEY,
   MIN_REVIEWS_COLUMN_WIDTH,
   MAX_REVIEWS_COLUMN_WIDTH,
   isReviewsColumnVisible,
+  resolveActionsColumnWidth,
   resolveReviewsColumnWidth,
   computeReviewsSummaryCount,
 } from './reviews-analysis-table-columns.ts';
@@ -134,6 +136,37 @@ test('resolveReviewsColumnWidth — non-numeric override → falls back to defau
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const widths = { [col.id]: '200' as any };
   assert.equal(resolveReviewsColumnWidth(widths, col), col.defaultWidth);
+});
+
+// ─── resolveActionsColumnWidth (FF2 — last-column resize) ───────────
+
+test('resolveActionsColumnWidth — empty override map → returns ACTIONS_COL_WIDTH default', () => {
+  assert.equal(resolveActionsColumnWidth({}), ACTIONS_COL_WIDTH);
+});
+
+test('resolveActionsColumnWidth — positive override under __actions__ key → returns override', () => {
+  assert.equal(resolveActionsColumnWidth({ [ACTIONS_COL_KEY]: 200 }), 200);
+});
+
+test('resolveActionsColumnWidth — zero/negative override → falls back to default', () => {
+  assert.equal(resolveActionsColumnWidth({ [ACTIONS_COL_KEY]: 0 }), ACTIONS_COL_WIDTH);
+  assert.equal(resolveActionsColumnWidth({ [ACTIONS_COL_KEY]: -50 }), ACTIONS_COL_WIDTH);
+});
+
+test('resolveActionsColumnWidth — unrelated keys do not affect the lookup', () => {
+  // Only __actions__ key controls the Actions column width. Sibling
+  // column keys (e.g., the URLs page's 'platform') should NOT leak in.
+  assert.equal(
+    resolveActionsColumnWidth({ platform: 999, productName: 999 }),
+    ACTIONS_COL_WIDTH
+  );
+});
+
+test('ACTIONS_COL_KEY — uses double-underscore namespace to avoid collision with the 10 column ids', () => {
+  // The key shouldn't match any spec column id (would cause persistence
+  // logic to read the wrong width when both are present).
+  const specIds = REVIEWS_TABLE_COLUMNS.map((c) => c.id);
+  assert.equal(specIds.includes(ACTIONS_COL_KEY), false);
 });
 
 // ─── computeReviewsSummaryCount (Q10 → A plain text) ────────────────

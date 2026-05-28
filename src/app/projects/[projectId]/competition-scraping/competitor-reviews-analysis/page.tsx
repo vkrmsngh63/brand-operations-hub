@@ -51,13 +51,13 @@ import {
 import { PLATFORM_LABELS } from '../components/url-table-columns';
 import { ColumnResizeHandle } from '../components/ColumnResizeHandle';
 import {
-  ACTIONS_COL_WIDTH,
   EXPAND_TOGGLE_WIDTH,
   MAX_REVIEWS_COLUMN_WIDTH,
   MIN_REVIEWS_COLUMN_WIDTH,
   REVIEWS_TABLE_COLUMNS,
   computeReviewsSummaryCount,
   isReviewsColumnVisible,
+  resolveActionsColumnWidth,
   resolveReviewsColumnWidth,
   type ReviewsTableColumnDef,
 } from '@/lib/competition-scraping/reviews-analysis-table-columns';
@@ -250,6 +250,205 @@ export default function CompetitorReviewsAnalysisPage() {
   const handleSelectAllPlatforms = useCallback((next: boolean) => {
     setSelectedPlatforms(next ? [...PLATFORMS] : []);
   }, []);
+
+  // FF2 2026-05-29 — Fix C: persistence for column widths + visibility.
+  // The existing /table-preferences endpoint stores a single
+  // (userId, projectId) row with `columnVisibility` + `columnWidths` JSON
+  // maps shared across all tables on this Project. To avoid colliding
+  // with the sibling Competitor URLs page's keys (which use unprefixed
+  // column ids), the Reviews Analysis Table prefixes its keys with
+  // `reviewsTable:` before persisting. Read path strips the prefix.
+  //
+  // Server keeps full-replace semantics on PUT (no merge mode yet), so
+  // each write sends a merged map: cached non-reviewsTable keys
+  // (preserving the URLs page's state) + the page's current
+  // reviewsTable: keys re-prefixed. Race window: both tabs editing
+  // their prefs row simultaneously — acceptable for v1 since toggles +
+  // resize commits are infrequent.
+  //
+  // serverPrefsRef caches the latest seen unprefixed (URLs-page) keys
+  // so writes don't clobber them. The page's local state is the source
+  // of truth for `reviewsTable:` keys.
+  const serverPrefsRef = useRef<{
+    columnVisibility: Record<string, boolean>;
+    columnWidths: Record<string, number>;
+  }>({ columnVisibility: {}, columnWidths: {} });
+  const writePrefsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!projectId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await authFetch(
+          `/api/projects/${projectId}/competition-scraping/table-preferences`
+        );
+        if (cancelled) return;
+        if (res.status === 404) {
+          // First-time user — no row exists yet. Local state stays at
+          // its initial empty maps; defaults render.
+          return;
+        }
+        if (!res.ok) return; // silent on auth/error — defaults render
+        const body = (await res.json()) as {
+          columnVisibility?: Record<string, boolean>;
+          columnWidths?: Record<string, number>;
+        };
+        const incomingVisibility = body.columnVisibility ?? {};
+        const incomingWidths = body.columnWidths ?? {};
+
+        // Split prefs into reviewsTable: prefixed (this page's keys) +
+        // the rest (URLs page's keys — must survive our writes).
+        const prefix = 'reviewsTable:';
+        const localVisibility: Record<string, boolean> = {};
+        const localWidths: Record<string, number> = {};
+        const otherVisibility: Record<string, boolean> = {};
+        const otherWidths: Record<string, number> = {};
+        for (const [k, v] of Object.entries(incomingVisibility)) {
+          if (k.startsWith(prefix)) {
+            localVisibility[k.slice(prefix.length)] = v;
+          } else {
+            otherVisibility[k] = v;
+          }
+        }
+        for (const [k, v] of Object.entries(incomingWidths)) {
+          if (k.startsWith(prefix)) {
+            localWidths[k.slice(prefix.length)] = v;
+          } else {
+            otherWidths[k] = v;
+          }
+        }
+        if (cancelled) return;
+        serverPrefsRef.current = {
+          columnVisibility: otherVisibility,
+          columnWidths: otherWidths,
+        };
+        setColumnVisibility(localVisibility);
+        setColumnWidths(localWidths);
+      } catch {
+        // Network errors don't block the page; defaults render.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
+
+  // Debounced write whenever local visibility OR widths change. The
+  // 500 ms delay coalesces drag-resize bursts into a single PUT.
+  useEffect(() => {
+    if (!projectId) return;
+    if (writePrefsTimerRef.current) {
+      clearTimeout(writePrefsTimerRef.current);
+    }
+    writePrefsTimerRef.current = setTimeout(() => {
+      const prefix = 'reviewsTable:';
+      const visibilityToSend: Record<string, boolean> = {
+        ...serverPrefsRef.current.columnVisibility,
+      };
+      for (const [k, v] of Object.entries(columnVisibility)) {
+        visibilityToSend[prefix + k] = v;
+      }
+      const widthsToSend: Record<string, number> = {
+        ...serverPrefsRef.current.columnWidths,
+      };
+      for (const [k, v] of Object.entries(columnWidths)) {
+        widthsToSend[prefix + k] = v;
+      }
+      authFetch(
+        `/api/projects/${projectId}/competition-scraping/table-preferences`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            columnVisibility: visibilityToSend,
+            columnWidths: widthsToSend,
+          }),
+        }
+      ).catch(() => {
+        // Best-effort write; local state already updated. Next
+        // toggle/resize will re-send.
+      });
+    }, 500);
+    return () => {
+      if (writePrefsTimerRef.current) {
+        clearTimeout(writePrefsTimerRef.current);
+      }
+    };
+  }, [projectId, columnVisibility, columnWidths]);
+
+  // FF2 2026-05-29 — Fix E: hydrate per-review + per-competitor summary
+  // state from stored ReviewAnalysis rows on page mount. Closes D-8
+  // (refreshing the page no longer wipes the table; the data was
+  // server-side all along — the page just wasn't reading it back).
+  //
+  // PER_REVIEW rows carry analysisJson.reviewId + analysisJson.summary
+  // → seed summaryByReviewId.
+  // PER_PRODUCT rows carry urlId + id + analysisJson.summary → seed
+  // competitorSummaryByUrlId (id becomes analysisId for the Edit affordance).
+  useEffect(() => {
+    if (!projectId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await authFetch(
+          `/api/projects/${projectId}/competition-scraping/review-analysis`
+        );
+        if (cancelled || !res.ok) return;
+        const body = (await res.json()) as {
+          items: Array<{
+            id: string;
+            level: 'PER_REVIEW' | 'PER_PRODUCT';
+            urlId: string | null;
+            analysisJson: unknown;
+          }>;
+        };
+        if (!Array.isArray(body.items)) return;
+        const nextSummaryByReviewId: Record<
+          string,
+          { summary: string; source: 'cache' | 'fresh' }
+        > = {};
+        const nextCompetitorSummaryByUrlId: Record<
+          string,
+          { analysisId: string; summary: string; source: 'cache' | 'fresh' }
+        > = {};
+        for (const item of body.items) {
+          const aj =
+            item.analysisJson && typeof item.analysisJson === 'object'
+              ? (item.analysisJson as Record<string, unknown>)
+              : {};
+          const summary =
+            typeof aj.summary === 'string' ? aj.summary : '';
+          if (!summary) continue;
+          if (item.level === 'PER_REVIEW') {
+            const reviewId = typeof aj.reviewId === 'string' ? aj.reviewId : null;
+            if (reviewId) {
+              nextSummaryByReviewId[reviewId] = { summary, source: 'cache' };
+            }
+          } else if (item.level === 'PER_PRODUCT' && item.urlId) {
+            nextCompetitorSummaryByUrlId[item.urlId] = {
+              analysisId: item.id,
+              summary,
+              source: 'cache',
+            };
+          }
+        }
+        if (cancelled) return;
+        // Merge over any state already populated by in-session AI runs
+        // (those win on conflict since they're the freshest).
+        setSummaryByReviewId((prev) => ({ ...nextSummaryByReviewId, ...prev }));
+        setCompetitorSummaryByUrlId((prev) => ({
+          ...nextCompetitorSummaryByUrlId,
+          ...prev,
+        }));
+      } catch {
+        // Network errors don't block the page; user can still re-run AI.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
 
   // Load all URLs for the Project on mount.
   useEffect(() => {
@@ -980,7 +1179,7 @@ function UrlsTable({
       (acc, c) => acc + resolveReviewsColumnWidth(columnWidths, c),
       0
     ) +
-    ACTIONS_COL_WIDTH;
+    resolveActionsColumnWidth(columnWidths);
 
   const colspanForBanner = 2 + visibleColumns.length;
 
@@ -991,6 +1190,17 @@ function UrlsTable({
         borderRadius: '8px',
         overflow: 'auto',
         background: '#0d1117',
+        // FF2 2026-05-29 — cap the outer scroll container's height so
+        // the sticky <thead> stays at the top of the viewport AND the
+        // horizontal scrollbar (which sits at the bottom of THIS
+        // container) stays at the bottom of the viewport regardless
+        // of where the user scrolls. Without this cap, the table can
+        // grow taller than the viewport and the page scrollbar takes
+        // over — moving header + horizontal scrollbar off-screen.
+        // Calc: viewport height minus rough page-chrome offset
+        // (header / nav toggle / title / description / controls bar).
+        maxHeight: 'calc(100vh - 280px)',
+        minHeight: '200px',
       }}
     >
       <table
@@ -1014,7 +1224,7 @@ function UrlsTable({
               }}
             />
           ))}
-          <col style={{ width: `${ACTIONS_COL_WIDTH}px` }} />
+          <col style={{ width: `${resolveActionsColumnWidth(columnWidths)}px` }} />
         </colgroup>
         <thead>
           <tr>
@@ -1034,6 +1244,18 @@ function UrlsTable({
             ))}
             <th style={thStyle}>
               <span style={thLabelStyle}>Actions</span>
+              {/* FF2 2026-05-29 — resize handle on the right edge of the
+                  Actions column, which is the right edge of the entire
+                  table. Width persisted under the key '__actions__' in
+                  the column-widths JSON column on UserTablePreferences. */}
+              <ColumnResizeHandle
+                columnId="__actions__"
+                currentWidth={resolveActionsColumnWidth(columnWidths)}
+                minWidth={MIN_REVIEWS_COLUMN_WIDTH}
+                maxWidth={MAX_REVIEWS_COLUMN_WIDTH}
+                tableHeight={tableHeight}
+                onCommit={(w) => onColumnResize('__actions__', w)}
+              />
             </th>
           </tr>
         </thead>
@@ -1149,9 +1371,17 @@ function UrlsTable({
 
 // Style shared across every <th> in the URL table — sticky-header at
 // the top so the header stays visible when the user scrolls rows; the
-// position:relative anchor for the absolute-positioned ColumnResizeHandle
+// position:sticky anchor for the absolute-positioned ColumnResizeHandle
 // child (sticky + relative don't conflict — sticky IS a positioned mode
 // for purposes of establishing a containing block).
+//
+// FF2 2026-05-29 — `overflow: hidden` REMOVED from the th itself. The
+// prior copy clipped the absolute-positioned ColumnResizeHandle's full-
+// height drag zone to the header's box, so users could only drag from
+// the header strip — not anywhere along the table length. Ellipsis
+// truncation moves onto the inner <span> wrapper (thLabelStyle below)
+// which DOES carry overflow:hidden so the column label still truncates
+// neatly when the column is narrow.
 const thStyle: React.CSSProperties = {
   padding: '10px 10px',
   fontSize: '11px',
@@ -1164,8 +1394,6 @@ const thStyle: React.CSSProperties = {
   borderBottom: '1px solid #30363d',
   borderRight: '1px solid #21262d',
   whiteSpace: 'nowrap',
-  overflow: 'hidden',
-  textOverflow: 'ellipsis',
   position: 'sticky',
   top: 0,
   zIndex: 3,
