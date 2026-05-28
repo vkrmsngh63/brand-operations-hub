@@ -20,6 +20,8 @@ import {
   resolveActionsColumnWidth,
   resolveReviewsColumnWidth,
   computeReviewsSummaryCount,
+  computeReviewsSummaryCellAffordance,
+  computeBannerCellAffordance,
 } from './reviews-analysis-table-columns.ts';
 
 // ─── REVIEWS_TABLE_COLUMNS shape ────────────────────────────────────
@@ -212,6 +214,75 @@ test('computeReviewsSummaryCount — fully summarized → N === M', () => {
     kind: 'populated',
     text: '10 of 10 summarized',
   });
+});
+
+// ─── computeReviewsSummaryCellAffordance (FF4 click-state cycling) ──
+
+test('computeReviewsSummaryCellAffordance — null total → "click to load" + clickable', () => {
+  const result = computeReviewsSummaryCellAffordance(null, null, false);
+  assert.equal(result.kind, 'not-loaded');
+  assert.match(result.text, /click to load/);
+  assert.equal(result.clickable, true);
+});
+
+test('computeReviewsSummaryCellAffordance — 0 reviews → "no reviews" + non-clickable', () => {
+  const result = computeReviewsSummaryCellAffordance(0, 0, false);
+  assert.equal(result.kind, 'no-reviews');
+  assert.equal(result.text, 'no reviews');
+  assert.equal(result.clickable, false);
+});
+
+test('computeReviewsSummaryCellAffordance — populated + collapsed → "click to expand"', () => {
+  const result = computeReviewsSummaryCellAffordance(3, 12, false);
+  assert.equal(result.kind, 'collapsed');
+  assert.match(result.text, /3 of 12 summarized/);
+  assert.match(result.text, /click to expand/);
+  assert.equal(result.clickable, true);
+});
+
+test('computeReviewsSummaryCellAffordance — populated + expanded → "click to collapse"', () => {
+  const result = computeReviewsSummaryCellAffordance(3, 12, true);
+  assert.equal(result.kind, 'expanded');
+  assert.match(result.text, /3 of 12 summarized/);
+  assert.match(result.text, /click to collapse/);
+  assert.equal(result.clickable, true);
+});
+
+test('computeReviewsSummaryCellAffordance — null summarized falls back to 0 in display', () => {
+  const result = computeReviewsSummaryCellAffordance(null, 5, false);
+  assert.match(result.text, /^0 of 5/);
+});
+
+// ─── computeBannerCellAffordance (FF4 click-state cycling) ───────────
+
+test('computeBannerCellAffordance — no summary → em-dash + non-clickable', () => {
+  const result = computeBannerCellAffordance(false, false);
+  assert.equal(result.kind, 'no-summary');
+  assert.equal(result.text, '—');
+  assert.equal(result.clickable, false);
+});
+
+test('computeBannerCellAffordance — summary exists + collapsed → "click to expand"', () => {
+  const result = computeBannerCellAffordance(true, false);
+  assert.equal(result.kind, 'collapsed');
+  assert.match(result.text, /click to expand/);
+  assert.equal(result.clickable, true);
+});
+
+test('computeBannerCellAffordance — summary exists + expanded → "click to collapse"', () => {
+  const result = computeBannerCellAffordance(true, true);
+  assert.equal(result.kind, 'expanded');
+  assert.match(result.text, /click to collapse/);
+  assert.equal(result.clickable, true);
+});
+
+test('computeBannerCellAffordance — expanded state ignored when no summary exists', () => {
+  // Edge case: if somehow `expanded` is true but `hasSummary` is false,
+  // the no-summary branch wins. Defensive — caller shouldn't reach this
+  // state but the helper is conservative.
+  const result = computeBannerCellAffordance(false, true);
+  assert.equal(result.kind, 'no-summary');
+  assert.equal(result.clickable, false);
 });
 
 // ─── Negative tests — Fix Session A scope guards ────────────────────

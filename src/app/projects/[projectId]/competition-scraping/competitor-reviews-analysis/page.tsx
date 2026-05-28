@@ -55,7 +55,8 @@ import {
   MAX_REVIEWS_COLUMN_WIDTH,
   MIN_REVIEWS_COLUMN_WIDTH,
   REVIEWS_TABLE_COLUMNS,
-  computeReviewsSummaryCount,
+  computeBannerCellAffordance,
+  computeReviewsSummaryCellAffordance,
   isReviewsColumnVisible,
   resolveActionsColumnWidth,
   resolveReviewsColumnWidth,
@@ -89,8 +90,19 @@ export default function CompetitorReviewsAnalysisPage() {
   });
 
   const [urlsState, setUrlsState] = useState<UrlsLoadState>({ kind: 'loading' });
-  // per-urlId expansion state
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  // FF4 2026-05-29 — per-urlId expansion split into TWO independent
+  // surfaces, each cycled by clicking its associated cell on the URL
+  // row (director directive round-4 verification):
+  //   - reviewsExpanded : controls the ReviewsList sub-rows render
+  //                       (per-review summaries). Toggled by clicking
+  //                       Column 8 Reviews Summary cell or the leftmost
+  //                       ▸/▾ master cell.
+  //   - bannerExpanded  : controls the per-competitor comprehensive
+  //                       summary banner row render. Toggled by
+  //                       clicking Column 9 Comprehensive (bulleted)
+  //                       cell or the leftmost ▸/▾ master cell.
+  const [reviewsExpanded, setReviewsExpanded] = useState<Record<string, boolean>>({});
+  const [bannerExpanded, setBannerExpanded] = useState<Record<string, boolean>>({});
   // per-urlId reviews cache
   const [reviewsByUrl, setReviewsByUrl] = useState<
     Record<string, ReviewsLoadState>
@@ -532,10 +544,31 @@ export default function CompetitorReviewsAnalysisPage() {
     }
   }
 
-  function toggleExpand(urlId: string) {
-    const willExpand = !expanded[urlId];
-    setExpanded((prev) => ({ ...prev, [urlId]: willExpand }));
+  // FF4 2026-05-29 — Column 8 cell toggle. Lazy-loads reviews on first
+  // expand.
+  function toggleReviewsExpanded(urlId: string) {
+    const willExpand = !reviewsExpanded[urlId];
+    setReviewsExpanded((prev) => ({ ...prev, [urlId]: willExpand }));
     if (willExpand) void ensureReviewsLoaded(urlId);
+  }
+
+  // FF4 2026-05-29 — Column 9 cell toggle. No lazy-load needed; banner
+  // state comes from competitorSummaryByUrlId which is hydrated on
+  // mount (FF2) + populated by in-session AI runs.
+  function toggleBannerExpanded(urlId: string) {
+    setBannerExpanded((prev) => ({ ...prev, [urlId]: !prev[urlId] }));
+  }
+
+  // FF4 2026-05-29 — leftmost ▸/▾ master cell. One click expands BOTH
+  // surfaces (or collapses both if either is open). Lazy-loads reviews
+  // if expanding for the first time.
+  function toggleBothExpanded(urlId: string) {
+    const reviewsOpen = !!reviewsExpanded[urlId];
+    const bannerOpen = !!bannerExpanded[urlId];
+    const willExpand = !(reviewsOpen || bannerOpen);
+    setReviewsExpanded((prev) => ({ ...prev, [urlId]: willExpand }));
+    setBannerExpanded((prev) => ({ ...prev, [urlId]: willExpand }));
+    if (willExpand && !reviewsOpen) void ensureReviewsLoaded(urlId);
   }
 
   function handleSummary(
@@ -556,6 +589,12 @@ export default function CompetitorReviewsAnalysisPage() {
       ...prev,
       [urlId]: { analysisId, summary, source },
     }));
+    // FF4 2026-05-29 — auto-expand the banner when a fresh AI summary
+    // lands so the user sees the result immediately. Cache hits don't
+    // auto-expand (the user clicks Column 9 to view).
+    if (source === 'fresh') {
+      setBannerExpanded((prev) => ({ ...prev, [urlId]: true }));
+    }
   }
 
   // Called by CompetitorSummaryBanner after a successful PATCH so the
@@ -740,7 +779,8 @@ export default function CompetitorReviewsAnalysisPage() {
             selectedPlatforms={selectedPlatforms}
             columnVisibility={columnVisibility}
             columnWidths={columnWidths}
-            expanded={expanded}
+            reviewsExpanded={reviewsExpanded}
+            bannerExpanded={bannerExpanded}
             reviewsByUrl={reviewsByUrl}
             summaryByReviewId={summaryByReviewId}
             competitorSummaryByUrlId={competitorSummaryByUrlId}
@@ -748,9 +788,22 @@ export default function CompetitorReviewsAnalysisPage() {
             onColumnResize={handleColumnResize}
             onTogglePlatform={handleTogglePlatform}
             onSelectAllPlatforms={handleSelectAllPlatforms}
-            onToggleRow={toggleExpand}
-            onOpenSummarizeModal={(u) => setModalUrl(u)}
-            onOpenCompetitorModal={openCompetitorModal}
+            onToggleReviewsExpanded={toggleReviewsExpanded}
+            onToggleBannerExpanded={toggleBannerExpanded}
+            onToggleBothExpanded={toggleBothExpanded}
+            onOpenSummarizeModal={(u) => {
+              // FF4 2026-05-29 — auto-expand reviews when the user kicks
+              // off a per-URL per-review run so the summaries land
+              // visibly as they stream back.
+              setReviewsExpanded((prev) => ({ ...prev, [u.id]: true }));
+              setModalUrl(u);
+            }}
+            onOpenCompetitorModal={(u) => {
+              // FF4 2026-05-29 — auto-expand banner when kicking off a
+              // per-URL per-competitor run.
+              setBannerExpanded((prev) => ({ ...prev, [u.id]: true }));
+              void openCompetitorModal(u);
+            }}
             onCompetitorSummaryEdited={handleCompetitorSummaryEdited}
             onUrlCellSave={handleUrlCellSave}
             onReviewCellSave={handleReviewCellSave}
@@ -819,7 +872,11 @@ interface ReviewsAnalysisTableSectionProps {
   selectedPlatforms: Platform[];
   columnVisibility: Record<string, boolean>;
   columnWidths: Record<string, number>;
-  expanded: Record<string, boolean>;
+  // FF4 2026-05-29 — split expansion state into two independent
+  // surfaces (per-review summaries via reviewsExpanded; per-competitor
+  // comprehensive banner via bannerExpanded).
+  reviewsExpanded: Record<string, boolean>;
+  bannerExpanded: Record<string, boolean>;
   reviewsByUrl: Record<string, ReviewsLoadState>;
   summaryByReviewId: Record<string, { summary: string; source: 'cache' | 'fresh' }>;
   competitorSummaryByUrlId: Record<
@@ -830,7 +887,9 @@ interface ReviewsAnalysisTableSectionProps {
   onColumnResize: (columnId: string, width: number) => void;
   onTogglePlatform: (platform: Platform, next: boolean) => void;
   onSelectAllPlatforms: (next: boolean) => void;
-  onToggleRow: (urlId: string) => void;
+  onToggleReviewsExpanded: (urlId: string) => void;
+  onToggleBannerExpanded: (urlId: string) => void;
+  onToggleBothExpanded: (urlId: string) => void;
   onOpenSummarizeModal: (url: CompetitorUrl) => void;
   onOpenCompetitorModal: (url: CompetitorUrl) => void;
   onCompetitorSummaryEdited: (urlId: string, summary: string) => void;
@@ -909,14 +968,17 @@ function ReviewsAnalysisTableSection(
         <UrlsTable
           projectId={props.projectId}
           urls={filteredUrls}
-          expanded={props.expanded}
+          reviewsExpanded={props.reviewsExpanded}
+          bannerExpanded={props.bannerExpanded}
           reviewsByUrl={props.reviewsByUrl}
           summaryByReviewId={props.summaryByReviewId}
           competitorSummaryByUrlId={props.competitorSummaryByUrlId}
           columnVisibility={columnVisibility}
           columnWidths={columnWidths}
           onColumnResize={onColumnResize}
-          onToggle={props.onToggleRow}
+          onToggleReviewsExpanded={props.onToggleReviewsExpanded}
+          onToggleBannerExpanded={props.onToggleBannerExpanded}
+          onToggleBothExpanded={props.onToggleBothExpanded}
           onOpenSummarizeModal={props.onOpenSummarizeModal}
           onOpenCompetitorModal={props.onOpenCompetitorModal}
           onCompetitorSummaryEdited={props.onCompetitorSummaryEdited}
@@ -1129,7 +1191,8 @@ const controlsDividerStyle: React.CSSProperties = {
 interface UrlsTableProps {
   projectId: string;
   urls: CompetitorUrl[];
-  expanded: Record<string, boolean>;
+  reviewsExpanded: Record<string, boolean>;
+  bannerExpanded: Record<string, boolean>;
   reviewsByUrl: Record<string, ReviewsLoadState>;
   summaryByReviewId: Record<string, { summary: string; source: 'cache' | 'fresh' }>;
   competitorSummaryByUrlId: Record<
@@ -1139,7 +1202,9 @@ interface UrlsTableProps {
   columnVisibility: Record<string, boolean>;
   columnWidths: Record<string, number>;
   onColumnResize: (columnId: string, width: number) => void;
-  onToggle: (urlId: string) => void;
+  onToggleReviewsExpanded: (urlId: string) => void;
+  onToggleBannerExpanded: (urlId: string) => void;
+  onToggleBothExpanded: (urlId: string) => void;
   onOpenSummarizeModal: (url: CompetitorUrl) => void;
   onOpenCompetitorModal: (url: CompetitorUrl) => void;
   onCompetitorSummaryEdited: (urlId: string, summary: string) => void;
@@ -1160,14 +1225,17 @@ const PLATFORM_OPTIONS: ReadonlyArray<{ value: Platform; label: string }> =
 function UrlsTable({
   projectId,
   urls,
-  expanded,
+  reviewsExpanded,
+  bannerExpanded,
   reviewsByUrl,
   summaryByReviewId,
   competitorSummaryByUrlId,
   columnVisibility,
   columnWidths,
   onColumnResize,
-  onToggle,
+  onToggleReviewsExpanded,
+  onToggleBannerExpanded,
+  onToggleBothExpanded,
   onOpenSummarizeModal,
   onOpenCompetitorModal,
   onCompetitorSummaryEdited,
@@ -1293,7 +1361,9 @@ function UrlsTable({
         </thead>
         <tbody>
           {urls.map((u) => {
-            const isExpanded = !!expanded[u.id];
+            // FF4 2026-05-29 — two independent expand states.
+            const reviewsOpen = !!reviewsExpanded[u.id];
+            const bannerOpen = !!bannerExpanded[u.id];
             const reviewsState = reviewsByUrl[u.id];
             const reviewsLoaded =
               reviewsState?.kind === 'loaded' ? reviewsState.reviews : null;
@@ -1305,23 +1375,29 @@ function UrlsTable({
                 )
               : null;
             const competitorSummary = competitorSummaryByUrlId[u.id];
+            const isAnyOpen = reviewsOpen || bannerOpen;
             return (
               <Fragment key={u.id}>
                 <tr
                   style={{
-                    cursor: 'pointer',
                     borderBottom: competitorSummary
                       ? '1px solid #161b22'
                       : '1px solid #21262d',
                   }}
-                  onClick={() => onToggle(u.id)}
                 >
-                  <td style={tdExpandStyle}>
+                  {/* FF4 2026-05-29 — leftmost master cell: click here to
+                      expand/collapse BOTH the per-review summaries AND
+                      the per-competitor banner in one action. */}
+                  <td
+                    style={{ ...tdExpandStyle, cursor: 'pointer' }}
+                    onClick={() => onToggleBothExpanded(u.id)}
+                    title={isAnyOpen ? 'Collapse all summaries for this URL' : 'Expand all summaries for this URL'}
+                  >
                     <span
                       style={{ fontSize: '12px', color: '#8b949e' }}
-                      aria-label={isExpanded ? 'Collapse' : 'Expand'}
+                      aria-label={isAnyOpen ? 'Collapse' : 'Expand'}
                     >
-                      {isExpanded ? '▾' : '▸'}
+                      {isAnyOpen ? '▾' : '▸'}
                     </span>
                   </td>
                   {visibleColumns.map((col) =>
@@ -1332,12 +1408,13 @@ function UrlsTable({
                       summarizedReviews,
                       totalReviews,
                       competitorSummary,
+                      reviewsOpen,
+                      bannerOpen,
+                      onToggleReviewsExpanded,
+                      onToggleBannerExpanded,
                     })
                   )}
-                  <td
-                    style={tdActionsStyle}
-                    onClick={(e) => e.stopPropagation()}
-                  >
+                  <td style={tdActionsStyle}>
                     {/* FF3 2026-05-29 — director directive (round-3): blue
                         per-review button on TOP; green per-competitor
                         button below. Per-review is the more granular /
@@ -1353,10 +1430,7 @@ function UrlsTable({
                     >
                       <button
                         type="button"
-                        onClick={() => {
-                          if (!isExpanded) onToggle(u.id);
-                          onOpenSummarizeModal(u);
-                        }}
+                        onClick={() => onOpenSummarizeModal(u)}
                         disabled={reviewsState?.kind === 'loading'}
                         style={summarizeButtonStyle(reviewsState?.kind)}
                       >
@@ -1373,7 +1447,10 @@ function UrlsTable({
                     </div>
                   </td>
                 </tr>
-                {competitorSummary && (
+                {/* FF4 2026-05-29 — banner now renders only when both
+                    a summary exists AND bannerExpanded is true. User
+                    toggles via Column 9 click or the master ▸/▾ cell. */}
+                {competitorSummary && bannerOpen && (
                   <tr>
                     <td colSpan={tableColspan} style={{ padding: 0, border: 'none' }}>
                       <CompetitorSummaryBanner
@@ -1385,7 +1462,10 @@ function UrlsTable({
                     </td>
                   </tr>
                 )}
-                {isExpanded && (
+                {/* FF4 2026-05-29 — review rows now render only when
+                    reviewsExpanded is true. User toggles via Column 8
+                    click or the master ▸/▾ cell. */}
+                {reviewsOpen && (
                   <tr>
                     <td colSpan={tableColspan} style={{ padding: 0, border: 'none' }}>
                       <ReviewsList
@@ -1495,6 +1575,11 @@ interface UrlRowCellArgs {
   competitorSummary:
     | { analysisId: string; summary: string; source: 'cache' | 'fresh' }
     | undefined;
+  // FF4 2026-05-29 — expand-state per surface + cell-level click handlers.
+  reviewsOpen: boolean;
+  bannerOpen: boolean;
+  onToggleReviewsExpanded: (urlId: string) => void;
+  onToggleBannerExpanded: (urlId: string) => void;
 }
 
 function renderUrlRowCell({
@@ -1504,6 +1589,10 @@ function renderUrlRowCell({
   summarizedReviews,
   totalReviews,
   competitorSummary,
+  reviewsOpen,
+  bannerOpen,
+  onToggleReviewsExpanded,
+  onToggleBannerExpanded,
 }: UrlRowCellArgs): JSX.Element {
   // FF3 2026-05-29 — td no longer stops propagation. The previous copy
   // ate the row-toggle click — clicking anywhere on a data cell
@@ -1608,31 +1697,58 @@ function renderUrlRowCell({
         </td>
       );
     case 'reviewsSummaryCount': {
-      const cell = computeReviewsSummaryCount(summarizedReviews, totalReviews);
-      let display: React.ReactNode;
-      if (cell.kind === 'not-loaded') {
-        display = (
-          <span style={{ color: '#6e7681', fontStyle: 'italic' }}>
-            expand to load
-          </span>
-        );
-      } else if (cell.kind === 'no-reviews') {
-        display = <span style={{ color: '#6e7681' }}>no reviews</span>;
-      } else {
-        display = cell.text;
-      }
-      return <td {...tdProps}>{display}</td>;
-    }
-    case 'compBulleted':
+      // FF4 2026-05-29 — Column 8 is now a click target whose text
+      // updates with state ("click to expand" / "click to collapse").
+      // Handler lives in the parent (lazy-loads on first expand).
+      const cell = computeReviewsSummaryCellAffordance(
+        summarizedReviews,
+        totalReviews,
+        reviewsOpen
+      );
+      const tdStyle: React.CSSProperties = cell.clickable
+        ? { ...tdBaseStyle, cursor: 'pointer' }
+        : tdBaseStyle;
+      const tdOnClick = cell.clickable
+        ? () => onToggleReviewsExpanded(url.id)
+        : undefined;
+      const textColor =
+        cell.kind === 'not-loaded' || cell.kind === 'no-reviews'
+          ? '#6e7681'
+          : '#e6edf3';
+      const fontStyle = cell.kind === 'not-loaded' ? 'italic' : 'normal';
       return (
-        <td {...tdProps}>
-          {competitorSummary ? (
-            <span style={{ color: '#8b949e' }}>summary below</span>
-          ) : (
-            <span style={{ color: '#6e7681' }}>—</span>
-          )}
+        <td
+          key={col.id}
+          style={tdStyle}
+          onClick={tdOnClick}
+          title={cell.clickable ? cell.text : undefined}
+        >
+          <span style={{ color: textColor, fontStyle }}>{cell.text}</span>
         </td>
       );
+    }
+    case 'compBulleted': {
+      // FF4 2026-05-29 — Column 9 toggles the per-competitor banner
+      // row's visibility. Cell text reflects state.
+      const cell = computeBannerCellAffordance(!!competitorSummary, bannerOpen);
+      const tdStyle: React.CSSProperties = cell.clickable
+        ? { ...tdBaseStyle, cursor: 'pointer' }
+        : tdBaseStyle;
+      const tdOnClick = cell.clickable
+        ? () => onToggleBannerExpanded(url.id)
+        : undefined;
+      const textColor = cell.kind === 'no-summary' ? '#6e7681' : '#e6edf3';
+      return (
+        <td
+          key={col.id}
+          style={tdStyle}
+          onClick={tdOnClick}
+          title={cell.clickable ? cell.text : undefined}
+        >
+          <span style={{ color: textColor }}>{cell.text}</span>
+        </td>
+      );
+    }
     case 'compNonBulleted':
       return (
         <td {...tdProps}>

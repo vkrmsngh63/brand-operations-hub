@@ -132,3 +132,69 @@ export function computeReviewsSummaryCount(
     text: `${summarizedReviews ?? 0} of ${totalReviews} summarized`,
   };
 }
+
+// FF4 2026-05-29 — cell-text + clickability helpers for the
+// expand/collapse cycle. Director directive (round-4 verification): the
+// Column 8 Reviews Summary cell + the Column 9 Comprehensive (bulleted)
+// cell should be CLICKABLE on the URL row; clicks toggle the visibility
+// of their corresponding summary surfaces (the per-review summary
+// sub-rows + the per-competitor summary banner respectively); and the
+// cell TEXT should update to inform the user what the next click does.
+//
+// Pure helpers extracted from the page .tsx so node:test pins the
+// text-state branching deterministically (mirrors the precedent set
+// by computeReviewsSummaryCount above).
+
+export type ReviewsSummaryCellAffordance =
+  | { kind: 'not-loaded'; text: string; clickable: true }
+  | { kind: 'no-reviews'; text: string; clickable: false }
+  | { kind: 'collapsed'; text: string; clickable: true }
+  | { kind: 'expanded'; text: string; clickable: true };
+
+export function computeReviewsSummaryCellAffordance(
+  summarizedReviews: number | null,
+  totalReviews: number | null,
+  expanded: boolean
+): ReviewsSummaryCellAffordance {
+  if (totalReviews === null) {
+    // Reviews haven't been fetched yet — clicking lazy-loads + expands.
+    return { kind: 'not-loaded', text: 'click to load summaries', clickable: true };
+  }
+  if (totalReviews === 0) {
+    // No reviews captured — no toggle action; cell is read-only state.
+    return { kind: 'no-reviews', text: 'no reviews', clickable: false };
+  }
+  const count = `${summarizedReviews ?? 0} of ${totalReviews} summarized`;
+  if (expanded) {
+    return { kind: 'expanded', text: `${count} — click to collapse`, clickable: true };
+  }
+  return { kind: 'collapsed', text: `${count} — click to expand`, clickable: true };
+}
+
+export type BannerCellAffordance =
+  | { kind: 'no-summary'; text: string; clickable: false }
+  | { kind: 'collapsed'; text: string; clickable: true }
+  | { kind: 'expanded'; text: string; clickable: true };
+
+export function computeBannerCellAffordance(
+  hasSummary: boolean,
+  expanded: boolean
+): BannerCellAffordance {
+  if (!hasSummary) {
+    // No comprehensive summary saved for this URL yet — cell shows em-
+    // dash and is non-interactive.
+    return { kind: 'no-summary', text: '—', clickable: false };
+  }
+  if (expanded) {
+    return {
+      kind: 'expanded',
+      text: 'comprehensive summary — click to collapse',
+      clickable: true,
+    };
+  }
+  return {
+    kind: 'collapsed',
+    text: 'comprehensive summary — click to expand',
+    clickable: true,
+  };
+}
