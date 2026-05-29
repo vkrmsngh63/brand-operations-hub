@@ -30,6 +30,7 @@
 
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { JSX } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams, useRouter } from 'next/navigation';
 import { authFetch } from '@/lib/authFetch';
 import { useWorkflowContext } from '@/lib/workflow-components';
@@ -1177,10 +1178,19 @@ function getLoadedReviews(state: ReviewsLoadState | undefined): CapturedReview[]
 
 // P-49 W5 Fix Session C FF1 (2026-05-29) — director request: a styled
 // message that fades in on mouseover to explain what a button does.
-// Wraps a control; on hover, an absolutely-positioned tooltip above the
-// control fades in via a CSS opacity transition (React state, since inline
-// styles can't express :hover). `block` makes the wrapper full-width so a
-// wrapped button keeps stretching inside a flex-column Actions cell.
+//
+// FF3 (2026-05-29) — the tooltip is rendered in a PORTAL to document.body
+// with viewport-FIXED positioning computed from the trigger's bounding
+// rect on hover. The earlier absolutely-positioned version got painted
+// behind adjacent table rows + clipped by the table's overflow:auto
+// scroll container when it extended past a row's top/bottom border
+// (director report). A body portal escapes every ancestor stacking
+// context + overflow clip, so the tooltip always shows in full.
+//
+// Fade preserved: the portal mounts on hover, then a rAF flips opacity
+// 0 → 1; on leave opacity → 0 and the portal unmounts after the
+// transition. `block` makes the wrapper full-width so a wrapped button
+// keeps stretching inside a flex-column Actions cell.
 function HoverTooltip({
   text,
   block = false,
@@ -1190,13 +1200,44 @@ function HoverTooltip({
   block?: boolean;
   children: React.ReactNode;
 }): JSX.Element {
-  const [show, setShow] = useState(false);
+  const triggerRef = useRef<HTMLSpanElement | null>(null);
+  const [mounted, setMounted] = useState(false);
+  const [visible, setVisible] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function open() {
+    const el = triggerRef.current;
+    if (el) {
+      const r = el.getBoundingClientRect();
+      setPos({ top: r.top, left: r.left + r.width / 2 });
+    }
+    if (hideTimer.current) {
+      clearTimeout(hideTimer.current);
+      hideTimer.current = null;
+    }
+    setMounted(true);
+    requestAnimationFrame(() => setVisible(true));
+  }
+
+  function close() {
+    setVisible(false);
+    hideTimer.current = setTimeout(() => setMounted(false), 200);
+  }
+
+  useEffect(() => {
+    return () => {
+      if (hideTimer.current) clearTimeout(hideTimer.current);
+    };
+  }, []);
+
   return (
     <span
-      onMouseEnter={() => setShow(true)}
-      onMouseLeave={() => setShow(false)}
-      onFocus={() => setShow(true)}
-      onBlur={() => setShow(false)}
+      ref={triggerRef}
+      onMouseEnter={open}
+      onMouseLeave={close}
+      onFocus={open}
+      onBlur={close}
       style={{
         position: 'relative',
         display: block ? 'block' : 'inline-flex',
@@ -1204,35 +1245,41 @@ function HoverTooltip({
       }}
     >
       {children}
-      <span
-        role="tooltip"
-        style={{
-          position: 'absolute',
-          bottom: '100%',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          marginBottom: '8px',
-          width: 'max-content',
-          maxWidth: '300px',
-          background: '#161b22',
-          color: '#e6edf3',
-          border: '1px solid #30363d',
-          borderRadius: '6px',
-          padding: '8px 10px',
-          fontSize: '11px',
-          fontWeight: 400,
-          lineHeight: 1.5,
-          textAlign: 'left',
-          whiteSpace: 'normal',
-          opacity: show ? 1 : 0,
-          transition: 'opacity 160ms ease',
-          pointerEvents: 'none',
-          zIndex: 1100,
-          boxShadow: '0 6px 20px rgba(0,0,0,0.45)',
-        }}
-      >
-        {text}
-      </span>
+      {mounted &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <span
+            role="tooltip"
+            style={{
+              position: 'fixed',
+              top: pos.top,
+              left: pos.left,
+              // Center horizontally on the trigger; sit above it with an
+              // 8px gap (the -100% lifts the box fully above the anchor).
+              transform: 'translate(-50%, calc(-100% - 8px))',
+              width: 'max-content',
+              maxWidth: '300px',
+              background: '#161b22',
+              color: '#e6edf3',
+              border: '1px solid #30363d',
+              borderRadius: '6px',
+              padding: '8px 10px',
+              fontSize: '11px',
+              fontWeight: 400,
+              lineHeight: 1.5,
+              textAlign: 'left',
+              whiteSpace: 'normal',
+              opacity: visible ? 1 : 0,
+              transition: 'opacity 160ms ease',
+              pointerEvents: 'none',
+              zIndex: 2000,
+              boxShadow: '0 6px 20px rgba(0,0,0,0.45)',
+            }}
+          >
+            {text}
+          </span>,
+          document.body
+        )}
     </span>
   );
 }
