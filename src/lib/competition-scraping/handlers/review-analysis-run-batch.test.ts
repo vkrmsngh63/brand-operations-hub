@@ -26,6 +26,7 @@ import {
   type CompetitorUrlForBatchRow,
   type Ctx,
   type PerCompetitorBulletedResponseBody,
+  type PerCompetitorNonBulletedResponseBody,
   type PerReviewBatchResponseBody,
   type RequestLike,
   type ReviewAnalysisCachedRow,
@@ -245,13 +246,15 @@ test('SUPPORTED_FLOWS contains all 7 flows from §B 2026-05-27', () => {
   assert.ok(SUPPORTED_FLOWS.includes('per-type-nonbulleted'));
 });
 
-test('SHIPPED_FLOWS in Session 3 contains per-review-summarize + per-competitor-bulleted', () => {
-  assert.equal(SHIPPED_FLOWS.size, 2);
+test('SHIPPED_FLOWS contains per-review + per-competitor bulleted + non-bulleted (Fix Session C)', () => {
+  // Fix Session C (2026-05-29) shipped per-competitor-nonbulleted.
+  assert.equal(SHIPPED_FLOWS.size, 3);
   assert.ok(SHIPPED_FLOWS.has('per-review-summarize'));
   assert.ok(SHIPPED_FLOWS.has('per-competitor-bulleted'));
-  // The other 5 flows from §B 2026-05-27 land in later sessions.
-  assert.equal(SHIPPED_FLOWS.has('per-competitor-nonbulleted'), false);
+  assert.ok(SHIPPED_FLOWS.has('per-competitor-nonbulleted'));
+  // The per-category / per-type flows land in later sessions.
   assert.equal(SHIPPED_FLOWS.has('per-category-bulleted'), false);
+  assert.equal(SHIPPED_FLOWS.has('per-type-nonbulleted'), false);
 });
 
 test('isReviewAnalysisFlow narrows known values', () => {
@@ -1317,4 +1320,119 @@ test('per-competitor does NOT use the per-review prompt version in its cache key
   assert.match(body.summary, /Fresh per-competitor summary/);
   assert.equal(clientState.createCalls.length, 1);
   assert.equal(prismaState.createCalls.length, 1);
+});
+
+// ─── Per-Competitor NON-bulleted (prose) dispatch — Fix Session C ────────
+
+test('per-competitor-nonbulleted fresh — returns prose, persists PER_PRODUCT row with flow discriminator, appends to box', async () => {
+  const { prisma, state: prismaState } = makePrisma({});
+  const { client, state: clientState } = makeAnthropicClient({
+    createResult: makeAnthropicMessage(
+      'Product shortcomings\nThe strap breaks within months and the casing feels flimsy.'
+    ),
+  });
+  const deps = makeDeps({ prisma, anthropicClient: client });
+  const { POST } = makeReviewAnalysisRunBatchHandlers(deps);
+  const r = await POST(
+    makeRequest({
+      flow: 'per-competitor-nonbulleted',
+      urlId: 'url-1',
+      bulletedSummary: '## Product critiques\n- Strap breaks\n- Flimsy casing',
+      // reviewIds intentionally omitted — the non-bulleted flow does not
+      // require them (input is the bulleted summary, not the corpus).
+    }),
+    makeCtx('proj-1')
+  );
+  assert.equal(r.status, 200);
+  const body = r.body as PerCompetitorNonBulletedResponseBody;
+  assert.equal(body.flow, 'per-competitor-nonbulleted');
+  assert.equal(body.source, 'fresh');
+  assert.match(body.summary, /Product shortcomings/);
+  assert.equal(body.analysisId, 'analysis-1');
+  // Exactly one AI call + one persisted row at PER_PRODUCT with the
+  // flow discriminator + prose under summary.
+  assert.equal(clientState.createCalls.length, 1);
+  assert.equal(prismaState.createCalls.length, 1);
+  const persisted = prismaState.createCalls[0].data;
+  assert.equal(persisted.level, 'PER_PRODUCT');
+  assert.equal(persisted.urlId, 'url-1');
+  const written = persisted.analysisJson as { summary: string; flow: string };
+  assert.equal(written.flow, 'per-competitor-nonbulleted');
+  assert.match(written.summary, /strap breaks within months/);
+  // Write-back appended the prose to overallAnalyses["reviews"].
+  assert.equal(prismaState.urlUpdateCalls.length, 1);
+});
+
+test('per-competitor-nonbulleted 400 when bulletedSummary is missing', async () => {
+  const deps = makeDeps();
+  const { POST } = makeReviewAnalysisRunBatchHandlers(deps);
+  const r = await POST(
+    makeRequest({ flow: 'per-competitor-nonbulleted', urlId: 'url-1' }),
+    makeCtx('proj-1')
+  );
+  assert.equal(r.status, 400);
+  assert.match(JSON.stringify(r.body), /bulletedSummary is required/);
+});
+
+test('per-competitor-nonbulleted 502 when the model returns empty prose', async () => {
+  const { prisma } = makePrisma({});
+  const { client } = makeAnthropicClient({
+    createResult: makeAnthropicMessage('   \n\n  '),
+  });
+  const deps = makeDeps({ prisma, anthropicClient: client });
+  const { POST } = makeReviewAnalysisRunBatchHandlers(deps);
+  const r = await POST(
+    makeRequest({
+      flow: 'per-competitor-nonbulleted',
+      urlId: 'url-1',
+      bulletedSummary: '## Product critiques\n- Strap breaks',
+    }),
+    makeCtx('proj-1')
+  );
+  assert.equal(r.status, 502);
+});
+
+test('per-competitor-nonbulleted cache HIT — no AI call, returns stored prose', async () => {
+  const bulletedSummary = '## Product critiques\n- Strap breaks';
+  // The non-bulleted cache key is sha256(bulletedSummary|model|promptVersion).
+  // Re-derive it here so the seeded row matches the lookup. The handler uses
+  // node:crypto directly; mirror that.
+  const { createHash } = await import('node:crypto');
+  const nbHash = createHash('sha256')
+    .update(`${bulletedSummary}\n|claude-opus-4-7|v1`)
+    .digest('hex');
+  const { prisma, state: prismaState } = makePrisma({
+    cachedRows: [
+      {
+        id: 'nb-cached-1',
+        reviewsHash: nbHash,
+        analysisJson: {
+          summary: 'Cached prose critique.',
+          flow: 'per-competitor-nonbulleted',
+        } as Prisma.JsonValue,
+        modelVersion: 'claude-opus-4-7',
+        level: 'PER_PRODUCT',
+      },
+    ],
+  });
+  const { client, state: clientState } = makeAnthropicClient({});
+  const deps = makeDeps({ prisma, anthropicClient: client });
+  const { POST } = makeReviewAnalysisRunBatchHandlers(deps);
+  const r = await POST(
+    makeRequest({
+      flow: 'per-competitor-nonbulleted',
+      urlId: 'url-1',
+      bulletedSummary,
+      modelVersion: 'claude-opus-4-7',
+    }),
+    makeCtx('proj-1')
+  );
+  assert.equal(r.status, 200);
+  const body = r.body as PerCompetitorNonBulletedResponseBody;
+  assert.equal(body.source, 'cache');
+  assert.equal(body.analysisId, 'nb-cached-1');
+  assert.equal(body.summary, 'Cached prose critique.');
+  // Cache hit → zero AI calls + zero new rows.
+  assert.equal(clientState.createCalls.length, 0);
+  assert.equal(prismaState.createCalls.length, 0);
 });

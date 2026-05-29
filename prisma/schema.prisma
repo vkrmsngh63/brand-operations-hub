@@ -468,6 +468,7 @@ model CapturedReview {
   analysis        Json      @default("{}") // TipTap document JSON for per-item Analysis box per §A.11
   source          String    @default("manual") // "manual" in v1; "extension-scrape" added P-49 W2; future per-platform values
   sortRank        Int? // P-49 W4 — server-side drag-to-reorder per §A.5; null = insertion order
+  sortRankInReviewsTable Int? // P-49 W5 Reviews Phase 2 Fix Session C (2026-05-29) — per-page drag-to-reorder of review rows WITHIN a URL on the Competitor Reviews Analysis Table page (Q5 → A; page-specific, NOT propagated to the URL detail page). null = insertion order.
   helpfulCount    Int? // P-49 W2 — Amazon-supplied "X people found this helpful"; null for eBay/Etsy/Walmart
   platform        String? // P-49 W2 — denormalized from parent CompetitorUrl for cross-product queries
   addedBy         String // userId

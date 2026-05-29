@@ -66,6 +66,16 @@ import {
 import { PerReviewSummarizeModal } from './components/PerReviewSummarizeModal';
 import { PerCompetitorSummarizeModal } from './components/PerCompetitorSummarizeModal';
 import { GlobalCompetitorSummarizeModal } from './components/GlobalCompetitorSummarizeModal';
+import { PerCompetitorNonBulletedModal } from './components/PerCompetitorNonBulletedModal';
+import { GlobalCompetitorNonBulletedModal } from './components/GlobalCompetitorNonBulletedModal';
+import * as XLSX from 'xlsx';
+import {
+  buildReviewsExportMatrix,
+  buildReviewsExportFilename,
+  WRAPPED_EXPORT_COLUMN_IDS,
+  type ReviewsExportRowInput,
+} from '@/lib/competition-scraping/reviews-table-export';
+import { computeReviewsSummaryCount } from '@/lib/competition-scraping/reviews-analysis-table-columns';
 
 const WORKFLOW_SLUG = 'competition-scraping';
 
@@ -128,6 +138,22 @@ export default function CompetitorReviewsAnalysisPage() {
       { analysisId: string; summary: string; source: 'cache' | 'fresh' }
     >
   >({});
+  // P-49 W5 Fix Session C (2026-05-29) — per-urlId Per-Competitor
+  // NON-bulleted (prose) summary cache. Separate map from the bulleted
+  // one above; both seed from PER_PRODUCT ReviewAnalysis rows but are
+  // discriminated by analysisJson.flow ('per-competitor-nonbulleted').
+  // Drives Column 10 + its own banner row.
+  const [competitorNonBulletedByUrlId, setCompetitorNonBulletedByUrlId] =
+    useState<
+      Record<
+        string,
+        { analysisId: string; summary: string; source: 'cache' | 'fresh' }
+      >
+    >({});
+  // Column 10 banner expand state (independent of Column 9's bannerExpanded).
+  const [nonBulletedExpanded, setNonBulletedExpanded] = useState<
+    Record<string, boolean>
+  >({});
   // FU-1 (a.110) — urlIds whose per-competitor traceability table was
   // hand-edited on the URL detail page (analysisJson.manuallyEdited). Used to
   // warn before a re-run replaces those edits (director pick: warn-then-
@@ -142,6 +168,11 @@ export default function CompetitorReviewsAnalysisPage() {
   const [modalUrl, setModalUrl] = useState<CompetitorUrl | null>(null);
   const [competitorModalUrl, setCompetitorModalUrl] = useState<CompetitorUrl | null>(null);
   const [globalModalOpen, setGlobalModalOpen] = useState<boolean>(false);
+  // P-49 W5 Fix Session C (2026-05-29) — non-bulleted prose flow modals.
+  const [nonBulletedModalUrl, setNonBulletedModalUrl] =
+    useState<CompetitorUrl | null>(null);
+  const [globalNonBulletedModalOpen, setGlobalNonBulletedModalOpen] =
+    useState<boolean>(false);
 
   // P-49 W5 Fix Session A (2026-05-29) — per-user column visibility for
   // the 10 spec columns. Default empty map → all visible (the
@@ -436,6 +467,12 @@ export default function CompetitorReviewsAnalysisPage() {
         string,
         { analysisId: string; summary: string; source: 'cache' | 'fresh' }
       > = {};
+      // P-49 W5 Fix Session C — non-bulleted prose rows live at PER_PRODUCT
+      // too; tell them apart from bulleted rows via analysisJson.flow.
+      const nextNonBulletedByUrlId: Record<
+        string,
+        { analysisId: string; summary: string; source: 'cache' | 'fresh' }
+      > = {};
       const nextManuallyEdited = new Set<string>();
       for (const item of body.items) {
         const aj =
@@ -454,12 +491,20 @@ export default function CompetitorReviewsAnalysisPage() {
             };
           }
         } else if (item.level === 'PER_PRODUCT' && item.urlId) {
-          nextCompetitorSummaryByUrlId[item.urlId] = {
-            analysisId: item.id,
-            summary,
-            source: 'cache',
-          };
-          if (aj.manuallyEdited === true) nextManuallyEdited.add(item.urlId);
+          if (aj.flow === 'per-competitor-nonbulleted') {
+            nextNonBulletedByUrlId[item.urlId] = {
+              analysisId: item.id,
+              summary,
+              source: 'cache',
+            };
+          } else {
+            nextCompetitorSummaryByUrlId[item.urlId] = {
+              analysisId: item.id,
+              summary,
+              source: 'cache',
+            };
+            if (aj.manuallyEdited === true) nextManuallyEdited.add(item.urlId);
+          }
         }
       }
       // Merge over any state already populated by in-session AI runs
@@ -467,6 +512,10 @@ export default function CompetitorReviewsAnalysisPage() {
       setSummaryByReviewId((prev) => ({ ...nextSummaryByReviewId, ...prev }));
       setCompetitorSummaryByUrlId((prev) => ({
         ...nextCompetitorSummaryByUrlId,
+        ...prev,
+      }));
+      setCompetitorNonBulletedByUrlId((prev) => ({
+        ...nextNonBulletedByUrlId,
         ...prev,
       }));
       // manuallyEdited reflects server truth (a fresh in-session run already
@@ -703,6 +752,111 @@ export default function CompetitorReviewsAnalysisPage() {
     });
   }
 
+  // P-49 W5 Fix Session C — Column 10 toggle + non-bulleted summary
+  // setters mirroring the bulleted equivalents above.
+  function toggleNonBulletedExpanded(urlId: string) {
+    setNonBulletedExpanded((prev) => ({ ...prev, [urlId]: !prev[urlId] }));
+  }
+
+  function handleCompetitorNonBulleted(
+    urlId: string,
+    analysisId: string,
+    summary: string,
+    source: 'cache' | 'fresh'
+  ) {
+    setCompetitorNonBulletedByUrlId((prev) => ({
+      ...prev,
+      [urlId]: { analysisId, summary, source },
+    }));
+    if (source === 'fresh') {
+      setNonBulletedExpanded((prev) => ({ ...prev, [urlId]: true }));
+    }
+  }
+
+  function handleCompetitorNonBulletedEdited(urlId: string, summary: string) {
+    setCompetitorNonBulletedByUrlId((prev) => {
+      const existing = prev[urlId];
+      if (!existing) return prev;
+      return { ...prev, [urlId]: { ...existing, summary, source: 'cache' } };
+    });
+  }
+
+  // The per-URL non-bulleted modal reads the bulleted summary from
+  // competitorSummaryByUrlId; no reviews load needed (the prose flow's
+  // input is the bullets, not the corpus). Open directly.
+  function openNonBulletedModal(u: CompetitorUrl) {
+    setNonBulletedExpanded((prev) => ({ ...prev, [u.id]: true }));
+    setNonBulletedModalUrl(u);
+  }
+
+  // D-7 — Export the table to .xlsx. Respects the current column show/hide
+  // (Q7 → A): only currently-visible columns are exported, in their
+  // on-screen left-to-right order. AI/summary columns get word-wrap.
+  function handleExportTable() {
+    if (urlsState.kind !== 'loaded') return;
+    const visibleColumns = REVIEWS_TABLE_COLUMNS.filter((c) =>
+      isReviewsColumnVisible(columnVisibility, c.id)
+    );
+    // Only export rows for the currently-selected platforms (mirror what's
+    // on screen).
+    const platformSet = new Set(selectedPlatforms);
+    const rowsForExport = urlsState.urls
+      .filter((u) => platformSet.has(u.platform))
+      .map<ReviewsExportRowInput>((u) => {
+        const loaded =
+          reviewsByUrl[u.id]?.kind === 'loaded'
+            ? (reviewsByUrl[u.id] as { kind: 'loaded'; reviews: CapturedReview[] }).reviews
+            : null;
+        const totalReviews = loaded ? loaded.length : null;
+        const summarizedReviews = loaded
+          ? loaded.reduce((acc, r) => acc + (summaryByReviewId[r.id] ? 1 : 0), 0)
+          : null;
+        const countCell = computeReviewsSummaryCount(summarizedReviews, totalReviews);
+        const reviewsSummaryText =
+          countCell.kind === 'populated' ? countCell.text : '';
+        return {
+          platform: u.platform,
+          competitionCategory: u.competitionCategory ?? '',
+          type: u.type ?? '',
+          productName: u.productName ?? '',
+          resultsPageRank: u.resultsPageRank ?? null,
+          competitionScore: u.competitionScore ?? null,
+          url: u.url ?? '',
+          reviewsSummaryText,
+          compBulleted: competitorSummaryByUrlId[u.id]?.summary ?? '',
+          compNonBulleted: competitorNonBulletedByUrlId[u.id]?.summary ?? '',
+        };
+      });
+
+    const matrix = buildReviewsExportMatrix(visibleColumns, rowsForExport);
+    const worksheet = XLSX.utils.aoa_to_sheet(matrix);
+    // Column widths + word-wrap. Wrapped AI columns get a wider, wrapping
+    // cell; others a sensible default.
+    worksheet['!cols'] = visibleColumns.map((c) =>
+      WRAPPED_EXPORT_COLUMN_IDS.has(c.id) ? { wch: 60 } : { wch: 22 }
+    );
+    // Apply wrapText to every cell in the wrapped columns (incl. header).
+    const wrappedColIndexes = visibleColumns
+      .map((c, i) => (WRAPPED_EXPORT_COLUMN_IDS.has(c.id) ? i : -1))
+      .filter((i) => i >= 0);
+    for (let r = 0; r < matrix.length; r++) {
+      for (const ci of wrappedColIndexes) {
+        const addr = XLSX.utils.encode_cell({ r, c: ci });
+        const cell = worksheet[addr];
+        if (cell) cell.s = { alignment: { wrapText: true, vertical: 'top' } };
+      }
+    }
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Reviews Analysis');
+    const projectName =
+      (ctx.project as { name?: string } | null)?.name ?? projectId ?? 'project';
+    const dateStr = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(
+      workbook,
+      buildReviewsExportFilename(projectName, dateStr)
+    );
+  }
+
   // Helper for the Per-Competitor button — we need the FULL review
   // corpus loaded before we can fire the AI call (the browser-side
   // prompt preview needs review bodies; the wire call needs reviewIds).
@@ -812,9 +966,16 @@ export default function CompetitorReviewsAnalysisPage() {
           category and per-type comprehensive flows land in later sessions.
         </p>
 
-        {/* Global Summarize-All button */}
+        {/* Global flow buttons + Export */}
         {urlsState.kind === 'loaded' && urlsState.urls.length > 0 && (
-          <div style={{ marginBottom: '20px' }}>
+          <div
+            style={{
+              marginBottom: '20px',
+              display: 'flex',
+              gap: '10px',
+              flexWrap: 'wrap',
+            }}
+          >
             <button
               type="button"
               onClick={() => setGlobalModalOpen(true)}
@@ -829,7 +990,39 @@ export default function CompetitorReviewsAnalysisPage() {
                 cursor: 'pointer',
               }}
             >
-              Summarize All Reviews From All Competitors
+              Auto-create Competitor Comprehensive Reviews Analysis (bulleted)
+            </button>
+            <button
+              type="button"
+              onClick={() => setGlobalNonBulletedModalOpen(true)}
+              style={{
+                padding: '8px 16px',
+                fontSize: '12px',
+                fontWeight: 600,
+                background: '#1f6feb',
+                color: '#fff',
+                border: '1px solid #388bfd',
+                borderRadius: '6px',
+                cursor: 'pointer',
+              }}
+            >
+              Auto-create Competitor Comprehensive Reviews Analysis (non-bulleted)
+            </button>
+            <button
+              type="button"
+              onClick={handleExportTable}
+              style={{
+                padding: '8px 16px',
+                fontSize: '12px',
+                fontWeight: 600,
+                background: 'transparent',
+                color: '#e6edf3',
+                border: '1px solid #30363d',
+                borderRadius: '6px',
+                cursor: 'pointer',
+              }}
+            >
+              Export Table
             </button>
           </div>
         )}
@@ -874,6 +1067,8 @@ export default function CompetitorReviewsAnalysisPage() {
             reviewsByUrl={reviewsByUrl}
             summaryByReviewId={summaryByReviewId}
             competitorSummaryByUrlId={competitorSummaryByUrlId}
+            competitorNonBulletedByUrlId={competitorNonBulletedByUrlId}
+            nonBulletedExpanded={nonBulletedExpanded}
             onToggleColumn={handleToggleColumn}
             onColumnResize={handleColumnResize}
             onTogglePlatform={handleTogglePlatform}
@@ -894,7 +1089,10 @@ export default function CompetitorReviewsAnalysisPage() {
               setBannerExpanded((prev) => ({ ...prev, [u.id]: true }));
               void openCompetitorModal(u);
             }}
+            onOpenNonBulletedModal={(u) => openNonBulletedModal(u)}
             onCompetitorSummaryEdited={handleCompetitorSummaryEdited}
+            onCompetitorNonBulletedEdited={handleCompetitorNonBulletedEdited}
+            onToggleNonBulletedExpanded={toggleNonBulletedExpanded}
             onReviewSummaryEdited={handleReviewSummaryEdited}
             onUrlCellSave={handleUrlCellSave}
             onReviewCellSave={handleReviewCellSave}
@@ -934,6 +1132,32 @@ export default function CompetitorReviewsAnalysisPage() {
           }
           onClose={() => setGlobalModalOpen(false)}
           onSummary={handleCompetitorSummary}
+        />
+      )}
+      {nonBulletedModalUrl && (
+        <PerCompetitorNonBulletedModal
+          projectId={projectId}
+          urlId={nonBulletedModalUrl.id}
+          productName={nonBulletedModalUrl.productName || nonBulletedModalUrl.url}
+          bulletedSummary={
+            competitorSummaryByUrlId[nonBulletedModalUrl.id]?.summary ?? ''
+          }
+          onClose={() => setNonBulletedModalUrl(null)}
+          onSummary={handleCompetitorNonBulleted}
+        />
+      )}
+      {globalNonBulletedModalOpen && urlsState.kind === 'loaded' && (
+        <GlobalCompetitorNonBulletedModal
+          projectId={projectId}
+          urls={urlsState.urls}
+          bulletedSummaryByUrlId={Object.fromEntries(
+            Object.entries(competitorSummaryByUrlId).map(([urlId, v]) => [
+              urlId,
+              v.summary,
+            ])
+          )}
+          onClose={() => setGlobalNonBulletedModalOpen(false)}
+          onSummary={handleCompetitorNonBulleted}
         />
       )}
     </div>
@@ -981,6 +1205,11 @@ interface ReviewsAnalysisTableSectionProps {
     string,
     { analysisId: string; summary: string; source: 'cache' | 'fresh' }
   >;
+  competitorNonBulletedByUrlId: Record<
+    string,
+    { analysisId: string; summary: string; source: 'cache' | 'fresh' }
+  >;
+  nonBulletedExpanded: Record<string, boolean>;
   onToggleColumn: (columnId: string, visible: boolean) => void;
   onColumnResize: (columnId: string, width: number) => void;
   onTogglePlatform: (platform: Platform, next: boolean) => void;
@@ -988,9 +1217,12 @@ interface ReviewsAnalysisTableSectionProps {
   onToggleReviewsExpanded: (urlId: string) => void;
   onToggleBannerExpanded: (urlId: string) => void;
   onToggleBothExpanded: (urlId: string) => void;
+  onToggleNonBulletedExpanded: (urlId: string) => void;
   onOpenSummarizeModal: (url: CompetitorUrl) => void;
   onOpenCompetitorModal: (url: CompetitorUrl) => void;
+  onOpenNonBulletedModal: (url: CompetitorUrl) => void;
   onCompetitorSummaryEdited: (urlId: string, summary: string) => void;
+  onCompetitorNonBulletedEdited: (urlId: string, summary: string) => void;
   onReviewSummaryEdited: (reviewId: string, summary: string) => void;
   onUrlCellSave: (urlId: string, patch: UpdateCompetitorUrlRequest) => Promise<void>;
   onReviewCellSave: (
@@ -1072,15 +1304,20 @@ function ReviewsAnalysisTableSection(
           reviewsByUrl={props.reviewsByUrl}
           summaryByReviewId={props.summaryByReviewId}
           competitorSummaryByUrlId={props.competitorSummaryByUrlId}
+          competitorNonBulletedByUrlId={props.competitorNonBulletedByUrlId}
+          nonBulletedExpanded={props.nonBulletedExpanded}
           columnVisibility={columnVisibility}
           columnWidths={columnWidths}
           onColumnResize={onColumnResize}
           onToggleReviewsExpanded={props.onToggleReviewsExpanded}
           onToggleBannerExpanded={props.onToggleBannerExpanded}
           onToggleBothExpanded={props.onToggleBothExpanded}
+          onToggleNonBulletedExpanded={props.onToggleNonBulletedExpanded}
           onOpenSummarizeModal={props.onOpenSummarizeModal}
           onOpenCompetitorModal={props.onOpenCompetitorModal}
+          onOpenNonBulletedModal={props.onOpenNonBulletedModal}
           onCompetitorSummaryEdited={props.onCompetitorSummaryEdited}
+          onCompetitorNonBulletedEdited={props.onCompetitorNonBulletedEdited}
           onReviewSummaryEdited={props.onReviewSummaryEdited}
           onUrlCellSave={props.onUrlCellSave}
           onReviewCellSave={props.onReviewCellSave}
@@ -1302,15 +1539,23 @@ interface UrlsTableProps {
     string,
     { analysisId: string; summary: string; source: 'cache' | 'fresh' }
   >;
+  competitorNonBulletedByUrlId: Record<
+    string,
+    { analysisId: string; summary: string; source: 'cache' | 'fresh' }
+  >;
+  nonBulletedExpanded: Record<string, boolean>;
   columnVisibility: Record<string, boolean>;
   columnWidths: Record<string, number>;
   onColumnResize: (columnId: string, width: number) => void;
   onToggleReviewsExpanded: (urlId: string) => void;
   onToggleBannerExpanded: (urlId: string) => void;
   onToggleBothExpanded: (urlId: string) => void;
+  onToggleNonBulletedExpanded: (urlId: string) => void;
   onOpenSummarizeModal: (url: CompetitorUrl) => void;
   onOpenCompetitorModal: (url: CompetitorUrl) => void;
+  onOpenNonBulletedModal: (url: CompetitorUrl) => void;
   onCompetitorSummaryEdited: (urlId: string, summary: string) => void;
+  onCompetitorNonBulletedEdited: (urlId: string, summary: string) => void;
   onReviewSummaryEdited: (reviewId: string, summary: string) => void;
   onUrlCellSave: (
     urlId: string,
@@ -1334,15 +1579,20 @@ function UrlsTable({
   reviewsByUrl,
   summaryByReviewId,
   competitorSummaryByUrlId,
+  competitorNonBulletedByUrlId,
+  nonBulletedExpanded,
   columnVisibility,
   columnWidths,
   onColumnResize,
   onToggleReviewsExpanded,
   onToggleBannerExpanded,
   onToggleBothExpanded,
+  onToggleNonBulletedExpanded,
   onOpenSummarizeModal,
   onOpenCompetitorModal,
+  onOpenNonBulletedModal,
   onCompetitorSummaryEdited,
+  onCompetitorNonBulletedEdited,
   onReviewSummaryEdited,
   onUrlCellSave,
   onReviewCellSave,
@@ -1480,6 +1730,8 @@ function UrlsTable({
                 )
               : null;
             const competitorSummary = competitorSummaryByUrlId[u.id];
+            const nonBulleted = competitorNonBulletedByUrlId[u.id];
+            const nonBulletedOpen = !!nonBulletedExpanded[u.id];
             const isAnyOpen = reviewsOpen || bannerOpen;
             return (
               <Fragment key={u.id}>
@@ -1513,10 +1765,13 @@ function UrlsTable({
                       summarizedReviews,
                       totalReviews,
                       competitorSummary,
+                      nonBulletedSummary: nonBulleted,
                       reviewsOpen,
                       bannerOpen,
+                      nonBulletedOpen,
                       onToggleReviewsExpanded,
                       onToggleBannerExpanded,
+                      onToggleNonBulletedExpanded,
                     })
                   )}
                   <td style={tdActionsStyle}>
@@ -1547,7 +1802,23 @@ function UrlsTable({
                         disabled={reviewsState?.kind === 'loading'}
                         style={competitorButtonStyle(reviewsState?.kind)}
                       >
-                        Summarize all reviews within this product
+                        Summarize all reviews within this product (bulleted)
+                      </button>
+                      {/* P-49 W5 Fix Session C — per-URL non-bulleted prose
+                          run. Disabled until this competitor has a bulleted
+                          summary (the prose flow's input). */}
+                      <button
+                        type="button"
+                        onClick={() => onOpenNonBulletedModal(u)}
+                        disabled={!competitorSummary}
+                        title={
+                          competitorSummary
+                            ? 'Rewrite the bulleted summary into prose'
+                            : 'Generate the bulleted summary first'
+                        }
+                        style={nonBulletedButtonStyle(!competitorSummary)}
+                      >
+                        Comprehensive analysis (non-bulleted prose)
                       </button>
                     </div>
                   </td>
@@ -1563,6 +1834,20 @@ function UrlsTable({
                         urlId={u.id}
                         summary={competitorSummary}
                         onEdited={onCompetitorSummaryEdited}
+                      />
+                    </td>
+                  </tr>
+                )}
+                {/* P-49 W5 Fix Session C — non-bulleted prose banner. Reuses
+                    CompetitorSummaryBanner (PATCH preserves analysisJson.flow). */}
+                {nonBulleted && nonBulletedOpen && (
+                  <tr>
+                    <td colSpan={tableColspan} style={{ padding: 0, border: 'none' }}>
+                      <CompetitorSummaryBanner
+                        projectId={projectId}
+                        urlId={u.id}
+                        summary={nonBulleted}
+                        onEdited={onCompetitorNonBulletedEdited}
                       />
                     </td>
                   </tr>
@@ -1682,11 +1967,17 @@ interface UrlRowCellArgs {
   competitorSummary:
     | { analysisId: string; summary: string; source: 'cache' | 'fresh' }
     | undefined;
+  // P-49 W5 Fix Session C — Column 10 (non-bulleted prose) state.
+  nonBulletedSummary:
+    | { analysisId: string; summary: string; source: 'cache' | 'fresh' }
+    | undefined;
   // FF4 2026-05-29 — expand-state per surface + cell-level click handlers.
   reviewsOpen: boolean;
   bannerOpen: boolean;
+  nonBulletedOpen: boolean;
   onToggleReviewsExpanded: (urlId: string) => void;
   onToggleBannerExpanded: (urlId: string) => void;
+  onToggleNonBulletedExpanded: (urlId: string) => void;
 }
 
 function renderUrlRowCell({
@@ -1696,10 +1987,13 @@ function renderUrlRowCell({
   summarizedReviews,
   totalReviews,
   competitorSummary,
+  nonBulletedSummary,
   reviewsOpen,
   bannerOpen,
+  nonBulletedOpen,
   onToggleReviewsExpanded,
   onToggleBannerExpanded,
+  onToggleNonBulletedExpanded,
 }: UrlRowCellArgs): JSX.Element {
   // FF3 2026-05-29 — td no longer stops propagation. The previous copy
   // ate the row-toggle click — clicking anywhere on a data cell
@@ -1856,14 +2150,28 @@ function renderUrlRowCell({
         </td>
       );
     }
-    case 'compNonBulleted':
+    case 'compNonBulleted': {
+      // P-49 W5 Fix Session C — Column 10 toggles the non-bulleted prose
+      // banner row. Same affordance helper as Column 9.
+      const cell = computeBannerCellAffordance(!!nonBulletedSummary, nonBulletedOpen);
+      const tdStyle: React.CSSProperties = cell.clickable
+        ? { ...tdBaseStyle, cursor: 'pointer' }
+        : tdBaseStyle;
+      const tdOnClick = cell.clickable
+        ? () => onToggleNonBulletedExpanded(url.id)
+        : undefined;
+      const textColor = cell.kind === 'no-summary' ? '#6e7681' : '#e6edf3';
       return (
-        <td {...tdProps}>
-          <span style={{ color: '#6e7681', fontStyle: 'italic' }}>
-            (Fix Session C)
-          </span>
+        <td
+          key={col.id}
+          style={tdStyle}
+          onClick={tdOnClick}
+          title={cell.clickable ? cell.text : undefined}
+        >
+          <span style={{ color: textColor }}>{cell.text}</span>
         </td>
       );
+    }
     default:
       return (
         <td {...tdProps}>
@@ -2340,6 +2648,23 @@ function competitorButtonStyle(
     borderRadius: '6px',
     cursor: loading ? 'wait' : 'pointer',
     opacity: loading ? 0.7 : 1,
+  };
+}
+
+// P-49 W5 Fix Session C — per-URL non-bulleted prose button. Blue (the
+// same family as the global non-bulleted button); disabled until the
+// competitor has a bulleted summary to rewrite.
+function nonBulletedButtonStyle(disabled: boolean): React.CSSProperties {
+  return {
+    padding: '6px 12px',
+    fontSize: '11px',
+    fontWeight: 600,
+    background: disabled ? '#21262d' : '#1f6feb',
+    color: disabled ? '#6e7681' : '#fff',
+    border: '1px solid #388bfd',
+    borderRadius: '6px',
+    cursor: disabled ? 'not-allowed' : 'pointer',
+    opacity: disabled ? 0.7 : 1,
   };
 }
 

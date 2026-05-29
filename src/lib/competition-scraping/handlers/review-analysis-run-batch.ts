@@ -26,6 +26,8 @@
 // 'per-review-summarize'; the other 6 flow values are reserved in
 // SUPPORTED_FLOWS and reject with 400 until their builders land.
 
+import { createHash } from 'node:crypto';
+
 import type { Prisma } from '@prisma/client';
 import type Anthropic from '@anthropic-ai/sdk';
 
@@ -38,7 +40,12 @@ import {
   type AnthropicClientLike,
 } from '../review-analysis/client.ts';
 import { computeReviewsHash } from '../review-analysis/cache.ts';
-import { summaryStringToTipTapDoc } from '../../rich-text/tiptap-helpers.ts';
+import {
+  summaryStringToTipTapDoc,
+  appendSummaryToTipTapDoc,
+  tipTapDocContainsSummary,
+  isValidOverallAnalysesBag,
+} from '../../rich-text/tiptap-helpers.ts';
 import {
   calculateCostUsd,
   estimateCostUsd,
@@ -58,6 +65,10 @@ import {
   resolveReviewRefs,
   flattenCategoriesToSummaryString,
   type PerCompetitorStructuredAnalysis,
+  PER_COMPETITOR_NONBULLETED_PROMPT_VERSION,
+  PER_COMPETITOR_NONBULLETED_SYSTEM_PROMPT,
+  buildPerCompetitorNonBulletedUserMessage,
+  normalizeNonBulletedProse,
 } from '../review-analysis/prompts.ts';
 import { countMessageTokens } from '../review-analysis/token-counter.ts';
 
@@ -95,6 +106,7 @@ export type ReviewAnalysisFlow = (typeof SUPPORTED_FLOWS)[number];
 export const SHIPPED_FLOWS = new Set<ReviewAnalysisFlow>([
   'per-review-summarize',
   'per-competitor-bulleted',
+  'per-competitor-nonbulleted',
 ]);
 
 export function isReviewAnalysisFlow(v: unknown): v is ReviewAnalysisFlow {
@@ -253,9 +265,24 @@ export interface PerCompetitorBulletedResponseBody {
   usage: PerReviewBatchUsage;
 }
 
+// Per-Competitor NON-bulleted wire shape — P-49 W5 Fix Session C. ONE
+// prose summary per call. `summary` carries the flowing prose paragraphs
+// (stored under analysisJson.summary alongside an analysisJson.flow
+// discriminator so the GET hydration + Edit affordance can tell it apart
+// from the bulleted PER_PRODUCT row at the same urlId). analysisId is the
+// stored row id for the in-page Edit affordance.
+export interface PerCompetitorNonBulletedResponseBody {
+  flow: 'per-competitor-nonbulleted';
+  analysisId: string;
+  summary: string;
+  source: 'cache' | 'fresh';
+  usage: PerReviewBatchUsage;
+}
+
 export type RunBatchResponseBody =
   | PerReviewBatchResponseBody
-  | PerCompetitorBulletedResponseBody;
+  | PerCompetitorBulletedResponseBody
+  | PerCompetitorNonBulletedResponseBody;
 
 // Pull the concatenated text content out of a messages.create response.
 function extractTextFromContent(
@@ -309,6 +336,16 @@ function buildPerCompetitorSystemBlocks(): Anthropic.TextBlockParam[] {
   ];
 }
 
+function buildPerCompetitorNonBulletedSystemBlocks(): Anthropic.TextBlockParam[] {
+  return [
+    {
+      type: 'text',
+      text: PER_COMPETITOR_NONBULLETED_SYSTEM_PROMPT,
+      cache_control: { type: 'ephemeral' },
+    },
+  ];
+}
+
 // Pull a summary string out of a stored analysisJson. Used by both
 // PER_REVIEW and PER_PRODUCT cache reads since both store the summary
 // as { summary: string, ... } in the JSON column.
@@ -348,6 +385,11 @@ export function makeReviewAnalysisRunBatchHandlers(
       urlId?: unknown;
       reviewIds?: unknown;
       modelVersion?: unknown;
+      // P-49 W5 Fix Session C — the non-bulleted flow's INPUT is the
+      // bulleted summary already shown in Column 9 for this URL (the
+      // browser supplies it from competitorSummaryByUrlId), not the raw
+      // review corpus. Required for flow='per-competitor-nonbulleted'.
+      bulletedSummary?: unknown;
     };
 
     if (!isReviewAnalysisFlow(body.flow)) {
@@ -373,30 +415,36 @@ export function makeReviewAnalysisRunBatchHandlers(
       return { status: 400, body: { error: 'urlId is required' } };
     }
 
-    if (!Array.isArray(body.reviewIds) || body.reviewIds.length === 0) {
-      return {
-        status: 400,
-        body: { error: 'reviewIds must be a non-empty array of strings' },
-      };
-    }
+    // P-49 W5 Fix Session C — the non-bulleted flow does NOT read the raw
+    // review corpus (its input is the bulleted summary supplied in the
+    // body), so it does not require reviewIds. Every other flow does.
+    const requiresReviews = flow !== 'per-competitor-nonbulleted';
     const reviewIds: string[] = [];
-    const seenIds = new Set<string>();
-    for (const id of body.reviewIds) {
-      if (typeof id !== 'string' || !id.trim()) {
+    if (requiresReviews) {
+      if (!Array.isArray(body.reviewIds) || body.reviewIds.length === 0) {
         return {
           status: 400,
-          body: { error: 'reviewIds must contain only non-empty strings' },
+          body: { error: 'reviewIds must be a non-empty array of strings' },
         };
       }
-      const trimmed = id.trim();
-      if (seenIds.has(trimmed)) {
-        return {
-          status: 400,
-          body: { error: `reviewIds contains a duplicate: ${trimmed}` },
-        };
+      const seenIds = new Set<string>();
+      for (const id of body.reviewIds) {
+        if (typeof id !== 'string' || !id.trim()) {
+          return {
+            status: 400,
+            body: { error: 'reviewIds must contain only non-empty strings' },
+          };
+        }
+        const trimmed = id.trim();
+        if (seenIds.has(trimmed)) {
+          return {
+            status: 400,
+            body: { error: `reviewIds contains a duplicate: ${trimmed}` },
+          };
+        }
+        seenIds.add(trimmed);
+        reviewIds.push(trimmed);
       }
-      seenIds.add(trimmed);
-      reviewIds.push(trimmed);
     }
 
     const modelVersion =
@@ -413,7 +461,7 @@ export function makeReviewAnalysisRunBatchHandlers(
     }
 
     let url: CompetitorUrlForBatchRow | null;
-    let reviews: CapturedReviewForBatchRow[];
+    let reviews: CapturedReviewForBatchRow[] = [];
     try {
       url = await withRetry(() =>
         prisma.competitorUrl.findFirst({
@@ -429,19 +477,21 @@ export function makeReviewAnalysisRunBatchHandlers(
       if (!url) {
         return { status: 404, body: { error: 'Competitor URL not found' } };
       }
-      reviews = await withRetry(() =>
-        prisma.capturedReview.findMany({
-          where: { id: { in: reviewIds }, competitorUrlId: urlId },
-          select: {
-            id: true,
-            competitorUrlId: true,
-            starRating: true,
-            body: true,
-            reviewerName: true,
-            reviewDate: true,
-          },
-        })
-      );
+      if (requiresReviews) {
+        reviews = await withRetry(() =>
+          prisma.capturedReview.findMany({
+            where: { id: { in: reviewIds }, competitorUrlId: urlId },
+            select: {
+              id: true,
+              competitorUrlId: true,
+              starRating: true,
+              body: true,
+              reviewerName: true,
+              reviewDate: true,
+            },
+          })
+        );
+      }
     } catch (error) {
       recordFlake('POST review-analysis-run-batch load', error, {
         projectId,
@@ -456,8 +506,8 @@ export function makeReviewAnalysisRunBatchHandlers(
     // Verify every requested reviewId resolved to a real row scoped to
     // this URL. Surfacing a 404 here protects against the browser
     // sending stale IDs after a delete or against an attacker probing
-    // for cross-URL reviews.
-    if (reviews.length !== reviewIds.length) {
+    // for cross-URL reviews. Skipped for the non-bulleted flow (no corpus).
+    if (requiresReviews && reviews.length !== reviewIds.length) {
       const foundIds = new Set(reviews.map((r) => r.id));
       const missing = reviewIds.filter((id) => !foundIds.has(id));
       return {
@@ -467,6 +517,227 @@ export function makeReviewAnalysisRunBatchHandlers(
           missing,
         },
       };
+    }
+
+    // ─── Per-Competitor Comprehensive (NON-bulleted) dispatch ───────
+    //
+    // P-49 W5 Fix Session C. INPUT is the bulleted summary already shown
+    // in Column 9 for this URL (the browser supplies it; it only fires
+    // this flow for URLs that HAVE a bulleted summary — others are
+    // skipped + flagged client-side). Output is ONE prose paragraph block
+    // persisted as a SECOND PER_PRODUCT ReviewAnalysis row, discriminated
+    // from the bulleted row by analysisJson.flow. Cache key is over the
+    // bulleted source text + model + prompt-version, so editing or
+    // re-running the bulleted summary invalidates the non-bulleted cache.
+    if (flow === 'per-competitor-nonbulleted') {
+      const bulletedSummary =
+        typeof body.bulletedSummary === 'string' ? body.bulletedSummary.trim() : '';
+      if (!bulletedSummary) {
+        return {
+          status: 400,
+          body: {
+            error:
+              'bulletedSummary is required for the non-bulleted flow — generate the bulleted summary for this competitor first',
+          },
+        };
+      }
+
+      const nbHash = createHash('sha256')
+        .update(
+          `${bulletedSummary}\n|${modelVersion}|${PER_COMPETITOR_NONBULLETED_PROMPT_VERSION}`
+        )
+        .digest('hex');
+
+      let nbCachedRows: ReviewAnalysisCachedRow[];
+      try {
+        nbCachedRows = await withRetry(() =>
+          prisma.reviewAnalysis.findMany({
+            where: {
+              urlId,
+              level: 'PER_PRODUCT',
+              reviewsHash: { in: [nbHash] },
+            },
+            select: {
+              id: true,
+              reviewsHash: true,
+              analysisJson: true,
+              modelVersion: true,
+            },
+          })
+        );
+      } catch (error) {
+        recordFlake('POST per-competitor-nonbulleted cache lookup', error, {
+          projectId,
+          urlId,
+        });
+        nbCachedRows = [];
+      }
+
+      const nbCachedHit = nbCachedRows
+        .map((r) => ({ id: r.id, summary: summaryFromCachedJson(r.analysisJson) }))
+        .find((entry): entry is { id: string; summary: string } => !!entry.summary);
+
+      if (nbCachedHit) {
+        const cachedResponse: PerCompetitorNonBulletedResponseBody = {
+          flow: 'per-competitor-nonbulleted',
+          analysisId: nbCachedHit.id,
+          summary: nbCachedHit.summary,
+          source: 'cache',
+          usage: {
+            inputTokens: 0,
+            outputTokens: 0,
+            cacheCreationInputTokens: 0,
+            cacheReadInputTokens: 0,
+            actualCostUsd: 0,
+            estimatedCostUsd: 0,
+          },
+        };
+        return { status: 200, body: cachedResponse };
+      }
+
+      const productNameNB = url.productName ?? 'Unknown product';
+      const userTextNB = buildPerCompetitorNonBulletedUserMessage({
+        productName: productNameNB,
+        platform: url.platform,
+        bulletedSummary,
+      });
+
+      let estimatedInputTokensNB = 0;
+      try {
+        estimatedInputTokensNB = await countMessageTokens({
+          client: anthropicClient,
+          model: modelVersion,
+          system: PER_COMPETITOR_NONBULLETED_SYSTEM_PROMPT,
+          messages: [{ role: 'user', content: userTextNB }],
+        });
+      } catch (error) {
+        recordFlake('POST per-competitor-nonbulleted countTokens', error, {
+          projectId,
+          urlId,
+        });
+      }
+      // ~2-4 paragraphs ≈ ~150-300 words ≈ ~400 output tokens. 2k cap
+      // for headroom on dense sources.
+      const estimatedOutputTokensNB = 2_000;
+      const estimatedCostUsdNB = estimateCostUsd(
+        modelVersion,
+        estimatedInputTokensNB,
+        estimatedOutputTokensNB
+      );
+
+      let responseNB: Anthropic.Message;
+      try {
+        responseNB = await anthropicClient.messages.create({
+          model: modelVersion,
+          max_tokens: PER_BATCH_MAX_OUTPUT_TOKENS,
+          system: buildPerCompetitorNonBulletedSystemBlocks(),
+          messages: [{ role: 'user', content: userTextNB }],
+        });
+      } catch (error) {
+        recordFlake('POST per-competitor-nonbulleted messages.create', error, {
+          projectId,
+          urlId,
+        });
+        return {
+          status: 502,
+          body: {
+            error: `AI call failed: ${error instanceof Error ? error.message : 'unknown error'}`,
+          },
+        };
+      }
+
+      const proseRaw = extractTextFromContent(responseNB.content);
+      const prose = normalizeNonBulletedProse(proseRaw);
+      if (!prose) {
+        return {
+          status: 502,
+          body: { error: 'AI returned empty prose for the non-bulleted flow' },
+        };
+      }
+
+      let persistedIdNB: string | null = null;
+      try {
+        const created = await withRetry(() =>
+          prisma.reviewAnalysis.create({
+            data: {
+              level: 'PER_PRODUCT',
+              urlId,
+              projectId,
+              typeFilter: null,
+              analysisJson: {
+                summary: prose,
+                flow: 'per-competitor-nonbulleted',
+              } as unknown as Prisma.InputJsonValue,
+              reviewsHash: nbHash,
+              modelVersion,
+              runByUserId: userId,
+              costUsdMicros: null,
+            },
+            select: { id: true },
+          })
+        );
+        persistedIdNB = created.id;
+      } catch (error) {
+        recordFlake('POST per-competitor-nonbulleted persist', error, {
+          projectId,
+          urlId,
+        });
+      }
+
+      // Write-back: append the prose at the BOTTOM of the URL's "Overall
+      // Analysis — Captured Reviews" box (overallAnalyses["reviews"]) per
+      // §1 verbatim "merge, never overwrite". Idempotent via
+      // tipTapDocContainsSummary so re-runs don't duplicate the block.
+      try {
+        const cu = await withRetry(() =>
+          prisma.competitorUrl.findUnique({
+            where: { id: urlId },
+            select: { overallAnalyses: true },
+          })
+        );
+        const bag = isValidOverallAnalysesBag(cu?.overallAnalyses)
+          ? (cu!.overallAnalyses as Record<string, Record<string, unknown>>)
+          : {};
+        const existingReviews = bag.reviews ?? {};
+        if (!tipTapDocContainsSummary(existingReviews, prose)) {
+          const merged = appendSummaryToTipTapDoc(existingReviews, prose);
+          const newBag = { ...bag, reviews: merged };
+          await withRetry(() =>
+            prisma.competitorUrl.update({
+              where: { id: urlId },
+              data: { overallAnalyses: newBag as Prisma.InputJsonValue },
+            })
+          );
+        }
+      } catch (error) {
+        recordFlake('POST per-competitor-nonbulleted writeback', error, {
+          projectId,
+          urlId,
+        });
+      }
+
+      const actualCostUsdNB = calculateCostUsd(modelVersion, {
+        inputTokens: responseNB.usage.input_tokens,
+        outputTokens: responseNB.usage.output_tokens,
+        cacheCreationInputTokens: responseNB.usage.cache_creation_input_tokens ?? 0,
+        cacheReadInputTokens: responseNB.usage.cache_read_input_tokens ?? 0,
+      });
+
+      const freshResponseNB: PerCompetitorNonBulletedResponseBody = {
+        flow: 'per-competitor-nonbulleted',
+        analysisId: persistedIdNB ?? '',
+        summary: prose,
+        source: 'fresh',
+        usage: {
+          inputTokens: responseNB.usage.input_tokens,
+          outputTokens: responseNB.usage.output_tokens,
+          cacheCreationInputTokens: responseNB.usage.cache_creation_input_tokens ?? 0,
+          cacheReadInputTokens: responseNB.usage.cache_read_input_tokens ?? 0,
+          actualCostUsd: actualCostUsdNB,
+          estimatedCostUsd: estimatedCostUsdNB,
+        },
+      };
+      return { status: 200, body: freshResponseNB };
     }
 
     // ─── Per-Competitor Comprehensive (bulleted) dispatch ───────────

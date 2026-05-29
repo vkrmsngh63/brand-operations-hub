@@ -437,3 +437,95 @@ export function flattenCategoriesToSummaryString(
     })
     .join('\n\n');
 }
+
+// ────────────────────────────────────────────────────────────────────
+// Per-Competitor Comprehensive (NON-bulleted) — P-49 W5 Fix Session C
+// (2026-05-29). The fourth shipped flow.
+//
+// DIVERGES from every prior flow on its INPUT: where the bulleted flow
+// reads the raw review corpus, the non-bulleted flow reads the BULLETED
+// flow's already-generated summary for the SAME competitor URL and
+// rewrites it as flowing prose. This mirrors the director's §1 verbatim:
+// "the AI model should analyze the review summaries in 'Comprehensive
+// Review (bulleted)' column … come up with a detailed analysis of the
+// bullet list … presented in a paragraphs manner that paints a clear
+// picture of the competitor's shortcomings in a way that can be used to
+// effectively critique the competitor on a product comparison website."
+//
+// Design locked at Fix Session C start (Rule 14f, 4/4 Yes-to-Recommended):
+//   - Layout: short labeled paragraphs grouped by the SAME critique themes
+//     the bulleted summary already groups by (one heading line + one
+//     paragraph per theme).
+//   - Length: moderate (~2-4 paragraphs / ~150-300 words), scaling DOWN
+//     when the bulleted source is thin. No padding.
+//   - Keep natural volume cues ("several reviewers", "multiple buyers")
+//     that already live in the bulleted source; DO NOT add formal
+//     per-review citations (the bulleted half carries traceability).
+//   - Third-person neutral analyst voice. Critique-only (the bulleted
+//     source is already critique-only).
+//
+// Output is PLAIN PROSE (not JSON) — there is no traceability payload to
+// structure, so a free-text response is simpler and has fewer failure
+// modes than a JSON contract. The handler trims it via
+// normalizeNonBulletedProse.
+//
+// History:
+//   v1 (2026-05-29, current): theme-labeled short paragraphs from the
+//        bulleted summary; moderate length; volume cues kept; no
+//        citations.
+export const PER_COMPETITOR_NONBULLETED_PROMPT_VERSION = 'v1';
+
+export const PER_COMPETITOR_NONBULLETED_SYSTEM_PROMPT = `You are an expert competitive-research analyst writing a polished prose critique of ONE competitor's product for a brand owner. You will be given a bullet-point summary of that product's review critiques, already grouped under theme headings. Your task: rewrite those bullets into flowing prose that paints a clear picture of the competitor's shortcomings — the kind of write-up a brand owner could lift directly onto a product-comparison page.
+
+Rules:
+
+- Group the prose by the SAME critique themes the bullet summary uses (e.g. "Product shortcomings", "Shipping & fulfillment", "Service & support", plus any other theme present in the source). For each theme that has content, write ONE short heading line (the theme name, on its own line, no "##" markers) followed by ONE flowing paragraph that weaves that theme's bullets together.
+- Keep it MODERATE in length: roughly 2-4 short paragraphs total (about 150-300 words). If the source has few critiques, write less — do NOT pad with filler, repetition, or invented detail.
+- Preserve natural volume cues that appear in the source ("several reviewers", "multiple buyers", "one reviewer reports"). Do NOT add formal citations, review numbers, or reference labels.
+- Critique-only: the source is already critiques. Do NOT introduce praise, neutral observations, or use-case descriptions.
+- Third-person neutral analyst voice. Do NOT use first person ("I"); do NOT address the reader directly ("you"). Do NOT open with a preamble like "Here is the analysis".
+- Do NOT invent shortcomings that are not present in the bullet source. Stay faithful to the source's claims.
+- Use the product name where it reads naturally.
+
+If the bullet source contains no real critiques (e.g. it is the "no critiques surfaced" sentinel or is empty), respond with exactly: No critiques were surfaced across this competitor's reviews.
+
+Output rules:
+
+- Return ONLY the prose. No JSON. No \`\`\` fences. No preamble. No trailing commentary.`;
+
+export type BuildPerCompetitorNonBulletedPromptInput = {
+  productName: string;
+  platform: string;
+  bulletedSummary: string;
+};
+
+export function buildPerCompetitorNonBulletedUserMessage({
+  productName,
+  platform,
+  bulletedSummary,
+}: BuildPerCompetitorNonBulletedPromptInput): string {
+  return (
+    `Product: ${productName}\n` +
+    `Platform: ${platform}\n\n` +
+    `Below is the bullet-point critique summary for this competitor's product, grouped under theme headings. Rewrite it as a polished prose critique following your instructions.\n\n` +
+    `--- BULLETED CRITIQUE SUMMARY ---\n` +
+    `${bulletedSummary.trim()}\n`
+  );
+}
+
+// Normalize the model's prose response: strip any stray ``` fences and a
+// common "Here is …:" preamble line, collapse 3+ blank lines down to a
+// single blank line, and trim. Returns '' when nothing usable remains
+// (the handler treats '' as a soft failure rather than persisting empty
+// prose).
+export function normalizeNonBulletedProse(text: string): string {
+  let cleaned = (text ?? '').trim();
+  // Strip a wrapping ``` / ```text fence if the model added one.
+  const fenceMatch = cleaned.match(/^```(?:[a-zA-Z]*)?\s*([\s\S]*?)\s*```$/);
+  if (fenceMatch) cleaned = fenceMatch[1].trim();
+  // Drop a single leading preamble line like "Here is the analysis:".
+  cleaned = cleaned.replace(/^\s*here(?:'s| is)[^\n]*:\s*\n+/i, '');
+  // Collapse runs of blank lines.
+  cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
+  return cleaned.trim();
+}

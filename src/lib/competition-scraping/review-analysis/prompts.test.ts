@@ -20,6 +20,10 @@ import {
   resolveReviewRefs,
   flattenCategoriesToSummaryString,
   type PerCompetitorStructuredAnalysis,
+  PER_COMPETITOR_NONBULLETED_PROMPT_VERSION,
+  PER_COMPETITOR_NONBULLETED_SYSTEM_PROMPT,
+  buildPerCompetitorNonBulletedUserMessage,
+  normalizeNonBulletedProse,
 } from './prompts.ts';
 
 function makeReview(
@@ -440,4 +444,70 @@ test('flattenCategoriesToSummaryString emits the no-critiques sentinel for empty
     flattenCategoriesToSummaryString({ categories: [] }),
     '- (no critiques surfaced across the corpus)'
   );
+});
+
+// ── Per-Competitor NON-bulleted (prose) — P-49 W5 Fix Session C ──────
+
+test('PER_COMPETITOR_NONBULLETED_PROMPT_VERSION is v1', () => {
+  assert.equal(PER_COMPETITOR_NONBULLETED_PROMPT_VERSION, 'v1');
+});
+
+test('PER_COMPETITOR_NONBULLETED_SYSTEM_PROMPT is non-empty + carries prose + theme + no-citations directives', () => {
+  const p = PER_COMPETITOR_NONBULLETED_SYSTEM_PROMPT;
+  assert.ok(p.length > 200);
+  assert.match(p, /prose/i);
+  assert.match(p, /theme/i);
+  // moderate length guidance + no formal citations (design lock)
+  assert.match(p, /2-4 short paragraphs/i);
+  assert.match(p, /do not add formal citations/i);
+  // critique-only + third-person voice carried over from the bulleted flow
+  assert.match(p, /critique-only/i);
+  assert.match(p, /third-person/i);
+});
+
+test('buildPerCompetitorNonBulletedUserMessage embeds product, platform, and the bulleted source', () => {
+  const msg = buildPerCompetitorNonBulletedUserMessage({
+    productName: 'Acme Widget Pro',
+    platform: 'amazon',
+    bulletedSummary:
+      '## Product critiques\n- Strap breaks within months\n- Flimsy casing',
+  });
+  assert.match(msg, /Product: Acme Widget Pro/);
+  assert.match(msg, /Platform: amazon/);
+  assert.match(msg, /BULLETED CRITIQUE SUMMARY/);
+  assert.match(msg, /Strap breaks within months/);
+  // the bulleted source is trimmed into the message body
+  assert.match(msg, /Flimsy casing/);
+});
+
+test('normalizeNonBulletedProse trims + strips a wrapping fence', () => {
+  assert.equal(
+    normalizeNonBulletedProse('```\nProduct shortcomings\nThe strap breaks.\n```'),
+    'Product shortcomings\nThe strap breaks.'
+  );
+  assert.equal(
+    normalizeNonBulletedProse('```text\nClean prose here.\n```'),
+    'Clean prose here.'
+  );
+});
+
+test('normalizeNonBulletedProse drops a leading "Here is" preamble line', () => {
+  assert.equal(
+    normalizeNonBulletedProse(
+      "Here is the prose critique:\n\nProduct shortcomings\nThe casing is flimsy."
+    ),
+    'Product shortcomings\nThe casing is flimsy.'
+  );
+});
+
+test('normalizeNonBulletedProse collapses 3+ blank lines to one blank line', () => {
+  assert.equal(
+    normalizeNonBulletedProse('Para one.\n\n\n\nPara two.'),
+    'Para one.\n\nPara two.'
+  );
+});
+
+test('normalizeNonBulletedProse returns empty string for whitespace-only input', () => {
+  assert.equal(normalizeNonBulletedProse('   \n\n  '), '');
+  assert.equal(normalizeNonBulletedProse(''), '');
 });
