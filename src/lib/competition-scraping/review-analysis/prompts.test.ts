@@ -15,7 +15,11 @@ import {
   PER_COMPETITOR_BULLETED_PROMPT_VERSION,
   PER_COMPETITOR_BULLETED_SYSTEM_PROMPT,
   buildPerCompetitorBulletedUserMessage,
-  validatePerCompetitorBulletedOutput,
+  reviewRefLabel,
+  validatePerCompetitorStructuredOutput,
+  resolveReviewRefs,
+  flattenCategoriesToSummaryString,
+  type PerCompetitorStructuredAnalysis,
 } from './prompts.ts';
 
 function makeReview(
@@ -219,80 +223,58 @@ test('findReviewIdMismatch surfaces all three failure modes together', () => {
 });
 
 // ────────────────────────────────────────────────────────────────────
-// Per-Competitor Comprehensive (bulleted) — W5 Session 3.
+// Per-Competitor Comprehensive (bulleted) — W5 Session 3 (free-text v3),
+// redesigned to STRUCTURED output in Fix Session D v4 (2026-05-31).
 
-test('PER_COMPETITOR_BULLETED_PROMPT_VERSION is set to v3 (post-second-Phase-4-redirect)', () => {
+test('PER_COMPETITOR_BULLETED_PROMPT_VERSION is set to v4 (Fix Session D structured redesign)', () => {
   // Tripwire — when bumping prompt version (e.g., after a Phase 4
   // redirect), update this test + the version history comment in
-  // prompts.ts. v2 retired same day after director's second redirect:
-  // "I want all negative signals related to the product and company
-  // to be part of the summaries even if they are not part of the
-  // examples I provided." Same versioning Pattern as W5 Session 2 FF#3.
-  assert.equal(PER_COMPETITOR_BULLETED_PROMPT_VERSION, 'v3');
+  // prompts.ts. v4 (2026-05-31): structured categories → bullets →
+  // reviewRefs output powering the 3-column traceability table per
+  // director's 2026-05-30 §1 addendum.
+  assert.equal(PER_COMPETITOR_BULLETED_PROMPT_VERSION, 'v4');
 });
 
-test('PER_COMPETITOR_BULLETED_SYSTEM_PROMPT v3 carries critique-only + theme-emergent directives', () => {
+test('PER_COMPETITOR_BULLETED_SYSTEM_PROMPT v4 carries structured-output + critique-only + theme-emergent directives', () => {
   assert.ok(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT.length > 500);
-  // v3 keeps the 3 common critique-category headings as EXAMPLES (but
-  // now also accepts emergent themes invented by the model):
-  assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /## Product critiques/);
-  assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /## Fulfillment \/ shipping critiques/);
-  assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /## Company \/ seller critiques/);
-  // v3 explicit theme-emergent directive (the core change from v2):
-  assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /INVENT a new theme heading/);
+  // v4 structured shape — categories / bullets / reviewRefs:
+  assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /"categories"/);
+  assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /"reviewRefs"/);
+  assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /R1.*R2.*R3/);
+  // The critical attribution directive (the heart of the traceability feature):
+  assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /List the labels of ALL reviews that support/);
+  assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /reviewRefs must never be empty/);
+  assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /Never invent a label/);
+  // v3-carried theme examples (now without the "##" markdown prefix):
+  assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /Product critiques/);
+  assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /Fulfillment \/ shipping critiques/);
+  assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /Company \/ seller critiques/);
+  // Theme-emergent directive carries from v3:
+  assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /INVENT a new theme name/);
   assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /DO NOT limit critiques to those three categories/);
-  // Sample emergent themes listed (model should recognize these as
-  // valid + invent further themes beyond them):
   assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /Pricing \/ value critiques/);
-  assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /Documentation \/ instructions critiques/);
   assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /Safety \/ reliability concerns/);
-  // Critique-only directive (carries from v2):
+  // Critique-only directive carries:
   assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /Focus EXCLUSIVELY on critiques/);
-  assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /Positive signals of any kind/);
-  // Empty-themes-omit directive carries from v2:
-  assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /Empty themes OMIT their heading/);
-  // Bulleted-critical inherits from Per-Review v2:
-  assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /critical/i);
-  // Volume cues + new length target (5-15, loosened from v2's 5-12 to
-  // accommodate emergent themes):
+  assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /positive signals of any kind/i);
+  // Volume cues + length target + tone + output rules carry:
   assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /Multiple reviewers/);
   assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /5-15/);
-  // Tone + output rules carried from v2:
   assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /Third-person neutral/);
   assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /Return ONLY the JSON object/);
-  // No-critiques fallback bullet carries from v2:
-  assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /no critiques surfaced across the corpus/);
+  // Empty-corpus path now returns { "categories": [] }:
+  assert.match(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /"categories": \[\]/);
 });
 
-test('PER_COMPETITOR_BULLETED_SYSTEM_PROMPT v3 does NOT carry deprecated v1/v2 restrictive phrasings', () => {
-  // Defends against accidental partial revert to v1 (positives) or
-  // v2 (rigid 4-theme cap) during future iterations.
-  // v1 phrasings:
-  assert.doesNotMatch(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /## Positive signals/);
-  assert.doesNotMatch(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /## Use cases/);
-  assert.doesNotMatch(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /## Negative signals/);
-  // v2 restrictive phrasings (v2 said "up to four section headings" +
-  // capped themes at the fixed 4 — v3 explicitly removes this cap):
-  assert.doesNotMatch(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /up to four section headings/);
-  assert.doesNotMatch(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /in fewer than four headings/);
-  // v2's "Fulfillment critiques" heading renamed to "Fulfillment /
-  // shipping critiques" in v3 (more descriptive):
-  assert.doesNotMatch(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /## Fulfillment critiques\b/);
-  // v2 length target (5-12) replaced by v3's 5-15:
-  assert.doesNotMatch(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /5-12 critique bullets/);
-});
-
-test('PER_COMPETITOR_BULLETED_SYSTEM_PROMPT does NOT carry Per-Review-specific directives', () => {
-  // Defends against accidental copy-paste leakage from Per-Review v2:
-  // per-competitor output is ONE aggregated summary string, not an
-  // array of per-review summaries, so phrases like "Echo each
-  // review's reviewId" must NOT appear.
+test('PER_COMPETITOR_BULLETED_SYSTEM_PROMPT v4 dropped the v3 free-text "summary" string shape', () => {
+  // Defends against accidental revert to the v3 free-text single-string
+  // output (which had no review traceability).
+  assert.doesNotMatch(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /"summary": "<theme-grouped/);
   assert.doesNotMatch(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /Echo each review's reviewId/);
   assert.doesNotMatch(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /summaries\[\]/);
-  assert.doesNotMatch(PER_COMPETITOR_BULLETED_SYSTEM_PROMPT, /one entry per input review/);
 });
 
-test('buildPerCompetitorBulletedUserMessage emits header + raw review bodies', () => {
+test('buildPerCompetitorBulletedUserMessage emits header + R-labeled reviews for citation', () => {
   const msg = buildPerCompetitorBulletedUserMessage({
     productName: 'Acme Widget Pro',
     platform: 'amazon',
@@ -305,25 +287,13 @@ test('buildPerCompetitorBulletedUserMessage emits header + raw review bodies', (
   assert.match(msg, /Product: Acme Widget Pro/);
   assert.match(msg, /Platform: amazon/);
   assert.match(msg, /Reviews in corpus: 3/);
-  assert.match(msg, /Aggregate the critical signals across all reviews/);
-  assert.match(msg, /--- Review 1 \(5\/5 stars, Jane Doe, 2026-01-15\) ---/);
-  assert.match(msg, /--- Review 2 \(5\/5 stars, Jane Doe, 2026-01-15\) ---/);
+  assert.match(msg, /record in "reviewRefs" the labels/);
+  // R-labels replace the old "Review N" headers so the model cites by label:
+  assert.match(msg, /--- R1 \(5\/5 stars, Jane Doe, 2026-01-15\) ---/);
+  assert.match(msg, /--- R2 \(5\/5 stars, Jane Doe, 2026-01-15\) ---/);
+  assert.match(msg, /--- R3 \(5\/5 stars, Jane Doe, 2026-01-15\) ---/);
   assert.match(msg, /Loved the build quality/);
   assert.match(msg, /Strap broke within 3 months/);
-  assert.match(msg, /Use it daily for hiking/);
-});
-
-test('buildPerCompetitorBulletedUserMessage does NOT echo reviewIds (one-aggregated-summary shape)', () => {
-  // Per-Competitor output is ONE summary per call, so reviewIds don't
-  // need to be echoed back — model just reads the bodies. This defends
-  // against accidental copy-paste from the Per-Review builder.
-  const msg = buildPerCompetitorBulletedUserMessage({
-    productName: 'X',
-    platform: 'walmart',
-    reviews: [makeReview('rev-r1')],
-  });
-  assert.doesNotMatch(msg, /reviewId: rev-r1/);
-  assert.doesNotMatch(msg, /Echo each reviewId/);
 });
 
 test('buildPerCompetitorBulletedUserMessage handles missing metadata cleanly', () => {
@@ -338,37 +308,136 @@ test('buildPerCompetitorBulletedUserMessage handles missing metadata cleanly', (
       }),
     ],
   });
-  assert.match(msg, /--- Review 1 ---\nGreat product/);
+  assert.match(msg, /--- R1 ---\nGreat product/);
   assert.doesNotMatch(msg, /\(.*Jane.*\)/);
 });
 
-test('validatePerCompetitorBulletedOutput accepts well-formed shape', () => {
-  const ok = validatePerCompetitorBulletedOutput({
-    summary: '## Positive signals\n- Reviewers praise battery life\n- Build quality holds up\n\n## Negative signals\n- Strap breaks within 3 months',
-  });
-  assert.ok(ok);
-  assert.match(ok.summary, /## Positive signals/);
-  assert.match(ok.summary, /Strap breaks/);
+test('reviewRefLabel is 1-based (index 0 → R1)', () => {
+  assert.equal(reviewRefLabel(0), 'R1');
+  assert.equal(reviewRefLabel(4), 'R5');
 });
 
-test('validatePerCompetitorBulletedOutput rejects malformed shapes', () => {
-  assert.equal(validatePerCompetitorBulletedOutput(null), null);
-  assert.equal(validatePerCompetitorBulletedOutput('not-an-object'), null);
-  assert.equal(validatePerCompetitorBulletedOutput([]), null);
-  // Missing summary field.
-  assert.equal(validatePerCompetitorBulletedOutput({}), null);
-  // summary is not a string.
-  assert.equal(validatePerCompetitorBulletedOutput({ summary: 42 }), null);
-  assert.equal(validatePerCompetitorBulletedOutput({ summary: null }), null);
-  // Empty / whitespace-only summary.
-  assert.equal(validatePerCompetitorBulletedOutput({ summary: '' }), null);
-  assert.equal(validatePerCompetitorBulletedOutput({ summary: '   ' }), null);
-  // Per-Review shape rejected (defends against handler dispatching to
-  // the wrong validator).
+test('validatePerCompetitorStructuredOutput accepts a well-formed structured shape', () => {
+  const ok = validatePerCompetitorStructuredOutput({
+    categories: [
+      {
+        name: 'Product critiques',
+        bullets: [
+          { text: 'No noticeable effect on pain', reviewRefs: ['R1', 'R2'] },
+          { text: 'No reduction in bruising', reviewRefs: ['R3'] },
+        ],
+      },
+      {
+        name: 'Safety / reliability concerns',
+        bullets: [{ text: 'No thyroid-med warning', reviewRefs: ['R4'] }],
+      },
+    ],
+  });
+  assert.ok(ok);
+  assert.equal(ok.categories.length, 2);
+  assert.equal(ok.categories[0].name, 'Product critiques');
+  assert.equal(ok.categories[0].bullets.length, 2);
+  assert.deepEqual(ok.categories[0].bullets[0].reviewRefs, ['R1', 'R2']);
+});
+
+test('validatePerCompetitorStructuredOutput accepts empty categories (no critiques surfaced)', () => {
+  const ok = validatePerCompetitorStructuredOutput({ categories: [] });
+  assert.ok(ok);
+  assert.equal(ok.categories.length, 0);
+});
+
+test('validatePerCompetitorStructuredOutput trims blanks + drops empty categories', () => {
+  const ok = validatePerCompetitorStructuredOutput({
+    categories: [
+      {
+        name: '  Product critiques  ',
+        bullets: [
+          { text: '  Real complaint  ', reviewRefs: ['R1'] },
+          { text: '   ', reviewRefs: ['R2'] }, // blank bullet dropped
+        ],
+      },
+      { name: 'All-blank category', bullets: [{ text: '', reviewRefs: [] }] }, // whole category dropped
+    ],
+  });
+  assert.ok(ok);
+  assert.equal(ok.categories.length, 1);
+  assert.equal(ok.categories[0].name, 'Product critiques');
+  assert.equal(ok.categories[0].bullets.length, 1);
+  assert.equal(ok.categories[0].bullets[0].text, 'Real complaint');
+});
+
+test('validatePerCompetitorStructuredOutput rejects malformed shapes', () => {
+  assert.equal(validatePerCompetitorStructuredOutput(null), null);
+  assert.equal(validatePerCompetitorStructuredOutput('nope'), null);
+  assert.equal(validatePerCompetitorStructuredOutput([]), null);
+  assert.equal(validatePerCompetitorStructuredOutput({}), null); // no categories
+  assert.equal(validatePerCompetitorStructuredOutput({ categories: 'x' }), null);
+  // Category missing name.
   assert.equal(
-    validatePerCompetitorBulletedOutput({
-      summaries: [{ reviewId: 'r', summary: 'x' }],
+    validatePerCompetitorStructuredOutput({ categories: [{ bullets: [] }] }),
+    null
+  );
+  // Bullets not an array.
+  assert.equal(
+    validatePerCompetitorStructuredOutput({
+      categories: [{ name: 'X', bullets: 'nope' }],
     }),
     null
+  );
+  // Bullet text not a string.
+  assert.equal(
+    validatePerCompetitorStructuredOutput({
+      categories: [{ name: 'X', bullets: [{ text: 42, reviewRefs: [] }] }],
+    }),
+    null
+  );
+  // Old v3 free-text shape rejected (defends against stale dispatch).
+  assert.equal(
+    validatePerCompetitorStructuredOutput({ summary: '## Product\n- x' }),
+    null
+  );
+});
+
+test('resolveReviewRefs maps R-labels to ids by position, dedups, drops invalid/out-of-range', () => {
+  const ids = ['id-a', 'id-b', 'id-c'];
+  assert.deepEqual(resolveReviewRefs(['R1', 'R3'], ids), ['id-a', 'id-c']);
+  // Dedup preserves first-seen order.
+  assert.deepEqual(resolveReviewRefs(['R2', 'R2', 'R1'], ids), ['id-b', 'id-a']);
+  // Out-of-range + malformed labels dropped silently.
+  assert.deepEqual(resolveReviewRefs(['R4', 'R0', 'banana', 'R2'], ids), ['id-b']);
+  // Whitespace + case tolerated.
+  assert.deepEqual(resolveReviewRefs([' r1 ', 'R 2'], ids), ['id-a', 'id-b']);
+  // Empty input → empty output.
+  assert.deepEqual(resolveReviewRefs([], ids), []);
+});
+
+test('flattenCategoriesToSummaryString reproduces the legacy "## heading / - bullet" string', () => {
+  const analysis: PerCompetitorStructuredAnalysis = {
+    categories: [
+      {
+        name: 'Product critiques',
+        bullets: [
+          { text: 'No noticeable effect', reviewIds: ['id-a'] },
+          { text: 'No bruise reduction', reviewIds: ['id-b'] },
+        ],
+      },
+      {
+        name: 'Safety / reliability concerns',
+        bullets: [{ text: 'No thyroid warning', reviewIds: ['id-c'] }],
+      },
+    ],
+  };
+  const str = flattenCategoriesToSummaryString(analysis);
+  assert.equal(
+    str,
+    '## Product critiques\n- No noticeable effect\n- No bruise reduction\n\n' +
+      '## Safety / reliability concerns\n- No thyroid warning'
+  );
+});
+
+test('flattenCategoriesToSummaryString emits the no-critiques sentinel for empty analysis', () => {
+  assert.equal(
+    flattenCategoriesToSummaryString({ categories: [] }),
+    '- (no critiques surfaced across the corpus)'
   );
 });

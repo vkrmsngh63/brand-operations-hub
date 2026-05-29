@@ -924,10 +924,30 @@ test('per-competitor 200 fresh — one AI call, ONE persisted PER_PRODUCT row, s
     sampleReview('rev-c'),
   ];
   const { prisma, state: prismaState } = makePrisma({ reviews });
+  // Fix Session D (v4) — model returns STRUCTURED output citing R-labels.
   const modelResponse = makeAnthropicMessage(
     JSON.stringify({
-      summary:
-        '## Product critiques\n- Multiple reviewers report strap breaks within 3 months\n- Sizing runs small\n\n## Fulfillment critiques\n- Several mention damaged packaging on arrival',
+      categories: [
+        {
+          name: 'Product critiques',
+          bullets: [
+            {
+              text: 'Multiple reviewers report strap breaks within 3 months',
+              reviewRefs: ['R1', 'R2'],
+            },
+            { text: 'Sizing runs small', reviewRefs: ['R3'] },
+          ],
+        },
+        {
+          name: 'Fulfillment / shipping critiques',
+          bullets: [
+            {
+              text: 'Several mention damaged packaging on arrival',
+              reviewRefs: ['R2'],
+            },
+          ],
+        },
+      ],
     })
   );
   const { client, state: clientState } = makeAnthropicClient({
@@ -947,6 +967,7 @@ test('per-competitor 200 fresh — one AI call, ONE persisted PER_PRODUCT row, s
   const body = r.body as PerCompetitorBulletedResponseBody;
   assert.equal(body.flow, 'per-competitor-bulleted');
   assert.equal(body.source, 'fresh');
+  // The response carries the FLATTENED summary (back-compat for Column 9).
   assert.match(body.summary, /## Product critiques/);
   assert.match(body.summary, /Multiple reviewers report strap breaks/);
   // analysisId returned so client can PATCH the row on edit.
@@ -959,22 +980,40 @@ test('per-competitor 200 fresh — one AI call, ONE persisted PER_PRODUCT row, s
   const persisted = prismaState.createCalls[0].data;
   assert.equal(persisted.level, 'PER_PRODUCT');
   assert.equal(persisted.urlId, 'url-1');
-  // analysisJson holds just { summary } (no reviewId).
+  // analysisJson holds BOTH the flattened summary AND the structured
+  // categories with R-labels RESOLVED back to real CapturedReview ids.
   const written = persisted.analysisJson as {
     summary: string;
+    categories: Array<{
+      name: string;
+      bullets: Array<{ text: string; reviewIds: string[] }>;
+    }>;
     reviewId?: string;
   };
   assert.match(written.summary, /## Product critiques/);
   assert.equal(written.reviewId, undefined);
+  assert.equal(written.categories.length, 2);
+  assert.equal(written.categories[0].name, 'Product critiques');
+  // R1,R2 → rev-a,rev-b (resolved by prompt position).
+  assert.deepEqual(written.categories[0].bullets[0].reviewIds, [
+    'rev-a',
+    'rev-b',
+  ]);
+  assert.deepEqual(written.categories[0].bullets[1].reviewIds, ['rev-c']);
+  assert.deepEqual(written.categories[1].bullets[0].reviewIds, ['rev-b']);
 });
 
-// ─── Fix Session B (2026-05-30) — per-competitor bulleted write-back ─────
+// ─── Fix Session D (2026-05-31) — box no longer free-text-appended ───────
+// The per-competitor bulleted output now powers the 3-column traceability
+// table read directly from the PER_PRODUCT row. The Fix Session B FF1
+// free-text write-back into overallAnalyses["reviews"] is REMOVED — any
+// director-typed box content must be left strictly untouched.
 
-test('per-competitor fresh — appends summary to overallAnalyses.reviews (D-10), preserving existing content', async () => {
+test('per-competitor fresh — does NOT write back into the box (Fix D: table reads the structured row)', async () => {
   const reviews = [sampleReview('rev-a'), sampleReview('rev-b')];
   const { prisma, state: prismaState } = makePrisma({
     reviews,
-    // The box already has a director-written paragraph — append must keep it.
+    // The box already has a director-written paragraph — it must NOT be touched.
     existingOverallAnalyses: {
       reviews: {
         type: 'doc',
@@ -985,7 +1024,17 @@ test('per-competitor fresh — appends summary to overallAnalyses.reviews (D-10)
     } as Prisma.JsonValue,
   });
   const modelResponse = makeAnthropicMessage(
-    JSON.stringify({ summary: '## Themes\n- strap breaks\n- runs small' })
+    JSON.stringify({
+      categories: [
+        {
+          name: 'Themes',
+          bullets: [
+            { text: 'strap breaks', reviewRefs: ['R1'] },
+            { text: 'runs small', reviewRefs: ['R2'] },
+          ],
+        },
+      ],
+    })
   );
   const { client } = makeAnthropicClient({ createResult: modelResponse });
   const deps = makeDeps({ prisma, anthropicClient: client });
@@ -999,15 +1048,15 @@ test('per-competitor fresh — appends summary to overallAnalyses.reviews (D-10)
     makeCtx('proj-1')
   );
   assert.equal(r.status, 200);
-  // One overallAnalyses write-back.
-  assert.equal(prismaState.urlUpdateCalls.length, 1);
-  const bag = prismaState.urlUpdateCalls[0].overallAnalyses as {
-    reviews: { type: string; content: Array<{ type: string }> };
+  // No box write-back at all — the director's prior note is left alone.
+  assert.equal(prismaState.urlUpdateCalls.length, 0);
+  // The structured row IS persisted with resolved reviewIds.
+  const persisted = prismaState.createCalls[0].data;
+  const written = persisted.analysisJson as {
+    categories: Array<{ bullets: Array<{ reviewIds: string[] }> }>;
   };
-  // Prior content preserved at the top; new content appended below.
-  assert.equal(bag.reviews.type, 'doc');
-  assert.ok(bag.reviews.content.length >= 2);
-  assert.equal(bag.reviews.content[0].type, 'paragraph'); // the prior note
+  assert.deepEqual(written.categories[0].bullets[0].reviewIds, ['rev-a']);
+  assert.deepEqual(written.categories[0].bullets[1].reviewIds, ['rev-b']);
 });
 
 function makeCompetitorCacheRow() {
@@ -1024,14 +1073,13 @@ function makeCompetitorCacheRow() {
   };
 }
 
-test('per-competitor cache hit — writes back to an EMPTY box (FF1: pre-deploy summaries surface)', async () => {
+test('per-competitor cache hit — returns cached summary, NO box write-back (Fix D)', async () => {
   const reviews = [sampleReview('rev-a'), sampleReview('rev-b')];
   const { prisma, state: prismaState } = makePrisma({
     reviews,
     cachedRows: [makeCompetitorCacheRow()],
-    // Box empty (default {}) — the summary predates the write-back feature.
   });
-  const { client } = makeAnthropicClient({});
+  const { client, state: clientState } = makeAnthropicClient({});
   const deps = makeDeps({ prisma, anthropicClient: client });
   const { POST } = makeReviewAnalysisRunBatchHandlers(deps);
   const r = await POST(
@@ -1043,38 +1091,22 @@ test('per-competitor cache hit — writes back to an EMPTY box (FF1: pre-deploy 
     makeCtx('proj-1')
   );
   assert.equal(r.status, 200);
-  // Cache hit now DOES write back when the box doesn't already have it.
-  assert.equal(prismaState.urlUpdateCalls.length, 1);
+  const body = r.body as PerCompetitorBulletedResponseBody;
+  assert.equal(body.source, 'cache');
+  assert.match(body.summary, /cached competitor point/);
+  // No AI call + no box write-back on cache hit.
+  assert.equal(clientState.createCalls.length, 0);
+  assert.equal(prismaState.urlUpdateCalls.length, 0);
 });
 
-test('per-competitor cache hit — does NOT duplicate when summary already in the box', async () => {
+test('per-competitor — back-compat: legacy { summary } cache rows still read cleanly', async () => {
+  // Older PER_PRODUCT rows persisted only { summary } (pre-v4). The cache
+  // read must still surface them (the box just renders the flattened text
+  // until the director re-runs to get a v4 structured row + table).
   const reviews = [sampleReview('rev-a'), sampleReview('rev-b')];
   const { prisma, state: prismaState } = makePrisma({
     reviews,
     cachedRows: [makeCompetitorCacheRow()],
-    // Box already contains the summary text (flattened: heading + bullet).
-    existingOverallAnalyses: {
-      reviews: {
-        type: 'doc',
-        content: [
-          { type: 'paragraph', content: [{ type: 'text', text: '## Themes' }] },
-          {
-            type: 'bulletList',
-            content: [
-              {
-                type: 'listItem',
-                content: [
-                  {
-                    type: 'paragraph',
-                    content: [{ type: 'text', text: 'cached competitor point' }],
-                  },
-                ],
-              },
-            ],
-          },
-        ],
-      },
-    } as Prisma.JsonValue,
   });
   const { client } = makeAnthropicClient({});
   const deps = makeDeps({ prisma, anthropicClient: client });
@@ -1088,7 +1120,8 @@ test('per-competitor cache hit — does NOT duplicate when summary already in th
     makeCtx('proj-1')
   );
   assert.equal(r.status, 200);
-  // Already present → idempotent → no write-back.
+  assert.equal((r.body as PerCompetitorBulletedResponseBody).source, 'cache');
+  // No box write-back for legacy rows either.
   assert.equal(prismaState.urlUpdateCalls.length, 0);
 });
 
@@ -1256,7 +1289,14 @@ test('per-competitor does NOT use the per-review prompt version in its cache key
   const { client, state: clientState } = makeAnthropicClient({
     createResult: makeAnthropicMessage(
       JSON.stringify({
-        summary: '## Positive signals\n- Fresh per-competitor summary',
+        categories: [
+          {
+            name: 'Product critiques',
+            bullets: [
+              { text: 'Fresh per-competitor summary', reviewRefs: ['R1'] },
+            ],
+          },
+        ],
       })
     ),
   });

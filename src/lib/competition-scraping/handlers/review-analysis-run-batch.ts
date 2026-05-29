@@ -38,11 +38,7 @@ import {
   type AnthropicClientLike,
 } from '../review-analysis/client.ts';
 import { computeReviewsHash } from '../review-analysis/cache.ts';
-import {
-  appendSummaryToTipTapDoc,
-  summaryStringToTipTapDoc,
-  tipTapDocContainsSummary,
-} from '../../rich-text/tiptap-helpers.ts';
+import { summaryStringToTipTapDoc } from '../../rich-text/tiptap-helpers.ts';
 import {
   calculateCostUsd,
   estimateCostUsd,
@@ -58,7 +54,10 @@ import {
   PER_COMPETITOR_BULLETED_PROMPT_VERSION,
   PER_COMPETITOR_BULLETED_SYSTEM_PROMPT,
   buildPerCompetitorBulletedUserMessage,
-  validatePerCompetitorBulletedOutput,
+  validatePerCompetitorStructuredOutput,
+  resolveReviewRefs,
+  flattenCategoriesToSummaryString,
+  type PerCompetitorStructuredAnalysis,
 } from '../review-analysis/prompts.ts';
 import { countMessageTokens } from '../review-analysis/token-counter.ts';
 
@@ -519,55 +518,15 @@ export function makeReviewAnalysisRunBatchHandlers(
         cachedRows = [];
       }
 
-      // FF1 2026-05-30 — shared per-competitor write-back into the URL's
-      // "Overall Analysis — Captured Reviews" box (overallAnalyses["reviews"]),
-      // append-merged at the bottom. Append-IF-ABSENT (content-dedup) so it's
-      // idempotent across both fresh + cache-hit runs: a summary already in the
-      // box is never duplicated, and a summary not yet in the box (e.g. one
-      // generated before this deploy) gets appended on the next run. Soft-fail.
-      const writeBackPerCompetitorReviews = async (
-        summaryText: string
-      ): Promise<void> => {
-        try {
-          const existingUrl = await withRetry(() =>
-            prisma.competitorUrl.findUnique({
-              where: { id: urlId },
-              select: { overallAnalyses: true },
-            })
-          );
-          const bag =
-            existingUrl &&
-            existingUrl.overallAnalyses &&
-            typeof existingUrl.overallAnalyses === 'object' &&
-            !Array.isArray(existingUrl.overallAnalyses)
-              ? (existingUrl.overallAnalyses as Record<string, unknown>)
-              : {};
-          if (tipTapDocContainsSummary(bag.reviews, summaryText)) {
-            return; // already present — no duplicate append
-          }
-          const mergedReviewsDoc = appendSummaryToTipTapDoc(
-            bag.reviews,
-            summaryText
-          );
-          await withRetry(() =>
-            prisma.competitorUrl.update({
-              where: { id: urlId },
-              data: {
-                overallAnalyses: {
-                  ...bag,
-                  reviews: mergedReviewsDoc,
-                } as Prisma.InputJsonValue,
-              },
-            })
-          );
-        } catch (error) {
-          recordFlake(
-            'POST per-competitor-bulleted overallAnalyses write-back',
-            error,
-            { projectId, urlId }
-          );
-        }
-      };
+      // P-49 W5 Fix Session D (2026-05-31) — the per-competitor bulleted
+      // output NO LONGER appends free text into the "Overall Analysis —
+      // Captured Reviews" box. Per director's 2026-05-30 §1 addendum, that
+      // box now renders a 3-column traceability table read directly from
+      // this PER_PRODUCT ReviewAnalysis row's structured analysisJson
+      // (categories → bullets → reviewIds). Any legacy free text already
+      // appended into overallAnalyses["reviews"] is left untouched (it
+      // stays in the box's editable notes area below the table). The Fix
+      // Session B FF1 box write-back is intentionally removed here.
 
       // Pair each cached row with its summary so we can return the row
       // id alongside the summary text (the client needs both for the
@@ -580,12 +539,6 @@ export function makeReviewAnalysisRunBatchHandlers(
         .find((entry): entry is { id: string; summary: string } => !!entry.summary);
 
       if (cachedHit) {
-        // FF1 2026-05-30 — write-back on cache hit too. The original Fix
-        // Session B build only wrote back on fresh persists, so summaries
-        // generated before this deploy (always cache hits now) never landed
-        // in the "Overall Analysis — Captured Reviews" box. Append-if-absent
-        // keeps it idempotent across repeated cache-hit runs.
-        await writeBackPerCompetitorReviews(cachedHit.summary);
         const cachedResponse: PerCompetitorBulletedResponseBody = {
           flow: 'per-competitor-bulleted',
           analysisId: cachedHit.id,
@@ -676,13 +629,32 @@ export function makeReviewAnalysisRunBatchHandlers(
           body: { error: 'AI returned malformed JSON' },
         };
       }
-      const validatedPC = validatePerCompetitorBulletedOutput(parsedPC);
-      if (!validatedPC) {
+      const modelOutputPC = validatePerCompetitorStructuredOutput(parsedPC);
+      if (!modelOutputPC) {
         return {
           status: 502,
           body: { error: 'AI output did not match the per-competitor schema' },
         };
       }
+
+      // P-49 W5 Fix Session D (2026-05-31) — resolve the model's R-labels
+      // back to real CapturedReview ids (by prompt position) so each
+      // bullet records its supporting reviews. We persist BOTH the
+      // structured `categories` (powers the 3-column traceability table on
+      // the URL detail page) AND a flattened `summary` string (keeps the
+      // main Reviews Analysis Table's Column 9 + Edit affordance + cache
+      // reads working unchanged — they only ever read analysisJson.summary).
+      const orderedReviewIds = orderedReviews.map((r) => r.id);
+      const structuredPC: PerCompetitorStructuredAnalysis = {
+        categories: modelOutputPC.categories.map((cat) => ({
+          name: cat.name,
+          bullets: cat.bullets.map((b) => ({
+            text: b.text,
+            reviewIds: resolveReviewRefs(b.reviewRefs, orderedReviewIds),
+          })),
+        })),
+      };
+      const summaryPC = flattenCategoriesToSummaryString(structuredPC);
 
       let persistedId: string | null = null;
       try {
@@ -694,8 +666,9 @@ export function makeReviewAnalysisRunBatchHandlers(
               projectId,
               typeFilter: null,
               analysisJson: {
-                summary: validatedPC.summary,
-              } as Prisma.InputJsonValue,
+                summary: summaryPC,
+                categories: structuredPC.categories,
+              } as unknown as Prisma.InputJsonValue,
               reviewsHash: corpusHash,
               modelVersion,
               runByUserId: userId,
@@ -717,13 +690,6 @@ export function makeReviewAnalysisRunBatchHandlers(
         // this run (best effort vs. lying about a non-existent id).
       }
 
-      // P-49 W5 Fix Session B (2026-05-30; D-10 bulleted half) — write the
-      // bulleted summary BACK into this URL's "Overall Analysis — Captured
-      // Reviews" box via the shared append-if-absent helper (idempotent;
-      // see definition above). Soft-fail: the summary already persisted +
-      // returns to the browser regardless.
-      await writeBackPerCompetitorReviews(validatedPC.summary);
-
       const actualCostUsdPC = calculateCostUsd(modelVersion, {
         inputTokens: responsePC.usage.input_tokens,
         outputTokens: responsePC.usage.output_tokens,
@@ -735,7 +701,7 @@ export function makeReviewAnalysisRunBatchHandlers(
       const freshResponse: PerCompetitorBulletedResponseBody = {
         flow: 'per-competitor-bulleted',
         analysisId: persistedId ?? '',
-        summary: validatedPC.summary,
+        summary: summaryPC,
         source: 'fresh',
         usage: {
           inputTokens: responsePC.usage.input_tokens,

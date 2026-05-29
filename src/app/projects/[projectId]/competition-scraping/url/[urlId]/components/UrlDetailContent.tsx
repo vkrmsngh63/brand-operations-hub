@@ -75,6 +75,7 @@ import { CapturedImageAddModal } from '../../../components/CapturedImageAddModal
 import { CapturedReviewAddModal } from '../../../components/CapturedReviewAddModal';
 import { PerItemAnalysisBox } from '../../../components/PerItemAnalysisBox';
 import { OverallAnalysisBox } from '../../../components/OverallAnalysisBox';
+import { ReviewsTraceabilityTable } from '../../../components/ReviewsTraceabilityTable';
 import {
   ConfirmDeleteDialog,
   type CascadeCounts,
@@ -135,6 +136,11 @@ export function UrlDetailContent({ project, urlId }: Props) {
     data: null,
     error: null,
   });
+  // P-49 W5 Fix Session D (2026-05-31) — latest PER_PRODUCT per-competitor
+  // analysis (analysisJson) for THIS url, used to render the 3-column
+  // traceability table in the "Overall Analysis — Captured Reviews" box.
+  // null until the GET resolves OR when no per-competitor run has happened.
+  const [reviewsAnalysisJson, setReviewsAnalysisJson] = useState<unknown>(null);
   // P-28 — URL-delete dialog state lives at the top-level component because
   // the trash button is in UrlMetadataCard but on success the whole page
   // navigates away. Cascade counts lazy-fetch on dialog open.
@@ -344,14 +350,28 @@ export function UrlDetailContent({ project, urlId }: Props) {
     // dropped per §A.6 (hide-UI-keep-data). Schema + API endpoint remain
     // for reversibility; the client just stops paying the network cost +
     // doesn't render the section.
+    // P-49 W5 Fix Session D — the per-competitor analysis list is keyed at
+    // the PROJECT level (GET .../competition-scraping/review-analysis), so it
+    // uses the project base rather than the per-URL `base`. We filter to the
+    // latest PER_PRODUCT row for THIS url client-side.
+    const projectBase = `/api/projects/${project.id}/competition-scraping`;
+
     (async () => {
-      const [urlRes, textRes, imagesRes, videosRes, reviewsRes] =
+      const [urlRes, textRes, imagesRes, videosRes, reviewsRes, analysisRes] =
         await Promise.all([
           fetchOne<ReadCompetitorUrlResponse>(base, 'this URL'),
           fetchOne<ListCapturedTextsResponse>(`${base}/text`, 'captured text'),
           fetchOne<ListCapturedImagesResponse>(`${base}/images`, 'captured images'),
           fetchOne<ListCapturedVideosResponse>(`${base}/videos`, 'captured videos'),
           fetchOne<ListCapturedReviewsResponse>(`${base}/reviews`, 'captured reviews'),
+          fetchOne<{
+            items: Array<{
+              id: string;
+              level: string;
+              urlId: string | null;
+              analysisJson: unknown;
+            }>;
+          }>(`${projectBase}/review-analysis`, 'review analysis'),
         ]);
       if (cancelled) return;
       setUrlSlot(urlRes);
@@ -359,6 +379,16 @@ export function UrlDetailContent({ project, urlId }: Props) {
       setImagesSlot(imagesRes);
       setVideosSlot(videosRes);
       setReviewsSlot(reviewsRes);
+      // Latest PER_PRODUCT row for this URL — the GET returns rows in
+      // ascending runAt order, so the last match is the most recent run.
+      const items = analysisRes.data?.items ?? [];
+      let latest: unknown = null;
+      for (const item of items) {
+        if (item.level === 'PER_PRODUCT' && item.urlId === urlId) {
+          latest = item.analysisJson;
+        }
+      }
+      setReviewsAnalysisJson(latest);
     })();
 
     return () => {
@@ -599,6 +629,7 @@ export function UrlDetailContent({ project, urlId }: Props) {
               projectId={project.id}
               urlId={urlId}
               overallAnalysisInitial={urlSlot.data.overallAnalyses?.reviews ?? {}}
+              reviewsAnalysisJson={reviewsAnalysisJson}
               onReviewAdded={handleReviewAdded}
               onReviewDeleted={handleReviewDeleted}
               onReviewsBulkDeleted={handleReviewsBulkDeleted}
@@ -1808,6 +1839,7 @@ function CapturedReviewsSection({
   projectId,
   urlId,
   overallAnalysisInitial,
+  reviewsAnalysisJson,
   onReviewAdded,
   onReviewDeleted,
   onReviewsBulkDeleted,
@@ -1817,6 +1849,7 @@ function CapturedReviewsSection({
   projectId: string;
   urlId: string;
   overallAnalysisInitial: Record<string, unknown>;
+  reviewsAnalysisJson: unknown;
   onReviewAdded: (row: CapturedReview) => void;
   onReviewDeleted: (reviewId: string) => Promise<void>;
   onReviewsBulkDeleted: (reviewIds: string[]) => Promise<void>;
@@ -2101,17 +2134,29 @@ function CapturedReviewsSection({
           )}
         </div>
       )}
-      {/* P-46 Workstream 2 Session 4 (2026-05-28) — per-category Overall
-          Analysis box at the bottom of the Captured Reviews section.
-          Persists to CompetitorUrl.overallAnalyses.reviews via the
-          urls/[urlId] PATCH route. The route merges so this slot doesn't
-          wipe sibling categories. */}
+      {/* P-49 W5 Fix Session D (2026-05-31) — the per-competitor bulleted
+          AI output renders as a READ-ONLY 3-column traceability table
+          (Category / Complaint / source reviews + star counts) on TOP of
+          the box, per director's 2026-05-30 §1 addendum. Renders nothing
+          until a per-competitor run exists; falls back to the legacy
+          free-text summary for pre-v4 rows. */}
+      <ReviewsTraceabilityTable
+        analysisJson={reviewsAnalysisJson}
+        reviews={slot.data ?? []}
+        testId="reviews-traceability-table"
+      />
+      {/* P-46 Workstream 2 Session 4 (2026-05-28) — the free-text notes area
+          BELOW the table. Persists to CompetitorUrl.overallAnalyses.reviews
+          via the urls/[urlId] PATCH route (the route merges so this slot
+          doesn't wipe sibling categories). Relabeled "Your notes" in Fix
+          Session D since the AI critique now lives in the table above; any
+          legacy free-text the prior write-back appended here is preserved. */}
       <OverallAnalysisBox
         apiUrl={`/api/projects/${projectId}/competition-scraping/urls/${urlId}`}
         initialContent={overallAnalysisInitial}
         field={{ kind: 'overallAnalyses', category: 'reviews' }}
-        label="Overall Analysis — Captured Reviews"
-        placeholder="Synthesize your overall analysis across the captured reviews above…"
+        label="Your notes — Captured Reviews"
+        placeholder="Add your own notes across the captured reviews here…"
         testId="overall-analysis-reviews"
       />
       <CapturedReviewAddModal

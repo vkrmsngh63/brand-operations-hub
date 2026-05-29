@@ -186,6 +186,21 @@ export function findReviewIdMismatch(
 //     bullets — preserves tone, sarcasm, context.
 //   - ONE Anthropic call per competitor URL (no batching since the
 //     output is one summary per URL).
+//
+// P-49 W5 Fix Session D (2026-05-31) — STRUCTURED-OUTPUT REDESIGN per
+// director's 2026-05-30 §1 addendum: the "Overall Analysis — Captured
+// Reviews" box becomes a 3-column traceability table (Category /
+// Complaint / source reviews + star counts) instead of free text. To
+// power Column 3, the model must now return, per bullet, WHICH reviews
+// support it. Two reliability moves over the prior free-text shape:
+//   - Input reviews are labeled "R1".."Rn" (short, stable) instead of
+//     asking the model to echo long UUIDs — the handler maps R-labels
+//     back to CapturedReview ids by position (see resolveReviewRefs).
+//   - Output is structured { categories: [{ name, bullets: [{ text,
+//     reviewRefs }] }] }. The handler flattens it back into the legacy
+//     "## heading / - bullet" string (flattenCategoriesToSummaryString)
+//     so the main Reviews Analysis Table's Column 9 + the Edit
+//     affordance + any downstream reader keep working unchanged.
 
 // Bump on substantive prompt changes; included in the cache hash so old
 // summaries don't get served when the prompt's semantic shape changes.
@@ -201,72 +216,85 @@ export function findReviewIdMismatch(
 //        Company-seller / Other notable). Director read the 4 fixed
 //        headings as restrictive — critiques outside those 3 example
 //        categories got dropped or jammed into "Other".
-//   v3 (2026-05-27-e, current): critique-only, theme-emergent. Lists
-//        Product / Fulfillment / Company-seller as COMMON examples but
-//        explicitly instructs the model to INVENT new theme headings
-//        (Pricing / Documentation / Compatibility / Safety / Customer
-//        support / etc.) when the data calls for them. ~5-15 bullets
-//        total. Maps director's verbatim Phase 4 redirect: "I want all
-//        negative signals related to the product and company to be
-//        part of the summaries even if they are not part of the
-//        examples I provided."
-export const PER_COMPETITOR_BULLETED_PROMPT_VERSION = 'v3';
+//   v3 (2026-05-27-e): critique-only, theme-emergent. Lists Product /
+//        Fulfillment / Company-seller as COMMON examples but explicitly
+//        instructs the model to INVENT new theme headings when the data
+//        calls for them. Free-text "## heading / - bullet" string output.
+//   v4 (2026-05-31, current): SAME critique-only, theme-emergent rules as
+//        v3, but STRUCTURED output (categories → bullets → reviewRefs) so
+//        each bullet traces back to its supporting reviews. Powers the
+//        Fix Session D 3-column traceability table.
+export const PER_COMPETITOR_BULLETED_PROMPT_VERSION = 'v4';
 
-export const PER_COMPETITOR_BULLETED_SYSTEM_PROMPT = `You are an expert competitive-research analyst extracting CRITIQUES from customer reviews of ONE competitor's product for a brand owner. Your task: aggregate the critique signals across every review into a single theme-grouped bulleted summary the brand owner can scan in under a minute.
+export const PER_COMPETITOR_BULLETED_SYSTEM_PROMPT = `You are an expert competitive-research analyst extracting CRITIQUES from customer reviews of ONE competitor's product for a brand owner. Your task: aggregate the critique signals across every review into a theme-grouped list of complaints, AND for each complaint record exactly which reviews support it.
 
 Focus EXCLUSIVELY on critiques — what reviewers complain about, what fails, what disappoints, what reviewers wish were different. Do NOT include positive signals, praise, neutral observations, or generic use-case descriptions. The brand owner is hunting for the competitor's weaknesses; positives + neutrals are noise here.
+
+Each review in the input is labeled with a short reference like "R1", "R2", "R3". Use these labels — and ONLY these labels — when recording which reviews a complaint traces back to.
 
 Return a JSON object with the shape:
 
 {
-  "summary": "<theme-grouped bulleted critique list as a single string>"
+  "categories": [
+    {
+      "name": "<theme heading, e.g. Product critiques>",
+      "bullets": [
+        { "text": "<one short critique sentence>", "reviewRefs": ["R1", "R4", "R7"] }
+      ]
+    }
+  ]
 }
 
-Rules for the "summary" field:
+Rules for "categories":
 
-- Organize critique bullets under markdown H2 theme headings ("## Theme name"). Each heading describes a coherent critique category surfaced by the actual review data.
+- Each category's "name" is a coherent critique theme surfaced by the actual review data. Do NOT prefix it with "##" or any markdown — just the plain theme name.
 - Use these COMMON theme categories where they apply:
-    "## Product critiques" — complaints about the product itself (build quality, materials, durability, features, design choices, performance, defects, sizing, fit).
-    "## Fulfillment / shipping critiques" — complaints about shipping, packaging, delivery time, order accuracy, items arriving damaged or wrong, missing parts, packaging quality.
-    "## Company / seller critiques" — complaints about customer service, returns, warranty handling, refund issues, seller communication, responsiveness, listing accuracy vs. delivered product.
-- DO NOT limit critiques to those three categories. If reviewers raise critique patterns that don't fit them, INVENT a new theme heading rather than dropping the critique or jamming it into "Other". These are EXAMPLES of valid emergent themes — use any of them when warranted by the data, AND invent new ones beyond this list as the data calls for:
-    "## Pricing / value critiques" (price-to-quality ratio complaints, hidden fees)
-    "## Documentation / instructions critiques" (missing manual, confusing setup, poor labeling)
-    "## Compatibility / interoperability critiques" (doesn't work with X, integration failures)
-    "## Safety / reliability concerns" (injuries, malfunctions, safety hazards)
-    "## Software / firmware critiques" (app issues, update failures, OS support)
-    "## Customer support critiques" (response time, agent quality, escalation issues — distinct from "Company / seller critiques" when the corpus has enough volume to warrant a separate theme)
-    "## Longevity / durability critiques" (failures after N months, premature wear)
-    "## Marketing accuracy critiques" (advertising vs. reality, misleading claims)
-    "## Accessibility / usability critiques" (hard to use, ergonomic issues)
-    — and any other coherent critique category emerging from the actual data.
-- "## Other notable critiques" remains available as a fallback for true one-off complaints that don't fit any theme. Use sparingly — prefer to invent a specific theme over jamming into "Other".
-- Empty themes OMIT their heading entirely (do not emit an empty section). Sections appear ONLY if they have at least one critique bullet.
-- Each bullet starts with "- " and lives on its own line. Each bullet is one short sentence (one main idea). No sub-bullets. No paragraphs.
+    "Product critiques" — complaints about the product itself (build quality, materials, durability, features, design choices, performance, defects, sizing, fit).
+    "Fulfillment / shipping critiques" — complaints about shipping, packaging, delivery time, order accuracy, items arriving damaged or wrong, missing parts, packaging quality.
+    "Company / seller critiques" — complaints about customer service, returns, warranty handling, refund issues, seller communication, responsiveness, listing accuracy vs. delivered product.
+- DO NOT limit critiques to those three categories. If reviewers raise critique patterns that don't fit them, INVENT a new theme name rather than dropping the critique or jamming it into "Other". These are EXAMPLES of valid emergent themes — use any when warranted, AND invent new ones beyond this list as the data calls for:
+    "Pricing / value critiques", "Documentation / instructions critiques", "Compatibility / interoperability critiques", "Safety / reliability concerns", "Software / firmware critiques", "Customer support critiques", "Longevity / durability critiques", "Marketing accuracy critiques", "Accessibility / usability critiques" — and any other coherent critique category emerging from the actual data.
+- "Other notable critiques" remains available as a fallback for true one-off complaints that don't fit any theme. Use sparingly — prefer to invent a specific theme over jamming into "Other".
+- Omit empty categories entirely (do not emit a category with no bullets).
+
+Rules for each bullet's "text":
+
+- One short sentence (one main idea). No sub-bullets, no paragraphs, no leading "- ".
 - Include ONLY critical negative signals the brand owner could act on. Critical = patterns that recur across reviews OR singular complaints strong enough to surface (e.g., "Multiple reviewers note the strap breaks within 3 months" / "One reviewer reports the battery swelling after 6 months").
-- EXCLUDE entirely:
-    - Positive signals of any kind (praise, recommendations, satisfaction).
-    - Neutral observations (use cases without a complaint, descriptive context).
-    - Generic positive/negative comments not tied to a specific signal.
-    - Parenthetical asides, mild observations the reviewer themselves dismissed.
-    - Repeated points across reviews — surface each critique pattern only once.
-- Volume cues when useful: "Multiple reviewers report X" / "Several mention Y" / "A few note Z" / "One reviewer reports W". Use these to communicate how widespread a critique is. Avoid exact counts unless they're load-bearing.
-- Length target: typically 5-15 critique bullets total across all themes combined. Some products legitimately have fewer (sparse corpora, mostly positive reviews) — emit fewer. Some legitimately have more — go up to ~25 if there's genuine critique density across multiple themes. Do not pad.
+- EXCLUDE entirely: positive signals of any kind; neutral observations (use cases without a complaint, descriptive context); generic comments not tied to a specific signal; parenthetical asides; mild observations the reviewer themselves dismissed; repeated points (surface each critique pattern only once).
+- Volume cues when useful: "Multiple reviewers report X" / "Several mention Y" / "A few note Z" / "One reviewer reports W". Avoid exact counts unless load-bearing.
 - Third-person neutral analyst voice. Do NOT use first person ("I"); do NOT address the reader directly ("you").
 - Use the product name when relevant; do not invent attributes not present in any review.
 - Quote sparingly — short fragments only, in double quotes, never whole sentences.
-- If the entire corpus contains zero critiques (e.g., all reviews are 5-star generic praise with no complaints surfaced), emit a single bullet under no heading: "- (no critiques surfaced across the corpus)".
+
+Rules for each bullet's "reviewRefs" — THIS IS CRITICAL:
+
+- List the labels of ALL reviews that support this complaint — not just one example, EVERY review that expresses or evidences it. The brand owner needs the complete set of source reviews behind each complaint.
+- Use ONLY labels that appear in the input ("R1", "R2", …). Never invent a label. Never reference a review that does not exist.
+- A single review may legitimately support multiple complaints — it is fine for the same label to appear under more than one bullet.
+- If, after careful reading, a complaint genuinely traces to one review only, list just that one label. But err toward completeness: if a review plausibly evidences the complaint, include it.
+- reviewRefs must never be empty — every bullet must cite at least one supporting review.
+
+Length target: typically 5-15 critique bullets total across all categories combined. Some products legitimately have fewer; some more (go up to ~25 if there's genuine critique density). Do not pad.
+
+Empty corpus: if the entire corpus contains zero critiques (e.g., all reviews are generic praise with no complaints), return { "categories": [] }.
 
 Output rules:
 
-- Return ONLY the JSON object. No prose preamble. No \`\`\`json fences. No trailing commentary.
-- The "summary" field is a single string containing newline-separated headings + bullets (rendered with whiteSpace: pre-wrap on the client side).`;
+- Return ONLY the JSON object. No prose preamble. No \`\`\`json fences. No trailing commentary.`;
 
 export type BuildPerCompetitorBulletedPromptInput = {
   productName: string;
   platform: string;
   reviews: ReadonlyArray<BatchableReview>;
 };
+
+// The short, stable label assigned to the i-th review (0-based) in the
+// prompt. Kept as a single source of truth so the prompt builder and the
+// ref-resolver agree on the labeling scheme.
+export function reviewRefLabel(index: number): string {
+  return `R${index + 1}`;
+}
 
 export function buildPerCompetitorBulletedUserMessage({
   productName,
@@ -277,7 +305,7 @@ export function buildPerCompetitorBulletedUserMessage({
     `Product: ${productName}\n` +
     `Platform: ${platform}\n` +
     `Reviews in corpus: ${reviews.length}\n\n` +
-    `Aggregate the critical signals across all reviews below into one theme-grouped bulleted summary for the brand owner.\n\n`;
+    `Aggregate the critical signals across all reviews below into theme-grouped complaints. For each complaint, record in "reviewRefs" the labels (R1, R2, …) of ALL reviews that support it.\n\n`;
 
   const body = reviews
     .map((r, i) => {
@@ -286,28 +314,126 @@ export function buildPerCompetitorBulletedUserMessage({
       if (r.reviewerName) meta.push(r.reviewerName);
       if (r.reviewDate) meta.push(r.reviewDate.toISOString().slice(0, 10));
       const metaLine = meta.length > 0 ? ` (${meta.join(', ')})` : '';
-      return `--- Review ${i + 1}${metaLine} ---\n${r.body}\n`;
+      return `--- ${reviewRefLabel(i)}${metaLine} ---\n${r.body}\n`;
     })
     .join('\n');
 
   return header + body;
 }
 
-// Validated output shape — ONE summary per call (not an array, since
-// the output is one aggregated summary per competitor URL).
-export interface PerCompetitorBulletedOutput {
-  summary: string;
+// ── Structured output shapes ────────────────────────────────────────
+// What the MODEL returns: categories → bullets → reviewRefs (R-labels).
+export interface PerCompetitorModelBullet {
+  text: string;
+  reviewRefs: string[];
+}
+export interface PerCompetitorModelCategory {
+  name: string;
+  bullets: PerCompetitorModelBullet[];
+}
+export interface PerCompetitorModelOutput {
+  categories: PerCompetitorModelCategory[];
 }
 
-export function validatePerCompetitorBulletedOutput(
+// What we STORE in analysisJson.categories after resolving R-labels back
+// to real CapturedReview ids (see resolveReviewRefs in the handler).
+export interface PerCompetitorStructuredBullet {
+  text: string;
+  reviewIds: string[];
+}
+export interface PerCompetitorStructuredCategory {
+  name: string;
+  bullets: PerCompetitorStructuredBullet[];
+}
+export interface PerCompetitorStructuredAnalysis {
+  categories: PerCompetitorStructuredCategory[];
+}
+
+// Validate + normalize the model's structured output. Lenient where it
+// can be (trims, drops blank bullets / empty categories) but rejects
+// anything structurally wrong so the handler can surface a 502 rather
+// than persist garbage. An empty { categories: [] } is VALID (zero
+// critiques surfaced) and returned as-is.
+export function validatePerCompetitorStructuredOutput(
   parsed: unknown
-): PerCompetitorBulletedOutput | null {
+): PerCompetitorModelOutput | null {
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
     return null;
   }
-  const obj = parsed as { summary?: unknown };
-  if (typeof obj.summary !== 'string' || !obj.summary.trim()) {
-    return null;
+  const obj = parsed as { categories?: unknown };
+  if (!Array.isArray(obj.categories)) return null;
+
+  const categories: PerCompetitorModelCategory[] = [];
+  for (const rawCat of obj.categories) {
+    if (!rawCat || typeof rawCat !== 'object') return null;
+    const cat = rawCat as { name?: unknown; bullets?: unknown };
+    if (typeof cat.name !== 'string') return null;
+    const name = cat.name.trim();
+    if (!name) return null;
+    if (!Array.isArray(cat.bullets)) return null;
+
+    const bullets: PerCompetitorModelBullet[] = [];
+    for (const rawBullet of cat.bullets) {
+      if (!rawBullet || typeof rawBullet !== 'object') return null;
+      const b = rawBullet as { text?: unknown; reviewRefs?: unknown };
+      if (typeof b.text !== 'string') return null;
+      const text = b.text.trim();
+      if (!text) continue; // drop blank bullets defensively
+      const refs: string[] = [];
+      if (Array.isArray(b.reviewRefs)) {
+        for (const ref of b.reviewRefs) {
+          if (typeof ref === 'string' && ref.trim()) refs.push(ref.trim());
+        }
+      }
+      bullets.push({ text, reviewRefs: refs });
+    }
+    if (bullets.length === 0) continue; // drop empty categories
+    categories.push({ name, bullets });
   }
-  return { summary: obj.summary };
+  return { categories };
+}
+
+// Map the model's R-labels back to real CapturedReview ids by position.
+// `orderedReviewIds` is the reviewId at each prompt label (index 0 → R1).
+// Parses "R<n>" case-insensitively, dedups while preserving order, and
+// silently drops any label that is malformed or out of range — the model
+// occasionally hallucinates a label, and one bad ref must not poison the
+// whole bullet.
+export function resolveReviewRefs(
+  refs: ReadonlyArray<string>,
+  orderedReviewIds: ReadonlyArray<string>
+): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const ref of refs) {
+    const m = /^r\s*(\d+)$/i.exec(ref.trim());
+    if (!m) continue;
+    const idx = Number(m[1]) - 1;
+    if (idx < 0 || idx >= orderedReviewIds.length) continue;
+    const id = orderedReviewIds[idx];
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+  }
+  return out;
+}
+
+// Flatten the structured analysis back into the legacy free-text summary
+// string ("## Heading\n- bullet\n…") so the main Reviews Analysis Table's
+// Column 9 + the Edit affordance + the cache-hit response keep rendering
+// exactly as before the structured redesign. An empty analysis flattens
+// to the canonical "no critiques" sentinel.
+export function flattenCategoriesToSummaryString(
+  analysis: PerCompetitorStructuredAnalysis
+): string {
+  if (analysis.categories.length === 0) {
+    return '- (no critiques surfaced across the corpus)';
+  }
+  return analysis.categories
+    .map((cat) => {
+      const lines = [`## ${cat.name}`];
+      for (const bullet of cat.bullets) lines.push(`- ${bullet.text}`);
+      return lines.join('\n');
+    })
+    .join('\n\n');
 }
