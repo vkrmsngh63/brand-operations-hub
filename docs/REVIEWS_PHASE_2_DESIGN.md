@@ -2416,6 +2416,72 @@ Entry baselines = 2026-05-29-b exit = locked (root tsc clean / extension tsc cle
 
 ---
 
+## §B 2026-05-29-d — `session_2026-05-29-d_p49-w5-fix-session-c-deploy-2-drag-to-reorder` — Workstream 5 Reviews Analysis Table Fix Session C "Deploy 2" — drag-to-reorder (URL/competitor rows + review rows within a URL) ✅ DEPLOYED-AND-VERIFIED 2026-05-29-d end-to-end on vklf.com via `workflow-2-competition-scraping` → `main` — single build `194e66f` (11 files +743/-29) ff-merged to main under ONE Rule 9 deploy gate — TWENTIETH build/deploy-session §B entry per Rule 18; TWELFTH W5 entry — director Phase 4 verbatim verdict: "Passed"; the LAST remaining Reviews Analysis Table work — the page is now fully §1-compliant / CLOSED; TWO NEW reusable PATTERNS memorialized — "Reorder-field discriminator on a shared reorder endpoint" + "Spec-named storage column may not exist — audit before building" (the Rule 3 `CompetitorUrl.sortRank`-never-existed finding); Schema-change-in-flight NO entire session
+
+**§A frozen per Rule 18.** This entry is an implementation note for the §1 "Drag-to-reorder" requirement — it is ADDITIVE and does NOT edit §A. It records how the two drag surfaces were built + persisted without changing the design intent in §A.
+
+**Closes (a.113) RECOMMENDED-NEXT** — Fix Session C "Deploy 2" drag-to-reorder ✅ DEPLOYED-AND-VERIFIED 2026-05-29-d. With it, the Competitor Reviews Analysis Table page is fully §1-compliant / CLOSED — only the Category page (Sessions 1-3) + Type page (Sessions 4-5) corrective rebuilds remain in P-49 W5. **Opens (a.114) RECOMMENDED-NEXT = P-49 W5 Category page corrective rebuild — Block 1 planning resume** on `workflow-2-competition-scraping` (answer the 6 open questions in `docs/polish-item-specs/P-49-W5-S4-category-page.md` §4 before any code).
+
+### Session shape — DEPLOY with 1 ff-merge under 1 Rule 9 deploy gate
+
+Session opened per yesterday's NEXT_SESSION.md pointer scoping (a.113) Fix Session C "Deploy 2". Phase 0 audit-shipped-state + a 2-question design batch (order-sync + drag-affordance, both Recommended + chosen) + the deploy gate = THREE Rule 14f decisions, 3/3 = 100% Yes-to-Recommended. No fix-forwards — director Phase 4 was a clean single-pass PASS ("Passed").
+
+### Phase 0 — audit-shipped-state + the CRITICAL Rule 3 finding
+
+The Phase 0 audit-shipped-state read (Rule 31) against the planned URL-row persistence mechanism surfaced the most important finding of the session: **the spec-named `CompetitorUrl.sortRank` column never existed.** The spec (Q5 → A, §3 "Drag-to-reorder", §3 schema notes) named `CompetitorUrl.sortRank` as the URL-row persistence column, claiming it was "the SAME column used by the Competitor Content Table." Code-truth: (a) there is NO `sortRank` field on the `CompetitorUrl` model in `prisma/schema.prisma`; (b) the Competitor Content Table (`UrlTable.tsx`) actually persists URL order via a per-user `UserTablePreferences.rowOrder` string[] array; (c) the Reviews Analysis page deliberately prefixes its other table-preferences keys (`reviewsTable:`) to avoid collision — but `rowOrder` is a single shared scalar. Surfaced to the director via the design picker; the director chose to keep the "reflects everywhere" behavior (director Q5 → A) by persisting URL-row order through the SHARED `rowOrder` field — so the order tracks across BOTH the Competitor Content Table and the Reviews Analysis Table. No schema change.
+
+### Design choices made this session (Rule 14f forced-pickers — Rule 14f)
+
+- **Order-sync across both tables = Synced (Recommended + chosen).** URL-row order persists via the shared `UserTablePreferences.rowOrder` field, so reordering competitors on the Reviews Analysis Table reflects on the Competitor Content Table and vice-versa — honoring the §1 / Q5 → A "reflects everywhere" intent. (The original spec named `CompetitorUrl.sortRank` as the mechanism, which never existed; the shared `rowOrder` field delivers the same intent with no schema change — see the Rule 3 finding.)
+- **Drag affordance = dedicated grip handle (Recommended + chosen), NOT whole-row grab.** Every cell on this table is click-to-edit, so a whole-row grab would conflict with editing; both drag surfaces expose a dedicated grip handle instead.
+
+### What shipped (build `194e66f`, 11 files +743/-29)
+
+- **Two @dnd-kit drag surfaces, both mirroring the canonical `UrlTable.tsx` dnd pattern, in `competitor-reviews-analysis/page.tsx`.** (1) URL (competitor) rows drag to reorder; each competitor's child review rows ride along; persisted via the shared `UserTablePreferences.rowOrder` array. (2) Review rows within a URL drag to reorder (scoped strictly within a single URL group); persisted via the already-shipped `CapturedReview.sortRankInReviewsTable` column.
+- **The existing `reviews-reorder.ts` handler gained an optional `field` discriminator** (default `'sortRank'` = back-compat with the URL-detail-page order; `'sortRankInReviewsTable'` for this page) so the two orders of the SAME `CapturedReview` rows never collide — NO new route (route count stayed 68).
+- **NEW pure helper `src/lib/competition-scraping/reviews-table-reorder.ts` (+ `.test`, +17 cases)** carries the rank assignment / re-normalization logic. Rendered rows sort by the rank fields (URL rows by `rowOrder`; review rows within a URL by `sortRankInReviewsTable`, falling back to capture order for NULL ranks); the Excel export follows the on-screen order.
+- **MODIFIED supporting files:** `url-reviews.ts` + `.test`, `reviews-by-id.ts` + `.test`, `captured-reviews-helpers.test.ts`, `shared-types/competition-scraping.ts` (the `field` param + sort-field plumbing).
+
+### Phase 4 (director real-Chrome verification) — clean single-pass PASS
+
+Director's verbatim verdict: **"Passed."** No fix-forwards. Verified: URL-row drag (with child review rows moving), review-row drag within a URL, order persistence across refresh, and the order-sync across both tables.
+
+### NEW reusable PATTERNS
+
+- **"Reorder-field discriminator on a shared reorder endpoint"** (the `reviews-reorder.ts` `field` param). When a second surface needs an INDEPENDENT order of the SAME rows, add an optional discriminator param (defaulting to the back-compat column) to the existing reorder PUT rather than minting a parallel route. Route count stayed 68.
+- **"Spec-named storage column may not exist — audit before building"** (the Rule 3 finding). When a spec names a specific storage column/field, audit the actual `prisma/schema.prisma` + the analogous shipped persistence path BEFORE building against it; the shipped code is ground-truth (Rule 3). Here `CompetitorUrl.sortRank` never existed and the real mechanism was `UserTablePreferences.rowOrder`.
+
+### Scoreboard
+
+Entry baselines = 2026-05-29-c exit = locked (root tsc clean / extension tsc clean / **910 ext** / **1080 src/lib** / **68 routes**). Post-merge /scoreboard all GREEN at NEW LOCKED baseline:
+
+| Check | Entry | Exit | Delta |
+| --- | --- | --- | --- |
+| Root tsc | clean | clean | unchanged |
+| Extension tsc | clean | clean | unchanged |
+| Extension `npm test` | 910/910 | 910/910 | UNCHANGED (no extension code changed) |
+| src/lib `node:test` | 1080/1080 | **1101/1101** | **+21** (+17 NEW reviews-table-reorder.test pure-helper cases + 4 NEW reviews-reorder.test field-discriminator cases) |
+| `npm run build` | 68 routes | **68 routes** | UNCHANGED (reused existing `/table-preferences` + `/reviews/reorder` endpoints; no new route) |
+| Playwright | — | SKIPPED | per Rule 27 (deploy session; @dnd-kit drag impractical to Playwright reliably + sibling table drag has no Playwright coverage; director real-Chrome Phase 4 used instead) |
+
+### Affected §A sections (informational — §A FROZEN per Rule 18)
+
+- The §1 "Drag-to-reorder" requirement (both URL rows and review rows) is now LIVE — it was the LAST §1 item not yet shipped. With it, the Competitor Reviews Analysis Table page is fully §1-compliant / CLOSED. §A is frozen; this implementation note (the shared `rowOrder` mechanism + the `field`-discriminated review-row order + the grip-handle affordance) lives in §B only.
+- The §1 / Q5 → A "reflects everywhere" intent for URL-row order is honored by persisting through the shared `UserTablePreferences.rowOrder` field (NOT the spec-named `CompetitorUrl.sortRank` column, which never existed — see the Rule 3 finding).
+
+### Cross-references
+
+- §B 2026-05-29-c above (W5 Fix Session C "Deploy 1" — the non-bulleted prose flow + Excel export + the `CapturedReview.sortRankInReviewsTable` column this Deploy 2 consumes) — Deploy 2 must NOT regress the Deploy 1 non-bulleted flow, the Excel export, the body-portal tooltips, or the structured `analysisJson` shape.
+- §B 2026-05-31-b above (W5 FU-1 + FU-2 — the editable traceability box) — Deploy 2 must not regress the editable box.
+- `docs/CORRECTIONS_LOG.md` §Entry 2026-05-29-d — the INFORMATIONAL entry (the 2 NEW Patterns + the Rule 3 `CompetitorUrl.sortRank`-never-existed audit win + the P-43 tally).
+- `docs/polish-item-specs/P-49-W5-S2-S3-competitor-reviews-analysis.md` §3 (Fix Session C items 9 + 10 ✅ DONE; Fix Session C fully CLOSED) + §2 2026-05-29-d note; `docs/polish-item-specs/P-49-W5-reviews-phase-2-master-spec.md` §3 pointer table (Reviews Analysis Table page CLOSED; Category + Type pages remaining).
+- `docs/ROADMAP.md` P-49 — status updated to "🟢 IN-FLIGHT 2026-05-29-d — Fix Session C Deploy 2 ✅ DEPLOYED-AND-VERIFIED".
+- Reorder-field-discriminator cross-reference: `src/lib/competition-scraping/handlers/reviews-reorder.ts` (the `field` param) + `src/lib/competition-scraping/reviews-table-reorder.ts` (rank-assignment helper) + `competitor-reviews-analysis/page.tsx` (the two @dnd-kit drag surfaces); build `194e66f`.
+
+**Closing line:** P-49 W5 Reviews Analysis Table Fix Session C "Deploy 2" — drag-to-reorder (URL/competitor rows via the shared `UserTablePreferences.rowOrder` field + review rows within a URL via the already-shipped `CapturedReview.sortRankInReviewsTable` column through the `field`-discriminated reorder handler) ✅ DEPLOYED-AND-VERIFIED 2026-05-29-d (build `194e66f`) under 1 Rule 9 deploy gate on `workflow-2-competition-scraping` — director "Passed." The LAST remaining Reviews Analysis Table work — the page is now fully §1-compliant / CLOSED. TWO NEW reusable PATTERNS memorialized + a positive Rule 3 audit win (the spec-named `CompetitorUrl.sortRank` column never existed). Schema-change-in-flight NO entire session. 3/3 = 100% Yes-to-Recommended this session; running cumulative 133/136 = 97.8%. NEW baselines: src/lib `node:test` = **1101/1101** + `npm run build` = **68 routes UNCHANGED** + extension = 910/910 UNCHANGED. **Closes (a.113) RECOMMENDED-NEXT.** **Opens (a.114) RECOMMENDED-NEXT = P-49 W5 Category page corrective rebuild — Block 1 planning resume** on `workflow-2-competition-scraping`. **TWENTIETH build/deploy-session §B entry per Rule 18 — TWELFTH W5 entry.** The next §B entry will land at the close of the Category page corrective rebuild Block 1.
+
+---
+
 ---
 
 END OF DOCUMENT
