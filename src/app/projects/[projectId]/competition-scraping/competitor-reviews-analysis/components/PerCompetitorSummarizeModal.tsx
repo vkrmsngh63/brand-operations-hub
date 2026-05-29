@@ -38,6 +38,10 @@ export interface PerCompetitorSummarizeModalProps {
   productName: string;
   platform: string;
   reviews: ReadonlyArray<CapturedReview>;
+  // FU-1 (a.110): true when this competitor's traceability table was
+  // hand-edited on the URL detail page. Re-running replaces those edits, so
+  // we warn + require an explicit confirm before starting (director pick).
+  manuallyEdited?: boolean;
   onClose: () => void;
   // Called once when the call returns successfully so the parent can
   // paint the new summary into the Table 2 URL row immediately.
@@ -72,6 +76,7 @@ export function PerCompetitorSummarizeModal({
   productName,
   platform,
   reviews,
+  manuallyEdited = false,
   onClose,
   onSummary,
 }: PerCompetitorSummarizeModalProps): JSX.Element {
@@ -80,6 +85,8 @@ export function PerCompetitorSummarizeModal({
   const [executionMode, setExecutionMode] =
     useState<ExecutionMode>(EXECUTION_MODE_SERVER);
   const [runState, setRunState] = useState<RunState>({ kind: 'idle' });
+  // FU-1 (a.110): interstitial confirm shown when manuallyEdited is true.
+  const [showOverwriteWarning, setShowOverwriteWarning] = useState(false);
   const [tally, setTally] = useState<CallUsage>({
     inputTokens: 0,
     outputTokens: 0,
@@ -466,9 +473,39 @@ export function PerCompetitorSummarizeModal({
           </div>
         )}
 
+        {/* FU-1 (a.110) — warn before a re-run replaces hand-edits. */}
+        {showOverwriteWarning && !isRunning && !isDone && (
+          <div
+            style={overwriteWarnStyle}
+            data-testid="per-competitor-overwrite-warning"
+          >
+            This competitor’s analysis table has manual edits. Re-running the AI
+            will replace them with a fresh version. Continue?
+            <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+              <button
+                type="button"
+                style={dangerButtonStyle}
+                onClick={() => {
+                  setShowOverwriteWarning(false);
+                  void handleStart();
+                }}
+              >
+                Replace my edits &amp; continue
+              </button>
+              <button
+                type="button"
+                style={secondaryButtonStyle}
+                onClick={() => setShowOverwriteWarning(false)}
+              >
+                Keep my edits
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* ── Controls ── */}
         <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-          {!isRunning && !isDone && (
+          {!isRunning && !isDone && !showOverwriteWarning && (
             <>
               <button
                 type="button"
@@ -479,7 +516,10 @@ export function PerCompetitorSummarizeModal({
               </button>
               <button
                 type="button"
-                onClick={handleStart}
+                onClick={() => {
+                  if (manuallyEdited) setShowOverwriteWarning(true);
+                  else void handleStart();
+                }}
                 disabled={reviewIds.length === 0}
                 style={{
                   ...primaryButtonStyle,
@@ -549,6 +589,17 @@ const dangerButtonStyle: React.CSSProperties = {
   border: '1px solid #f85149',
   borderRadius: '6px',
   cursor: 'pointer',
+};
+
+const overwriteWarnStyle: React.CSSProperties = {
+  marginTop: '10px',
+  marginBottom: '4px',
+  padding: '10px 12px',
+  background: '#3d2b16',
+  border: '1px solid #f0883e',
+  borderRadius: '6px',
+  color: '#f0c674',
+  fontSize: '13px',
 };
 
 const promptSectionHeaderStyle: React.CSSProperties = {

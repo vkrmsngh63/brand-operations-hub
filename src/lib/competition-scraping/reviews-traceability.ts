@@ -48,25 +48,29 @@ export interface TraceabilitySource {
 // cell); subsequent bullets in the same category carry `categoryName:
 // null` so the renderer omits the category cell (covered by the rowspan).
 export interface TraceabilityRow {
+  // Index of this bullet's category + the bullet within it, so the editable
+  // table (FU-1 / Q11) can target an edit/delete back at the structured shape.
+  categoryIndex: number;
+  bulletIndex: number;
   categoryName: string | null;
   categoryRowSpan: number;
   bulletText: string;
   sources: TraceabilitySource[];
 }
 
-// Parse a stored analysisJson value into the structured traceability shape.
-// Returns null when the row is the legacy free-text { summary } shape (pre-
-// v4) or otherwise has no usable `categories` array — the caller then falls
-// back to rendering the plain-text summary instead of a table.
-export function parseTraceabilityAnalysis(
-  analysisJson: unknown
-): TraceabilityAnalysis | null {
-  if (!analysisJson || typeof analysisJson !== 'object') return null;
-  const obj = analysisJson as { categories?: unknown };
-  if (!Array.isArray(obj.categories)) return null;
-
+// Defensively validate + normalize a raw `categories` value into the
+// structured shape. Drops malformed categories/bullets (blank name, bullets
+// not an array, blank text) and filters non-string reviewIds. Returns null
+// ONLY when the input isn't an array at all; an array that yields zero usable
+// categories returns `[]` (legal for FU-1 edits — deleting every entry leaves
+// an empty analysis, which renders the "no critiques" summary). Shared by
+// parseTraceabilityAnalysis (render path) + the FU-1 PATCH validator (server).
+export function validateCategoriesInput(
+  raw: unknown
+): TraceabilityCategory[] | null {
+  if (!Array.isArray(raw)) return null;
   const categories: TraceabilityCategory[] = [];
-  for (const rawCat of obj.categories) {
+  for (const rawCat of raw) {
     if (!rawCat || typeof rawCat !== 'object') continue;
     const cat = rawCat as { name?: unknown; bullets?: unknown };
     if (typeof cat.name !== 'string' || !cat.name.trim()) continue;
@@ -88,7 +92,20 @@ export function parseTraceabilityAnalysis(
     if (bullets.length === 0) continue;
     categories.push({ name: cat.name.trim(), bullets });
   }
-  if (categories.length === 0) return null;
+  return categories;
+}
+
+// Parse a stored analysisJson value into the structured traceability shape.
+// Returns null when the row is the legacy free-text { summary } shape (pre-
+// v4) or otherwise has no usable `categories` array — the caller then falls
+// back to rendering the plain-text summary instead of a table.
+export function parseTraceabilityAnalysis(
+  analysisJson: unknown
+): TraceabilityAnalysis | null {
+  if (!analysisJson || typeof analysisJson !== 'object') return null;
+  const obj = analysisJson as { categories?: unknown };
+  const categories = validateCategoriesInput(obj.categories);
+  if (!categories || categories.length === 0) return null;
   return { categories };
 }
 
@@ -120,7 +137,7 @@ export function buildTraceabilityRows(
   reviewsById: ReadonlyMap<string, TraceabilityReview>
 ): TraceabilityRow[] {
   const rows: TraceabilityRow[] = [];
-  for (const category of analysis.categories) {
+  analysis.categories.forEach((category, categoryIndex) => {
     category.bullets.forEach((bullet, bulletIdx) => {
       const sources: TraceabilitySource[] = bullet.reviewIds.map((reviewId) => {
         const review = reviewsById.get(reviewId);
@@ -140,12 +157,123 @@ export function buildTraceabilityRows(
         };
       });
       rows.push({
+        categoryIndex,
+        bulletIndex: bulletIdx,
         categoryName: bulletIdx === 0 ? category.name : null,
         categoryRowSpan: bulletIdx === 0 ? category.bullets.length : 0,
         bulletText: bullet.text,
         sources,
       });
     });
-  }
+  });
   return rows;
+}
+
+// ─── FU-1 / Q11 (a.110) — edit + delete mutations ─────────────────────────
+// Pure, immutable transforms over the structured analysis. The editable
+// table calls these, then persists the result's `categories` back to the
+// per-competitor PER_PRODUCT ReviewAnalysis row via PATCH. NONE of these
+// touch the underlying CapturedReviews — only the analysis-derived entries.
+// Categories left with zero bullets are dropped (a complaint-less category
+// would render nothing anyway per parseTraceabilityAnalysis).
+
+export interface BulletTarget {
+  categoryIndex: number;
+  bulletIndex: number;
+}
+
+function dropEmptyCategories(
+  categories: TraceabilityCategory[]
+): TraceabilityCategory[] {
+  return categories.filter((c) => c.bullets.length > 0);
+}
+
+// Rename a category (Column 1). A blank name is ignored (no-op) — renaming to
+// empty is meaningless; the category is removed via deleteCategory instead.
+export function editCategoryName(
+  analysis: TraceabilityAnalysis,
+  categoryIndex: number,
+  name: string
+): TraceabilityAnalysis {
+  const trimmed = name.trim();
+  if (!trimmed) return analysis;
+  return {
+    categories: analysis.categories.map((cat, i) =>
+      i === categoryIndex ? { ...cat, name: trimmed } : cat
+    ),
+  };
+}
+
+// Edit a complaint's wording (Column 2). A blank text is ignored (no-op) —
+// emptying a complaint is a delete, handled via deleteBullets.
+export function editBulletText(
+  analysis: TraceabilityAnalysis,
+  categoryIndex: number,
+  bulletIndex: number,
+  text: string
+): TraceabilityAnalysis {
+  const trimmed = text.trim();
+  if (!trimmed) return analysis;
+  return {
+    categories: analysis.categories.map((cat, i) =>
+      i === categoryIndex
+        ? {
+            ...cat,
+            bullets: cat.bullets.map((b, j) =>
+              j === bulletIndex ? { ...b, text: trimmed } : b
+            ),
+          }
+        : cat
+    ),
+  };
+}
+
+// Delete a whole category group (and all its complaints).
+export function deleteCategory(
+  analysis: TraceabilityAnalysis,
+  categoryIndex: number
+): TraceabilityAnalysis {
+  return {
+    categories: analysis.categories.filter((_, i) => i !== categoryIndex),
+  };
+}
+
+// Delete one or many complaint rows (single-delete = a one-element target
+// list). A category that loses its last complaint is dropped.
+export function deleteBullets(
+  analysis: TraceabilityAnalysis,
+  targets: ReadonlyArray<BulletTarget>
+): TraceabilityAnalysis {
+  const toDelete = new Set(
+    targets.map((t) => `${t.categoryIndex}:${t.bulletIndex}`)
+  );
+  const categories = analysis.categories.map((cat, i) => ({
+    ...cat,
+    bullets: cat.bullets.filter((_, j) => !toDelete.has(`${i}:${j}`)),
+  }));
+  return { categories: dropEmptyCategories(categories) };
+}
+
+// Detach a single source review from one complaint (Column 3). The complaint
+// stays; it simply re-renders with fewer (or no) source reviews behind it.
+export function deleteSourceReview(
+  analysis: TraceabilityAnalysis,
+  categoryIndex: number,
+  bulletIndex: number,
+  reviewId: string
+): TraceabilityAnalysis {
+  return {
+    categories: analysis.categories.map((cat, i) =>
+      i === categoryIndex
+        ? {
+            ...cat,
+            bullets: cat.bullets.map((b, j) =>
+              j === bulletIndex
+                ? { ...b, reviewIds: b.reviewIds.filter((id) => id !== reviewId) }
+                : b
+            ),
+          }
+        : cat
+    ),
+  };
 }

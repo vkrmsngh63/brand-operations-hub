@@ -378,3 +378,97 @@ test('PATCH 500 when findUnique throws', async () => {
   assert.equal(r.status, 500);
   assert.match(JSON.stringify(r.body), /Failed to load/);
 });
+
+// ─── FU-1 (a.110) — structured categories edit/delete ──────────────────
+
+test('PATCH 200 categories edit — persists trimmed categories + re-derived summary + manuallyEdited; never touches CapturedReviews', async () => {
+  const { prisma, state } = makePrisma({}); // default row is PER_PRODUCT
+  const deps = makeDeps({ prisma });
+  const { PATCH } = makeReviewAnalysisUpdateHandlers(deps);
+  const r = await PATCH(
+    makeRequest({
+      categories: [
+        {
+          name: '  Product critiques  ',
+          bullets: [{ text: '  No effect  ', reviewIds: ['id-a', 'id-b'] }],
+        },
+      ],
+    }),
+    makeCtx('proj-1', 'an-1')
+  );
+  assert.equal(r.status, 200);
+  const body = r.body as ReviewAnalysisUpdateResponseBody;
+  // Response echoes the server-normalized structured shape.
+  assert.ok(body.categories);
+  assert.equal(body.categories?.length, 1);
+  assert.equal(body.categories?.[0].name, 'Product critiques');
+  // Persisted analysisJson carries categories + re-derived flattened summary +
+  // the manuallyEdited flag.
+  assert.equal(state.updateCalls.length, 1);
+  const writtenJson = state.updateCalls[0].analysisJson as {
+    categories?: unknown[];
+    summary?: string;
+    manuallyEdited?: boolean;
+  };
+  assert.equal(writtenJson.categories?.length, 1);
+  assert.equal(writtenJson.manuallyEdited, true);
+  // Flattened summary matches the "## name / - bullet" shape the main table reads.
+  assert.match(writtenJson.summary ?? '', /## Product critiques/);
+  assert.match(writtenJson.summary ?? '', /- No effect/);
+  // The captured reviews are NOT mutated by a structured edit.
+  assert.equal(state.reviewUpdateCalls.length, 0);
+});
+
+test('PATCH 200 categories edit accepts an empty array (delete-all) → no-critiques summary', async () => {
+  const { prisma, state } = makePrisma({});
+  const deps = makeDeps({ prisma });
+  const { PATCH } = makeReviewAnalysisUpdateHandlers(deps);
+  const r = await PATCH(
+    makeRequest({ categories: [] }),
+    makeCtx('proj-1', 'an-1')
+  );
+  assert.equal(r.status, 200);
+  const writtenJson = state.updateCalls[0].analysisJson as {
+    categories?: unknown[];
+    summary?: string;
+  };
+  assert.deepEqual(writtenJson.categories, []);
+  assert.match(writtenJson.summary ?? '', /no critiques/);
+});
+
+test('PATCH 400 categories edit rejects a non-array categories value', async () => {
+  const { prisma, state } = makePrisma({});
+  const deps = makeDeps({ prisma });
+  const { PATCH } = makeReviewAnalysisUpdateHandlers(deps);
+  const r = await PATCH(
+    makeRequest({ categories: 'nope' }),
+    makeCtx('proj-1', 'an-1')
+  );
+  assert.equal(r.status, 400);
+  assert.match(JSON.stringify(r.body), /categories must be an array/);
+  assert.equal(state.updateCalls.length, 0);
+});
+
+test('PATCH 400 categories edit rejected on a PER_REVIEW row', async () => {
+  const { prisma, state } = makePrisma({
+    row: {
+      id: 'an-1',
+      level: 'PER_REVIEW',
+      urlId: 'url-1',
+      projectId: 'proj-1',
+      analysisJson: { reviewId: 'rev-a', summary: 'x' } as Prisma.JsonValue,
+      competitorUrl: { projectWorkflowId: 'pw-1' },
+    },
+  });
+  const deps = makeDeps({ prisma });
+  const { PATCH } = makeReviewAnalysisUpdateHandlers(deps);
+  const r = await PATCH(
+    makeRequest({
+      categories: [{ name: 'X', bullets: [{ text: 'y', reviewIds: [] }] }],
+    }),
+    makeCtx('proj-1', 'an-1')
+  );
+  assert.equal(r.status, 400);
+  assert.match(JSON.stringify(r.body), /only supported for PER_PRODUCT/);
+  assert.equal(state.updateCalls.length, 0);
+});

@@ -49,6 +49,10 @@ const MIN_REVIEWS_FOR_GLOBAL_RUN = 2;
 export interface GlobalCompetitorSummarizeModalProps {
   projectId: string;
   urls: ReadonlyArray<CompetitorUrl>;
+  // FU-1 (a.110): how many of the target competitors have a hand-edited
+  // traceability table. >0 → warn + require confirm before the bulk re-run
+  // replaces those edits (director pick).
+  manuallyEditedCount?: number;
   onClose: () => void;
   onSummary: (
     urlId: string,
@@ -85,6 +89,7 @@ type RunState =
 export function GlobalCompetitorSummarizeModal({
   projectId,
   urls,
+  manuallyEditedCount = 0,
   onClose,
   onSummary,
 }: GlobalCompetitorSummarizeModalProps): JSX.Element {
@@ -92,6 +97,8 @@ export function GlobalCompetitorSummarizeModal({
   const [executionMode, setExecutionMode] =
     useState<ExecutionMode>(EXECUTION_MODE_SERVER);
   const [runState, setRunState] = useState<RunState>({ kind: 'idle' });
+  // FU-1 (a.110): interstitial confirm shown when any target is hand-edited.
+  const [showOverwriteWarning, setShowOverwriteWarning] = useState(false);
   const [perUrlResults, setPerUrlResults] = useState<PerUrlResult[]>(() =>
     urls.map((u) => ({
       urlId: u.id,
@@ -516,16 +523,51 @@ export function GlobalCompetitorSummarizeModal({
           </div>
         )}
 
+        {/* FU-1 (a.110) — warn before a bulk re-run replaces hand-edits. */}
+        {showOverwriteWarning && !isRunning && !isDone && (
+          <div
+            style={overwriteWarnStyle}
+            data-testid="global-competitor-overwrite-warning"
+          >
+            {manuallyEditedCount} competitor
+            {manuallyEditedCount === 1 ? ' has' : 's have'} a hand-edited
+            analysis table. Re-running for all competitors will replace those
+            edits with fresh versions. Continue?
+            <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+              <button
+                type="button"
+                style={dangerButtonStyle}
+                onClick={() => {
+                  setShowOverwriteWarning(false);
+                  void handleStart();
+                }}
+              >
+                Replace edits &amp; continue
+              </button>
+              <button
+                type="button"
+                style={secondaryButtonStyle}
+                onClick={() => setShowOverwriteWarning(false)}
+              >
+                Keep edits
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* ── Controls ── */}
         <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-          {!isRunning && !isDone && (
+          {!isRunning && !isDone && !showOverwriteWarning && (
             <>
               <button type="button" onClick={onClose} style={secondaryButtonStyle}>
                 Cancel
               </button>
               <button
                 type="button"
-                onClick={handleStart}
+                onClick={() => {
+                  if (manuallyEditedCount > 0) setShowOverwriteWarning(true);
+                  else void handleStart();
+                }}
                 disabled={totalUrls === 0}
                 style={{
                   ...primaryButtonStyle,
@@ -637,4 +679,15 @@ const dangerButtonStyle: React.CSSProperties = {
   border: '1px solid #f85149',
   borderRadius: '6px',
   cursor: 'pointer',
+};
+
+const overwriteWarnStyle: React.CSSProperties = {
+  marginTop: '10px',
+  marginBottom: '4px',
+  padding: '10px 12px',
+  background: '#3d2b16',
+  border: '1px solid #f0883e',
+  borderRadius: '6px',
+  color: '#f0c674',
+  fontSize: '13px',
 };

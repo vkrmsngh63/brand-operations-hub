@@ -22,6 +22,11 @@
 import type { Prisma } from '@prisma/client';
 
 import { summaryStringToTipTapDoc } from '../../rich-text/tiptap-helpers.ts';
+import {
+  validateCategoriesInput,
+  type TraceabilityCategory,
+} from '../reviews-traceability.ts';
+import { flattenCategoriesToSummaryString } from '../review-analysis/prompts.ts';
 import type {
   HandlerResult,
   RequestLike,
@@ -90,6 +95,9 @@ export type ReviewAnalysisUpdateHandlerDeps = {
 export interface ReviewAnalysisUpdateResponseBody {
   id: string;
   summary: string;
+  // FU-1 (a.110): present on a structured (categories) edit so the editable
+  // table can re-render from the server-normalized shape.
+  categories?: TraceabilityCategory[];
 }
 
 // Caller is expected to send a non-empty trimmed string. Trim whitespace
@@ -121,27 +129,36 @@ export function makeReviewAnalysisUpdateHandlers(
     if (!rawBody || typeof rawBody !== 'object') {
       return { status: 400, body: { error: 'Body must be a JSON object' } };
     }
-    const body = rawBody as { summary?: unknown };
-    if (typeof body.summary !== 'string') {
-      return {
-        status: 400,
-        body: { error: 'summary must be a string' },
-      };
-    }
-    const summary = body.summary.trim();
-    if (!summary) {
-      return {
-        status: 400,
-        body: { error: 'summary must be a non-empty string' },
-      };
-    }
-    if (summary.length > MAX_SUMMARY_LENGTH) {
-      return {
-        status: 400,
-        body: {
-          error: `summary too long; max ${MAX_SUMMARY_LENGTH} characters`,
-        },
-      };
+    const body = rawBody as { summary?: unknown; categories?: unknown };
+    // FU-1 (a.110): two edit modes. The legacy/banner mode sends
+    // { summary: string } (validated up front). The structured edit+delete
+    // mode sends { categories: [...] } — validated after we've confirmed the
+    // row is PER_PRODUCT (only per-competitor rows carry the structured table).
+    const isCategoriesEdit = body.categories !== undefined;
+
+    let summary = '';
+    if (!isCategoriesEdit) {
+      if (typeof body.summary !== 'string') {
+        return {
+          status: 400,
+          body: { error: 'summary must be a string' },
+        };
+      }
+      summary = body.summary.trim();
+      if (!summary) {
+        return {
+          status: 400,
+          body: { error: 'summary must be a non-empty string' },
+        };
+      }
+      if (summary.length > MAX_SUMMARY_LENGTH) {
+        return {
+          status: 400,
+          body: {
+            error: `summary too long; max ${MAX_SUMMARY_LENGTH} characters`,
+          },
+        };
+      }
     }
 
     let row: ReviewAnalysisRowForUpdate | null;
@@ -202,6 +219,17 @@ export function makeReviewAnalysisUpdateHandlers(
         },
       };
     }
+    // FU-1 (a.110): the structured table only exists on per-competitor
+    // PER_PRODUCT rows. A categories edit against a PER_REVIEW row is a
+    // client bug — reject rather than silently writing an unrenderable shape.
+    if (isCategoriesEdit && row.level !== 'PER_PRODUCT') {
+      return {
+        status: 400,
+        body: {
+          error: `Structured (categories) edits are only supported for PER_PRODUCT (per-competitor) rows; got level=${row.level}.`,
+        },
+      };
+    }
 
     // Merge the new summary into the existing analysisJson shape. Per-
     // Product analysisJson currently carries { summary }; if future
@@ -211,10 +239,35 @@ export function makeReviewAnalysisUpdateHandlers(
       row.analysisJson && typeof row.analysisJson === 'object' && !Array.isArray(row.analysisJson)
         ? (row.analysisJson as Record<string, Prisma.JsonValue>)
         : {};
-    const nextAnalysisJson: Prisma.InputJsonValue = {
-      ...existingJson,
-      summary,
-    } as Prisma.InputJsonValue;
+
+    let nextAnalysisJson: Prisma.InputJsonValue;
+    let responseCategories: TraceabilityCategory[] | undefined;
+    if (isCategoriesEdit) {
+      const validated = validateCategoriesInput(body.categories);
+      if (!validated) {
+        return {
+          status: 400,
+          body: { error: 'categories must be an array' },
+        };
+      }
+      // Re-derive the flattened summary from the trimmed/edited categories so
+      // the main Reviews Analysis Table's Column 9 + cache-hit reads stay in
+      // lock-step with the table. `manuallyEdited` flags the row so a later
+      // AI re-run can warn before it replaces these hand-edits.
+      summary = flattenCategoriesToSummaryString({ categories: validated });
+      responseCategories = validated;
+      nextAnalysisJson = {
+        ...existingJson,
+        categories: validated,
+        summary,
+        manuallyEdited: true,
+      } as unknown as Prisma.InputJsonValue;
+    } else {
+      nextAnalysisJson = {
+        ...existingJson,
+        summary,
+      } as Prisma.InputJsonValue;
+    }
 
     let updated: { id: string; analysisJson: Prisma.JsonValue };
     try {
@@ -281,6 +334,7 @@ export function makeReviewAnalysisUpdateHandlers(
     const responseBody: ReviewAnalysisUpdateResponseBody = {
       id: updated.id,
       summary: updatedSummary,
+      ...(responseCategories ? { categories: responseCategories } : {}),
     };
     return { status: 200, body: responseBody };
   }

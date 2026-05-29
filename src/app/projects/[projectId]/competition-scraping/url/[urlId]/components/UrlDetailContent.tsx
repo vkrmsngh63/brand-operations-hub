@@ -76,6 +76,7 @@ import { CapturedReviewAddModal } from '../../../components/CapturedReviewAddMod
 import { PerItemAnalysisBox } from '../../../components/PerItemAnalysisBox';
 import { OverallAnalysisBox } from '../../../components/OverallAnalysisBox';
 import { ReviewsTraceabilityTable } from '../../../components/ReviewsTraceabilityTable';
+import type { TraceabilityAnalysis } from '@/lib/competition-scraping/reviews-traceability';
 import {
   ConfirmDeleteDialog,
   type CascadeCounts,
@@ -141,6 +142,12 @@ export function UrlDetailContent({ project, urlId }: Props) {
   // traceability table in the "Overall Analysis — Captured Reviews" box.
   // null until the GET resolves OR when no per-competitor run has happened.
   const [reviewsAnalysisJson, setReviewsAnalysisJson] = useState<unknown>(null);
+  // FU-1 (a.110) — the PER_PRODUCT ReviewAnalysis row id for THIS url, needed
+  // to PATCH edits/deletes from the editable traceability table. null until
+  // the GET resolves a per-competitor run for this url.
+  const [reviewsAnalysisId, setReviewsAnalysisId] = useState<string | null>(
+    null
+  );
   // P-28 — URL-delete dialog state lives at the top-level component because
   // the trash button is in UrlMetadataCard but on success the whole page
   // navigates away. Cascade counts lazy-fetch on dialog open.
@@ -189,6 +196,40 @@ export function UrlDetailContent({ project, urlId }: Props) {
     setUrlDeleteOpen(false);
     router.push(`/projects/${project.id}/competition-scraping`);
   }, [project.id, urlId, router]);
+
+  // FU-1 (a.110) — persist an edit/delete from the traceability table. PATCHes
+  // the structured `categories` to the per-competitor PER_PRODUCT row; the
+  // server re-derives the flattened summary + flags the row manuallyEdited.
+  // Only the analysis-derived entries change — the captured reviews are never
+  // touched. On success we mirror the saved shape into local state so the
+  // table re-renders trimmed/edited without a full refetch.
+  const handleSaveTraceability = useCallback(
+    async (next: TraceabilityAnalysis): Promise<void> => {
+      if (!reviewsAnalysisId) {
+        throw new Error('No saved analysis to edit yet — run the AI first.');
+      }
+      const res = await authFetch(
+        `/api/projects/${project.id}/competition-scraping/review-analysis/${reviewsAnalysisId}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ categories: next.categories }),
+        }
+      );
+      if (!res.ok) {
+        const detail = await readErrorMessage(res, 'Could not save your change');
+        throw new Error(detail);
+      }
+      setReviewsAnalysisJson((prev: unknown) => {
+        const base =
+          prev && typeof prev === 'object' && !Array.isArray(prev)
+            ? (prev as Record<string, unknown>)
+            : {};
+        return { ...base, categories: next.categories };
+      });
+    },
+    [project.id, reviewsAnalysisId]
+  );
 
   // P-27 — captured-text delete. The captured text subsection owns its own
   // dialog state; the parent owns the text-list state because the optimistic
@@ -383,12 +424,15 @@ export function UrlDetailContent({ project, urlId }: Props) {
       // ascending runAt order, so the last match is the most recent run.
       const items = analysisRes.data?.items ?? [];
       let latest: unknown = null;
+      let latestId: string | null = null;
       for (const item of items) {
         if (item.level === 'PER_PRODUCT' && item.urlId === urlId) {
           latest = item.analysisJson;
+          latestId = item.id;
         }
       }
       setReviewsAnalysisJson(latest);
+      setReviewsAnalysisId(latestId);
     })();
 
     return () => {
@@ -630,6 +674,8 @@ export function UrlDetailContent({ project, urlId }: Props) {
               urlId={urlId}
               overallAnalysisInitial={urlSlot.data.overallAnalyses?.reviews ?? {}}
               reviewsAnalysisJson={reviewsAnalysisJson}
+              reviewsAnalysisId={reviewsAnalysisId}
+              onSaveTraceability={handleSaveTraceability}
               onReviewAdded={handleReviewAdded}
               onReviewDeleted={handleReviewDeleted}
               onReviewsBulkDeleted={handleReviewsBulkDeleted}
@@ -1840,6 +1886,8 @@ function CapturedReviewsSection({
   urlId,
   overallAnalysisInitial,
   reviewsAnalysisJson,
+  reviewsAnalysisId,
+  onSaveTraceability,
   onReviewAdded,
   onReviewDeleted,
   onReviewsBulkDeleted,
@@ -1850,6 +1898,8 @@ function CapturedReviewsSection({
   urlId: string;
   overallAnalysisInitial: Record<string, unknown>;
   reviewsAnalysisJson: unknown;
+  reviewsAnalysisId: string | null;
+  onSaveTraceability: (next: TraceabilityAnalysis) => Promise<void>;
   onReviewAdded: (row: CapturedReview) => void;
   onReviewDeleted: (reviewId: string) => Promise<void>;
   onReviewsBulkDeleted: (reviewIds: string[]) => Promise<void>;
@@ -2144,6 +2194,8 @@ function CapturedReviewsSection({
         analysisJson={reviewsAnalysisJson}
         reviews={slot.data ?? []}
         testId="reviews-traceability-table"
+        analysisId={reviewsAnalysisId}
+        onSave={onSaveTraceability}
       />
       {/* P-46 Workstream 2 Session 4 (2026-05-28) — the free-text notes area
           BELOW the table. Persists to CompetitorUrl.overallAnalyses.reviews

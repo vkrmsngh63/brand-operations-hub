@@ -128,6 +128,13 @@ export default function CompetitorReviewsAnalysisPage() {
       { analysisId: string; summary: string; source: 'cache' | 'fresh' }
     >
   >({});
+  // FU-1 (a.110) — urlIds whose per-competitor traceability table was
+  // hand-edited on the URL detail page (analysisJson.manuallyEdited). Used to
+  // warn before a re-run replaces those edits (director pick: warn-then-
+  // replace). A fresh AI run clears the url from this set.
+  const [manuallyEditedUrlIds, setManuallyEditedUrlIds] = useState<Set<string>>(
+    new Set()
+  );
 
   // Modal state — Table 2 hosts three AI flow surfaces so we track
   // which is open. Only one modal open at a time; the other slots are
@@ -405,73 +412,110 @@ export default function CompetitorReviewsAnalysisPage() {
   // → seed summaryByReviewId.
   // PER_PRODUCT rows carry urlId + id + analysisJson.summary → seed
   // competitorSummaryByUrlId (id becomes analysisId for the Edit affordance).
-  useEffect(() => {
+  const hydrateSummaries = useCallback(async () => {
     if (!projectId) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await authFetch(
-          `/api/projects/${projectId}/competition-scraping/review-analysis`
-        );
-        if (cancelled || !res.ok) return;
-        const body = (await res.json()) as {
-          items: Array<{
-            id: string;
-            level: 'PER_REVIEW' | 'PER_PRODUCT';
-            urlId: string | null;
-            analysisJson: unknown;
-          }>;
-        };
-        if (!Array.isArray(body.items)) return;
-        const nextSummaryByReviewId: Record<
-          string,
-          { analysisId: string | null; summary: string; source: 'cache' | 'fresh' }
-        > = {};
-        const nextCompetitorSummaryByUrlId: Record<
-          string,
-          { analysisId: string; summary: string; source: 'cache' | 'fresh' }
-        > = {};
-        for (const item of body.items) {
-          const aj =
-            item.analysisJson && typeof item.analysisJson === 'object'
-              ? (item.analysisJson as Record<string, unknown>)
-              : {};
-          const summary =
-            typeof aj.summary === 'string' ? aj.summary : '';
-          if (!summary) continue;
-          if (item.level === 'PER_REVIEW') {
-            const reviewId = typeof aj.reviewId === 'string' ? aj.reviewId : null;
-            if (reviewId) {
-              nextSummaryByReviewId[reviewId] = {
-                analysisId: item.id,
-                summary,
-                source: 'cache',
-              };
-            }
-          } else if (item.level === 'PER_PRODUCT' && item.urlId) {
-            nextCompetitorSummaryByUrlId[item.urlId] = {
+    try {
+      const res = await authFetch(
+        `/api/projects/${projectId}/competition-scraping/review-analysis`
+      );
+      if (!res.ok) return;
+      const body = (await res.json()) as {
+        items: Array<{
+          id: string;
+          level: 'PER_REVIEW' | 'PER_PRODUCT';
+          urlId: string | null;
+          analysisJson: unknown;
+        }>;
+      };
+      if (!Array.isArray(body.items)) return;
+      const nextSummaryByReviewId: Record<
+        string,
+        { analysisId: string | null; summary: string; source: 'cache' | 'fresh' }
+      > = {};
+      const nextCompetitorSummaryByUrlId: Record<
+        string,
+        { analysisId: string; summary: string; source: 'cache' | 'fresh' }
+      > = {};
+      const nextManuallyEdited = new Set<string>();
+      for (const item of body.items) {
+        const aj =
+          item.analysisJson && typeof item.analysisJson === 'object'
+            ? (item.analysisJson as Record<string, unknown>)
+            : {};
+        const summary = typeof aj.summary === 'string' ? aj.summary : '';
+        if (!summary) continue;
+        if (item.level === 'PER_REVIEW') {
+          const reviewId = typeof aj.reviewId === 'string' ? aj.reviewId : null;
+          if (reviewId) {
+            nextSummaryByReviewId[reviewId] = {
               analysisId: item.id,
               summary,
               source: 'cache',
             };
           }
+        } else if (item.level === 'PER_PRODUCT' && item.urlId) {
+          nextCompetitorSummaryByUrlId[item.urlId] = {
+            analysisId: item.id,
+            summary,
+            source: 'cache',
+          };
+          if (aj.manuallyEdited === true) nextManuallyEdited.add(item.urlId);
         }
-        if (cancelled) return;
-        // Merge over any state already populated by in-session AI runs
-        // (those win on conflict since they're the freshest).
-        setSummaryByReviewId((prev) => ({ ...nextSummaryByReviewId, ...prev }));
-        setCompetitorSummaryByUrlId((prev) => ({
-          ...nextCompetitorSummaryByUrlId,
-          ...prev,
-        }));
-      } catch {
-        // Network errors don't block the page; user can still re-run AI.
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
+      // Merge over any state already populated by in-session AI runs
+      // (those win on conflict since they're the freshest).
+      setSummaryByReviewId((prev) => ({ ...nextSummaryByReviewId, ...prev }));
+      setCompetitorSummaryByUrlId((prev) => ({
+        ...nextCompetitorSummaryByUrlId,
+        ...prev,
+      }));
+      // manuallyEdited reflects server truth (a fresh in-session run already
+      // cleared its url via handleCompetitorSummary), so a straight replace.
+      setManuallyEditedUrlIds(nextManuallyEdited);
+    } catch {
+      // Network errors don't block the page; user can still re-run AI.
+    }
   }, [projectId]);
+
+  useEffect(() => {
+    void hydrateSummaries();
+  }, [hydrateSummaries]);
+
+  // FU-2 (a.110): keep this page in sync with cross-page deletions. When a
+  // review is deleted on a URL detail page (a different route the App Router
+  // keeps this page mounted behind), this page's reviewsByUrl cache goes
+  // stale. On tab refocus we re-hydrate the summaries + force-refetch every
+  // already-loaded URL's reviews so the deleted review + its "N of M
+  // summarized" count disappear here without a manual reload.
+  const reviewsByUrlRef = useRef(reviewsByUrl);
+  useEffect(() => {
+    reviewsByUrlRef.current = reviewsByUrl;
+  }, [reviewsByUrl]);
+  useEffect(() => {
+    if (!projectId) return;
+    function onRefocus() {
+      if (
+        typeof document !== 'undefined' &&
+        document.visibilityState !== 'visible'
+      ) {
+        return;
+      }
+      void hydrateSummaries();
+      const loaded = reviewsByUrlRef.current;
+      for (const urlId of Object.keys(loaded)) {
+        if (loaded[urlId]?.kind === 'loaded') void ensureReviewsLoaded(urlId, true);
+      }
+    }
+    window.addEventListener('focus', onRefocus);
+    document.addEventListener('visibilitychange', onRefocus);
+    return () => {
+      window.removeEventListener('focus', onRefocus);
+      document.removeEventListener('visibilitychange', onRefocus);
+    };
+    // ensureReviewsLoaded is a stable component-scope fn (force path ignores
+    // the closed-over cache); only projectId + hydrateSummaries matter here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, hydrateSummaries]);
 
   // Load all URLs for the Project on mount.
   useEffect(() => {
@@ -514,10 +558,17 @@ export default function CompetitorReviewsAnalysisPage() {
   }, [projectId]);
 
   // Lazy-load reviews for a URL when it expands for the first time.
-  async function ensureReviewsLoaded(urlId: string) {
+  async function ensureReviewsLoaded(urlId: string, force = false) {
     if (!projectId) return;
     const existing = reviewsByUrl[urlId];
-    if (existing && existing.kind !== 'idle' && existing.kind !== 'error') return;
+    if (
+      !force &&
+      existing &&
+      existing.kind !== 'idle' &&
+      existing.kind !== 'error'
+    ) {
+      return;
+    }
     setReviewsByUrl((prev) => ({ ...prev, [urlId]: { kind: 'loading' } }));
     try {
       const res = await authFetch(
@@ -625,6 +676,14 @@ export default function CompetitorReviewsAnalysisPage() {
     // auto-expand (the user clicks Column 9 to view).
     if (source === 'fresh') {
       setBannerExpanded((prev) => ({ ...prev, [urlId]: true }));
+      // FU-1 (a.110): a fresh run regenerated this competitor's table, so any
+      // prior hand-edits are gone — clear the manually-edited flag.
+      setManuallyEditedUrlIds((prev) => {
+        if (!prev.has(urlId)) return prev;
+        const next = new Set(prev);
+        next.delete(urlId);
+        return next;
+      });
     }
   }
 
@@ -861,6 +920,7 @@ export default function CompetitorReviewsAnalysisPage() {
           productName={competitorModalUrl.productName || competitorModalUrl.url}
           platform={competitorModalUrl.platform}
           reviews={getLoadedReviews(reviewsByUrl[competitorModalUrl.id])}
+          manuallyEdited={manuallyEditedUrlIds.has(competitorModalUrl.id)}
           onClose={() => setCompetitorModalUrl(null)}
           onSummary={handleCompetitorSummary}
         />
@@ -869,6 +929,9 @@ export default function CompetitorReviewsAnalysisPage() {
         <GlobalCompetitorSummarizeModal
           projectId={projectId}
           urls={urlsState.urls}
+          manuallyEditedCount={
+            urlsState.urls.filter((u) => manuallyEditedUrlIds.has(u.id)).length
+          }
           onClose={() => setGlobalModalOpen(false)}
           onSummary={handleCompetitorSummary}
         />

@@ -6,10 +6,36 @@ import assert from 'node:assert/strict';
 
 import {
   parseTraceabilityAnalysis,
+  validateCategoriesInput,
   buildTraceabilityRows,
   mergeReviewTitleBody,
+  editCategoryName,
+  editBulletText,
+  deleteCategory,
+  deleteBullets,
+  deleteSourceReview,
+  type TraceabilityAnalysis,
   type TraceabilityReview,
 } from './reviews-traceability.ts';
+
+// Shared fixture for the FU-1 mutation tests — two categories, three bullets.
+function sampleAnalysis(): TraceabilityAnalysis {
+  return {
+    categories: [
+      {
+        name: 'Product critiques',
+        bullets: [
+          { text: 'No effect', reviewIds: ['id-a', 'id-b'] },
+          { text: 'No bruise reduction', reviewIds: ['id-c'] },
+        ],
+      },
+      {
+        name: 'Safety concerns',
+        bullets: [{ text: 'No warning label', reviewIds: ['id-a'] }],
+      },
+    ],
+  };
+}
 
 test('parseTraceabilityAnalysis accepts a well-formed structured row', () => {
   const parsed = parseTraceabilityAnalysis({
@@ -129,4 +155,121 @@ test('buildTraceabilityRows renders a placeholder for deleted reviews', () => {
   assert.equal(rows[0].sources[0].missing, true);
   assert.equal(rows[0].sources[0].starRating, null);
   assert.match(rows[0].sources[0].text, /no longer available/);
+});
+
+test('buildTraceabilityRows tags each row with its category + bullet index', () => {
+  const rows = buildTraceabilityRows(sampleAnalysis(), new Map());
+  assert.deepEqual(
+    rows.map((r) => [r.categoryIndex, r.bulletIndex]),
+    [
+      [0, 0],
+      [0, 1],
+      [1, 0],
+    ]
+  );
+});
+
+// ─── FU-1 / Q11 — validateCategoriesInput (server PATCH validator) ─────────
+
+test('validateCategoriesInput returns null only for non-array input', () => {
+  assert.equal(validateCategoriesInput(null), null);
+  assert.equal(validateCategoriesInput(undefined), null);
+  assert.equal(validateCategoriesInput('x'), null);
+  assert.equal(validateCategoriesInput({}), null);
+});
+
+test('validateCategoriesInput tolerates an empty array (legal delete-all)', () => {
+  assert.deepEqual(validateCategoriesInput([]), []);
+  // An array of only-malformed entries normalizes to empty, NOT null.
+  assert.deepEqual(
+    validateCategoriesInput([{ name: '   ', bullets: [] }, { bogus: true }]),
+    []
+  );
+});
+
+test('validateCategoriesInput normalizes + filters defensively', () => {
+  const out = validateCategoriesInput([
+    {
+      name: '  Kept  ',
+      bullets: [
+        { text: '  trimmed  ', reviewIds: ['id-a', 5, '', 'id-b'] },
+        { text: '   ', reviewIds: ['x'] }, // blank text dropped
+      ],
+    },
+    { name: 'Empty after filtering', bullets: [{ text: '  ', reviewIds: [] }] }, // 0 valid bullets → dropped
+  ]);
+  assert.ok(out);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].name, 'Kept');
+  assert.equal(out[0].bullets.length, 1);
+  assert.equal(out[0].bullets[0].text, 'trimmed');
+  assert.deepEqual(out[0].bullets[0].reviewIds, ['id-a', 'id-b']);
+});
+
+// ─── FU-1 / Q11 — edit mutations ───────────────────────────────────────────
+
+test('editCategoryName renames the targeted category; blank name is a no-op', () => {
+  const a = sampleAnalysis();
+  const renamed = editCategoryName(a, 1, '  Safety / reliability  ');
+  assert.equal(renamed.categories[1].name, 'Safety / reliability');
+  assert.equal(renamed.categories[0].name, 'Product critiques'); // untouched
+  // Original is not mutated.
+  assert.equal(a.categories[1].name, 'Safety concerns');
+  // Blank rename is ignored.
+  assert.equal(editCategoryName(a, 0, '   '), a);
+});
+
+test('editBulletText edits the targeted complaint; blank text is a no-op', () => {
+  const a = sampleAnalysis();
+  const edited = editBulletText(a, 0, 1, '  Bruising unchanged  ');
+  assert.equal(edited.categories[0].bullets[1].text, 'Bruising unchanged');
+  assert.equal(edited.categories[0].bullets[0].text, 'No effect'); // untouched
+  // reviewIds preserved.
+  assert.deepEqual(edited.categories[0].bullets[1].reviewIds, ['id-c']);
+  assert.equal(editBulletText(a, 0, 0, '  '), a);
+});
+
+// ─── FU-1 / Q11 — delete mutations ─────────────────────────────────────────
+
+test('deleteCategory removes the whole category group', () => {
+  const out = deleteCategory(sampleAnalysis(), 0);
+  assert.equal(out.categories.length, 1);
+  assert.equal(out.categories[0].name, 'Safety concerns');
+});
+
+test('deleteBullets removes a single complaint row', () => {
+  const out = deleteBullets(sampleAnalysis(), [
+    { categoryIndex: 0, bulletIndex: 0 },
+  ]);
+  assert.equal(out.categories[0].bullets.length, 1);
+  assert.equal(out.categories[0].bullets[0].text, 'No bruise reduction');
+  assert.equal(out.categories.length, 2); // category 0 still has a bullet
+});
+
+test('deleteBullets supports bulk + drops a category left with zero bullets', () => {
+  // Delete both bullets of category 0 + the lone bullet of category 1.
+  const out = deleteBullets(sampleAnalysis(), [
+    { categoryIndex: 0, bulletIndex: 0 },
+    { categoryIndex: 0, bulletIndex: 1 },
+    { categoryIndex: 1, bulletIndex: 0 },
+  ]);
+  assert.equal(out.categories.length, 0); // every category emptied → dropped
+});
+
+test('deleteBullets dropping all but one keeps the surviving category', () => {
+  const out = deleteBullets(sampleAnalysis(), [
+    { categoryIndex: 0, bulletIndex: 0 },
+    { categoryIndex: 0, bulletIndex: 1 },
+  ]);
+  assert.equal(out.categories.length, 1);
+  assert.equal(out.categories[0].name, 'Safety concerns');
+});
+
+test('deleteSourceReview detaches one review but keeps the complaint', () => {
+  const out = deleteSourceReview(sampleAnalysis(), 0, 0, 'id-a');
+  assert.deepEqual(out.categories[0].bullets[0].reviewIds, ['id-b']);
+  // The complaint itself survives even if its last source is removed.
+  const emptied = deleteSourceReview(out, 0, 0, 'id-b');
+  assert.deepEqual(emptied.categories[0].bullets[0].reviewIds, []);
+  assert.equal(emptied.categories[0].bullets.length, 2);
 });
