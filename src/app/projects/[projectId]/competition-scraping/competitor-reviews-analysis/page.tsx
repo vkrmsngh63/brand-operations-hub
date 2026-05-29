@@ -976,22 +976,24 @@ export default function CompetitorReviewsAnalysisPage() {
               flexWrap: 'wrap',
             }}
           >
-            <button
-              type="button"
-              onClick={() => setGlobalModalOpen(true)}
-              style={{
-                padding: '8px 16px',
-                fontSize: '12px',
-                fontWeight: 600,
-                background: '#238636',
-                color: '#fff',
-                border: '1px solid #2ea043',
-                borderRadius: '6px',
-                cursor: 'pointer',
-              }}
-            >
-              Auto-create Competitor Comprehensive Reviews Analysis (bulleted)
-            </button>
+            <HoverTooltip text="Reads every competitor's customer reviews and produces a theme-grouped bullet-point list of their critiques (build quality, shipping, service, etc.). Runs across all competitors with at least 2 reviews; cached results are reused for free.">
+              <button
+                type="button"
+                onClick={() => setGlobalModalOpen(true)}
+                style={{
+                  padding: '8px 16px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  background: '#238636',
+                  color: '#fff',
+                  border: '1px solid #2ea043',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                }}
+              >
+                Auto-create Competitor Comprehensive Reviews Analysis (bulleted)
+              </button>
+            </HoverTooltip>
             <HoverTooltip text="Turns each competitor's bullet-point review summary into a flowing, plain-paragraph critique — the kind you can drop onto a product-comparison page. Runs across all competitors; any that don't have a bullet summary yet are skipped and listed.">
               <button
                 type="button"
@@ -1010,22 +1012,24 @@ export default function CompetitorReviewsAnalysisPage() {
                 Auto-create Competitor Comprehensive Reviews Analysis (non-bulleted)
               </button>
             </HoverTooltip>
-            <button
-              type="button"
-              onClick={handleExportTable}
-              style={{
-                padding: '8px 16px',
-                fontSize: '12px',
-                fontWeight: 600,
-                background: 'transparent',
-                color: '#e6edf3',
-                border: '1px solid #30363d',
-                borderRadius: '6px',
-                cursor: 'pointer',
-              }}
-            >
-              Export Table
-            </button>
+            <HoverTooltip text="Downloads the table as an Excel (.xlsx) file. Only the columns you currently have showing are included, in the same order — hide a column and it won't be exported.">
+              <button
+                type="button"
+                onClick={handleExportTable}
+                style={{
+                  padding: '8px 16px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  background: 'transparent',
+                  color: '#e6edf3',
+                  border: '1px solid #30363d',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                }}
+              >
+                Export Table
+              </button>
+            </HoverTooltip>
           </div>
         )}
 
@@ -1852,22 +1856,32 @@ function UrlsTable({
                         alignItems: 'stretch',
                       }}
                     >
-                      <button
-                        type="button"
-                        onClick={() => onOpenSummarizeModal(u)}
-                        disabled={reviewsState?.kind === 'loading'}
-                        style={summarizeButtonStyle(reviewsState?.kind)}
+                      <HoverTooltip
+                        block
+                        text="Writes a short bullet-point summary for EACH individual review under this product (one per review). Expands the rows so you can watch them fill in. Already-summarized reviews are reused for free."
                       >
-                        Summarize each individual review under this product
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onOpenCompetitorModal(u)}
-                        disabled={reviewsState?.kind === 'loading'}
-                        style={competitorButtonStyle(reviewsState?.kind)}
+                        <button
+                          type="button"
+                          onClick={() => onOpenSummarizeModal(u)}
+                          disabled={reviewsState?.kind === 'loading'}
+                          style={summarizeButtonStyle(reviewsState?.kind)}
+                        >
+                          Summarize each individual review under this product
+                        </button>
+                      </HoverTooltip>
+                      <HoverTooltip
+                        block
+                        text="Reads ALL of this product's reviews and produces one theme-grouped bullet-point critique for the whole competitor. This is the bullet summary the plain-paragraph version is built from."
                       >
-                        Summarize all reviews within this product (bulleted)
-                      </button>
+                        <button
+                          type="button"
+                          onClick={() => onOpenCompetitorModal(u)}
+                          disabled={reviewsState?.kind === 'loading'}
+                          style={competitorButtonStyle(reviewsState?.kind)}
+                        >
+                          Summarize all reviews within this product (bulleted)
+                        </button>
+                      </HoverTooltip>
                       {/* P-49 W5 Fix Session C — per-URL non-bulleted prose
                           run. Disabled until this competitor has a bulleted
                           summary (the prose flow's input). */}
@@ -2687,6 +2701,7 @@ function summarizeButtonStyle(
 ): React.CSSProperties {
   const loading = state === 'loading';
   return {
+    width: '100%',
     padding: '6px 12px',
     fontSize: '11px',
     fontWeight: 600,
@@ -2704,6 +2719,7 @@ function competitorButtonStyle(
 ): React.CSSProperties {
   const loading = state === 'loading';
   return {
+    width: '100%',
     padding: '6px 12px',
     fontSize: '11px',
     fontWeight: 600,
