@@ -2300,7 +2300,48 @@ Entry baselines = Fix Session D exit = 2026-05-31 locked (root tsc clean / exten
 - `docs/polish-item-specs/P-49-W5-S2-S3-competitor-reviews-analysis.md` §4 (Q11 RESOLVED) + §3 (FU-1 + FU-2 ✅ DEPLOYED-AND-VERIFIED 2026-05-31-b; Status updated; Fix Session C + Category/Type still remaining); `docs/polish-item-specs/P-49-W5-reviews-phase-2-master-spec.md` §3 pointer table ("Fix A + B + D + FU-1 + FU-2 ✅ DEPLOYED-AND-VERIFIED; Fix Session C remaining").
 - `docs/ROADMAP.md` NEW entry **P-52** (AI model registry + central model-selection methodology + Opus 4.8 rollout) — the destination for the deferred Issue 2; queued as (a.111) on the `main` track.
 
-**Closing line:** P-49 W5 FU-1 (edit+delete the traceability box) + FU-2 (deleted-reviews sync bug) ✅ DEPLOYED-AND-VERIFIED 2026-05-31-b (build `7d89d75`) under 1 Rule 9 deploy gate on `workflow-2-competition-scraping` — director "Everything passed." The traceability box is now fully editable (rename categories / reword complaints / delete a single complaint, a whole category, or a single source review / bulk-delete) and review deletions stay in sync across the table + box on tab refocus. TWO NEW reusable PATTERNS memorialized. Schema-change-in-flight NO entire session. 7/7 = 100% Yes-to-Recommended this session; running cumulative 115/118 = 97.5%. NEW baselines: src/lib `node:test` = **1053/1053** + `npm run build` = **68 routes UNCHANGED** + extension = 910/910 UNCHANGED. **Closes (a.110) RECOMMENDED-NEXT partially** (FU-1 + FU-2 done; Fix Session C remains). **Opens (a.111) RECOMMENDED-NEXT = AI model registry doc + methodology rule + Opus 4.8 rollout** on `main` (NEW ROADMAP entry P-52). **SEVENTEENTH build/deploy-session §B entry per Rule 18 — NINTH W5 entry.** The next §B entry will land at the close of Fix Session C (the only remaining Reviews Analysis Table work) — note (a.111) is a `main`-track platform-wide session that will NOT produce a §B entry in this W#2 doc.
+**Closing line:** P-49 W5 FU-1 (edit+delete the traceability box) + FU-2 (deleted-reviews sync bug) ✅ DEPLOYED-AND-VERIFIED 2026-05-31-b (build `7d89d75`) under 1 Rule 9 deploy gate on `workflow-2-competition-scraping` — director "Everything passed." The traceability box is now fully editable (rename categories / reword complaints / delete a single complaint, a whole category, or a single source review / bulk-delete) and review deletions stay in sync across the table + box on tab refocus. TWO NEW reusable PATTERNS memorialized. Schema-change-in-flight NO entire session. 7/7 = 100% Yes-to-Recommended this session; running cumulative 115/118 = 97.5%. NEW baselines: src/lib `node:test` = **1053/1053** + `npm run build` = **68 routes UNCHANGED** + extension = 910/910 UNCHANGED. **Closes (a.110) RECOMMENDED-NEXT partially** (FU-1 + FU-2 done; Fix Session C remains). **Opens (a.111) RECOMMENDED-NEXT = AI model registry doc + methodology rule + Opus 4.8 rollout** on `main` (NEW ROADMAP entry P-52). **SEVENTEENTH build/deploy-session §B entry per Rule 18 — NINTH W5 entry.**
+
+---
+
+## §B 2026-05-29-b — `session_2026-05-29-b_p52-ai-model-registry-rule-32-opus-4-8-rollout` — P-52 AI model registry doc + central model-selection methodology (NEW Rule 32) + Opus 4.8 rollout ✅ DEPLOYED-AND-VERIFIED 2026-05-29-b end-to-end on vklf.com on the `main` track (platform-wide; spans W#1 Keyword Clustering + W#2 Competition Scraping) — single build commit `5b9784a` (14 files +343/-31) pushed to main + ping-ponged to `workflow-2-competition-scraping` under ONE Rule 9 deploy gate — EIGHTEENTH build/deploy-session §B entry per Rule 18; TENTH W5 entry — director Phase 4 verbatim verdict: "passed"; NEW reusable PATTERN memorialized — "SDK-free constants module lets client components import shared constants without bundling the server SDK"; Schema-change-in-flight NO entire session (model lists + pricing are code constants)
+
+**§A frozen per Rule 18.** This entry is a SUPERSEDENCE note for §A.7 (the W#2 model policy "Opus 4.7 default + Opus 4.6 selectable") — it is ADDITIVE and does NOT change the Opus-only policy. It records how the model menu + the model-list plumbing evolved this session without editing §A.
+
+### What shipped (W#2-relevant slice of the platform-wide P-52 work)
+
+- **Opus 4.8 (`claude-opus-4-8`) added to the §A.7 Opus-only menu — ADDITIVE.** The W#2 review-summarize modals now offer Opus 4.8, Opus 4.7 (default — UNCHANGED), and Opus 4.6. The Opus-only policy from §A.7 is intact; 4.8 simply joins the existing Opus menu. This is a §B supersedence note over §A.7's enumerated menu, NOT a policy change.
+- **The 3 W#2 summarize modals refactored to import a central model list.** Before this session, `PerReviewSummarizeModal` / `PerCompetitorSummarizeModal` / `GlobalCompetitorSummarizeModal` each kept its OWN duplicate copy of `SUPPORTED_MODEL_VERSIONS` — a 3-way drift hazard (add a model to one, forget the other two). This session extracted the constants into a NEW SDK-free module `src/lib/competition-scraping/review-analysis/models.ts` that `client.ts` re-exports for back-compat; the 3 modals now IMPORT from `models.ts`. ONE source of truth for the W#2 model menu, AND the server-only `@anthropic-ai/sdk` (imported by `client.ts`) stays out of the browser bundle.
+- **`pricing.ts`** gained an Opus 4.8 entry (Opus-tier PLACEHOLDER pricing, same as 4.7, with a `CONFIRM` comment pending official numbers).
+- **The central registry doc + Rule 32.** NEW `docs/AI_MODEL_REGISTRY.md` indexes every model-choice declaration site across W#1 + W#2 (the W#2 sites are `models.ts` + `pricing.ts`); NEW HANDOFF_PROTOCOL Rule 32 + the SessionStart hook `.claude/hooks/check-model-registry-drift.sh` keep that index honest as the platform grows.
+
+### Design choices made this session (Rule 14f)
+
+- **SDK-free constants module over importing from `client.ts` directly** (the Phase 1 design picker, Recommended + chosen). The modals are `'use client'`; importing the list from `client.ts` would pull the server SDK into the browser bundle. Extracting the constants into `models.ts` (re-exported by `client.ts`) is the clean fix — see the NEW reusable Pattern.
+- **Defaults UNCHANGED.** W#2 stays on Opus 4.7 (`DEFAULT_MODEL_VERSION`); director did not promote 4.8 to default.
+
+### Implementation subtlety
+
+`client.ts` remains the SDK seam + back-compat re-export point, so every existing W#2 consumer (`review-analysis-run-batch.ts` validator via `isSupportedModelVersion`, the modals via the re-export → now direct import) reads the SAME list. No behavior change for existing models; Opus 4.8 simply appears as a new selectable option.
+
+### Affected §A sections (informational — §A frozen per Rule 18)
+
+- **§A.7** (model policy) — Opus 4.8 joins the Opus-only menu (additive supersedence; policy unchanged).
+- **§A.12** (model/version + pricing plumbing references) — the W#2 model list now lives in `models.ts` (re-exported by `client.ts`); pricing in `pricing.ts` gained the 4.8 entry. These are plumbing-location notes; the design intent in §A is unchanged.
+
+### Scoreboard
+
+src/lib `node:test` = **1059/1059** (+6 from 1053 — 5 new `models.test.ts` cases + 1 new `pricing.test.ts` case); `npm run build` = **68 routes UNCHANGED** (constants only; no new route); extension `npm test` = **910/910 UNCHANGED** (no extension model selection); root + extension tsc clean; Check 6 SKIPPED per Rule 27.
+
+### Cross-references
+
+- `docs/AI_MODEL_REGISTRY.md` — the NEW central declaration-site registry (the P-52 deliverable). `docs/HANDOFF_PROTOCOL.md` **Rule 32** + `.claude/hooks/check-model-registry-drift.sh` — the methodology + enforcement.
+- `docs/polish-item-specs/P-52-ai-model-registry.md` — the Rule 31 spec doc (§4 carries the 2 OPEN carry-overs: official Opus 4.8 pricing numbers + the deferred W#1 `AutoAnalyze.tsx` shared-list migration).
+- `docs/CORRECTIONS_LOG.md` §Entry 2026-05-29-b — the INFORMATIONAL entry (DATE-STAMP DRIFT RESOLVED + the SDK-free-constants Pattern + Rule 32 + the P-43 tally).
+- `docs/ROADMAP.md` **P-52** — status flipped to ✅ DEPLOYED-AND-VERIFIED 2026-05-29-b (build `5b9784a`).
+- Predecessor entry: §B 2026-05-31-b above (W5 FU-1 + FU-2 — the session that DEFERRED this model-registry work to its own `main`-track session).
+
+**Closing line:** P-52 AI model registry + central model-selection methodology (NEW Rule 32) + Opus 4.8 rollout ✅ DEPLOYED-AND-VERIFIED 2026-05-29-b (build `5b9784a`) under 1 Rule 9 deploy gate — platform-wide on `main` (spans W#1 + W#2). The W#2-relevant slice: Opus 4.8 added to the §A.7 Opus-only menu (additive) + the 3 W#2 modals now import a single central `models.ts` list. NEW reusable PATTERN: "SDK-free constants module lets client components import shared constants without bundling the server SDK". Schema-change-in-flight NO entire session. Running cumulative 121/124 = 97.6% Yes-to-Recommended. NEW baselines: src/lib `node:test` = **1059/1059** + `npm run build` = **68 routes UNCHANGED** + extension = 910/910 UNCHANGED. **Closes (a.111) RECOMMENDED-NEXT.** **Opens (a.112) RECOMMENDED-NEXT = P-49 W5 Reviews Analysis Table Fix Session C** on `workflow-2-competition-scraping` (the only remaining Reviews Analysis Table work; carries the only remaining schema change `CapturedReview.sortRankInReviewsTable Int?`). **EIGHTEENTH build/deploy-session §B entry per Rule 18 — TENTH W5 entry.** The next §B entry will land at the close of Fix Session C.
 
 ---
 

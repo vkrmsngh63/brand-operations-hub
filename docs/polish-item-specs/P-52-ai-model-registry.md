@@ -1,9 +1,9 @@
 # P-52 — AI model registry + central model-selection methodology + Opus 4.8 rollout
 
 **Polish-item ID:** P-52 (cross-reference to ROADMAP entry P-52)
-**Created:** 2026-05-31-b
+**Created:** 2026-05-29-b
 **Session that captured §1:** session_2026-05-31-b (director's session-start "Issue 2"; deferred to its own `main`-track session) — verbatim text NOT preserved at capture time; see §1 note.
-**Status:** §3 BUILT — registry doc + Rule 32 + Opus 4.8 rollout shipped at code level 2026-05-31-c (pending deploy decision).
+**Status:** §3 BUILT — registry doc + Rule 32 + Opus 4.8 rollout shipped at code level 2026-05-29-b (pending deploy decision).
 
 ## §1 — Original director instructions (VERBATIM, append-only)
 
@@ -15,12 +15,12 @@
 
 ## §2 — Joint-discussion adjustments (append-only, chronological)
 
-- **2026-05-31-c (session_2026-05-31-c):** Phase 1 design picker — 4 questions, 4/4 Yes-to-Recommended:
+- **2026-05-29-b (session_2026-05-29-b):** Phase 1 design picker — 4 questions, 4/4 Yes-to-Recommended:
   1. **Registry doc:** new dedicated `docs/AI_MODEL_REGISTRY.md` with a call-site table (vs. a section in an existing doc).
   2. **Methodology rule:** new HANDOFF_PROTOCOL rule (Rule 32) + a session-start auto-detect hook that flags unregistered model-list declaration sites (vs. manual checklist only / no rule).
   3. **W#1 scope:** add Opus 4.8 *inline only* to the live Keyword Clustering tool's three hardcoded spots this session; defer the shared-list refactor of W#1 (smaller, safer change to a live tool).
   4. **Default + pricing:** keep current defaults unchanged (W#2 → Opus 4.7, W#1 → Sonnet 4.6); add Opus 4.8 as a selectable option only; price it at the Opus-tier placeholder (same as 4.7/4.6) with a CONFIRM note, since official numbers weren't supplied.
-- **2026-05-31-c:** baseline cleanup confirmed — the 3 W#2 summarize modals now import the central `SUPPORTED_MODEL_VERSIONS` from a new SDK-free `models.ts` instead of each keeping a local copy (removes the 3-way drift hazard).
+- **2026-05-29-b:** baseline cleanup confirmed — the 3 W#2 summarize modals now import the central `SUPPORTED_MODEL_VERSIONS` from a new SDK-free `models.ts` instead of each keeping a local copy (removes the 3-way drift hazard).
 
 ## §3 — Current consolidated spec (rolled-up source-of-truth)
 

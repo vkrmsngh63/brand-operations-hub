@@ -2,7 +2,7 @@
 
 **Purpose:** the single canonical list of every place in PLOS where a user (director) picks an AI model, plus where each model's pricing lives. When a new Claude model ships, this doc tells you exactly which files to touch so the model becomes selectable everywhere and cost estimates stay accurate. When a new model-picker is added to the platform, it MUST be registered here per **HANDOFF_PROTOCOL.md Rule 32**.
 
-**Created:** 2026-05-31-b (ROADMAP P-52 — AI model registry + central model-selection methodology + Opus 4.8 rollout).
+**Created:** 2026-05-29-b (ROADMAP P-52 — AI model registry + central model-selection methodology + Opus 4.8 rollout). *(The build commit `5b9784a` carried a `2026-05-31-b` stamp here, written before the date-stamp drift was resolved this same session; corrected to the real calendar date `2026-05-29-b` in the end-of-session doc-batch — see CORRECTIONS_LOG §Entry 2026-05-29-b.)*
 
 **Cross-references:**
 - ROADMAP entry: **P-52**
