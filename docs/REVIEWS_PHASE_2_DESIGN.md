@@ -2345,6 +2345,77 @@ src/lib `node:test` = **1059/1059** (+6 from 1053 — 5 new `models.test.ts` cas
 
 ---
 
+## §B 2026-05-29-c — `session_2026-05-29-c_p49-w5-fix-session-c-deploy-1-nonbulleted-prose-excel-tooltips` — Workstream 5 Reviews Analysis Table Fix Session C "Deploy 1" (NEW per-competitor non-bulleted prose AI flow + "Export Table" Excel download + the additive nullable `CapturedReview.sortRankInReviewsTable Int?` schema column) ✅ DEPLOYED-AND-VERIFIED 2026-05-29-c end-to-end on vklf.com via `workflow-2-competition-scraping` → `main` — Deploy 1 build `a24e92c` (10 files) + 3 fix-forwards (FF1 `ecad5af` + FF2 `9da50ec` + FF3 `0631762`) ff-merged to main under FOUR Rule 9 deploy gates — NINETEENTH build/deploy-session §B entry per Rule 18; ELEVENTH W5 entry — director Phase 4 verbatim verdict: "Everything passed"; THREE NEW reusable PATTERNS memorialized — "Body-portal + viewport-fixed positioning for tooltips/overlays that must escape table-row stacking-context + overflow:auto clipping" + "Second-pass AI transform reads a prior flow's output, not raw inputs" + "analysisJson.flow discriminator lets two same-level (PER_PRODUCT) rows coexist per URL"; Schema-change-in-flight YES entry → FLIPPED YES → NO at the Deploy 1 push
+
+**Closes (a.112) RECOMMENDED-NEXT PARTIALLY** — Fix Session C was split into "Deploy 1" (non-bulleted prose flow + Excel export + the `sortRankInReviewsTable` schema column) ✅ DEPLOYED-AND-VERIFIED 2026-05-29-c + "Deploy 2" (drag-to-reorder) DEFERRED to next session per a director Rule 14f reliability pick (the riskiest, cleanly-separable UI piece). **Opens (a.113) RECOMMENDED-NEXT = P-49 W5 Fix Session C "Deploy 2" — drag-to-reorder** on `workflow-2-competition-scraping` (URL rows via existing `CompetitorUrl.sortRank` + review rows within a URL via the already-shipped `CapturedReview.sortRankInReviewsTable`; @dnd-kit, mirror `UrlTable.tsx`; Schema-change-in-flight NO at entry since the column already shipped).
+
+### Session shape — DEPLOY with 4 ff-merges under 4 Rule 9 deploy gates (Deploy 1 + 3 fix-forwards) in one Phase 4 verification day
+
+Session opened per yesterday's NEXT_SESSION.md pointer scoping (a.112) Fix Session C. A 4-question Phase-0 design batch (4/4 Yes-to-Recommended) + the Deploy 1 gate + the Deploy-2-sequencing pick + 3 fix-forward gates = NINE Rule 14f decisions, 9/9 = 100% Yes-to-Recommended. **Q8 (the per-batch flow-value naming convention) was resolved DIRECTLY** = `per-competitor-nonbulleted` — it was already in the VALID_FLOWS allowlist and is consistent with the shipped `per-competitor-bulleted`, so no director picker was needed.
+
+### Phase 0 — 4 design decisions (all Recommended)
+
+- **Prose layout = short labeled paragraphs by theme.** The non-bulleted output is a set of theme-labeled plain paragraphs (not bullets, not one wall of text).
+- **Length = moderate (2-4 paragraphs); volume cues kept; no formal citations.** The prose paints a clear, critique-ready picture without inline review-ID citations.
+- **Input source = read the already-generated BULLETED summary, NOT the raw review corpus.** This is the key design divergence from every prior flow — the non-bulleted flow is a SECOND-PASS TRANSFORM over Column 9's bulleted summary. If a competitor has no bullet summary, the run SKIPS + FLAGS that competitor.
+- **Excel = currently-VISIBLE columns only (Q7→A).** "Export Table" exports whatever columns are shown, with word-wrap on AI cells.
+
+### Phase 1-2 — what shipped (Deploy 1 build `a24e92c`, 10 files)
+
+- **NEW per-competitor non-bulleted (prose) AI flow** in `review-analysis/prompts.ts` (v1 builder + normalizer) + `handlers/review-analysis-run-batch.ts` dispatch (flow `per-competitor-nonbulleted`; fresh/cache/400/502 paths tested). The flow reads the competitor's bulleted `analysisJson.summary` (Column 9) and emits theme-labeled prose.
+- **NEW top "Auto-create Competitor Comprehensive Reviews Analysis (non-bulleted)" button + global modal** `GlobalCompetitorNonBulletedModal.tsx` (SKIPS + FLAGS competitors without a bullet summary) + **NEW per-URL inline button + single-URL modal** `PerCompetitorNonBulletedModal.tsx`. Both modals render a model-selection `<select>` over `SUPPORTED_MODEL_VERSIONS` imported from the central `models.ts` (Rule 32 consumers — registered in `docs/AI_MODEL_REGISTRY.md`; no new declaration site).
+- **Column 10 cell + banner** (reuses `CompetitorSummaryBanner`) + **edit-in-place** + **refresh-persistence**: hydration discriminates the non-bulleted PER_PRODUCT row from the bulleted one via `analysisJson.flow='per-competitor-nonbulleted'`.
+- **Append-merge write-back** to `CompetitorUrl.overallAnalyses["reviews"]` (added at the bottom per §1 verbatim "merge, never overwrite").
+- **"Export Table" Excel download** — NEW pure `review-analysis/reviews-table-export.ts` (+ `.test`, +11 cases) maps the currently-VISIBLE columns to an xlsx workbook with word-wrap on AI cells; filename `competitor-reviews-analysis-{slug}-{YYYY-MM-DD}.xlsx`. Client-side; no new route.
+- **Additive nullable `CapturedReview.sortRankInReviewsTable Int?`** schema column shipped via `prisma db push` (zero data loss). It does nothing visible yet — it is the persistence target the deferred Deploy 2 drag-to-reorder will write.
+
+### Phase 3 — 3 fix-forwards (tooltips)
+
+- **FF1 `ecad5af`** (page.tsx) — a `HoverTooltip` component + fade-in hover tooltips on the two NEW non-bulleted buttons.
+- **FF2 `9da50ec`** (page.tsx) — tooltips on the remaining four buttons (top bulleted "Auto-create", "Export Table", per-URL per-review, per-URL per-competitor bulleted) + `width:100%` on their styles.
+- **FF3 `0631762`** (page.tsx) — re-render the tooltips in a **body portal with viewport-fixed positioning** (`createPortal` + `getBoundingClientRect`) to fix director-reported clipping: last-column tooltips, absolutely-positioned inside a `<td>`, were painted behind adjacent rows + clipped by the table's `overflow:auto`. Rendering them in a body portal positioned from the button's bounding rect escapes both the row stacking-context and the scroll container.
+
+### Phase 4 (director real-Chrome verification) — clean PASS
+
+Director's verbatim verdict: **"Everything passed."** No further fix-forwards.
+
+### NEW reusable PATTERNS
+
+- **"Body-portal + viewport-fixed positioning for tooltips/overlays that must escape table-row stacking-context + overflow:auto clipping"** (the FF3 fix). An absolutely-positioned tooltip inside a table cell gets painted behind sibling rows and clipped by a scrolling table container. Rendering it via `createPortal` to `document.body`, positioned from the trigger's `getBoundingClientRect()`, escapes both.
+- **"Second-pass AI transform reads a prior flow's output, not raw inputs"** (the non-bulleted flow design). Unlike every prior flow that reads the raw review corpus or per-review summaries, the non-bulleted flow reads the competitor's already-generated BULLETED summary and rewrites it — a transform over a prior flow's output. Skip-and-flag when the prerequisite output is missing.
+- **"analysisJson.flow discriminator lets two same-level (PER_PRODUCT) rows coexist per URL"** (the storage design). The bulleted and non-bulleted per-competitor summaries both live at `ReviewAnalysisLevel.PER_PRODUCT`; they are told apart by `analysisJson.flow` (`per-competitor-bulleted` vs `per-competitor-nonbulleted`). Hydration + GET routing key off this discriminator. A positive consequence: the PATCH endpoint already supported non-bulleted edits with ZERO change, because its `{summary}` branch spreads `existingJson` (preserving the flow discriminator) — an audit-shipped-state win.
+
+### Scoreboard
+
+Entry baselines = 2026-05-29-b exit = locked (root tsc clean / extension tsc clean / **910 ext** / **1059 src/lib** / **68 routes**). Post-merge /scoreboard all GREEN at NEW LOCKED baseline:
+
+| Check | Entry | Exit | Delta |
+| --- | --- | --- | --- |
+| Root tsc | clean | clean | unchanged |
+| Extension tsc | clean | clean | unchanged |
+| Extension `npm test` | 910/910 | 910/910 | UNCHANGED (no extension code changed) |
+| src/lib `node:test` | 1059/1059 | **1080/1080** | **+21** (+9 prompts.test [non-bulleted builder/normalizer + SHIPPED_FLOWS tripwire update — one tripwire test UPDATED not added] + 11 NEW reviews-table-export.test + 4 run-batch.test non-bulleted dispatch [fresh/cache/400/502]) |
+| `npm run build` | 68 routes | **68 routes** | UNCHANGED (Excel is client-side; no new route) |
+| Playwright | — | SKIPPED | per Rule 27 (build/deploy session) |
+
+### Affected §A sections (informational — §A FROZEN per Rule 18)
+
+- The "Competitor Comprehensive Reviews Analysis (non-bulleted)" column (Column 10) + its AI flow + the "Auto-create … (non-bulleted)" buttons (both top + per-URL) + the "Export Table" Excel button are now LIVE per the §1 verbatim spec for the Competitor Reviews Analysis Table page. The drag-to-reorder requirement (both URL rows and review rows) remains the LAST §1 item not yet shipped — deferred to "Deploy 2" (a.113). §A is frozen; this implementation note lives in §B only.
+- The §1 instruction "this bullet list should also be added to the 'Overall Analysis — Captured Reviews' box … merged … added to the very bottom so that no data … is overwritten" is honored by the non-bulleted append-merge write-back to `CompetitorUrl.overallAnalyses["reviews"]`.
+
+### Cross-references
+
+- §B 2026-05-31-b above (W5 FU-1 + FU-2 — the editable traceability box + the deleted-reviews sync fix) — the predecessor W5 entry; Deploy 1 must not regress the editable box or the structured `analysisJson` shape.
+- §B 2026-05-29-b above (P-52 — the central `models.ts` list) — the 2 NEW non-bulleted modals import `SUPPORTED_MODEL_VERSIONS` from that central list rather than re-duplicating it.
+- `docs/CORRECTIONS_LOG.md` §Entry 2026-05-29-c — the INFORMATIONAL entry (the 3 NEW Patterns + the audit-shipped-state PATCH win + the P-43 tally).
+- `docs/polish-item-specs/P-49-W5-S2-S3-competitor-reviews-analysis.md` §3 "Fix Session C" (items 1-7 ✅ DONE; items 8/9/10 → Deploy 2) + §4 (Q8 RESOLVED) + §2 2026-05-29-c note; `docs/polish-item-specs/P-49-W5-reviews-phase-2-master-spec.md` §3 pointer table ("Fix A+B+D+FU-1+FU-2 + Fix C Deploy 1 ✅ DEPLOYED-AND-VERIFIED; Fix C Deploy 2 remaining").
+- `docs/AI_MODEL_REGISTRY.md` §2 — the 2 NEW non-bulleted modals registered as W#2 CONSUMERS.
+- `docs/ROADMAP.md` P-49 — status updated to "🟢 IN-FLIGHT 2026-05-29-c — Fix Session C Deploy 1 ✅ DEPLOYED-AND-VERIFIED".
+
+**Closing line:** P-49 W5 Reviews Analysis Table Fix Session C "Deploy 1" (non-bulleted prose flow + Excel export + the `CapturedReview.sortRankInReviewsTable` schema column) ✅ DEPLOYED-AND-VERIFIED 2026-05-29-c (Deploy 1 build `a24e92c` + 3 FFs) under 4 Rule 9 deploy gates on `workflow-2-competition-scraping` — director "Everything passed." THREE NEW reusable PATTERNS memorialized. Schema-change-in-flight YES entry → NO at the Deploy 1 push. 9/9 = 100% Yes-to-Recommended this session; running cumulative 130/133 = 97.7%. NEW baselines: src/lib `node:test` = **1080/1080** + `npm run build` = **68 routes UNCHANGED** + extension = 910/910 UNCHANGED. **Closes (a.112) RECOMMENDED-NEXT PARTIALLY** (Deploy 1 done; Deploy 2 drag-to-reorder remains). **Opens (a.113) RECOMMENDED-NEXT = P-49 W5 Fix Session C "Deploy 2" — drag-to-reorder** on `workflow-2-competition-scraping`. **NINETEENTH build/deploy-session §B entry per Rule 18 — ELEVENTH W5 entry.** The next §B entry will land at the close of Fix Session C "Deploy 2".
+
+---
+
 ---
 
 END OF DOCUMENT
