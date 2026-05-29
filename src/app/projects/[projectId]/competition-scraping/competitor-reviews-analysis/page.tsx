@@ -992,22 +992,24 @@ export default function CompetitorReviewsAnalysisPage() {
             >
               Auto-create Competitor Comprehensive Reviews Analysis (bulleted)
             </button>
-            <button
-              type="button"
-              onClick={() => setGlobalNonBulletedModalOpen(true)}
-              style={{
-                padding: '8px 16px',
-                fontSize: '12px',
-                fontWeight: 600,
-                background: '#1f6feb',
-                color: '#fff',
-                border: '1px solid #388bfd',
-                borderRadius: '6px',
-                cursor: 'pointer',
-              }}
-            >
-              Auto-create Competitor Comprehensive Reviews Analysis (non-bulleted)
-            </button>
+            <HoverTooltip text="Turns each competitor's bullet-point review summary into a flowing, plain-paragraph critique — the kind you can drop onto a product-comparison page. Runs across all competitors; any that don't have a bullet summary yet are skipped and listed.">
+              <button
+                type="button"
+                onClick={() => setGlobalNonBulletedModalOpen(true)}
+                style={{
+                  padding: '8px 16px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  background: '#1f6feb',
+                  color: '#fff',
+                  border: '1px solid #388bfd',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                }}
+              >
+                Auto-create Competitor Comprehensive Reviews Analysis (non-bulleted)
+              </button>
+            </HoverTooltip>
             <button
               type="button"
               onClick={handleExportTable}
@@ -1167,6 +1169,68 @@ export default function CompetitorReviewsAnalysisPage() {
 function getLoadedReviews(state: ReviewsLoadState | undefined): CapturedReview[] {
   if (!state || state.kind !== 'loaded') return [];
   return state.reviews;
+}
+
+// P-49 W5 Fix Session C FF1 (2026-05-29) — director request: a styled
+// message that fades in on mouseover to explain what a button does.
+// Wraps a control; on hover, an absolutely-positioned tooltip above the
+// control fades in via a CSS opacity transition (React state, since inline
+// styles can't express :hover). `block` makes the wrapper full-width so a
+// wrapped button keeps stretching inside a flex-column Actions cell.
+function HoverTooltip({
+  text,
+  block = false,
+  children,
+}: {
+  text: string;
+  block?: boolean;
+  children: React.ReactNode;
+}): JSX.Element {
+  const [show, setShow] = useState(false);
+  return (
+    <span
+      onMouseEnter={() => setShow(true)}
+      onMouseLeave={() => setShow(false)}
+      onFocus={() => setShow(true)}
+      onBlur={() => setShow(false)}
+      style={{
+        position: 'relative',
+        display: block ? 'block' : 'inline-flex',
+        width: block ? '100%' : undefined,
+      }}
+    >
+      {children}
+      <span
+        role="tooltip"
+        style={{
+          position: 'absolute',
+          bottom: '100%',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          marginBottom: '8px',
+          width: 'max-content',
+          maxWidth: '300px',
+          background: '#161b22',
+          color: '#e6edf3',
+          border: '1px solid #30363d',
+          borderRadius: '6px',
+          padding: '8px 10px',
+          fontSize: '11px',
+          fontWeight: 400,
+          lineHeight: 1.5,
+          textAlign: 'left',
+          whiteSpace: 'normal',
+          opacity: show ? 1 : 0,
+          transition: 'opacity 160ms ease',
+          pointerEvents: 'none',
+          zIndex: 1100,
+          boxShadow: '0 6px 20px rgba(0,0,0,0.45)',
+        }}
+      >
+        {text}
+      </span>
+    </span>
+  );
 }
 
 // ─── ReviewsAnalysisTableSection ────────────────────────────────────
@@ -1807,19 +1871,23 @@ function UrlsTable({
                       {/* P-49 W5 Fix Session C — per-URL non-bulleted prose
                           run. Disabled until this competitor has a bulleted
                           summary (the prose flow's input). */}
-                      <button
-                        type="button"
-                        onClick={() => onOpenNonBulletedModal(u)}
-                        disabled={!competitorSummary}
-                        title={
+                      <HoverTooltip
+                        block
+                        text={
                           competitorSummary
-                            ? 'Rewrite the bulleted summary into prose'
-                            : 'Generate the bulleted summary first'
+                            ? "Rewrites this competitor's bullet-point summary into a flowing, plain-paragraph critique you can lift onto a comparison page. Also added to the bottom of this competitor's Overall Analysis box."
+                            : "Generate this competitor's bullet-point summary first (the green button above) — the plain-paragraph version is built from it."
                         }
-                        style={nonBulletedButtonStyle(!competitorSummary)}
                       >
-                        Comprehensive analysis (non-bulleted prose)
-                      </button>
+                        <button
+                          type="button"
+                          onClick={() => onOpenNonBulletedModal(u)}
+                          disabled={!competitorSummary}
+                          style={nonBulletedButtonStyle(!competitorSummary)}
+                        >
+                          Comprehensive analysis (non-bulleted prose)
+                        </button>
+                      </HoverTooltip>
                     </div>
                   </td>
                 </tr>
@@ -2656,6 +2724,7 @@ function competitorButtonStyle(
 // competitor has a bulleted summary to rewrite.
 function nonBulletedButtonStyle(disabled: boolean): React.CSSProperties {
   return {
+    width: '100%',
     padding: '6px 12px',
     fontSize: '11px',
     fontWeight: 600,
