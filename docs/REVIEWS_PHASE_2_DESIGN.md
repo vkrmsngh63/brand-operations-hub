@@ -2189,6 +2189,69 @@ Entry baselines = Fix Session A exit = 2026-05-29 locked (root tsc clean / exten
 
 ---
 
+## §B 2026-05-31 — `session_2026-05-31_p49-w5-reviews-analysis-table-fix-session-d` — Workstream 5 Reviews Analysis Table Fix Session D ✅ DEPLOYED-AND-VERIFIED 2026-05-31 end-to-end on vklf.com via `workflow-2-competition-scraping` → `main` — RE-SEQUENCED ahead of the planned Fix Session C per director's session-start Rule 14f pick — initial build commit `4db2b5c` (8 files +1052/-276) plus ONE fix-forward commit FF1 `889667e` (4 files +318/-54 — the only Phase-4 redirect) all ff-merged to main under 2 Rule 9 deploy gates — SIXTEENTH build/deploy-session §B entry per Rule 18; EIGHTH W5 entry — director Phase 4 verdict: table feature "Both worked"; FF1 "Pass"; the "Overall Analysis — Captured Reviews" box on the URL detail page is now a read-only 3-column traceability table (Category / Complaint / source captured reviews + star counts); NEW reusable PATTERN memorialized — "Transient DB-auth 500 under AI-batch load → client-side autosave retry"; Schema-change-in-flight NO entire session (the structured traceability shape lives in the EXISTING `ReviewAnalysis.analysisJson` Json column)
+
+**Closes (a.109) RECOMMENDED-NEXT with a twist** — (a.109) was "P-49 W5 Reviews Analysis Table Fix Session C"; this session RE-SEQUENCED and shipped **Fix Session D** instead ✅ DEPLOYED-AND-VERIFIED 2026-05-31 (build `4db2b5c` + FF1 `889667e`); Fix Session C is NOT done — it remains pending. **Opens (a.110) RECOMMENDED-NEXT = P-49 W5 Reviews Analysis Table follow-ups** on `workflow-2-competition-scraping`, in order: (1) delete entries from the Overall Analysis traceability table individually + in bulk (NEEDS a design chat — reverses this session's read-only decision); (2) deleted-reviews sync bug on the `/competitor-reviews-analysis` table (cache-invalidation fix); THEN (3) Fix Session C (non-bulleted flow + Excel export D-7 + drag-to-reorder review rows D-6 + NEW `CapturedReview.sortRankInReviewsTable Int?` schema column + Q8 flow-naming; Schema-change-in-flight YES entry for THAT piece).
+
+### Session shape — DEPLOY with 2 ff-merges across 2 Rule 9 deploy gates; the corrective-fix plan re-sequenced at session start
+
+Session opened per yesterday's NEXT_SESSION.md pointer scoping "Fix Session C". Claude completed the start-of-session routine (branch verify / Group A doc reads / Rule 31 §3 read of the P-49-W5 spec docs / audit-shipped-state confirmation of the URL detail page state) and awaited director go-ahead.
+
+**Phase 1 (re-sequence + design).** During the output-shape design discussion for the Fix Session C non-bulleted flow, the director paused the initial 2-question output-shape design picker to ask "what were you referring to" (a comprehension check — NOT a reversal) and then re-pasted the 2026-05-30 §1 ADDENDUM (the 3-column traceability-table feature, originally scoped as "Fix Session D" AFTER Fix C). Via a Rule 14f picker, the director chose to build the traceability table THIS session ahead of Fix C. Three further design-decision pickers resolved Recommended: (a) box layout — table-on-top + notes-below; (b) editability — read-only generated table; (c) source-text — full review text (title+body merge) in the source column. So Fix Session D was built; Fix Session C remains pending.
+
+**Phase 2 (build) — `4db2b5c` (8 files +1052/-276):**
+
+1. **Structured per-competitor output (prompt v3→v4).** The per-competitor bulleted prompt now emits STRUCTURED output `{ categories: [{ name, bullets: [{ text, reviewRefs }] }] }` instead of free-text bullets. Input reviews are labeled R1..Rn so the model cites by short label. PROMPT_VERSION bump invalidates the cache for fresh structured runs.
+2. **R-label resolution (`resolveReviewRefs`).** The per-batch handler maps each bullet's R-labels → real `CapturedReview` ids by prompt position, then persists `analysisJson` as `{ summary (flattened, back-compat) + categories (structured) }`.
+3. **Back-compat (`flattenCategoriesToSummaryString`).** The flattened `summary` string keeps the main table's Column 9 + Edit affordance + cache reads working unchanged; legacy `{ summary }`-only rows render via the flattened path.
+4. **NEW read-only 3-column traceability table (`ReviewsTraceabilityTable.tsx`)** on the URL detail page — Category / Complaint / source captured reviews (full review text via title+body merge + star count). Category cells rowspan-grouped. NEW pure helpers `reviews-traceability.ts` (parse + buildRows + mergeReviewTitleBody).
+5. **URL detail page wiring (`UrlDetailContent.tsx`).** Fetches the latest PER_PRODUCT analysis for the URL via the existing `GET /review-analysis` route, renders the table on top, and relabels the free-text box "Your notes — Captured Reviews" below it. Removed the Fix B FF1 box free-text write-back (the box now renders the table from the structured row; director-typed box content untouched).
+
+**Phase 3 (initial-build deploy decision).** Director picked Recommended (Deploy `4db2b5c` to main). Ff-merge to main under Rule 9 deploy gate #1.
+
+**Phase 4 (initial-build director real-Chrome verification) — surfaced 1 redirect bundled into FF1.**
+
+### FF1 `889667e` — the only Phase-4 redirect — NEW reusable PATTERN "Transient DB-auth 500 under AI-batch load → client-side autosave retry"
+
+**Symptom.** Director reported that many "Your Analysis" + notes autosave boxes showed "Save failed — HTTP 500" / "Failed to resolve project workflow", and that "a page refresh fixes it."
+
+**Root cause.** Those rich-text boxes PATCH on every debounced edit. Each request runs `verifyProjectWorkflowAuth`, which performs a `projectWorkflow.upsert` (a DB write). During and after a heavy AI summarization run the Supabase connection pool transiently saturates → the upsert throws → the route 500s → the box is stranded until a manual refresh. This is a PRE-EXISTING transient-infrastructure exposure that the heavy bulleted run surfaced — NOT caused by the Fix D table work (the per-review save path was untouched this session).
+
+**Fix (FF1 `889667e`, 4 files +318/-54).** NEW shared `src/lib/rich-text/save-with-retry.ts` transparently retries transient failures (HTTP 5xx + network throws) with exponential backoff (500/1000/2000ms, 4 attempts); 4xx is NOT retried; a generation-cancel hook lets a newer keystroke supersede an in-flight retry. Applied to BOTH `PerItemAnalysisBox` + `OverallAnalysisBox`. A brief DB hiccup now self-heals silently. Ff-merged to main under Rule 9 deploy gate #2.
+
+**The reusable Pattern.** Any per-keystroke / debounced autosave that routes through `verifyProjectWorkflowAuth`'s `projectWorkflow.upsert` DB write needs transient-retry resilience under heavy-AI-run Supabase pool saturation. Prevention: wrap the save in a shared retry helper that backs off on 5xx/network throws (NOT 4xx) and supersedes on a newer generation. Reusable for every PLOS rich-text autosave surface.
+
+**Director's verbatim Phase 4 verification results: table feature "Both worked"; FF1 "Pass".**
+
+### Scoreboard
+
+Entry baselines = Fix Session B exit = 2026-05-30 locked (root tsc clean / extension tsc clean / **910 ext** / **1018 src/lib** / **68 routes**). Post-FF1 /scoreboard all GREEN at NEW LOCKED baseline:
+
+| Check | Entry | Exit | Delta |
+| --- | --- | --- | --- |
+| Root tsc | clean | clean | unchanged |
+| Extension tsc | clean | clean | unchanged |
+| Extension `npm test` | 910/910 | 910/910 | UNCHANGED (PLOS-side only session) |
+| src/lib `node:test` | 1018/1018 | **1038/1038** | **+20** (+11 Fix D: structured prompt/validator + `resolveReviewRefs` + `flattenCategoriesToSummaryString` + reviews-traceability parse/buildRows; +9 save-with-retry) |
+| `npm run build` | 68 routes | **68 routes** | UNCHANGED (the table reuses the existing GET /review-analysis route — no new route) |
+| Playwright | — | SKIPPED | per Rule 27 (build/deploy session) |
+
+### Affected §A sections (informational — §A FROZEN per Rule 18)
+
+- The per-competitor analysis output shape evolves from free-text `{ summary }` to structured `{ summary (flattened) + categories }` within the EXISTING `ReviewAnalysis.analysisJson` Json column — no schema migration, no new column. §A is frozen; this supersedence note lives in §B only. The flattened `summary` string is retained for back-compat with the main table + legacy rows.
+- The "Overall Analysis — Captured Reviews" box on the URL detail page changes role: it no longer renders the per-competitor bulleted free-text write-back (added Fix B FF1) — that area now renders the read-only `ReviewsTraceabilityTable`, and the adjacent free-text box is relabeled "Your notes — Captured Reviews" for director-typed content. This supersedes the §B 2026-05-30 D-10-bulleted-half write-back-into-the-box behavior (§A frozen; supersedence captured in §B only).
+
+### Cross-references
+
+- §B 2026-05-30 above (W5 Fix Session B deploy + FF1 write-back-on-cache-hit) — the predecessor entry; this session replaces that box write-back with the structured table render.
+- §B 2026-05-27-c above (W5 Session 3 Per-Competitor bulleted deploy) — the v3 critique-theme prompt + per-batch flow-dispatch architecture this session's v4 structured prompt extends.
+- `docs/CORRECTIONS_LOG.md` §Entry 2026-05-31 — the INFORMATIONAL entry capturing the "Transient DB-auth 500 → autosave retry" Pattern + the re-sequence process note + the 2 new follow-up items + the P-43 running tally.
+- `docs/polish-item-specs/P-49-W5-S2-S3-competitor-reviews-analysis.md` §2 (NEW 2026-05-31 entry) + §3 (Fix Session D scope now ✅ DONE + the 2 NEW follow-up items) + §4 (NEW delete-from-table design question); `docs/polish-item-specs/P-49-W5-reviews-phase-2-master-spec.md` §3 pointer table (Reviews Analysis Table page now "Fix Sessions A + B + D ✅ DEPLOYED-AND-VERIFIED; Fix Session C + 2 new follow-ups remaining").
+
+**Closing line:** P-49 W5 Reviews Analysis Table Fix Session D ✅ DEPLOYED-AND-VERIFIED 2026-05-31 (build `4db2b5c` + FF1 `889667e`) under 2 Rule 9 deploy gates on `workflow-2-competition-scraping` — RE-SEQUENCED ahead of Fix Session C per director's Rule 14f pick. The "Overall Analysis — Captured Reviews" box is now a read-only 3-column traceability table (Category / Complaint / source reviews + star counts). NEW reusable PATTERN memorialized: "Transient DB-auth 500 under AI-batch load → client-side autosave retry". Schema-change-in-flight NO entire session (structured shape in the existing `ReviewAnalysis.analysisJson` Json column). 7/7 = 100% Yes-to-Recommended this session; running cumulative 108/111 = 97.3%. NEW baselines: src/lib `node:test` = **1038/1038** + `npm run build` = **68 routes UNCHANGED** + extension = 910/910 UNCHANGED. **Closes (a.109) RECOMMENDED-NEXT with a twist.** **Opens (a.110) RECOMMENDED-NEXT = P-49 W5 Reviews Analysis Table follow-ups** (delete-from-table feature + deleted-reviews sync bug + THEN Fix Session C). **SIXTEENTH build/deploy-session §B entry per Rule 18 — EIGHTH W5 entry.** The next §B entry will land at the close of the (a.110) follow-ups (delete-from-table feature + deleted-reviews sync bug) and/or Fix Session C.
+
+---
+
 ---
 
 END OF DOCUMENT
