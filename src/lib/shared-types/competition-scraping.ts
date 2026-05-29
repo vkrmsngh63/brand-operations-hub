@@ -960,6 +960,12 @@ export interface CapturedReview {
   // P-49 Workstream 4 (2026-05-26) — server-side drag-to-reorder per docs/REVIEWS_PHASE_2_DESIGN.md
   // §A.5. Null = insertion order; set by Workstream 4's reorder PUT endpoint.
   sortRank: number | null;
+  // P-49 Workstream 5 Reviews Phase 2 Fix Session C (2026-05-29-c) — per-page
+  // drag-to-reorder of review rows WITHIN a URL on the Competitor Reviews
+  // Analysis Table page (Deploy 2). Page-specific; NOT propagated to the URL
+  // detail page. Null = insertion order. Set by the reviews reorder PUT with
+  // field='sortRankInReviewsTable'.
+  sortRankInReviewsTable: number | null;
   // P-49 Workstream 2 (2026-05-26) — Amazon "X people found this helpful" per §A.16.
   // Null on platforms without helpful-count signal (eBay/Etsy/Walmart).
   helpfulCount: number | null;

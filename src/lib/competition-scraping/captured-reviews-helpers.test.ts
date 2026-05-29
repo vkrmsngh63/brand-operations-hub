@@ -29,6 +29,7 @@ function makeReview(overrides: Partial<CapturedReview> = {}): CapturedReview {
     analysis: {},
     source: 'extension-scrape',
     sortRank: null,
+    sortRankInReviewsTable: null,
     helpfulCount: null,
     platform: null,
     addedBy: 'u-1',

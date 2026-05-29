@@ -45,6 +45,8 @@ export type CapturedReviewRow = {
   source: string;
   // P-49 Workstream 2 (2026-05-26) — extension-scrape additive columns per §A.16.
   sortRank: number | null;
+  // P-49 W5 Fix Session C (2026-05-29-c) — per-page review-row drag order.
+  sortRankInReviewsTable: number | null;
   helpfulCount: number | null;
   platform: string | null;
   addedBy: string;
@@ -96,6 +98,8 @@ export function toWireShape(row: CapturedReviewRow | null): CapturedReview | nul
     source: row.source,
     // P-49 Workstream 2 (2026-05-26) — extension-scrape fields per §A.16.
     sortRank: row.sortRank,
+    // P-49 W5 Fix Session C (2026-05-29-c) — per-page review-row drag order.
+    sortRankInReviewsTable: row.sortRankInReviewsTable,
     helpfulCount: row.helpfulCount,
     platform: row.platform,
     addedBy: row.addedBy,

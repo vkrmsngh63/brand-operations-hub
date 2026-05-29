@@ -293,6 +293,83 @@ test('reviews-reorder: happy path applies all sortRanks', async () => {
   assert.deepEqual(written, { a: 0, b: 1, c: 2 });
 });
 
+// ─── P-49 W5 Fix Session C "Deploy 2" — field discriminator ─────────
+
+test('reviews-reorder: defaults to the sortRank column when no field given', async () => {
+  const { prisma, state } = makeFakePrisma({ ownedIds: ['a'] });
+  const handlers = makeReviewsReorderHandlers(makeDeps(prisma));
+  const result = await handlers.PUT(
+    makeReq({ orderings: [{ reviewId: 'a', sortRank: 7 }] }),
+    ctx
+  );
+  assert.equal(result.status, 200);
+  const data = state.updateCalls[0].data as Record<string, unknown>;
+  assert.equal(data.sortRank, 7);
+  assert.ok(
+    !('sortRankInReviewsTable' in data),
+    'default must not touch the per-page column'
+  );
+});
+
+test('reviews-reorder: field=sortRankInReviewsTable writes the per-page column only', async () => {
+  const { prisma, state } = makeFakePrisma({ ownedIds: ['a', 'b'] });
+  const handlers = makeReviewsReorderHandlers(makeDeps(prisma));
+  const result = await handlers.PUT(
+    makeReq({
+      field: 'sortRankInReviewsTable',
+      orderings: [
+        { reviewId: 'a', sortRank: 0 },
+        { reviewId: 'b', sortRank: 1 },
+      ],
+    }),
+    ctx
+  );
+  assert.equal(result.status, 200);
+  assert.deepEqual(result.body, { updated: 2 });
+  for (const call of state.updateCalls) {
+    const data = call.data as Record<string, unknown>;
+    assert.ok(
+      'sortRankInReviewsTable' in data,
+      'must write the per-page column'
+    );
+    assert.ok(
+      !('sortRank' in data),
+      'must NOT overwrite the URL-detail-page sortRank column'
+    );
+  }
+  const written: Record<string, number> = {};
+  for (const call of state.updateCalls) {
+    const id = (call.where as { id: string }).id;
+    written[id] = (call.data as { sortRankInReviewsTable: number })
+      .sortRankInReviewsTable;
+  }
+  assert.deepEqual(written, { a: 0, b: 1 });
+});
+
+test('reviews-reorder: explicit field=sortRank still writes sortRank', async () => {
+  const { prisma, state } = makeFakePrisma({ ownedIds: ['a'] });
+  const handlers = makeReviewsReorderHandlers(makeDeps(prisma));
+  const result = await handlers.PUT(
+    makeReq({ field: 'sortRank', orderings: [{ reviewId: 'a', sortRank: 3 }] }),
+    ctx
+  );
+  assert.equal(result.status, 200);
+  const data = state.updateCalls[0].data as Record<string, unknown>;
+  assert.equal(data.sortRank, 3);
+  assert.ok(!('sortRankInReviewsTable' in data));
+});
+
+test('reviews-reorder: rejects an unknown field value', async () => {
+  const { prisma, state } = makeFakePrisma({ ownedIds: ['a'] });
+  const handlers = makeReviewsReorderHandlers(makeDeps(prisma));
+  const result = await handlers.PUT(
+    makeReq({ field: 'bogusColumn', orderings: [{ reviewId: 'a', sortRank: 0 }] }),
+    ctx
+  );
+  assert.equal(result.status, 400);
+  assert.equal(state.updateCalls.length, 0);
+});
+
 test('reviews-reorder: accepts negative sortRank values', async () => {
   const { prisma, state } = makeFakePrisma({ ownedIds: ['a'] });
   const handlers = makeReviewsReorderHandlers(makeDeps(prisma));

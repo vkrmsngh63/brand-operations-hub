@@ -31,6 +31,21 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { JSX } from 'react';
 import { createPortal } from 'react-dom';
+import {
+  DndContext,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { useParams, useRouter } from 'next/navigation';
 import { authFetch } from '@/lib/authFetch';
 import { useWorkflowContext } from '@/lib/workflow-components';
@@ -77,6 +92,12 @@ import {
   type ReviewsExportRowInput,
 } from '@/lib/competition-scraping/reviews-table-export';
 import { computeReviewsSummaryCount } from '@/lib/competition-scraping/reviews-analysis-table-columns';
+import {
+  orderByRowOrder,
+  sortReviewsByTableRank,
+  mergeRowOrder,
+  buildReviewOrderings,
+} from '@/lib/competition-scraping/reviews-table-reorder';
 
 const WORKFLOW_SLUG = 'competition-scraping';
 
@@ -192,6 +213,13 @@ export default function CompetitorReviewsAnalysisPage() {
   // ships in Fix Session B.
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
 
+  // P-49 W5 Fix Session C "Deploy 2" (2026-05-29-c) — competitor (URL) row
+  // drag order. Shared with the Competitor Content Table: the SAME per-user
+  // `UserTablePreferences.rowOrder` array backs both pages, so reordering on
+  // either reflects on the other (director Q5 → A "reflects everywhere").
+  // Empty = server default order (platform asc, addedAt asc).
+  const [rowOrder, setRowOrder] = useState<string[]>([]);
+
   // P-49 W5 Fix Session A FF1 (2026-05-29) — platform filter chips
   // mirroring the sibling Competitor URLs page's pattern. Default = all
   // platforms selected (table shows everything). Empty array → empty
@@ -292,6 +320,75 @@ export default function CompetitorReviewsAnalysisPage() {
     []
   );
 
+  // P-49 W5 Fix Session C "Deploy 2" (2026-05-29-c) — persist the new
+  // competitor (URL) row order. `nextOrder` is the FULL merged order
+  // (UrlsTable already tucked any platform-filtered-out ids at the tail).
+  // Written to the shared `rowOrder` field via a partial PUT so column
+  // visibility/widths are untouched; reflects on the Competitor Content
+  // Table too since both pages read this one field.
+  const handleUrlReorder = useCallback(
+    (nextOrder: string[]) => {
+      setRowOrder(nextOrder);
+      if (!projectId) return;
+      authFetch(
+        `/api/projects/${projectId}/competition-scraping/table-preferences`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rowOrder: nextOrder }),
+        }
+      ).catch(() => {
+        // Best-effort; local state already updated. Next drag re-sends.
+      });
+    },
+    [projectId]
+  );
+
+  // P-49 W5 Fix Session C "Deploy 2" (2026-05-29-c) — persist a new review
+  // row order WITHIN a single URL. `orderedReviewIds` is the full new order
+  // of that URL's reviews. Optimistically reorders + stamps the per-page
+  // rank so a refetch (e.g. tab-refocus re-hydrate) keeps the order, then
+  // PUTs to the reorder endpoint targeting the per-page column only (never
+  // the URL-detail-page `sortRank`).
+  const handleReviewsReorder = useCallback(
+    (urlId: string, orderedReviewIds: string[]) => {
+      setReviewsByUrl((prev) => {
+        const existing = prev[urlId];
+        if (!existing || existing.kind !== 'loaded') return prev;
+        const byId = new Map(existing.reviews.map((r) => [r.id, r]));
+        const reordered: CapturedReview[] = [];
+        orderedReviewIds.forEach((id, index) => {
+          const r = byId.get(id);
+          if (r) reordered.push({ ...r, sortRankInReviewsTable: index });
+        });
+        // Defensive: keep any review not present in the ordered list (should
+        // not happen — the list is the full displayed set) at the tail.
+        if (reordered.length !== existing.reviews.length) {
+          const included = new Set(orderedReviewIds);
+          for (const r of existing.reviews) {
+            if (!included.has(r.id)) reordered.push(r);
+          }
+        }
+        return { ...prev, [urlId]: { kind: 'loaded', reviews: reordered } };
+      });
+      if (!projectId) return;
+      authFetch(
+        `/api/projects/${projectId}/competition-scraping/urls/${urlId}/reviews/reorder`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            field: 'sortRankInReviewsTable',
+            orderings: buildReviewOrderings(orderedReviewIds),
+          }),
+        }
+      ).catch(() => {
+        // Best-effort; local state already updated. Next drag re-sends.
+      });
+    },
+    [projectId]
+  );
+
   const handleTogglePlatform = useCallback(
     (platform: Platform, next: boolean) => {
       setSelectedPlatforms((prev) => {
@@ -351,9 +448,15 @@ export default function CompetitorReviewsAnalysisPage() {
         const body = (await res.json()) as {
           columnVisibility?: Record<string, boolean>;
           columnWidths?: Record<string, number>;
+          rowOrder?: string[];
         };
         const incomingVisibility = body.columnVisibility ?? {};
         const incomingWidths = body.columnWidths ?? {};
+        // rowOrder is the SAME field the Competitor Content Table writes
+        // (NOT prefixed), so the two pages share one competitor order.
+        if (Array.isArray(body.rowOrder)) {
+          setRowOrder(body.rowOrder.filter((id) => typeof id === 'string'));
+        }
 
         // Split prefs into reviewsTable: prefixed (this page's keys) +
         // the rest (URLs page's keys — must survive our writes).
@@ -801,9 +904,12 @@ export default function CompetitorReviewsAnalysisPage() {
     // Only export rows for the currently-selected platforms (mirror what's
     // on screen).
     const platformSet = new Set(selectedPlatforms);
-    const rowsForExport = urlsState.urls
-      .filter((u) => platformSet.has(u.platform))
-      .map<ReviewsExportRowInput>((u) => {
+    // P-49 W5 Fix Session C "Deploy 2" — export in the on-screen drag order
+    // (rowOrder) so the spreadsheet matches what the user sees.
+    const rowsForExport = orderByRowOrder(
+      urlsState.urls.filter((u) => platformSet.has(u.platform)),
+      rowOrder
+    ).map<ReviewsExportRowInput>((u) => {
         const loaded =
           reviewsByUrl[u.id]?.kind === 'loaded'
             ? (reviewsByUrl[u.id] as { kind: 'loaded'; reviews: CapturedReview[] }).reviews
@@ -1069,6 +1175,9 @@ export default function CompetitorReviewsAnalysisPage() {
             selectedPlatforms={selectedPlatforms}
             columnVisibility={columnVisibility}
             columnWidths={columnWidths}
+            rowOrder={rowOrder}
+            onUrlReorder={handleUrlReorder}
+            onReviewsReorder={handleReviewsReorder}
             reviewsExpanded={reviewsExpanded}
             bannerExpanded={bannerExpanded}
             reviewsByUrl={reviewsByUrl}
@@ -1306,6 +1415,10 @@ interface ReviewsAnalysisTableSectionProps {
   selectedPlatforms: Platform[];
   columnVisibility: Record<string, boolean>;
   columnWidths: Record<string, number>;
+  // P-49 W5 Fix Session C "Deploy 2" — drag-to-reorder plumbing.
+  rowOrder: string[];
+  onUrlReorder: (nextOrder: string[]) => void;
+  onReviewsReorder: (urlId: string, orderedReviewIds: string[]) => void;
   // FF4 2026-05-29 — split expansion state into two independent
   // surfaces (per-review summaries via reviewsExpanded; per-competitor
   // comprehensive banner via bannerExpanded).
@@ -1414,6 +1527,9 @@ function ReviewsAnalysisTableSection(
         <UrlsTable
           projectId={props.projectId}
           urls={filteredUrls}
+          rowOrder={props.rowOrder}
+          onUrlReorder={props.onUrlReorder}
+          onReviewsReorder={props.onReviewsReorder}
           reviewsExpanded={props.reviewsExpanded}
           bannerExpanded={props.bannerExpanded}
           reviewsByUrl={props.reviewsByUrl}
@@ -1643,6 +1759,10 @@ const controlsDividerStyle: React.CSSProperties = {
 interface UrlsTableProps {
   projectId: string;
   urls: CompetitorUrl[];
+  // P-49 W5 Fix Session C "Deploy 2" — drag-to-reorder.
+  rowOrder: string[];
+  onUrlReorder: (nextOrder: string[]) => void;
+  onReviewsReorder: (urlId: string, orderedReviewIds: string[]) => void;
   reviewsExpanded: Record<string, boolean>;
   bannerExpanded: Record<string, boolean>;
   reviewsByUrl: Record<string, ReviewsLoadState>;
@@ -1689,6 +1809,9 @@ const PLATFORM_OPTIONS: ReadonlyArray<{ value: Platform; label: string }> =
 function UrlsTable({
   projectId,
   urls,
+  rowOrder,
+  onUrlReorder,
+  onReviewsReorder,
   reviewsExpanded,
   bannerExpanded,
   reviewsByUrl,
@@ -1716,6 +1839,32 @@ function UrlsTable({
     isReviewsColumnVisible(columnVisibility, c.id)
   );
 
+  // P-49 W5 Fix Session C "Deploy 2" — apply the saved competitor order.
+  // `urls` arrives already platform-filtered; ordering is applied after so
+  // filtered-out competitors don't perturb the visible sequence.
+  const orderedUrls = useMemo(
+    () => orderByRowOrder(urls, rowOrder),
+    [urls, rowOrder]
+  );
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } })
+  );
+
+  // Drop handler — compute the new displayed id order, then merge any
+  // platform-filtered-out competitors back at the tail before persisting
+  // (mirrors UrlTable.tsx so the shared rowOrder stays consistent).
+  const handleUrlDragEnd = (event: DragEndEvent): void => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const ids = orderedUrls.map((u) => u.id);
+    const oldIndex = ids.indexOf(active.id as string);
+    const newIndex = ids.indexOf(over.id as string);
+    if (oldIndex < 0 || newIndex < 0) return;
+    const displayedOrder = arrayMove(ids, oldIndex, newIndex);
+    onUrlReorder(mergeRowOrder(displayedOrder, rowOrder));
+  };
+
   // ResizeObserver-driven full-table height so the column-resize
   // handles can extend their drag zone past the header all the way
   // down. Mirrors the sibling URLs table (UrlTable.tsx). Falls back to
@@ -1737,6 +1886,7 @@ function UrlsTable({
   // Used as `min-width` on the table so horizontal scroll kicks in when
   // the viewport is narrower than the columns.
   const totalWidth =
+    URL_DRAG_HANDLE_WIDTH +
     EXPAND_TOGGLE_WIDTH +
     visibleColumns.reduce(
       (acc, c) => acc + resolveReviewsColumnWidth(columnWidths, c),
@@ -1750,8 +1900,9 @@ function UrlsTable({
   // showed through onto the banner area (director report round-3
   // verification: "the existing column borders of the table are visible
   // over the area where the review summaries are pasted").
-  // Total = 1 (expand toggle) + visibleColumns + 1 (Actions).
-  const tableColspan = 2 + visibleColumns.length;
+  // P-49 W5 Fix Session C "Deploy 2" — +1 for the new leftmost drag-handle
+  // column. Total = 1 (drag) + 1 (expand toggle) + visibleColumns + 1 (Actions).
+  const tableColspan = 3 + visibleColumns.length;
 
   return (
     <div
@@ -1771,6 +1922,15 @@ function UrlsTable({
         minHeight: 0,
       }}
     >
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={handleUrlDragEnd}
+      >
+        <SortableContext
+          items={orderedUrls.map((u) => u.id)}
+          strategy={verticalListSortingStrategy}
+        >
       <table
         ref={tableRef}
         style={{
@@ -1783,6 +1943,8 @@ function UrlsTable({
         }}
       >
         <colgroup>
+          {/* P-49 W5 Fix Session C "Deploy 2" — leftmost drag-handle column */}
+          <col style={{ width: `${URL_DRAG_HANDLE_WIDTH}px` }} />
           <col style={{ width: `${EXPAND_TOGGLE_WIDTH}px` }} />
           {visibleColumns.map((col) => (
             <col
@@ -1796,6 +1958,7 @@ function UrlsTable({
         </colgroup>
         <thead>
           <tr>
+            <th style={thStyle} aria-label="Reorder competitors" />
             <th style={thStyle} aria-label="Expand" />
             {visibleColumns.map((col) => (
               <th key={col.id} style={thStyle}>
@@ -1830,7 +1993,7 @@ function UrlsTable({
           </tr>
         </thead>
         <tbody>
-          {urls.map((u) => {
+          {orderedUrls.map((u) => {
             // FF4 2026-05-29 — two independent expand states.
             const reviewsOpen = !!reviewsExpanded[u.id];
             const bannerOpen = !!bannerExpanded[u.id];
@@ -1850,12 +2013,13 @@ function UrlsTable({
             const isAnyOpen = reviewsOpen || bannerOpen;
             return (
               <Fragment key={u.id}>
-                <tr
-                  style={{
-                    borderBottom: competitorSummary
+                <SortableUrlRow
+                  id={u.id}
+                  borderBottom={
+                    competitorSummary
                       ? '1px solid #161b22'
-                      : '1px solid #21262d',
-                  }}
+                      : '1px solid #21262d'
+                  }
                 >
                   {/* FF4 2026-05-29 — leftmost master cell: click here to
                       expand/collapse BOTH the per-review summaries AND
@@ -1951,7 +2115,7 @@ function UrlsTable({
                       </HoverTooltip>
                     </div>
                   </td>
-                </tr>
+                </SortableUrlRow>
                 {/* FF4 2026-05-29 — banner now renders only when both
                     a summary exists AND bannerExpanded is true. User
                     toggles via Column 9 click or the master ▸/▾ cell. */}
@@ -1994,6 +2158,7 @@ function UrlsTable({
                         summaryByReviewId={summaryByReviewId}
                         onReviewCellSave={onReviewCellSave}
                         onReviewSummaryEdited={onReviewSummaryEdited}
+                        onReviewsReorder={onReviewsReorder}
                       />
                     </td>
                   </tr>
@@ -2003,9 +2168,85 @@ function UrlsTable({
           })}
         </tbody>
       </table>
+        </SortableContext>
+      </DndContext>
     </div>
   );
 }
+
+// P-49 W5 Fix Session C "Deploy 2" (2026-05-29-c) — leftmost drag-handle
+// column width for the URL-row reorder handle. Mirrors UrlTable.tsx.
+const URL_DRAG_HANDLE_WIDTH = 28;
+
+// P-49 W5 Fix Session C "Deploy 2" — a single competitor (URL) row, made
+// draggable via @dnd-kit. The grip button carries the drag listeners so the
+// rest of the row stays clickable for the click-to-edit cells (director
+// Rule 14f pick: dedicated grip handle, not whole-row grab). The expand
+// cell + data cells + actions cell are passed in as children.
+function SortableUrlRow({
+  id,
+  borderBottom,
+  children,
+}: {
+  id: string;
+  borderBottom: string;
+  children: React.ReactNode;
+}): JSX.Element {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id });
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    borderBottom,
+    background: isDragging ? '#161b22' : undefined,
+    opacity: isDragging ? 0.6 : 1,
+  };
+  return (
+    <tr ref={setNodeRef} style={style} {...attributes}>
+      <td style={reorderHandleCellStyle}>
+        <button
+          type="button"
+          {...listeners}
+          style={reorderHandleButtonStyle}
+          aria-label="Drag to reorder this competitor"
+          title="Drag to reorder this competitor"
+          data-testid="reviews-url-row-drag-handle"
+        >
+          ⋮⋮
+        </button>
+      </td>
+      {children}
+    </tr>
+  );
+}
+
+// Shared drag-handle cell + button styles for both the URL rows and the
+// review rows. Mirrors UrlTable.tsx's handle styling.
+const reorderHandleCellStyle: React.CSSProperties = {
+  textAlign: 'center',
+  padding: '0 4px',
+  color: '#484f58',
+  verticalAlign: 'top',
+  userSelect: 'none',
+};
+const reorderHandleButtonStyle: React.CSSProperties = {
+  background: 'transparent',
+  border: 'none',
+  color: '#484f58',
+  cursor: 'grab',
+  padding: '4px 2px',
+  fontSize: '13px',
+  fontFamily: 'inherit',
+  lineHeight: '13px',
+  letterSpacing: '-1px',
+  touchAction: 'none',
+};
 
 // Style shared across every <th> in the URL table — sticky-header at
 // the top so the header stays visible when the user scrolls rows; the
@@ -2829,6 +3070,8 @@ interface ReviewsListProps {
     patch: UpdateCapturedReviewRequest
   ) => Promise<void>;
   onReviewSummaryEdited: (reviewId: string, summary: string) => void;
+  // P-49 W5 Fix Session C "Deploy 2" — review-row drag persistence.
+  onReviewsReorder: (urlId: string, orderedReviewIds: string[]) => void;
 }
 
 function ReviewsList({
@@ -2838,7 +3081,12 @@ function ReviewsList({
   summaryByReviewId,
   onReviewCellSave,
   onReviewSummaryEdited,
+  onReviewsReorder,
 }: ReviewsListProps): JSX.Element {
+  // Hooks must run before the early returns below.
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } })
+  );
   if (!state || state.kind === 'idle' || state.kind === 'loading') {
     return (
       <div
@@ -2882,6 +3130,19 @@ function ReviewsList({
       </div>
     );
   }
+  // P-49 W5 Fix Session C "Deploy 2" — render in the per-page saved order,
+  // then let the user drag rows within this URL. Order persists in the
+  // CapturedReview.sortRankInReviewsTable column (page-specific).
+  const sortedReviews = sortReviewsByTableRank(state.reviews);
+  const handleReviewDragEnd = (event: DragEndEvent): void => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const ids = sortedReviews.map((r) => r.id);
+    const oldIndex = ids.indexOf(active.id as string);
+    const newIndex = ids.indexOf(over.id as string);
+    if (oldIndex < 0 || newIndex < 0) return;
+    onReviewsReorder(urlId, arrayMove(ids, oldIndex, newIndex));
+  };
   return (
     <div style={{ background: '#0a0d12', borderBottom: '1px solid #21262d' }}>
       <div
@@ -2904,27 +3165,23 @@ function ReviewsList({
         <span>Date</span>
         <span>Summary</span>
       </div>
-      {state.reviews.map((r) => {
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={handleReviewDragEnd}
+      >
+        <SortableContext
+          items={sortedReviews.map((r) => r.id)}
+          strategy={verticalListSortingStrategy}
+        >
+      {sortedReviews.map((r) => {
         const summary = summaryByReviewId[r.id];
         // Per-review save bound to this row's id so each cell only needs
         // to pass its single-field patch.
         const saveCell = (patch: UpdateCapturedReviewRequest) =>
           onReviewCellSave(urlId, r.id, patch);
         return (
-          <div
-            key={r.id}
-            style={{
-              display: 'grid',
-              gridTemplateColumns: REVIEW_ROW_GRID,
-              padding: '10px 14px 10px 50px',
-              borderBottom: '1px solid #161b22',
-              alignItems: 'flex-start',
-              fontSize: '12px',
-              color: '#e6edf3',
-              lineHeight: 1.5,
-            }}
-          >
-            <span></span>
+          <SortableReviewRow key={r.id} id={r.id}>
             <span style={{ color: '#f0b341' }}>
               <InlineNumberCell
                 value={r.starRating}
@@ -2996,9 +3253,63 @@ function ReviewsList({
               summary={summary}
               onEdited={onReviewSummaryEdited}
             />
-          </div>
+          </SortableReviewRow>
         );
       })}
+        </SortableContext>
+      </DndContext>
+    </div>
+  );
+}
+
+// P-49 W5 Fix Session C "Deploy 2" (2026-05-29-c) — one review row, made
+// draggable within its parent URL. The grip lives in the leftmost grid
+// column (replacing the previously-empty spacer span) and carries the drag
+// listeners; the data cells stay clickable for click-to-edit.
+function SortableReviewRow({
+  id,
+  children,
+}: {
+  id: string;
+  children: React.ReactNode;
+}): JSX.Element {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id });
+  const style: React.CSSProperties = {
+    display: 'grid',
+    gridTemplateColumns: REVIEW_ROW_GRID,
+    padding: '10px 14px 10px 50px',
+    borderBottom: '1px solid #161b22',
+    alignItems: 'flex-start',
+    fontSize: '12px',
+    color: '#e6edf3',
+    lineHeight: 1.5,
+    transform: CSS.Transform.toString(transform),
+    transition,
+    background: isDragging ? '#161b22' : undefined,
+    opacity: isDragging ? 0.6 : 1,
+  };
+  return (
+    <div ref={setNodeRef} style={style} {...attributes}>
+      <span style={{ display: 'flex', alignItems: 'flex-start' }}>
+        <button
+          type="button"
+          {...listeners}
+          style={reorderHandleButtonStyle}
+          aria-label="Drag to reorder this review"
+          title="Drag to reorder this review"
+          data-testid="reviews-review-row-drag-handle"
+        >
+          ⋮⋮
+        </button>
+      </span>
+      {children}
     </div>
   );
 }

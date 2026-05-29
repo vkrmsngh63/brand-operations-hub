@@ -40,8 +40,17 @@ export type ReorderEntry = {
   sortRank: number;
 };
 
+// P-49 W5 Fix Session C "Deploy 2" (2026-05-29-c) — which order column the
+// payload targets. Default 'sortRank' keeps the URL-detail-page reorder
+// (Workstream 4) working unchanged; the Competitor Reviews Analysis Table
+// page sends 'sortRankInReviewsTable' so its per-page order never overwrites
+// the URL-detail order.
+export const REORDER_FIELDS = ['sortRank', 'sortRankInReviewsTable'] as const;
+export type ReorderField = (typeof REORDER_FIELDS)[number];
+
 export type ReorderRequest = {
   orderings: ReorderEntry[];
+  field?: ReorderField;
 };
 
 export type ReorderResponse = {
@@ -115,6 +124,17 @@ export function makeReviewsReorderHandlers(deps: ReviewsReorderHandlerDeps) {
         },
       };
     }
+    // Default to the URL-detail-page order column for back-compat; the
+    // analysis table page opts into its own per-page column explicitly.
+    const field: ReorderField = body.field ?? 'sortRank';
+    if (!REORDER_FIELDS.includes(field)) {
+      return {
+        status: 400,
+        body: {
+          error: `field must be one of: ${REORDER_FIELDS.join(', ')}`,
+        },
+      };
+    }
     if (body.orderings.length === 0) {
       return { status: 200, body: { updated: 0 } satisfies ReorderResponse };
     }
@@ -178,7 +198,10 @@ export function makeReviewsReorderHandlers(deps: ReviewsReorderHandlerDeps) {
           if (rank === undefined) continue;
           await deps.prisma.capturedReview.update({
             where: { id },
-            data: { sortRank: rank },
+            data:
+              field === 'sortRankInReviewsTable'
+                ? { sortRankInReviewsTable: rank }
+                : { sortRank: rank },
           });
           updatedCount += 1;
         }
