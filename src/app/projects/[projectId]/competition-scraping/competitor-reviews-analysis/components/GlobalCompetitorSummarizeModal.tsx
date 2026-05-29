@@ -30,16 +30,18 @@ import {
   type ExecutionMode,
 } from '@/lib/workflow-components/execution-mode';
 import { ExecutionModeSelect } from '@/lib/workflow-components/execution-mode-select';
+import {
+  SUPPORTED_MODEL_VERSIONS,
+  type SupportedModelVersion,
+} from '@/lib/competition-scraping/review-analysis/models';
 import type {
   CapturedReview,
   CompetitorUrl,
 } from '@/lib/shared-types/competition-scraping';
 
-const SUPPORTED_MODEL_VERSIONS = [
-  'claude-opus-4-7',
-  'claude-opus-4-6',
-] as const;
-type ModelVersion = (typeof SUPPORTED_MODEL_VERSIONS)[number];
+// SUPPORTED_MODEL_VERSIONS imported from the central registry (models.ts)
+// per HANDOFF_PROTOCOL Rule 32 — no local copy to drift.
+type ModelVersion = SupportedModelVersion;
 
 // Minimum review count for inclusion in the global loop. Director's
 // verbatim: "all competitors with at least 2 reviews". Under 2 reviews

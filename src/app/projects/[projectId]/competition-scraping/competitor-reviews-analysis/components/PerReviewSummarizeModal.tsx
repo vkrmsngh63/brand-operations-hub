@@ -20,6 +20,10 @@ import {
 } from '@/lib/workflow-components/execution-mode';
 import { ExecutionModeSelect } from '@/lib/workflow-components/execution-mode-select';
 import {
+  SUPPORTED_MODEL_VERSIONS,
+  type SupportedModelVersion,
+} from '@/lib/competition-scraping/review-analysis/models';
+import {
   PER_REVIEW_SUMMARIZE_SYSTEM_PROMPT,
   buildPerReviewBatchUserMessage,
 } from '@/lib/competition-scraping/review-analysis/prompts';
@@ -31,11 +35,9 @@ import type { CapturedReview } from '@/lib/shared-types/competition-scraping';
 // Future tuning: bump up once the first live runs confirm headroom.
 const DEFAULT_BATCH_SIZE = 20;
 
-const SUPPORTED_MODEL_VERSIONS = [
-  'claude-opus-4-7',
-  'claude-opus-4-6',
-] as const;
-type ModelVersion = (typeof SUPPORTED_MODEL_VERSIONS)[number];
+// SUPPORTED_MODEL_VERSIONS imported from the central registry (models.ts)
+// per HANDOFF_PROTOCOL Rule 32 — no local copy to drift.
+type ModelVersion = SupportedModelVersion;
 
 export interface PerReviewSummarizeModalProps {
   projectId: string;

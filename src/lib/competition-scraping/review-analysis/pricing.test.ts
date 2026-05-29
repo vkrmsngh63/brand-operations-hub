@@ -24,9 +24,16 @@ test('getPricingForModel throws on unknown model', () => {
   );
 });
 
-test('MODEL_PRICING covers both supported Opus models', () => {
+test('MODEL_PRICING covers all supported Opus models including 4.8', () => {
+  assert.ok(MODEL_PRICING['claude-opus-4-8']);
   assert.ok(MODEL_PRICING['claude-opus-4-7']);
   assert.ok(MODEL_PRICING['claude-opus-4-6']);
+});
+
+test('Opus 4.8 priced at the Opus-tier placeholder (matches 4.7) pending official numbers', () => {
+  const p48 = getPricingForModel('claude-opus-4-8');
+  const p47 = getPricingForModel('claude-opus-4-7');
+  assert.deepEqual(p48, p47);
 });
 
 test('calculateCostUsd sums input + output + cache write + cache read', () => {

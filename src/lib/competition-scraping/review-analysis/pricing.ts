@@ -30,6 +30,17 @@ export type ModelPricing = {
 // or changes pricing. Keep numeric literals — no env-var indirection so
 // tests can audit the constants directly.
 export const MODEL_PRICING: Record<string, ModelPricing> = {
+  // PLACEHOLDER PRICING (P-52, 2026-05-31-b): official Opus 4.8 per-MTok rates
+  // were not available at rollout, so 4.8 is priced at the same Opus-tier rates
+  // as 4.7/4.6 so cost estimates degrade gracefully. CONFIRM + replace with the
+  // official numbers when the director supplies them (input / output /
+  // cache-write-5m / cache-read per million tokens).
+  'claude-opus-4-8': {
+    inputPerMillion: 5,
+    outputPerMillion: 25,
+    cacheWrite5mPerMillion: 6.25,
+    cacheReadPerMillion: 0.5,
+  },
   'claude-opus-4-7': {
     inputPerMillion: 5,
     outputPerMillion: 25,

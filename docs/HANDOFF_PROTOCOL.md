@@ -1043,6 +1043,28 @@ These docs are the canonical reference implementations of Rule 31's file structu
 - `CORRECTIONS_LOG.md` §Entry 2026-05-28 (HIGH-importance scope-misread + plan-output-shape-before-building re-violation, pending capture this session). Rule 31 is the operational prevention mechanism for this class of incident.
 - `CLAUDE_CODE_STARTER.md` Step 7b (plain-terms session summary) — the standing rule that gates session start; Rule 31's §3 reads happen at the same point.
 
+### Rule 32 — Model-selection registry: every model-picker is registered in `AI_MODEL_REGISTRY.md` (NEW 2026-05-31-b)
+
+Whenever a session adds, moves, or changes a place where a user picks an AI model — a new dropdown, a new supported-model list constant, or a new per-model pricing table — that surface MUST be registered in `docs/AI_MODEL_REGISTRY.md` (§1 Declaration sites) in the **same session**, with its file path, the workflow it belongs to, the models it offers, its default, and where its pricing lives.
+
+**Why this rule exists.** A 2026-05-31-b read-only audit (ROADMAP P-52) found FIVE model-choice call sites across W#1 + W#2 with no central index — and three W#2 modals each kept their own *duplicate* copy of the supported-model list, a latent drift hazard (add a model to one, forget the other two). There was no single place to answer "where do model choices live, and where do I add the next model?" Rule 32 makes that question answerable from one doc and keeps the answer current as the platform grows from 1 tool toward 14.
+
+**The protocol.**
+
+1. When a session introduces or modifies a model-picker / model-list / pricing-table **declaration site**, add or update its row in `docs/AI_MODEL_REGISTRY.md` §1 the same session.
+2. Prefer importing a central list over declaring a new local copy. A *consumer* that imports an existing registered list (like the W#2 summarize modals importing `models.ts`) is logged in §2 but is not itself a new declaration site.
+3. When adding a new model version, follow the §3 checklist in the registry doc (model list + pricing entry + every declaration site + tests + the registry table).
+4. Mirrors Rule 31's spec-capture mechanism: the registry is the stable, version-controlled answer to "where are the model choices," readable at any future session start.
+
+**Mechanical enforcement (the auto-detect hook).** `.claude/hooks/check-model-registry-drift.sh` runs at SessionStart. It greps `src/` for model-menu/pricing declaration patterns and cross-checks each declaration site's file path against `docs/AI_MODEL_REGISTRY.md`. Any declaration site not referenced in the registry triggers a non-blocking "🟠 MODEL REGISTRY DRIFT" reminder in the session's injected context — surfacing an unregistered model-picker so this rule is honored. The hook never blocks session start (graceful-degradation contract, same as the other SessionStart hooks).
+
+**Cross-references.**
+
+- `docs/AI_MODEL_REGISTRY.md` — the registry doc this rule maintains.
+- ROADMAP **P-52** — the audit + rollout that created this rule.
+- `docs/REVIEWS_PHASE_2_DESIGN.md` §A.7 — the W#2 Opus-only model policy the registry records.
+- Rule 31 — the sibling spec-capture rule whose mechanism this mirrors.
+
 ---
 
 ## 4. END-OF-CHAT PROTOCOL

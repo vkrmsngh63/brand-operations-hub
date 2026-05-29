@@ -92,7 +92,11 @@ const AA_BATCH_TIERS = [
   { size: 18, name: 'Placement',  trigger: { windowSize: 5, maxAvgNewTopics: 1.5 } },
 ];
 
+// Registered in docs/AI_MODEL_REGISTRY.md per HANDOFF_PROTOCOL Rule 32.
+// Opus 4.8 priced at the Opus-tier placeholder (same as 4.7/4.6) pending
+// official numbers — see ROADMAP P-52.
 const AA_PRICING: Record<string, { inputPer1M: number; outputPer1M: number }> = {
+  'claude-opus-4-8':   { inputPer1M: 5.00, outputPer1M: 25.00 },
   'claude-opus-4-7':   { inputPer1M: 5.00, outputPer1M: 25.00 },
   'claude-opus-4-6':   { inputPer1M: 5.00, outputPer1M: 25.00 },
   'claude-sonnet-4-6': { inputPer1M: 3.00, outputPer1M: 15.00 },
@@ -2113,6 +2117,7 @@ export default function AutoAnalyze({
             <div className="aa-row">
               <span className="aa-label">Model<span className="aa-help">ⓘ<span className="aa-tip">Which Claude model to use. Opus is most capable but slower/costlier. Sonnet is a good balance. Haiku is fastest/cheapest.</span></span></span>
               <select className="aa-select" value={model} onChange={e => setModel(e.target.value)} disabled={aaState !== 'IDLE'}>
+                <option value="claude-opus-4-8">Claude Opus 4.8</option>
                 <option value="claude-opus-4-7">Claude Opus 4.7</option>
                 <option value="claude-opus-4-6">Claude Opus 4.6</option>
                 <option value="claude-sonnet-4-6">Claude Sonnet 4.6</option>

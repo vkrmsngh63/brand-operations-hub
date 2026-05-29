@@ -7,21 +7,17 @@
 
 import type Anthropic from '@anthropic-ai/sdk';
 
-// Default model selection per §A.7 — Opus 4.7 is the current flagship.
-// Opus 4.6 is the selectable alternative (the W2 model-version dropdown
-// will surface both per §A.7 cascade impact).
-export const DEFAULT_MODEL_VERSION = 'claude-opus-4-7';
-export const SUPPORTED_MODEL_VERSIONS = [
-  'claude-opus-4-7',
-  'claude-opus-4-6',
-] as const;
-export type SupportedModelVersion = (typeof SUPPORTED_MODEL_VERSIONS)[number];
-
-export function isSupportedModelVersion(
-  v: string
-): v is SupportedModelVersion {
-  return (SUPPORTED_MODEL_VERSIONS as readonly string[]).includes(v);
-}
+// Model registry moved to the SDK-free ./models.ts module (so client
+// components can import the list without bundling the Anthropic SDK).
+// Re-exported here for back-compat: server callers that already import the
+// model constants from `client.ts` keep working unchanged.
+// REGISTERED in docs/AI_MODEL_REGISTRY.md per HANDOFF_PROTOCOL Rule 32.
+export {
+  DEFAULT_MODEL_VERSION,
+  SUPPORTED_MODEL_VERSIONS,
+  isSupportedModelVersion,
+} from './models.ts';
+export type { SupportedModelVersion } from './models.ts';
 
 // Minimal surface the handler + token-counter exercise. Production wires
 // a real `Anthropic` instance; tests pass a stub. Keeping the shape
