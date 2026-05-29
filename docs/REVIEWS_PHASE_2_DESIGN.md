@@ -2252,6 +2252,58 @@ Entry baselines = Fix Session B exit = 2026-05-30 locked (root tsc clean / exten
 
 ---
 
+## §B 2026-05-31-b — `session_2026-05-31-b_p49-w5-fu1-edit-delete-overall-analysis-box-plus-fu2-deleted-reviews-sync-bug` — Workstream 5 Reviews Analysis Table FU-1 (EDIT + delete entries in the "Overall Analysis — Captured Reviews" traceability box, individually + in bulk) + FU-2 (deleted-reviews sync bug) ✅ DEPLOYED-AND-VERIFIED 2026-05-31-b end-to-end on vklf.com via `workflow-2-competition-scraping` → `main` — single build commit `7d89d75` (10 files) ff-merged to main under ONE Rule 9 deploy gate — SEVENTEENTH build/deploy-session §B entry per Rule 18; NINTH W5 entry — director Phase 4 verbatim verdict: "Everything passed"; FU-1 reverses Fix Session D's read-only decision (the traceability box is now fully editable); TWO NEW reusable PATTERNS memorialized — "Cross-page stale client cache → re-fetch on tab refocus (visibilitychange/focus)" + "Structured-edit PATCH re-derives the flattened back-compat field"; Schema-change-in-flight NO entire session (the structured edit lives in the EXISTING `ReviewAnalysis.analysisJson` Json column)
+
+**Closes (a.110) RECOMMENDED-NEXT partially** — (a.110) listed three things in order: (1) edit/delete entries from the traceability box, (2) the deleted-reviews sync bug, (3) THEN Fix Session C. This session shipped (1) [expanded by the director at session start from delete-only to EDIT + delete] + (2) ✅ DEPLOYED-AND-VERIFIED 2026-05-31-b (build `7d89d75`); (3) Fix Session C was always a separate later session and remains PENDING. **Opens (a.111) RECOMMENDED-NEXT = AI model registry doc + central model-selection methodology rule + Opus 4.8 rollout** on the **`main`** track (platform-wide; spans W#1 Keyword Clustering + W#2 Competition Scraping) — captured as NEW ROADMAP entry P-52; deferred to its own main-track session because it touches the live W#1 tool.
+
+### Session shape — DEPLOY with 1 ff-merge under 1 Rule 9 deploy gate; director added TWO new issues at session start
+
+Session opened per yesterday's NEXT_SESSION.md pointer scoping the (a.110) follow-ups. At session start the director added TWO new issues. **Issue 1 EXPANDED the already-queued FU-1** from delete-only to EDIT + delete of entries in the (until-now read-only) 3-column traceability table — reversing Fix Session D's read-only decision. **Issue 2** = create a central AI-model registry doc + a methodology rule + roll Opus 4.8 (`claude-opus-4-8`) into every model picker. A 2-question session-direction Rule 14f picker (both Yes-to-Recommended) resolved: tackle the box edit/delete + the sync bug NOW; defer the model work to its own platform-wide `main`-track session (Q2=A) because it spans W#1 + W#2 and touches the live W#1 tool. Issue 2 was captured as NEW ROADMAP entry P-52 after a Rule 24 pre-capture search (PRIOR TREATMENT FOUND in `docs/REVIEWS_PHASE_2_DESIGN.md` §A.7 W#2 model policy + `docs/MODEL_QUALITY_SCORING.md` W#1 stability scoring; no existing central registry doc).
+
+**Phase 1 (FU-1 design).** A 4-question Rule 14f picker (4/4 Yes-to-Recommended) locked: (a) delete unit = three levels (single complaint / whole category / single source review under a complaint); (b) edit scope = click-to-edit on category names + complaint wording; (c) bulk UX = always-visible bulk-select checkboxes + "Delete selected" + a confirm; (d) re-run behavior = warns-then-replaces hand-edits.
+
+**Phase 2a (build FU-1 edit+delete).** All edits/deletes trim/modify `analysisJson.categories` on the per-competitor PER_PRODUCT `ReviewAnalysis` row via the extended PATCH (`handlers/review-analysis-update.ts`). The PATCH re-derives the flattened `analysisJson.summary` via `flattenCategoriesToSummaryString` (so the main table's Column 9 + cache reads stay in lock-step with the edited structured table) and sets `manuallyEdited:true` (which enables the re-run warning). The edits/deletes NEVER touch `CapturedReviews` — only the analysis row's structured categories. UI lives in `ReviewsTraceabilityTable.tsx` (click-to-edit + delete affordances + bulk-select checkboxes) wired through `UrlDetailContent.tsx`. NEW mutation/validator helpers added to `reviews-traceability.ts` (+11 node:test cases) + 4 PATCH-categories cases in `review-analysis-update.test.ts`.
+
+**Phase 2b (build FU-2 deleted-reviews sync bug).** Root cause: the App Router kept the `/competitor-reviews-analysis` page mounted behind the URL-detail-page navigation, so its `reviewsByUrl` lazy-load cache went stale after a cross-page review deletion — the deleted review still showed in the table + the "N of M summarized" count was wrong until a manual reload. Fix: the page now registers a tab-refocus listener (`visibilitychange`/`focus`) that re-hydrates summaries + force-refetches the already-loaded per-URL reviews. Touches `competitor-reviews-analysis/page.tsx` + the two summarize modals (`PerCompetitorSummarizeModal.tsx` + `GlobalCompetitorSummarizeModal.tsx`).
+
+**Phase 3 (deploy decision).** Director picked Recommended (Deploy `7d89d75` to main). Ff-merge `ca7266a..7d89d75` to main under the single Rule 9 deploy gate; ping-pong pushed `origin/workflow-2-competition-scraping`; both branches at `7d89d75`. Vercel auto-redeployed vklf.com.
+
+**Phase 4 (director real-Chrome verification) — NO redirects; clean PASS.** Director's verbatim verdict: **"Everything passed."** No fix-forward commit this session.
+
+### NEW reusable PATTERNS
+
+- **"Cross-page stale client cache → re-fetch on tab refocus (visibilitychange/focus)"** (FU-2 root cause + fix). When an App Router page stays mounted while the user navigates to a sibling page that mutates shared data, the mounted page's lazy-load cache goes stale. Fix = a refocus listener that re-hydrates + force-refetches the loaded data on `visibilitychange`/`focus`. Reusable for any sibling-page stale-cache-after-cross-page-mutation situation.
+- **"Structured-edit PATCH re-derives the flattened back-compat field"** (FU-1 mechanism). When a structured JSON field is the source-of-truth but a flattened back-compat field is still read elsewhere, the PATCH must re-derive the flattened field on every structured edit so the two never drift; a `manuallyEdited` flag drives the re-run-will-replace warning.
+
+### Scoreboard
+
+Entry baselines = Fix Session D exit = 2026-05-31 locked (root tsc clean / extension tsc clean / **910 ext** / **1038 src/lib** / **68 routes**). Post-merge /scoreboard all GREEN at NEW LOCKED baseline:
+
+| Check | Entry | Exit | Delta |
+| --- | --- | --- | --- |
+| Root tsc | clean | clean | unchanged |
+| Extension tsc | clean | clean | unchanged |
+| Extension `npm test` | 910/910 | 910/910 | UNCHANGED (no extension code changed) |
+| src/lib `node:test` | 1038/1038 | **1053/1053** | **+15** (11 traceability mutation/validator/row-index cases + 4 PATCH-categories cases) |
+| `npm run build` | 68 routes | **68 routes** | UNCHANGED (reused the existing PATCH route — no new route) |
+| Playwright | — | SKIPPED | per Rule 27 (build/deploy session) |
+
+### Affected §A sections (informational — §A FROZEN per Rule 18)
+
+- §A.7 W#2 model policy ("Opus 4.7 default + Opus 4.6 selectable") is the PRIOR TREATMENT the Rule 24 search surfaced for the DEFERRED Issue 2 (P-52 model-registry work); the future (a.111) session will add Opus 4.8 to the model lists + pricing table + author a central registry doc + methodology rule. §A is frozen; this forward-pointer lives in §B only.
+- The "Overall Analysis — Captured Reviews" box on the URL detail page changes role again: Fix Session D made it a read-only 3-column traceability table; FU-1 makes that table EDITABLE (rename categories, reword complaints, delete at 3 levels, bulk-delete). The edits persist via the structured `analysisJson.categories` PATCH and re-derive the flattened `summary`. This supersedes the §B 2026-05-31 read-only-table behavior (§A frozen; supersedence captured in §B only).
+
+### Cross-references
+
+- §B 2026-05-31 above (W5 Fix Session D deploy + the read-only traceability table) — the predecessor entry; this session makes that table editable + adds delete + bulk-delete.
+- `docs/CORRECTIONS_LOG.md` §Entry 2026-05-31-b — the INFORMATIONAL entry capturing the two NEW Patterns + the director scope-expansion-handling note + the date-stamp-uncertainty flag + the P-43 running tally.
+- `docs/polish-item-specs/P-49-W5-S2-S3-competitor-reviews-analysis.md` §4 (Q11 RESOLVED) + §3 (FU-1 + FU-2 ✅ DEPLOYED-AND-VERIFIED 2026-05-31-b; Status updated; Fix Session C + Category/Type still remaining); `docs/polish-item-specs/P-49-W5-reviews-phase-2-master-spec.md` §3 pointer table ("Fix A + B + D + FU-1 + FU-2 ✅ DEPLOYED-AND-VERIFIED; Fix Session C remaining").
+- `docs/ROADMAP.md` NEW entry **P-52** (AI model registry + central model-selection methodology + Opus 4.8 rollout) — the destination for the deferred Issue 2; queued as (a.111) on the `main` track.
+
+**Closing line:** P-49 W5 FU-1 (edit+delete the traceability box) + FU-2 (deleted-reviews sync bug) ✅ DEPLOYED-AND-VERIFIED 2026-05-31-b (build `7d89d75`) under 1 Rule 9 deploy gate on `workflow-2-competition-scraping` — director "Everything passed." The traceability box is now fully editable (rename categories / reword complaints / delete a single complaint, a whole category, or a single source review / bulk-delete) and review deletions stay in sync across the table + box on tab refocus. TWO NEW reusable PATTERNS memorialized. Schema-change-in-flight NO entire session. 7/7 = 100% Yes-to-Recommended this session; running cumulative 115/118 = 97.5%. NEW baselines: src/lib `node:test` = **1053/1053** + `npm run build` = **68 routes UNCHANGED** + extension = 910/910 UNCHANGED. **Closes (a.110) RECOMMENDED-NEXT partially** (FU-1 + FU-2 done; Fix Session C remains). **Opens (a.111) RECOMMENDED-NEXT = AI model registry doc + methodology rule + Opus 4.8 rollout** on `main` (NEW ROADMAP entry P-52). **SEVENTEENTH build/deploy-session §B entry per Rule 18 — NINTH W5 entry.** The next §B entry will land at the close of Fix Session C (the only remaining Reviews Analysis Table work) — note (a.111) is a `main`-track platform-wide session that will NOT produce a §B entry in this W#2 doc.
+
+---
+
 ---
 
 END OF DOCUMENT
