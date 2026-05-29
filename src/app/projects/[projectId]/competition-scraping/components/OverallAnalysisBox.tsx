@@ -19,6 +19,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { authFetch } from '@/lib/authFetch';
+import { saveWithRetry } from '@/lib/rich-text/save-with-retry';
 import type { OverallAnalysesCategory } from '@/lib/rich-text/tiptap-helpers';
 import { RichTextEditor } from './RichTextEditor';
 
@@ -91,35 +92,30 @@ export function OverallAnalysisBox({
       const myGen = ++inFlightGen.current;
       setSaveState('saving');
       setSaveError(null);
-      try {
-        const res = await authFetch(apiUrl, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(buildBody(field, content)),
-        });
-        if (myGen !== inFlightGen.current) return;
-        if (!res.ok) {
-          let detail = `HTTP ${res.status}`;
-          try {
-            const body = (await res.json()) as { error?: string };
-            if (body && typeof body.error === 'string') detail = body.error;
-          } catch {
-            // ignore — keep generic HTTP detail
-          }
-          setSaveState('error');
-          setSaveError(detail);
-          return;
-        }
-        setSaveState('saved');
-        if (savedTimer.current !== null) clearTimeout(savedTimer.current);
-        savedTimer.current = setTimeout(() => {
-          if (myGen === inFlightGen.current) setSaveState('idle');
-        }, SAVED_INDICATOR_MS);
-      } catch (err) {
-        if (myGen !== inFlightGen.current) return;
+      // FF1 2026-05-29 — transparently retry transient (5xx / network)
+      // failures (shared with PerItemAnalysisBox) so a brief DB hiccup
+      // during a heavy AI run self-heals instead of stranding the box in
+      // "Save failed" until a refresh. A newer keystroke cancels the loop.
+      const outcome = await saveWithRetry({
+        doFetch: () =>
+          authFetch(apiUrl, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(buildBody(field, content)),
+          }),
+        isCancelled: () => myGen !== inFlightGen.current,
+      });
+      if (myGen !== inFlightGen.current || outcome.cancelled) return;
+      if (!outcome.ok) {
         setSaveState('error');
-        setSaveError(err instanceof Error ? err.message : 'Network error');
+        setSaveError(outcome.detail ?? 'Network error');
+        return;
       }
+      setSaveState('saved');
+      if (savedTimer.current !== null) clearTimeout(savedTimer.current);
+      savedTimer.current = setTimeout(() => {
+        if (myGen === inFlightGen.current) setSaveState('idle');
+      }, SAVED_INDICATOR_MS);
     },
     [apiUrl, field]
   );
