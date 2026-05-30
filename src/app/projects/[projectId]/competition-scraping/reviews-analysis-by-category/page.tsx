@@ -81,6 +81,11 @@ const AI_COLUMN_IDS = new Set([
   'catNonBulleted',
 ]);
 
+// Blank scrollable space to the right of the table so the user can scroll a
+// little PAST the table's right edge — keeping the rightmost column's resize
+// handle clear of the vertical scrollbar (director report 2026-05-30).
+const TABLE_TRAILING_SPACE = 48;
+
 type UrlsLoadState =
   | { kind: 'loading' }
   | { kind: 'loaded'; urls: CompetitorUrl[] }
@@ -759,10 +764,17 @@ function CategoryTable({
           // floating bar so it stays pinned to the viewport bottom.
           overflowX: 'hidden',
           overflowY: 'auto',
+          // Reserve a dedicated lane for the vertical scrollbar so it never
+          // overlays the table's right edge / rightmost resize handle.
+          scrollbarGutter: 'stable',
           // Leave room so the floating bar never covers the last rows.
           paddingBottom: needsHScroll ? '18px' : 0,
         }}
       >
+        {/* Wrapper is wider than the table by TABLE_TRAILING_SPACE so the
+            user can scroll a little PAST the table's right edge, bringing the
+            rightmost column's resize handle clear of the scrollbar. */}
+        <div style={{ width: `${totalWidth + TABLE_TRAILING_SPACE}px` }}>
         <table
           ref={tableRef}
           style={{
@@ -829,6 +841,7 @@ function CategoryTable({
             ))}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* Floating horizontal scrollbar pinned to the bottom of the viewport
