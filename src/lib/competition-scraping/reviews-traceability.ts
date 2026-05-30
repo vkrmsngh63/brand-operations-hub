@@ -292,6 +292,89 @@ export function deleteBullets(
   return { categories: dropEmptyCategories(categories) };
 }
 
+// ─── Category page "Source Reviews" column (a.117 / 2026-05-30-c) ─────────
+// The detail-page table above is single-competitor: its source reviews all
+// belong to one product, so it never needs a product name. The Category page's
+// NEW "Source Reviews" column shows, for each bulleted CATEGORY complaint, the
+// individual reviews that traced up to it ACROSS every competitor in the
+// category — so each source MUST carry which product it came from, plus the
+// urlId so the cell can link to that review's detail page.
+//
+// The persisted PER_CATEGORY analysisJson reuses the SAME structured shape
+// ({ categories: [{ name, bullets: [{ text, reviewIds }] }] }) the per-
+// competitor flow uses (the category bulleted flow unions the cited bullets'
+// reviewIds onto each category bullet). So this resolver mirrors
+// buildTraceabilityRows, but it resolves against a richer review map (product
+// name + urlId) and groups by theme→bullet→sources for the cell renderer
+// instead of flat rowspan rows.
+
+// The per-review fields the Source Reviews cell needs: stars + merged text
+// (as before) PLUS the product name + urlId for the cross-competitor display
+// and the jump-to-detail link.
+export interface CategorySourceReviewMeta {
+  starRating: number;
+  title: string | null;
+  body: string;
+  productName: string;
+  urlId: string;
+}
+
+export interface CategorySourceReview {
+  reviewId: string;
+  urlId: string | null;
+  productName: string;
+  starRating: number | null;
+  text: string;
+  missing: boolean;
+}
+export interface CategorySourceBullet {
+  text: string;
+  sources: CategorySourceReview[];
+}
+export interface CategorySourceTheme {
+  name: string;
+  bullets: CategorySourceBullet[];
+}
+
+// Resolve a category's structured bullets into theme→bullet→source-review
+// groups for the Source Reviews cell. Each cited reviewId that no longer
+// resolves renders as a `missing` placeholder so the cited-review count stays
+// honest (same contract as buildTraceabilityRows). Themes/bullets are kept in
+// their stored order; a bullet with zero reviewIds renders an empty source
+// list (a genuinely category-wide insight is never dropped).
+export function buildCategorySourceReviewRows(
+  categories: ReadonlyArray<TraceabilityCategory>,
+  reviewsById: ReadonlyMap<string, CategorySourceReviewMeta>
+): CategorySourceTheme[] {
+  return categories.map((category) => ({
+    name: category.name,
+    bullets: category.bullets.map((bullet) => ({
+      text: bullet.text,
+      sources: bullet.reviewIds.map((reviewId): CategorySourceReview => {
+        const review = reviewsById.get(reviewId);
+        if (!review) {
+          return {
+            reviewId,
+            urlId: null,
+            productName: '(unknown product)',
+            starRating: null,
+            text: '(this review is no longer available)',
+            missing: true,
+          };
+        }
+        return {
+          reviewId,
+          urlId: review.urlId,
+          productName: review.productName,
+          starRating: review.starRating,
+          text: mergeReviewTitleBody(review.title, review.body),
+          missing: false,
+        };
+      }),
+    })),
+  }));
+}
+
 // Detach a single source review from one complaint (Column 3). The complaint
 // stays; it simply re-renders with fewer (or no) source reviews behind it.
 export function deleteSourceReview(

@@ -1961,6 +1961,23 @@ function CapturedReviewsSection({
     });
   }, [sorted]);
 
+  // a.117 (2026-05-30-c) — when arrived here via a Source Reviews "jump to
+  // detail" link (the Category page sets the URL hash to #review-<id>), scroll
+  // that review card into view once it has loaded + rendered. Guarded by a ref
+  // so re-sorts / star-filter changes don't re-trigger the scroll.
+  const scrolledHashRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const hash = window.location.hash;
+    if (!hash.startsWith('#review-')) return;
+    if (!slot.data || slot.data.length === 0) return;
+    if (scrolledHashRef.current === hash) return;
+    const el = document.getElementById(hash.slice(1));
+    if (!el) return;
+    scrolledHashRef.current = hash;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [slot.data]);
+
   const handleConfirmReviewDelete = async (): Promise<void> => {
     if (!pendingDelete) return;
     const row = pendingDelete;
@@ -2506,11 +2523,15 @@ function CapturedReviewCard({
   return (
     <article
       ref={setNodeRef}
+      id={`review-${row.id}`}
       style={{
         background: '#0d1117',
         border: `1px solid ${selected ? '#1f6feb' : '#21262d'}`,
         borderRadius: '8px',
         padding: '14px 16px',
+        // a.117 — give the jump-to-detail scroll a little breathing room so the
+        // targeted card isn't flush against the sticky header.
+        scrollMarginTop: '80px',
         ...dragStyle,
       }}
       data-testid="captured-review-card"

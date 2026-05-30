@@ -15,8 +15,10 @@ import {
 
 // ─── registry shape ─────────────────────────────────────────────────
 
-test('CATEGORY_TABLE_COLUMNS has the 13 spec columns in verbatim order', () => {
-  assert.equal(CATEGORY_TABLE_COLUMNS.length, 13);
+test('CATEGORY_TABLE_COLUMNS has the 13 spec columns + Source Reviews in verbatim order', () => {
+  // 13 §3 spec columns + the 14th "Source Reviews" column (director addendum
+  // 2026-05-30-c), inserted directly after Category Comprehensive (bulleted).
+  assert.equal(CATEGORY_TABLE_COLUMNS.length, 14);
   assert.deepEqual(
     CATEGORY_TABLE_COLUMNS.map((c) => c.id),
     [
@@ -32,6 +34,7 @@ test('CATEGORY_TABLE_COLUMNS has the 13 spec columns in verbatim order', () => {
       'compBulleted',
       'compNonBulleted',
       'catBulleted',
+      'catSourceReviews',
       'catNonBulleted',
     ]
   );
@@ -42,9 +45,10 @@ test('Category is the leftmost column (the grouping column)', () => {
   assert.equal(CATEGORY_TABLE_COLUMNS[0].label, 'Category');
 });
 
-test('Stars + Reviews Summary are read-only; spec editable columns are editable', () => {
+test('Stars + Reviews Summary + Source Reviews are read-only; spec editable columns are editable', () => {
   const editableIds = CATEGORY_TABLE_COLUMNS.filter((c) => c.editable).map((c) => c.id);
-  // Spec §3 editable set: 1,2,3,4,5,6,7,10,11,12,13 (Stars=8 + Reviews Summary=9 read-only).
+  // Spec §3 editable set: 1,2,3,4,5,6,7,10,11,12,13 (Stars=8 + Reviews Summary=9
+  // read-only); the Source Reviews column is resolved evidence, also read-only.
   assert.deepEqual(editableIds, [
     'competitionCategory',
     'platform',
@@ -60,11 +64,12 @@ test('Stars + Reviews Summary are read-only; spec editable columns are editable'
   ]);
   assert.equal(getCategoryColumnDef('stars')?.editable, false);
   assert.equal(getCategoryColumnDef('reviewsSummary')?.editable, false);
+  assert.equal(getCategoryColumnDef('catSourceReviews')?.editable, false);
 });
 
-test('only the two Category-level columns carry the categoryLevel flag', () => {
+test('the three Category-level columns carry the categoryLevel flag', () => {
   const catLevel = CATEGORY_TABLE_COLUMNS.filter((c) => c.categoryLevel).map((c) => c.id);
-  assert.deepEqual(catLevel, ['catBulleted', 'catNonBulleted']);
+  assert.deepEqual(catLevel, ['catBulleted', 'catSourceReviews', 'catNonBulleted']);
 });
 
 test('pref prefix is distinct from the sibling reviewsTable prefix', () => {

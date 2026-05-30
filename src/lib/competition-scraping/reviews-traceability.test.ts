@@ -8,6 +8,7 @@ import {
   parseTraceabilityAnalysis,
   validateCategoriesInput,
   buildTraceabilityRows,
+  buildCategorySourceReviewRows,
   mergeReviewTitleBody,
   editCategoryName,
   editBulletText,
@@ -18,6 +19,7 @@ import {
   type TraceabilityAnalysis,
   type TraceabilityReview,
   type PerProductAnalysisRow,
+  type CategorySourceReviewMeta,
 } from './reviews-traceability.ts';
 
 // Shared fixture for the FU-1 mutation tests — two categories, three bullets.
@@ -349,4 +351,58 @@ test('selectBulletedAnalysisRow keeps a legacy flat-summary bulleted row (no flo
   const legacy = { summary: 'flat bullet text' };
   const picked = selectBulletedAnalysisRow(rows({ id: 'legacy', analysisJson: legacy }), 'u1');
   assert.equal(picked?.id, 'legacy');
+});
+
+// ─── buildCategorySourceReviewRows (Source Reviews column) ────────────────
+
+function catReviewMap(): Map<string, CategorySourceReviewMeta> {
+  return new Map<string, CategorySourceReviewMeta>([
+    ['id-a', { starRating: 2, title: 'Strap snapped', body: 'broke in a month', productName: 'AcmeBuds Pro', urlId: 'u1' }],
+    ['id-b', { starRating: 1, title: null, body: 'died after an hour', productName: 'SoundMax X3', urlId: 'u2' }],
+    ['id-c', { starRating: 3, title: 'Falls out', body: 'while running', productName: 'AcmeBuds Pro', urlId: 'u1' }],
+  ]);
+}
+
+test('buildCategorySourceReviewRows groups theme→bullet→sources with product + urlId', () => {
+  const themes = buildCategorySourceReviewRows(sampleAnalysis().categories, catReviewMap());
+  assert.equal(themes.length, 2);
+  assert.equal(themes[0].name, 'Product critiques');
+  assert.equal(themes[0].bullets.length, 2);
+  // First bullet cites id-a + id-b → two products, merged title.body text.
+  const first = themes[0].bullets[0];
+  assert.equal(first.text, 'No effect');
+  assert.equal(first.sources.length, 2);
+  assert.deepEqual(
+    first.sources.map((s) => s.productName),
+    ['AcmeBuds Pro', 'SoundMax X3']
+  );
+  assert.deepEqual(
+    first.sources.map((s) => s.urlId),
+    ['u1', 'u2']
+  );
+  assert.equal(first.sources[0].text, 'Strap snapped. broke in a month');
+  // id-b has no title → body only, no leading dot.
+  assert.equal(first.sources[1].text, 'died after an hour');
+  assert.equal(first.sources[1].missing, false);
+});
+
+test('buildCategorySourceReviewRows renders a placeholder for a deleted (unresolvable) review', () => {
+  const themes = buildCategorySourceReviewRows(sampleAnalysis().categories, new Map());
+  const s = themes[0].bullets[0].sources[0];
+  assert.equal(s.missing, true);
+  assert.equal(s.starRating, null);
+  assert.equal(s.urlId, null);
+  assert.equal(s.productName, '(unknown product)');
+  assert.equal(s.text, '(this review is no longer available)');
+  // The count stays honest — every cited id still produces a row.
+  assert.equal(themes[0].bullets[0].sources.length, 2);
+});
+
+test('buildCategorySourceReviewRows keeps a zero-reviewId bullet with an empty source list', () => {
+  const themes = buildCategorySourceReviewRows(
+    [{ name: 'Theme', bullets: [{ text: 'Category-wide insight', reviewIds: [] }] }],
+    catReviewMap()
+  );
+  assert.equal(themes[0].bullets[0].text, 'Category-wide insight');
+  assert.deepEqual(themes[0].bullets[0].sources, []);
 });

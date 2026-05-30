@@ -1,14 +1,17 @@
 // W#2 P-49 W5 Category page Session 1 scaffold (2026-05-30) — pure helpers
 // for the "Reviews Analysis By Competitor Category Table" column registry.
 // Mirrors the sibling `reviews-analysis-table-columns.ts` registry (same
-// shape + same MIN/MAX/resolve helpers) but carries all 13 spec columns in
+// shape + same MIN/MAX/resolve helpers) but carries the 13 spec columns in
 // the verbatim left-to-right order from
 // `docs/polish-item-specs/P-49-W5-S4-category-page.md` §3:
 //   Category / Platform / Type / Product Name / Results Rank /
 //   Competition Score / URL / Stars / Reviews Summary /
 //   Competitor Comprehensive (bulleted) / Competitor Comprehensive
 //   (non-bulleted) / Category Comprehensive (bulleted) / Category
-//   Comprehensive (non-bulleted).
+//   Comprehensive (non-bulleted)
+// — PLUS the 14th "Source Reviews" column (director addendum 2026-05-30-c),
+// inserted directly after Category Comprehensive (bulleted): each bulleted
+// category complaint's source reviews across all in-category competitors.
 //
 // Lives at src/lib/ (not src/app/) so the src/lib node:test runner can
 // import it without JSDOM or tsconfig path-alias resolution. The page .tsx
@@ -47,6 +50,12 @@ export const CATEGORY_TABLE_COLUMNS: ReadonlyArray<CategoryTableColumnDef> = [
   { id: 'compBulleted', label: 'Competitor Comprehensive (bulleted)', defaultWidth: 280, editable: true },
   { id: 'compNonBulleted', label: 'Competitor Comprehensive (non-bulleted)', defaultWidth: 280, editable: true },
   { id: 'catBulleted', label: 'Category Comprehensive (bulleted)', defaultWidth: 280, editable: true, categoryLevel: true },
+  // Source Reviews (director addendum 2026-05-30-c) — for each bulleted
+  // category complaint, the individual reviews across all in-category
+  // competitors that traced up to it (product · stars · text · jump link).
+  // Read-only (it's resolved evidence, not editable text) + category-level
+  // (renders on the banner row only, alongside catBulleted).
+  { id: 'catSourceReviews', label: 'Source Reviews', defaultWidth: 340, editable: false, categoryLevel: true },
   { id: 'catNonBulleted', label: 'Category Comprehensive (non-bulleted)', defaultWidth: 280, editable: true, categoryLevel: true },
 ];
 

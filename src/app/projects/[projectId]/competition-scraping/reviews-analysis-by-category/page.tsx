@@ -85,6 +85,11 @@ import {
 } from './components/CategoryAiRunModal';
 import type { PerCompetitorStructuredCategory } from '@/lib/competition-scraping/review-analysis/prompts';
 import {
+  buildCategorySourceReviewRows,
+  type CategorySourceReviewMeta,
+  type CategorySourceTheme,
+} from '@/lib/competition-scraping/reviews-traceability';
+import {
   buildCategoryGroups,
   normalizeCategoryKey,
   type CategoryDisplayRow,
@@ -1028,6 +1033,33 @@ function CategoryTable({
         })),
     [groups]
   );
+  // Source Reviews column: a global reviewId → { product, stars, text, urlId }
+  // map resolving every category bullet's cited reviewIds (which span all the
+  // competitors in a category) to the captured review's display fields + the
+  // urlId for the jump-to-detail link. Built from the eager-loaded reviews +
+  // each URL's product name; rebuilt as reviews stream in.
+  const reviewMetaById = useMemo(() => {
+    const map = new Map<string, CategorySourceReviewMeta>();
+    const productNameByUrlId = new Map<string, string>();
+    for (const u of urls) {
+      productNameByUrlId.set(u.id, u.productName?.trim() || u.url);
+    }
+    for (const [urlId, state] of Object.entries(reviewsByUrl)) {
+      if (state.kind !== 'loaded') continue;
+      const productName = productNameByUrlId.get(urlId) ?? '(unknown product)';
+      for (const r of state.reviews) {
+        map.set(r.id, {
+          starRating: r.starRating,
+          title: r.title,
+          body: r.body,
+          productName,
+          urlId,
+        });
+      }
+    }
+    return map;
+  }, [urls, reviewsByUrl]);
+
   // For the non-bulleted modal: the bulleted summary text per category (the
   // input; categories without one are skipped + flagged in the modal).
   const bulletedSummaryByCategoryKey = useMemo(() => {
@@ -1299,7 +1331,12 @@ function CategoryTable({
                         labelSpan={bannerLabelSpan}
                         categoryLevelColumns={categoryLevelColumns}
                         onHideCategory={onHideCategory}
+                        projectId={projectId}
                         bulletedSummary={categoryBulletedByKey[group.key]?.summary ?? ''}
+                        sourceReviewThemes={buildCategorySourceReviewRows(
+                          categoryBulletedByKey[group.key]?.categories ?? [],
+                          reviewMetaById
+                        )}
                         nonBulletedSummary={categoryNonBulletedByKey[group.key]?.summary ?? ''}
                       />
                       <SortableContext
@@ -1361,15 +1398,18 @@ const thBaseStyle: React.CSSProperties = {
 
 // ─── Category banner row (interactive batch) ───────────────────────────
 // The category name lives on its own shaded banner: grip (drag the whole
-// category) + name + hide-category control on the left, the two category-level
-// AI cells at the right. Competitor rows render beneath it.
+// category) + name + hide-category control on the left, the category-level
+// AI cells at the right (bulleted summary · Source Reviews · non-bulleted
+// summary). Competitor rows render beneath it.
 
 interface CategoryBannerRowProps {
   group: CategoryGroup<CompetitorUrl>;
   labelSpan: number;
   categoryLevelColumns: ReadonlyArray<CategoryTableColumnDef>;
   onHideCategory: (categoryKey: string) => void;
+  projectId: string;
   bulletedSummary: string;
+  sourceReviewThemes: CategorySourceTheme[];
   nonBulletedSummary: string;
 }
 
@@ -1378,7 +1418,9 @@ function CategoryBannerRow({
   labelSpan,
   categoryLevelColumns,
   onHideCategory,
+  projectId,
   bulletedSummary,
+  sourceReviewThemes,
   nonBulletedSummary,
 }: CategoryBannerRowProps): JSX.Element {
   // The uncategorized bucket is pinned last and is NOT draggable.
@@ -1448,6 +1490,28 @@ function CategoryBannerRow({
         </span>
       </td>
       {categoryLevelColumns.map((c) => {
+        if (c.id === 'catSourceReviews') {
+          return (
+            <td
+              key={c.id}
+              style={{
+                padding: '6px 10px',
+                borderTop: '2px solid #30363d',
+                borderRight: '1px solid #161b22',
+                fontSize: '12px',
+                verticalAlign: 'top',
+                maxHeight: '260px',
+                overflowY: 'auto',
+              }}
+              data-testid="category-ai-cell-catSourceReviews"
+            >
+              <CategorySourceReviewsCell
+                themes={sourceReviewThemes}
+                projectId={projectId}
+              />
+            </td>
+          );
+        }
         const content =
           c.id === 'catBulleted'
             ? bulletedSummary
@@ -1476,6 +1540,140 @@ function CategoryBannerRow({
         );
       })}
     </tr>
+  );
+}
+
+// ─── Source Reviews cell (a.117 / 2026-05-30-c) ────────────────────────────
+// For each bulleted CATEGORY complaint, the individual reviews across all in-
+// category competitors that traced up to it: product · stars · text · a jump-
+// to-detail link. Always visible, bullet-by-bullet (director Rule 14f locked
+// 2026-05-30-c), mirroring the URL-detail traceability table's shape. The
+// structured bullets carry the cross-competitor union of source reviewIds;
+// when no bulleted category run has happened yet, themes is empty.
+function CategorySourceReviewsCell({
+  themes,
+  projectId,
+}: {
+  themes: CategorySourceTheme[];
+  projectId: string;
+}): JSX.Element {
+  if (themes.length === 0) {
+    return (
+      <span style={{ color: '#6e7681', fontStyle: 'italic' }}>
+        (run the bulleted analysis to see source reviews)
+      </span>
+    );
+  }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+      {themes.map((theme, ti) => (
+        <div key={ti}>
+          <div
+            style={{
+              color: '#8b949e',
+              fontSize: '10px',
+              fontWeight: 700,
+              textTransform: 'uppercase',
+              letterSpacing: '0.03em',
+              marginBottom: '4px',
+            }}
+          >
+            {theme.name}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {theme.bullets.map((bullet, bi) => (
+              <div key={bi}>
+                <div style={{ color: '#e6edf3', marginBottom: '3px' }}>
+                  • {bullet.text}
+                </div>
+                {bullet.sources.length === 0 ? (
+                  <div
+                    style={{
+                      color: '#6e7681',
+                      fontStyle: 'italic',
+                      paddingLeft: '12px',
+                    }}
+                  >
+                    (no individual reviews traced to this point)
+                  </div>
+                ) : (
+                  <ul
+                    style={{
+                      listStyle: 'none',
+                      margin: 0,
+                      padding: '0 0 0 12px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '5px',
+                    }}
+                  >
+                    {bullet.sources.map((s, si) => (
+                      <li
+                        key={si}
+                        style={{
+                          borderLeft: '2px solid #21262d',
+                          paddingLeft: '8px',
+                        }}
+                      >
+                        <span
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            flexWrap: 'wrap',
+                          }}
+                        >
+                          <span style={{ color: '#c9d1d9', fontWeight: 600 }}>
+                            {s.productName}
+                          </span>
+                          <CategoryStarCount value={s.starRating} />
+                          {s.missing || !s.urlId ? null : (
+                            <a
+                              href={`/projects/${projectId}/competition-scraping/url/${s.urlId}#review-${s.reviewId}`}
+                              title="Jump to this review's detail page"
+                              data-testid="category-source-review-jump"
+                              style={{
+                                color: '#58a6ff',
+                                textDecoration: 'none',
+                                fontSize: '12px',
+                              }}
+                            >
+                              ↗
+                            </a>
+                          )}
+                        </span>
+                        <span
+                          style={{
+                            color: s.missing ? '#6e7681' : '#8b949e',
+                            fontStyle: s.missing ? 'italic' : 'normal',
+                            display: 'block',
+                          }}
+                        >
+                          {s.text}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function CategoryStarCount({ value }: { value: number | null }): JSX.Element {
+  if (value == null) {
+    return <span style={{ color: '#6e7681', fontSize: '11px' }}>☆☆☆☆☆</span>;
+  }
+  const full = Math.max(0, Math.min(5, Math.round(value)));
+  return (
+    <span style={{ color: '#e3b341', fontSize: '11px' }} title={`${value} stars`}>
+      {'★'.repeat(full)}
+      {'☆'.repeat(5 - full)}
+    </span>
   );
 }
 
