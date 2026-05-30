@@ -126,6 +126,11 @@ export default function ReviewsAnalysisByCategoryPage(): JSX.Element {
   const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>(() => [
     ...PLATFORMS,
   ]);
+  // Gate: don't persist visibility/widths until the initial server load has
+  // completed — otherwise the debounced save can fire with empty local state
+  // and WIPE the user's previously-saved categoryTable: prefs before the
+  // load populates them (the cause of widths not sticking, 2026-05-30).
+  const [hasLoadedPrefs, setHasLoadedPrefs] = useState(false);
 
   // ─── click-to-edit save handler (URL-backed columns) ───────────────
   const handleUrlCellSave = useCallback(
@@ -215,6 +220,11 @@ export default function ReviewsAnalysisByCategoryPage(): JSX.Element {
         }
       } catch {
         // defaults render
+      } finally {
+        // Open the save gate even on error/404 so future edits persist —
+        // but only AFTER this initial read so we never overwrite saved
+        // prefs with the empty initial state.
+        if (!cancelled) setHasLoadedPrefs(true);
       }
     })();
     return () => {
@@ -224,7 +234,7 @@ export default function ReviewsAnalysisByCategoryPage(): JSX.Element {
 
   // ─── persist column visibility + widths (debounced, merge-safe) ────
   useEffect(() => {
-    if (!projectId) return;
+    if (!projectId || !hasLoadedPrefs) return;
     const handle = setTimeout(() => {
       void (async () => {
         try {
@@ -272,7 +282,7 @@ export default function ReviewsAnalysisByCategoryPage(): JSX.Element {
       })();
     }, 500);
     return () => clearTimeout(handle);
-  }, [projectId, columnVisibility, columnWidths]);
+  }, [projectId, columnVisibility, columnWidths, hasLoadedPrefs]);
 
   // ─── hydrate per-review + per-competitor summaries ─────────────────
   useEffect(() => {
@@ -726,6 +736,17 @@ function CategoryTable({
 
   const needsHScroll = metrics.scrollWidth > metrics.clientWidth + 1;
 
+  // Explicit table width = exact sum of the visible column widths. Without
+  // this, a fixed-layout table inside an overflow-hidden container can
+  // collapse to the container width instead of overflowing — which kept the
+  // table from being draggable past the screen edge (director report
+  // 2026-05-30). Pinning the width makes the table grow as columns are
+  // resized, overflow the container, and surface the floating scrollbar.
+  const totalWidth = visibleColumns.reduce(
+    (sum, c) => sum + resolveCategoryColumnWidth(columnWidths, c),
+    0
+  );
+
   return (
     <>
       <div
@@ -747,6 +768,8 @@ function CategoryTable({
           style={{
             borderCollapse: 'collapse',
             tableLayout: 'fixed',
+            width: `${totalWidth}px`,
+            minWidth: `${totalWidth}px`,
             fontSize: '13px',
             background: '#0d1117',
           }}
@@ -856,39 +879,103 @@ function CategoryRow({
   onUrlCellSave,
 }: CategoryRowProps): JSX.Element {
   const u = row.url;
-  const rowTopBorder = row.isFirstInGroup ? '2px solid #30363d' : '1px solid #161b22';
+  const perReviewVisible = visibleColumns.some(
+    (c) => c.id === 'stars' || c.id === 'reviewsSummary'
+  );
+  const reviews = sortedReviewsOf(reviewsState);
+
+  // Placeholder shown in the Stars / Reviews Summary cells when there's no
+  // review list to stack (loading / error / none) — those cases collapse to
+  // a single row.
+  let starsPlaceholder = '—';
+  let summaryPlaceholder = 'no reviews';
+  if (reviewsState === undefined || reviewsState.kind === 'loading') {
+    starsPlaceholder = '…';
+    summaryPlaceholder = 'loading…';
+  } else if (reviewsState.kind === 'error') {
+    starsPlaceholder = '!';
+    summaryPlaceholder = 'failed to load';
+  }
+
+  // When per-review columns are visible AND there's a review list, render one
+  // sub-row per review: the non-per-review columns become a single rowSpan
+  // cell on the first sub-row, while the Stars + Reviews Summary cells render
+  // once per sub-row. Because a review's star and summary share one <tr>,
+  // they line up exactly and the sub-row borders align across both columns.
+  const hasList = perReviewVisible && !!reviews && reviews.length > 0;
+  const subRows: Array<CapturedReview | null> = hasList ? reviews! : [null];
+  const span = subRows.length;
+  const groupTop = row.isFirstInGroup ? '2px solid #30363d' : '1px solid #21262d';
 
   return (
-    <tr style={{ borderTop: rowTopBorder }}>
-      {visibleColumns.map((c) => {
-        const isAi = AI_COLUMN_IDS.has(c.id);
+    <>
+      {subRows.map((review, i) => {
+        const isFirstSub = i === 0;
+        const isLastSub = i === subRows.length - 1;
         return (
-          <td
-            key={c.id}
-            style={{
-              padding: isAi ? 0 : '6px 10px',
-              borderRight: '1px solid #161b22',
-              verticalAlign: 'top',
-              color: '#e6edf3',
-              // AI cells host an absolutely-positioned box that fills the
-              // cell height (polish item 4) — needs a positioning context.
-              position: isAi ? 'relative' : undefined,
-            }}
-          >
-            {renderCell(c, row, u, reviewsState, summaryByReviewId, bulleted, nonBulleted, onUrlCellSave)}
-          </td>
+          <tr key={review ? review.id : `${u.id}-only`}>
+            {visibleColumns.map((c) => {
+              const isPerReview = c.id === 'stars' || c.id === 'reviewsSummary';
+              if (!isPerReview) {
+                // Non-per-review columns render once, spanning all sub-rows.
+                if (!isFirstSub) return null;
+                const isAi = AI_COLUMN_IDS.has(c.id);
+                return (
+                  <td
+                    key={c.id}
+                    rowSpan={span}
+                    style={{
+                      padding: isAi ? 0 : '6px 10px',
+                      borderRight: '1px solid #161b22',
+                      borderTop: groupTop,
+                      verticalAlign: 'top',
+                      color: '#e6edf3',
+                      // AI cells host an absolutely-positioned box that fills
+                      // the (now full rowSpan) cell height — needs a
+                      // positioning context.
+                      position: isAi ? 'relative' : undefined,
+                    }}
+                  >
+                    {renderDataCell(c, row, u, bulleted, nonBulleted, onUrlCellSave)}
+                  </td>
+                );
+              }
+              // Per-review cell — one per sub-row.
+              return (
+                <td
+                  key={c.id}
+                  style={{
+                    padding: '5px 10px',
+                    borderRight: '1px solid #161b22',
+                    borderTop: isFirstSub ? groupTop : undefined,
+                    borderBottom: isLastSub ? undefined : '1px solid #21262d',
+                    verticalAlign: 'top',
+                    color: '#e6edf3',
+                  }}
+                >
+                  {c.id === 'stars' ? (
+                    <StarCell review={review} placeholder={starsPlaceholder} />
+                  ) : (
+                    <SummaryCell
+                      review={review}
+                      summaryByReviewId={summaryByReviewId}
+                      placeholder={summaryPlaceholder}
+                    />
+                  )}
+                </td>
+              );
+            })}
+          </tr>
         );
       })}
-    </tr>
+    </>
   );
 }
 
-function renderCell(
+function renderDataCell(
   c: CategoryTableColumnDef,
   row: CategoryDisplayRow<CompetitorUrl>,
   u: CompetitorUrl,
-  reviewsState: ReviewsLoadState | undefined,
-  summaryByReviewId: Record<string, ReviewSummaryEntry>,
   bulleted: string,
   nonBulleted: string,
   onUrlCellSave: (urlId: string, patch: UpdateCompetitorUrlRequest) => Promise<void>
@@ -954,12 +1041,6 @@ function renderCell(
           multiline
         />
       );
-    case 'stars':
-      return <PerReviewStarsCell reviewsState={reviewsState} />;
-    case 'reviewsSummary':
-      return (
-        <PerReviewSummaryCell reviewsState={reviewsState} summaryByReviewId={summaryByReviewId} />
-      );
     case 'compBulleted':
       return <SummaryTextCell text={bulleted} />;
     case 'compNonBulleted':
@@ -997,77 +1078,56 @@ function sortedReviewsOf(state: ReviewsLoadState | undefined): CapturedReview[] 
   });
 }
 
-// Shared sub-row style — a visible bottom border between per-review entries
-// (polish item 5). The last entry drops the border.
-function subRowStyle(isLast: boolean): React.CSSProperties {
-  return {
-    padding: '5px 0',
-    borderBottom: isLast ? 'none' : '1px solid #21262d',
-    fontSize: '12px',
-    lineHeight: 1.5,
-  };
-}
-
-function PerReviewStarsCell({ reviewsState }: { reviewsState: ReviewsLoadState | undefined }): JSX.Element {
-  if (reviewsState?.kind === 'loading' || reviewsState === undefined) {
-    return <span style={{ color: '#6e7681', fontSize: '12px' }}>…</span>;
-  }
-  if (reviewsState.kind === 'error') {
-    return <span style={{ color: '#f85149', fontSize: '12px' }}>!</span>;
-  }
-  const reviews = sortedReviewsOf(reviewsState);
-  if (!reviews || reviews.length === 0) {
-    return <span style={{ color: '#6e7681', fontSize: '12px' }}>—</span>;
+// A single review's star rating (one per sub-row). The Stars + Reviews
+// Summary cells for the same review live in the same <tr>, so they line up.
+function StarCell({
+  review,
+  placeholder,
+}: {
+  review: CapturedReview | null;
+  placeholder: string;
+}): JSX.Element {
+  if (!review) {
+    return <span style={{ color: '#6e7681', fontSize: '12px' }}>{placeholder}</span>;
   }
   return (
-    <div>
-      {reviews.map((r, i) => (
-        <div key={r.id} style={subRowStyle(i === reviews.length - 1)}>
-          <span style={{ color: '#f0b341', whiteSpace: 'nowrap' }}>
-            {'★'.repeat(Math.max(0, Math.min(5, Math.round(r.starRating))))}
-          </span>
-        </div>
-      ))}
-    </div>
+    <span style={{ color: '#f0b341', fontSize: '12px', whiteSpace: 'nowrap' }}>
+      {'★'.repeat(Math.max(0, Math.min(5, Math.round(review.starRating))))}
+    </span>
   );
 }
 
-function PerReviewSummaryCell({
-  reviewsState,
+// A single review's summary (one per sub-row), paired with its star.
+function SummaryCell({
+  review,
   summaryByReviewId,
+  placeholder,
 }: {
-  reviewsState: ReviewsLoadState | undefined;
+  review: CapturedReview | null;
   summaryByReviewId: Record<string, ReviewSummaryEntry>;
+  placeholder: string;
 }): JSX.Element {
-  if (reviewsState?.kind === 'loading' || reviewsState === undefined) {
-    return <span style={{ color: '#6e7681', fontSize: '12px' }}>loading…</span>;
+  if (!review) {
+    return (
+      <span style={{ color: '#6e7681', fontSize: '12px', fontStyle: 'italic' }}>
+        {placeholder}
+      </span>
+    );
   }
-  if (reviewsState.kind === 'error') {
-    return <span style={{ color: '#f85149', fontSize: '12px' }}>failed to load</span>;
-  }
-  const reviews = sortedReviewsOf(reviewsState);
-  if (!reviews || reviews.length === 0) {
-    return <span style={{ color: '#6e7681', fontSize: '12px' }}>no reviews</span>;
-  }
+  const summary = summaryByReviewId[review.id]?.summary ?? '';
   return (
-    <div>
-      {reviews.map((r, i) => {
-        const summary = summaryByReviewId[r.id]?.summary ?? '';
-        return (
-          <div
-            key={r.id}
-            style={{
-              ...subRowStyle(i === reviews.length - 1),
-              color: summary ? '#e6edf3' : '#6e7681',
-              fontStyle: summary ? 'normal' : 'italic',
-              whiteSpace: 'pre-wrap',
-            }}
-          >
-            {summary || '(not summarized)'}
-          </div>
-        );
-      })}
-    </div>
+    <span
+      style={{
+        display: 'block',
+        fontSize: '12px',
+        lineHeight: 1.5,
+        color: summary ? '#e6edf3' : '#6e7681',
+        fontStyle: summary ? 'normal' : 'italic',
+        whiteSpace: 'pre-wrap',
+      }}
+    >
+      {summary || '(not summarized)'}
+    </span>
   );
 }
 

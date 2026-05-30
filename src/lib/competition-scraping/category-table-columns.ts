@@ -50,10 +50,13 @@ export const CATEGORY_TABLE_COLUMNS: ReadonlyArray<CategoryTableColumnDef> = [
   { id: 'catNonBulleted', label: 'Category Comprehensive (non-bulleted)', defaultWidth: 280, editable: true, categoryLevel: true },
 ];
 
-// Width bounds for the drag-to-resize handles. Match the sibling table's
-// MIN/MAX so behavior feels identical across surfaces.
+// Width bounds for the drag-to-resize handles. MAX is generous (1000px) so
+// the wide AI-summary columns can be dragged out far enough to push the
+// table well past the screen edge (director directive 2026-05-30 — the
+// right edge must be extendable beyond the viewport, surfacing the floating
+// horizontal scrollbar).
 export const MIN_CATEGORY_COLUMN_WIDTH = 60;
-export const MAX_CATEGORY_COLUMN_WIDTH = 600;
+export const MAX_CATEGORY_COLUMN_WIDTH = 1000;
 
 // Per-user persistence key prefix on the shared UserTablePreferences
 // record. Distinct from the sibling page's `reviewsTable:` prefix.
