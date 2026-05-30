@@ -47,6 +47,13 @@
   - **Session 4** = Type page scaffold + drag + Excel together (compressed since pattern is proven by then from Category Sessions 1+3).
   - **Session 5** = Type page two AI flows (mirror Category Session 2 with `type` substituted for `category` throughout).
 
+**2026-05-30 (`session_2026-05-30_p49-w5-category-page-session-1-scaffold-and-polish`) — Type page MUST inherit everything shipped + decided on the Category page (director directive 2026-05-30: "make these adjustments and the adjustments requested in the previous round to the Type page when we work on it next"). When the Type page is built (Sessions 4-5), it must be born with ALL of the following — substitute `type` / `(Untyped)` for `category` / `(Uncategorized)` throughout. Full detail in `docs/polish-item-specs/P-49-W5-S4-category-page.md` §2 (2026-05-30 entry).**
+
+- **Block-1 column decisions (mirror Category):** per-review STACKED Stars + Reviews Summary (Q-A/Q-B), each review's star beside its summary, read-only; reuse the shipped `per-competitor-nonbulleted` prose for Column 11 (Q-C); mirror the sibling `xlsx` export helper for the Export Table button (Q-D).
+- **5 look-and-feel items:** (1) Platforms filter box; (2) full-length drag-to-resize column borders incl. the right edge (per-column MAX 1000px); (3) floating horizontal scrollbar pinned to the viewport bottom; (4) AI content boxes fill the full cell height; (5) visible borders between the Stars/Reviews Summary sub-rows.
+- **3 follow-up fixes:** (1) explicit table width = Σ visible column widths so the table can be dragged past the screen edge; (2) per-review row alignment via real sub-rows (`<tr>`) with `rowSpan` on the non-per-review columns; (3) column widths persist server-side with a load-before-save gate; (4) `scrollbar-gutter: stable` + trailing scroll space so the vertical scrollbar never overlays the right edge.
+- **Interactive batch (the bigger features):** drag whole types + drag competitors within a type; the **header-row layout** (type name on its own row, all competitors beneath it); **hide-with-restore** of a competitor and of an entire type, **scoped to this Type table only** (never deleting data elsewhere); backed by the same per-user, per-Project "memory" area (additive schema).
+
 ---
 
 ## §3 — Current consolidated spec (rolled-up source-of-truth)

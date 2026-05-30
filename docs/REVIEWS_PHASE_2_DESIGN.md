@@ -2482,6 +2482,72 @@ Entry baselines = 2026-05-29-c exit = locked (root tsc clean / extension tsc cle
 
 ---
 
+## §B 2026-05-30 — `session_2026-05-30_p49-w5-category-page-session-1-scaffold-and-polish` — Workstream 5 Category page (Reviews Analysis By Competitor Category Table) Session 1 scaffold + a 5-item look-and-feel polish pass + 3 follow-up fixes + a vertical-scrollbar-overlap fix — FOUR deploys, ALL ✅ DEPLOYED-AND-VERIFIED 2026-05-30 end-to-end on vklf.com via `workflow-2-competition-scraping` → `main` — builds `f08a41f` (scaffold) + `ee56398` (5-item polish) + `90bfdf5` (3 fixes) + `9b1d023` (scrollbar-overlap fix) all ff-merged to main under ONE explicit Rule 9 deploy picker (first deploy) + 3 in-session director directives — TWENTY-FIRST build/deploy-session §B entry per Rule 18; THIRTEENTH W5 entry; the FIRST Category-page entry — director Phase 4 verbatim verdicts: all "passed"; the FIRST of the 5-session Category + Type corrective rebuild; TWO NEW reusable PATTERNS memorialized — "rowSpan sub-rows to align per-item data across two adjacent columns" + "Debounced merge-save must gate on initial-load-complete"; Schema-change-in-flight NO entire session (all persistence reused the existing `UserTablePreferences` model — NEXT session = YES at entry)
+
+**§A frozen per Rule 18.** This entry is an implementation note for the §1 Category page (Reviews Analysis By Competitor Category Table) requirement — it is ADDITIVE and does NOT edit §A. It records how the Session 1 scaffold + polish + fixes were built without changing the design intent in §A. **It does NOT regress the sibling Reviews Analysis Table page** (`competitor-reviews-analysis/page.tsx`, CLOSED 2026-05-29-d) — the Category page is a NEW route alongside it.
+
+**Closes (a.114) RECOMMENDED-NEXT** — Category page Block 1 planning resume RESOLVED (the 3 open questions settled) + Session 1 scaffold SHIPPED + a 5-item polish pass + 3 follow-up fixes, all deployed & verified. **Opens (a.115) RECOMMENDED-NEXT = P-49 W5 Category page "interactive batch"** on `workflow-2-competition-scraping` (drag whole categories + drag competitors within a category WITH the director-directed layout restructure [category name on its OWN header row, all competitor rows beneath it so the first is draggable] + hide-with-restore of a competitor and of an entire category scoped to THIS PAGE ONLY, backed by a NEW additive per-user/per-Project "memory" area → Schema-change-in-flight = YES at entry; then Session 2 = the two Category AI flows [Q-E prompts drafted at its start]; the Type page (Sessions 4-5) must inherit ALL Category behaviors per the 2026-05-30 director directive).
+
+### Session shape — BUILD + DEPLOY with 4 ff-merges (1 explicit Rule 9 picker + 3 in-session director directives)
+
+Session opened per yesterday's NEXT_SESSION.md pointer scoping (a.114) Category page Block 1 planning resume. A 3-question Block-1 planning batch (Q-A/B per-review-stacked + Q-C reuse the sibling per-competitor prose flow + Q-D mirror the xlsx export — all Recommended + chosen) preceded any code. The scaffold deployed under an explicit Rule 9 deploy picker (`f08a41f`); the director then directed the polish pass ("deploy those today" sequencing pick → `ee56398`) and the two fix rounds ("fix these issues" directives → `90bfdf5` + `9b1d023`), each covered by the in-session directive per `feedback_approval_scope_per_decision_unit.md`. A 3-decision refinement round (sequencing = polish-now-interactive-next + removal = hide-with-restore + scope = this-page-only — all Recommended + chosen) settled the deferred interactive batch. SEVEN Rule 14f decisions total, 7/7 = 100% Yes-to-Recommended.
+
+### Design choices made this session (Rule 14f forced-pickers — Rule 14f)
+
+- **Per-review Stars + Reviews Summary = stacked per-review, aligned (Q-A/B, Recommended + chosen).** Each captured review gets its own Stars value beside its own Reviews Summary, aligned row-for-row (implemented via real `rowSpan` sub-rows — see "What shipped").
+- **Per-competitor summary columns (10/11) = reuse the sibling page's already-generated summaries (Q-C, Recommended + chosen).** The Category page reads the sibling Reviews Analysis Table page's per-competitor BULLETED + non-bulleted summaries rather than re-generating; cols 12/13 (the future Category-level AI flows) render "(not yet generated)" placeholders until Session 2.
+- **Export = mirror the sibling xlsx export (Q-D, Recommended + chosen).** The Category page will mirror the sibling page's "Export Table" xlsx download (the sibling helper lives at `src/lib/competition-scraping/reviews-table-export.ts` — corrected from a prior handoff's `…/review-analysis/…` guess; see CORRECTIONS_LOG §Entry 2026-05-30 Obs. 4). Wiring this is part of the upcoming work.
+- **Refinement round (interactive batch deferral):** sequencing = ship the look-and-feel polish now + defer the interactive batch to a dedicated next session (Recommended + chosen); row/category removal = hide-with-restore, NOT delete (Recommended + chosen — never destroys data elsewhere); scope = the hide + the drag-order live scoped to THIS PAGE ONLY (Recommended + chosen), backed by a NEW additive per-user/per-Project memory area.
+
+### What shipped (builds `f08a41f` / `ee56398` / `90bfdf5` / `9b1d023`)
+
+- **NEW route `reviews-analysis-by-category`** (`src/app/projects/[projectId]/competition-scraping/reviews-analysis-by-category/page.tsx`) + nav tab enabled — `npm run build` route count 68 → **69**.
+- **A flat 13-column grouped table.** One block per competitor category; the grouping helper `category-table-grouping.ts` places the category label on the block's first row and sorts `(Uncategorized)` last (the uncategorized sentinel is the EMPTY STRING — see CORRECTIONS_LOG §Entry 2026-05-30 Obs. 3 for the stray-NUL-byte fix). Column show/hide + click-to-edit cells. Cols 10/11 reuse the sibling per-competitor summaries; cols 12/13 render "(not yet generated)" placeholders.
+- **Per-review Stars / Reviews Summary via real `rowSpan` sub-rows.** Each review is a real `<tr>` sub-row; the non-per-item columns span all sub-rows via `rowSpan`, so each review's star sits beside its own summary with aligned borders (the "rowSpan sub-rows" Pattern — CORRECTIONS_LOG §Entry 2026-05-30 Obs. 1).
+- **NEW pure helpers** `src/lib/competition-scraping/category-table-columns.ts` (column model / show-hide) + `category-table-grouping.ts` (the grouping + label-on-first-row + uncategorized-last logic), with `.test.ts` siblings (+29 node:test cases; src/lib 1101 → **1130**).
+- **5-item look-and-feel polish (`ee56398`):** a Platforms filter box + full-length drag-to-resize column borders (incl. the right edge) + a floating bottom horizontal scrollbar + full-height AI content boxes + sub-row borders.
+- **3 follow-up fixes (`90bfdf5`):** an explicit table width so the table can be dragged past the screen edge (per-column MAX raised 600→1000); the per-review `rowSpan` alignment; column-width server-side persistence fixed via a `hasLoadedPrefs` load-before-save gate (the "Debounced merge-save must gate on initial-load-complete" Pattern — CORRECTIONS_LOG §Entry 2026-05-30 Obs. 2). All column prefs persist under a `categoryTable:` key prefix on the existing `UserTablePreferences` model — NO schema change, NO `prisma db push`.
+- **Vertical-scrollbar-overlap fix (`9b1d023`):** `scrollbar-gutter: stable` + 48px trailing scroll space so the scrollbar never covers the table's right edge / rightmost resize handle.
+
+### Phase 4 (director real-Chrome verification) — clean PASS on all four deploys
+
+Director's verbatim verdicts on all four deploys: "passed." No fix-forwards beyond the directed fix rounds (which were planned in-session, not Phase-4 redirects). Verified: the new page renders one block per category, editable cells, per-review stars beside summaries, show/hide columns, drag-to-resize columns, and the remembered layout across refresh.
+
+### NEW reusable PATTERNS
+
+- **"rowSpan sub-rows to align per-item data across two adjacent columns."** Stacking per-item lists in two separate `<td>`s does NOT keep item N's data aligned across columns once one cell wraps; making each item a real `<tr>` sub-row and spanning the non-per-item columns via `rowSpan` does. (Full statement: CORRECTIONS_LOG §Entry 2026-05-30 Obs. 1.)
+- **"Debounced merge-save must gate on initial-load-complete."** A debounced GET-merge-PUT prefs save will wipe saved prefs if it fires before the initial load hydrates local state; gate the save on a `hasLoaded` (`hasLoadedPrefs`) flag. (Full statement: CORRECTIONS_LOG §Entry 2026-05-30 Obs. 2.)
+
+### Scoreboard
+
+Entry baselines = 2026-05-29-d exit = locked (root tsc clean / extension tsc clean / **910 ext** / **1101 src/lib** / **68 routes**). Post-merge /scoreboard all GREEN at NEW LOCKED baseline:
+
+| Check | Entry | Exit | Delta |
+| --- | --- | --- | --- |
+| Root tsc | clean | clean | unchanged |
+| Extension tsc | clean | clean | unchanged |
+| Extension `npm test` | 910/910 | 910/910 | UNCHANGED (no extension code changed) |
+| src/lib `node:test` | 1101/1101 | **1130/1130** | **+29** (the two new pure-helper test files `category-table-columns.test.ts` + `category-table-grouping.test.ts`) |
+| `npm run build` | 68 routes | **69 routes** | **+1** (the new `reviews-analysis-by-category` page route) |
+| Playwright | — | SKIPPED | per Rule 27 (build/deploy session; no e2e-relevant change; director real-Chrome Phase 4 used instead) |
+
+### Affected §A sections (informational — §A FROZEN per Rule 18)
+
+- The §1 Category page (Reviews Analysis By Competitor Category Table) requirement now has a LIVE Session 1 scaffold + polish. §A is frozen; this implementation note (the grouping helper's label-on-first-row + uncategorized-last shape, the per-review `rowSpan` sub-rows, the `categoryTable:`-prefixed column-prefs persistence on the existing `UserTablePreferences` model, the 5 polish items + the 3 fixes) lives in §B only.
+- The DEFERRED interactive batch (drag whole categories + competitors-within-a-category + the header-row layout restructure + hide-with-restore scoped-to-page) is recorded here as the design intent locked this session; it will be built next session against a NEW additive per-user/per-Project "memory" area (drag-order + hidden-rows) → Schema-change-in-flight = YES at that session's entry. The exact storage shape (new nullable JSON columns on `UserTablePreferences` vs a sibling row) is confirmed at the start of that build session per `feedback_plan_output_shape_before_building.md`.
+
+### Cross-references
+
+- §B 2026-05-29-d above (W5 Fix Session C "Deploy 2" — the sibling Reviews Analysis Table page, now CLOSED) — the Category page is a NEW route alongside it; this session must NOT regress that page.
+- `docs/CORRECTIONS_LOG.md` §Entry 2026-05-30 — the INFORMATIONAL entry (the 2 NEW Patterns + the stray-NUL-byte build lesson + the xlsx-export-helper doc-drift correction + the P-43 tally).
+- `docs/polish-item-specs/P-49-W5-S4-category-page.md` §2 2026-05-30 (parent-updated — the Session 1 ship state + the deferred interactive batch + the locked decisions hide-with-restore + scoped-to-page + the header-row layout restructure) + §3; `docs/polish-item-specs/P-49-W5-S5-type-page.md` §2 2026-05-30 (parent-updated — the Type page inherits ALL Category behaviors).
+- `docs/ROADMAP.md` P-49 — status updated to "🟢 IN-FLIGHT 2026-05-30 — Category page Session 1 scaffold + polish + fixes ✅ DEPLOYED-AND-VERIFIED".
+- Source cross-references: `src/app/projects/[projectId]/competition-scraping/reviews-analysis-by-category/page.tsx` (the new page; the `rowSpan` sub-rows + the `hasLoadedPrefs` gate) + `src/lib/competition-scraping/category-table-columns.ts` + `category-table-grouping.ts` (the new pure helpers) + `src/lib/competition-scraping/reviews-table-export.ts` (the sibling xlsx export helper to mirror next session); builds `f08a41f` / `ee56398` / `90bfdf5` / `9b1d023`.
+
+**Closing line:** P-49 W5 Category page (Reviews Analysis By Competitor Category Table) Session 1 scaffold + a 5-item look-and-feel polish pass + 3 follow-up fixes + a vertical-scrollbar-overlap fix ✅ DEPLOYED-AND-VERIFIED 2026-05-30 (builds `f08a41f` / `ee56398` / `90bfdf5` / `9b1d023`) under 1 explicit Rule 9 deploy picker + 3 in-session director directives on `workflow-2-competition-scraping` — director "passed" on all four. The FIRST of the 5-session Category + Type corrective rebuild. TWO NEW reusable PATTERNS memorialized. All persistence reused the existing `UserTablePreferences` model (`categoryTable:` prefix) — NO schema change. Schema-change-in-flight NO entire session (NEXT session = YES at entry). 7/7 = 100% Yes-to-Recommended this session; running cumulative 140/143 = 97.9%. NEW baselines: src/lib `node:test` = **1130/1130** + `npm run build` = **69 routes** + extension = 910/910 UNCHANGED. **Closes (a.114) RECOMMENDED-NEXT.** **Opens (a.115) RECOMMENDED-NEXT = P-49 W5 Category page "interactive batch"** on `workflow-2-competition-scraping`. **TWENTY-FIRST build/deploy-session §B entry per Rule 18 — THIRTEENTH W5 entry; the FIRST Category-page entry.** The next §B entry will land at the close of the Category page interactive batch.
+
+---
+
 ---
 
 END OF DOCUMENT
