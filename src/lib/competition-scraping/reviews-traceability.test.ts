@@ -14,8 +14,10 @@ import {
   deleteCategory,
   deleteBullets,
   deleteSourceReview,
+  selectBulletedAnalysisRow,
   type TraceabilityAnalysis,
   type TraceabilityReview,
+  type PerProductAnalysisRow,
 } from './reviews-traceability.ts';
 
 // Shared fixture for the FU-1 mutation tests — two categories, three bullets.
@@ -272,4 +274,79 @@ test('deleteSourceReview detaches one review but keeps the complaint', () => {
   const emptied = deleteSourceReview(out, 0, 0, 'id-b');
   assert.deepEqual(emptied.categories[0].bullets[0].reviewIds, []);
   assert.equal(emptied.categories[0].bullets.length, 2);
+});
+
+// ─── selectBulletedAnalysisRow (the non-bulleted-shadowing fix) ────────────
+
+const STRUCTURED = { categories: [{ name: 'C', bullets: [{ text: 'b', reviewIds: ['r1'] }] }] };
+const PROSE = { flow: 'per-competitor-nonbulleted', summary: 'prose…' };
+
+function rows(...defs: Array<Partial<PerProductAnalysisRow>>): PerProductAnalysisRow[] {
+  return defs.map((d, i) => ({
+    id: d.id ?? `row-${i}`,
+    level: d.level ?? 'PER_PRODUCT',
+    urlId: d.urlId ?? 'u1',
+    analysisJson: d.analysisJson ?? STRUCTURED,
+  }));
+}
+
+test('selectBulletedAnalysisRow returns null when there are no rows', () => {
+  assert.equal(selectBulletedAnalysisRow([], 'u1'), null);
+});
+
+test('selectBulletedAnalysisRow picks the bulleted row for the URL', () => {
+  const picked = selectBulletedAnalysisRow(rows({ id: 'bulleted', analysisJson: STRUCTURED }), 'u1');
+  assert.equal(picked?.id, 'bulleted');
+  assert.deepEqual(picked?.analysisJson, STRUCTURED);
+});
+
+test('selectBulletedAnalysisRow skips the non-bulleted prose row even when it ran last', () => {
+  // Ascending runAt order: bulleted first, prose most-recent. The prose row
+  // must NOT win — that was the bug that blanked the table.
+  const picked = selectBulletedAnalysisRow(
+    rows(
+      { id: 'bulleted', analysisJson: STRUCTURED },
+      { id: 'prose', analysisJson: PROSE }
+    ),
+    'u1'
+  );
+  assert.equal(picked?.id, 'bulleted');
+});
+
+test('selectBulletedAnalysisRow returns the LATEST bulleted row when several exist', () => {
+  const picked = selectBulletedAnalysisRow(
+    rows(
+      { id: 'old', analysisJson: STRUCTURED },
+      { id: 'new', analysisJson: STRUCTURED }
+    ),
+    'u1'
+  );
+  assert.equal(picked?.id, 'new');
+});
+
+test('selectBulletedAnalysisRow ignores other URLs and non-PER_PRODUCT rows', () => {
+  const picked = selectBulletedAnalysisRow(
+    rows(
+      { id: 'other-url', urlId: 'u2', analysisJson: STRUCTURED },
+      { id: 'per-review', level: 'PER_REVIEW', analysisJson: STRUCTURED },
+      { id: 'mine', analysisJson: STRUCTURED }
+    ),
+    'u1'
+  );
+  assert.equal(picked?.id, 'mine');
+});
+
+test('selectBulletedAnalysisRow returns null when the only row for the URL is prose', () => {
+  // No bulleted row exists yet → nothing feeds the table (it stays hidden),
+  // rather than falling back to the prose row.
+  const picked = selectBulletedAnalysisRow(rows({ id: 'prose', analysisJson: PROSE }), 'u1');
+  assert.equal(picked, null);
+});
+
+test('selectBulletedAnalysisRow keeps a legacy flat-summary bulleted row (no flow field)', () => {
+  // Pre-v4 bulleted rows stored { summary } with no flow marker; they are NOT
+  // the non-bulleted prose row, so they remain eligible (legacy-text fallback).
+  const legacy = { summary: 'flat bullet text' };
+  const picked = selectBulletedAnalysisRow(rows({ id: 'legacy', analysisJson: legacy }), 'u1');
+  assert.equal(picked?.id, 'legacy');
 });

@@ -76,7 +76,10 @@ import { CapturedReviewAddModal } from '../../../components/CapturedReviewAddMod
 import { PerItemAnalysisBox } from '../../../components/PerItemAnalysisBox';
 import { OverallAnalysisBox } from '../../../components/OverallAnalysisBox';
 import { ReviewsTraceabilityTable } from '../../../components/ReviewsTraceabilityTable';
-import type { TraceabilityAnalysis } from '@/lib/competition-scraping/reviews-traceability';
+import {
+  selectBulletedAnalysisRow,
+  type TraceabilityAnalysis,
+} from '@/lib/competition-scraping/reviews-traceability';
 import {
   ConfirmDeleteDialog,
   type CascadeCounts,
@@ -420,19 +423,17 @@ export function UrlDetailContent({ project, urlId }: Props) {
       setImagesSlot(imagesRes);
       setVideosSlot(videosRes);
       setReviewsSlot(reviewsRes);
-      // Latest PER_PRODUCT row for this URL — the GET returns rows in
-      // ascending runAt order, so the last match is the most recent run.
+      // The traceability table renders ONLY the per-competitor BULLETED
+      // (structured) analysis. The non-bulleted prose flow stores a SECOND
+      // PER_PRODUCT row for the same URL (discriminated by analysisJson.flow);
+      // if it ran more recently, naively taking "the latest PER_PRODUCT row"
+      // would feed the prose row here and blank the table. selectBulletedAnalysisRow
+      // picks the latest PER_PRODUCT row that is NOT the non-bulleted prose row
+      // (rows arrive in ascending runAt order).
       const items = analysisRes.data?.items ?? [];
-      let latest: unknown = null;
-      let latestId: string | null = null;
-      for (const item of items) {
-        if (item.level === 'PER_PRODUCT' && item.urlId === urlId) {
-          latest = item.analysisJson;
-          latestId = item.id;
-        }
-      }
-      setReviewsAnalysisJson(latest);
-      setReviewsAnalysisId(latestId);
+      const picked = selectBulletedAnalysisRow(items, urlId);
+      setReviewsAnalysisJson(picked?.analysisJson ?? null);
+      setReviewsAnalysisId(picked?.id ?? null);
     })();
 
     return () => {

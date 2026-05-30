@@ -109,6 +109,44 @@ export function parseTraceabilityAnalysis(
   return { categories };
 }
 
+// ─── Which PER_PRODUCT row feeds the traceability table ───────────────────
+// A competitor URL can have TWO PER_PRODUCT ReviewAnalysis rows: the BULLETED
+// flow (structured { categories: [...] } — the bullet→source-review shape this
+// table renders) and the NON-BULLETED prose flow (a second PER_PRODUCT row
+// discriminated by analysisJson.flow === 'per-competitor-nonbulleted', storing
+// only prose). The traceability table can ONLY render the bulleted row.
+//
+// The URL detail page used to feed it "the latest PER_PRODUCT row of either
+// flow", so generating the non-bulleted prose summary AFTER the bulleted one
+// silently shadowed the bulleted row and blanked the table. This helper picks
+// the LATEST PER_PRODUCT row for the URL that is NOT the non-bulleted prose
+// row — restoring the bulleted summary as the table's source regardless of
+// which flow ran most recently. Rows are expected in ascending runAt order
+// (the GET /review-analysis route's order), so the last eligible match wins.
+export interface PerProductAnalysisRow {
+  id: string;
+  level: string;
+  urlId: string | null;
+  analysisJson: unknown;
+}
+
+export function selectBulletedAnalysisRow(
+  rows: ReadonlyArray<PerProductAnalysisRow>,
+  urlId: string
+): { id: string; analysisJson: unknown } | null {
+  let picked: { id: string; analysisJson: unknown } | null = null;
+  for (const row of rows) {
+    if (row.level !== 'PER_PRODUCT' || row.urlId !== urlId) continue;
+    const flow =
+      row.analysisJson && typeof row.analysisJson === 'object'
+        ? (row.analysisJson as { flow?: unknown }).flow
+        : undefined;
+    if (flow === 'per-competitor-nonbulleted') continue;
+    picked = { id: row.id, analysisJson: row.analysisJson };
+  }
+  return picked;
+}
+
 const SENTENCE_END_PUNCT = /[.!?]$/;
 
 // Merge a review's title + body for the source column, matching the same
