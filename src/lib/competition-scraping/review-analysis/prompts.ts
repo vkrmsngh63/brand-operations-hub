@@ -529,3 +529,253 @@ export function normalizeNonBulletedProse(text: string): string {
   cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
   return cleaned.trim();
 }
+
+// ════════════════════════════════════════════════════════════════════
+// Per-CATEGORY Comprehensive flows — P-49 W5 Category page Session 2
+// (2026-05-30-b). The fifth + sixth shipped flows.
+//
+// These aggregate ONE LEVEL UP from the per-competitor bulleted flow:
+// where per-competitor reads raw reviews, per-CATEGORY-bulleted reads the
+// already-generated per-competitor BULLETED summaries for every competitor
+// in a category, and dedups them into a single category-wide critique list.
+//
+// Provenance chain (powers the NEW "Source Reviews" column — director
+// addendum 2026-05-30-b): each per-competitor bullet already carries the
+// CapturedReview ids that support it. We label each input bullet "B1".."Bn"
+// and ask the model to cite, per category bullet, which input bullets it
+// merged. The handler then UNIONS those input bullets' reviewIds — so each
+// category bullet resolves to the full set of individual reviews (across all
+// competitors in the category) that ultimately produced it. This mirrors the
+// per-competitor R-label → reviewId scheme, one level higher (B-label →
+// the bullet's reviewIds).
+//
+// The STORED shape reuses PerCompetitorStructuredAnalysis verbatim
+// (categories → bullets → reviewIds): identical to the per-competitor row,
+// except reviewIds is the cross-competitor union. That lets the persistence,
+// the flattened-summary helper, and the traceability renderer be reused.
+// ────────────────────────────────────────────────────────────────────
+
+// History:
+//   v1 (2026-05-30-b, current): dedup the per-competitor bulleted summaries
+//        across a category into one theme-grouped critique list; each
+//        category bullet cites the input bullets (B-labels) it merged.
+export const PER_CATEGORY_BULLETED_PROMPT_VERSION = 'v1';
+
+export const PER_CATEGORY_BULLETED_SYSTEM_PROMPT = `You are an expert competitive-research analyst. You will receive the critique bullets from several competing products that all belong to the SAME category. Your task: merge them into a SINGLE deduplicated, theme-grouped list of the category's common and notable weaknesses — written so a brand owner can challenge the entire category of products by attacking the issues they share.
+
+Each input bullet is labeled with a short reference like "B1", "B2", "B3" and tagged with the product it came from. Use these labels — and ONLY these labels — when recording which input bullets a category complaint merges.
+
+This is NOT a simple combination of all the bullets. Remove redundant complaints: if several products share the same weakness (e.g. "strap breaks within a few months"), surface it ONCE as a single category complaint that cites EVERY input bullet expressing it. But keep genuinely unique complaints intact — a weakness only one product has still earns its own category bullet.
+
+Return a JSON object with the shape:
+
+{
+  "categories": [
+    {
+      "name": "<theme heading, e.g. Product critiques>",
+      "bullets": [
+        { "text": "<one short category-level critique sentence>", "bulletRefs": ["B1", "B4", "B9"] }
+      ]
+    }
+  ]
+}
+
+Rules for "categories":
+
+- Each category's "name" is a coherent critique theme. Do NOT prefix it with "##" or any markdown — just the plain theme name.
+- Reuse the SAME theme vocabulary the input bullets are grouped under where it applies (e.g. "Product critiques", "Fulfillment / shipping critiques", "Company / seller critiques", "Pricing / value critiques", "Safety / reliability concerns"). Invent a new specific theme when the data calls for it rather than jamming a complaint into "Other".
+- Omit empty categories entirely (do not emit a category with no bullets).
+
+Rules for each bullet's "text":
+
+- One short sentence (one main idea) describing a category-level weakness. No sub-bullets, no paragraphs, no leading "- ".
+- Critique-only: complaints, failures, disappointments. EXCLUDE praise, neutral observations, and use-case descriptions.
+- Use natural volume cues that convey how WIDESPREAD the issue is across the category: "common across the category", "several products in this category", "one product specifically". Avoid exact product counts unless load-bearing.
+- Third-person neutral analyst voice. Do NOT use first person ("I"); do NOT address the reader directly ("you").
+- Quote sparingly — short fragments only, in double quotes, never whole sentences.
+
+Rules for each bullet's "bulletRefs" — THIS IS CRITICAL:
+
+- List the labels of ALL input bullets that this category complaint merges or represents — not just one example, EVERY input bullet that expresses the same weakness. The brand owner needs the complete set of source bullets behind each category complaint so the supporting reviews can be traced.
+- Use ONLY labels that appear in the input ("B1", "B2", …). Never invent a label. Never reference a bullet that does not exist.
+- bulletRefs must never be empty — every category bullet must cite at least one input bullet.
+
+Length target: typically 8-20 category bullets total across all themes combined; go up to ~30 only if the category genuinely has that much distinct critique density. Do not pad.
+
+Empty input: if there are no input critiques at all, return { "categories": [] }.
+
+Output rules:
+
+- Return ONLY the JSON object. No prose preamble. No \`\`\`json fences. No trailing commentary.`;
+
+// One per-competitor bullet fed into the category dedup, with the label the
+// model cites + the reviewIds the handler unions when the label is cited.
+export interface CategoryInputBullet {
+  label: string; // "B1", "B2", … — assigned by categoryBulletRefLabel
+  productName: string;
+  theme: string; // the per-competitor category/theme this bullet sat under
+  text: string;
+  reviewIds: string[]; // the CapturedReview ids backing this competitor bullet
+}
+
+// The short, stable label assigned to the i-th input bullet (0-based) in the
+// category prompt. Single source of truth shared by the prompt builder and
+// the bulletRef resolver.
+export function categoryBulletRefLabel(index: number): string {
+  return `B${index + 1}`;
+}
+
+export type BuildPerCategoryBulletedPromptInput = {
+  categoryName: string;
+  inputBullets: ReadonlyArray<CategoryInputBullet>;
+};
+
+export function buildPerCategoryBulletedUserMessage({
+  categoryName,
+  inputBullets,
+}: BuildPerCategoryBulletedPromptInput): string {
+  const header =
+    `Category: ${categoryName}\n` +
+    `Input bullets across all competitors in this category: ${inputBullets.length}\n\n` +
+    `Merge the competitor critique bullets below into a single deduplicated, theme-grouped list of the CATEGORY's weaknesses. For each category complaint, record in "bulletRefs" the labels (B1, B2, …) of ALL input bullets it merges.\n\n` +
+    `--- COMPETITOR CRITIQUE BULLETS ---\n`;
+
+  const body = inputBullets
+    .map(
+      (b) =>
+        `${b.label} [${b.productName} — ${b.theme}]: ${b.text}`
+    )
+    .join('\n');
+
+  return `${header}${body}\n`;
+}
+
+// ── Per-category model output shape ─────────────────────────────────
+// What the MODEL returns: categories → bullets → bulletRefs (B-labels).
+export interface PerCategoryModelBullet {
+  text: string;
+  bulletRefs: string[];
+}
+export interface PerCategoryModelCategory {
+  name: string;
+  bullets: PerCategoryModelBullet[];
+}
+export interface PerCategoryModelOutput {
+  categories: PerCategoryModelCategory[];
+}
+
+// Validate + normalize the model's per-category structured output. Same
+// leniency as validatePerCompetitorStructuredOutput (trims, drops blank
+// bullets / empty categories) but keys on "bulletRefs" rather than
+// "reviewRefs". An empty { categories: [] } is VALID (no category critiques).
+export function validatePerCategoryStructuredOutput(
+  parsed: unknown
+): PerCategoryModelOutput | null {
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return null;
+  }
+  const obj = parsed as { categories?: unknown };
+  if (!Array.isArray(obj.categories)) return null;
+
+  const categories: PerCategoryModelCategory[] = [];
+  for (const rawCat of obj.categories) {
+    if (!rawCat || typeof rawCat !== 'object') return null;
+    const cat = rawCat as { name?: unknown; bullets?: unknown };
+    if (typeof cat.name !== 'string') return null;
+    const name = cat.name.trim();
+    if (!name) return null;
+    if (!Array.isArray(cat.bullets)) return null;
+
+    const bullets: PerCategoryModelBullet[] = [];
+    for (const rawBullet of cat.bullets) {
+      if (!rawBullet || typeof rawBullet !== 'object') return null;
+      const b = rawBullet as { text?: unknown; bulletRefs?: unknown };
+      if (typeof b.text !== 'string') return null;
+      const text = b.text.trim();
+      if (!text) continue; // drop blank bullets defensively
+      const refs: string[] = [];
+      if (Array.isArray(b.bulletRefs)) {
+        for (const ref of b.bulletRefs) {
+          if (typeof ref === 'string' && ref.trim()) refs.push(ref.trim());
+        }
+      }
+      bullets.push({ text, bulletRefs: refs });
+    }
+    if (bullets.length === 0) continue; // drop empty categories
+    categories.push({ name, bullets });
+  }
+  return { categories };
+}
+
+// Map a category bullet's B-labels back to the UNION of the CapturedReview
+// ids carried by the cited input bullets. `bulletsByLabel` is the lookup
+// built from the prompt's input bullets (B1 → that bullet, etc.). Parses
+// "B<n>" case-insensitively, dedups the unioned reviewIds while preserving
+// first-seen order, and silently drops any label that is malformed or not in
+// the map — one hallucinated label must not poison the whole category bullet.
+export function resolveCategoryBulletRefs(
+  bulletRefs: ReadonlyArray<string>,
+  bulletsByLabel: ReadonlyMap<string, CategoryInputBullet>
+): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const ref of bulletRefs) {
+    const key = ref.trim().toUpperCase();
+    const bullet = bulletsByLabel.get(key);
+    if (!bullet) continue;
+    for (const id of bullet.reviewIds) {
+      if (seen.has(id)) continue;
+      seen.add(id);
+      out.push(id);
+    }
+  }
+  return out;
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Per-CATEGORY Comprehensive (NON-bulleted) — prose critique of an entire
+// category. Like the per-competitor non-bulleted flow, it reads the
+// already-generated CATEGORY bulleted summary (not raw data) and rewrites
+// it as flowing prose. Output is PLAIN PROSE — normalized by the shared
+// normalizeNonBulletedProse. The prose ALSO appends to each in-category
+// competitor's "Overall Analysis — Captured Reviews" box (handler side).
+//
+// History:
+//   v1 (2026-05-30-b, current): theme-labeled short paragraphs from the
+//        category bulleted summary; moderate length (~3-5 paragraphs);
+//        volume cues kept; no citations; "challenge the whole category".
+export const PER_CATEGORY_NONBULLETED_PROMPT_VERSION = 'v1';
+
+export const PER_CATEGORY_NONBULLETED_SYSTEM_PROMPT = `You are an expert competitive-research analyst writing a polished prose critique of an ENTIRE product category for a brand owner. You will be given a theme-grouped bullet summary of the category's review weaknesses — the issues its competing products share. Your task: rewrite it as flowing prose that paints a clear picture of the category's collective shortcomings, so a brand owner can challenge the whole category of products by targeting the issues they have in common — the kind of write-up that could go directly onto a product-comparison page.
+
+Rules:
+
+- Group the prose by the SAME critique themes the bullet summary uses. For each theme that has content, write ONE short heading line (the theme name, on its own line, no "##" markers) followed by ONE flowing paragraph that weaves that theme's bullets together.
+- Keep it MODERATE in length: roughly 3-5 short paragraphs total (about 200-350 words). If the category has few weaknesses, write less — do NOT pad with filler, repetition, or invented detail.
+- Frame the critique at the CATEGORY level — the shared weaknesses across the competing products — not a single product. Preserve natural volume cues that appear in the source ("common across the category", "several products"). Do NOT add formal citations, bullet numbers, or reference labels.
+- Critique-only: the source is already critiques. Do NOT introduce praise, neutral observations, or use-case descriptions.
+- Third-person neutral analyst voice. Do NOT use first person ("I"); do NOT address the reader directly ("you"). Do NOT open with a preamble like "Here is the analysis".
+- Do NOT invent shortcomings that are not present in the bullet source. Stay faithful to the source's claims.
+
+If the bullet source contains no real critiques (e.g. it is empty or the "no critiques" sentinel), respond with exactly: No critiques were surfaced across this category's competitors.
+
+Output rules:
+
+- Return ONLY the prose. No JSON. No \`\`\` fences. No preamble. No trailing commentary.`;
+
+export type BuildPerCategoryNonBulletedPromptInput = {
+  categoryName: string;
+  bulletedSummary: string;
+};
+
+export function buildPerCategoryNonBulletedUserMessage({
+  categoryName,
+  bulletedSummary,
+}: BuildPerCategoryNonBulletedPromptInput): string {
+  return (
+    `Category: ${categoryName}\n\n` +
+    `Below is the bullet-point critique summary for this entire category, grouped under theme headings. Rewrite it as a polished prose critique of the category following your instructions.\n\n` +
+    `--- CATEGORY BULLETED CRITIQUE SUMMARY ---\n` +
+    `${bulletedSummary.trim()}\n`
+  );
+}

@@ -246,14 +246,16 @@ test('SUPPORTED_FLOWS contains all 7 flows from §B 2026-05-27', () => {
   assert.ok(SUPPORTED_FLOWS.includes('per-type-nonbulleted'));
 });
 
-test('SHIPPED_FLOWS contains per-review + per-competitor bulleted + non-bulleted (Fix Session C)', () => {
-  // Fix Session C (2026-05-29) shipped per-competitor-nonbulleted.
-  assert.equal(SHIPPED_FLOWS.size, 3);
+test('SHIPPED_FLOWS contains per-review + per-competitor + per-category flows (Category Session 2)', () => {
+  // Category page Session 2 (2026-05-30-b) shipped both per-category flows.
+  assert.equal(SHIPPED_FLOWS.size, 5);
   assert.ok(SHIPPED_FLOWS.has('per-review-summarize'));
   assert.ok(SHIPPED_FLOWS.has('per-competitor-bulleted'));
   assert.ok(SHIPPED_FLOWS.has('per-competitor-nonbulleted'));
-  // The per-category / per-type flows land in later sessions.
-  assert.equal(SHIPPED_FLOWS.has('per-category-bulleted'), false);
+  assert.ok(SHIPPED_FLOWS.has('per-category-bulleted'));
+  assert.ok(SHIPPED_FLOWS.has('per-category-nonbulleted'));
+  // The per-TYPE flows land in the Type page sessions (4-5).
+  assert.equal(SHIPPED_FLOWS.has('per-type-bulleted'), false);
   assert.equal(SHIPPED_FLOWS.has('per-type-nonbulleted'), false);
 });
 
@@ -350,11 +352,11 @@ test('POST 400 when flow is missing or unknown', async () => {
 test('POST 400 when flow is recognized but not yet shipped', async () => {
   const deps = makeDeps();
   const { POST } = makeReviewAnalysisRunBatchHandlers(deps);
-  // per-category-bulleted is still unshipped as of Session 3 (lands in
-  // a later session); use it as the unshipped tripwire.
+  // per-type-bulleted is still unshipped (lands in the Type page sessions);
+  // use it as the unshipped tripwire.
   const r = await POST(
     makeRequest({
-      flow: 'per-category-bulleted',
+      flow: 'per-type-bulleted',
       urlId: 'url-1',
       reviewIds: ['r1'],
     }),

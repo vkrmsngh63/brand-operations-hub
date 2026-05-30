@@ -69,7 +69,25 @@ import {
   PER_COMPETITOR_NONBULLETED_SYSTEM_PROMPT,
   buildPerCompetitorNonBulletedUserMessage,
   normalizeNonBulletedProse,
+  type PerCompetitorStructuredCategory,
+  // Per-CATEGORY flows (Session 2)
+  PER_CATEGORY_BULLETED_PROMPT_VERSION,
+  PER_CATEGORY_BULLETED_SYSTEM_PROMPT,
+  buildPerCategoryBulletedUserMessage,
+  validatePerCategoryStructuredOutput,
+  PER_CATEGORY_NONBULLETED_PROMPT_VERSION,
+  PER_CATEGORY_NONBULLETED_SYSTEM_PROMPT,
+  buildPerCategoryNonBulletedUserMessage,
 } from '../review-analysis/prompts.ts';
+import {
+  collectCategoryInputBullets,
+  buildCategoryStructuredAnalysis,
+  canonicalizeCategoryInputBullets,
+} from '../category-analysis-aggregation.ts';
+import {
+  selectBulletedAnalysisRow,
+  parseTraceabilityAnalysis,
+} from '../reviews-traceability.ts';
 import { countMessageTokens } from '../review-analysis/token-counter.ts';
 
 import type {
@@ -107,6 +125,9 @@ export const SHIPPED_FLOWS = new Set<ReviewAnalysisFlow>([
   'per-review-summarize',
   'per-competitor-bulleted',
   'per-competitor-nonbulleted',
+  // P-49 W5 Category page Session 2 (2026-05-30-b).
+  'per-category-bulleted',
+  'per-category-nonbulleted',
 ]);
 
 export function isReviewAnalysisFlow(v: unknown): v is ReviewAnalysisFlow {
@@ -149,6 +170,61 @@ export type ReviewAnalysisCachedRow = {
 
 export type ReviewAnalysisCreatedRow = {
   id: string;
+};
+
+// P-49 W5 Category page Session 2 — rows read by the per-category flows.
+export type CompetitorUrlNameRow = { id: string; productName: string | null };
+export type ReviewAnalysisScanRow = {
+  id: string;
+  level: string;
+  urlId: string | null;
+  analysisJson: Prisma.JsonValue;
+};
+export type ReviewAnalysisCategoryCacheRow = {
+  id: string;
+  analysisJson: Prisma.JsonValue;
+};
+
+// The category flows need a few queries the rigid per-url deps type doesn't
+// declare. Rather than widen that shared type (which the real PrismaClient +
+// the per-competitor mock both satisfy precisely), the category branch casts
+// `prisma` to this narrow local view — the real client + a category-aware
+// mock both satisfy it structurally.
+export type CategoryQueryPrisma = {
+  competitorUrl: {
+    findMany(args: {
+      where: { id: { in: string[] }; projectWorkflowId: string };
+      select: { id: true; productName: true };
+    }): Promise<CompetitorUrlNameRow[]>;
+    findUnique(args: {
+      where: { id: string };
+      select: { overallAnalyses: true };
+    }): Promise<{ overallAnalyses: Prisma.JsonValue } | null>;
+    update(args: {
+      where: { id: string };
+      data: { overallAnalyses: Prisma.InputJsonValue };
+    }): Promise<{ id: string }>;
+  };
+  reviewAnalysis: {
+    findMany(args: {
+      where: { urlId: { in: string[] }; level: 'PER_PRODUCT' };
+      select: { id: true; level: true; urlId: true; analysisJson: true };
+      orderBy: { runAt: 'asc' };
+    }): Promise<ReviewAnalysisScanRow[]>;
+    findMany(args: {
+      where: {
+        projectId: string;
+        level: 'PER_CATEGORY';
+        typeFilter: string;
+        reviewsHash: { in: string[] };
+      };
+      select: { id: true; analysisJson: true };
+    }): Promise<ReviewAnalysisCategoryCacheRow[]>;
+    create(args: {
+      data: Prisma.ReviewAnalysisUncheckedCreateInput;
+      select: { id: true };
+    }): Promise<ReviewAnalysisCreatedRow>;
+  };
 };
 
 export type ReviewAnalysisRunBatchPrismaLike = {
@@ -279,10 +355,43 @@ export interface PerCompetitorNonBulletedResponseBody {
   usage: PerReviewBatchUsage;
 }
 
+// Per-CATEGORY bulleted wire shape — P-49 W5 Category page Session 2. ONE
+// deduplicated category summary per call. `categoryKey` is echoed back so the
+// browser can verify the response matches the category cell it dispatched for
+// before painting (director's "redundancies … no cell mistakenly skipped"
+// directive). `categories` carries the structured bullets + each bullet's
+// UNIONED source reviewIds — the browser renders the bullets into Column 12
+// AND resolves the reviewIds into the NEW "Source Reviews" column. `summary`
+// is the flattened text for the Column-12 cell + Edit affordance.
+export interface PerCategoryBulletedResponseBody {
+  flow: 'per-category-bulleted';
+  categoryKey: string;
+  analysisId: string;
+  summary: string;
+  categories: PerCompetitorStructuredCategory[];
+  source: 'cache' | 'fresh';
+  usage: PerReviewBatchUsage;
+}
+
+// Per-CATEGORY NON-bulleted wire shape — ONE prose summary per call,
+// discriminated in analysisJson.flow like the per-competitor non-bulleted
+// row. The prose paints Column 13 + appends to each in-category competitor's
+// "Overall Analysis — Captured Reviews" box (handler write-back).
+export interface PerCategoryNonBulletedResponseBody {
+  flow: 'per-category-nonbulleted';
+  categoryKey: string;
+  analysisId: string;
+  summary: string;
+  source: 'cache' | 'fresh';
+  usage: PerReviewBatchUsage;
+}
+
 export type RunBatchResponseBody =
   | PerReviewBatchResponseBody
   | PerCompetitorBulletedResponseBody
-  | PerCompetitorNonBulletedResponseBody;
+  | PerCompetitorNonBulletedResponseBody
+  | PerCategoryBulletedResponseBody
+  | PerCategoryNonBulletedResponseBody;
 
 // Pull the concatenated text content out of a messages.create response.
 function extractTextFromContent(
@@ -390,6 +499,10 @@ export function makeReviewAnalysisRunBatchHandlers(
       // browser supplies it from competitorSummaryByUrlId), not the raw
       // review corpus. Required for flow='per-competitor-nonbulleted'.
       bulletedSummary?: unknown;
+      // P-49 W5 Category page Session 2 — the per-category flows operate on a
+      // whole category (a set of competitor urls), not a single urlId.
+      categoryKey?: unknown; // the category label (typeFilter); '(Uncategorized)' etc.
+      urlIds?: unknown; // the competitor urls in this category (input + write-back targets)
     };
 
     if (!isReviewAnalysisFlow(body.flow)) {
@@ -408,6 +521,490 @@ export function makeReviewAnalysisRunBatchHandlers(
           error: `flow '${flow}' is not yet shipped; supported flows: ${[...SHIPPED_FLOWS].join(', ')}.`,
         },
       };
+    }
+
+    // ─── Per-CATEGORY flows (Session 2) ──────────────────────────────────
+    // These aggregate across a whole category (a set of competitor urls), so
+    // they branch BEFORE the single-urlId contract below. The bulleted flow
+    // dedups the per-competitor bulleted summaries + traces each category
+    // bullet to its source reviews; the non-bulleted flow rewrites the
+    // category bulleted summary as prose + appends it to each in-category
+    // competitor's "Overall Analysis — Captured Reviews" box.
+    if (flow === 'per-category-bulleted' || flow === 'per-category-nonbulleted') {
+      const categoryKey =
+        typeof body.categoryKey === 'string' ? body.categoryKey.trim() : '';
+      if (!categoryKey) {
+        return {
+          status: 400,
+          body: { error: 'categoryKey is required for per-category flows' },
+        };
+      }
+      const catModelVersion =
+        typeof body.modelVersion === 'string' && body.modelVersion.trim()
+          ? body.modelVersion.trim()
+          : DEFAULT_MODEL_VERSION;
+      if (!isSupportedModelVersion(catModelVersion)) {
+        return {
+          status: 400,
+          body: {
+            error: `modelVersion must be one of: claude-opus-4-7, claude-opus-4-6`,
+          },
+        };
+      }
+
+      // Narrow view of `prisma` carrying the category-specific queries the
+      // rigid per-url deps type doesn't declare (see CategoryQueryPrisma).
+      const catPrisma = prisma as unknown as CategoryQueryPrisma;
+
+      // urlIds = the competitors in this category. Required for the bulleted
+      // flow (the input source) AND the non-bulleted flow (write-back targets).
+      const catUrlIds: string[] = [];
+      if (!Array.isArray(body.urlIds) || body.urlIds.length === 0) {
+        return {
+          status: 400,
+          body: {
+            error: 'urlIds must be a non-empty array of strings for per-category flows',
+          },
+        };
+      }
+      {
+        const seen = new Set<string>();
+        for (const id of body.urlIds) {
+          if (typeof id !== 'string' || !id.trim()) {
+            return {
+              status: 400,
+              body: { error: 'urlIds must contain only non-empty strings' },
+            };
+          }
+          const t = id.trim();
+          if (!seen.has(t)) {
+            seen.add(t);
+            catUrlIds.push(t);
+          }
+        }
+      }
+
+      // Confirm every url belongs to this project's workflow + grab product
+      // names (shown in the Source Reviews cell to disambiguate products).
+      let catUrls: Array<{ id: string; productName: string | null }>;
+      try {
+        catUrls = await withRetry(() =>
+          catPrisma.competitorUrl.findMany({
+            where: { id: { in: catUrlIds }, projectWorkflowId },
+            select: { id: true, productName: true },
+          })
+        );
+      } catch (error) {
+        recordFlake('POST per-category load urls', error, { projectId });
+        return { status: 502, body: { error: 'Failed to load category competitors' } };
+      }
+      if (catUrls.length !== catUrlIds.length) {
+        return {
+          status: 404,
+          body: { error: 'One or more competitor URLs not found in this project' },
+        };
+      }
+      const productNameById = new Map(
+        catUrls.map((u) => [u.id, u.productName ?? 'Unknown product'])
+      );
+
+      const ZERO_USAGE = {
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheCreationInputTokens: 0,
+        cacheReadInputTokens: 0,
+        actualCostUsd: 0,
+        estimatedCostUsd: 0,
+      };
+
+      // ── Category Comprehensive (bulleted) — dedup + provenance ──────────
+      if (flow === 'per-category-bulleted') {
+        // Load the per-competitor PER_PRODUCT rows for these urls; pick each
+        // url's latest BULLETED (structured) row, excluding the non-bulleted
+        // prose row, via the shared selector.
+        let perProductRows: ReviewAnalysisScanRow[];
+        try {
+          perProductRows = await withRetry(() =>
+            catPrisma.reviewAnalysis.findMany({
+              where: { urlId: { in: catUrlIds }, level: 'PER_PRODUCT' },
+              select: { id: true, level: true, urlId: true, analysisJson: true },
+              orderBy: { runAt: 'asc' },
+            })
+          );
+        } catch (error) {
+          recordFlake('POST per-category-bulleted load per-product', error, {
+            projectId,
+          });
+          return {
+            status: 502,
+            body: { error: 'Failed to load competitor summaries' },
+          };
+        }
+
+        const competitors = catUrlIds.map((uid) => ({
+          urlId: uid,
+          productName: productNameById.get(uid) ?? 'Unknown product',
+          analysisJson:
+            selectBulletedAnalysisRow(perProductRows, uid)?.analysisJson ?? null,
+        }));
+        const { inputBullets, bulletsByLabel } =
+          collectCategoryInputBullets(competitors);
+
+        if (inputBullets.length === 0) {
+          return {
+            status: 400,
+            body: {
+              error:
+                'No competitor bulleted summaries found for this category — generate the per-competitor bulleted summaries first',
+            },
+          };
+        }
+
+        const catCacheKeyVersion = `${catModelVersion}|${PER_CATEGORY_BULLETED_PROMPT_VERSION}`;
+        const catHash = createHash('sha256')
+          .update(
+            `${categoryKey}\n${canonicalizeCategoryInputBullets(inputBullets)}\n|${catCacheKeyVersion}`
+          )
+          .digest('hex');
+
+        let catCachedRows: ReviewAnalysisCategoryCacheRow[];
+        try {
+          catCachedRows = await withRetry(() =>
+            catPrisma.reviewAnalysis.findMany({
+              where: {
+                projectId,
+                level: 'PER_CATEGORY',
+                typeFilter: categoryKey,
+                reviewsHash: { in: [catHash] },
+              },
+              select: { id: true, analysisJson: true },
+            })
+          );
+        } catch (error) {
+          recordFlake('POST per-category-bulleted cache lookup', error, {
+            projectId,
+          });
+          catCachedRows = [];
+        }
+        const catCachedHit = catCachedRows
+          .map((r) => ({
+            id: r.id,
+            summary: summaryFromCachedJson(r.analysisJson),
+            categories:
+              parseTraceabilityAnalysis(r.analysisJson)?.categories ?? [],
+          }))
+          .find((e): e is { id: string; summary: string; categories: PerCompetitorStructuredCategory[] } => !!e.summary);
+        if (catCachedHit) {
+          const cachedResponse: PerCategoryBulletedResponseBody = {
+            flow: 'per-category-bulleted',
+            categoryKey,
+            analysisId: catCachedHit.id,
+            summary: catCachedHit.summary,
+            categories: catCachedHit.categories,
+            source: 'cache',
+            usage: ZERO_USAGE,
+          };
+          return { status: 200, body: cachedResponse };
+        }
+
+        const userText = buildPerCategoryBulletedUserMessage({
+          categoryName: categoryKey,
+          inputBullets,
+        });
+        let estInputTokens = 0;
+        try {
+          estInputTokens = await countMessageTokens({
+            client: anthropicClient,
+            model: catModelVersion,
+            system: PER_CATEGORY_BULLETED_SYSTEM_PROMPT,
+            messages: [{ role: 'user', content: userText }],
+          });
+        } catch (error) {
+          recordFlake('POST per-category-bulleted countTokens', error, {
+            projectId,
+          });
+        }
+        const estCost = estimateCostUsd(catModelVersion, estInputTokens, 4_000);
+
+        let resp: Anthropic.Message;
+        try {
+          resp = await anthropicClient.messages.create({
+            model: catModelVersion,
+            max_tokens: PER_BATCH_MAX_OUTPUT_TOKENS,
+            system: PER_CATEGORY_BULLETED_SYSTEM_PROMPT,
+            messages: [{ role: 'user', content: userText }],
+          });
+        } catch (error) {
+          recordFlake('POST per-category-bulleted messages.create', error, {
+            projectId,
+          });
+          return {
+            status: 502,
+            body: {
+              error: `AI call failed: ${error instanceof Error ? error.message : 'unknown error'}`,
+            },
+          };
+        }
+        const text = extractTextFromContent(resp.content);
+        let parsed: unknown;
+        try {
+          parsed = extractJsonFromModelText(text);
+        } catch (error) {
+          recordFlake('POST per-category-bulleted parse JSON', error, {
+            projectId,
+          });
+          return { status: 502, body: { error: 'AI returned malformed JSON' } };
+        }
+        const modelOut = validatePerCategoryStructuredOutput(parsed);
+        if (!modelOut) {
+          return {
+            status: 502,
+            body: { error: 'AI output did not match the per-category schema' },
+          };
+        }
+        const structured = buildCategoryStructuredAnalysis(
+          modelOut,
+          bulletsByLabel
+        );
+        const summary = flattenCategoriesToSummaryString(structured);
+
+        let persistedId: string | null = null;
+        try {
+          const created = await withRetry(() =>
+            prisma.reviewAnalysis.create({
+              data: {
+                level: 'PER_CATEGORY',
+                urlId: null,
+                projectId,
+                typeFilter: categoryKey,
+                analysisJson: {
+                  summary,
+                  categories: structured.categories,
+                } as unknown as Prisma.InputJsonValue,
+                reviewsHash: catHash,
+                modelVersion: catModelVersion,
+                runByUserId: userId,
+                costUsdMicros: null,
+              },
+              select: { id: true },
+            })
+          );
+          persistedId = created.id;
+        } catch (error) {
+          recordFlake('POST per-category-bulleted persist', error, {
+            projectId,
+          });
+        }
+
+        const actualCost = calculateCostUsd(catModelVersion, {
+          inputTokens: resp.usage.input_tokens,
+          outputTokens: resp.usage.output_tokens,
+          cacheCreationInputTokens: resp.usage.cache_creation_input_tokens ?? 0,
+          cacheReadInputTokens: resp.usage.cache_read_input_tokens ?? 0,
+        });
+        const freshResponse: PerCategoryBulletedResponseBody = {
+          flow: 'per-category-bulleted',
+          categoryKey,
+          analysisId: persistedId ?? '',
+          summary,
+          categories: structured.categories,
+          source: 'fresh',
+          usage: {
+            inputTokens: resp.usage.input_tokens,
+            outputTokens: resp.usage.output_tokens,
+            cacheCreationInputTokens: resp.usage.cache_creation_input_tokens ?? 0,
+            cacheReadInputTokens: resp.usage.cache_read_input_tokens ?? 0,
+            actualCostUsd: actualCost,
+            estimatedCostUsd: estCost,
+          },
+        };
+        return { status: 200, body: freshResponse };
+      }
+
+      // ── Category Comprehensive (NON-bulleted) — prose + write-back ──────
+      const catBulletedSummary =
+        typeof body.bulletedSummary === 'string'
+          ? body.bulletedSummary.trim()
+          : '';
+      if (!catBulletedSummary) {
+        return {
+          status: 400,
+          body: {
+            error:
+              'bulletedSummary is required for the per-category non-bulleted flow — generate the category bulleted summary first',
+          },
+        };
+      }
+      const nbCacheKeyVersion = `${catModelVersion}|${PER_CATEGORY_NONBULLETED_PROMPT_VERSION}`;
+      const nbHash = createHash('sha256')
+        .update(`${categoryKey}\n${catBulletedSummary}\n|${nbCacheKeyVersion}`)
+        .digest('hex');
+
+      let nbCachedRows: ReviewAnalysisCategoryCacheRow[];
+      try {
+        nbCachedRows = await withRetry(() =>
+          catPrisma.reviewAnalysis.findMany({
+            where: {
+              projectId,
+              level: 'PER_CATEGORY',
+              typeFilter: categoryKey,
+              reviewsHash: { in: [nbHash] },
+            },
+            select: { id: true, analysisJson: true },
+          })
+        );
+      } catch (error) {
+        recordFlake('POST per-category-nonbulleted cache lookup', error, {
+          projectId,
+        });
+        nbCachedRows = [];
+      }
+      const nbCachedHit = nbCachedRows
+        .map((r) => ({ id: r.id, summary: summaryFromCachedJson(r.analysisJson) }))
+        .find((e): e is { id: string; summary: string } => !!e.summary);
+      if (nbCachedHit) {
+        const cachedResponse: PerCategoryNonBulletedResponseBody = {
+          flow: 'per-category-nonbulleted',
+          categoryKey,
+          analysisId: nbCachedHit.id,
+          summary: nbCachedHit.summary,
+          source: 'cache',
+          usage: ZERO_USAGE,
+        };
+        return { status: 200, body: cachedResponse };
+      }
+
+      const nbUserText = buildPerCategoryNonBulletedUserMessage({
+        categoryName: categoryKey,
+        bulletedSummary: catBulletedSummary,
+      });
+      let nbEstInputTokens = 0;
+      try {
+        nbEstInputTokens = await countMessageTokens({
+          client: anthropicClient,
+          model: catModelVersion,
+          system: PER_CATEGORY_NONBULLETED_SYSTEM_PROMPT,
+          messages: [{ role: 'user', content: nbUserText }],
+        });
+      } catch (error) {
+        recordFlake('POST per-category-nonbulleted countTokens', error, {
+          projectId,
+        });
+      }
+      const nbEstCost = estimateCostUsd(catModelVersion, nbEstInputTokens, 4_000);
+
+      let nbResp: Anthropic.Message;
+      try {
+        nbResp = await anthropicClient.messages.create({
+          model: catModelVersion,
+          max_tokens: PER_BATCH_MAX_OUTPUT_TOKENS,
+          system: PER_CATEGORY_NONBULLETED_SYSTEM_PROMPT,
+          messages: [{ role: 'user', content: nbUserText }],
+        });
+      } catch (error) {
+        recordFlake('POST per-category-nonbulleted messages.create', error, {
+          projectId,
+        });
+        return {
+          status: 502,
+          body: {
+            error: `AI call failed: ${error instanceof Error ? error.message : 'unknown error'}`,
+          },
+        };
+      }
+      const nbProse = normalizeNonBulletedProse(
+        extractTextFromContent(nbResp.content)
+      );
+      if (!nbProse) {
+        return {
+          status: 502,
+          body: { error: 'AI returned empty prose' },
+        };
+      }
+
+      let nbPersistedId: string | null = null;
+      try {
+        const created = await withRetry(() =>
+          prisma.reviewAnalysis.create({
+            data: {
+              level: 'PER_CATEGORY',
+              urlId: null,
+              projectId,
+              typeFilter: categoryKey,
+              analysisJson: {
+                summary: nbProse,
+                flow: 'per-category-nonbulleted',
+              } as unknown as Prisma.InputJsonValue,
+              reviewsHash: nbHash,
+              modelVersion: catModelVersion,
+              runByUserId: userId,
+              costUsdMicros: null,
+            },
+            select: { id: true },
+          })
+        );
+        nbPersistedId = created.id;
+      } catch (error) {
+        recordFlake('POST per-category-nonbulleted persist', error, {
+          projectId,
+        });
+      }
+
+      // Write-back: append the category prose to the BOTTOM of EACH in-category
+      // competitor's "Overall Analysis — Captured Reviews" box per §1 verbatim
+      // "merge, never overwrite". Idempotent via tipTapDocContainsSummary.
+      for (const uid of catUrlIds) {
+        try {
+          const cu = await withRetry(() =>
+            prisma.competitorUrl.findUnique({
+              where: { id: uid },
+              select: { overallAnalyses: true },
+            })
+          );
+          const bag = isValidOverallAnalysesBag(cu?.overallAnalyses)
+            ? (cu!.overallAnalyses as Record<string, Record<string, unknown>>)
+            : {};
+          const existingReviews = bag.reviews ?? {};
+          if (!tipTapDocContainsSummary(existingReviews, nbProse)) {
+            const merged = appendSummaryToTipTapDoc(existingReviews, nbProse);
+            await withRetry(() =>
+              prisma.competitorUrl.update({
+                where: { id: uid },
+                data: {
+                  overallAnalyses: { ...bag, reviews: merged } as Prisma.InputJsonValue,
+                },
+              })
+            );
+          }
+        } catch (error) {
+          recordFlake('POST per-category-nonbulleted writeback', error, {
+            projectId,
+          });
+        }
+      }
+
+      const nbActualCost = calculateCostUsd(catModelVersion, {
+        inputTokens: nbResp.usage.input_tokens,
+        outputTokens: nbResp.usage.output_tokens,
+        cacheCreationInputTokens: nbResp.usage.cache_creation_input_tokens ?? 0,
+        cacheReadInputTokens: nbResp.usage.cache_read_input_tokens ?? 0,
+      });
+      const nbFreshResponse: PerCategoryNonBulletedResponseBody = {
+        flow: 'per-category-nonbulleted',
+        categoryKey,
+        analysisId: nbPersistedId ?? '',
+        summary: nbProse,
+        source: 'fresh',
+        usage: {
+          inputTokens: nbResp.usage.input_tokens,
+          outputTokens: nbResp.usage.output_tokens,
+          cacheCreationInputTokens: nbResp.usage.cache_creation_input_tokens ?? 0,
+          cacheReadInputTokens: nbResp.usage.cache_read_input_tokens ?? 0,
+          actualCostUsd: nbActualCost,
+          estimatedCostUsd: nbEstCost,
+        },
+      };
+      return { status: 200, body: nbFreshResponse };
     }
 
     const urlId = typeof body.urlId === 'string' ? body.urlId.trim() : '';

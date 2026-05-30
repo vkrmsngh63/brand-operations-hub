@@ -24,6 +24,16 @@ import {
   PER_COMPETITOR_NONBULLETED_SYSTEM_PROMPT,
   buildPerCompetitorNonBulletedUserMessage,
   normalizeNonBulletedProse,
+  PER_CATEGORY_BULLETED_PROMPT_VERSION,
+  PER_CATEGORY_BULLETED_SYSTEM_PROMPT,
+  buildPerCategoryBulletedUserMessage,
+  categoryBulletRefLabel,
+  validatePerCategoryStructuredOutput,
+  resolveCategoryBulletRefs,
+  PER_CATEGORY_NONBULLETED_PROMPT_VERSION,
+  PER_CATEGORY_NONBULLETED_SYSTEM_PROMPT,
+  buildPerCategoryNonBulletedUserMessage,
+  type CategoryInputBullet,
 } from './prompts.ts';
 
 function makeReview(
@@ -510,4 +520,139 @@ test('normalizeNonBulletedProse collapses 3+ blank lines to one blank line', () 
 test('normalizeNonBulletedProse returns empty string for whitespace-only input', () => {
   assert.equal(normalizeNonBulletedProse('   \n\n  '), '');
   assert.equal(normalizeNonBulletedProse(''), '');
+});
+
+// ─── Per-CATEGORY bulleted flow (Session 2 — dedup + provenance) ───────────
+
+function makeInputBullet(
+  label: string,
+  overrides: Partial<CategoryInputBullet> = {}
+): CategoryInputBullet {
+  return {
+    label,
+    productName: 'BrandA Eye Roller',
+    theme: 'Product critiques',
+    text: 'Strap breaks within ~3 months',
+    reviewIds: ['r1'],
+    ...overrides,
+  };
+}
+
+test('PER_CATEGORY_BULLETED_PROMPT_VERSION is set to v1', () => {
+  assert.equal(PER_CATEGORY_BULLETED_PROMPT_VERSION, 'v1');
+});
+
+test('PER_CATEGORY_BULLETED_SYSTEM_PROMPT carries dedup + B-label provenance + category-level directives', () => {
+  const p = PER_CATEGORY_BULLETED_SYSTEM_PROMPT;
+  assert.ok(p.includes('SAME category'));
+  assert.ok(p.includes('"bulletRefs"'));
+  assert.ok(p.includes('B1'));
+  // Load-bearing dedup semantics (director's explicit requirement).
+  assert.ok(/deduplicat|redundant/i.test(p));
+  assert.ok(p.includes('keep genuinely unique complaints intact'));
+  // bulletRefs must be complete, never empty.
+  assert.ok(p.includes('bulletRefs must never be empty'));
+  // Critique-only + JSON-only.
+  assert.ok(p.includes('Critique-only'));
+  assert.ok(p.includes('Return ONLY the JSON object'));
+});
+
+test('categoryBulletRefLabel is 1-based (index 0 → B1)', () => {
+  assert.equal(categoryBulletRefLabel(0), 'B1');
+  assert.equal(categoryBulletRefLabel(8), 'B9');
+});
+
+test('buildPerCategoryBulletedUserMessage emits header + B-labeled, product-tagged bullets', () => {
+  const msg = buildPerCategoryBulletedUserMessage({
+    categoryName: 'Eye Creams',
+    inputBullets: [
+      makeInputBullet('B1', { productName: 'BrandA', text: 'Strap breaks' }),
+      makeInputBullet('B2', { productName: 'BrandB', theme: 'Documentation', text: 'No manual' }),
+    ],
+  });
+  assert.ok(msg.includes('Category: Eye Creams'));
+  assert.ok(msg.includes('Input bullets across all competitors in this category: 2'));
+  assert.ok(msg.includes('B1 [BrandA — Product critiques]: Strap breaks'));
+  assert.ok(msg.includes('B2 [BrandB — Documentation]: No manual'));
+});
+
+test('validatePerCategoryStructuredOutput accepts a well-formed shape', () => {
+  const out = validatePerCategoryStructuredOutput({
+    categories: [
+      {
+        name: 'Product critiques',
+        bullets: [{ text: 'Strap durability is a common weakness', bulletRefs: ['B1', 'B3'] }],
+      },
+    ],
+  });
+  assert.ok(out);
+  assert.equal(out!.categories[0].bullets[0].bulletRefs.length, 2);
+});
+
+test('validatePerCategoryStructuredOutput accepts empty categories + trims/drops blanks', () => {
+  assert.deepEqual(validatePerCategoryStructuredOutput({ categories: [] }), {
+    categories: [],
+  });
+  const out = validatePerCategoryStructuredOutput({
+    categories: [
+      { name: '  Theme  ', bullets: [{ text: '  keep  ', bulletRefs: [' B1 ', 7] }, { text: '   ', bulletRefs: ['B2'] }] },
+      { name: 'Empty', bullets: [{ text: '   ', bulletRefs: ['B9'] }] },
+    ],
+  });
+  assert.ok(out);
+  assert.equal(out!.categories.length, 1); // empty-bullet category dropped
+  assert.equal(out!.categories[0].name, 'Theme');
+  assert.deepEqual(out!.categories[0].bullets, [{ text: 'keep', bulletRefs: ['B1'] }]);
+});
+
+test('validatePerCategoryStructuredOutput rejects malformed shapes', () => {
+  assert.equal(validatePerCategoryStructuredOutput(null), null);
+  assert.equal(validatePerCategoryStructuredOutput([]), null);
+  assert.equal(validatePerCategoryStructuredOutput({ categories: 'x' }), null);
+  assert.equal(validatePerCategoryStructuredOutput({ categories: [{ bullets: [] }] }), null);
+  assert.equal(
+    validatePerCategoryStructuredOutput({ categories: [{ name: 'X', bullets: 'y' }] }),
+    null
+  );
+});
+
+test('resolveCategoryBulletRefs unions cited bullets reviewIds, dedups, preserves order, drops unknowns', () => {
+  const bulletsByLabel = new Map<string, CategoryInputBullet>([
+    ['B1', makeInputBullet('B1', { reviewIds: ['r1', 'r2'] })],
+    ['B2', makeInputBullet('B2', { reviewIds: ['r2', 'r3'] })], // r2 overlaps B1
+    ['B3', makeInputBullet('B3', { reviewIds: ['r9'] })],
+  ]);
+  // Cite B1 + B2 → union r1,r2,r3 (r2 once). Case-insensitive label. Unknown B7 dropped.
+  assert.deepEqual(
+    resolveCategoryBulletRefs(['B1', 'b2', 'B7'], bulletsByLabel),
+    ['r1', 'r2', 'r3']
+  );
+  // No valid refs → empty.
+  assert.deepEqual(resolveCategoryBulletRefs(['B7', ''], bulletsByLabel), []);
+});
+
+// ─── Per-CATEGORY non-bulleted flow (Session 2 — prose) ───────────────────
+
+test('PER_CATEGORY_NONBULLETED_PROMPT_VERSION is set to v1', () => {
+  assert.equal(PER_CATEGORY_NONBULLETED_PROMPT_VERSION, 'v1');
+});
+
+test('PER_CATEGORY_NONBULLETED_SYSTEM_PROMPT carries category-level prose + critique-only + prose-only directives', () => {
+  const p = PER_CATEGORY_NONBULLETED_SYSTEM_PROMPT;
+  assert.ok(/entire .*category|category level|CATEGORY level/i.test(p));
+  assert.ok(p.includes('challenge the whole category'));
+  assert.ok(p.includes('Critique-only'));
+  assert.ok(p.includes('No JSON'));
+  // No per-review citations in the prose half.
+  assert.ok(/Do NOT add formal citations/i.test(p));
+});
+
+test('buildPerCategoryNonBulletedUserMessage embeds the category bulleted summary', () => {
+  const msg = buildPerCategoryNonBulletedUserMessage({
+    categoryName: 'Eye Creams',
+    bulletedSummary: '## Product critiques\n- Strap breaks',
+  });
+  assert.ok(msg.includes('Category: Eye Creams'));
+  assert.ok(msg.includes('CATEGORY BULLETED CRITIQUE SUMMARY'));
+  assert.ok(msg.includes('- Strap breaks'));
 });
