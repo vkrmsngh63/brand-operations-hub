@@ -79,6 +79,12 @@ import {
   type CategoryTableColumnDef,
 } from '@/lib/competition-scraping/category-table-columns';
 import {
+  CategoryAiRunModal,
+  type CategoryFlow,
+  type CategoryRunTarget,
+} from './components/CategoryAiRunModal';
+import type { PerCompetitorStructuredCategory } from '@/lib/competition-scraping/review-analysis/prompts';
+import {
   buildCategoryGroups,
   normalizeCategoryKey,
   type CategoryDisplayRow,
@@ -134,6 +140,13 @@ type ReviewsLoadState =
 
 type ReviewSummaryEntry = { summary: string; source: 'cache' };
 type CompetitorSummaryEntry = { summary: string; source: 'cache' };
+// Category bulleted summary + its structured categories (each bullet's source
+// reviewIds) for the Source Reviews column + the analysisId for editing.
+type CategoryBulletedEntry = {
+  summary: string;
+  analysisId: string;
+  categories: PerCompetitorStructuredCategory[];
+};
 
 export default function ReviewsAnalysisByCategoryPage(): JSX.Element {
   const params = useParams();
@@ -154,6 +167,15 @@ export default function ReviewsAnalysisByCategoryPage(): JSX.Element {
   >({});
   const [competitorNonBulletedByUrlId, setCompetitorNonBulletedByUrlId] =
     useState<Record<string, CompetitorSummaryEntry>>({});
+  // Category-level AI summaries, keyed by category key (typeFilter). Bulleted
+  // carries the structured categories (bullets + source reviewIds) for the
+  // Source Reviews column; non-bulleted is prose for Column 13.
+  const [categoryBulletedByKey, setCategoryBulletedByKey] = useState<
+    Record<string, CategoryBulletedEntry>
+  >({});
+  const [categoryNonBulletedByKey, setCategoryNonBulletedByKey] = useState<
+    Record<string, CompetitorSummaryEntry>
+  >({});
 
   const [columnVisibility, setColumnVisibility] = useState<
     Record<string, boolean>
@@ -367,6 +389,7 @@ export default function ReviewsAnalysisByCategoryPage(): JSX.Element {
             id: string;
             level: string;
             urlId: string | null;
+            typeFilter: string | null;
             analysisJson: unknown;
           }>;
         };
@@ -374,6 +397,8 @@ export default function ReviewsAnalysisByCategoryPage(): JSX.Element {
         const nextReview: Record<string, ReviewSummaryEntry> = {};
         const nextBulleted: Record<string, CompetitorSummaryEntry> = {};
         const nextNonBulleted: Record<string, CompetitorSummaryEntry> = {};
+        const nextCatBulleted: Record<string, CategoryBulletedEntry> = {};
+        const nextCatNonBulleted: Record<string, CompetitorSummaryEntry> = {};
         for (const item of body.items) {
           const aj =
             item.analysisJson && typeof item.analysisJson === 'object'
@@ -390,12 +415,27 @@ export default function ReviewsAnalysisByCategoryPage(): JSX.Element {
             } else {
               nextBulleted[item.urlId] = { summary, source: 'cache' };
             }
+          } else if (item.level === 'PER_CATEGORY' && item.typeFilter != null) {
+            if (aj.flow === 'per-category-nonbulleted') {
+              nextCatNonBulleted[item.typeFilter] = { summary, source: 'cache' };
+            } else {
+              const cats = Array.isArray(aj.categories)
+                ? (aj.categories as PerCompetitorStructuredCategory[])
+                : [];
+              nextCatBulleted[item.typeFilter] = {
+                summary,
+                analysisId: item.id,
+                categories: cats,
+              };
+            }
           }
         }
         if (cancelled) return;
         setSummaryByReviewId(nextReview);
         setCompetitorBulletedByUrlId(nextBulleted);
         setCompetitorNonBulletedByUrlId(nextNonBulleted);
+        setCategoryBulletedByKey(nextCatBulleted);
+        setCategoryNonBulletedByKey(nextCatNonBulleted);
       } catch {
         // page still renders; summaries just show "—"
       }
@@ -510,6 +550,35 @@ export default function ReviewsAnalysisByCategoryPage(): JSX.Element {
       });
     },
     [layout, persistLayout]
+  );
+
+  // Paint a completed category AI run into Columns 12/13 (live + on refresh).
+  const handleCategoryResult = useCallback(
+    (result: {
+      categoryKey: string;
+      analysisId: string;
+      summary: string;
+      categories: PerCompetitorStructuredCategory[] | null;
+      source: 'cache' | 'fresh';
+    }) => {
+      if (result.categories) {
+        const cats = result.categories;
+        setCategoryBulletedByKey((prev) => ({
+          ...prev,
+          [result.categoryKey]: {
+            summary: result.summary,
+            analysisId: result.analysisId,
+            categories: cats,
+          },
+        }));
+      } else {
+        setCategoryNonBulletedByKey((prev) => ({
+          ...prev,
+          [result.categoryKey]: { summary: result.summary, source: 'cache' },
+        }));
+      }
+    },
+    []
   );
 
   // ─── render gates ──────────────────────────────────────────────────
@@ -631,6 +700,7 @@ export default function ReviewsAnalysisByCategoryPage(): JSX.Element {
         )}
         {urlsState.kind === 'loaded' && (
           <CategoryTable
+            projectId={projectId}
             urls={urlsState.urls}
             selectedPlatforms={selectedPlatforms}
             layout={layout}
@@ -641,6 +711,9 @@ export default function ReviewsAnalysisByCategoryPage(): JSX.Element {
             summaryByReviewId={summaryByReviewId}
             competitorBulletedByUrlId={competitorBulletedByUrlId}
             competitorNonBulletedByUrlId={competitorNonBulletedByUrlId}
+            categoryBulletedByKey={categoryBulletedByKey}
+            categoryNonBulletedByKey={categoryNonBulletedByKey}
+            onCategoryResult={handleCategoryResult}
             onUrlCellSave={handleUrlCellSave}
             onColumnResize={handleColumnResize}
             onHideUrl={(id) => handleHideUrl(id, true)}
@@ -866,6 +939,7 @@ function RestoreChip({
 // ─── The grouped table ─────────────────────────────────────────────────
 
 interface CategoryTableProps {
+  projectId: string;
   urls: CompetitorUrl[];
   selectedPlatforms: Platform[];
   layout: CategoryTableLayout;
@@ -876,6 +950,15 @@ interface CategoryTableProps {
   summaryByReviewId: Record<string, ReviewSummaryEntry>;
   competitorBulletedByUrlId: Record<string, CompetitorSummaryEntry>;
   competitorNonBulletedByUrlId: Record<string, CompetitorSummaryEntry>;
+  categoryBulletedByKey: Record<string, CategoryBulletedEntry>;
+  categoryNonBulletedByKey: Record<string, CompetitorSummaryEntry>;
+  onCategoryResult: (result: {
+    categoryKey: string;
+    analysisId: string;
+    summary: string;
+    categories: PerCompetitorStructuredCategory[] | null;
+    source: 'cache' | 'fresh';
+  }) => void;
   onUrlCellSave: (urlId: string, patch: UpdateCompetitorUrlRequest) => Promise<void>;
   onColumnResize: (columnId: string, width: number) => void;
   onHideUrl: (urlId: string) => void;
@@ -884,6 +967,7 @@ interface CategoryTableProps {
 }
 
 function CategoryTable({
+  projectId,
   urls,
   selectedPlatforms,
   layout,
@@ -894,12 +978,16 @@ function CategoryTable({
   summaryByReviewId,
   competitorBulletedByUrlId,
   competitorNonBulletedByUrlId,
+  categoryBulletedByKey,
+  categoryNonBulletedByKey,
+  onCategoryResult,
   onUrlCellSave,
   onColumnResize,
   onHideUrl,
   onHideCategory,
   totalUrlCount,
 }: CategoryTableProps): JSX.Element {
+  const [aiModalFlow, setAiModalFlow] = useState<CategoryFlow | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const tableRef = useRef<HTMLTableElement>(null);
   const floatingRef = useRef<HTMLDivElement>(null);
@@ -926,6 +1014,29 @@ function CategoryTable({
       rowOrderByUrlId: layout.rowOrderByUrlId,
     });
   }, [urls, platformSet, hidden, layout.categoryOrder, layout.rowOrderByUrlId]);
+
+  // The AI run targets — real categories only (the uncategorized bucket has no
+  // category label to summarize). Each carries its competitor urlIds.
+  const categoryRunTargets: CategoryRunTarget[] = useMemo(
+    () =>
+      groups
+        .filter((g) => !g.isUncategorized && g.key)
+        .map((g) => ({
+          categoryKey: g.key,
+          label: g.label,
+          urlIds: g.rows.map((r) => r.url.id),
+        })),
+    [groups]
+  );
+  // For the non-bulleted modal: the bulleted summary text per category (the
+  // input; categories without one are skipped + flagged in the modal).
+  const bulletedSummaryByCategoryKey = useMemo(() => {
+    const out: Record<string, string> = {};
+    for (const [key, entry] of Object.entries(categoryBulletedByKey)) {
+      out[key] = entry.summary;
+    }
+    return out;
+  }, [categoryBulletedByKey]);
 
   // Drag bookkeeping: the displayed category-key order (real categories are
   // draggable; the uncategorized bucket is always pinned last), the flat
@@ -1055,6 +1166,47 @@ function CategoryTable({
 
   return (
     <>
+      {/* Category AI run buttons (Session 2). The bulleted run dedups each
+          category's competitor bullets + traces source reviews; the
+          non-bulleted run rewrites the bulleted summary as prose. */}
+      <div
+        style={{
+          flex: '0 0 auto',
+          display: 'flex',
+          gap: '10px',
+          marginBottom: '10px',
+          flexWrap: 'wrap',
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => setAiModalFlow('per-category-bulleted')}
+          disabled={categoryRunTargets.length === 0}
+          style={categoryAiButtonStyle(categoryRunTargets.length === 0)}
+          data-testid="category-auto-bulleted-button"
+        >
+          Auto-create Category Comprehensive Reviews Analysis (bulleted)
+        </button>
+        <button
+          type="button"
+          onClick={() => setAiModalFlow('per-category-nonbulleted')}
+          disabled={categoryRunTargets.length === 0}
+          style={categoryAiButtonStyle(categoryRunTargets.length === 0)}
+          data-testid="category-auto-nonbulleted-button"
+        >
+          Auto-create Category Comprehensive Reviews Analysis (non-bulleted)
+        </button>
+      </div>
+      {aiModalFlow && (
+        <CategoryAiRunModal
+          projectId={projectId}
+          flow={aiModalFlow}
+          categories={categoryRunTargets}
+          bulletedSummaryByCategoryKey={bulletedSummaryByCategoryKey}
+          onClose={() => setAiModalFlow(null)}
+          onResult={onCategoryResult}
+        />
+      )}
       <div
         ref={scrollRef}
         onScroll={syncFromContainer}
@@ -1147,6 +1299,8 @@ function CategoryTable({
                         labelSpan={bannerLabelSpan}
                         categoryLevelColumns={categoryLevelColumns}
                         onHideCategory={onHideCategory}
+                        bulletedSummary={categoryBulletedByKey[group.key]?.summary ?? ''}
+                        nonBulletedSummary={categoryNonBulletedByKey[group.key]?.summary ?? ''}
                       />
                       <SortableContext
                         items={group.rows.map((r) => r.url.id)}
@@ -1215,6 +1369,8 @@ interface CategoryBannerRowProps {
   labelSpan: number;
   categoryLevelColumns: ReadonlyArray<CategoryTableColumnDef>;
   onHideCategory: (categoryKey: string) => void;
+  bulletedSummary: string;
+  nonBulletedSummary: string;
 }
 
 function CategoryBannerRow({
@@ -1222,6 +1378,8 @@ function CategoryBannerRow({
   labelSpan,
   categoryLevelColumns,
   onHideCategory,
+  bulletedSummary,
+  nonBulletedSummary,
 }: CategoryBannerRowProps): JSX.Element {
   // The uncategorized bucket is pinned last and is NOT draggable.
   const draggable = !group.isUncategorized;
@@ -1289,22 +1447,34 @@ function CategoryBannerRow({
           </button>
         </span>
       </td>
-      {categoryLevelColumns.map((c) => (
-        <td
-          key={c.id}
-          style={{
-            padding: '6px 10px',
-            borderTop: '2px solid #30363d',
-            borderRight: '1px solid #161b22',
-            color: '#6e7681',
-            fontStyle: 'italic',
-            fontSize: '12px',
-            verticalAlign: 'top',
-          }}
-        >
-          (not yet generated)
-        </td>
-      ))}
+      {categoryLevelColumns.map((c) => {
+        const content =
+          c.id === 'catBulleted'
+            ? bulletedSummary
+            : c.id === 'catNonBulleted'
+              ? nonBulletedSummary
+              : '';
+        return (
+          <td
+            key={c.id}
+            style={{
+              padding: '6px 10px',
+              borderTop: '2px solid #30363d',
+              borderRight: '1px solid #161b22',
+              color: content ? '#e6edf3' : '#6e7681',
+              fontStyle: content ? 'normal' : 'italic',
+              fontSize: '12px',
+              verticalAlign: 'top',
+              whiteSpace: 'pre-wrap',
+              maxHeight: '260px',
+              overflowY: 'auto',
+            }}
+            data-testid={`category-ai-cell-${c.id}`}
+          >
+            {content || '(not yet generated)'}
+          </td>
+        );
+      })}
     </tr>
   );
 }
@@ -1674,6 +1844,19 @@ const errorBoxStyle: React.CSSProperties = {
   color: '#ff7b72',
   fontSize: '13px',
 };
+
+function categoryAiButtonStyle(disabled: boolean): React.CSSProperties {
+  return {
+    padding: '8px 14px',
+    fontSize: '12px',
+    fontWeight: 600,
+    background: disabled ? '#21262d' : '#1f6feb',
+    color: disabled ? '#6e7681' : '#fff',
+    border: '1px solid ' + (disabled ? '#30363d' : '#388bfd'),
+    borderRadius: '6px',
+    cursor: disabled ? 'not-allowed' : 'pointer',
+  };
+}
 
 interface FullPageStateProps {
   message: string;

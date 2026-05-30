@@ -44,6 +44,10 @@ export interface ReviewAnalysisListEntry {
   id: string;
   level: 'PER_REVIEW' | 'PER_PRODUCT' | 'PER_CATEGORY' | 'PER_TYPE' | 'PER_PROJECT';
   urlId: string | null;
+  // P-49 W5 Category page Session 2 — the category label for PER_CATEGORY rows
+  // (null for PER_REVIEW/PER_PRODUCT). The Category page maps category summaries
+  // back to their banner by this key.
+  typeFilter: string | null;
   analysisJson: Prisma.JsonValue;
 }
 
@@ -62,6 +66,7 @@ export type ReviewAnalysisListPrismaLike = {
         id: true;
         level: true;
         urlId: true;
+        typeFilter: true;
         analysisJson: true;
       };
       orderBy: { runAt: 'asc' };
@@ -91,12 +96,13 @@ export function makeReviewAnalysisListHandlers(
         prisma.reviewAnalysis.findMany({
           where: {
             projectId,
-            level: { in: ['PER_REVIEW', 'PER_PRODUCT'] },
+            level: { in: ['PER_REVIEW', 'PER_PRODUCT', 'PER_CATEGORY'] },
           },
           select: {
             id: true,
             level: true,
             urlId: true,
+            typeFilter: true,
             analysisJson: true,
           },
           // Stable ordering so consecutive GETs return the same shape;
