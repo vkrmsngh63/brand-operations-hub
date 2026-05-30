@@ -49,8 +49,9 @@ const SURFACES: ReadonlyArray<SurfaceEntry> = [
     label: 'Reviews Analysis By Competitor Category Table',
     href: (projectId) =>
       `/projects/${projectId}/competition-scraping/reviews-analysis-by-category`,
-    disabled: true,
-    disabledNote: 'Coming in P-49 W5 Category page Sessions 1-3 (after Fix Session C)',
+    // Enabled 2026-05-30 — P-49 W5 Category page Session 1 scaffold shipped
+    // (route + grouped 13-column table + column show/hide + click-to-edit).
+    // AI flows + drag + Excel land in Sessions 2-3.
   },
   {
     key: 'reviews-analysis-by-type',
