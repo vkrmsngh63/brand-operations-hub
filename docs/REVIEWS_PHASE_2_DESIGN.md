@@ -2686,6 +2686,82 @@ Entry baselines = 2026-05-30-b exit = locked (root tsc clean / extension tsc cle
 
 ---
 
+## §B 2026-05-30-d — `session_2026-05-30-d` — Workstream 5 Category page Session 2 FINISH — the NEW "Source Reviews" column rendering + the whole-Category-Session-2 deploy + 4 director Phase-4 adjustments — TWO deploys, BOTH ✅ DEPLOYED-AND-VERIFIED 2026-05-30-d end-to-end on vklf.com via `workflow-2-competition-scraping` → `main` — Deploy 1 (`e2030e8` — the Source Reviews column rendering, which landed TOGETHER with the previously-held-back Category Session 2 backend+frontend `d1659d7` + `fb772ad` + last session's doc-batch `fbd318f`, all of which were ahead of main) + Deploy 2 (`c641b3d` — 4 director adjustments) ff-merged to main under TWO Rule 9 deploy gates — TWENTY-FOURTH build/deploy-session §B entry per Rule 18; SIXTEENTH W5 entry — director Phase 4 PASS on both deploys; the Category page is now essentially CLOSED; NEW reusable PATTERN memorialized — "Per-row alignment across two adjacent table columns via a multi-`<tr>` banner block with rowSpan'd flanking cells"; Schema-change-in-flight NO entire session (the Source Reviews column reads already-persisted PER_CATEGORY `analysisJson` data; the Deploy-2 write-back removal is a deletion)
+
+**§A frozen per Rule 18.** This entry is an implementation note for the §1 Category page (Reviews Analysis By Competitor Category Table) requirement + the §1 ADDENDUM "Source Reviews" feature the director surfaced 2026-05-30-c — it is ADDITIVE and does NOT edit §A. **It does NOT regress the sibling Reviews Analysis Table page** (`competitor-reviews-analysis/page.tsx`, CLOSED 2026-05-29-d), **the per-competitor AI flows** (bulleted / non-bulleted), **nor the Category page's Session 1 scaffold + interactive batch** (the banner-row layout, the two-level @dnd-kit drag, hide-with-restore, the `categoryTableLayout` layout-memory). It FINISHES the Category page by adding the last UI piece (the Source Reviews column), deploying the whole Category Session 2 feature, and applying 4 director Phase-4 refinements.
+
+**Closes (a.117) RECOMMENDED-NEXT** — P-49 W5 Category page Session 2 FINISH ✅ DEPLOYED-AND-VERIFIED 2026-05-30-d; the Category page is now essentially CLOSED (the two category AI flows + the Source Reviews column + the 4 adjustments all shipped + verified; only the optional editable-banner-category-name refinement remains). **Opens (a.118) RECOMMENDED-NEXT = P-49 W5 Type page Sessions 4-5** on `workflow-2-competition-scraping` — the `Reviews Analysis By Competitor Type Table` inherits ALL Category behaviors + the Source Reviews column + the 4 adjustments, substituting type/`CompetitorUrl.type` for category, with its own `typeTableLayout` memory column; Schema-change-in-flight likely YES at entry.
+
+### Session shape — DEPLOY: 2 deploys, both director Phase 4 PASS
+
+The session opened with the two Category Session 2 build commits (`d1659d7` backend + `fb772ad` frontend) + last session's doc-batch (`fbd318f`) already committed on `workflow-2` AHEAD of main (held back on purpose 2026-05-30-c). This session built the one missing UI piece — the Source Reviews column rendering (`e2030e8`) — then deployed the WHOLE Category Session 2 feature to main as ONE unit under Rule 9 deploy gate #1 (`d1659d7` + `fb772ad` + `fbd318f` + `e2030e8` all landed together). Director Phase 4: "Everything passed," with 4 requested adjustments. Those 4 adjustments were built + deployed under Rule 9 deploy gate #2 (`c641b3d`), also Phase 4 PASS. ZERO non-deploy Rule 14f forced-pickers — the Source Reviews shape was already locked 2026-05-30-c, so the build proceeded under the default-to-recommendation path with a plain-terms shape description + go-ahead. `main` went `bdec02e → e2030e8 → c641b3d`; both branches at `c641b3d`.
+
+### Design choices made this session (Rule 14f forced-pickers + locked-prior decisions)
+
+- **Source Reviews column layout (locked 2026-05-30-c, built this session): bullet-by-bullet, always visible.** Each "Category Comprehensive (bulleted)" bullet is aligned with an adjacent Source Reviews cell listing the individual reviews that traced up to that bullet — mirroring the detail-page traceability table's row-aligned shape.
+- **Source Reviews scope (locked 2026-05-30-c): category bullets only.** The column attaches to the category-level bulleted flow only, NOT the per-competitor column.
+- **Helper placement decision (Rule 3 code-truth):** the NEW pure helper `buildCategorySourceReviewRows` was kept in the CLIENT-SAFE `reviews-traceability.ts`, NOT in `category-analysis-aggregation.ts`, because the latter imports runtime prompt helpers that would pull the server SDK into the client bundle.
+- **Deploy gate #1 (whole Category Session 2 feature) = Yes.** Deploy gate #2 (the 4 adjustments) = Yes. No other forced-pickers fired.
+- **Write-back-scope clarification (Deploy 2 adjustment #2, resolved with NO code change beyond the targeted deletion):** the director's terminology distinguished three surfaces — each competitor's "Your notes — Captured Reviews" notes BOX, the "Category Comprehensive (non-bulleted)" COLUMN, and the NEW "Source Reviews" COLUMN. The change removed ONLY the duplication of the category prose into competitor notes boxes; the non-bulleted column keeps its prose; the Source Reviews column is reviews-only.
+
+### What shipped (DEPLOYED: `e2030e8` + `c641b3d`)
+
+**Deploy 1 (`e2030e8`) — the Source Reviews column rendering (+ the whole held-back Category Session 2 feature):**
+
+- **NEW 14th column `catSourceReviews`** (read-only, `categoryLevel`) in `category-table-columns.ts`, inserted after `catBulleted`. `category-table-columns.test.ts` registry assertions updated (13→14 columns; 3 categoryLevel; catSourceReviews read-only — MODIFIED-not-added, so net node:test +3 came from the helper tests).
+- **NEW client-safe pure helper `buildCategorySourceReviewRows(categories, reviewsById)`** in `reviews-traceability.ts` — resolves each category bullet's cross-competitor union of reviewIds to product name + stars + merged title/body text + urlId. +3 node:test in `reviews-traceability.test.ts`.
+- **`reviews-analysis-by-category/page.tsx`** builds a global reviewId→meta map from the eager-loaded reviews + each URL's product name + renders the Source Reviews cell.
+- **`UrlDetailContent.tsx`** gained a per-review anchor `id={`review-${row.id}`}` + scrollMarginTop + a scroll-on-hash effect so the Source Reviews jump link (`/…/url/<urlId>#review-<id>`) lands on the exact review.
+
+**Deploy 2 (`c641b3d`) — 4 director Phase-4 adjustments:**
+
+- **(#1) Top-align the Category name on the banner** (was vertical-center).
+- **(#2) Removed the per-category NON-bulleted prose write-back** into each in-category competitor's "Your notes — Captured Reviews" box (deleted the append-merge loop in `review-analysis-run-batch.ts`). Category-level prose now lives ONLY in the Category page's "Category Comprehensive (non-bulleted)" column. The non-bulleted COLUMN keeps its paragraph prose; only the duplication into competitor notes boxes was removed; the Source Reviews column was never prose. The per-COMPETITOR non-bulleted write-back is a different flow, left intact.
+- **(#3) NEW shared `components/HoverTooltip.tsx`** (ports the sibling Competitor Reviews Analysis page's portal+fade tooltip + adds `autoHideMs` so the tooltip fades out after a few seconds even while hovered). Wired onto the two "Auto-create …" category AI buttons.
+- **(#4) Source Reviews layout restructured** — each bulleted complaint is now its OWN sub-row that extends across the "Category Comprehensive (bulleted)" + "Source Reviews" columns (per-bullet row alignment, mirroring the URL-detail traceability table). The banner is now a multi-`<tr>` block: grip / category-name label / non-bulleted prose rowSpan the whole category; the bulleted text + its source reviews render per sub-row. Replaces the prior single-cell stacked layout.
+
+### Phase 4 (director real-Chrome verification)
+
+Both deploys verified live on vklf.com: Deploy 1 ("Everything passed," with the 4 adjustment requests) + Deploy 2 (the 4 adjustments PASS). The category page now shows, per category, the two AI summaries (bulleted dedup + non-bulleted prose) plus the new Source Reviews column where each bulleted complaint lines up beside the exact reviews behind it.
+
+### NEW reusable PATTERN
+
+- **"Per-row alignment across two adjacent table columns via a multi-`<tr>` banner block with rowSpan'd flanking cells"** (Deploy 2 adjustment #4). To line up each bullet in column A with its evidence in column B inside a larger fixed-layout table, render one `<tr>` per bullet and rowSpan the columns that should NOT subdivide (grip, category-name label colSpan, the non-bulleted prose). Mirrors the per-competitor stacked-review-rows pattern already used for the Stars / Reviews Summary columns on this same page (and the §B 2026-05-30 "rowSpan sub-rows to align per-item data across two adjacent columns" Pattern). (Full statement: CORRECTIONS_LOG §Entry 2026-05-30-d.)
+
+### Scoreboard
+
+Entry baselines = 2026-05-30-c exit = locked (root tsc clean / extension tsc clean / **910 ext** / **1179 src/lib** / **69 routes**). Post-merge + post-build /scoreboard all GREEN at NEW LOCKED baseline:
+
+| Check | Entry | Exit | Delta |
+| --- | --- | --- | --- |
+| Root tsc | clean | clean | unchanged |
+| Extension tsc | clean | clean | unchanged |
+| Extension `npm test` | 910/910 | 910/910 | UNCHANGED (no extension code touched) |
+| src/lib `node:test` | 1179/1179 | **1182/1182** | **+3** (the `buildCategorySourceReviewRows` tests; the `category-table-columns.test.ts` registry assertions were modified-not-added) |
+| `npm run build` | 69 routes | **69 routes** | **UNCHANGED** (reused existing endpoints — no new route) |
+| Playwright | — | SKIPPED | per Rule 27 (DEPLOY session; director real-Chrome Phase 4 used instead — both deploys PASS) |
+
+### Affected §A sections (informational — §A FROZEN per Rule 18)
+
+- The §1 Category page now has its two category-level AI flows (Columns 12/13) + the NEW Source Reviews column (the 14th column) all DEPLOYED + verified. §A is frozen; this implementation note lives in §B only.
+- The §1 ADDENDUM "Source Reviews" feature (the per-category bullet → individual source reviews provenance) is now SHIPPED at the column-rendering level. Its Type-page mirror remains DEFERRED to Sessions 4-5.
+- The category non-bulleted prose no longer writes back into competitor notes boxes (Deploy 2 adjustment #2) — the prose lives ONLY in the Category page's non-bulleted column. The per-competitor non-bulleted write-back flow is unaffected.
+- The PER_CATEGORY analysis storage is reused as-is → Schema-change-in-flight NO this session; the Type page (Sessions 4-5) likely needs a new `typeTableLayout` column → likely YES at that session's entry.
+
+### Cross-references
+
+- §B 2026-05-30-c above (the FU-3 fix + the two category AI flows + the Source Reviews provenance backend this FINISH ships the column for).
+- §B 2026-05-30-b above (W5 Category page interactive batch — the banner-row layout + the `categoryTableLayout` memory the multi-`<tr>` banner restructure builds on).
+- §B 2026-05-30 above (the "rowSpan sub-rows to align per-item data across two adjacent columns" Pattern this session's multi-`<tr>` banner generalizes).
+- `docs/CORRECTIONS_LOG.md` §Entry 2026-05-30-d — the INFORMATIONAL entry (the NEW multi-`<tr>` rowSpan-alignment Pattern + the write-back-scope clarification + the no-backend-per-category-invocation-test gap + the P-43 tally).
+- `docs/polish-item-specs/P-49-W5-S4-category-page.md` §2 + §3 2026-05-30-d (Source Reviews column + the 4 adjustments ✅ DONE + the Category page essentially CLOSED) + `docs/polish-item-specs/P-49-W5-S5-type-page.md` §2 2026-05-30-d (the Type page must inherit ALL FOUR adjustments + the Source Reviews feature) + `docs/polish-item-specs/P-49-W5-reviews-phase-2-master-spec.md` §3 (Category page CLOSED; only the Type page remaining).
+- `docs/ROADMAP.md` P-49 — status updated to reflect the Source Reviews column + the 4 adjustments ✅ DEPLOYED-AND-VERIFIED + the Category page essentially CLOSED + (a.117) closes / (a.118) opens for the Type page Sessions 4-5.
+- Source cross-references: `src/lib/competition-scraping/reviews-traceability.ts` (`buildCategorySourceReviewRows` + `.test`) + `src/lib/competition-scraping/category-table-columns.ts` (`catSourceReviews`) + `.test` + `reviews-analysis-by-category/page.tsx` (the global reviewId→meta map + the Source Reviews cell + the multi-`<tr>` banner restructure + the two HoverTooltip-wired buttons + the top-aligned name) + NEW `components/HoverTooltip.tsx` + `url/[urlId]/components/UrlDetailContent.tsx` (per-review anchor + scroll-on-hash) + `handlers/review-analysis-run-batch.ts` (DELETED the per-category prose append-merge loop); commits `e2030e8` + `c641b3d` (both deployed).
+
+**Closing line:** P-49 W5 Category page Session 2 FINISH — TWO deploys, BOTH ✅ DEPLOYED-AND-VERIFIED 2026-05-30-d on `workflow-2-competition-scraping` → `main`, director PASS on both (`e2030e8` the Source Reviews column rendering [shipped together with the held-back Category Session 2 backend+frontend `d1659d7` + `fb772ad`] + `c641b3d` 4 director adjustments). ONE NEW reusable PATTERN memorialized ("multi-`<tr>` banner block with rowSpan'd flanking cells"). Schema-change-in-flight NO entire session. TWO Rule 9 deploy gates — both Yes; ZERO other Rule 14f forced-pickers; running cumulative 151/155 = 97.4%. NEW baselines: src/lib `node:test` = **1182/1182** + `npm run build` = **69 routes UNCHANGED** + extension = 910/910 UNCHANGED. **Closes (a.117) RECOMMENDED-NEXT — the Category page is now essentially CLOSED.** **Opens (a.118) RECOMMENDED-NEXT = P-49 W5 Type page Sessions 4-5** on `workflow-2-competition-scraping`. **TWENTY-FOURTH build/deploy-session §B entry per Rule 18 — SIXTEENTH W5 entry.** The next §B entry will land at the close of the Type page Sessions 4-5.
+
+---
+
 ---
 
 END OF DOCUMENT
