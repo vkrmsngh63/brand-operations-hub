@@ -2613,6 +2613,79 @@ Entry baselines = 2026-05-30 (Session 1) exit = locked (root tsc clean / extensi
 
 ---
 
+## §B 2026-05-30-c — `session_2026-05-30-c` — Workstream 5 MIXED session: (1) FU-3 traceability-table-shadowing bug fix ✅ DEPLOYED-AND-VERIFIED 2026-05-30-c end-to-end on vklf.com via `workflow-2-competition-scraping` → `main` (single build `bdec02e` under ONE Rule 9 deploy gate; director Phase 4 verbatim "PASS, table is back") + (2) the NEW "Source Reviews" column for the Category page DESIGNED + APPROVED (TWO Rule 14f decisions LOCKED) + (3) Category page Session 2 BUILT-not-deployed (backend `d1659d7` + frontend `fb772ad`, both committed on `workflow-2-competition-scraping` ahead of main, undeployed on purpose) — TWENTY-THIRD build/deploy-session §B entry per Rule 18; FIFTEENTH W5 entry; the FIRST Category-page AI-flows entry — NEW reusable PATTERN memorialized — "A second same-level row discriminated only by `analysisJson.flow` can silently shadow the structured row a reader needs — select by flow, not recency"; Schema-change-in-flight NO entire session (entry NO → exit NO — the FU-3 fix is a read-side selection change; the Category Session 2 backend reuses the existing `ReviewAnalysis` PER_CATEGORY storage)
+
+**§A frozen per Rule 18.** This entry is an implementation note for the §1 Category page (Reviews Analysis By Competitor Category Table) requirement + the §1 ADDENDUM "Source Reviews" feature the director surfaced this session — it is ADDITIVE and does NOT edit §A. **It does NOT regress the sibling Reviews Analysis Table page** (`competitor-reviews-analysis/page.tsx`, CLOSED 2026-05-29-d) **nor the Category page's Session 1 scaffold + interactive batch** (the banner-row layout, the two-level @dnd-kit drag, hide-with-restore, the `categoryTableLayout` layout-memory). The FU-3 fix RESTORES a detail-page behavior that an interaction between two prior shipped flows had broken.
+
+**Closes (a.116) RECOMMENDED-NEXT PARTIALLY** — the two Category AI flows + the Source Reviews provenance backend are BUILT (committed `d1659d7` + `fb772ad`, undeployed); the FU-3 bug is fixed & DEPLOYED (`bdec02e`). **Opens (a.117) RECOMMENDED-NEXT = P-49 W5 Category page Session 2 FINISH** on `workflow-2-competition-scraping` — build the Source Reviews column rendering against the already-produced backend data, THEN deploy the WHOLE Category Session 2 feature (the two summaries + the Source Reviews column) together + director Phase 4 real-Chrome verification; Schema-change-in-flight NO at entry.
+
+### Session shape — MIXED: 1 deploy + 2 undeployed build commits
+
+The session opened on the FU-3 bug (the detail-page traceability table vanishing after the per-competitor prose summary ran), fixed + deployed it under ONE Rule 9 gate. The director then surfaced the NEW "Source Reviews" column ADDENDUM; two Rule 14f design decisions + the AI prompt wording were settled before code. The two per-category AI flows + the Source Reviews provenance backend + the two category run modals + live painting were built and committed on `workflow-2-competition-scraping` (`d1659d7` backend + `fb772ad` frontend) but, per a Rule 14f override on the end-of-build continue-vs-pause picker (director chose "keep going" over the recommended "pause"), held OFF main — to deploy next session together with the Source Reviews column rendering as one finished feature. `main` stays at `bdec02e`; `workflow-2` is 2 commits ahead. SIX Rule 14f decisions total — 5 Recommended + 1 override.
+
+### Design choices made this session (Rule 14f forced-pickers + Rule 14f design locks)
+
+- **Source Reviews column layout = bullet-by-bullet, always visible (Recommended + chosen).** Each "Category Comprehensive (bulleted)" bullet cell is aligned with an adjacent Source Reviews cell listing the individual reviews that traced up to that bullet — mirroring the detail-page traceability table's row-aligned shape (Fix Session D / FU-1).
+- **Source Reviews scope = category bullets only (Recommended + chosen).** The column attaches to the category-level bulleted flow only, NOT also the per-competitor column. Rule 24 pre-capture confirmed this is genuinely NEW at the category level (the per-competitor bullet→reviews traceability already exists on the detail page).
+- **AI prompt wording for the two category flows settled with the director before code** (per `feedback_plan_output_shape_before_building.md`).
+- **Continue-vs-pause = OVERRIDE.** The recommended option was to PAUSE (deploy the category work as a clean unit); the director chose "keep going" (build the Session 2 backend + frontend now, deploy next session with the Source Reviews column). Recorded as a calibration data point.
+- **FU-3 deploy gate = Yes (Recommended + chosen).**
+
+### What shipped (DEPLOYED: `bdec02e`)
+
+- **FU-3 traceability-table-shadowing bug fix.** The "Overall Analysis — Captured Reviews" bullet↔reviews traceability table on the competitor URL detail page had stopped rendering after a per-competitor non-bulleted (prose) summary was generated. Root cause (Rule 3 code-truth): `UrlDetailContent.tsx` fed the table "the latest PER_PRODUCT `ReviewAnalysis` row of EITHER flow" via a naive last-match loop; the non-bulleted prose row (a 2nd PER_PRODUCT row discriminated by `analysisJson.flow`) carries no `categories` structure, so when it ran more recently it shadowed the structured bulleted row → `parseTraceabilityAnalysis` returned null → empty table. Fix = NEW pure helper `selectBulletedAnalysisRow(rows, urlId)` in `src/lib/competition-scraping/reviews-traceability.ts` that picks the latest PER_PRODUCT row for the URL that is NOT the non-bulleted prose row; `UrlDetailContent.tsx` uses it instead of the naive last-match loop. +7 node:test. NO schema change. ff-merged to main under ONE Rule 9 deploy gate; director Phase 4 "PASS, table is back."
+
+### What was BUILT but NOT deployed (on `workflow-2`, ahead of main: `d1659d7` + `fb772ad`)
+
+- **Backend (`d1659d7`)** — added `per-category-bulleted` + `per-category-nonbulleted` to SHIPPED_FLOWS + their dispatch in `review-analysis-run-batch.ts` (branch BEFORE the single-urlId contract). The bulleted flow reads each in-category url's latest bulleted structured per-competitor summary, labels input bullets B1..Bn, the model cites which it merged, and the handler UNIONS the cited bullets' reviewIds → each category bullet's source reviews; persists PER_CATEGORY `{ summary, categories }` reusing the per-competitor structured shape. The non-bulleted flow rewrites the category bulleted summary as prose + appends it (merge-never-overwrite) to each in-category competitor's "Overall Analysis — Captured Reviews" box. NEW prompts `PER_CATEGORY_BULLETED/NONBULLETED v1`. NEW pure helpers `src/lib/competition-scraping/category-analysis-aggregation.ts` (`collectCategoryInputBullets` / `buildCategoryStructuredAnalysis` / `canonicalizeCategoryInputBullets`) + `.test.ts`. NO schema change (PER_CATEGORY + nullable urlId + typeFilter already exist; `analysisJson` reuses the existing Json column). NO new route (reuses `/review-analysis/run-batch`). A local `CategoryQueryPrisma` cast keeps the shared per-url deps type + the real-PrismaClient wiring untouched.
+- **Frontend (`fb772ad`)** — NEW `CategoryAiRunModal.tsx` (one parameterized modal for both category flows: model select / progress / per-category status / cost tally / cancel; categoryKey echo-guard before painting) + two "Auto-create Category Comprehensive Reviews Analysis (bulleted)/(non-bulleted)" buttons + live painting into Columns 12/13 on each category banner + re-hydrate on refresh + extended `review-analysis-list` GET to return PER_CATEGORY rows + `typeFilter`.
+- **REMAINING for next session:** the Source Reviews column rendering (the new column UI — its data is already produced + persisted by the backend) + then deploy the WHOLE Category Session 2 feature (the two summaries + the Source Reviews column) together + director Phase 4 verification.
+
+### Write-back placement nuance (flagged to director)
+
+The category non-bulleted prose appends to each in-category competitor's "Overall Analysis — Captured Reviews" box — the SAME box Fix Session D (§B 2026-05-31) relabeled "Your notes — Captured Reviews." Built per the literal §1 spec; director to confirm placement at the next session's Phase 4.
+
+### Phase 4 (director real-Chrome verification)
+
+The FU-3 fix (`bdec02e`) was verified live: the detail-page traceability table renders again after a prose summary runs. Director verbatim: "PASS, table is back." The two category AI flows + the Source Reviews column were NOT deployed this session — their Phase 4 verification happens next session after the column is built and the whole feature deploys together.
+
+### NEW reusable PATTERN
+
+- **"A second same-level row discriminated only by `analysisJson.flow` can silently shadow the structured row a reader needs — select by flow, not recency"** (the FU-3 root cause). Where two same-level rows coexist via a `flow` discriminator (per the §B 2026-05-29-c "analysisJson.flow discriminator lets two same-level (PER_PRODUCT) rows coexist per URL" Pattern), any reader needing ONE specific flow must SELECT BY FLOW, never "take the latest" — the other flow's row will eventually be newer and shadow it. (Full statement: CORRECTIONS_LOG §Entry 2026-05-30-c.)
+
+### Scoreboard
+
+Entry baselines = 2026-05-30-b exit = locked (root tsc clean / extension tsc clean / **910 ext** / **1156 src/lib** / **69 routes**). Post-merge + post-build /scoreboard all GREEN at NEW LOCKED baseline:
+
+| Check | Entry | Exit | Delta |
+| --- | --- | --- | --- |
+| Root tsc | clean | clean | unchanged |
+| Extension tsc | clean | clean | unchanged |
+| Extension `npm test` | 910/910 | 910/910 | UNCHANGED (no extension code touched) |
+| src/lib `node:test` | 1156/1156 | **1179/1179** | **+23** (+7 FU-3 `selectBulletedAnalysisRow` + 16 `category-analysis-aggregation`) |
+| `npm run build` | 69 routes | **69 routes** | **UNCHANGED** (reused the existing `/review-analysis/run-batch` endpoint — no new route) |
+| Playwright | — | SKIPPED | per Rule 27 (AI-batch flows impractical to Playwright reliably; director real-Chrome Phase 4 used instead) |
+
+### Affected §A sections (informational — §A FROZEN per Rule 18)
+
+- The §1 Category page now has its two category-level AI flows (Columns 12/13) BUILT (committed, undeployed) on top of the interactive batch. §A is frozen; this implementation note lives in §B only.
+- The §1 ADDENDUM "Source Reviews" feature (the per-category bullet → individual source reviews provenance) is a NEW director ask captured here; its backend is built (the reviewId-union), its column UI + deploy are next session.
+- The PER_CATEGORY analysis storage is reused as-is (the 2026-05-27 W5 Session 1.5 `prisma db push` added the PER_CATEGORY enum + nullable urlId + typeFilter) → Schema-change-in-flight NO at this and the next session's entry.
+
+### Cross-references
+
+- §B 2026-05-30-b above (W5 Category page interactive batch — the foundation the two category AI flows + the Source Reviews column build on).
+- §B 2026-05-29-c above (W5 Fix Session C Deploy 1 — the `analysisJson.flow` discriminator + the per-competitor bulleted/non-bulleted flows the category flows mirror; the discriminator the FU-3 bug exploited).
+- §B 2026-05-31 + §B 2026-05-31-b above (W5 Fix Session D + FU-1 — the detail-page traceability table the FU-3 fix restores + the Source Reviews column layout mirrors; the box Fix Session D relabeled "Your notes — Captured Reviews" the category prose writes back to).
+- `docs/CORRECTIONS_LOG.md` §Entry 2026-05-30-c — the INFORMATIONAL entry (the FU-3 Pattern + the Source Reviews design + the write-back placement nuance + the P-43 tally).
+- `docs/polish-item-specs/P-49-W5-S4-category-page.md` §2 2026-05-30-c (parent-updated — the Source Reviews design + the BUILT-not-deployed category flows + the write-back nuance) + `docs/polish-item-specs/P-49-W5-S5-type-page.md` §2 2026-05-30-c (parent-updated — the Type-page Source Reviews directive) + `docs/polish-item-specs/P-49-W5-reviews-phase-2-master-spec.md` §2/§3 (Source Reviews cross-cutting + Category Session 2 status).
+- `docs/ROADMAP.md` P-49 — status updated to "🟢 IN-FLIGHT 2026-05-30-c" + the FU-3 fix ✅ DEPLOYED + the Source Reviews feature design + the BUILT-not-deployed category build.
+- Source cross-references: `src/lib/competition-scraping/reviews-traceability.ts` (`selectBulletedAnalysisRow`) + `UrlDetailContent.tsx` (uses it) + `src/lib/competition-scraping/handlers/review-analysis-run-batch.ts` (`per-category-bulleted`/`per-category-nonbulleted` dispatch + reviewId-union) + NEW `src/lib/competition-scraping/category-analysis-aggregation.ts` + `src/lib/competition-scraping/review-analysis/prompts.ts` (`PER_CATEGORY_BULLETED/NONBULLETED v1`) + NEW `CategoryAiRunModal.tsx` + `reviews-analysis-by-category/page.tsx`; commits `bdec02e` (deployed) / `d1659d7` + `fb772ad` (undeployed on workflow-2).
+
+**Closing line:** P-49 W5 MIXED session — FU-3 traceability-table-shadowing bug fix ✅ DEPLOYED-AND-VERIFIED 2026-05-30-c (`bdec02e`) under ONE Rule 9 deploy gate on `workflow-2-competition-scraping` → `main`, director "PASS, table is back" + the NEW "Source Reviews" column feature DESIGNED + APPROVED (TWO Rule 14f decisions locked) + Category page Session 2 BUILT-not-deployed (`d1659d7` backend + `fb772ad` frontend, undeployed on workflow-2 ahead of main, deploy queued next session). ONE NEW reusable PATTERN memorialized ("select by flow, not recency"). Schema-change-in-flight NO entire session. SIX Rule 14f decisions — 5 Recommended + 1 override; running cumulative 149/153 = 97.4%. NEW baselines: src/lib `node:test` = **1179/1179** + `npm run build` = **69 routes UNCHANGED** + extension = 910/910 UNCHANGED. **Closes (a.116) RECOMMENDED-NEXT PARTIALLY.** **Opens (a.117) RECOMMENDED-NEXT = P-49 W5 Category page Session 2 FINISH** (the Source Reviews column rendering + the Category Session 2 deploy) on `workflow-2-competition-scraping`. **TWENTY-THIRD build/deploy-session §B entry per Rule 18 — FIFTEENTH W5 entry; the FIRST Category-page AI-flows entry.** The next §B entry will land at the close of the Category page Session 2 FINISH (the Source Reviews column + the deploy).
+
+---
+
 ---
 
 END OF DOCUMENT

@@ -38,6 +38,7 @@ These surfaces import from a declaration site rather than keeping their own copy
 | Global competitor summarize modal | `…/competitor-reviews-analysis/components/GlobalCompetitorSummarizeModal.tsx` | `models.ts` |
 | Per-competitor NON-bulleted (prose) modal | `…/competitor-reviews-analysis/components/PerCompetitorNonBulletedModal.tsx` | `models.ts` (`SUPPORTED_MODEL_VERSIONS`) |
 | Global competitor NON-bulleted (prose) modal | `…/competitor-reviews-analysis/components/GlobalCompetitorNonBulletedModal.tsx` | `models.ts` (`SUPPORTED_MODEL_VERSIONS`) |
+| Category AI run modal (bulleted + non-bulleted) | `…/reviews-analysis-by-category/components/CategoryAiRunModal.tsx` | `models.ts` (`SUPPORTED_MODEL_VERSIONS`) |
 | SDK client seam (back-compat re-export) | `src/lib/competition-scraping/review-analysis/client.ts` | re-exports `models.ts` |
 | Review-analysis batch handler (validator) | `src/lib/competition-scraping/handlers/review-analysis-run-batch.ts` | `client.ts` → `models.ts` (`DEFAULT_MODEL_VERSION` + `isSupportedModelVersion`) |
 
