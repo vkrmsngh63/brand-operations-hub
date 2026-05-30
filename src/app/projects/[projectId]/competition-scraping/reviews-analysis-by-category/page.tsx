@@ -38,6 +38,7 @@ import type { JSX } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   DndContext,
+  MeasuringStrategy,
   closestCenter,
   PointerSensor,
   useSensor,
@@ -1071,6 +1072,15 @@ function CategoryTable({
             sensors={sensors}
             collisionDetection={closestCenter}
             onDragEnd={handleDragEnd}
+            // A category can be many rows tall, so its sibling categories often
+            // sit below the fold. Re-measure droppables every frame (Always) so
+            // rows the auto-scroll reveals register as valid drop targets, and
+            // tune vertical auto-scroll explicitly. The horizontal axis is
+            // disabled (threshold.x: 0) — the table scrolls horizontally via
+            // the floating bar (overflowX is hidden on the container), so
+            // auto-scrolling X can't work and only confused detection.
+            measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
+            autoScroll={{ threshold: { x: 0, y: 0.25 }, acceleration: 15 }}
           >
             <table
               ref={tableRef}
