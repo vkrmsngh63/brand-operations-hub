@@ -2548,6 +2548,71 @@ Entry baselines = 2026-05-29-d exit = locked (root tsc clean / extension tsc cle
 
 ---
 
+## §B 2026-05-30-b — `session_2026-05-30-b_p49-w5-category-page-interactive-batch` — Workstream 5 Category page "interactive batch" — banner-row layout restructure + two-level @dnd-kit drag-to-reorder + hide-with-restore + a NEW per-user/per-Project page-layout "memory" area — TWO deploys, BOTH ✅ DEPLOYED-AND-VERIFIED 2026-05-30-b end-to-end on vklf.com via `workflow-2-competition-scraping` → `main` — builds `5f07f24` (interactive batch, 9 files +1268/-186) + `469e5c6` (FF1: fix category drag below the fold, 1 file +10) ff-merged to main (ranges `0c9f361..5f07f24` then `5f07f24..469e5c6`) under TWO Rule 9 deploy gates — TWENTY-SECOND build/deploy-session §B entry per Rule 18; FOURTEENTH W5 entry; the FIRST Category-page interactive-batch entry — director Phase 4 verbatim verdict: "All passed"; the SECOND of the 5-session Category + Type corrective rebuild; TWO NEW reusable PATTERNS memorialized — "Two-level nested @dnd-kit drag in ONE DndContext via prefixed sortable ids + per-group SortableContexts" + "Off-screen drop targets in an `overflowX:hidden` scroll container need `MeasuringStrategy.Always` + explicit `autoScroll`"; Schema-change-in-flight YES at entry → FLIPPED YES → NO at the interactive-batch deploy push (`5f07f24` — the additive nullable `UserTablePreferences.categoryTableLayout Json?` column; `prisma db push` 1.29s; zero data loss)
+
+**§A frozen per Rule 18.** This entry is an implementation note for the §1 Category page (Reviews Analysis By Competitor Category Table) requirement — it is ADDITIVE and does NOT edit §A. It records how the interactive batch was built without changing the design intent in §A. **It does NOT regress the sibling Reviews Analysis Table page** (`competitor-reviews-analysis/page.tsx`, CLOSED 2026-05-29-d) **nor the Category page's Session 1 scaffold behaviors** (the grouping with the label-on-first-row / `(Uncategorized)`-last shape — now superseded by the banner-row restructure on THIS page only — the per-review `rowSpan` sub-row alignment, and the column-width persistence).
+
+**Closes (a.115) RECOMMENDED-NEXT** — P-49 W5 Category page "interactive batch" ✅ DEPLOYED-AND-VERIFIED 2026-05-30-b (`5f07f24` + FF1 `469e5c6`). **Opens (a.116) RECOMMENDED-NEXT = P-49 W5 Category page Session 2 — the two Category AI flows** (bulleted dedup + non-bulleted prose) on `workflow-2-competition-scraping` (Q-E AI prompt content drafted jointly with director at that session's start per `feedback_plan_output_shape_before_building.md`; per-batch endpoint architecture reusing `review-analysis-run-batch.ts` SHIPPED_FLOWS dispatch; real-time per-cell painting into Columns 12/13 on the banner rows; non-bulleted writes back to the URL detail "Overall Analysis — Captured Reviews" box; Schema-change-in-flight NO at entry — reuses the existing `ReviewAnalysis` PER_CATEGORY storage; then Sessions 4-5 = the Type page inheriting ALL Category behaviors with its own `typeTableLayout` column).
+
+### Session shape — BUILD + DEPLOY with 2 ff-merges under 2 Rule 9 deploy gates
+
+Session opened per yesterday's NEXT_SESSION.md pointer scoping (a.115) the Category page interactive batch. Two design pickers preceded any code — the memory-drawer storage shape (one additive nullable column on `UserTablePreferences`, Recommended + chosen) + the banner-row layout (a shaded banner with grip + name + hide on the left + the two category AI boxes at the right, Recommended + chosen). The interactive batch deployed under an explicit Rule 9 deploy gate (`5f07f24`). Director Phase 4 then reported category drag failed for targets below the fold; FF1 (`469e5c6`) fixed it under a second Rule 9 deploy gate. FOUR Rule 14f decisions total, 4/4 = 100% Yes-to-Recommended.
+
+### Design choices made this session (Rule 14f forced-pickers)
+
+- **Memory-drawer storage shape = one additive nullable column on `UserTablePreferences` (Recommended + chosen).** A single `categoryTableLayout Json?` column `{ categoryOrder, rowOrderByUrlId, hiddenUrlIds, hiddenCategoryKeys }` rather than a separate sibling order/hidden-rows table — additive, mirrors the existing `categoryTable:`-prefixed prefs, no new table, and generalizes to the Type page (which will get its own `typeTableLayout` column).
+- **Banner-row layout = a shaded banner row with grip + name + hide-category ✕ on the left + the two category-level AI cells at the right (Recommended + chosen).** The category name moves OFF the first competitor row and onto its own banner, with every competitor row beneath it — which makes the first competitor draggable (the Session 1 scaffold's label-on-first-row shape had blocked it). The banner name is a READ-ONLY label this session; renaming the whole category from the banner was deliberately deferred (captured as an optional refinement on the P-49 ROADMAP entry; CORRECTIONS_LOG §Entry 2026-05-30-b Obs. 3).
+- **Both deploy gates = Yes (Recommended + chosen).** The interactive batch + the FF1 each cleared an explicit Rule 9 deploy gate.
+
+### What shipped (builds `5f07f24` / `469e5c6`)
+
+- **Banner-row layout restructure** — the category name on its OWN shaded banner row (drag-grip + name + hide-category ✕ on the left; the two category-level AI cells at the right), every competitor row beneath it so the first competitor is now draggable.
+- **Two-level @dnd-kit drag-to-reorder in a SINGLE DndContext** — drag whole categories (uncategorized pinned last, not draggable) via prefixed `cat:<key>` sortable ids in an outer SortableContext + drag competitors within a category via per-category nested SortableContexts; each per-competitor multi-`<tr>` sub-row block travels together via one shared transform. One `onDragEnd` disambiguates by the `cat:` prefix and guards competitor drags to same-category targets (a category dropped onto a competitor row is mapped to that competitor's category for forgiving drops).
+- **Hide-with-restore** — hide a competitor or a whole category from THIS page only, with a "Hidden on this page" restore panel that brings them back (never deletes data elsewhere).
+- **NEW per-user/per-Project page-layout "memory" area** — an additive nullable `UserTablePreferences.categoryTableLayout` Json column `{ categoryOrder, rowOrderByUrlId, hiddenUrlIds, hiddenCategoryKeys }` threaded through the shared-types wire shape (`src/lib/shared-types/competition-scraping.ts` — NEW `CategoryTableLayout` interface + wire/write fields) + the existing `/table-preferences` GET/PUT handler (`handlers/user-table-preferences.ts` — strict validation; `Prisma.DbNull` clears), REUSING the existing endpoint — NO new route. NEW pure helper `src/lib/competition-scraping/category-table-layout.ts` + `.test.ts`; `category-table-grouping.ts` gained `foldIntoCategoryGroups`/`buildCategoryGroups` (+ tests). `prisma db push` 1.29s, additive nullable, zero data loss. src/lib node:test 1130 → **1156** (+26).
+- **FF1 (`469e5c6`) — fix category drag below the fold.** Added `measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}` + `autoScroll={{ threshold: { x: 0, y: 0.25 }, acceleration: 15 }}` to the DndContext so the `overflowX:hidden` + floating-scrollbar container auto-scrolls vertically and re-measures off-screen drop targets during a drag.
+
+### Phase 4 (director real-Chrome verification)
+
+The interactive batch (`5f07f24`) Phase 4 surfaced ONE redirect — category drag failed when the drop target sat below the fold (no auto-scroll). FF1 (`469e5c6`) fixed it. Director's verbatim verdict after FF1: "All passed." Verified: banner-row layout, drag whole categories + drag competitors within a category (including off-screen drops after FF1), hide-with-restore of competitors + whole categories with the restore panel, and the remembered per-user/per-Project layout across refresh.
+
+### NEW reusable PATTERNS
+
+- **"Two-level nested @dnd-kit drag in ONE DndContext via prefixed sortable ids + per-group SortableContexts."** An outer SortableContext keyed by PREFIXED `cat:<key>` ids + per-group nested SortableContexts of member ids, with one `onDragEnd` disambiguating by the prefix and guarding member drags to same-group targets; each multi-`<tr>` member block travels via one shared transform. (Full statement: CORRECTIONS_LOG §Entry 2026-05-30-b Obs. 1.)
+- **"Off-screen drop targets in an `overflowX:hidden` scroll container need `MeasuringStrategy.Always` + explicit `autoScroll`."** A plain `overflow:auto` container auto-scrolls on @dnd-kit defaults; an `overflowX:hidden` + floating-horizontal-scrollbar container silently fails to — fix = Always droppable re-measuring + explicit vertical `autoScroll` with the X axis disabled. (Full statement: CORRECTIONS_LOG §Entry 2026-05-30-b Obs. 2 — the FF1 root cause.)
+
+### Scoreboard
+
+Entry baselines = 2026-05-30 (Session 1) exit = locked (root tsc clean / extension tsc clean / **910 ext** / **1130 src/lib** / **69 routes**). Post-merge /scoreboard all GREEN at NEW LOCKED baseline:
+
+| Check | Entry | Exit | Delta |
+| --- | --- | --- | --- |
+| Root tsc | clean | clean | unchanged |
+| Extension tsc | clean | clean | unchanged |
+| Extension `npm test` | 910/910 | 910/910 | UNCHANGED (no extension code touched) |
+| src/lib `node:test` | 1130/1130 | **1156/1156** | **+26** (NEW `category-table-layout.test.ts` + grouping fold/build tests + handler `categoryTableLayout` tests) |
+| `npm run build` | 69 routes | **69 routes** | **UNCHANGED** (reused the existing `/table-preferences` endpoint — no new route) |
+| Playwright | — | SKIPPED | per Rule 27 (deploy session; @dnd-kit drag impractical to Playwright reliably + the sibling drag has no Playwright coverage; director real-Chrome Phase 4 used instead) |
+
+### Affected §A sections (informational — §A FROZEN per Rule 18)
+
+- The §1 Category page (Reviews Analysis By Competitor Category Table) requirement now has a LIVE interactive batch on top of the Session 1 scaffold. §A is frozen; this implementation note (the banner-row restructure, the two-level nested @dnd-kit drag, hide-with-restore, the `categoryTableLayout` per-page layout-memory column on the existing `UserTablePreferences` model, the FF1 auto-scroll fix) lives in §B only.
+- The two Category-level AI flows (Columns 12/13 — currently placeholders) remain the next Category-page work (Session 2); they reuse the existing `ReviewAnalysis` PER_CATEGORY storage → Schema-change-in-flight NO at that session's entry.
+- The banner-name editability (rename the whole category group) is recorded here as an OPTIONAL future refinement; the banner name is a read-only label this session.
+
+### Cross-references
+
+- §B 2026-05-30 above (W5 Category page Session 1 scaffold + polish + fixes — the foundation this interactive batch builds on).
+- §B 2026-05-29-d above (W5 Fix Session C "Deploy 2" — the sibling Reviews Analysis Table page's @dnd-kit drag pattern, CLOSED) — the drag pattern the two-level nested drag extends.
+- `docs/CORRECTIONS_LOG.md` §Entry 2026-05-30-b — the INFORMATIONAL entry (the 2 NEW Patterns + the read-only-banner-name design note + the P-43 tally).
+- `docs/polish-item-specs/P-49-W5-S4-category-page.md` §2 + §3 2026-05-30-b (parent-updated — the interactive batch ✅ DONE + the read-only-banner-name note) + `docs/polish-item-specs/P-49-W5-S5-type-page.md` §2 2026-05-30-b (parent-updated — Category behaviors all shipped, mirror at Sessions 4-5 with `typeTableLayout`) + `docs/polish-item-specs/P-49-W5-reviews-phase-2-master-spec.md` §3 pointer table (Category interactive batch ✅ DONE; remaining = Category Session 2 AI flows + Type page Sessions 4-5).
+- `docs/ROADMAP.md` P-49 — status updated to "🟢 IN-FLIGHT 2026-05-30-b — Category page interactive batch ✅ DEPLOYED-AND-VERIFIED" + the optional-refinement sub-note.
+- Source cross-references: `src/app/projects/[projectId]/competition-scraping/reviews-analysis-by-category/page.tsx` (the single DndContext + prefixed `cat:<key>` ids + nested per-category SortableContexts + hide-with-restore + the `measuring`/`autoScroll` props) + `src/lib/competition-scraping/category-table-layout.ts` (the layout validation helpers) + `category-table-grouping.ts` (`foldIntoCategoryGroups`/`buildCategoryGroups`) + `src/lib/competition-scraping/handlers/user-table-preferences.ts` (the `categoryTableLayout` thread-through) + `src/lib/shared-types/competition-scraping.ts` (`CategoryTableLayout`) + `prisma/schema.prisma` (`categoryTableLayout Json?`); builds `5f07f24` / `469e5c6`.
+
+**Closing line:** P-49 W5 Category page "interactive batch" — banner-row layout restructure + two-level @dnd-kit drag-to-reorder + hide-with-restore + a NEW per-user/per-Project page-layout "memory" area ✅ DEPLOYED-AND-VERIFIED 2026-05-30-b (builds `5f07f24` + FF1 `469e5c6`) under 2 Rule 9 deploy gates on `workflow-2-competition-scraping` — director "All passed." The SECOND of the 5-session Category + Type corrective rebuild. TWO NEW reusable PATTERNS memorialized. ONE additive nullable `UserTablePreferences.categoryTableLayout Json?` column — REUSED the existing `/table-preferences` endpoint, NO new route. Schema-change-in-flight YES at entry → FLIPPED YES → NO at the deploy push `5f07f24`; exit NO. 4/4 = 100% Yes-to-Recommended this session; running cumulative 144/147 = 98.0%. NEW baselines: src/lib `node:test` = **1156/1156** + `npm run build` = **69 routes UNCHANGED** + extension = 910/910 UNCHANGED. **Closes (a.115) RECOMMENDED-NEXT.** **Opens (a.116) RECOMMENDED-NEXT = P-49 W5 Category page Session 2 — the two Category AI flows** on `workflow-2-competition-scraping`. **TWENTY-SECOND build/deploy-session §B entry per Rule 18 — FOURTEENTH W5 entry; the FIRST Category-page interactive-batch entry.** The next §B entry will land at the close of the Category page Session 2 AI flows.
+
+---
+
 ---
 
 END OF DOCUMENT
