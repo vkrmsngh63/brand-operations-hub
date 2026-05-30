@@ -1070,6 +1070,30 @@ export interface WriteComprehensiveCompetitorAnalysisRequest {
 export type WriteComprehensiveCompetitorAnalysisResponse =
   ComprehensiveCompetitorAnalysis;
 
+// ─── CategoryTableLayout (P-49 W5 Category page "interactive batch", ──────
+//     2026-05-30) ──────────────────────────────────────────────────────────
+// Per-user, per-Project "memory" for the Reviews Analysis By Competitor
+// Category page ONLY. Scoped to THAT page — never shared with the Competitor
+// Content Table or the Reviews Analysis Table (those use rowOrder). Stored in
+// the additive nullable UserTablePreferences.categoryTableLayout Json column.
+// The sibling Reviews Analysis By Competitor Type page gets its own
+// typeTableLayout column when it's built (Sessions 4-5).
+export interface CategoryTableLayout {
+  // Ordered category keys (normalized competitionCategory values). Keys absent
+  // from the list fall back to alphabetical after the listed ones; the
+  // "(Uncategorized)" group is always forced last regardless.
+  categoryOrder: string[];
+  // Flat ordered competitor-url-id list. A competitor only reorders WITHIN its
+  // own category, so a single flat ranking suffices (the grouping helper
+  // sorts each category's bucket by this list).
+  rowOrderByUrlId: string[];
+  // Competitor url ids hidden on this page (hide-with-restore; never deletes
+  // data anywhere else).
+  hiddenUrlIds: string[];
+  // Category keys hidden on this page (hides the whole category block).
+  hiddenCategoryKeys: string[];
+}
+
 // ─── UserTablePreferences (P-46 Workstream 1, 2026-05-24) ──────────────
 // Wire shape for per-user-per-project Competition Data table preferences
 // per docs/COMPETITION_DATA_V2_DESIGN.md §A.3. Cross-device sync via
@@ -1090,6 +1114,9 @@ export interface UserTablePreferences {
   rowOrder: string[];
   lastUsedSortColumn: string | null;
   lastUsedSortDirection: 'asc' | 'desc' | null;
+  // Category-page-only layout memory (drag order + hidden rows). null when the
+  // user has never customized the Category page. See CategoryTableLayout.
+  categoryTableLayout: CategoryTableLayout | null;
   updatedAt: string;
 }
 
@@ -1110,6 +1137,9 @@ export interface WriteUserTablePreferencesRequest {
   rowOrder?: string[];
   lastUsedSortColumn?: string | null;
   lastUsedSortDirection?: 'asc' | 'desc' | null;
+  // Category-page-only layout memory. Pass the whole object to replace it;
+  // omit to leave it untouched. null is a valid value (clears the memory).
+  categoryTableLayout?: CategoryTableLayout | null;
 }
 
 export type WriteUserTablePreferencesResponse = UserTablePreferences;

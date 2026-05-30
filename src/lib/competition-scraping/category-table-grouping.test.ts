@@ -7,6 +7,8 @@ import assert from 'node:assert/strict';
 
 import {
   buildCategoryGroupedRows,
+  buildCategoryGroups,
+  foldIntoCategoryGroups,
   normalizeCategoryKey,
   isUncategorizedKey,
   categoryKeyToLabel,
@@ -192,4 +194,42 @@ test('buildCategoryGroupedRows: rowOrderByUrlId leaves unranked rows in input or
     { rowOrderByUrlId: ['4', '2'] }
   );
   assert.deepEqual(rows.map((r) => r.url.id), ['4', '2', '1', '3']);
+});
+
+// ─── foldIntoCategoryGroups / buildCategoryGroups (interactive batch) ──
+
+test('foldIntoCategoryGroups: groups consecutive same-category rows into blocks', () => {
+  const flat = buildCategoryGroupedRows([
+    u('1', 'Knives'),
+    u('2', 'Forks'),
+    u('3', 'Knives'),
+    u('4', null),
+  ]);
+  const groups = foldIntoCategoryGroups(flat);
+  // Alpha order: Forks, Knives, then (Uncategorized) last.
+  assert.deepEqual(groups.map((g) => g.label), ['Forks', 'Knives', UNCATEGORIZED_LABEL]);
+  assert.deepEqual(groups.map((g) => g.rows.length), [1, 2, 1]);
+  assert.equal(groups[2].isUncategorized, true);
+});
+
+test('buildCategoryGroups: applies categoryOrder + rowOrderByUrlId then folds', () => {
+  const groups = buildCategoryGroups(
+    [u('1', 'Knives'), u('2', 'Forks'), u('3', 'Knives')],
+    { categoryOrder: ['Knives', 'Forks'], rowOrderByUrlId: ['3', '1'] }
+  );
+  assert.deepEqual(groups.map((g) => g.key), ['Knives', 'Forks']);
+  // Knives block respects rowOrderByUrlId (3 before 1).
+  assert.deepEqual(groups[0].rows.map((r) => r.url.id), ['3', '1']);
+});
+
+test('buildCategoryGroups: uncategorized block is always forced last', () => {
+  const groups = buildCategoryGroups(
+    [u('1', null), u('2', 'Knives')],
+    { categoryOrder: ['', 'Knives'] } // even if memory lists uncategorized first
+  );
+  assert.deepEqual(groups.map((g) => g.label), ['Knives', UNCATEGORIZED_LABEL]);
+});
+
+test('foldIntoCategoryGroups: empty input → empty list', () => {
+  assert.deepEqual(foldIntoCategoryGroups([]), []);
 });

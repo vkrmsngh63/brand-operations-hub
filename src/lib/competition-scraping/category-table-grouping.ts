@@ -165,3 +165,57 @@ export function buildCategoryGroupedRows<T extends CategoryGroupRowInput>(
   }
   return out;
 }
+
+// ─── nested grouping (P-49 W5 "interactive batch", 2026-05-30) ─────────
+// The interactive batch moves the category label onto its OWN banner row,
+// with all competitor rows beneath it (so the first competitor is draggable).
+// The page renders one banner + a block of competitor rows per category, so
+// it needs the rows folded back into per-category blocks. This re-uses the
+// flat ordering produced by buildCategoryGroupedRows (single source of truth
+// for the order) and groups consecutive same-category rows.
+
+export interface CategoryGroup<T extends CategoryGroupRowInput> {
+  /** Normalized group key (real trimmed category, or the uncategorized
+   *  sentinel). Stable id for category-level drag + hidden state. */
+  key: string;
+  /** Human label for the banner row ("(Uncategorized)" for the bucket). */
+  label: string;
+  /** True for the "(Uncategorized)" group. */
+  isUncategorized: boolean;
+  /** The category's competitor display rows, in their within-group order. */
+  rows: CategoryDisplayRow<T>[];
+}
+
+/** Fold a flat, already-ordered display-row list into per-category blocks,
+ *  preserving the flat order. Adjacent rows sharing a categoryKey join one
+ *  block; the flat builder guarantees a category's rows are contiguous. */
+export function foldIntoCategoryGroups<T extends CategoryGroupRowInput>(
+  displayRows: ReadonlyArray<CategoryDisplayRow<T>>
+): CategoryGroup<T>[] {
+  const groups: CategoryGroup<T>[] = [];
+  let current: CategoryGroup<T> | null = null;
+  for (const row of displayRows) {
+    if (!current || current.key !== row.categoryKey) {
+      current = {
+        key: row.categoryKey,
+        label: categoryKeyToLabel(row.categoryKey),
+        isUncategorized: row.isUncategorized,
+        rows: [],
+      };
+      groups.push(current);
+    }
+    current.rows.push(row);
+  }
+  return groups;
+}
+
+/** Build the per-category blocks for the interactive Category page in one
+ *  step: order (via categoryOrder + rowOrderByUrlId) then fold into blocks.
+ *  Hidden-row filtering is the caller's job (it happens before this so the
+ *  page can also surface a "restore hidden" panel). */
+export function buildCategoryGroups<T extends CategoryGroupRowInput>(
+  urls: ReadonlyArray<T>,
+  options: BuildCategoryGroupedRowsOptions = {}
+): CategoryGroup<T>[] {
+  return foldIntoCategoryGroups(buildCategoryGroupedRows(urls, options));
+}

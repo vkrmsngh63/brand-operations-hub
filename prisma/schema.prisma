@@ -568,6 +568,15 @@ model UserTablePreferences {
   rowOrder              Json     @default("[]") // [competitorUrlId] in user's preferred order
   lastUsedSortColumn    String?
   lastUsedSortDirection String? // "asc" | "desc" — validated at application layer
+  // W#2 P-49 W5 Category page "interactive batch" (2026-05-30). Per-user,
+  // per-Project "memory" for the Reviews Analysis By Competitor Category
+  // page ONLY — scoped to that page, never shared with the Content Table or
+  // Reviews Analysis Table (which use rowOrder). Additive + nullable:
+  // { categoryOrder: string[], rowOrderByUrlId: string[],
+  //   hiddenUrlIds: string[], hiddenCategoryKeys: string[] }. The sibling
+  // Reviews Analysis By Competitor Type page gets its own typeTableLayout
+  // column when it's built (Sessions 4-5).
+  categoryTableLayout   Json?
   updatedAt             DateTime @updatedAt
 
   @@unique([userId, projectId])

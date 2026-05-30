@@ -17,10 +17,15 @@
 import { Prisma } from '@prisma/client';
 
 import type {
+  CategoryTableLayout,
   UserTablePreferences,
   WriteUserTablePreferencesRequest,
 } from '../../shared-types/competition-scraping.ts';
 import { isTablePreferencesSortDirection } from '../../shared-types/competition-scraping.ts';
+import {
+  coerceCategoryTableLayout,
+  validateCategoryTableLayout,
+} from '../category-table-layout.ts';
 
 import type { HandlerResult, RequestLike } from './shared.ts';
 
@@ -42,6 +47,7 @@ export type UserTablePreferencesRow = {
   rowOrder: Prisma.JsonValue;
   lastUsedSortColumn: string | null;
   lastUsedSortDirection: string | null;
+  categoryTableLayout: Prisma.JsonValue | null;
   updatedAt: Date;
 };
 
@@ -101,6 +107,7 @@ export function toWireShape(row: UserTablePreferencesRow): UserTablePreferences 
     )
       ? row.lastUsedSortDirection
       : null,
+    categoryTableLayout: coerceCategoryTableLayout(row.categoryTableLayout),
     updatedAt: row.updatedAt.toISOString(),
   };
 }
@@ -149,6 +156,7 @@ export type ValidatedPatch = {
   rowOrder?: string[];
   lastUsedSortColumn?: string | null;
   lastUsedSortDirection?: 'asc' | 'desc' | null;
+  categoryTableLayout?: CategoryTableLayout | null;
 };
 
 export type ValidationResult =
@@ -254,6 +262,14 @@ export function extractTablePreferencesPatch(body: unknown): ValidationResult {
     patch.lastUsedSortDirection = v as 'asc' | 'desc' | null;
   }
 
+  if ('categoryTableLayout' in b) {
+    const result = validateCategoryTableLayout(b.categoryTableLayout);
+    if (!result.ok) {
+      return { ok: false, error: result.error };
+    }
+    patch.categoryTableLayout = result.value;
+  }
+
   return { ok: true, patch };
 }
 
@@ -334,6 +350,14 @@ export function makeUserTablePreferencesHandlers(
     if (patch.lastUsedSortDirection !== undefined) {
       update.lastUsedSortDirection = patch.lastUsedSortDirection;
     }
+    if (patch.categoryTableLayout !== undefined) {
+      // Nullable Json column: a null patch clears the memory back to SQL NULL
+      // (Prisma.DbNull); an object replaces it wholesale.
+      update.categoryTableLayout =
+        patch.categoryTableLayout === null
+          ? Prisma.DbNull
+          : (patch.categoryTableLayout as unknown as Prisma.InputJsonValue);
+    }
 
     const create: Prisma.UserTablePreferencesUncheckedCreateInput = {
       userId,
@@ -344,6 +368,10 @@ export function makeUserTablePreferencesHandlers(
       rowOrder: patch.rowOrder ?? [],
       lastUsedSortColumn: patch.lastUsedSortColumn ?? null,
       lastUsedSortDirection: patch.lastUsedSortDirection ?? null,
+      categoryTableLayout:
+        patch.categoryTableLayout == null
+          ? Prisma.DbNull
+          : (patch.categoryTableLayout as unknown as Prisma.InputJsonValue),
     };
 
     try {

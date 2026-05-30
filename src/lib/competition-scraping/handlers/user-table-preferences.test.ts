@@ -32,6 +32,7 @@ function makeRow(
     rowOrder: [],
     lastUsedSortColumn: null,
     lastUsedSortDirection: null,
+    categoryTableLayout: null,
     updatedAt: FROZEN_DATE,
     ...overrides,
   };
@@ -263,6 +264,49 @@ test('extract: full payload', () => {
   assert.equal(result.ok, true);
 });
 
+// ─── categoryTableLayout (P-49 W5 interactive batch) ───────────────────
+
+test('extract: categoryTableLayout valid object normalizes', () => {
+  const result = extractTablePreferencesPatch({
+    categoryTableLayout: {
+      categoryOrder: ['Knives'],
+      rowOrderByUrlId: ['u1', 'u2'],
+      hiddenUrlIds: ['u3'],
+      hiddenCategoryKeys: ['Old'],
+    },
+  });
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    assert.deepEqual(result.patch.categoryTableLayout, {
+      categoryOrder: ['Knives'],
+      rowOrderByUrlId: ['u1', 'u2'],
+      hiddenUrlIds: ['u3'],
+      hiddenCategoryKeys: ['Old'],
+    });
+  }
+});
+
+test('extract: categoryTableLayout null clears the memory', () => {
+  const result = extractTablePreferencesPatch({ categoryTableLayout: null });
+  assert.equal(result.ok, true);
+  if (result.ok) assert.equal(result.patch.categoryTableLayout, null);
+});
+
+test('extract: categoryTableLayout bad shape → error', () => {
+  assert.equal(
+    extractTablePreferencesPatch({ categoryTableLayout: 'nope' }).ok,
+    false
+  );
+  assert.equal(
+    extractTablePreferencesPatch({ categoryTableLayout: { categoryOrder: 'A' } }).ok,
+    false
+  );
+  assert.equal(
+    extractTablePreferencesPatch({ categoryTableLayout: { hiddenUrlIds: ['ok', 9] } }).ok,
+    false
+  );
+});
+
 // ─── toWireShape ──────────────────────────────────────────────────────
 
 test('toWireShape: coerces JsonValue columns to typed shapes', () => {
@@ -278,6 +322,26 @@ test('toWireShape: coerces JsonValue columns to typed shapes', () => {
   assert.deepEqual(wire.rowOrder, ['url-1', 'url-2']);
   assert.equal(wire.lastUsedSortDirection, 'desc');
   assert.equal(wire.updatedAt, FROZEN_DATE.toISOString());
+});
+
+test('toWireShape: categoryTableLayout null → null; object coerced', () => {
+  assert.equal(toWireShape(makeRow({ categoryTableLayout: null })).categoryTableLayout, null);
+  const wire = toWireShape(
+    makeRow({
+      categoryTableLayout: {
+        categoryOrder: ['Knives'],
+        rowOrderByUrlId: ['u1'],
+        hiddenUrlIds: [],
+        hiddenCategoryKeys: ['Old'],
+      } as unknown as import('@prisma/client').Prisma.JsonValue,
+    })
+  );
+  assert.deepEqual(wire.categoryTableLayout, {
+    categoryOrder: ['Knives'],
+    rowOrderByUrlId: ['u1'],
+    hiddenUrlIds: [],
+    hiddenCategoryKeys: ['Old'],
+  });
 });
 
 test('toWireShape: bad JSON shapes in DB → defaults', () => {

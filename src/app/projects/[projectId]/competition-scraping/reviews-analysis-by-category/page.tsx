@@ -5,41 +5,56 @@
 // Route: /projects/[projectId]/competition-scraping/reviews-analysis-by-category
 //
 // The page re-lists every CompetitorUrl's review data grouped by
-// competitionCategory: the first row of each category group carries the
-// category name in Column 1; subsequent rows in the group leave Column 1
-// blank (the grouping signal). URLs with no category bucket into
-// "(Uncategorized)", which always sorts last.
+// competitionCategory. Session 1 (2026-05-30) shipped the scaffold (flat
+// 13-column grouped table + column show/hide + click-to-edit + per-review
+// stacked Stars/Reviews Summary + reuse of the sibling page's per-competitor
+// summaries) plus a polish pass + fixes.
 //
-// Session 1 (2026-05-30, shipped): route + flat 13-column grouped table +
-// column show/hide + click-to-edit on URL-backed columns + per-review
-// stacked Stars/Reviews Summary (Q-A/Q-B) + reuse of the sibling page's
-// per-competitor bulleted/non-bulleted summaries (Q-C). Category-level AI
-// columns show "(not yet generated)" until Session 2.
-//
-// Session 1 polish pass (2026-05-30, this deploy): (1) Platforms filter box
-// alongside Show columns; (2) full-length drag-to-resize column borders
-// (incl. the right edge) via the shared ColumnResizeHandle measured to the
-// table height; (3) floating horizontal scrollbar pinned to the bottom of
-// the viewport; (4) the per-competitor AI content boxes fill the full cell
-// height (less scrolling); (5) visible borders between the Stars / Reviews
-// Summary sub-rows. The heavier interactive features (drag-to-reorder
-// categories + competitors with the header-row layout change, and
-// hide/restore of competitors + categories) land next session per the
-// 2026-05-30 director decisions (hide-with-restore + scoped to this page).
+// "Interactive batch" (2026-05-30, this update): the category name moves onto
+// its OWN shaded banner row, with every competitor row beneath it — so the
+// FIRST competitor is draggable too. Adds:
+//   • two-level drag-to-reorder — drag whole categories (their competitors
+//     ride along) + drag competitors within a category (mirrors the sibling
+//     Reviews Analysis Table's @dnd-kit pattern);
+//   • hide-with-restore — hide a competitor or a whole category FROM THIS
+//     PAGE ONLY (a "Hidden on this page" panel restores them); never deletes
+//     data anywhere else;
+//   • a new per-user, per-Project "memory" area backing all of the above
+//     (UserTablePreferences.categoryTableLayout), scoped to THIS page — the
+//     Content Table + Reviews Analysis Table are untouched.
+// The two category-level AI columns sit on the banner row and still show
+// "(not yet generated)" until Session 2.
 
 import {
+  Fragment,
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react';
 import type { JSX } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { authFetch } from '@/lib/authFetch';
 import { useWorkflowContext } from '@/lib/workflow-components';
 import type {
   CapturedReview,
+  CategoryTableLayout,
   CompetitorUrl,
   Platform,
   UpdateCompetitorUrlRequest,
@@ -63,9 +78,19 @@ import {
   type CategoryTableColumnDef,
 } from '@/lib/competition-scraping/category-table-columns';
 import {
-  buildCategoryGroupedRows,
+  buildCategoryGroups,
+  normalizeCategoryKey,
   type CategoryDisplayRow,
+  type CategoryGroup,
 } from '@/lib/competition-scraping/category-table-grouping';
+import {
+  EMPTY_CATEGORY_TABLE_LAYOUT,
+  applyCategoryDrag,
+  applyCompetitorDrag,
+  readCategoryTableLayout,
+  toHiddenSets,
+  toggleHidden,
+} from '@/lib/competition-scraping/category-table-layout';
 
 const WORKFLOW_SLUG = 'competition-scraping';
 
@@ -85,6 +110,15 @@ const AI_COLUMN_IDS = new Set([
 // little PAST the table's right edge — keeping the rightmost column's resize
 // handle clear of the vertical scrollbar (director report 2026-05-30).
 const TABLE_TRAILING_SPACE = 48;
+
+// Width of the leftmost drag-grip / hide column (interactive batch). Hosts the
+// per-competitor + per-category reorder grip + the hide affordance.
+const GRIP_COL_WIDTH = 34;
+
+// The drag id of a category banner is prefixed so the single DndContext can
+// tell a category drag from a competitor drag without ambiguity.
+const CATEGORY_DRAG_PREFIX = 'cat:';
+const catDragId = (key: string): string => `${CATEGORY_DRAG_PREFIX}${key}`;
 
 type UrlsLoadState =
   | { kind: 'loading' }
@@ -131,6 +165,11 @@ export default function ReviewsAnalysisByCategoryPage(): JSX.Element {
   const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>(() => [
     ...PLATFORMS,
   ]);
+  // Interactive-batch "memory": category order + within-category competitor
+  // order + hidden competitors + hidden categories. Scoped to THIS page.
+  const [layout, setLayout] = useState<CategoryTableLayout>(
+    EMPTY_CATEGORY_TABLE_LAYOUT
+  );
   // Gate: don't persist visibility/widths until the initial server load has
   // completed — otherwise the debounced save can fire with empty local state
   // and WIPE the user's previously-saved categoryTable: prefs before the
@@ -193,7 +232,28 @@ export default function ReviewsAnalysisByCategoryPage(): JSX.Element {
     setSelectedPlatforms(next ? [...PLATFORMS] : []);
   }, []);
 
-  // ─── load column-visibility + width prefs (categoryTable: prefix) ──
+  // ─── persist the interactive-batch layout memory ───────────────────
+  // Fired only on explicit user action (drag / hide / restore), so it can
+  // never race the initial load with an empty layout.
+  const persistLayout = useCallback(
+    (next: CategoryTableLayout) => {
+      setLayout(next);
+      if (!projectId) return;
+      void authFetch(
+        `/api/projects/${projectId}/competition-scraping/table-preferences`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ categoryTableLayout: next }),
+        }
+      ).catch(() => {
+        // best-effort; the next layout change re-sends the whole object
+      });
+    },
+    [projectId]
+  );
+
+  // ─── load column-visibility + width prefs + layout (categoryTable:) ──
   useEffect(() => {
     if (!projectId) return;
     let cancelled = false;
@@ -206,6 +266,7 @@ export default function ReviewsAnalysisByCategoryPage(): JSX.Element {
         const body = (await res.json()) as {
           columnVisibility?: Record<string, boolean>;
           columnWidths?: Record<string, number>;
+          categoryTableLayout?: unknown;
         };
         const localVis: Record<string, boolean> = {};
         for (const [key, value] of Object.entries(body.columnVisibility ?? {})) {
@@ -222,6 +283,7 @@ export default function ReviewsAnalysisByCategoryPage(): JSX.Element {
         if (!cancelled) {
           setColumnVisibility(localVis);
           setColumnWidths(localWidths);
+          setLayout(readCategoryTableLayout(body.categoryTableLayout));
         }
       } catch {
         // defaults render
@@ -428,6 +490,27 @@ export default function ReviewsAnalysisByCategoryPage(): JSX.Element {
     };
   }, [projectId, urlsState]);
 
+  // ─── hide / restore handlers ───────────────────────────────────────
+  const handleHideUrl = useCallback(
+    (urlId: string, hide: boolean) => {
+      persistLayout({
+        ...layout,
+        hiddenUrlIds: toggleHidden(layout.hiddenUrlIds, urlId, hide),
+      });
+    },
+    [layout, persistLayout]
+  );
+
+  const handleHideCategory = useCallback(
+    (categoryKey: string, hide: boolean) => {
+      persistLayout({
+        ...layout,
+        hiddenCategoryKeys: toggleHidden(layout.hiddenCategoryKeys, categoryKey, hide),
+      });
+    },
+    [layout, persistLayout]
+  );
+
   // ─── render gates ──────────────────────────────────────────────────
   if (ctx.loading || !ctx.project) {
     return <FullPageState message={ctx.error ?? 'Loading…'} isError={!!ctx.error} />;
@@ -446,15 +529,12 @@ export default function ReviewsAnalysisByCategoryPage(): JSX.Element {
     isCategoryColumnVisible(columnVisibility, c.id)
   );
 
-  // Platform filter applied BEFORE grouping (polish item 1) — a category
-  // with no competitors left after the filter simply drops out.
-  const platformSet = new Set(selectedPlatforms);
-  const filteredUrls =
-    urlsState.kind === 'loaded'
-      ? urlsState.urls.filter((u) => platformSet.has(u.platform))
-      : [];
-  const groupedRows: CategoryDisplayRow<CompetitorUrl>[] =
-    buildCategoryGroupedRows(filteredUrls);
+  const allUrls = urlsState.kind === 'loaded' ? urlsState.urls : [];
+
+  // Resolve the hidden competitors (for the restore panel) from the FULL url
+  // list so a hidden-and-platform-filtered competitor is still restorable.
+  const hiddenUrlSet = new Set(layout.hiddenUrlIds);
+  const hiddenUrls = allUrls.filter((u) => hiddenUrlSet.has(u.id));
 
   return (
     <div
@@ -499,9 +579,11 @@ export default function ReviewsAnalysisByCategoryPage(): JSX.Element {
           Reviews Analysis By Competitor Category
         </h1>
         <p style={{ fontSize: '13px', color: '#8b949e', margin: '0 0 16px', lineHeight: 1.6 }}>
-          Every competitor&apos;s review data re-listed by category. The first row of each
-          category carries the category name; the rows beneath it belong to that same
-          category. Category-level AI write-ups arrive in a later update.
+          Every competitor&apos;s review data re-listed by category. Each category sits on its
+          own banner row; drag the grip on a banner to reorder whole categories, or the grip on a
+          competitor to reorder competitors within a category. Use the ✕ to hide a competitor or a
+          category from this page — your order and hidden rows are remembered just for you, just
+          here. Category-level AI write-ups arrive in a later update.
         </p>
 
         <PlatformFilterBar
@@ -514,6 +596,13 @@ export default function ReviewsAnalysisByCategoryPage(): JSX.Element {
           columns={CATEGORY_TABLE_COLUMNS}
           columnVisibility={columnVisibility}
           onToggleColumn={handleToggleColumn}
+        />
+
+        <HiddenRowsPanel
+          hiddenUrls={hiddenUrls}
+          hiddenCategoryKeys={layout.hiddenCategoryKeys}
+          onRestoreUrl={(id) => handleHideUrl(id, false)}
+          onRestoreCategory={(key) => handleHideCategory(key, false)}
         />
       </div>
 
@@ -539,16 +628,12 @@ export default function ReviewsAnalysisByCategoryPage(): JSX.Element {
             <span style={errorBoxStyle}>Failed to load competitors: {urlsState.message}</span>
           </div>
         )}
-        {urlsState.kind === 'loaded' && groupedRows.length === 0 && (
-          <div style={{ padding: '24px', color: '#8b949e', fontSize: '13px' }}>
-            {urlsState.urls.length === 0
-              ? 'No competitors captured yet for this project.'
-              : 'No competitors match the selected platforms.'}
-          </div>
-        )}
-        {urlsState.kind === 'loaded' && groupedRows.length > 0 && (
+        {urlsState.kind === 'loaded' && (
           <CategoryTable
-            rows={groupedRows}
+            urls={urlsState.urls}
+            selectedPlatforms={selectedPlatforms}
+            layout={layout}
+            onLayoutChange={persistLayout}
             visibleColumns={visibleColumns}
             columnWidths={columnWidths}
             reviewsByUrl={reviewsByUrl}
@@ -557,6 +642,9 @@ export default function ReviewsAnalysisByCategoryPage(): JSX.Element {
             competitorNonBulletedByUrlId={competitorNonBulletedByUrlId}
             onUrlCellSave={handleUrlCellSave}
             onColumnResize={handleColumnResize}
+            onHideUrl={(id) => handleHideUrl(id, true)}
+            onHideCategory={(key) => handleHideCategory(key, true)}
+            totalUrlCount={urlsState.urls.length}
           />
         )}
       </div>
@@ -673,10 +761,114 @@ function ColumnVisibilityControls({
   );
 }
 
+// ─── Hidden-rows restore panel (interactive batch) ─────────────────────
+
+interface HiddenRowsPanelProps {
+  hiddenUrls: CompetitorUrl[];
+  hiddenCategoryKeys: string[];
+  onRestoreUrl: (urlId: string) => void;
+  onRestoreCategory: (categoryKey: string) => void;
+}
+
+function HiddenRowsPanel({
+  hiddenUrls,
+  hiddenCategoryKeys,
+  onRestoreUrl,
+  onRestoreCategory,
+}: HiddenRowsPanelProps): JSX.Element | null {
+  if (hiddenUrls.length === 0 && hiddenCategoryKeys.length === 0) return null;
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        gap: '6px 10px',
+        padding: '10px 12px',
+        marginBottom: '16px',
+        background: '#1c1207',
+        border: '1px solid #5a3a12',
+        borderRadius: '8px',
+        fontSize: '12px',
+      }}
+    >
+      <span style={{ color: '#d8a657', fontWeight: 600 }}>Hidden on this page:</span>
+      {hiddenCategoryKeys.map((key) => (
+        <RestoreChip
+          key={`cat:${key}`}
+          label={`📁 ${key === '' ? '(Uncategorized)' : key}`}
+          onRestore={() => onRestoreCategory(key)}
+        />
+      ))}
+      {hiddenUrls.map((u) => (
+        <RestoreChip
+          key={u.id}
+          label={u.productName?.trim() || u.url}
+          onRestore={() => onRestoreUrl(u.id)}
+        />
+      ))}
+    </div>
+  );
+}
+
+function RestoreChip({
+  label,
+  onRestore,
+}: {
+  label: string;
+  onRestore: () => void;
+}): JSX.Element {
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '6px',
+        maxWidth: '260px',
+        padding: '3px 8px',
+        background: '#161b22',
+        border: '1px solid #30363d',
+        borderRadius: '12px',
+        color: '#c9d1d9',
+      }}
+    >
+      <span
+        style={{
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}
+        title={label}
+      >
+        {label}
+      </span>
+      <button
+        type="button"
+        onClick={onRestore}
+        style={{
+          background: 'transparent',
+          border: 'none',
+          color: '#58a6ff',
+          cursor: 'pointer',
+          fontSize: '12px',
+          padding: 0,
+          fontFamily: 'inherit',
+        }}
+        title="Show this row again"
+      >
+        Show
+      </button>
+    </span>
+  );
+}
+
 // ─── The grouped table ─────────────────────────────────────────────────
 
 interface CategoryTableProps {
-  rows: CategoryDisplayRow<CompetitorUrl>[];
+  urls: CompetitorUrl[];
+  selectedPlatforms: Platform[];
+  layout: CategoryTableLayout;
+  onLayoutChange: (next: CategoryTableLayout) => void;
   visibleColumns: ReadonlyArray<CategoryTableColumnDef>;
   columnWidths: Record<string, number>;
   reviewsByUrl: Record<string, ReviewsLoadState>;
@@ -685,10 +877,16 @@ interface CategoryTableProps {
   competitorNonBulletedByUrlId: Record<string, CompetitorSummaryEntry>;
   onUrlCellSave: (urlId: string, patch: UpdateCompetitorUrlRequest) => Promise<void>;
   onColumnResize: (columnId: string, width: number) => void;
+  onHideUrl: (urlId: string) => void;
+  onHideCategory: (categoryKey: string) => void;
+  totalUrlCount: number;
 }
 
 function CategoryTable({
-  rows,
+  urls,
+  selectedPlatforms,
+  layout,
+  onLayoutChange,
   visibleColumns,
   columnWidths,
   reviewsByUrl,
@@ -697,15 +895,104 @@ function CategoryTable({
   competitorNonBulletedByUrlId,
   onUrlCellSave,
   onColumnResize,
+  onHideUrl,
+  onHideCategory,
+  totalUrlCount,
 }: CategoryTableProps): JSX.Element {
   const scrollRef = useRef<HTMLDivElement>(null);
   const tableRef = useRef<HTMLTableElement>(null);
   const floatingRef = useRef<HTMLDivElement>(null);
   const [tableHeight, setTableHeight] = useState(0);
-  // scrollWidth/clientWidth of the scroll container — drives the floating
-  // horizontal scrollbar (polish item 3) + the full-height resize handles
-  // (polish item 2).
   const [metrics, setMetrics] = useState({ scrollWidth: 0, clientWidth: 0 });
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } })
+  );
+
+  // Platform filter, then hide filter, then group with the saved order.
+  const platformSet = useMemo(() => new Set(selectedPlatforms), [selectedPlatforms]);
+  const hidden = useMemo(() => toHiddenSets(layout), [layout]);
+
+  const groups: CategoryGroup<CompetitorUrl>[] = useMemo(() => {
+    const visible = urls.filter(
+      (u) =>
+        platformSet.has(u.platform) &&
+        !hidden.hiddenUrlIds.has(u.id) &&
+        !hidden.hiddenCategoryKeys.has(normalizeCategoryKey(u.competitionCategory))
+    );
+    return buildCategoryGroups(visible, {
+      categoryOrder: layout.categoryOrder,
+      rowOrderByUrlId: layout.rowOrderByUrlId,
+    });
+  }, [urls, platformSet, hidden, layout.categoryOrder, layout.rowOrderByUrlId]);
+
+  // Drag bookkeeping: the displayed category-key order (real categories are
+  // draggable; the uncategorized bucket is always pinned last), the flat
+  // displayed competitor-id order, and a url-id → category-key map so a
+  // competitor drag only reorders within its own category.
+  const displayedCategoryKeys = useMemo(
+    () => groups.filter((g) => !g.isUncategorized).map((g) => g.key),
+    [groups]
+  );
+  const displayedUrlIds = useMemo(
+    () => groups.flatMap((g) => g.rows.map((r) => r.url.id)),
+    [groups]
+  );
+  const urlIdToCategoryKey = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const g of groups) for (const r of g.rows) map.set(r.url.id, g.key);
+    return map;
+  }, [groups]);
+
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event;
+      if (!over) return;
+      const activeId = String(active.id);
+      const overId = String(over.id);
+      if (activeId === overId) return;
+      const activeIsCat = activeId.startsWith(CATEGORY_DRAG_PREFIX);
+      if (activeIsCat) {
+        // Dragging a category: the drop target is another banner OR any
+        // competitor row (whose category we map to) — so dropping anywhere
+        // inside a category lands the dragged category there. Dropping onto
+        // the pinned-last uncategorized bucket no-ops (it's never reorderable).
+        const activeKey = activeId.slice(CATEGORY_DRAG_PREFIX.length);
+        const targetKey = overId.startsWith(CATEGORY_DRAG_PREFIX)
+          ? overId.slice(CATEGORY_DRAG_PREFIX.length)
+          : urlIdToCategoryKey.get(overId);
+        if (!targetKey) return;
+        const next = applyCategoryDrag(
+          layout.categoryOrder,
+          displayedCategoryKeys,
+          activeKey,
+          targetKey
+        );
+        onLayoutChange({ ...layout, categoryOrder: next });
+        return;
+      }
+      // Dragging a competitor: only reorder when the drop target is another
+      // competitor in the SAME category (dropping onto a banner is ignored).
+      if (overId.startsWith(CATEGORY_DRAG_PREFIX)) return;
+      if (urlIdToCategoryKey.get(activeId) !== urlIdToCategoryKey.get(overId)) {
+        return;
+      }
+      const next = applyCompetitorDrag(
+        layout.rowOrderByUrlId,
+        displayedUrlIds,
+        activeId,
+        overId
+      );
+      onLayoutChange({ ...layout, rowOrderByUrlId: next });
+    },
+    [
+      layout,
+      displayedCategoryKeys,
+      displayedUrlIds,
+      urlIdToCategoryKey,
+      onLayoutChange,
+    ]
+  );
 
   useLayoutEffect(() => {
     const tableEl = tableRef.current;
@@ -723,11 +1010,8 @@ function CategoryTable({
     ro.observe(tableEl);
     ro.observe(scrollEl);
     return () => ro.disconnect();
-  }, []);
+  }, [groups.length]);
 
-  // Keep the floating scrollbar's thumb in sync if the table is scrolled by
-  // other means (e.g. a future drag autoscroll). The container has its own
-  // horizontal scrollbar hidden, so the floating bar is the primary control.
   const syncFromContainer = useCallback(() => {
     if (floatingRef.current && scrollRef.current) {
       floatingRef.current.scrollLeft = scrollRef.current.scrollLeft;
@@ -741,16 +1025,32 @@ function CategoryTable({
 
   const needsHScroll = metrics.scrollWidth > metrics.clientWidth + 1;
 
-  // Explicit table width = exact sum of the visible column widths. Without
-  // this, a fixed-layout table inside an overflow-hidden container can
-  // collapse to the container width instead of overflowing — which kept the
-  // table from being draggable past the screen edge (director report
-  // 2026-05-30). Pinning the width makes the table grow as columns are
-  // resized, overflow the container, and surface the floating scrollbar.
-  const totalWidth = visibleColumns.reduce(
-    (sum, c) => sum + resolveCategoryColumnWidth(columnWidths, c),
-    0
-  );
+  // Explicit table width = grip column + sum of the visible column widths.
+  const totalWidth =
+    GRIP_COL_WIDTH +
+    visibleColumns.reduce(
+      (sum, c) => sum + resolveCategoryColumnWidth(columnWidths, c),
+      0
+    );
+
+  // Banner layout: the label cell spans the non-category-level visible
+  // columns; the category-level AI columns (rightmost) keep their own cells.
+  const bannerLabelSpan = visibleColumns.filter((c) => !c.categoryLevel).length;
+  const categoryLevelColumns = visibleColumns.filter((c) => c.categoryLevel);
+
+  if (groups.length === 0) {
+    const anyHidden =
+      layout.hiddenUrlIds.length > 0 || layout.hiddenCategoryKeys.length > 0;
+    return (
+      <div style={{ padding: '24px', color: '#8b949e', fontSize: '13px' }}>
+        {totalUrlCount === 0
+          ? 'No competitors captured yet for this project.'
+          : anyHidden
+            ? 'Every competitor is hidden or filtered out. Use "Show" above to bring rows back, or adjust the platform filter.'
+            : 'No competitors match the selected platforms.'}
+      </div>
+    );
+  }
 
   return (
     <>
@@ -760,92 +1060,111 @@ function CategoryTable({
         style={{
           flex: '1 1 auto',
           minHeight: 0,
-          // Vertical scroll inside the region; horizontal handled by the
-          // floating bar so it stays pinned to the viewport bottom.
           overflowX: 'hidden',
           overflowY: 'auto',
-          // Reserve a dedicated lane for the vertical scrollbar so it never
-          // overlays the table's right edge / rightmost resize handle.
           scrollbarGutter: 'stable',
-          // Leave room so the floating bar never covers the last rows.
           paddingBottom: needsHScroll ? '18px' : 0,
         }}
       >
-        {/* Wrapper is wider than the table by TABLE_TRAILING_SPACE so the
-            user can scroll a little PAST the table's right edge, bringing the
-            rightmost column's resize handle clear of the scrollbar. */}
         <div style={{ width: `${totalWidth + TABLE_TRAILING_SPACE}px` }}>
-        <table
-          ref={tableRef}
-          style={{
-            borderCollapse: 'collapse',
-            tableLayout: 'fixed',
-            width: `${totalWidth}px`,
-            minWidth: `${totalWidth}px`,
-            fontSize: '13px',
-            background: '#0d1117',
-          }}
-        >
-          <colgroup>
-            {visibleColumns.map((c) => (
-              <col key={c.id} style={{ width: `${resolveCategoryColumnWidth(columnWidths, c)}px` }} />
-            ))}
-          </colgroup>
-          <thead>
-            <tr>
-              {visibleColumns.map((c) => (
-                <th
-                  key={c.id}
-                  style={{
-                    position: 'sticky',
-                    top: 0,
-                    zIndex: 2,
-                    textAlign: 'left',
-                    padding: '8px 10px',
-                    background: '#161b22',
-                    borderBottom: '1px solid #30363d',
-                    borderRight: '1px solid #21262d',
-                    fontSize: '11px',
-                    fontWeight: 600,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.03em',
-                    color: '#8b949e',
-                    whiteSpace: 'normal',
-                  }}
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <table
+              ref={tableRef}
+              style={{
+                borderCollapse: 'collapse',
+                tableLayout: 'fixed',
+                width: `${totalWidth}px`,
+                minWidth: `${totalWidth}px`,
+                fontSize: '13px',
+                background: '#0d1117',
+              }}
+            >
+              <colgroup>
+                <col style={{ width: `${GRIP_COL_WIDTH}px` }} />
+                {visibleColumns.map((c) => (
+                  <col key={c.id} style={{ width: `${resolveCategoryColumnWidth(columnWidths, c)}px` }} />
+                ))}
+              </colgroup>
+              <thead>
+                <tr>
+                  <th style={{ ...thBaseStyle, position: 'sticky', top: 0, zIndex: 2 }} aria-label="Reorder" />
+                  {visibleColumns.map((c) => (
+                    <th
+                      key={c.id}
+                      style={{
+                        position: 'sticky',
+                        top: 0,
+                        zIndex: 2,
+                        textAlign: 'left',
+                        padding: '8px 10px',
+                        background: '#161b22',
+                        borderBottom: '1px solid #30363d',
+                        borderRight: '1px solid #21262d',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.03em',
+                        color: '#8b949e',
+                        whiteSpace: 'normal',
+                      }}
+                    >
+                      {c.label}
+                      <ColumnResizeHandle
+                        columnId={c.id}
+                        currentWidth={resolveCategoryColumnWidth(columnWidths, c)}
+                        minWidth={MIN_CATEGORY_COLUMN_WIDTH}
+                        maxWidth={MAX_CATEGORY_COLUMN_WIDTH}
+                        tableHeight={tableHeight}
+                        onCommit={(width) => onColumnResize(c.id, width)}
+                      />
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                <SortableContext
+                  items={displayedCategoryKeys.map(catDragId)}
+                  strategy={verticalListSortingStrategy}
                 >
-                  {c.label}
-                  <ColumnResizeHandle
-                    columnId={c.id}
-                    currentWidth={resolveCategoryColumnWidth(columnWidths, c)}
-                    minWidth={MIN_CATEGORY_COLUMN_WIDTH}
-                    maxWidth={MAX_CATEGORY_COLUMN_WIDTH}
-                    tableHeight={tableHeight}
-                    onCommit={(width) => onColumnResize(c.id, width)}
-                  />
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <CategoryRow
-                key={row.url.id}
-                row={row}
-                visibleColumns={visibleColumns}
-                reviewsState={reviewsByUrl[row.url.id]}
-                summaryByReviewId={summaryByReviewId}
-                bulleted={competitorBulletedByUrlId[row.url.id]?.summary ?? ''}
-                nonBulleted={competitorNonBulletedByUrlId[row.url.id]?.summary ?? ''}
-                onUrlCellSave={onUrlCellSave}
-              />
-            ))}
-          </tbody>
-        </table>
+                  {groups.map((group) => (
+                    <Fragment key={group.key || '__uncategorized__'}>
+                      <CategoryBannerRow
+                        group={group}
+                        labelSpan={bannerLabelSpan}
+                        categoryLevelColumns={categoryLevelColumns}
+                        onHideCategory={onHideCategory}
+                      />
+                      <SortableContext
+                        items={group.rows.map((r) => r.url.id)}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        {group.rows.map((row) => (
+                          <SortableCategoryRow
+                            key={row.url.id}
+                            row={row}
+                            visibleColumns={visibleColumns}
+                            reviewsState={reviewsByUrl[row.url.id]}
+                            summaryByReviewId={summaryByReviewId}
+                            bulleted={competitorBulletedByUrlId[row.url.id]?.summary ?? ''}
+                            nonBulleted={competitorNonBulletedByUrlId[row.url.id]?.summary ?? ''}
+                            onUrlCellSave={onUrlCellSave}
+                            onHideUrl={onHideUrl}
+                          />
+                        ))}
+                      </SortableContext>
+                    </Fragment>
+                  ))}
+                </SortableContext>
+              </tbody>
+            </table>
+          </DndContext>
         </div>
       </div>
 
-      {/* Floating horizontal scrollbar pinned to the bottom of the viewport
-          (polish item 3). Only shown when the table is wider than the view. */}
       {needsHScroll && (
         <div
           ref={floatingRef}
@@ -870,9 +1189,119 @@ function CategoryTable({
   );
 }
 
-// ─── A single competitor row ───────────────────────────────────────────
+const thBaseStyle: React.CSSProperties = {
+  background: '#161b22',
+  borderBottom: '1px solid #30363d',
+  borderRight: '1px solid #21262d',
+};
 
-interface CategoryRowProps {
+// ─── Category banner row (interactive batch) ───────────────────────────
+// The category name lives on its own shaded banner: grip (drag the whole
+// category) + name + hide-category control on the left, the two category-level
+// AI cells at the right. Competitor rows render beneath it.
+
+interface CategoryBannerRowProps {
+  group: CategoryGroup<CompetitorUrl>;
+  labelSpan: number;
+  categoryLevelColumns: ReadonlyArray<CategoryTableColumnDef>;
+  onHideCategory: (categoryKey: string) => void;
+}
+
+function CategoryBannerRow({
+  group,
+  labelSpan,
+  categoryLevelColumns,
+  onHideCategory,
+}: CategoryBannerRowProps): JSX.Element {
+  // The uncategorized bucket is pinned last and is NOT draggable.
+  const draggable = !group.isUncategorized;
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: catDragId(group.key), disabled: !draggable });
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    background: isDragging ? '#1f2937' : '#15203a',
+    opacity: isDragging ? 0.7 : 1,
+  };
+
+  return (
+    <tr ref={setNodeRef} style={style} {...attributes}>
+      <td
+        style={{
+          ...gripCellStyle,
+          borderTop: '2px solid #30363d',
+          background: 'transparent',
+        }}
+      >
+        {draggable ? (
+          <button
+            type="button"
+            {...listeners}
+            style={gripButtonStyle}
+            aria-label="Drag to reorder this category"
+            title="Drag to reorder this category"
+            data-testid="category-banner-drag-handle"
+          >
+            ⋮⋮
+          </button>
+        ) : null}
+      </td>
+      <td
+        colSpan={labelSpan}
+        style={{
+          padding: '8px 10px',
+          borderTop: '2px solid #30363d',
+          borderRight: '1px solid #161b22',
+          color: '#e6edf3',
+          fontWeight: 700,
+          fontSize: '13px',
+          verticalAlign: 'middle',
+        }}
+      >
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '10px' }}>
+          <span>{group.label}</span>
+          <button
+            type="button"
+            onClick={() => onHideCategory(group.key)}
+            style={hideButtonStyle}
+            aria-label={`Hide the ${group.label} category from this page`}
+            title="Hide this category from this page (restore it from the panel above)"
+            data-testid="category-hide-button"
+          >
+            ✕
+          </button>
+        </span>
+      </td>
+      {categoryLevelColumns.map((c) => (
+        <td
+          key={c.id}
+          style={{
+            padding: '6px 10px',
+            borderTop: '2px solid #30363d',
+            borderRight: '1px solid #161b22',
+            color: '#6e7681',
+            fontStyle: 'italic',
+            fontSize: '12px',
+            verticalAlign: 'top',
+          }}
+        >
+          (not yet generated)
+        </td>
+      ))}
+    </tr>
+  );
+}
+
+// ─── A single competitor (one or more review sub-rows), draggable ──────
+
+interface SortableCategoryRowProps {
   row: CategoryDisplayRow<CompetitorUrl>;
   visibleColumns: ReadonlyArray<CategoryTableColumnDef>;
   reviewsState: ReviewsLoadState | undefined;
@@ -880,9 +1309,10 @@ interface CategoryRowProps {
   bulleted: string;
   nonBulleted: string;
   onUrlCellSave: (urlId: string, patch: UpdateCompetitorUrlRequest) => Promise<void>;
+  onHideUrl: (urlId: string) => void;
 }
 
-function CategoryRow({
+function SortableCategoryRow({
   row,
   visibleColumns,
   reviewsState,
@@ -890,16 +1320,32 @@ function CategoryRow({
   bulleted,
   nonBulleted,
   onUrlCellSave,
-}: CategoryRowProps): JSX.Element {
+  onHideUrl,
+}: SortableCategoryRowProps): JSX.Element {
   const u = row.url;
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: u.id });
+
+  // The transform moves the whole competitor block: applied to every sub-row
+  // so the stacked Stars/Reviews rows travel together during a drag.
+  const dragStyle: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    background: isDragging ? '#161b22' : undefined,
+    opacity: isDragging ? 0.6 : 1,
+  };
+
   const perReviewVisible = visibleColumns.some(
     (c) => c.id === 'stars' || c.id === 'reviewsSummary'
   );
   const reviews = sortedReviewsOf(reviewsState);
 
-  // Placeholder shown in the Stars / Reviews Summary cells when there's no
-  // review list to stack (loading / error / none) — those cases collapse to
-  // a single row.
   let starsPlaceholder = '—';
   let summaryPlaceholder = 'no reviews';
   if (reviewsState === undefined || reviewsState.kind === 'loading') {
@@ -910,15 +1356,9 @@ function CategoryRow({
     summaryPlaceholder = 'failed to load';
   }
 
-  // When per-review columns are visible AND there's a review list, render one
-  // sub-row per review: the non-per-review columns become a single rowSpan
-  // cell on the first sub-row, while the Stars + Reviews Summary cells render
-  // once per sub-row. Because a review's star and summary share one <tr>,
-  // they line up exactly and the sub-row borders align across both columns.
   const hasList = perReviewVisible && !!reviews && reviews.length > 0;
   const subRows: Array<CapturedReview | null> = hasList ? reviews! : [null];
   const span = subRows.length;
-  const groupTop = row.isFirstInGroup ? '2px solid #30363d' : '1px solid #21262d';
 
   return (
     <>
@@ -926,11 +1366,42 @@ function CategoryRow({
         const isFirstSub = i === 0;
         const isLastSub = i === subRows.length - 1;
         return (
-          <tr key={review ? review.id : `${u.id}-only`}>
+          <tr
+            key={review ? review.id : `${u.id}-only`}
+            ref={isFirstSub ? setNodeRef : undefined}
+            style={dragStyle}
+            {...(isFirstSub ? attributes : {})}
+          >
+            {/* Leftmost grip / hide cell — one per competitor (rowSpan). */}
+            {isFirstSub && (
+              <td rowSpan={span} style={gripCellStyle}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                  <button
+                    type="button"
+                    {...listeners}
+                    style={gripButtonStyle}
+                    aria-label="Drag to reorder this competitor"
+                    title="Drag to reorder this competitor within its category"
+                    data-testid="category-competitor-drag-handle"
+                  >
+                    ⋮⋮
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onHideUrl(u.id)}
+                    style={hideButtonStyle}
+                    aria-label="Hide this competitor from this page"
+                    title="Hide this competitor from this page (restore it from the panel above)"
+                    data-testid="category-competitor-hide-button"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </td>
+            )}
             {visibleColumns.map((c) => {
               const isPerReview = c.id === 'stars' || c.id === 'reviewsSummary';
               if (!isPerReview) {
-                // Non-per-review columns render once, spanning all sub-rows.
                 if (!isFirstSub) return null;
                 const isAi = AI_COLUMN_IDS.has(c.id);
                 return (
@@ -940,12 +1411,9 @@ function CategoryRow({
                     style={{
                       padding: isAi ? 0 : '6px 10px',
                       borderRight: '1px solid #161b22',
-                      borderTop: groupTop,
+                      borderTop: '1px solid #21262d',
                       verticalAlign: 'top',
                       color: '#e6edf3',
-                      // AI cells host an absolutely-positioned box that fills
-                      // the (now full rowSpan) cell height — needs a
-                      // positioning context.
                       position: isAi ? 'relative' : undefined,
                     }}
                   >
@@ -953,14 +1421,13 @@ function CategoryRow({
                   </td>
                 );
               }
-              // Per-review cell — one per sub-row.
               return (
                 <td
                   key={c.id}
                   style={{
                     padding: '5px 10px',
                     borderRight: '1px solid #161b22',
-                    borderTop: isFirstSub ? groupTop : undefined,
+                    borderTop: isFirstSub ? '1px solid #21262d' : undefined,
                     borderBottom: isLastSub ? undefined : '1px solid #21262d',
                     verticalAlign: 'top',
                     color: '#e6edf3',
@@ -997,14 +1464,9 @@ function renderDataCell(
 
   switch (c.id) {
     case 'competitionCategory':
-      return (
-        <InlineTextCell
-          value={u.competitionCategory}
-          onSave={(next) => save({ competitionCategory: next })}
-          placeholder={row.isFirstInGroup ? '(set category)' : ''}
-          formatRead={(raw) => (row.isFirstInGroup ? raw : <span />)}
-        />
-      );
+      // The category name now lives on the banner row; competitor rows leave
+      // Column 1 blank (the grouping signal).
+      return <span />;
     case 'platform':
       return (
         <InlineEnumCell<Platform>
@@ -1060,21 +1522,8 @@ function renderDataCell(
       return <SummaryTextCell text={nonBulleted} />;
     case 'catBulleted':
     case 'catNonBulleted':
-      return row.isFirstInGroup ? (
-        <span
-          style={{
-            display: 'block',
-            padding: '6px 10px',
-            color: '#6e7681',
-            fontStyle: 'italic',
-            fontSize: '12px',
-          }}
-        >
-          (not yet generated)
-        </span>
-      ) : (
-        <span />
-      );
+      // Category-level AI content lives on the banner row; blank here.
+      return <span />;
     default:
       return <span />;
   }
@@ -1091,8 +1540,6 @@ function sortedReviewsOf(state: ReviewsLoadState | undefined): CapturedReview[] 
   });
 }
 
-// A single review's star rating (one per sub-row). The Stars + Reviews
-// Summary cells for the same review live in the same <tr>, so they line up.
 function StarCell({
   review,
   placeholder,
@@ -1110,7 +1557,6 @@ function StarCell({
   );
 }
 
-// A single review's summary (one per sub-row), paired with its star.
 function SummaryCell({
   review,
   summaryByReviewId,
@@ -1144,8 +1590,6 @@ function SummaryCell({
   );
 }
 
-// AI-summary content box that fills the full cell height + scrolls internally
-// (polish item 4). Rendered inside a position:relative <td>.
 function SummaryTextCell({ text }: { text: string }): JSX.Element {
   if (!text) {
     return (
@@ -1171,6 +1615,43 @@ function SummaryTextCell({ text }: { text: string }): JSX.Element {
     </div>
   );
 }
+
+// ─── shared grip / hide control styles ─────────────────────────────────
+
+const gripCellStyle: React.CSSProperties = {
+  textAlign: 'center',
+  padding: '4px 2px',
+  borderRight: '1px solid #161b22',
+  borderTop: '1px solid #21262d',
+  color: '#484f58',
+  verticalAlign: 'top',
+  userSelect: 'none',
+};
+
+const gripButtonStyle: React.CSSProperties = {
+  background: 'transparent',
+  border: 'none',
+  color: '#6e7681',
+  cursor: 'grab',
+  padding: '2px',
+  fontSize: '13px',
+  fontFamily: 'inherit',
+  lineHeight: '13px',
+  letterSpacing: '-1px',
+  touchAction: 'none',
+};
+
+const hideButtonStyle: React.CSSProperties = {
+  background: 'transparent',
+  border: '1px solid #30363d',
+  borderRadius: '4px',
+  color: '#8b949e',
+  cursor: 'pointer',
+  padding: '0 4px',
+  fontSize: '11px',
+  lineHeight: '16px',
+  fontFamily: 'inherit',
+};
 
 // ─── full-page status screen (loading / error gate) ────────────────────
 
