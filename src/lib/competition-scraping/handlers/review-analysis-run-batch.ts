@@ -528,8 +528,9 @@ export function makeReviewAnalysisRunBatchHandlers(
     // they branch BEFORE the single-urlId contract below. The bulleted flow
     // dedups the per-competitor bulleted summaries + traces each category
     // bullet to its source reviews; the non-bulleted flow rewrites the
-    // category bulleted summary as prose + appends it to each in-category
-    // competitor's "Overall Analysis — Captured Reviews" box.
+    // category bulleted summary as prose stored ONLY in the Category page's own
+    // cell (the per-competitor notes-box write-back was removed at director
+    // Phase 4 2026-05-30-d).
     if (flow === 'per-category-bulleted' || flow === 'per-category-nonbulleted') {
       const categoryKey =
         typeof body.categoryKey === 'string' ? body.categoryKey.trim() : '';
@@ -557,7 +558,8 @@ export function makeReviewAnalysisRunBatchHandlers(
       const catPrisma = prisma as unknown as CategoryQueryPrisma;
 
       // urlIds = the competitors in this category. Required for the bulleted
-      // flow (the input source) AND the non-bulleted flow (write-back targets).
+      // flow (the input source); the non-bulleted flow still validates them for
+      // a consistent contract though it no longer writes back to them.
       const catUrlIds: string[] = [];
       if (!Array.isArray(body.urlIds) || body.urlIds.length === 0) {
         return {
@@ -950,38 +952,14 @@ export function makeReviewAnalysisRunBatchHandlers(
         });
       }
 
-      // Write-back: append the category prose to the BOTTOM of EACH in-category
-      // competitor's "Overall Analysis — Captured Reviews" box per §1 verbatim
-      // "merge, never overwrite". Idempotent via tipTapDocContainsSummary.
-      for (const uid of catUrlIds) {
-        try {
-          const cu = await withRetry(() =>
-            prisma.competitorUrl.findUnique({
-              where: { id: uid },
-              select: { overallAnalyses: true },
-            })
-          );
-          const bag = isValidOverallAnalysesBag(cu?.overallAnalyses)
-            ? (cu!.overallAnalyses as Record<string, Record<string, unknown>>)
-            : {};
-          const existingReviews = bag.reviews ?? {};
-          if (!tipTapDocContainsSummary(existingReviews, nbProse)) {
-            const merged = appendSummaryToTipTapDoc(existingReviews, nbProse);
-            await withRetry(() =>
-              prisma.competitorUrl.update({
-                where: { id: uid },
-                data: {
-                  overallAnalyses: { ...bag, reviews: merged } as Prisma.InputJsonValue,
-                },
-              })
-            );
-          }
-        } catch (error) {
-          recordFlake('POST per-category-nonbulleted writeback', error, {
-            projectId,
-          });
-        }
-      }
+      // NOTE: the per-category non-bulleted prose intentionally does NOT write
+      // back into the in-category competitors' "Your notes — Captured Reviews"
+      // boxes. The §1 verbatim spec asked for that append-merge, but at Phase 4
+      // (2026-05-30-d) the director decided the category-level prose should live
+      // ONLY in the Category page's own cell — appending it onto each
+      // competitor's notes box cluttered those boxes with category-wide text.
+      // (The per-COMPETITOR non-bulleted flow's own write-back below is
+      // unaffected — that one stays, it's per-competitor critique.)
 
       const nbActualCost = calculateCostUsd(catModelVersion, {
         inputTokens: nbResp.usage.input_tokens,

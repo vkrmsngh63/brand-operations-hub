@@ -69,6 +69,7 @@ import {
 } from '../components/InlineCells';
 import { PLATFORM_LABELS } from '../components/url-table-columns';
 import { ColumnResizeHandle } from '../components/ColumnResizeHandle';
+import { HoverTooltip } from '../components/HoverTooltip';
 import {
   CATEGORY_TABLE_COLUMNS,
   CATEGORY_TABLE_PREF_PREFIX,
@@ -86,6 +87,7 @@ import {
 import type { PerCompetitorStructuredCategory } from '@/lib/competition-scraping/review-analysis/prompts';
 import {
   buildCategorySourceReviewRows,
+  type CategorySourceReview,
   type CategorySourceReviewMeta,
   type CategorySourceTheme,
 } from '@/lib/competition-scraping/reviews-traceability';
@@ -1210,24 +1212,28 @@ function CategoryTable({
           flexWrap: 'wrap',
         }}
       >
-        <button
-          type="button"
-          onClick={() => setAiModalFlow('per-category-bulleted')}
-          disabled={categoryRunTargets.length === 0}
-          style={categoryAiButtonStyle(categoryRunTargets.length === 0)}
-          data-testid="category-auto-bulleted-button"
-        >
-          Auto-create Category Comprehensive Reviews Analysis (bulleted)
-        </button>
-        <button
-          type="button"
-          onClick={() => setAiModalFlow('per-category-nonbulleted')}
-          disabled={categoryRunTargets.length === 0}
-          style={categoryAiButtonStyle(categoryRunTargets.length === 0)}
-          data-testid="category-auto-nonbulleted-button"
-        >
-          Auto-create Category Comprehensive Reviews Analysis (non-bulleted)
-        </button>
+        <HoverTooltip text="For each category, reads every competitor's bulleted review summary and merges them into ONE de-duplicated bullet list of the category's common complaints — the same complaint raised by several competitors is listed once. The result fills the 'Category Comprehensive (bulleted)' cell, and the new 'Source Reviews' column shows the individual reviews behind each bullet.">
+          <button
+            type="button"
+            onClick={() => setAiModalFlow('per-category-bulleted')}
+            disabled={categoryRunTargets.length === 0}
+            style={categoryAiButtonStyle(categoryRunTargets.length === 0)}
+            data-testid="category-auto-bulleted-button"
+          >
+            Auto-create Category Comprehensive Reviews Analysis (bulleted)
+          </button>
+        </HoverTooltip>
+        <HoverTooltip text="Turns each category's de-duplicated bullet list into a flowing, plain-paragraph critique of that whole category of products — the kind of write-up you can use to challenge a category on a product-comparison page. Fills the 'Category Comprehensive (non-bulleted)' cell. Run the bulleted analysis first.">
+          <button
+            type="button"
+            onClick={() => setAiModalFlow('per-category-nonbulleted')}
+            disabled={categoryRunTargets.length === 0}
+            style={categoryAiButtonStyle(categoryRunTargets.length === 0)}
+            data-testid="category-auto-nonbulleted-button"
+          >
+            Auto-create Category Comprehensive Reviews Analysis (non-bulleted)
+          </button>
+        </HoverTooltip>
       </div>
       {aiModalFlow && (
         <CategoryAiRunModal
@@ -1441,226 +1447,292 @@ function CategoryBannerRow({
     opacity: isDragging ? 0.7 : 1,
   };
 
+  // Director adjustment 2026-05-30-d (#4): each bulleted complaint becomes its
+  // OWN sub-row whose row extends across the "Category Comprehensive (bulleted)"
+  // + "Source Reviews" columns, so a bullet sits on the same line as the
+  // individual reviews behind it (mirrors the URL-detail traceability table).
+  // Flatten the resolved themes → one sub-row per bullet (the first bullet of
+  // each theme carries the theme label).
+  const bulletRows: BannerBulletRow[] = [];
+  for (const theme of sourceReviewThemes) {
+    theme.bullets.forEach((b, bi) => {
+      bulletRows.push({
+        themeName: bi === 0 ? theme.name : null,
+        bulletText: b.text,
+        sources: b.sources,
+      });
+    });
+  }
+  // The per-bullet sub-row layout only applies when at least one per-bullet
+  // column (bulleted / Source Reviews) is showing AND a bulleted run exists;
+  // otherwise the banner is a single row (placeholder, or non-bulleted only).
+  const anyPerBulletVisible = categoryLevelColumns.some(
+    (c) => c.id === 'catBulleted' || c.id === 'catSourceReviews'
+  );
+  const useBulletSubRows = anyPerBulletVisible && bulletRows.length > 0;
+  const subRows: Array<BannerBulletRow | null> = useBulletSubRows
+    ? bulletRows
+    : [null];
+  const span = subRows.length;
+
   return (
-    <tr ref={setNodeRef} style={style} {...attributes}>
-      <td
-        style={{
-          ...gripCellStyle,
-          borderTop: '2px solid #30363d',
-          background: 'transparent',
-        }}
-      >
-        {draggable ? (
-          <button
-            type="button"
-            {...listeners}
-            style={gripButtonStyle}
-            aria-label="Drag to reorder this category"
-            title="Drag to reorder this category"
-            data-testid="category-banner-drag-handle"
+    <>
+      {subRows.map((br, i) => {
+        const isFirstSub = i === 0;
+        const topBorder = isFirstSub
+          ? '2px solid #30363d'
+          : '1px solid #21262d';
+        return (
+          <tr
+            key={br ? `${group.key}-b${i}` : `${group.key}-only`}
+            ref={isFirstSub ? setNodeRef : undefined}
+            style={style}
+            {...(isFirstSub ? attributes : {})}
           >
-            ⋮⋮
-          </button>
-        ) : null}
-      </td>
-      <td
-        colSpan={labelSpan}
-        style={{
-          padding: '8px 10px',
-          borderTop: '2px solid #30363d',
-          borderRight: '1px solid #161b22',
-          color: '#e6edf3',
-          fontWeight: 700,
-          fontSize: '13px',
-          verticalAlign: 'middle',
-        }}
-      >
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '10px' }}>
-          <span>{group.label}</span>
-          <button
-            type="button"
-            onClick={() => onHideCategory(group.key)}
-            style={hideButtonStyle}
-            aria-label={`Hide the ${group.label} category from this page`}
-            title="Hide this category from this page (restore it from the panel above)"
-            data-testid="category-hide-button"
-          >
-            ✕
-          </button>
-        </span>
-      </td>
-      {categoryLevelColumns.map((c) => {
-        if (c.id === 'catSourceReviews') {
-          return (
-            <td
-              key={c.id}
-              style={{
+            {isFirstSub && (
+              <td
+                rowSpan={span}
+                style={{
+                  ...gripCellStyle,
+                  borderTop: '2px solid #30363d',
+                  background: 'transparent',
+                }}
+              >
+                {draggable ? (
+                  <button
+                    type="button"
+                    {...listeners}
+                    style={gripButtonStyle}
+                    aria-label="Drag to reorder this category"
+                    title="Drag to reorder this category"
+                    data-testid="category-banner-drag-handle"
+                  >
+                    ⋮⋮
+                  </button>
+                ) : null}
+              </td>
+            )}
+            {isFirstSub && (
+              <td
+                rowSpan={span}
+                colSpan={labelSpan}
+                style={{
+                  padding: '8px 10px',
+                  borderTop: '2px solid #30363d',
+                  borderRight: '1px solid #161b22',
+                  color: '#e6edf3',
+                  fontWeight: 700,
+                  fontSize: '13px',
+                  // Director adjustment 2026-05-30-d (#1): top-align the
+                  // category name, not vertical-center, now that the banner can
+                  // be several bullet sub-rows tall.
+                  verticalAlign: 'top',
+                }}
+              >
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                  }}
+                >
+                  <span>{group.label}</span>
+                  <button
+                    type="button"
+                    onClick={() => onHideCategory(group.key)}
+                    style={hideButtonStyle}
+                    aria-label={`Hide the ${group.label} category from this page`}
+                    title="Hide this category from this page (restore it from the panel above)"
+                    data-testid="category-hide-button"
+                  >
+                    ✕
+                  </button>
+                </span>
+              </td>
+            )}
+            {categoryLevelColumns.map((c) => {
+              const isPerBullet =
+                c.id === 'catBulleted' || c.id === 'catSourceReviews';
+              // Non-bulleted prose spans the whole category height (rowSpan).
+              if (!isPerBullet) {
+                if (!isFirstSub) return null;
+                const content = c.id === 'catNonBulleted' ? nonBulletedSummary : '';
+                return (
+                  <td
+                    key={c.id}
+                    rowSpan={span}
+                    style={{
+                      padding: '6px 10px',
+                      borderTop: '2px solid #30363d',
+                      borderRight: '1px solid #161b22',
+                      color: content ? '#e6edf3' : '#6e7681',
+                      fontStyle: content ? 'normal' : 'italic',
+                      fontSize: '12px',
+                      verticalAlign: 'top',
+                      whiteSpace: 'pre-wrap',
+                    }}
+                    data-testid={`category-ai-cell-${c.id}`}
+                  >
+                    {content || '(not yet generated)'}
+                  </td>
+                );
+              }
+              const cellStyle: React.CSSProperties = {
                 padding: '6px 10px',
-                borderTop: '2px solid #30363d',
+                borderTop: topBorder,
                 borderRight: '1px solid #161b22',
                 fontSize: '12px',
                 verticalAlign: 'top',
-                maxHeight: '260px',
-                overflowY: 'auto',
-              }}
-              data-testid="category-ai-cell-catSourceReviews"
-            >
-              <CategorySourceReviewsCell
-                themes={sourceReviewThemes}
-                projectId={projectId}
-              />
-            </td>
-          );
-        }
-        const content =
-          c.id === 'catBulleted'
-            ? bulletedSummary
-            : c.id === 'catNonBulleted'
-              ? nonBulletedSummary
-              : '';
-        return (
-          <td
-            key={c.id}
-            style={{
-              padding: '6px 10px',
-              borderTop: '2px solid #30363d',
-              borderRight: '1px solid #161b22',
-              color: content ? '#e6edf3' : '#6e7681',
-              fontStyle: content ? 'normal' : 'italic',
-              fontSize: '12px',
-              verticalAlign: 'top',
-              whiteSpace: 'pre-wrap',
-              maxHeight: '260px',
-              overflowY: 'auto',
-            }}
-            data-testid={`category-ai-cell-${c.id}`}
-          >
-            {content || '(not yet generated)'}
-          </td>
+              };
+              if (c.id === 'catBulleted') {
+                return (
+                  <td
+                    key={c.id}
+                    style={cellStyle}
+                    data-testid="category-ai-cell-catBulleted"
+                  >
+                    {br ? (
+                      <div>
+                        {br.themeName ? (
+                          <div
+                            style={{
+                              color: '#8b949e',
+                              fontSize: '10px',
+                              fontWeight: 700,
+                              textTransform: 'uppercase',
+                              letterSpacing: '0.03em',
+                              marginBottom: '3px',
+                            }}
+                          >
+                            {br.themeName}
+                          </div>
+                        ) : null}
+                        <div style={{ color: '#e6edf3' }}>• {br.bulletText}</div>
+                      </div>
+                    ) : (
+                      <span
+                        style={{
+                          color: bulletedSummary ? '#e6edf3' : '#6e7681',
+                          fontStyle: bulletedSummary ? 'normal' : 'italic',
+                          whiteSpace: 'pre-wrap',
+                        }}
+                      >
+                        {bulletedSummary || '(not yet generated)'}
+                      </span>
+                    )}
+                  </td>
+                );
+              }
+              // catSourceReviews — the reviews behind THIS sub-row's bullet.
+              return (
+                <td
+                  key={c.id}
+                  style={cellStyle}
+                  data-testid="category-ai-cell-catSourceReviews"
+                >
+                  {br ? (
+                    <CategoryBulletSources
+                      sources={br.sources}
+                      projectId={projectId}
+                    />
+                  ) : (
+                    <span style={{ color: '#6e7681', fontStyle: 'italic' }}>
+                      (run the bulleted analysis to see source reviews)
+                    </span>
+                  )}
+                </td>
+              );
+            })}
+          </tr>
         );
       })}
-    </tr>
+    </>
   );
 }
 
-// ─── Source Reviews cell (a.117 / 2026-05-30-c) ────────────────────────────
-// For each bulleted CATEGORY complaint, the individual reviews across all in-
-// category competitors that traced up to it: product · stars · text · a jump-
-// to-detail link. Always visible, bullet-by-bullet (director Rule 14f locked
-// 2026-05-30-c), mirroring the URL-detail traceability table's shape. The
-// structured bullets carry the cross-competitor union of source reviewIds;
-// when no bulleted category run has happened yet, themes is empty.
-function CategorySourceReviewsCell({
-  themes,
+// One flattened bullet sub-row of a category banner: the bullet text, the
+// theme label (only on the theme's first bullet), and the cross-competitor
+// source reviews behind that bullet.
+interface BannerBulletRow {
+  themeName: string | null;
+  bulletText: string;
+  sources: CategorySourceReview[];
+}
+
+// ─── Source Reviews for ONE category bullet (a.117 / 2026-05-30-d) ─────────
+// The individual reviews across all in-category competitors that traced up to
+// a single category bullet: product · stars · review text · jump-to-detail
+// link. Rendered inside that bullet's Source Reviews sub-row cell, aligned
+// with the bullet in the "Category Comprehensive (bulleted)" column.
+function CategoryBulletSources({
+  sources,
   projectId,
 }: {
-  themes: CategorySourceTheme[];
+  sources: CategorySourceReview[];
   projectId: string;
 }): JSX.Element {
-  if (themes.length === 0) {
+  if (sources.length === 0) {
     return (
       <span style={{ color: '#6e7681', fontStyle: 'italic' }}>
-        (run the bulleted analysis to see source reviews)
+        (no individual reviews traced to this point)
       </span>
     );
   }
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-      {themes.map((theme, ti) => (
-        <div key={ti}>
-          <div
+    <ul
+      style={{
+        listStyle: 'none',
+        margin: 0,
+        padding: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '6px',
+      }}
+    >
+      {sources.map((s, si) => (
+        <li
+          key={si}
+          style={{ borderLeft: '2px solid #21262d', paddingLeft: '8px' }}
+        >
+          <span
             style={{
-              color: '#8b949e',
-              fontSize: '10px',
-              fontWeight: 700,
-              textTransform: 'uppercase',
-              letterSpacing: '0.03em',
-              marginBottom: '4px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              flexWrap: 'wrap',
             }}
           >
-            {theme.name}
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {theme.bullets.map((bullet, bi) => (
-              <div key={bi}>
-                <div style={{ color: '#e6edf3', marginBottom: '3px' }}>
-                  • {bullet.text}
-                </div>
-                {bullet.sources.length === 0 ? (
-                  <div
-                    style={{
-                      color: '#6e7681',
-                      fontStyle: 'italic',
-                      paddingLeft: '12px',
-                    }}
-                  >
-                    (no individual reviews traced to this point)
-                  </div>
-                ) : (
-                  <ul
-                    style={{
-                      listStyle: 'none',
-                      margin: 0,
-                      padding: '0 0 0 12px',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '5px',
-                    }}
-                  >
-                    {bullet.sources.map((s, si) => (
-                      <li
-                        key={si}
-                        style={{
-                          borderLeft: '2px solid #21262d',
-                          paddingLeft: '8px',
-                        }}
-                      >
-                        <span
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            flexWrap: 'wrap',
-                          }}
-                        >
-                          <span style={{ color: '#c9d1d9', fontWeight: 600 }}>
-                            {s.productName}
-                          </span>
-                          <CategoryStarCount value={s.starRating} />
-                          {s.missing || !s.urlId ? null : (
-                            <a
-                              href={`/projects/${projectId}/competition-scraping/url/${s.urlId}#review-${s.reviewId}`}
-                              title="Jump to this review's detail page"
-                              data-testid="category-source-review-jump"
-                              style={{
-                                color: '#58a6ff',
-                                textDecoration: 'none',
-                                fontSize: '12px',
-                              }}
-                            >
-                              ↗
-                            </a>
-                          )}
-                        </span>
-                        <span
-                          style={{
-                            color: s.missing ? '#6e7681' : '#8b949e',
-                            fontStyle: s.missing ? 'italic' : 'normal',
-                            display: 'block',
-                          }}
-                        >
-                          {s.text}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
+            <span style={{ color: '#c9d1d9', fontWeight: 600 }}>
+              {s.productName}
+            </span>
+            <CategoryStarCount value={s.starRating} />
+            {s.missing || !s.urlId ? null : (
+              <a
+                href={`/projects/${projectId}/competition-scraping/url/${s.urlId}#review-${s.reviewId}`}
+                title="Jump to this review's detail page"
+                data-testid="category-source-review-jump"
+                style={{
+                  color: '#58a6ff',
+                  textDecoration: 'none',
+                  fontSize: '12px',
+                }}
+              >
+                ↗
+              </a>
+            )}
+          </span>
+          <span
+            style={{
+              color: s.missing ? '#6e7681' : '#8b949e',
+              fontStyle: s.missing ? 'italic' : 'normal',
+              display: 'block',
+            }}
+          >
+            {s.text}
+          </span>
+        </li>
       ))}
-    </div>
+    </ul>
   );
 }
 
