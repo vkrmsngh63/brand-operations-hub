@@ -26,15 +26,12 @@ import { useEffect, useRef } from 'react';
 import { PLATFORMS, type Platform } from '@/lib/shared-types/competition-scraping';
 import type { GroupByMode } from '@/lib/competition-scraping/main-table-grouping';
 import {
-  CAPTURED_KINDS,
   KIND_GROUP_LABEL,
   KIND_GROUP_VIS_KEY,
+  orderedColumnBoxEntries,
   type CapturedKind,
 } from '@/lib/competition-scraping/dynamic-columns';
-import {
-  applyColumnOrder,
-  withMissingKeysBefore,
-} from '@/lib/competition-scraping/column-order';
+import { withMissingKeysBefore } from '@/lib/competition-scraping/column-order';
 import { PLATFORM_LABELS, TABLE_COLUMN_DEFS } from './url-table-columns';
 
 // P-54 Phase 4 (2026-06-01) — the "Sort By" box options. 'none' = the flat
@@ -99,18 +96,24 @@ export function ColumnVisibilityBar({
   groupBy,
   onGroupByChange,
 }: Props) {
-  // P-55 Phase 1 — order the per-column checkboxes to match the table's
-  // arranged column order. Dynamic value keys in columnOrder simply don't match
-  // any TABLE_COLUMN_DEFS id and are ignored here (their visibility rides on the
-  // category-group checkboxes below).
-  const registryKeys = TABLE_COLUMN_DEFS.map((c) => c.id);
-  const orderedColumnDefs = applyColumnOrder(
-    TABLE_COLUMN_DEFS,
-    // Mirror UrlTable's effective order: splice any newly-introduced fixed
-    // column (absent from a saved order that predates it) in before 'Added On',
-    // so the checkbox order matches the table instead of appending at the end.
-    withMissingKeysBefore(columnOrder ?? [], registryKeys, 'addedAt'),
-    (c) => c.id
+  // P-55 Phase 1 — order the Columns-box checkboxes (per-column + the per-kind
+  // category-GROUP checkboxes) to MIRROR the table's arranged column order. The
+  // group checkboxes interleave at the position of their kind's dynamic columns
+  // (left of Added On) instead of always appending after the fixed checkboxes.
+  const fixedIds = TABLE_COLUMN_DEFS.map((c) => c.id);
+  const defById = new Map(TABLE_COLUMN_DEFS.map((c) => [c.id, c] as const));
+  // Mirror UrlTable's effective arranged order: an empty saved order means the
+  // registry default; otherwise splice any newly-introduced fixed column in
+  // before 'Added On'. The dynamic value keys ride along in the saved order so
+  // orderedColumnBoxEntries can place each group checkbox at its real position.
+  const arrangedOrder =
+    columnOrder && columnOrder.length > 0
+      ? withMissingKeysBefore(columnOrder, fixedIds, 'addedAt')
+      : fixedIds;
+  const boxEntries = orderedColumnBoxEntries(
+    arrangedOrder,
+    fixedIds,
+    captureGroupsPresent
   );
   const allChecked = selectedPlatforms.length === PLATFORMS.length;
   const someChecked = selectedPlatforms.length > 0 && !allChecked;
@@ -180,53 +183,56 @@ export function ColumnVisibilityBar({
       <div style={groupStyle}>
         <span style={groupLabelStyle}>Columns</span>
         <div style={chipRowStyle}>
-          {orderedColumnDefs.map((col) => {
-            const visible = isColumnVisible(columnVisibility, col.id);
-            return (
-              <label
-                key={col.id}
-                style={chipStyle(visible)}
-                title={`Show or hide the ${col.label} column`}
-              >
-                <input
-                  type="checkbox"
-                  checked={visible}
-                  onChange={() => onToggleColumn(col.id, !visible)}
-                  style={checkboxStyle}
-                  aria-label={`Show ${col.label} column`}
-                />
-                <span>{col.label}</span>
-              </label>
-            );
-          })}
-          {/* P-54 Phase 5 (2026-06-01) — one group checkbox per captured-content
-              kind that has categorized content. Checking it shows ALL of that
-              kind's dynamic category columns; unchecking hides them all
-              (director's "Content / Image / Video Categories" checkbox). */}
-          {CAPTURED_KINDS.filter((kind) => captureGroupsPresent[kind]).map(
-            (kind) => {
-              const key = KIND_GROUP_VIS_KEY[kind];
-              const label = KIND_GROUP_LABEL[kind];
-              const visible = isColumnVisible(columnVisibility, key);
+          {/* P-55 Phase 1 — per-column checkboxes AND the per-kind category-GROUP
+              checkboxes ("Content / Image / Video Categories") rendered in ONE
+              pass, in the table's arranged column order, so the checkbox order
+              mirrors the table and the group checkboxes sit where their columns
+              do (left of Added On) rather than appended after the fixed ones. */}
+          {boxEntries.map((entry) => {
+            if (entry.type === 'fixed') {
+              const col = defById.get(entry.id);
+              if (!col) return null;
+              const visible = isColumnVisible(columnVisibility, col.id);
               return (
                 <label
-                  key={key}
+                  key={col.id}
                   style={chipStyle(visible)}
-                  title={`Show or hide all ${label} columns`}
-                  data-testid={`column-group-${kind}`}
+                  title={`Show or hide the ${col.label} column`}
                 >
                   <input
                     type="checkbox"
                     checked={visible}
-                    onChange={() => onToggleColumn(key, !visible)}
+                    onChange={() => onToggleColumn(col.id, !visible)}
                     style={checkboxStyle}
-                    aria-label={`Show ${label} columns`}
+                    aria-label={`Show ${col.label} column`}
                   />
-                  <span>{label}</span>
+                  <span>{col.label}</span>
                 </label>
               );
             }
-          )}
+            // Category-GROUP checkbox: checking it shows ALL of that kind's
+            // dynamic category columns; unchecking hides them all.
+            const key = KIND_GROUP_VIS_KEY[entry.kind];
+            const label = KIND_GROUP_LABEL[entry.kind];
+            const visible = isColumnVisible(columnVisibility, key);
+            return (
+              <label
+                key={key}
+                style={chipStyle(visible)}
+                title={`Show or hide all ${label} columns`}
+                data-testid={`column-group-${entry.kind}`}
+              >
+                <input
+                  type="checkbox"
+                  checked={visible}
+                  onChange={() => onToggleColumn(key, !visible)}
+                  style={checkboxStyle}
+                  aria-label={`Show ${label} columns`}
+                />
+                <span>{label}</span>
+              </label>
+            );
+          })}
         </div>
       </div>
 

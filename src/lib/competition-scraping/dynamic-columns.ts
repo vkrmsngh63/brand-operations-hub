@@ -234,6 +234,65 @@ export function withDynamicKeysInOrder(
   return saved;
 }
 
+// ─── Columns-box entry ordering (W#2 P-55 Phase 1) ─────────────────────────
+
+// One entry in the "Columns" box: either a per-fixed-column checkbox or a
+// per-kind category-GROUP checkbox ("Content / Image / Video Categories").
+export type ColumnBoxEntry =
+  | { type: 'fixed'; id: string }
+  | { type: 'group'; kind: CapturedKind };
+
+/**
+ * Build the ordered list of Columns-box entries so the checkbox order MIRRORS
+ * the table's arranged column order (director's P-55 1b requirement).
+ *
+ *   - `arrangedOrder` is the table's effective key order (fixed ids + dynamic
+ *     value keys interspersed) — pass what UrlTable renders so the two stay in
+ *     lockstep. When empty, pass the registry fixed-id order for the default.
+ *   - Each fixed id in `arrangedOrder` that is a known `fixedIds` member emits a
+ *     'fixed' entry, in order. (Dynamic value/analysis keys are not fixed cols.)
+ *   - A kind's GROUP checkbox is emitted ONCE, at the position of that kind's
+ *     FIRST dynamic VALUE column in the order — so the group checkbox sits where
+ *     that kind's columns sit in the table (left of Added On), not appended last.
+ *   - A kind flagged present in `groupsPresent` but with NO column yet in the
+ *     order (a brand-new category not yet dragged) is inserted just before
+ *     `newGroupAnchorId` (the Overall Competitor Analysis column), falling back
+ *     to 'addedAt', then end — mirroring the table's default splice.
+ *   - Only kinds flagged in `groupsPresent` ever get a group entry.
+ */
+export function orderedColumnBoxEntries(
+  arrangedOrder: readonly string[],
+  fixedIds: readonly string[],
+  groupsPresent: Record<CapturedKind, boolean>,
+  newGroupAnchorId = 'overallCompetitorAnalysis'
+): ColumnBoxEntry[] {
+  const fixedSet = new Set(fixedIds);
+  const entries: ColumnBoxEntry[] = [];
+  const emittedGroups = new Set<CapturedKind>();
+  for (const key of arrangedOrder) {
+    if (fixedSet.has(key)) {
+      entries.push({ type: 'fixed', id: key });
+      continue;
+    }
+    const parsed = parseDynKey(key);
+    if (parsed && groupsPresent[parsed.kind] && !emittedGroups.has(parsed.kind)) {
+      emittedGroups.add(parsed.kind);
+      entries.push({ type: 'group', kind: parsed.kind });
+    }
+    // analysis keys, already-emitted kinds, and unknown keys fall through.
+  }
+  const trailing: ColumnBoxEntry[] = CAPTURED_KINDS.filter(
+    (k) => groupsPresent[k] && !emittedGroups.has(k)
+  ).map((k) => ({ type: 'group', kind: k }));
+  if (trailing.length > 0) {
+    let at = entries.findIndex((e) => e.type === 'fixed' && e.id === newGroupAnchorId);
+    if (at < 0) at = entries.findIndex((e) => e.type === 'fixed' && e.id === 'addedAt');
+    if (at < 0) at = entries.length;
+    entries.splice(at, 0, ...trailing);
+  }
+  return entries;
+}
+
 // ─── Per-row stacked sub-rows (D3) ─────────────────────────────────────────
 
 /** The captured items of one kind+category for one URL row, preserving the

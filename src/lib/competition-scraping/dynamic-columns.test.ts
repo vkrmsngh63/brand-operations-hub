@@ -14,6 +14,7 @@ import {
   collectCategories,
   buildDynamicColumnPairs,
   withDynamicKeysInOrder,
+  orderedColumnBoxEntries,
   itemsForCategory,
   subRowSpan,
   type CapturedKind,
@@ -263,6 +264,125 @@ test('static column ids are never mistaken for dynamic keys', () => {
     assert.equal(parseDynKey(id), null, `${id} must not parse as a dynamic key`);
     assert.equal(isDynValueKey(id), false);
   }
+});
+
+// ─── orderedColumnBoxEntries (P-55 Phase 1) ────────────────────────────────
+
+const FIXED = ['platform', 'productName', 'overallCompetitorAnalysis', 'addedAt'];
+const NO_GROUPS: Record<CapturedKind, boolean> = {
+  text: false,
+  image: false,
+  video: false,
+};
+
+test('orderedColumnBoxEntries: no groups present → fixed entries in arranged order', () => {
+  const out = orderedColumnBoxEntries(FIXED, FIXED, NO_GROUPS);
+  assert.deepEqual(out, [
+    { type: 'fixed', id: 'platform' },
+    { type: 'fixed', id: 'productName' },
+    { type: 'fixed', id: 'overallCompetitorAnalysis' },
+    { type: 'fixed', id: 'addedAt' },
+  ]);
+});
+
+test('orderedColumnBoxEntries: group checkbox interleaves at its kind first dyn column (left of Added On)', () => {
+  // Arranged order has the dynamic content columns spliced before OCA/Added On.
+  const arranged = [
+    'platform',
+    'productName',
+    dynValueKey('text', 'Acme'),
+    dynAnalysisKey('text', 'Acme'),
+    'overallCompetitorAnalysis',
+    'addedAt',
+  ];
+  const out = orderedColumnBoxEntries(arranged, FIXED, {
+    text: true,
+    image: false,
+    video: false,
+  });
+  assert.deepEqual(out, [
+    { type: 'fixed', id: 'platform' },
+    { type: 'fixed', id: 'productName' },
+    { type: 'group', kind: 'text' }, // sits where its column is — BEFORE Added On
+    { type: 'fixed', id: 'overallCompetitorAnalysis' },
+    { type: 'fixed', id: 'addedAt' },
+  ]);
+});
+
+test('orderedColumnBoxEntries: a kind emits ONE group entry even with many columns + the analysis pair', () => {
+  const arranged = [
+    'platform',
+    dynValueKey('text', 'Acme'),
+    dynAnalysisKey('text', 'Acme'),
+    dynValueKey('text', 'Beta'),
+    dynAnalysisKey('text', 'Beta'),
+    'addedAt',
+  ];
+  const out = orderedColumnBoxEntries(arranged, FIXED, {
+    text: true,
+    image: false,
+    video: false,
+  });
+  assert.deepEqual(
+    out.filter((e) => e.type === 'group'),
+    [{ type: 'group', kind: 'text' }]
+  );
+});
+
+test('orderedColumnBoxEntries: present kind with NO column in the order is inserted before the OCA anchor', () => {
+  // A brand-new category not yet in the saved order.
+  const out = orderedColumnBoxEntries(FIXED, FIXED, {
+    text: true,
+    image: false,
+    video: false,
+  });
+  assert.deepEqual(out, [
+    { type: 'fixed', id: 'platform' },
+    { type: 'fixed', id: 'productName' },
+    { type: 'group', kind: 'text' }, // before Overall Competitor Analysis
+    { type: 'fixed', id: 'overallCompetitorAnalysis' },
+    { type: 'fixed', id: 'addedAt' },
+  ]);
+});
+
+test('orderedColumnBoxEntries: trailing groups fall back to before Added On when no OCA column', () => {
+  const fixedNoOca = ['platform', 'productName', 'addedAt'];
+  const out = orderedColumnBoxEntries(fixedNoOca, fixedNoOca, {
+    text: true,
+    image: false,
+    video: false,
+  });
+  assert.deepEqual(out, [
+    { type: 'fixed', id: 'platform' },
+    { type: 'fixed', id: 'productName' },
+    { type: 'group', kind: 'text' },
+    { type: 'fixed', id: 'addedAt' },
+  ]);
+});
+
+test('orderedColumnBoxEntries: only present kinds get a group entry; order follows CAPTURED_KINDS for trailing', () => {
+  const out = orderedColumnBoxEntries(FIXED, FIXED, {
+    text: true,
+    image: false,
+    video: true,
+  });
+  assert.deepEqual(out, [
+    { type: 'fixed', id: 'platform' },
+    { type: 'fixed', id: 'productName' },
+    { type: 'group', kind: 'text' },
+    { type: 'group', kind: 'video' },
+    { type: 'fixed', id: 'overallCompetitorAnalysis' },
+    { type: 'fixed', id: 'addedAt' },
+  ]);
+});
+
+test('orderedColumnBoxEntries: unknown / non-registry keys in the order are skipped', () => {
+  const arranged = ['platform', 'someGhostKey', 'addedAt'];
+  const out = orderedColumnBoxEntries(arranged, FIXED, NO_GROUPS);
+  assert.deepEqual(out, [
+    { type: 'fixed', id: 'platform' },
+    { type: 'fixed', id: 'addedAt' },
+  ]);
 });
 
 void (CAPTURED_KINDS satisfies readonly CapturedKind[]);
