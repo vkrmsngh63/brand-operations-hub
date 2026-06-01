@@ -369,6 +369,17 @@ export function UrlTable({
     });
   }, [columnVisibility]);
 
+  // P-54 Phase 1 (R1) — the rightmost VISIBLE data column. The table's
+  // far-right edge (the trailing row-actions column) carries a resize grip
+  // that resizes THIS column, so the user can widen/narrow the last column
+  // by dragging the table's right edge. Recomputed from visibleColumns so it
+  // tracks the actual last column even after column show/hide (and, later,
+  // column reorder).
+  const lastVisibleColumn =
+    visibleColumns.length > 0
+      ? visibleColumns[visibleColumns.length - 1]
+      : null;
+
   // P-46 Workstream 3 Session 2 — per-column inline-editor cell renderers.
   // Each renderer returns a <td> containing the appropriate InlineCells
   // component wired to onCellSave with the right field key. The tbody
@@ -1102,6 +1113,32 @@ export function UrlTable({
                     >
                       {/* Actions column — trash only since fix-forward #3
                           moved the ↗ Open button into the Product Name cell. */}
+                      {/* P-54 Phase 1 (R1, 2026-06-01) — resize grip on the
+                          table's far-right edge (right:0 of this sticky
+                          trailing th = the table's right border). It resizes
+                          the LAST VISIBLE DATA column. Previously the table's
+                          outer right edge had no grip — the last data column
+                          could only be resized via its inter-column grip to
+                          the LEFT of this narrow actions column, so dragging
+                          the table's right edge did nothing (director report
+                          2026-06-01). Grip tracks the last column dynamically
+                          so it stays correct after column show/hide + (future)
+                          reorder. */}
+                      {lastVisibleColumn ? (
+                        <ColumnResizeHandle
+                          columnId={lastVisibleColumn.key}
+                          currentWidth={resolveColumnWidth(
+                            effectiveColumnWidths,
+                            tableColumnDefByKey(lastVisibleColumn.key)
+                          )}
+                          minWidth={MIN_COLUMN_WIDTH}
+                          maxWidth={MAX_COLUMN_WIDTH}
+                          tableHeight={tableHeight}
+                          onCommit={(width) =>
+                            onColumnResize?.(lastVisibleColumn.key, width)
+                          }
+                        />
+                      ) : null}
                     </th>
                   </tr>
                 </thead>

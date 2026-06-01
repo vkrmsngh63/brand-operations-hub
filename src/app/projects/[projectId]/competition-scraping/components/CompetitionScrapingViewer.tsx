@@ -496,37 +496,11 @@ export function CompetitionScrapingViewer({ projectId }: Props) {
 
   return (
     <section style={{ marginTop: '32px' }}>
-      <div
-        style={{
-          display: 'flex',
-          marginBottom: '12px',
-        }}
-      >
-        <button
-          type="button"
-          onClick={() =>
-            router.push(
-              `/projects/${projectId}/competition-scraping/comprehensive-analysis`
-            )
-          }
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '8px 16px',
-            background: '#1f6feb',
-            color: '#ffffff',
-            border: '1px solid #1f6feb',
-            borderRadius: '6px',
-            fontSize: '13px',
-            fontWeight: 600,
-            cursor: 'pointer',
-          }}
-          data-testid="open-comprehensive-analysis-button"
-        >
-          → Comprehensive Competitor Analysis
-        </button>
-      </div>
+      {/* P-54 Phase 1 (R3, 2026-06-01) — removed the blue "→ Comprehensive
+          Competitor Analysis" button that lived here. It was a redundant
+          duplicate of the "Comprehensive Analysis" tab in the
+          CompetitionScrapingSurfaceNav at the top of the page, which links to
+          the same /comprehensive-analysis route. */}
       <ColumnVisibilityBar
         selectedPlatforms={selectedPlatforms}
         countsByPlatform={countsByPlatform}
