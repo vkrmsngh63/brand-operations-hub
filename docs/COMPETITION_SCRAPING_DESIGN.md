@@ -3856,4 +3856,23 @@ This session's W5 Session 1.5 design-lock + build work is **PLOS-side AI infrast
 
 ---
 
+## §B 2026-06-01-c — `session_2026-06-01-c_p54-competition-scraping-main-table-phase-4-sort-by-grouping` — P-54 Phase 4: the "Sort By" grouping box on the MAIN `/competition-scraping` Competitor URLs table (R6 / D2) — append-only design note per Rule 18 (§A frozen)
+
+**Informational design note (the canonical phase spec lives in `docs/polish-item-specs/P-54-competition-scraping-main-table-enhancements.md` §3 Phase 4 + §4 Q-H resolution; the as-built scoreboard + the reusable Pattern live in `docs/CORRECTIONS_LOG.md` §Entry 2026-06-01-c).**
+
+**Design choices made this session (Q-H resolved WITH the director via a 3-question design picker BEFORE coding, per `feedback_plan_output_shape_before_building` — all 3 Recommended chosen):**
+- The MAIN Competitor URLs table gained a "Sort By" box (beside Platforms / Columns in `ColumnVisibilityBar`) that groups rows by **Platform / Category / Type** into banner-row groups, mirroring the `/reviews-analysis-by-category` + `/reviews-analysis-by-type` page pattern. **"None" (flat) is the default** = the existing ungrouped table.
+- The chosen grouping mode + the per-mode banner order PERSIST and are SHARED across the Project (consistent with the Phase-3 share-everything model) — they ride in the existing `ProjectTablePreferences` row via the additive `groupBy String @default("none")` + `groupOrder Json @default("{}")` fields (`prisma db push`; additive; zero data loss).
+- Within a group BOTH per-column click-sort AND row-drag work; the group banners are themselves draggable (two-level drag); the Phase-3 column reorder stays INDEPENDENT of grouping; the empty bucket renders "(Uncategorized)" / "(Untyped)" pinned last.
+
+**Implementation subtlety (the reusable Pattern):** grouping is a re-bucketing LAYER over the rows that are ALREADY in display order (the active per-column click-sort, or the manual `rowOrder` drag order). `buildMainGroupedRows` (NEW pure helper `src/lib/competition-scraping/main-table-grouping.ts`) re-buckets by group key while preserving the input order WITHIN each bucket — so the active column-sort / manual row order flows through for free, with no re-sort inside the grouping. A consequence: the existing two-level-drag re-rank helpers `applyCategoryDrag` / `applyCompetitorDrag` (from `category-table-layout`) generalize directly to the main table — their "Category"/"Competitor" names are historical; the ops are pure string-array re-ranks. The flat path is byte-for-byte unchanged (Phases 1–3 untouched); the only new render code is the grouped branch in `UrlTable.tsx` (banner rows + per-group `SortableContext` inside the existing ONE `DndContext`, id-discriminated as column-key / `grp:` banner / row-id) + the NEW `GroupBannerRow` component.
+
+**Affected §A sections (INFORMATIONAL — §A is FROZEN per Rule 18; not edited):** the main-table surface description (Competitor URLs table) now also supports a "Sort By" grouping mode; persistence for the main table is the shared `ProjectTablePreferences` store (Phase 3), now also carrying `groupBy` + `groupOrder`.
+
+**Cross-references:** spec `docs/polish-item-specs/P-54-competition-scraping-main-table-enhancements.md` (§3 Phase 4 + §4 Q-H); `docs/CORRECTIONS_LOG.md` §Entry 2026-06-01-c; grouping precedent `src/lib/competition-scraping/category-table-grouping.ts` + `type-table-grouping.ts` + the By-Category / By-Type pages; the as-built grouping helper `src/lib/competition-scraping/main-table-grouping.ts`; the grouped render `components/UrlTable.tsx`; the shared store `handlers/project-table-preferences.ts`.
+
+---
+
+---
+
 END OF DOCUMENT
