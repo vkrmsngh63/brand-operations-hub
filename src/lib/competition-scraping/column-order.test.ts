@@ -1,7 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { applyColumnOrder, moveColumnKey } from './column-order.ts';
+import {
+  applyColumnOrder,
+  moveColumnKey,
+  withMissingKeysBefore,
+} from './column-order.ts';
 
 type Col = { key: string; label: string };
 const getKey = (c: Col): string => c.key;
@@ -79,4 +83,56 @@ test('moveColumnKey: does not mutate the input array', () => {
   const input = ['a', 'b', 'c', 'd'];
   moveColumnKey(input, 'a', 'd');
   assert.deepEqual(input, ['a', 'b', 'c', 'd']);
+});
+
+// P-55 Phase 1 — withMissingKeysBefore (new-fixed-column reconciliation).
+const REGISTRY = ['a', 'b', 'oca', 'd']; // 'oca' = the newly-introduced column
+
+test('withMissingKeysBefore: empty saved order is returned as-is (registry default in play)', () => {
+  assert.deepEqual(withMissingKeysBefore([], REGISTRY, 'd'), []);
+  assert.deepEqual(withMissingKeysBefore(null, REGISTRY, 'd'), []);
+  assert.deepEqual(withMissingKeysBefore(undefined, REGISTRY, 'd'), []);
+});
+
+test('withMissingKeysBefore: splices a missing key in just before beforeKey', () => {
+  // Saved order predates 'oca'; it should land immediately left of 'd'.
+  assert.deepEqual(
+    withMissingKeysBefore(['a', 'b', 'd'], REGISTRY, 'd'),
+    ['a', 'b', 'oca', 'd']
+  );
+});
+
+test('withMissingKeysBefore: missing key lands left of beforeKey even with other keys (e.g. dynamic) present', () => {
+  assert.deepEqual(
+    withMissingKeysBefore(['a', 'b', 'dyn:text:foo', 'd'], REGISTRY, 'd'),
+    ['a', 'b', 'dyn:text:foo', 'oca', 'd']
+  );
+});
+
+test('withMissingKeysBefore: no missing keys returns a copy unchanged', () => {
+  const saved = ['b', 'a', 'oca', 'd'];
+  const out = withMissingKeysBefore(saved, REGISTRY, 'd');
+  assert.deepEqual(out, ['b', 'a', 'oca', 'd']);
+  assert.notEqual(out, saved); // copy, not the same reference
+});
+
+test('withMissingKeysBefore: appends missing keys when beforeKey is absent', () => {
+  assert.deepEqual(
+    withMissingKeysBefore(['a', 'b'], REGISTRY, 'd'),
+    ['a', 'b', 'oca', 'd']
+  );
+});
+
+test('withMissingKeysBefore: inserts multiple missing keys in registry relative order', () => {
+  const reg = ['a', 'x', 'y', 'd'];
+  assert.deepEqual(
+    withMissingKeysBefore(['a', 'd'], reg, 'd'),
+    ['a', 'x', 'y', 'd']
+  );
+});
+
+test('withMissingKeysBefore: does not mutate the input array', () => {
+  const input = ['a', 'b', 'd'];
+  withMissingKeysBefore(input, REGISTRY, 'd');
+  assert.deepEqual(input, ['a', 'b', 'd']);
 });

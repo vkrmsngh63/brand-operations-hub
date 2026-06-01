@@ -31,6 +31,10 @@ import {
   KIND_GROUP_VIS_KEY,
   type CapturedKind,
 } from '@/lib/competition-scraping/dynamic-columns';
+import {
+  applyColumnOrder,
+  withMissingKeysBefore,
+} from '@/lib/competition-scraping/column-order';
 import { PLATFORM_LABELS, TABLE_COLUMN_DEFS } from './url-table-columns';
 
 // P-54 Phase 4 (2026-06-01) — the "Sort By" box options. 'none' = the flat
@@ -59,6 +63,15 @@ interface Props {
   columnVisibility: Record<string, boolean>;
   onToggleColumn: (columnId: string, visible: boolean) => void;
 
+  // P-55 Phase 1 (2026-06-01) — the shared per-Project column order (same array
+  // UrlTable applies to the table). The Columns box renders its per-column
+  // checkboxes in THIS order so the checkbox order mirrors the on-screen column
+  // order and re-shuffles live when columns are drag-reordered. Keys absent from
+  // the array fall back to registry order (appended). The three category-GROUP
+  // checkboxes are not individually orderable and stay together as a group after
+  // the per-column checkboxes (director: "stay together as a group").
+  columnOrder?: string[];
+
   // P-54 Phase 5 (2026-06-01) — which captured-content kinds currently have
   // categorized content in the Project. Drives whether the matching "Content /
   // Image / Video Categories" group checkbox is shown in the Columns box (D7:
@@ -81,10 +94,24 @@ export function ColumnVisibilityBar({
   onSelectAllPlatforms,
   columnVisibility,
   onToggleColumn,
+  columnOrder,
   captureGroupsPresent,
   groupBy,
   onGroupByChange,
 }: Props) {
+  // P-55 Phase 1 — order the per-column checkboxes to match the table's
+  // arranged column order. Dynamic value keys in columnOrder simply don't match
+  // any TABLE_COLUMN_DEFS id and are ignored here (their visibility rides on the
+  // category-group checkboxes below).
+  const registryKeys = TABLE_COLUMN_DEFS.map((c) => c.id);
+  const orderedColumnDefs = applyColumnOrder(
+    TABLE_COLUMN_DEFS,
+    // Mirror UrlTable's effective order: splice any newly-introduced fixed
+    // column (absent from a saved order that predates it) in before 'Added On',
+    // so the checkbox order matches the table instead of appending at the end.
+    withMissingKeysBefore(columnOrder ?? [], registryKeys, 'addedAt'),
+    (c) => c.id
+  );
   const allChecked = selectedPlatforms.length === PLATFORMS.length;
   const someChecked = selectedPlatforms.length > 0 && !allChecked;
 
@@ -153,7 +180,7 @@ export function ColumnVisibilityBar({
       <div style={groupStyle}>
         <span style={groupLabelStyle}>Columns</span>
         <div style={chipRowStyle}>
-          {TABLE_COLUMN_DEFS.map((col) => {
+          {orderedColumnDefs.map((col) => {
             const visible = isColumnVisible(columnVisibility, col.id);
             return (
               <label

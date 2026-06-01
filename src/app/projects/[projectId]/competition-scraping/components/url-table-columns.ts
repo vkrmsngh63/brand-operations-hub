@@ -98,6 +98,14 @@ export const TABLE_COLUMN_DEFS: readonly TableColumnDef[] = [
   { id: 'competitionScore', label: 'Competition Score', dataType: 'number-integer', defaultWidth: 140 },
   { id: 'url', label: 'URL', dataType: 'url', defaultWidth: 280 },
   { id: 'scrapingStatus', label: 'Status', dataType: 'enum', defaultWidth: 120 },
+  // P-55 Phase 1 (2026-06-01) — the URL-level "Overall Competitor Analysis"
+  // box (CompetitorUrl.overallCompetitorAnalysis, edited on the detail page)
+  // surfaced as a main-table column, placed just left of 'Added On' per
+  // director directive. The cell is a click-to-open pop-out rich-text editor
+  // (UrlTable's OverallAnalysisCell); dataType 'text-multiline' is the closest
+  // registry value (it never drives this column's render — UrlTable's
+  // cellRenderers map handles it explicitly).
+  { id: 'overallCompetitorAnalysis', label: 'Overall Competitor Analysis', dataType: 'text-multiline', defaultWidth: 320 },
   { id: 'addedAt', label: 'Added On', dataType: 'date-readonly', defaultWidth: 130 },
 ];
 

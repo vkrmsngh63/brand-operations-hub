@@ -730,6 +730,7 @@ export function CompetitionScrapingViewer({ projectId }: Props) {
         onSelectAllPlatforms={handleSelectAllPlatforms}
         columnVisibility={columnVisibility}
         onToggleColumn={handleToggleColumn}
+        columnOrder={columnOrder}
         captureGroupsPresent={captureGroupsPresent}
         groupBy={groupBy}
         onGroupByChange={handleGroupByChange}

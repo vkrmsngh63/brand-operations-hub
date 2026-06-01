@@ -56,3 +56,37 @@ export function moveColumnKey(
   next.splice(to, 0, movingKey);
   return next;
 }
+
+// W#2 P-55 Phase 1 (2026-06-01) — reconcile a saved column order with the
+// current fixed-column registry: any `registryKeys` entry MISSING from
+// `savedOrder` (e.g. a fixed column introduced AFTER the order was last saved,
+// like the new 'overallCompetitorAnalysis' column) is spliced in immediately
+// before `beforeKey` ('addedAt'), preserving the registry's relative order
+// among inserted keys. This is the fixed-column analogue of
+// withDynamicKeysInOrder, so a brand-new fixed column lands at its intended
+// default slot ("just left of Added On") for users whose saved order predates
+// it — instead of applyColumnOrder appending it at the far right.
+//
+// Robustness:
+//   - Empty/missing savedOrder → returned as-is: the table is on the registry
+//     DEFAULT order, which already includes every column at its default spot.
+//   - No missing keys → savedOrder returned unchanged (a copy).
+//   - `beforeKey` absent from savedOrder → missing keys appended at the end.
+export function withMissingKeysBefore(
+  savedOrder: readonly string[] | null | undefined,
+  registryKeys: readonly string[],
+  beforeKey: string
+): string[] {
+  const saved = savedOrder ? [...savedOrder] : [];
+  if (saved.length === 0) return saved;
+  const present = new Set(saved);
+  const missing = registryKeys.filter((k) => !present.has(k));
+  if (missing.length === 0) return saved;
+  const at = saved.indexOf(beforeKey);
+  if (at < 0) {
+    saved.push(...missing);
+    return saved;
+  }
+  saved.splice(at, 0, ...missing);
+  return saved;
+}

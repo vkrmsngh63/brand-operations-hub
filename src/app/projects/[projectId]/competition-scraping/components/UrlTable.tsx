@@ -73,6 +73,7 @@ import { CSS } from '@dnd-kit/utilities';
 import {
   applyColumnOrder,
   moveColumnKey,
+  withMissingKeysBefore,
 } from '@/lib/competition-scraping/column-order';
 import {
   CAPTURED_KINDS,
@@ -108,6 +109,7 @@ import type {
   UpdateCompetitorUrlRequest,
 } from '@/lib/shared-types/competition-scraping';
 import { PerItemAnalysisBox } from './PerItemAnalysisBox';
+import { OverallAnalysisBox } from './OverallAnalysisBox';
 import { UrlAddModal } from './UrlAddModal';
 import {
   ConfirmDeleteDialog,
@@ -169,7 +171,10 @@ type ColumnSortKey =
   | 'sellerStarRating'
   | 'numSellerReviews'
   // 2026-05-24 fix-forward #4 — Platform column added at very left.
-  | 'platform';
+  | 'platform'
+  // P-55 Phase 1 (2026-06-01) — URL-level Overall Competitor Analysis surfaced
+  // as a main-table column (rich text; sorts by its plain-text content).
+  | 'overallCompetitorAnalysis';
 
 type SortKey = ColumnSortKey | 'manual';
 
@@ -366,6 +371,16 @@ const COLUMNS: ColumnDef[] = [
   // works (INCOMPLETE < COMPLETE lexically); per-column filtering is
   // deferred to Workstream 3.
   { key: 'scrapingStatus', label: 'Status', defaultDir: 'asc', filterKey: null },
+  // P-55 Phase 1 (2026-06-01) — Overall Competitor Analysis, just left of
+  // 'Added On' per director directive. Sortable (by plain-text content, see
+  // the comparator special-case); no in-column filter. Must stay in lockstep
+  // with TABLE_COLUMN_DEFS in url-table-columns.ts.
+  {
+    key: 'overallCompetitorAnalysis',
+    label: 'Overall Competitor Analysis',
+    defaultDir: 'asc',
+    filterKey: null,
+  },
   {
     key: 'addedAt',
     label: 'Added On',
@@ -401,11 +416,15 @@ const DYN_VALUE_DEFAULT_WIDTH = 280;
 const DYN_ANALYSIS_DEFAULT_WIDTH = 280;
 
 // Default placement of the dynamic value keys: spliced in immediately before the
-// 'Added On' column (director: "create a new column to the left of the Added On
-// column"). Used only when no shared column order is saved yet.
+// 'Overall Competitor Analysis' column (which itself sits just left of 'Added
+// On'), so the default left-to-right tail is: …, [dynamic category columns],
+// Overall Competitor Analysis, Added On. Falls back to splicing before 'Added
+// On' (then to an append) if those anchor columns are ever removed. Used only
+// when no shared column order is saved yet.
 function defaultUnitOrder(dynValueKeys: readonly string[]): string[] {
   const fixedKeys = COLUMNS.map((c) => c.key as string);
-  const idx = fixedKeys.indexOf('addedAt');
+  const anchor = fixedKeys.indexOf('overallCompetitorAnalysis');
+  const idx = anchor >= 0 ? anchor : fixedKeys.indexOf('addedAt');
   if (idx < 0) return [...fixedKeys, ...dynValueKeys];
   return [
     ...fixedKeys.slice(0, idx),
@@ -540,7 +559,15 @@ export function UrlTable({
     ];
     const effectiveOrder =
       columnOrder && columnOrder.length > 0
-        ? withDynamicKeysInOrder(columnOrder, dynValueKeys)
+        ? // P-55 Phase 1 — splice the dynamic value keys in first, THEN splice any
+          // newly-introduced fixed column (the Overall Competitor Analysis column)
+          // before 'Added On', so it lands just left of Added On for users whose
+          // saved order predates it (instead of being appended at the far right).
+          withMissingKeysBefore(
+            withDynamicKeysInOrder(columnOrder, dynValueKeys),
+            COLUMNS.map((c) => c.key as string),
+            'addedAt'
+          )
         : defaultUnitOrder(dynValueKeys);
     const orderedUnits = applyColumnOrder(units, effectiveOrder, (u) => u.key);
 
@@ -830,8 +857,18 @@ export function UrlTable({
           />
         </td>
       ),
+      // P-55 Phase 1 (2026-06-01) — Overall Competitor Analysis. A click-to-open
+      // pop-out rich-text editor (same surface as the detail page's box) that
+      // saves the URL row's overallCompetitorAnalysis through the urls/[urlId]
+      // PATCH route. Mirrors the dynamic "Your Analysis" pop-out (DynAnalysisCell)
+      // for visual + interaction consistency on the same table.
+      overallCompetitorAnalysis: (row) => (
+        <td key="overallCompetitorAnalysis" style={overallAnalysisCellTdStyle}>
+          <OverallAnalysisCell projectId={projectId} row={row} />
+        </td>
+      ),
     }),
-    [onCellSave, onRowOpen]
+    [onCellSave, onRowOpen, projectId]
   );
 
   const [sortKey, setSortKey] = useState<SortKey>('addedAt');
@@ -965,6 +1002,15 @@ export function UrlTable({
     }
     const copy = [...filtered];
     copy.sort((a, b) => {
+      // P-55 Phase 1 — Overall Competitor Analysis is a TipTap doc object;
+      // compare by its flattened plain text so the sort is meaningful (the
+      // generic branch below would stringify every doc to "[object Object]").
+      if (sortKey === 'overallCompetitorAnalysis') {
+        const cmp = tiptapToPlainText(a.overallCompetitorAnalysis).localeCompare(
+          tiptapToPlainText(b.overallCompetitorAnalysis)
+        );
+        return sortDir === 'asc' ? cmp : -cmp;
+      }
       const av = a[sortKey];
       const bv = b[sortKey];
       // Null/undefined always sorts last regardless of direction so the
@@ -2352,6 +2398,84 @@ function DynAnalysisCell({
     </>
   );
 }
+
+// P-55 Phase 1 — the Overall Competitor Analysis cell. A tidy plain-text
+// preview that opens the SAME rich-text editor surface as the detail page's
+// "Overall Competitor Analysis" box in a pop-out. OverallAnalysisBox owns the
+// debounced PATCH (to the urls/[urlId] route, field overallCompetitorAnalysis)
+// + retry; the in-table preview refreshes via the page's refetch-on-return
+// (matching the dynamic "Your Analysis" pop-out's behavior on this same table).
+function OverallAnalysisCell({
+  projectId,
+  row,
+}: {
+  projectId: string;
+  row: CompetitorUrl;
+}) {
+  const [open, setOpen] = useState(false);
+  const preview = tiptapToPlainText(row.overallCompetitorAnalysis);
+  const apiUrl = `/api/projects/${projectId}/competition-scraping/urls/${row.id}`;
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        style={analysisPreviewButtonStyle}
+        title="Edit overall competitor analysis"
+        data-testid="overall-analysis-open"
+      >
+        {preview ? (
+          <span style={analysisPreviewTextStyle}>{preview}</span>
+        ) : (
+          <span style={dynEmptyStyle}>+ Add analysis</span>
+        )}
+      </button>
+      {open ? (
+        <div
+          style={analysisOverlayStyle}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Edit overall competitor analysis"
+          onClick={() => setOpen(false)}
+        >
+          <div style={analysisModalStyle} onClick={(e) => e.stopPropagation()}>
+            <div style={analysisModalHeaderStyle}>
+              <span style={{ fontWeight: 600, color: '#e6edf3' }}>
+                Overall Competitor Analysis
+              </span>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                style={analysisModalCloseStyle}
+                aria-label="Close overall competitor analysis editor"
+              >
+                Done
+              </button>
+            </div>
+            <OverallAnalysisBox
+              apiUrl={apiUrl}
+              initialContent={row.overallCompetitorAnalysis ?? {}}
+              field={{ kind: 'overallCompetitorAnalysis' }}
+              label=""
+            />
+          </div>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+// P-55 Phase 1 — the Overall Competitor Analysis cell wraps multi-line preview
+// text (3-line clamp), so unlike the nowrap fixed cells it allows wrapping and
+// top-aligns. Width is still driven by the column's resolved width.
+const overallAnalysisCellTdStyle: React.CSSProperties = {
+  padding: '6px 10px',
+  color: '#c9d1d9',
+  verticalAlign: 'top',
+  whiteSpace: 'normal',
+  wordBreak: 'break-word',
+  maxWidth: '420px',
+};
 
 // Walk a TipTap document JSON, concatenating its text nodes into a short plain-
 // text preview for the analysis cell. Cheap (no editor mount per cell).
