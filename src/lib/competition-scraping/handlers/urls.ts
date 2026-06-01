@@ -15,6 +15,7 @@ import {
   isSource,
   type CompetitorUrl,
   type CreateCompetitorUrlRequest,
+  type MainTableCaptures,
   type OverallAnalyses,
   type ScrapingStatus,
 } from '../../shared-types/competition-scraping.ts';
@@ -74,17 +75,59 @@ export type CompetitorUrlRow = {
   addedBy: string;
   addedAt: Date;
   updatedAt: Date;
+  // P-54 Phase 5 (2026-06-01) — populated ONLY when GET is called with
+  // `?withCaptures=1` (the Prisma `include` below). Native projected field
+  // names per kind; toCaptures() maps them to the shared {category, body}
+  // wire shape. Absent on every other read.
+  capturedTexts?: CapturedTextRow[];
+  capturedImages?: CapturedImageRow[];
+  capturedVideos?: CapturedVideoRow[];
+};
+
+// P-54 Phase 5 — the projected captured-item rows returned by the `select`
+// inside the GET `include` (Prisma can't alias, so each carries its native
+// category + value column; toCaptures maps them to the shared {category, body}
+// wire shape).
+export type CapturedTextRow = {
+  id: string;
+  competitorUrlId: string;
+  contentCategory: string | null;
+  text: string | null;
+  analysis: Prisma.JsonValue;
+  sortOrder: number;
+};
+export type CapturedImageRow = {
+  id: string;
+  competitorUrlId: string;
+  imageCategory: string | null;
+  embeddedText: string | null;
+  analysis: Prisma.JsonValue;
+  sortOrder: number;
+};
+export type CapturedVideoRow = {
+  id: string;
+  competitorUrlId: string;
+  videoCategory: string | null;
+  embeddedText: string | null;
+  analysis: Prisma.JsonValue;
+  sortOrder: number;
 };
 
 // Minimal Prisma surface the handler exercises. Tests construct a fake
-// that implements only these three methods.
+// that implements only these three methods. `findMany` accepts an optional
+// `include` (P-54 Phase 5 `?withCaptures=1`); tests that don't exercise the
+// include simply omit it.
 export type UrlsPrismaLike = {
   competitorUrl: {
     create(args: {
       data: Prisma.CompetitorUrlUncheckedCreateInput;
     }): Promise<CompetitorUrlRow>;
     findUnique(args: { where: object }): Promise<CompetitorUrlRow | null>;
-    findMany(args: { where: object; orderBy: object }): Promise<CompetitorUrlRow[]>;
+    findMany(args: {
+      where: object;
+      orderBy: object;
+      include?: object;
+    }): Promise<CompetitorUrlRow[]>;
   };
 };
 
@@ -136,6 +179,79 @@ export function toWireShape(row: CompetitorUrlRow | null): CompetitorUrl | null 
   };
 }
 
+// P-54 Phase 5 — project the included captured rows into the lightweight
+// MainTableCaptures wire shape (the fields the dynamic category columns render +
+// edit). Storage paths / tags / dates are intentionally dropped — the table
+// shows the captured/embedded text + the per-item analysis only.
+function toCaptures(row: CompetitorUrlRow): MainTableCaptures {
+  const asAnalysis = (v: Prisma.JsonValue): Record<string, unknown> =>
+    (v ?? {}) as Record<string, unknown>;
+  return {
+    text: (row.capturedTexts ?? []).map((t) => ({
+      id: t.id,
+      competitorUrlId: t.competitorUrlId,
+      category: t.contentCategory,
+      body: t.text,
+      analysis: asAnalysis(t.analysis),
+      sortOrder: t.sortOrder,
+    })),
+    image: (row.capturedImages ?? []).map((i) => ({
+      id: i.id,
+      competitorUrlId: i.competitorUrlId,
+      category: i.imageCategory,
+      body: i.embeddedText,
+      analysis: asAnalysis(i.analysis),
+      sortOrder: i.sortOrder,
+    })),
+    video: (row.capturedVideos ?? []).map((v) => ({
+      id: v.id,
+      competitorUrlId: v.competitorUrlId,
+      category: v.videoCategory,
+      body: v.embeddedText,
+      analysis: asAnalysis(v.analysis),
+      sortOrder: v.sortOrder,
+    })),
+  };
+}
+
+// The Prisma `include` for `?withCaptures=1` — the per-kind selects + a stable
+// (sortOrder, addedAt) ordering so the stacked sub-rows render deterministically.
+const CAPTURES_INCLUDE = {
+  capturedTexts: {
+    select: {
+      id: true,
+      competitorUrlId: true,
+      contentCategory: true,
+      text: true,
+      analysis: true,
+      sortOrder: true,
+    },
+    orderBy: [{ sortOrder: 'asc' as const }, { addedAt: 'asc' as const }],
+  },
+  capturedImages: {
+    select: {
+      id: true,
+      competitorUrlId: true,
+      imageCategory: true,
+      embeddedText: true,
+      analysis: true,
+      sortOrder: true,
+    },
+    orderBy: [{ sortOrder: 'asc' as const }, { addedAt: 'asc' as const }],
+  },
+  capturedVideos: {
+    select: {
+      id: true,
+      competitorUrlId: true,
+      videoCategory: true,
+      embeddedText: true,
+      analysis: true,
+      sortOrder: true,
+    },
+    orderBy: [{ sortOrder: 'asc' as const }, { addedAt: 'asc' as const }],
+  },
+};
+
 // ─── Factory ─────────────────────────────────────────────────────────────
 
 export function makeUrlsHandlers(deps: UrlsHandlerDeps) {
@@ -150,6 +266,11 @@ export function makeUrlsHandlers(deps: UrlsHandlerDeps) {
       return { status: 400, body: { error: 'Invalid platform' } };
     }
 
+    // P-54 Phase 5 — the main table opts into the captured content/image/video
+    // items via `?withCaptures=1` so it can render the dynamic category columns
+    // in one request. Every other caller omits it and gets the lean payload.
+    const withCaptures = req.nextUrl.searchParams.get('withCaptures') === '1';
+
     try {
       const rows = await deps.withRetry(() =>
         deps.prisma.competitorUrl.findMany({
@@ -158,9 +279,14 @@ export function makeUrlsHandlers(deps: UrlsHandlerDeps) {
             ...(platformParam ? { platform: platformParam } : {}),
           },
           orderBy: [{ platform: 'asc' }, { addedAt: 'asc' }],
+          ...(withCaptures ? { include: CAPTURES_INCLUDE } : {}),
         })
       );
-      const wire = rows.map((r) => toWireShape(r)!) satisfies CompetitorUrl[];
+      const wire = rows.map((r) => {
+        const shape = toWireShape(r)!;
+        if (withCaptures) shape.captures = toCaptures(r);
+        return shape;
+      }) satisfies CompetitorUrl[];
       return { status: 200, body: wire };
     } catch (error) {
       deps.recordFlake(

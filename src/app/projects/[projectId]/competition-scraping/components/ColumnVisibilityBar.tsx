@@ -25,6 +25,12 @@
 import { useEffect, useRef } from 'react';
 import { PLATFORMS, type Platform } from '@/lib/shared-types/competition-scraping';
 import type { GroupByMode } from '@/lib/competition-scraping/main-table-grouping';
+import {
+  CAPTURED_KINDS,
+  KIND_GROUP_LABEL,
+  KIND_GROUP_VIS_KEY,
+  type CapturedKind,
+} from '@/lib/competition-scraping/dynamic-columns';
 import { PLATFORM_LABELS, TABLE_COLUMN_DEFS } from './url-table-columns';
 
 // P-54 Phase 4 (2026-06-01) — the "Sort By" box options. 'none' = the flat
@@ -53,6 +59,13 @@ interface Props {
   columnVisibility: Record<string, boolean>;
   onToggleColumn: (columnId: string, visible: boolean) => void;
 
+  // P-54 Phase 5 (2026-06-01) — which captured-content kinds currently have
+  // categorized content in the Project. Drives whether the matching "Content /
+  // Image / Video Categories" group checkbox is shown in the Columns box (D7:
+  // it appears only once such content exists). The checkbox toggles ALL of that
+  // kind's dynamic category columns at once via columnVisibility[groupKey].
+  captureGroupsPresent: Record<CapturedKind, boolean>;
+
   // P-54 Phase 4 (2026-06-01) — "Sort By" row grouping. Mutually exclusive;
   // 'none' is the flat default. Shared per-Project (persisted by the parent).
   groupBy: GroupByMode;
@@ -68,6 +81,7 @@ export function ColumnVisibilityBar({
   onSelectAllPlatforms,
   columnVisibility,
   onToggleColumn,
+  captureGroupsPresent,
   groupBy,
   onGroupByChange,
 }: Props) {
@@ -158,6 +172,34 @@ export function ColumnVisibilityBar({
               </label>
             );
           })}
+          {/* P-54 Phase 5 (2026-06-01) — one group checkbox per captured-content
+              kind that has categorized content. Checking it shows ALL of that
+              kind's dynamic category columns; unchecking hides them all
+              (director's "Content / Image / Video Categories" checkbox). */}
+          {CAPTURED_KINDS.filter((kind) => captureGroupsPresent[kind]).map(
+            (kind) => {
+              const key = KIND_GROUP_VIS_KEY[kind];
+              const label = KIND_GROUP_LABEL[kind];
+              const visible = isColumnVisible(columnVisibility, key);
+              return (
+                <label
+                  key={key}
+                  style={chipStyle(visible)}
+                  title={`Show or hide all ${label} columns`}
+                  data-testid={`column-group-${kind}`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={visible}
+                    onChange={() => onToggleColumn(key, !visible)}
+                    style={checkboxStyle}
+                    aria-label={`Show ${label} columns`}
+                  />
+                  <span>{label}</span>
+                </label>
+              );
+            }
+          )}
         </div>
       </div>
 

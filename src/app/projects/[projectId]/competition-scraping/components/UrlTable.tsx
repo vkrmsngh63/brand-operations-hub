@@ -42,7 +42,17 @@
 //     'manual' mode (rowOrder still persists server-side; just not
 //     applied visually until the user picks 'manual' again by dragging).
 
-import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  Fragment,
+  cloneElement,
+  isValidElement,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactElement,
+} from 'react';
 import {
   DndContext,
   MeasuringStrategy,
@@ -65,6 +75,18 @@ import {
   moveColumnKey,
 } from '@/lib/competition-scraping/column-order';
 import {
+  CAPTURED_KINDS,
+  KIND_GROUP_VIS_KEY,
+  buildDynamicColumnPairs,
+  collectCategories,
+  itemsForCategory,
+  subRowSpan,
+  withDynamicKeysInOrder,
+  type CapturedKind,
+  type DynCapturedItem,
+  type DynColumnPair,
+} from '@/lib/competition-scraping/dynamic-columns';
+import {
   buildMainGroupedRows,
   reorderableGroupKeys,
   type GroupByMode,
@@ -85,6 +107,7 @@ import type {
   ScrapingStatus,
   UpdateCompetitorUrlRequest,
 } from '@/lib/shared-types/competition-scraping';
+import { PerItemAnalysisBox } from './PerItemAnalysisBox';
 import { UrlAddModal } from './UrlAddModal';
 import {
   ConfirmDeleteDialog,
@@ -229,6 +252,14 @@ interface Props {
   // with a partial body and updates local row state from the server's
   // response. Throws on failure so the inline cell can render its error.
   onCellSave: (urlId: string, patch: UpdateCompetitorUrlRequest) => Promise<void>;
+  // P-54 Phase 5 (2026-06-01) — in-table edit of a captured item's value (the
+  // captured/embedded text) or its analysis, writing back through the per-item
+  // PATCH routes. Parent updates the owning URL's `captures` from the result.
+  onCapturedSave?: (
+    kind: CapturedKind,
+    itemId: string,
+    patch: { body?: string | null; analysis?: Record<string, unknown> }
+  ) => Promise<void>;
   // 2026-05-15-d Slice #2.5 — current platform filter from the URL query
   // (?platform=<value>). Passed through to UrlAddModal as `defaultPlatform`
   // when not 'all' so a click on "+ Manually add URL" from a filtered view
@@ -344,6 +375,65 @@ const COLUMNS: ColumnDef[] = [
   },
 ];
 
+// P-54 Phase 5 — a physical render column: either a fixed registry column, or
+// one half of a dynamic category column-PAIR (the value column or its glued-on
+// analysis column). The pair's `orderKey` is the value key for BOTH halves, so
+// the analysis column rides immediately to the right of its value column and
+// the pair moves as a locked unit under reorder (only the value key is ever
+// orderable / persisted).
+interface FixedPhysicalColumn {
+  kind: 'fixed';
+  physKey: string;
+  col: ColumnDef;
+}
+interface DynPhysicalColumn {
+  kind: 'dyn';
+  physKey: string; // the DOM / width key (value key OR analysis key)
+  orderKey: string; // the value key — the orderable / pair id
+  role: 'value' | 'analysis';
+  capturedKind: CapturedKind;
+  category: string;
+  label: string;
+}
+type PhysicalColumn = FixedPhysicalColumn | DynPhysicalColumn;
+
+const DYN_VALUE_DEFAULT_WIDTH = 280;
+const DYN_ANALYSIS_DEFAULT_WIDTH = 280;
+
+// Default placement of the dynamic value keys: spliced in immediately before the
+// 'Added On' column (director: "create a new column to the left of the Added On
+// column"). Used only when no shared column order is saved yet.
+function defaultUnitOrder(dynValueKeys: readonly string[]): string[] {
+  const fixedKeys = COLUMNS.map((c) => c.key as string);
+  const idx = fixedKeys.indexOf('addedAt');
+  if (idx < 0) return [...fixedKeys, ...dynValueKeys];
+  return [
+    ...fixedKeys.slice(0, idx),
+    ...dynValueKeys,
+    ...fixedKeys.slice(idx),
+  ];
+}
+
+function resolveDynWidth(
+  columnWidths: Record<string, number>,
+  physKey: string,
+  role: 'value' | 'analysis'
+): number {
+  const override = columnWidths[physKey];
+  if (typeof override === 'number' && override > 0) return override;
+  return role === 'value' ? DYN_VALUE_DEFAULT_WIDTH : DYN_ANALYSIS_DEFAULT_WIDTH;
+}
+
+function physicalColumnWidth(
+  columnWidths: Record<string, number>,
+  pc: PhysicalColumn
+): number {
+  if (pc.kind === 'fixed') {
+    return resolveColumnWidth(columnWidths, tableColumnDefByKey(pc.col.key));
+  }
+  return resolveDynWidth(columnWidths, pc.physKey, pc.role);
+}
+
 export function UrlTable({
   columnVisibility,
   columnWidths,
@@ -369,6 +459,7 @@ export function UrlTable({
   onUrlAdded,
   onUrlDeleted,
   onCellSave,
+  onCapturedSave,
   selectedPlatform,
 }: Props) {
   // Effective values for the optional Session 3 props.
@@ -409,38 +500,118 @@ export function UrlTable({
   // P-54 Phase 3 — apply the shared arranged column order to the registry
   // FIRST, then filter by visibility. Columns absent from columnOrder fall back
   // to registry order (appended), so newly added columns never disappear.
-  const orderedColumns = useMemo(
-    () => applyColumnOrder(COLUMNS, columnOrder, (c) => c.key),
-    [columnOrder]
-  );
-  const columnKeySet = useMemo(
-    () => new Set<string>(COLUMNS.map((c) => c.key)),
-    []
-  );
-  const visibleColumns = useMemo(() => {
-    if (!columnVisibility) return orderedColumns;
-    return orderedColumns.filter((c) => {
-      if (c.key in columnVisibility) return columnVisibility[c.key];
-      return true;
-    });
-  }, [orderedColumns, columnVisibility]);
+  // P-54 Phase 5 — build the physical render columns: the fixed registry
+  // columns PLUS the dynamic content/image/video category column-pairs derived
+  // from the captured items on the (platform-scoped) rows. Dynamic VALUE keys
+  // are the orderable units (the analysis column is glued to the right of its
+  // value column); only value keys ride in the saved columnOrder. The whole
+  // model collapses to exactly the Phase 1-4 fixed columns when there is no
+  // captured content, so the flat table is byte-for-byte unchanged then.
+  const {
+    physicalColumns,
+    orderedUnitKeys,
+    headerSortableItems,
+    columnKeySet,
+    hasDynColumns,
+  } = useMemo(() => {
+    // 1. Distinct categories present per kind, across the platform-scoped set
+    //    (so a search-box narrow doesn't make columns appear/disappear).
+    const catsByKind: Record<CapturedKind, string[]> = {
+      text: [],
+      image: [],
+      video: [],
+    };
+    for (const kind of CAPTURED_KINDS) {
+      const items: DynCapturedItem[] = [];
+      for (const r of scopeRows) {
+        const bucket = r.captures?.[kind];
+        if (bucket) items.push(...bucket);
+      }
+      catsByKind[kind] = collectCategories(items);
+    }
+    const pairs = buildDynamicColumnPairs(catsByKind);
+    const dynValueKeys = pairs.map((p) => p.valueKey);
 
-  // P-54 Phase 1 (R1) — the rightmost VISIBLE data column. The table's
-  // far-right edge (the trailing row-actions column) carries a resize grip
-  // that resizes THIS column, so the user can widen/narrow the last column
-  // by dragging the table's right edge. Recomputed from visibleColumns so it
-  // tracks the actual last column even after column show/hide (and, later,
-  // column reorder).
-  const lastVisibleColumn =
-    visibleColumns.length > 0
-      ? visibleColumns[visibleColumns.length - 1]
+    // 2. Orderable units = fixed columns + dynamic value keys.
+    type Unit = { key: string; fixed?: ColumnDef; pair?: DynColumnPair };
+    const units: Unit[] = [
+      ...COLUMNS.map((c) => ({ key: c.key as string, fixed: c })),
+      ...pairs.map((p) => ({ key: p.valueKey, pair: p })),
+    ];
+    const effectiveOrder =
+      columnOrder && columnOrder.length > 0
+        ? withDynamicKeysInOrder(columnOrder, dynValueKeys)
+        : defaultUnitOrder(dynValueKeys);
+    const orderedUnits = applyColumnOrder(units, effectiveOrder, (u) => u.key);
+
+    // 3. Visibility filter — fixed columns by their own key (missing ⇒ shown);
+    //    dynamic columns by the per-kind group checkbox (missing ⇒ shown).
+    const visibleUnits = orderedUnits.filter((u) => {
+      if (u.fixed) {
+        if (!columnVisibility) return true;
+        return u.key in columnVisibility ? columnVisibility[u.key] : true;
+      }
+      const visKey = KIND_GROUP_VIS_KEY[u.pair!.kind];
+      return columnVisibility && visKey in columnVisibility
+        ? columnVisibility[visKey]
+        : true;
+    });
+
+    // 4. Expand visible units into physical columns (dyn unit ⇒ value + analysis).
+    const phys: PhysicalColumn[] = [];
+    for (const u of visibleUnits) {
+      if (u.fixed) {
+        phys.push({ kind: 'fixed', physKey: u.key, col: u.fixed });
+      } else {
+        const p = u.pair!;
+        phys.push({
+          kind: 'dyn',
+          physKey: p.valueKey,
+          orderKey: p.valueKey,
+          role: 'value',
+          capturedKind: p.kind,
+          category: p.category,
+          label: p.valueLabel,
+        });
+        phys.push({
+          kind: 'dyn',
+          physKey: p.analysisKey,
+          orderKey: p.valueKey,
+          role: 'analysis',
+          capturedKind: p.kind,
+          category: p.category,
+          label: p.analysisLabel,
+        });
+      }
+    }
+
+    return {
+      physicalColumns: phys,
+      // Full arranged order (incl. hidden) for moveColumnKey persistence.
+      orderedUnitKeys: orderedUnits.map((u) => u.key),
+      // Draggable header ids = the VISIBLE units (fixed keys + dyn value keys).
+      headerSortableItems: visibleUnits.map((u) => u.key),
+      // Discriminator for handleDragEnd: every orderable column id.
+      columnKeySet: new Set<string>(units.map((u) => u.key)),
+      hasDynColumns: phys.some((p) => p.kind === 'dyn'),
+    };
+  }, [scopeRows, columnOrder, columnVisibility]);
+
+  // P-54 Phase 1 (R1) — the rightmost VISIBLE physical column. The table's
+  // far-right edge (the trailing row-actions column) carries a resize grip that
+  // resizes THIS column. Recomputed from physicalColumns so it tracks the last
+  // column after show/hide + reorder + dynamic-column changes.
+  const lastPhysicalColumn =
+    physicalColumns.length > 0
+      ? physicalColumns[physicalColumns.length - 1]
       : null;
 
   // P-46 Workstream 3 Session 2 — per-column inline-editor cell renderers.
   // Each renderer returns a <td> containing the appropriate InlineCells
-  // component wired to onCellSave with the right field key. The tbody
-  // iterates visibleColumns.map((col) => cellRenderers[col.key](row)) so
-  // visibility decisions happen at column filtering, not per-cell.
+  // component wired to onCellSave with the right field key. SortableUrlRow
+  // renders these for the FIXED physical columns (P-54 Phase 5 wraps them with
+  // rowSpan when a row stacks dynamic-column sub-rows); visibility decisions
+  // happen during physical-column construction, not per-cell.
   const cellRenderers = useMemo<
     Record<ColumnSortKey, (row: CompetitorUrl) => React.ReactNode>
   >(
@@ -869,13 +1040,11 @@ export function UrlTable({
     const overIsColumn = columnKeySet.has(overId);
     if (activeIsColumn || overIsColumn) {
       if (!activeIsColumn || !overIsColumn) return;
-      // Move within the FULL arranged column order (incl. hidden columns) so
-      // the persisted order is complete and hidden columns keep their slots.
-      const nextColumnOrder = moveColumnKey(
-        orderedColumns.map((c) => c.key),
-        activeId,
-        overId
-      );
+      // Move within the FULL arranged unit order (incl. hidden columns + the
+      // dynamic value keys) so the persisted order is complete and hidden
+      // columns keep their slots. Only value keys are orderable units, so a
+      // category column drags its glued analysis column with it (locked pair).
+      const nextColumnOrder = moveColumnKey(orderedUnitKeys, activeId, overId);
       onColumnReorder?.(nextColumnOrder);
       return;
     }
@@ -1149,13 +1318,13 @@ export function UrlTable({
                 <colgroup>
                   {/* Drag-handle column (Session 3) */}
                   <col style={{ width: '32px' }} />
-                  {visibleColumns.map((col) => (
+                  {physicalColumns.map((pc) => (
                     <col
-                      key={col.key}
+                      key={pc.physKey}
                       style={{
-                        width: `${resolveColumnWidth(
+                        width: `${physicalColumnWidth(
                           effectiveColumnWidths,
-                          tableColumnDefByKey(col.key)
+                          pc
                         )}px`,
                       }}
                     />
@@ -1175,10 +1344,64 @@ export function UrlTable({
                         the one DndContext with the vertical row-reorder list;
                         handleDragEnd discriminates by id. */}
                     <SortableContext
-                      items={visibleColumns.map((c) => c.key)}
+                      items={headerSortableItems}
                       strategy={horizontalListSortingStrategy}
                     >
-                      {visibleColumns.map((col) => {
+                      {physicalColumns.map((pc) => {
+                        // P-54 Phase 5 — the glued analysis column is a plain,
+                        // NON-draggable header that rides to the right of its
+                        // value column (locked pair); the value column + the
+                        // fixed columns are the draggable, orderable headers.
+                        if (pc.kind === 'dyn' && pc.role === 'analysis') {
+                          return (
+                            <DynAnalysisHeaderCell
+                              key={pc.physKey}
+                              label={pc.label}
+                              resizeNode={
+                                <ColumnResizeHandle
+                                  columnId={pc.physKey}
+                                  currentWidth={resolveDynWidth(
+                                    effectiveColumnWidths,
+                                    pc.physKey,
+                                    'analysis'
+                                  )}
+                                  minWidth={MIN_COLUMN_WIDTH}
+                                  maxWidth={MAX_COLUMN_WIDTH}
+                                  tableHeight={tableHeight}
+                                  onCommit={(width) =>
+                                    onColumnResize?.(pc.physKey, width)
+                                  }
+                                />
+                              }
+                            />
+                          );
+                        }
+                        if (pc.kind === 'dyn') {
+                          return (
+                            <DynValueHeaderCell
+                              key={pc.physKey}
+                              id={pc.orderKey}
+                              label={pc.label}
+                              resizeNode={
+                                <ColumnResizeHandle
+                                  columnId={pc.physKey}
+                                  currentWidth={resolveDynWidth(
+                                    effectiveColumnWidths,
+                                    pc.physKey,
+                                    'value'
+                                  )}
+                                  minWidth={MIN_COLUMN_WIDTH}
+                                  maxWidth={MAX_COLUMN_WIDTH}
+                                  tableHeight={tableHeight}
+                                  onCommit={(width) =>
+                                    onColumnResize?.(pc.physKey, width)
+                                  }
+                                />
+                              }
+                            />
+                          );
+                        }
+                        const col = pc.col;
                         const active = sortKey === col.key;
                         const filterActive =
                           col.filterKey !== null &&
@@ -1253,18 +1476,18 @@ export function UrlTable({
                           2026-06-01). Grip tracks the last column dynamically
                           so it stays correct after column show/hide + (future)
                           reorder. */}
-                      {lastVisibleColumn ? (
+                      {lastPhysicalColumn ? (
                         <ColumnResizeHandle
-                          columnId={lastVisibleColumn.key}
-                          currentWidth={resolveColumnWidth(
+                          columnId={lastPhysicalColumn.physKey}
+                          currentWidth={physicalColumnWidth(
                             effectiveColumnWidths,
-                            tableColumnDefByKey(lastVisibleColumn.key)
+                            lastPhysicalColumn
                           )}
                           minWidth={MIN_COLUMN_WIDTH}
                           maxWidth={MAX_COLUMN_WIDTH}
                           tableHeight={tableHeight}
                           onCommit={(width) =>
-                            onColumnResize?.(lastVisibleColumn.key, width)
+                            onColumnResize?.(lastPhysicalColumn.physKey, width)
                           }
                         />
                       ) : null}
@@ -1283,9 +1506,12 @@ export function UrlTable({
                         <SortableUrlRow
                           key={row.id}
                           row={row}
-                          visibleColumns={visibleColumns}
+                          physicalColumns={physicalColumns}
+                          hasDynColumns={hasDynColumns}
                           cellRenderers={cellRenderers}
                           onTrashClick={handleTrashClick}
+                          projectId={projectId}
+                          onCapturedSave={onCapturedSave}
                         />
                       ))}
                     </SortableContext>
@@ -1303,7 +1529,7 @@ export function UrlTable({
                         <Fragment key={group.key || '__bucket__'}>
                           <GroupBannerRow
                             group={group}
-                            labelColSpan={visibleColumns.length + 1}
+                            labelColSpan={physicalColumns.length + 1}
                           />
                           <SortableContext
                             items={group.rows.map((r) => r.id)}
@@ -1313,9 +1539,12 @@ export function UrlTable({
                               <SortableUrlRow
                                 key={row.id}
                                 row={row}
-                                visibleColumns={visibleColumns}
+                                physicalColumns={physicalColumns}
+                                hasDynColumns={hasDynColumns}
                                 cellRenderers={cellRenderers}
                                 onTrashClick={handleTrashClick}
+                                projectId={projectId}
+                                onCapturedSave={onCapturedSave}
                               />
                             ))}
                           </SortableContext>
@@ -1809,14 +2038,24 @@ function StatusCycleCell({
 // surface so cell-clicks aren't hijacked by drag activation.
 function SortableUrlRow({
   row,
-  visibleColumns,
+  physicalColumns,
+  hasDynColumns,
   cellRenderers,
   onTrashClick,
+  projectId,
+  onCapturedSave,
 }: {
   row: CompetitorUrl;
-  visibleColumns: ColumnDef[];
+  physicalColumns: PhysicalColumn[];
+  hasDynColumns: boolean;
   cellRenderers: Record<ColumnSortKey, (row: CompetitorUrl) => React.ReactNode>;
   onTrashClick: (row: CompetitorUrl, e: React.MouseEvent) => void;
+  projectId: string;
+  onCapturedSave?: (
+    kind: CapturedKind,
+    itemId: string,
+    patch: { body?: string | null; analysis?: Record<string, unknown> }
+  ) => Promise<void>;
 }) {
   const {
     attributes,
@@ -1827,72 +2066,447 @@ function SortableUrlRow({
     isDragging,
   } = useSortable({ id: row.id });
 
-  const style: React.CSSProperties = {
+  // P-54 Phase 5 — per dynamic VALUE column, the captured items of this row in
+  // that column's category. The analysis column reuses its pair's value items
+  // (keyed by orderKey). span = the longest stacked list (min 1). When no
+  // dynamic columns are present the span is 1 and the row renders exactly the
+  // Phase 1-4 single <tr> (the fast path below).
+  const itemsByOrderKey = new Map<string, DynCapturedItem[]>();
+  if (hasDynColumns) {
+    for (const pc of physicalColumns) {
+      if (pc.kind === 'dyn' && pc.role === 'value') {
+        const bucket = row.captures?.[pc.capturedKind] ?? [];
+        itemsByOrderKey.set(
+          pc.orderKey,
+          itemsForCategory(bucket, pc.capturedKind, pc.category)
+        );
+      }
+    }
+  }
+  const span = hasDynColumns
+    ? subRowSpan(Array.from(itemsByOrderKey.values()))
+    : 1;
+
+  const dragStyle: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
-    borderBottom: '1px solid #21262d',
     background: isDragging ? '#21262d' : undefined,
     opacity: isDragging ? 0.6 : 1,
   };
 
-  return (
-    <tr
-      ref={setNodeRef}
-      style={style}
-      {...attributes}
-      onMouseEnter={(e) => {
-        if (isDragging) return;
-        const cells =
-          e.currentTarget.querySelectorAll<HTMLTableCellElement>('td');
-        cells.forEach((cell) => {
-          cell.style.background = '#21262d';
-        });
-      }}
-      onMouseLeave={(e) => {
-        const cells =
-          e.currentTarget.querySelectorAll<HTMLTableCellElement>('td');
-        cells.forEach((cell) => {
-          cell.style.background = '';
-        });
+  const dragHandleCell = (
+    <td rowSpan={span} style={{ ...dragHandleCellStyle, verticalAlign: 'top' }}>
+      <button
+        type="button"
+        {...listeners}
+        style={dragHandleButtonStyle}
+        aria-label={`Drag to reorder ${row.url}`}
+        title="Drag to reorder"
+        data-testid="url-row-drag-handle"
+      >
+        ⋮⋮
+      </button>
+    </td>
+  );
+
+  const trashCell = (
+    <td
+      rowSpan={span}
+      style={{
+        textAlign: 'right',
+        padding: '4px 6px',
+        whiteSpace: 'nowrap',
+        verticalAlign: 'top',
       }}
     >
-      <td style={dragHandleCellStyle}>
-        <button
-          type="button"
-          {...listeners}
-          style={dragHandleButtonStyle}
-          aria-label={`Drag to reorder ${row.url}`}
-          title="Drag to reorder"
-          data-testid="url-row-drag-handle"
-        >
-          ⋮⋮
-        </button>
-      </td>
-      {visibleColumns.map((col) => cellRenderers[col.key](row))}
-      <td
-        style={{
-          textAlign: 'right',
-          padding: '4px 6px',
-          whiteSpace: 'nowrap',
+      <button
+        type="button"
+        onClick={(e) => onTrashClick(row, e)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.stopPropagation();
+          }
         }}
+        aria-label={`Delete URL ${row.url}`}
+        title="Delete URL"
+        data-testid="url-row-delete-button"
+        style={rowTrashButtonStyle}
       >
+        🗑
+      </button>
+    </td>
+  );
+
+  return (
+    <>
+      {Array.from({ length: span }).map((_, i) => {
+        const isFirst = i === 0;
+        const isLast = i === span - 1;
+        return (
+          <tr
+            key={isFirst ? row.id : `${row.id}-sub-${i}`}
+            ref={isFirst ? setNodeRef : undefined}
+            style={{
+              ...dragStyle,
+              borderBottom: isLast ? '1px solid #21262d' : undefined,
+            }}
+            {...(isFirst ? attributes : {})}
+          >
+            {isFirst ? dragHandleCell : null}
+            {physicalColumns.map((pc) => {
+              if (pc.kind === 'fixed') {
+                // Fixed columns span the whole stacked block — rendered once on
+                // the first sub-row with rowSpan. When span === 1 the existing
+                // cell is returned verbatim (Phases 1-4 byte-for-byte unchanged).
+                if (!isFirst) return null;
+                const cell = cellRenderers[pc.col.key](row);
+                if (span === 1 || !isValidElement(cell)) return cell;
+                const el = cell as ReactElement<{ style?: React.CSSProperties }>;
+                return cloneElement(el, {
+                  rowSpan: span,
+                  style: { ...(el.props.style ?? {}), verticalAlign: 'top' },
+                } as Partial<{ style?: React.CSSProperties }> & { rowSpan: number });
+              }
+              // Dynamic column — one cell PER sub-row (rowSpan 1); sub-row i
+              // shows item i (or a blank placeholder past the end of the list).
+              const items = itemsByOrderKey.get(pc.orderKey) ?? [];
+              const item = items[i] ?? null;
+              return (
+                <DynCell
+                  key={pc.physKey}
+                  pc={pc}
+                  item={item}
+                  projectId={projectId}
+                  onCapturedSave={onCapturedSave}
+                  isLastSub={isLast}
+                />
+              );
+            })}
+            {isFirst ? trashCell : null}
+          </tr>
+        );
+      })}
+    </>
+  );
+}
+
+// P-54 Phase 5 — base style for a dynamic category / analysis cell. Top-aligned
+// + wrapping (these cells hold multi-line captured text / analysis, unlike the
+// nowrap fixed cells), with a thin separator between stacked sub-rows.
+function dynCellStyle(isLastSub: boolean): React.CSSProperties {
+  return {
+    padding: '6px 10px',
+    color: '#c9d1d9',
+    verticalAlign: 'top',
+    whiteSpace: 'normal',
+    wordBreak: 'break-word',
+    borderBottom: isLastSub ? undefined : '1px solid #161b22',
+  };
+}
+
+const dynEmptyStyle: React.CSSProperties = {
+  color: '#484f58',
+  fontStyle: 'italic',
+  fontSize: '0.9em',
+};
+
+function DynCell({
+  pc,
+  item,
+  projectId,
+  onCapturedSave,
+  isLastSub,
+}: {
+  pc: DynPhysicalColumn;
+  item: DynCapturedItem | null;
+  projectId: string;
+  onCapturedSave?: (
+    kind: CapturedKind,
+    itemId: string,
+    patch: { body?: string | null; analysis?: Record<string, unknown> }
+  ) => Promise<void>;
+  isLastSub: boolean;
+}) {
+  return (
+    <td style={dynCellStyle(isLastSub)}>
+      {item === null ? (
+        <span style={dynEmptyStyle} aria-hidden>
+          —
+        </span>
+      ) : pc.role === 'analysis' ? (
+        <DynAnalysisCell
+          kind={pc.capturedKind}
+          item={item}
+          projectId={projectId}
+        />
+      ) : (
+        <DynValueCell
+          kind={pc.capturedKind}
+          item={item}
+          onCapturedSave={onCapturedSave}
+        />
+      )}
+    </td>
+  );
+}
+
+// The captured/embedded-text VALUE cell — plain text, edited inline (reusing
+// InlineTextCell, multiline). Saves back through onCapturedSave → the per-item
+// PATCH route. Read-only when no save handler is wired.
+function DynValueCell({
+  kind,
+  item,
+  onCapturedSave,
+}: {
+  kind: CapturedKind;
+  item: DynCapturedItem;
+  onCapturedSave?: (
+    kind: CapturedKind,
+    itemId: string,
+    patch: { body?: string | null; analysis?: Record<string, unknown> }
+  ) => Promise<void>;
+}) {
+  if (!onCapturedSave) {
+    return <span>{item.body ?? <span style={dynEmptyStyle}>—</span>}</span>;
+  }
+  return (
+    <InlineTextCell
+      value={item.body}
+      onSave={(next) => onCapturedSave(kind, item.id, { body: next })}
+      placeholder="Set text"
+      multiline
+    />
+  );
+}
+
+const CAPTURED_ROUTE_SEGMENT: Record<CapturedKind, string> = {
+  text: 'text',
+  image: 'images',
+  video: 'videos',
+};
+
+// The "Your Analysis" cell — a tidy plain-text preview that opens the SAME
+// rich-text editor surface as the detail page in a pop-out (Q-I = pop-out
+// editor). PerItemAnalysisBox owns the debounced PATCH + retry; the in-table
+// preview refreshes via the page's refetch-on-return (D4).
+function DynAnalysisCell({
+  kind,
+  item,
+  projectId,
+}: {
+  kind: CapturedKind;
+  item: DynCapturedItem;
+  projectId: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const preview = tiptapToPlainText(item.analysis);
+  const apiUrl = `/api/projects/${projectId}/competition-scraping/${CAPTURED_ROUTE_SEGMENT[kind]}/${item.id}`;
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        style={analysisPreviewButtonStyle}
+        title="Edit your analysis"
+        data-testid="dyn-analysis-open"
+      >
+        {preview ? (
+          <span style={analysisPreviewTextStyle}>{preview}</span>
+        ) : (
+          <span style={dynEmptyStyle}>+ Add analysis</span>
+        )}
+      </button>
+      {open ? (
+        <div
+          style={analysisOverlayStyle}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Edit your analysis"
+          onClick={() => setOpen(false)}
+        >
+          <div
+            style={analysisModalStyle}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={analysisModalHeaderStyle}>
+              <span style={{ fontWeight: 600, color: '#e6edf3' }}>
+                Your Analysis
+              </span>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                style={analysisModalCloseStyle}
+                aria-label="Close analysis editor"
+              >
+                Done
+              </button>
+            </div>
+            <PerItemAnalysisBox
+              apiUrl={apiUrl}
+              initialAnalysis={item.analysis}
+              label=""
+            />
+          </div>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+// Walk a TipTap document JSON, concatenating its text nodes into a short plain-
+// text preview for the analysis cell. Cheap (no editor mount per cell).
+function tiptapToPlainText(doc: Record<string, unknown> | null | undefined): string {
+  if (!doc || typeof doc !== 'object') return '';
+  const out: string[] = [];
+  const walk = (node: unknown): void => {
+    if (!node || typeof node !== 'object') return;
+    const n = node as { text?: unknown; content?: unknown };
+    if (typeof n.text === 'string') out.push(n.text);
+    if (Array.isArray(n.content)) n.content.forEach(walk);
+  };
+  walk(doc);
+  return out.join(' ').trim();
+}
+
+const analysisPreviewButtonStyle: React.CSSProperties = {
+  display: 'block',
+  width: '100%',
+  textAlign: 'left',
+  background: 'transparent',
+  border: '1px solid transparent',
+  borderRadius: '4px',
+  color: '#c9d1d9',
+  font: 'inherit',
+  cursor: 'pointer',
+  padding: '2px 4px',
+};
+
+const analysisPreviewTextStyle: React.CSSProperties = {
+  display: '-webkit-box',
+  WebkitLineClamp: 3,
+  WebkitBoxOrient: 'vertical',
+  overflow: 'hidden',
+};
+
+const analysisOverlayStyle: React.CSSProperties = {
+  position: 'fixed',
+  inset: 0,
+  background: 'rgba(1, 4, 9, 0.7)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  zIndex: 50,
+  padding: '24px',
+};
+
+const analysisModalStyle: React.CSSProperties = {
+  background: '#0d1117',
+  border: '1px solid #30363d',
+  borderRadius: '10px',
+  padding: '16px',
+  width: 'min(720px, 92vw)',
+  maxHeight: '85vh',
+  overflowY: 'auto',
+  boxShadow: '0 16px 48px rgba(1, 4, 9, 0.6)',
+};
+
+const analysisModalHeaderStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  marginBottom: '8px',
+};
+
+const analysisModalCloseStyle: React.CSSProperties = {
+  background: '#238636',
+  border: '1px solid rgba(240, 246, 252, 0.10)',
+  borderRadius: '6px',
+  color: '#fff',
+  fontSize: '12px',
+  fontWeight: 600,
+  padding: '4px 12px',
+  cursor: 'pointer',
+  fontFamily: 'inherit',
+};
+
+// P-54 Phase 5 — draggable header for a dynamic VALUE column (the locked-pair
+// anchor). Mirrors SortableHeaderCell's grip + sticky behavior but carries no
+// sort/filter (the dynamic columns aren't sortable/filterable). The id is the
+// value key, so dragging it moves the glued analysis column with it.
+function DynValueHeaderCell({
+  id,
+  label,
+  resizeNode,
+}: {
+  id: string;
+  label: string;
+  resizeNode: React.ReactNode;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id });
+  return (
+    <th
+      ref={setNodeRef}
+      style={{
+        textAlign: 'left',
+        padding: '8px 10px',
+        borderBottom: '1px solid #30363d',
+        color: '#e6edf3',
+        fontWeight: 600,
+        whiteSpace: 'nowrap',
+        position: 'sticky',
+        top: 0,
+        zIndex: isDragging ? 6 : 3,
+        background: '#0d1117',
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.7 : 1,
+      }}
+    >
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
         <button
           type="button"
-          onClick={(e) => onTrashClick(row, e)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.stopPropagation();
-            }
-          }}
-          aria-label={`Delete URL ${row.url}`}
-          title="Delete URL"
-          data-testid="url-row-delete-button"
-          style={rowTrashButtonStyle}
+          aria-label={`Drag to reorder ${label} column`}
+          {...attributes}
+          {...listeners}
+          style={columnDragGripStyle}
         >
-          🗑
+          ⠿
         </button>
-      </td>
-    </tr>
+        <span>{label}</span>
+      </span>
+      {resizeNode}
+    </th>
+  );
+}
+
+// P-54 Phase 5 — the glued analysis column header. Not draggable (it rides with
+// its value column); still sticky + resizable.
+function DynAnalysisHeaderCell({
+  label,
+  resizeNode,
+}: {
+  label: string;
+  resizeNode: React.ReactNode;
+}) {
+  return (
+    <th
+      style={{
+        textAlign: 'left',
+        padding: '8px 10px',
+        borderBottom: '1px solid #30363d',
+        color: '#8b949e',
+        fontWeight: 600,
+        whiteSpace: 'nowrap',
+        position: 'sticky',
+        top: 0,
+        zIndex: 3,
+        background: '#0d1117',
+      }}
+    >
+      <span>{label}</span>
+      {resizeNode}
+    </th>
   );
 }
 

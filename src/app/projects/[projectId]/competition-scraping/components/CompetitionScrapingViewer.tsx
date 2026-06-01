@@ -59,6 +59,11 @@ import type {
   GroupByMode,
   ActiveGroupMode,
 } from '@/lib/competition-scraping/main-table-grouping';
+import {
+  CAPTURED_KINDS,
+  normalizeCategory,
+  type CapturedKind,
+} from '@/lib/competition-scraping/dynamic-columns';
 import { ColumnVisibilityBar } from './ColumnVisibilityBar';
 import {
   FONT_SIZE_DEFAULT,
@@ -150,15 +155,48 @@ export function CompetitionScrapingViewer({ projectId }: Props) {
   const [urls, setUrls] = useState<CompetitorUrl[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    setError(null);
-    setUrls(null);
-    (async () => {
+  // P-54 Phase 5 (2026-06-01) — fetch with `?withCaptures=1` so each URL row
+  // carries its captured content/image/video items (the dynamic category
+  // columns render from `row.captures`). `silent` re-fetches in place (used by
+  // the refetch-on-return listener) without flashing the loading state.
+  const loadUrls = useCallback(
+    async (silent: boolean): Promise<void> => {
+      if (!silent) {
+        setError(null);
+        setUrls(null);
+      }
       try {
         const res = await authFetch(
-          `/api/projects/${projectId}/competition-scraping/urls`
+          `/api/projects/${projectId}/competition-scraping/urls?withCaptures=1`
         );
+        if (!res.ok) {
+          throw new Error(`Could not load URLs (HTTP ${res.status}).`);
+        }
+        const data = (await res.json()) as ListCompetitorUrlsResponse;
+        setUrls(data);
+        if (silent) setError(null);
+      } catch (e) {
+        if (!silent) {
+          setError(e instanceof Error ? e.message : 'Could not load URLs.');
+        }
+        // A silent refresh that fails leaves the last-good data on screen.
+      }
+    },
+    [projectId]
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      // The cancelled guard prevents a stale project's fetch from landing after
+      // a fast project switch.
+      setError(null);
+      setUrls(null);
+      try {
+        const res = await authFetch(
+          `/api/projects/${projectId}/competition-scraping/urls?withCaptures=1`
+        );
+        if (cancelled) return;
         if (!res.ok) {
           throw new Error(`Could not load URLs (HTTP ${res.status}).`);
         }
@@ -174,6 +212,30 @@ export function CompetitionScrapingViewer({ projectId }: Props) {
       cancelled = true;
     };
   }, [projectId]);
+
+  // P-54 Phase 5 (2026-06-01) — D4 "refetch-on-return": pull the latest captured
+  // items (and URL fields) when the user comes back to this tab/window after
+  // editing a competitor's detail page, mirroring the review pages' pattern.
+  // `loadedRef` gates the refresh so it doesn't fire before the first load.
+  const loadedRef = useRef(false);
+  useEffect(() => {
+    loadedRef.current = urls !== null;
+  }, [urls]);
+  useEffect(() => {
+    function onRefocus(): void {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+        return;
+      }
+      if (!loadedRef.current) return;
+      void loadUrls(true);
+    }
+    window.addEventListener('focus', onRefocus);
+    document.addEventListener('visibilitychange', onRefocus);
+    return () => {
+      window.removeEventListener('focus', onRefocus);
+      document.removeEventListener('visibilitychange', onRefocus);
+    };
+  }, [loadUrls]);
 
   // P-46 Workstream 3 Sessions 1+3 — UserTablePreferences state.
   // Session 1 wired columnVisibility (map of columnId → visible).
@@ -397,6 +459,32 @@ export function CompetitionScrapingViewer({ projectId }: Props) {
   }, [urls]);
   const totalCount = urls === null ? null : urls.length;
 
+  // P-54 Phase 5 — which captured-content kinds have at least one categorized
+  // item across the Project. Drives whether the matching "Content / Image /
+  // Video Categories" group checkbox is offered in the Columns box (D7: the
+  // group appears only once such content exists).
+  const captureGroupsPresent = useMemo<Record<CapturedKind, boolean>>(() => {
+    const present: Record<CapturedKind, boolean> = {
+      text: false,
+      image: false,
+      video: false,
+    };
+    if (!urls) return present;
+    for (const u of urls) {
+      const c = u.captures;
+      if (!c) continue;
+      for (const kind of CAPTURED_KINDS) {
+        if (
+          !present[kind] &&
+          c[kind].some((it) => normalizeCategory(it.category) !== null)
+        ) {
+          present[kind] = true;
+        }
+      }
+    }
+    return present;
+  }, [urls]);
+
   // Platform-scoped rows — fed to UrlTable as `scopeRows` so its multi-
   // select dropdowns can derive their option lists from the platform-scoped
   // set instead of the search-and-column-filter-narrowed set.
@@ -545,8 +633,75 @@ export function CompetitionScrapingViewer({ projectId }: Props) {
         const idx = prev.findIndex((u) => u.id === updated.id);
         if (idx < 0) return prev;
         const next = [...prev];
-        next[idx] = updated;
+        // P-54 Phase 5 — the /urls PATCH response does NOT include `captures`
+        // (that rides only on the `?withCaptures=1` list read); carry the
+        // existing captures forward so a normal cell edit never blanks the
+        // dynamic category columns.
+        next[idx] = { ...updated, captures: prev[idx].captures };
         return next;
+      });
+    },
+    [projectId]
+  );
+
+  // P-54 Phase 5 (2026-06-01) — in-table edit of a captured item's value (the
+  // captured/embedded text) or its analysis. Writes back through the SAME
+  // per-item PATCH route the detail page uses, then patches the matching item
+  // inside the owning URL's `captures` so the cell reflects the edit without a
+  // refetch. `kind` selects the route + which captures bucket to update.
+  const handleCapturedSave = useCallback(
+    async (
+      kind: 'text' | 'image' | 'video',
+      itemId: string,
+      patch: { body?: string | null; analysis?: Record<string, unknown> }
+    ): Promise<void> => {
+      const routeSegment =
+        kind === 'text' ? 'text' : kind === 'image' ? 'images' : 'videos';
+      // The value column maps to `text` (content) or `embeddedText` (image/video).
+      const wireBody: Record<string, unknown> = {};
+      if ('body' in patch) {
+        if (kind === 'text') wireBody.text = patch.body ?? '';
+        else wireBody.embeddedText = patch.body ?? '';
+      }
+      if ('analysis' in patch && patch.analysis !== undefined) {
+        wireBody.analysis = patch.analysis;
+      }
+      const res = await authFetch(
+        `/api/projects/${projectId}/competition-scraping/${routeSegment}/${itemId}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(wireBody),
+        }
+      );
+      if (!res.ok) {
+        let detail = `HTTP ${res.status}`;
+        try {
+          const b = (await res.json()) as { error?: string };
+          if (b && typeof b.error === 'string') detail = b.error;
+        } catch {
+          // fall through with HTTP status
+        }
+        throw new Error(detail);
+      }
+      setUrls((prev) => {
+        if (!prev) return prev;
+        return prev.map((u) => {
+          const bucket = u.captures?.[kind];
+          if (!bucket || !bucket.some((it) => it.id === itemId)) return u;
+          const nextBucket = bucket.map((it) =>
+            it.id === itemId
+              ? {
+                  ...it,
+                  ...('body' in patch ? { body: patch.body ?? null } : {}),
+                  ...('analysis' in patch && patch.analysis !== undefined
+                    ? { analysis: patch.analysis }
+                    : {}),
+                }
+              : it
+          );
+          return { ...u, captures: { ...u.captures!, [kind]: nextBucket } };
+        });
       });
     },
     [projectId]
@@ -575,6 +730,7 @@ export function CompetitionScrapingViewer({ projectId }: Props) {
         onSelectAllPlatforms={handleSelectAllPlatforms}
         columnVisibility={columnVisibility}
         onToggleColumn={handleToggleColumn}
+        captureGroupsPresent={captureGroupsPresent}
         groupBy={groupBy}
         onGroupByChange={handleGroupByChange}
       />
@@ -636,6 +792,7 @@ export function CompetitionScrapingViewer({ projectId }: Props) {
             onUrlAdded={handleUrlAdded}
             onUrlDeleted={handleUrlDeleted}
             onCellSave={handleCellSave}
+            onCapturedSave={handleCapturedSave}
             selectedPlatform={modalDefaultPlatform}
           />
         )}

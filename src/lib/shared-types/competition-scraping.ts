@@ -149,6 +149,34 @@ export interface CompetitorUrl {
   addedBy: string;
   addedAt: string;
   updatedAt: string;
+  // P-54 Phase 5 (2026-06-01) — the captured content/image/video items for this
+  // URL, projected to the minimal fields the MAIN table's dynamic "category
+  // columns" need (the captured/embedded text, the per-item analysis, the
+  // category name). ONLY present when the list endpoint is queried with
+  // `?withCaptures=1`; omitted on every other read so the default payload and
+  // all existing consumers stay unchanged.
+  captures?: MainTableCaptures;
+}
+
+// P-54 Phase 5 (2026-06-01) — one captured item projected for the main table's
+// dynamic category columns. `body` = the captured text (content kind) or the
+// embedded text (image / video kind). `analysis` = the per-item "Your Analysis"
+// TipTap JSON. These mirror CapturedText.text / CapturedImage.embeddedText /
+// CapturedVideo.embeddedText + the shared `analysis` field; the in-table edits
+// write back through the existing per-item PATCH routes.
+export interface MainTableCapturedItem {
+  id: string;
+  competitorUrlId: string;
+  category: string | null;
+  body: string | null;
+  analysis: Record<string, unknown>;
+  sortOrder: number;
+}
+
+export interface MainTableCaptures {
+  text: MainTableCapturedItem[];
+  image: MainTableCapturedItem[];
+  video: MainTableCapturedItem[];
 }
 
 // POST /api/projects/[projectId]/competition-scraping/urls — request body.
