@@ -927,24 +927,22 @@ export function UrlTable({
       ) : (
         <div
           style={{
-            /* 2026-05-24 fix-forward (Issue 6) — table is now a fixed-
-               max-height scroll container with BOTH X and Y scrolling
-               inside it. This lets the sticky <thead> (below) lock to
-               the top of THIS container instead of the page viewport, AND
-               makes the browser's native horizontal scrollbar appear at
-               the bottom of THIS container — always visible while the
-               user vertically scrolls the rows inside it. Director's
-               directive: "the table header row at the top and the table
-               horizontal scroll at the bottom should be locked so that
-               when the user scrolls down on the table to any point, they
-               should be able to see the headers and the bottom horizontal
-               scroll at all times." minHeight floor keeps the table
-               usable on small viewports; maxHeight calc leaves room for
-               the workflow topbar + status row + guide + deliverables
-               + visibility bar above. */
-            overflow: 'auto',
-            maxHeight: 'calc(100vh - 200px)',
-            minHeight: '400px',
+            /* P-54 Phase 2 (R2+R4, 2026-06-01) — the table is NO LONGER in a
+               separate inner scroll box. Per director's directive "the page
+               scrolls themselves should suffice … this way the table can be
+               expanded into the page," the WHOLE PAGE now scrolls for BOTH
+               axes via the browser's own scrollbars: vertical = window
+               scroll; horizontal = the window's own bottom scrollbar (fixed
+               at the window bottom, reachable at any scroll position). The
+               prior 2026-05-24 inner `overflow:auto` + `maxHeight` container
+               trapped the table and is removed — which also lets dragging the
+               last column's right edge (P-54 Phase 1 R1) expand the table into
+               the page. The <thead> below stays `position:sticky; top:0`; with
+               no overflow ancestor it now sticks to the TOP OF THE WINDOW, so
+               the column titles stay visible as the user scrolls down (header
+               pinned per director's 2026-06-01 pick). position:relative is
+               retained as a harmless containing-block anchor; it does NOT
+               establish a scroll container, so viewport-sticky still works. */
             position: 'relative',
           }}
         >
@@ -960,12 +958,15 @@ export function UrlTable({
               <table
                 ref={tableRef}
                 style={{
-                  /* 2026-05-24 fix-forward (Issue 3) — table sizes to the
-                     sum of column widths (NOT 100% of container) so the
-                     overflowX:'auto' wrapper above can horizontally scroll
-                     when the sum exceeds container width. The minWidth
-                     keeps the table from collapsing narrower than its
-                     container when there are few columns. */
+                  /* 2026-05-24 fix-forward (Issue 3); P-54 Phase 2 update
+                     (2026-06-01) — table sizes to the sum of column widths
+                     (NOT 100% of container). With the inner scroll box now
+                     removed (Phase 2), when the column-width sum exceeds the
+                     viewport the table overflows into the PAGE, so the
+                     browser's own horizontal (window) scrollbar handles
+                     left-right scrolling. The minWidth keeps the table from
+                     collapsing narrower than its container when there are
+                     few columns. */
                   width: 'max-content',
                   minWidth: '100%',
                   borderCollapse: 'collapse',
