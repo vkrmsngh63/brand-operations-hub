@@ -940,10 +940,28 @@ export function UrlTable({
                the page. The <thead> below stays `position:sticky; top:0`; with
                no overflow ancestor it now sticks to the TOP OF THE WINDOW, so
                the column titles stay visible as the user scrolls down (header
-               pinned per director's 2026-06-01 pick). position:relative is
-               retained as a harmless containing-block anchor; it does NOT
-               establish a scroll container, so viewport-sticky still works. */
+               pinned per director's 2026-06-01 pick).
+
+               P-54 Phase 2 FF1 (2026-06-01) — director report: the wide table
+               wasn't extending the page's scrollable width past its own right
+               edge, and the last column's right edge sat flush against the
+               page edge with no room to grab/drag it. Fix: this wrapper now
+               SHRINK-WRAPS to the table's true content width (`width:
+               max-content`) — so it overflows the viewport and the window
+               horizontal scrollbar reliably reaches the full table — PLUS a
+               `paddingRight` trailing gap so there is clear empty space to the
+               right of the last column's resize grip (separated from the page
+               edge / right scrollbar), making the draggable edge obvious and
+               giving room to drag it wider. `minWidth:100%` keeps the table at
+               least viewport-wide when there are few columns. `position:
+               relative` is retained as a harmless containing-block anchor;
+               `width:max-content` does NOT establish a scroll container, so
+               viewport-sticky on the header still works. */
             position: 'relative',
+            width: 'max-content',
+            minWidth: '100%',
+            paddingRight: '48px',
+            boxSizing: 'content-box',
           }}
         >
           <DndContext
