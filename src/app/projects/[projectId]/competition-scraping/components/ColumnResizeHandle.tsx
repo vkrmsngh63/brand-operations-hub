@@ -54,35 +54,76 @@ export function ColumnResizeHandle({
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>): void => {
     e.preventDefault();
     e.stopPropagation();
-    const startX = e.clientX;
-    const startWidth = currentWidth;
     setIsDragging(true);
 
-    let latestWidth = startWidth;
+    const clamp = (w: number): number =>
+      Math.max(minWidth, Math.min(maxWidth, Math.round(w)));
+
+    // P-54 Phase 2 FF2 (2026-06-01) — width is tracked incrementally in
+    // DOCUMENT space (clientX + window.scrollX) rather than pure viewport
+    // space, so that when the page auto-scrolls horizontally during the drag
+    // (the RAF edge-scroll below), the new scroll offset keeps feeding into
+    // the width. Director directive: dragging a column's right edge should be
+    // able to go "as far to the right as needed" with the horizontal page
+    // scroll following along, instead of stalling at the viewport's right edge
+    // (the prior pure-clientX delta capped the drag at the visible edge).
+    let targetWidth = currentWidth;
+    let lastDocX = e.clientX + window.scrollX;
+    let lastClientX = e.clientX;
+    let rafId = 0;
+
+    const applyPointer = (clientX: number): void => {
+      const docX = clientX + window.scrollX;
+      targetWidth = clamp(targetWidth + (docX - lastDocX));
+      lastDocX = docX;
+      lastClientX = clientX;
+      // Optimistic: commit on every move so the colgroup width updates live
+      // as the user drags. The parent's debounced PUT coalesces the burst
+      // into one network write on idle.
+      onCommit(targetWidth);
+    };
+
+    // Distance from the viewport's right edge (px) that triggers auto-scroll,
+    // and the per-frame grow/scroll step.
+    const EDGE_ZONE = 80;
+    const STEP = 18;
+
+    const tick = (): void => {
+      if (
+        window.innerWidth - lastClientX < EDGE_ZONE &&
+        targetWidth < maxWidth
+      ) {
+        // Grow the column by one step FIRST — widening the table extends the
+        // document's scrollable width, creating room to scroll into (without
+        // this, scrollBy is a no-op when already at the current max scroll, so
+        // the drag would deadlock). Then scroll to follow and resync the
+        // baseline to the ACTUAL post-scroll position so subsequent pointer
+        // deltas aren't double-counted.
+        targetWidth = clamp(targetWidth + STEP);
+        onCommit(targetWidth);
+        window.scrollBy({ left: STEP });
+        lastDocX = lastClientX + window.scrollX;
+      }
+      rafId = window.requestAnimationFrame(tick);
+    };
+
     const onMove = (ev: PointerEvent): void => {
-      const delta = ev.clientX - startX;
-      const next = Math.max(
-        minWidth,
-        Math.min(maxWidth, Math.round(startWidth + delta))
-      );
-      latestWidth = next;
-      // Optimistic: commit on every move so the colgroup width updates
-      // live as the user drags. The parent's debounced PUT coalesces the
-      // burst into one network write on idle.
-      onCommit(next);
+      applyPointer(ev.clientX);
     };
     const onUp = (): void => {
       setIsDragging(false);
+      window.cancelAnimationFrame(rafId);
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
       window.removeEventListener('pointercancel', onUp);
-      // Final commit — guarantees the last value lands even if the
-      // browser drops the last pointermove.
-      onCommit(latestWidth);
+      // Final commit — guarantees the last value lands even if the browser
+      // drops the last pointermove.
+      onCommit(targetWidth);
     };
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
     window.addEventListener('pointercancel', onUp);
+    rafId = window.requestAnimationFrame(tick);
   };
 
   // height: tableHeight on the handle = full table height. Without this,

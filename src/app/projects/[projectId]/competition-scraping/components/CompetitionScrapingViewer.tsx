@@ -519,6 +519,14 @@ export function CompetitionScrapingViewer({ projectId }: Props) {
           borderRadius: '8px',
           padding: '16px',
           minHeight: '320px',
+          /* P-54 Phase 2 FF2 (2026-06-01) — director report: the grey panel
+             background/border stopped at the viewport edge while the wide
+             table overflowed past it. Shrink-wrap this panel to the table's
+             true content width so its grey background + border extend all the
+             way to the right of the table. minWidth:100% keeps it at least
+             viewport-wide when the table is narrow / on the empty states. */
+          width: 'max-content',
+          minWidth: '100%',
         }}
       >
         {error ? (

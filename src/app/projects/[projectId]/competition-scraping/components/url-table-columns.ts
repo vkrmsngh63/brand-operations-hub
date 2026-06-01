@@ -112,7 +112,13 @@ export const TABLE_COLUMN_IDS = new Set<string>(
 // (see src/lib/competition-scraping/handlers/user-table-preferences.ts) so
 // the stepper UI can't push a value the server would reject.
 export const MIN_COLUMN_WIDTH = 60;
-export const MAX_COLUMN_WIDTH = 600;
+// P-54 Phase 2 FF2 (2026-06-01) — raised from 600 → 4000 so the user can drag
+// a column "as far to the right as needed" (director directive). The server
+// validator (user-table-preferences.ts) has no upper bound, so this client
+// clamp is the only cap; 4000px keeps it sane while effectively unlimited for
+// real screens. Paired with the auto-scroll-during-resize in ColumnResizeHandle
+// so dragging past the viewport edge scrolls the page to follow.
+export const MAX_COLUMN_WIDTH = 4000;
 export const FONT_SIZE_MIN = 10;
 export const FONT_SIZE_MAX = 24;
 export const FONT_SIZE_DEFAULT = 14;
