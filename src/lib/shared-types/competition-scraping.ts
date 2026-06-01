@@ -1171,6 +1171,47 @@ export interface WriteUserTablePreferencesRequest {
 
 export type WriteUserTablePreferencesResponse = UserTablePreferences;
 
+// ─── ProjectTablePreferences (P-54 Phase 3, 2026-06-01) ────────────────
+// Wire shape for the SHARED, per-Project layout of the main
+// /competition-scraping Competitor URLs table. Director directive: column
+// order + show/hide + widths + competitor row order + font size are shared
+// across everyone on the Project (one coherent layout), NOT per-user. Keyed by
+// projectId only. On first read the server seeds it from the requesting user's
+// existing UserTablePreferences so a pre-existing layout is preserved.
+export interface ProjectTablePreferences {
+  id: string;
+  projectId: string;
+  // [columnId] in the arranged left-to-right order. Columns absent from the
+  // array fall back to the registry order, appended after the arranged ones.
+  columnOrder: string[];
+  columnVisibility: Record<string, boolean>;
+  columnWidths: Record<string, number>;
+  fontSize: number; // 10-24; validated at application layer
+  rowOrder: string[];
+  lastUsedSortColumn: string | null;
+  lastUsedSortDirection: 'asc' | 'desc' | null;
+  updatedAt: string;
+}
+
+// GET /api/projects/[projectId]/competition-scraping/project-table-preferences
+// Returns the shared row (seeded from the user's UserTablePreferences on first
+// read); 404 only when no per-user prefs exist to seed from either.
+export type ReadProjectTablePreferencesResponse = ProjectTablePreferences;
+
+// PUT /api/projects/[projectId]/competition-scraping/project-table-preferences
+// — upsert. Full or partial payload (any subset of editable fields).
+export interface WriteProjectTablePreferencesRequest {
+  columnOrder?: string[];
+  columnVisibility?: Record<string, boolean>;
+  columnWidths?: Record<string, number>;
+  fontSize?: number; // 10-24
+  rowOrder?: string[];
+  lastUsedSortColumn?: string | null;
+  lastUsedSortDirection?: 'asc' | 'desc' | null;
+}
+
+export type WriteProjectTablePreferencesResponse = ProjectTablePreferences;
+
 // Type guard for the sort-direction field — validated at the trust boundary
 // before persisting to the DB (the column is a free String at the DB layer
 // per §A.3; this guard enforces the two-value invariant at the API edge).

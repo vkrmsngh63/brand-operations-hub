@@ -589,6 +589,30 @@ model UserTablePreferences {
   @@index([userId])
 }
 
+// W#2 P-54 Phase 3 (2026-06-01) — SHARED, per-Project layout for the main
+// /competition-scraping Competitor URLs table. Director directive: column
+// order, show/hide, widths, competitor row order, and font size are all
+// SHARED across everyone on the Project (one coherent layout), not per-user.
+// Keyed by projectId @unique (no userId). The per-user UserTablePreferences
+// above is left intact and still backs the per-user Reviews Analysis
+// By-Category / By-Type page layouts (categoryTableLayout / typeTableLayout);
+// this model takes over ONLY the main table's layout fields. On first read the
+// project row is seeded from the requesting user's existing UserTablePreferences
+// so a pre-existing layout is preserved (handler seed-on-read). Additive new
+// table → zero data loss to existing tables.
+model ProjectTablePreferences {
+  id                    String   @id @default(uuid())
+  projectId             String   @unique
+  columnOrder           Json     @default("[]") // [columnId] left-to-right arranged order
+  columnVisibility      Json     @default("{}") // { columnId: boolean }
+  columnWidths          Json     @default("{}") // { columnId: pixels }
+  fontSize              Int      @default(14) // 10-24 range; validated at application layer
+  rowOrder              Json     @default("[]") // [competitorUrlId] in arranged order
+  lastUsedSortColumn    String?
+  lastUsedSortDirection String? // "asc" | "desc" — validated at application layer
+  updatedAt             DateTime @updatedAt
+}
+
 // VocabularyEntry — platform-shared vocabularies per PLATFORM_REQUIREMENTS.md §8.4.
 // Project-scoped, NOT workflow-scoped. Any workflow on the same Project can READ + ADD.
 model VocabularyEntry {

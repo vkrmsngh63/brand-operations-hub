@@ -55,9 +55,14 @@ import {
   SortableContext,
   arrayMove,
   useSortable,
+  horizontalListSortingStrategy,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import {
+  applyColumnOrder,
+  moveColumnKey,
+} from '@/lib/competition-scraping/column-order';
 import { authFetch } from '@/lib/authFetch';
 import type {
   CompetitorUrl,
@@ -151,6 +156,14 @@ interface Props {
   // UserTablePreferences. Applied only when sortKey === 'manual';
   // otherwise the comparator-based sort wins.
   rowOrder?: string[];
+  // P-54 Phase 3 (2026-06-01) — shared per-Project column order ([columnId] in
+  // arranged left-to-right order). Applied via applyColumnOrder over the column
+  // registry; columns absent from the array fall back to registry order.
+  // Optional so callers that don't thread it still see the default order.
+  columnOrder?: string[];
+  // P-54 Phase 3 — called with the full new column-id order after a header
+  // drag-to-reorder drop. Parent persists it to the shared project layout.
+  onColumnReorder?: (nextOrder: string[]) => void;
   // P-46 Workstream 3 Session 3 — resize-drag end + drop callbacks. The
   // parent persists the value via the same debounced PUT lifecycle that
   // carries columnVisibility.
@@ -310,6 +323,8 @@ export function UrlTable({
   fontSize,
   onFontSizeChange,
   rowOrder,
+  columnOrder,
+  onColumnReorder,
   onColumnResize,
   onRowReorder,
   rows,
@@ -361,13 +376,24 @@ export function UrlTable({
   // P-46 Workstream 3 Session 1 — filter the column registry by the
   // visibility map. Missing keys default to visible (matches
   // ColumnVisibilityBar's isColumnVisible).
+  // P-54 Phase 3 — apply the shared arranged column order to the registry
+  // FIRST, then filter by visibility. Columns absent from columnOrder fall back
+  // to registry order (appended), so newly added columns never disappear.
+  const orderedColumns = useMemo(
+    () => applyColumnOrder(COLUMNS, columnOrder, (c) => c.key),
+    [columnOrder]
+  );
+  const columnKeySet = useMemo(
+    () => new Set<string>(COLUMNS.map((c) => c.key)),
+    []
+  );
   const visibleColumns = useMemo(() => {
-    if (!columnVisibility) return COLUMNS;
-    return COLUMNS.filter((c) => {
+    if (!columnVisibility) return orderedColumns;
+    return orderedColumns.filter((c) => {
       if (c.key in columnVisibility) return columnVisibility[c.key];
       return true;
     });
-  }, [columnVisibility]);
+  }, [orderedColumns, columnVisibility]);
 
   // P-54 Phase 1 (R1) — the rightmost VISIBLE data column. The table's
   // far-right edge (the trailing row-actions column) carries a resize grip
@@ -777,8 +803,31 @@ export function UrlTable({
   const handleDragEnd = (event: DragEndEvent): void => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-    const oldIndex = sorted.findIndex((r) => r.id === active.id);
-    const newIndex = sorted.findIndex((r) => r.id === over.id);
+    const activeId = String(active.id);
+    const overId = String(over.id);
+
+    // P-54 Phase 3 — the ONE DndContext serves two sortable axes: row reorder
+    // (vertical, ids = competitorUrlIds) and column reorder (horizontal, ids =
+    // column keys). Discriminate by whether the dragged id is a known column
+    // key, and only act when BOTH ends are the same kind (so a stray
+    // cross-axis collision is a no-op).
+    const activeIsColumn = columnKeySet.has(activeId);
+    const overIsColumn = columnKeySet.has(overId);
+    if (activeIsColumn || overIsColumn) {
+      if (!activeIsColumn || !overIsColumn) return;
+      // Move within the FULL arranged column order (incl. hidden columns) so
+      // the persisted order is complete and hidden columns keep their slots.
+      const nextColumnOrder = moveColumnKey(
+        orderedColumns.map((c) => c.key),
+        activeId,
+        overId
+      );
+      onColumnReorder?.(nextColumnOrder);
+      return;
+    }
+
+    const oldIndex = sorted.findIndex((r) => r.id === activeId);
+    const newIndex = sorted.findIndex((r) => r.id === overId);
     if (oldIndex < 0 || newIndex < 0) return;
     const newDisplayedOrder = arrayMove(sorted, oldIndex, newIndex).map(
       (r) => r.id
@@ -1016,108 +1065,64 @@ export function UrlTable({
                       style={{ ...dragHandleHeaderStyle, ...stickyHeaderStyle }}
                       aria-label="Reorder rows"
                     />
-                    {visibleColumns.map((col) => {
-                      const active = sortKey === col.key;
-                      const arrow = !active
-                        ? ''
-                        : sortDir === 'asc'
-                        ? ' ▲'
-                        : ' ▼';
-                      const filterActive =
-                        col.filterKey !== null &&
-                        isColumnFilterActive(filters, col.filterKey);
-                      return (
-                        <th
-                          key={col.key}
-                          aria-sort={
-                            active
-                              ? sortDir === 'asc'
-                                ? 'ascending'
-                                : 'descending'
-                              : 'none'
-                          }
-                          style={{
-                            textAlign: col.align ?? 'left',
-                            padding: '8px 10px',
-                            borderBottom: '1px solid #30363d',
-                            color:
-                              active || filterActive ? '#e6edf3' : '#8b949e',
-                            fontWeight: 600,
-                            whiteSpace: 'nowrap',
-                            /* 2026-05-24 fix-forward (Issue 6) — sticky to
-                               the top of the scroll container so the header
-                               stays visible as the user scrolls rows. The
-                               th must also remain position:relative for the
-                               absolute-positioned ColumnResizeHandle child;
-                               sticky and relative don't conflict — sticky
-                               IS a positioned mode for purposes of
-                               establishing a containing block for absolute
-                               children. */
-                            position: 'sticky',
-                            top: 0,
-                            zIndex: 3,
-                            background: '#0d1117',
-                          }}
-                        >
-                          <span
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '2px',
-                            }}
-                          >
-                            <button
-                              type="button"
-                              onClick={() => handleSortClick(col)}
-                              style={sortLabelStyle}
-                              aria-label={`Sort by ${col.label}`}
-                            >
-                              {col.label}
-                              <span style={{ color: '#1f6feb' }}>{arrow}</span>
-                            </button>
-                            {col.filterKey !== null ? (
-                              <FilterPopover
-                                isActive={filterActive}
-                                ariaLabel={`Filter ${col.label}`}
-                                renderBody={(close) =>
-                                  renderFilterBody(
-                                    col.filterKey as ColumnFilterKey,
-                                    filters,
-                                    onFiltersChange,
-                                    close,
-                                    distinct,
-                                    blanks
-                                  )
+                    {/* P-54 Phase 3 — column headers are a horizontal sortable
+                        list (drag a header's grip to reorder columns). Shares
+                        the one DndContext with the vertical row-reorder list;
+                        handleDragEnd discriminates by id. */}
+                    <SortableContext
+                      items={visibleColumns.map((c) => c.key)}
+                      strategy={horizontalListSortingStrategy}
+                    >
+                      {visibleColumns.map((col) => {
+                        const active = sortKey === col.key;
+                        const filterActive =
+                          col.filterKey !== null &&
+                          isColumnFilterActive(filters, col.filterKey);
+                        return (
+                          <SortableHeaderCell
+                            key={col.key}
+                            col={col}
+                            active={active}
+                            sortDir={sortDir}
+                            filterActive={filterActive}
+                            onSortClick={() => handleSortClick(col)}
+                            filterNode={
+                              col.filterKey !== null ? (
+                                <FilterPopover
+                                  isActive={filterActive}
+                                  ariaLabel={`Filter ${col.label}`}
+                                  renderBody={(close) =>
+                                    renderFilterBody(
+                                      col.filterKey as ColumnFilterKey,
+                                      filters,
+                                      onFiltersChange,
+                                      close,
+                                      distinct,
+                                      blanks
+                                    )
+                                  }
+                                />
+                              ) : null
+                            }
+                            resizeNode={
+                              <ColumnResizeHandle
+                                columnId={col.key}
+                                currentWidth={resolveColumnWidth(
+                                  effectiveColumnWidths,
+                                  tableColumnDefByKey(col.key)
+                                )}
+                                minWidth={MIN_COLUMN_WIDTH}
+                                maxWidth={MAX_COLUMN_WIDTH}
+                                tableHeight={tableHeight}
+                                onCommit={(width) =>
+                                  onColumnResize?.(col.key, width)
                                 }
                               />
-                            ) : null}
-                          </span>
-                          {/* P-46 Workstream 3 Session 3 — drag-to-resize handle
-                              on the right edge of every header cell. The handle
-                              sits absolutely so it doesn't disrupt the inline
-                              label/sort/filter row above.
-                              2026-05-24 fix-forward (Issue 1) — drag zone now
-                              extends from the header all the way down to the
-                              bottom of the table (height = tableHeight)
-                              instead of being clipped to the header cell.
-                              Director's directive: "the column width can be
-                              changed by dragging the column border from any
-                              row." Also draws a faint full-height vertical
-                              line so users SEE the column edges. */}
-                          <ColumnResizeHandle
-                            columnId={col.key}
-                            currentWidth={resolveColumnWidth(
-                              effectiveColumnWidths,
-                              tableColumnDefByKey(col.key)
-                            )}
-                            minWidth={MIN_COLUMN_WIDTH}
-                            maxWidth={MAX_COLUMN_WIDTH}
-                            tableHeight={tableHeight}
-                            onCommit={(width) => onColumnResize?.(col.key, width)}
+                            }
                           />
-                        </th>
-                      );
-                    })}
+                        );
+                      })}
+                    </SortableContext>
                     <th
                       style={{
                         textAlign: 'right',
@@ -1355,6 +1360,93 @@ const sortLabelStyle: React.CSSProperties = {
   padding: 0,
   userSelect: 'none',
 };
+
+// P-54 Phase 3 (2026-06-01) — a draggable column-header cell. Only the small
+// grip (⠿) carries the dnd-kit listeners, so click-to-sort, the filter
+// popover, and the resize grip all stay conflict-free. The cell stays
+// position:sticky so the header pins to the window on vertical scroll (Phase 2);
+// the dnd transform offsets it horizontally only while actively dragging.
+const columnDragGripStyle: React.CSSProperties = {
+  background: 'transparent',
+  border: 'none',
+  color: '#484f58',
+  cursor: 'grab',
+  padding: '0 2px',
+  fontSize: '11px',
+  lineHeight: 1,
+  touchAction: 'none',
+  userSelect: 'none',
+};
+
+function SortableHeaderCell({
+  col,
+  active,
+  sortDir,
+  filterActive,
+  onSortClick,
+  filterNode,
+  resizeNode,
+}: {
+  col: ColumnDef;
+  active: boolean;
+  sortDir: 'asc' | 'desc';
+  filterActive: boolean;
+  onSortClick: () => void;
+  filterNode: React.ReactNode;
+  resizeNode: React.ReactNode;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: col.key });
+  const arrow = !active ? '' : sortDir === 'asc' ? ' ▲' : ' ▼';
+  return (
+    <th
+      ref={setNodeRef}
+      aria-sort={
+        active ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'
+      }
+      style={{
+        textAlign: col.align ?? 'left',
+        padding: '8px 10px',
+        borderBottom: '1px solid #30363d',
+        color: active || filterActive ? '#e6edf3' : '#8b949e',
+        fontWeight: 600,
+        whiteSpace: 'nowrap',
+        position: 'sticky',
+        top: 0,
+        zIndex: isDragging ? 6 : 3,
+        background: '#0d1117',
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.7 : 1,
+      }}
+    >
+      <span
+        style={{ display: 'inline-flex', alignItems: 'center', gap: '2px' }}
+      >
+        <button
+          type="button"
+          aria-label={`Drag to reorder ${col.label} column`}
+          {...attributes}
+          {...listeners}
+          style={columnDragGripStyle}
+        >
+          ⠿
+        </button>
+        <button
+          type="button"
+          onClick={onSortClick}
+          style={sortLabelStyle}
+          aria-label={`Sort by ${col.label}`}
+        >
+          {col.label}
+          <span style={{ color: '#1f6feb' }}>{arrow}</span>
+        </button>
+        {filterNode}
+      </span>
+      {resizeNode}
+    </th>
+  );
+}
 
 const clearAllButtonStyle: React.CSSProperties = {
   background: 'transparent',

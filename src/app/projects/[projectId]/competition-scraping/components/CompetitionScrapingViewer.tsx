@@ -50,10 +50,10 @@ import {
   type CompetitorUrl,
   type ListCompetitorUrlsResponse,
   type Platform,
-  type ReadUserTablePreferencesResponse,
+  type ReadProjectTablePreferencesResponse,
   type UpdateCompetitorUrlRequest,
   type UpdateCompetitorUrlResponse,
-  type WriteUserTablePreferencesRequest,
+  type WriteProjectTablePreferencesRequest,
 } from '@/lib/shared-types/competition-scraping';
 import { ColumnVisibilityBar } from './ColumnVisibilityBar';
 import {
@@ -186,13 +186,17 @@ export function CompetitionScrapingViewer({ projectId }: Props) {
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
   const [fontSize, setFontSize] = useState<number>(FONT_SIZE_DEFAULT);
   const [rowOrder, setRowOrder] = useState<string[]>([]);
+  // P-54 Phase 3 (2026-06-01) — shared per-Project column order ([columnId] in
+  // arranged left-to-right order). Loaded from + saved to the shared
+  // project-table-preferences endpoint along with the other layout fields.
+  const [columnOrder, setColumnOrder] = useState<string[]>([]);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const res = await authFetch(
-          `/api/projects/${projectId}/competition-scraping/table-preferences`
+          `/api/projects/${projectId}/competition-scraping/project-table-preferences`
         );
         if (cancelled) return;
         if (res.status === 404) {
@@ -200,7 +204,7 @@ export function CompetitionScrapingViewer({ projectId }: Props) {
           return;
         }
         if (!res.ok) return; // Silent fallback; defaults render fine.
-        const data = (await res.json()) as ReadUserTablePreferencesResponse;
+        const data = (await res.json()) as ReadProjectTablePreferencesResponse;
         if (cancelled) return;
         setColumnVisibility(data.columnVisibility ?? {});
         setColumnWidths(data.columnWidths ?? {});
@@ -208,6 +212,7 @@ export function CompetitionScrapingViewer({ projectId }: Props) {
           typeof data.fontSize === 'number' ? data.fontSize : FONT_SIZE_DEFAULT
         );
         setRowOrder(Array.isArray(data.rowOrder) ? data.rowOrder : []);
+        setColumnOrder(Array.isArray(data.columnOrder) ? data.columnOrder : []);
       } catch {
         // Network error — silently fall back to defaults. Failed prefs
         // shouldn't prevent the table from rendering.
@@ -230,10 +235,10 @@ export function CompetitionScrapingViewer({ projectId }: Props) {
   }, []);
 
   const flushPrefsPut = useCallback(
-    async (body: WriteUserTablePreferencesRequest) => {
+    async (body: WriteProjectTablePreferencesRequest) => {
       try {
         await authFetch(
-          `/api/projects/${projectId}/competition-scraping/table-preferences`,
+          `/api/projects/${projectId}/competition-scraping/project-table-preferences`,
           {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
@@ -307,6 +312,21 @@ export function CompetitionScrapingViewer({ projectId }: Props) {
       if (prefsTimerRef.current) clearTimeout(prefsTimerRef.current);
       prefsTimerRef.current = setTimeout(() => {
         void flushPrefsPut({ rowOrder: nextOrder });
+      }, PREFS_DEBOUNCE_MS);
+    },
+    [flushPrefsPut]
+  );
+
+  // P-54 Phase 3 (2026-06-01) — column drag-to-reorder hands a fresh ordered
+  // column-id array on every header drop. Optimistic local update + debounced
+  // PUT to the shared project layout (so everyone on the Project sees the same
+  // column order).
+  const handleColumnReorder = useCallback(
+    (nextOrder: string[]) => {
+      setColumnOrder(nextOrder);
+      if (prefsTimerRef.current) clearTimeout(prefsTimerRef.current);
+      prefsTimerRef.current = setTimeout(() => {
+        void flushPrefsPut({ columnOrder: nextOrder });
       }, PREFS_DEBOUNCE_MS);
     },
     [flushPrefsPut]
@@ -550,6 +570,8 @@ export function CompetitionScrapingViewer({ projectId }: Props) {
             fontSize={fontSize}
             onFontSizeChange={handleFontSizeChange}
             rowOrder={rowOrder}
+            columnOrder={columnOrder}
+            onColumnReorder={handleColumnReorder}
             onColumnResize={handleColumnResize}
             onRowReorder={handleRowReorder}
             rows={visibleUrls}
