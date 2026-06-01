@@ -1094,6 +1094,27 @@ export interface CategoryTableLayout {
   hiddenCategoryKeys: string[];
 }
 
+// ─── TypeTableLayout (P-49 W5 Type page Sessions 4-5, 2026-05-31) ─────────
+// Per-user, per-Project "memory" for the Reviews Analysis By Competitor Type
+// page ONLY — the parallel of CategoryTableLayout with the grouping key
+// swapped from category to type. Stored in the additive nullable
+// UserTablePreferences.typeTableLayout Json column. Scoped to THAT page only.
+export interface TypeTableLayout {
+  // Ordered type keys (normalized CompetitorUrl.type values). Keys absent from
+  // the list fall back to alphabetical after the listed ones; the "(Untyped)"
+  // group is always forced last regardless.
+  typeOrder: string[];
+  // Flat ordered competitor-url-id list. A competitor only reorders WITHIN its
+  // own type, so a single flat ranking suffices (the grouping helper sorts
+  // each type's bucket by this list).
+  rowOrderByUrlId: string[];
+  // Competitor url ids hidden on this page (hide-with-restore; never deletes
+  // data anywhere else).
+  hiddenUrlIds: string[];
+  // Type keys hidden on this page (hides the whole type block).
+  hiddenTypeKeys: string[];
+}
+
 // ─── UserTablePreferences (P-46 Workstream 1, 2026-05-24) ──────────────
 // Wire shape for per-user-per-project Competition Data table preferences
 // per docs/COMPETITION_DATA_V2_DESIGN.md §A.3. Cross-device sync via
@@ -1117,6 +1138,9 @@ export interface UserTablePreferences {
   // Category-page-only layout memory (drag order + hidden rows). null when the
   // user has never customized the Category page. See CategoryTableLayout.
   categoryTableLayout: CategoryTableLayout | null;
+  // Type-page-only layout memory (drag order + hidden rows). null when the
+  // user has never customized the Type page. See TypeTableLayout.
+  typeTableLayout: TypeTableLayout | null;
   updatedAt: string;
 }
 
@@ -1140,6 +1164,9 @@ export interface WriteUserTablePreferencesRequest {
   // Category-page-only layout memory. Pass the whole object to replace it;
   // omit to leave it untouched. null is a valid value (clears the memory).
   categoryTableLayout?: CategoryTableLayout | null;
+  // Type-page-only layout memory. Pass the whole object to replace it; omit to
+  // leave it untouched. null is a valid value (clears the memory).
+  typeTableLayout?: TypeTableLayout | null;
 }
 
 export type WriteUserTablePreferencesResponse = UserTablePreferences;

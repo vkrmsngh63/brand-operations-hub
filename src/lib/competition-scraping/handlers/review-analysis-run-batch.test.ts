@@ -246,17 +246,17 @@ test('SUPPORTED_FLOWS contains all 7 flows from §B 2026-05-27', () => {
   assert.ok(SUPPORTED_FLOWS.includes('per-type-nonbulleted'));
 });
 
-test('SHIPPED_FLOWS contains per-review + per-competitor + per-category flows (Category Session 2)', () => {
-  // Category page Session 2 (2026-05-30-b) shipped both per-category flows.
-  assert.equal(SHIPPED_FLOWS.size, 5);
+test('SHIPPED_FLOWS contains all 7 flows incl. per-category + per-type (Type page Sessions 4-5)', () => {
+  // P-49 W5 Type page Sessions 4-5 (2026-06-01) shipped both per-type flows;
+  // every recognized flow is now shipped.
+  assert.equal(SHIPPED_FLOWS.size, 7);
   assert.ok(SHIPPED_FLOWS.has('per-review-summarize'));
   assert.ok(SHIPPED_FLOWS.has('per-competitor-bulleted'));
   assert.ok(SHIPPED_FLOWS.has('per-competitor-nonbulleted'));
   assert.ok(SHIPPED_FLOWS.has('per-category-bulleted'));
   assert.ok(SHIPPED_FLOWS.has('per-category-nonbulleted'));
-  // The per-TYPE flows land in the Type page sessions (4-5).
-  assert.equal(SHIPPED_FLOWS.has('per-type-bulleted'), false);
-  assert.equal(SHIPPED_FLOWS.has('per-type-nonbulleted'), false);
+  assert.ok(SHIPPED_FLOWS.has('per-type-bulleted'));
+  assert.ok(SHIPPED_FLOWS.has('per-type-nonbulleted'));
 });
 
 test('isReviewAnalysisFlow narrows known values', () => {
@@ -349,21 +349,23 @@ test('POST 400 when flow is missing or unknown', async () => {
   assert.equal(r2.status, 400);
 });
 
-test('POST 400 when flow is recognized but not yet shipped', async () => {
+test('POST per-type-bulleted is shipped (passes the shipped gate)', async () => {
   const deps = makeDeps();
   const { POST } = makeReviewAnalysisRunBatchHandlers(deps);
-  // per-type-bulleted is still unshipped (lands in the Type page sessions);
-  // use it as the unshipped tripwire.
+  // P-49 W5 Type page Sessions 4-5 (2026-06-01) shipped the per-type flows, so
+  // every recognized flow is now shipped — there is no "not yet shipped" flow.
+  // per-type-bulleted now passes the SHIPPED_FLOWS gate and reaches the
+  // group-key validation (it 400s on the MISSING key, not on "not yet shipped").
   const r = await POST(
     makeRequest({
       flow: 'per-type-bulleted',
-      urlId: 'url-1',
-      reviewIds: ['r1'],
+      // no typeKey/categoryKey + no urlIds → group-key validation 400
     }),
     makeCtx('proj-1')
   );
   assert.equal(r.status, 400);
-  assert.match(JSON.stringify(r.body), /not yet shipped/);
+  assert.doesNotMatch(JSON.stringify(r.body), /not yet shipped/);
+  assert.match(JSON.stringify(r.body), /typeKey|categoryKey/);
 });
 
 test('POST 400 when urlId is missing', async () => {

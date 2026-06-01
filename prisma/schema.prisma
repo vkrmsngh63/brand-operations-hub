@@ -577,6 +577,12 @@ model UserTablePreferences {
   // Reviews Analysis By Competitor Type page gets its own typeTableLayout
   // column when it's built (Sessions 4-5).
   categoryTableLayout   Json?
+  // W#2 P-49 W5 Type page Sessions 4-5 (2026-05-31). The parallel per-user,
+  // per-Project "memory" for the Reviews Analysis By Competitor Type page
+  // ONLY — same shape as categoryTableLayout with the grouping key swapped:
+  // { typeOrder: string[], rowOrderByUrlId: string[],
+  //   hiddenUrlIds: string[], hiddenTypeKeys: string[] }. Additive + nullable.
+  typeTableLayout       Json?
   updatedAt             DateTime @updatedAt
 
   @@unique([userId, projectId])

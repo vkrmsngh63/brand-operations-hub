@@ -6,9 +6,10 @@
 // Route: GET /api/projects/[projectId]/competition-scraping/review-analysis
 // Returns: { items: ReviewAnalysisListEntry[] }
 //
-// Scope: PER_REVIEW + PER_PRODUCT rows only (the two levels rendered
-// on the Reviews Analysis Table page). PER_CATEGORY / PER_TYPE /
-// PER_PROJECT ship on different pages and have their own loaders.
+// Scope: PER_REVIEW + PER_PRODUCT (Reviews Analysis Table page) +
+// PER_CATEGORY (Category page) + PER_TYPE (Type page). All four levels
+// are returned so each page hydrates its own AI summaries on load;
+// PER_PROJECT ships elsewhere with its own loader.
 //
 // Mirrors the review-analysis-update handler's DI-seam factory pattern
 // + auth shape. Handler logic lives here; the production route shim
@@ -96,7 +97,7 @@ export function makeReviewAnalysisListHandlers(
         prisma.reviewAnalysis.findMany({
           where: {
             projectId,
-            level: { in: ['PER_REVIEW', 'PER_PRODUCT', 'PER_CATEGORY'] },
+            level: { in: ['PER_REVIEW', 'PER_PRODUCT', 'PER_CATEGORY', 'PER_TYPE'] },
           },
           select: {
             id: true,

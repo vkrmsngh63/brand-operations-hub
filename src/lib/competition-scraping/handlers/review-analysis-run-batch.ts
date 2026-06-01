@@ -78,6 +78,14 @@ import {
   PER_CATEGORY_NONBULLETED_PROMPT_VERSION,
   PER_CATEGORY_NONBULLETED_SYSTEM_PROMPT,
   buildPerCategoryNonBulletedUserMessage,
+  // Per-TYPE flows (Type page Sessions 4-5) — reuse the per-category
+  // aggregation + B-label parsing; only the prompts differ (type wording).
+  PER_TYPE_BULLETED_PROMPT_VERSION,
+  PER_TYPE_BULLETED_SYSTEM_PROMPT,
+  buildPerTypeBulletedUserMessage,
+  PER_TYPE_NONBULLETED_PROMPT_VERSION,
+  PER_TYPE_NONBULLETED_SYSTEM_PROMPT,
+  buildPerTypeNonBulletedUserMessage,
 } from '../review-analysis/prompts.ts';
 import {
   collectCategoryInputBullets,
@@ -128,6 +136,10 @@ export const SHIPPED_FLOWS = new Set<ReviewAnalysisFlow>([
   // P-49 W5 Category page Session 2 (2026-05-30-b).
   'per-category-bulleted',
   'per-category-nonbulleted',
+  // P-49 W5 Type page Sessions 4-5 (2026-05-31). Same per-group branch,
+  // parameterized by grouping level (PER_TYPE) + the type-worded prompts.
+  'per-type-bulleted',
+  'per-type-nonbulleted',
 ]);
 
 export function isReviewAnalysisFlow(v: unknown): v is ReviewAnalysisFlow {
@@ -214,7 +226,7 @@ export type CategoryQueryPrisma = {
     findMany(args: {
       where: {
         projectId: string;
-        level: 'PER_CATEGORY';
+        level: 'PER_CATEGORY' | 'PER_TYPE';
         typeFilter: string;
         reviewsHash: { in: string[] };
       };
@@ -364,7 +376,10 @@ export interface PerCompetitorNonBulletedResponseBody {
 // AND resolves the reviewIds into the NEW "Source Reviews" column. `summary`
 // is the flattened text for the Column-12 cell + Edit affordance.
 export interface PerCategoryBulletedResponseBody {
-  flow: 'per-category-bulleted';
+  // Generalized to also carry the parallel per-TYPE bulleted flow (Type page
+  // Sessions 4-5) — same wire shape; `categoryKey` carries the group key
+  // (category name OR type name) and the browser keys off `flow`.
+  flow: 'per-category-bulleted' | 'per-type-bulleted';
   categoryKey: string;
   analysisId: string;
   summary: string;
@@ -378,7 +393,8 @@ export interface PerCategoryBulletedResponseBody {
 // row. The prose paints Column 13 + appends to each in-category competitor's
 // "Overall Analysis — Captured Reviews" box (handler write-back).
 export interface PerCategoryNonBulletedResponseBody {
-  flow: 'per-category-nonbulleted';
+  // Generalized to also carry the parallel per-TYPE non-bulleted flow.
+  flow: 'per-category-nonbulleted' | 'per-type-nonbulleted';
   categoryKey: string;
   analysisId: string;
   summary: string;
@@ -502,7 +518,8 @@ export function makeReviewAnalysisRunBatchHandlers(
       // P-49 W5 Category page Session 2 — the per-category flows operate on a
       // whole category (a set of competitor urls), not a single urlId.
       categoryKey?: unknown; // the category label (typeFilter); '(Uncategorized)' etc.
-      urlIds?: unknown; // the competitor urls in this category (input + write-back targets)
+      typeKey?: unknown; // the type label — per-type flows' group key (alias of categoryKey)
+      urlIds?: unknown; // the competitor urls in this group (input + write-back targets)
     };
 
     if (!isReviewAnalysisFlow(body.flow)) {
@@ -531,13 +548,60 @@ export function makeReviewAnalysisRunBatchHandlers(
     // category bulleted summary as prose stored ONLY in the Category page's own
     // cell (the per-competitor notes-box write-back was removed at director
     // Phase 4 2026-05-30-d).
-    if (flow === 'per-category-bulleted' || flow === 'per-category-nonbulleted') {
-      const categoryKey =
-        typeof body.categoryKey === 'string' ? body.categoryKey.trim() : '';
+    if (
+      flow === 'per-category-bulleted' ||
+      flow === 'per-category-nonbulleted' ||
+      flow === 'per-type-bulleted' ||
+      flow === 'per-type-nonbulleted'
+    ) {
+      // Per-TYPE flows reuse this whole branch (Type page Sessions 4-5). The
+      // ONLY differences are the stored grouping `level` + the type-worded
+      // prompts; the aggregation, cache, persistence + Source Reviews tracing
+      // are identical. `categoryKey` is the generic group-key wire field for
+      // both (it carries the category name OR the type name).
+      const isTypeFlow =
+        flow === 'per-type-bulleted' || flow === 'per-type-nonbulleted';
+      const isBulletedFlow =
+        flow === 'per-category-bulleted' || flow === 'per-type-bulleted';
+      const groupLevel: 'PER_CATEGORY' | 'PER_TYPE' = isTypeFlow
+        ? 'PER_TYPE'
+        : 'PER_CATEGORY';
+      const bulletedPromptVersion = isTypeFlow
+        ? PER_TYPE_BULLETED_PROMPT_VERSION
+        : PER_CATEGORY_BULLETED_PROMPT_VERSION;
+      const bulletedSystemPrompt = isTypeFlow
+        ? PER_TYPE_BULLETED_SYSTEM_PROMPT
+        : PER_CATEGORY_BULLETED_SYSTEM_PROMPT;
+      const nonBulletedPromptVersion = isTypeFlow
+        ? PER_TYPE_NONBULLETED_PROMPT_VERSION
+        : PER_CATEGORY_NONBULLETED_PROMPT_VERSION;
+      const nonBulletedSystemPrompt = isTypeFlow
+        ? PER_TYPE_NONBULLETED_SYSTEM_PROMPT
+        : PER_CATEGORY_NONBULLETED_SYSTEM_PROMPT;
+      // Typed echo-back flow literals for the response bodies (the `flow`
+      // variable stays the full 7-flow union, so TS can't narrow it here).
+      const bulletedFlow: 'per-category-bulleted' | 'per-type-bulleted' =
+        isTypeFlow ? 'per-type-bulleted' : 'per-category-bulleted';
+      const nonBulletedFlow:
+        | 'per-category-nonbulleted'
+        | 'per-type-nonbulleted' = isTypeFlow
+        ? 'per-type-nonbulleted'
+        : 'per-category-nonbulleted';
+
+      // Generic group key — per-category flows send `categoryKey`, per-type
+      // flows send `typeKey` (alias); both land in the same `typeFilter`
+      // column, isolated by the `level` (PER_CATEGORY vs PER_TYPE).
+      const rawGroupKey =
+        typeof body.categoryKey === 'string'
+          ? body.categoryKey
+          : typeof body.typeKey === 'string'
+            ? body.typeKey
+            : '';
+      const categoryKey = rawGroupKey.trim();
       if (!categoryKey) {
         return {
           status: 400,
-          body: { error: 'categoryKey is required for per-category flows' },
+          body: { error: 'categoryKey/typeKey is required for per-category/per-type flows' },
         };
       }
       const catModelVersion =
@@ -619,8 +683,8 @@ export function makeReviewAnalysisRunBatchHandlers(
         estimatedCostUsd: 0,
       };
 
-      // ── Category Comprehensive (bulleted) — dedup + provenance ──────────
-      if (flow === 'per-category-bulleted') {
+      // ── Category/Type Comprehensive (bulleted) — dedup + provenance ─────
+      if (isBulletedFlow) {
         // Load the per-competitor PER_PRODUCT rows for these urls; pick each
         // url's latest BULLETED (structured) row, excluding the non-bulleted
         // prose row, via the shared selector.
@@ -662,7 +726,7 @@ export function makeReviewAnalysisRunBatchHandlers(
           };
         }
 
-        const catCacheKeyVersion = `${catModelVersion}|${PER_CATEGORY_BULLETED_PROMPT_VERSION}`;
+        const catCacheKeyVersion = `${catModelVersion}|${bulletedPromptVersion}`;
         const catHash = createHash('sha256')
           .update(
             `${categoryKey}\n${canonicalizeCategoryInputBullets(inputBullets)}\n|${catCacheKeyVersion}`
@@ -675,7 +739,7 @@ export function makeReviewAnalysisRunBatchHandlers(
             catPrisma.reviewAnalysis.findMany({
               where: {
                 projectId,
-                level: 'PER_CATEGORY',
+                level: groupLevel,
                 typeFilter: categoryKey,
                 reviewsHash: { in: [catHash] },
               },
@@ -698,7 +762,7 @@ export function makeReviewAnalysisRunBatchHandlers(
           .find((e): e is { id: string; summary: string; categories: PerCompetitorStructuredCategory[] } => !!e.summary);
         if (catCachedHit) {
           const cachedResponse: PerCategoryBulletedResponseBody = {
-            flow: 'per-category-bulleted',
+            flow: bulletedFlow,
             categoryKey,
             analysisId: catCachedHit.id,
             summary: catCachedHit.summary,
@@ -709,16 +773,21 @@ export function makeReviewAnalysisRunBatchHandlers(
           return { status: 200, body: cachedResponse };
         }
 
-        const userText = buildPerCategoryBulletedUserMessage({
-          categoryName: categoryKey,
-          inputBullets,
-        });
+        const userText = isTypeFlow
+          ? buildPerTypeBulletedUserMessage({
+              typeName: categoryKey,
+              inputBullets,
+            })
+          : buildPerCategoryBulletedUserMessage({
+              categoryName: categoryKey,
+              inputBullets,
+            });
         let estInputTokens = 0;
         try {
           estInputTokens = await countMessageTokens({
             client: anthropicClient,
             model: catModelVersion,
-            system: PER_CATEGORY_BULLETED_SYSTEM_PROMPT,
+            system: bulletedSystemPrompt,
             messages: [{ role: 'user', content: userText }],
           });
         } catch (error) {
@@ -733,7 +802,7 @@ export function makeReviewAnalysisRunBatchHandlers(
           resp = await anthropicClient.messages.create({
             model: catModelVersion,
             max_tokens: PER_BATCH_MAX_OUTPUT_TOKENS,
-            system: PER_CATEGORY_BULLETED_SYSTEM_PROMPT,
+            system: bulletedSystemPrompt,
             messages: [{ role: 'user', content: userText }],
           });
         } catch (error) {
@@ -775,7 +844,7 @@ export function makeReviewAnalysisRunBatchHandlers(
           const created = await withRetry(() =>
             prisma.reviewAnalysis.create({
               data: {
-                level: 'PER_CATEGORY',
+                level: groupLevel,
                 urlId: null,
                 projectId,
                 typeFilter: categoryKey,
@@ -805,7 +874,7 @@ export function makeReviewAnalysisRunBatchHandlers(
           cacheReadInputTokens: resp.usage.cache_read_input_tokens ?? 0,
         });
         const freshResponse: PerCategoryBulletedResponseBody = {
-          flow: 'per-category-bulleted',
+          flow: bulletedFlow,
           categoryKey,
           analysisId: persistedId ?? '',
           summary,
@@ -837,7 +906,7 @@ export function makeReviewAnalysisRunBatchHandlers(
           },
         };
       }
-      const nbCacheKeyVersion = `${catModelVersion}|${PER_CATEGORY_NONBULLETED_PROMPT_VERSION}`;
+      const nbCacheKeyVersion = `${catModelVersion}|${nonBulletedPromptVersion}`;
       const nbHash = createHash('sha256')
         .update(`${categoryKey}\n${catBulletedSummary}\n|${nbCacheKeyVersion}`)
         .digest('hex');
@@ -848,7 +917,7 @@ export function makeReviewAnalysisRunBatchHandlers(
           catPrisma.reviewAnalysis.findMany({
             where: {
               projectId,
-              level: 'PER_CATEGORY',
+              level: groupLevel,
               typeFilter: categoryKey,
               reviewsHash: { in: [nbHash] },
             },
@@ -866,7 +935,7 @@ export function makeReviewAnalysisRunBatchHandlers(
         .find((e): e is { id: string; summary: string } => !!e.summary);
       if (nbCachedHit) {
         const cachedResponse: PerCategoryNonBulletedResponseBody = {
-          flow: 'per-category-nonbulleted',
+          flow: nonBulletedFlow,
           categoryKey,
           analysisId: nbCachedHit.id,
           summary: nbCachedHit.summary,
@@ -876,16 +945,21 @@ export function makeReviewAnalysisRunBatchHandlers(
         return { status: 200, body: cachedResponse };
       }
 
-      const nbUserText = buildPerCategoryNonBulletedUserMessage({
-        categoryName: categoryKey,
-        bulletedSummary: catBulletedSummary,
-      });
+      const nbUserText = isTypeFlow
+        ? buildPerTypeNonBulletedUserMessage({
+            typeName: categoryKey,
+            bulletedSummary: catBulletedSummary,
+          })
+        : buildPerCategoryNonBulletedUserMessage({
+            categoryName: categoryKey,
+            bulletedSummary: catBulletedSummary,
+          });
       let nbEstInputTokens = 0;
       try {
         nbEstInputTokens = await countMessageTokens({
           client: anthropicClient,
           model: catModelVersion,
-          system: PER_CATEGORY_NONBULLETED_SYSTEM_PROMPT,
+          system: nonBulletedSystemPrompt,
           messages: [{ role: 'user', content: nbUserText }],
         });
       } catch (error) {
@@ -900,7 +974,7 @@ export function makeReviewAnalysisRunBatchHandlers(
         nbResp = await anthropicClient.messages.create({
           model: catModelVersion,
           max_tokens: PER_BATCH_MAX_OUTPUT_TOKENS,
-          system: PER_CATEGORY_NONBULLETED_SYSTEM_PROMPT,
+          system: nonBulletedSystemPrompt,
           messages: [{ role: 'user', content: nbUserText }],
         });
       } catch (error) {
@@ -929,13 +1003,13 @@ export function makeReviewAnalysisRunBatchHandlers(
         const created = await withRetry(() =>
           prisma.reviewAnalysis.create({
             data: {
-              level: 'PER_CATEGORY',
+              level: groupLevel,
               urlId: null,
               projectId,
               typeFilter: categoryKey,
               analysisJson: {
                 summary: nbProse,
-                flow: 'per-category-nonbulleted',
+                flow,
               } as unknown as Prisma.InputJsonValue,
               reviewsHash: nbHash,
               modelVersion: catModelVersion,
@@ -968,7 +1042,7 @@ export function makeReviewAnalysisRunBatchHandlers(
         cacheReadInputTokens: nbResp.usage.cache_read_input_tokens ?? 0,
       });
       const nbFreshResponse: PerCategoryNonBulletedResponseBody = {
-        flow: 'per-category-nonbulleted',
+        flow: nonBulletedFlow,
         categoryKey,
         analysisId: nbPersistedId ?? '',
         summary: nbProse,

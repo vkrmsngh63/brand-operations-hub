@@ -18,6 +18,7 @@ import { Prisma } from '@prisma/client';
 
 import type {
   CategoryTableLayout,
+  TypeTableLayout,
   UserTablePreferences,
   WriteUserTablePreferencesRequest,
 } from '../../shared-types/competition-scraping.ts';
@@ -26,6 +27,10 @@ import {
   coerceCategoryTableLayout,
   validateCategoryTableLayout,
 } from '../category-table-layout.ts';
+import {
+  coerceTypeTableLayout,
+  validateTypeTableLayout,
+} from '../type-table-layout.ts';
 
 import type { HandlerResult, RequestLike } from './shared.ts';
 
@@ -48,6 +53,7 @@ export type UserTablePreferencesRow = {
   lastUsedSortColumn: string | null;
   lastUsedSortDirection: string | null;
   categoryTableLayout: Prisma.JsonValue | null;
+  typeTableLayout: Prisma.JsonValue | null;
   updatedAt: Date;
 };
 
@@ -108,6 +114,7 @@ export function toWireShape(row: UserTablePreferencesRow): UserTablePreferences 
       ? row.lastUsedSortDirection
       : null,
     categoryTableLayout: coerceCategoryTableLayout(row.categoryTableLayout),
+    typeTableLayout: coerceTypeTableLayout(row.typeTableLayout),
     updatedAt: row.updatedAt.toISOString(),
   };
 }
@@ -157,6 +164,7 @@ export type ValidatedPatch = {
   lastUsedSortColumn?: string | null;
   lastUsedSortDirection?: 'asc' | 'desc' | null;
   categoryTableLayout?: CategoryTableLayout | null;
+  typeTableLayout?: TypeTableLayout | null;
 };
 
 export type ValidationResult =
@@ -270,6 +278,14 @@ export function extractTablePreferencesPatch(body: unknown): ValidationResult {
     patch.categoryTableLayout = result.value;
   }
 
+  if ('typeTableLayout' in b) {
+    const result = validateTypeTableLayout(b.typeTableLayout);
+    if (!result.ok) {
+      return { ok: false, error: result.error };
+    }
+    patch.typeTableLayout = result.value;
+  }
+
   return { ok: true, patch };
 }
 
@@ -358,6 +374,14 @@ export function makeUserTablePreferencesHandlers(
           ? Prisma.DbNull
           : (patch.categoryTableLayout as unknown as Prisma.InputJsonValue);
     }
+    if (patch.typeTableLayout !== undefined) {
+      // Nullable Json column: a null patch clears the memory back to SQL NULL
+      // (Prisma.DbNull); an object replaces it wholesale.
+      update.typeTableLayout =
+        patch.typeTableLayout === null
+          ? Prisma.DbNull
+          : (patch.typeTableLayout as unknown as Prisma.InputJsonValue);
+    }
 
     const create: Prisma.UserTablePreferencesUncheckedCreateInput = {
       userId,
@@ -372,6 +396,10 @@ export function makeUserTablePreferencesHandlers(
         patch.categoryTableLayout == null
           ? Prisma.DbNull
           : (patch.categoryTableLayout as unknown as Prisma.InputJsonValue),
+      typeTableLayout:
+        patch.typeTableLayout == null
+          ? Prisma.DbNull
+          : (patch.typeTableLayout as unknown as Prisma.InputJsonValue),
     };
 
     try {

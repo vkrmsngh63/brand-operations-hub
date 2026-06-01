@@ -33,6 +33,7 @@ function makeRow(
     lastUsedSortColumn: null,
     lastUsedSortDirection: null,
     categoryTableLayout: null,
+    typeTableLayout: null,
     updatedAt: FROZEN_DATE,
     ...overrides,
   };
@@ -307,6 +308,71 @@ test('extract: categoryTableLayout bad shape → error', () => {
   );
 });
 
+// ─── typeTableLayout (P-49 W5 Type page Sessions 4-5) ──────────────────
+
+test('extract: typeTableLayout valid object normalizes', () => {
+  const result = extractTablePreferencesPatch({
+    typeTableLayout: {
+      typeOrder: ['Fixed blade'],
+      rowOrderByUrlId: ['u1', 'u2'],
+      hiddenUrlIds: ['u3'],
+      hiddenTypeKeys: ['Old'],
+    },
+  });
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    assert.deepEqual(result.patch.typeTableLayout, {
+      typeOrder: ['Fixed blade'],
+      rowOrderByUrlId: ['u1', 'u2'],
+      hiddenUrlIds: ['u3'],
+      hiddenTypeKeys: ['Old'],
+    });
+  }
+});
+
+test('extract: typeTableLayout null clears the memory', () => {
+  const result = extractTablePreferencesPatch({ typeTableLayout: null });
+  assert.equal(result.ok, true);
+  if (result.ok) assert.equal(result.patch.typeTableLayout, null);
+});
+
+test('extract: typeTableLayout bad shape → error', () => {
+  assert.equal(
+    extractTablePreferencesPatch({ typeTableLayout: 'nope' }).ok,
+    false
+  );
+  assert.equal(
+    extractTablePreferencesPatch({ typeTableLayout: { typeOrder: 'A' } }).ok,
+    false
+  );
+  assert.equal(
+    extractTablePreferencesPatch({ typeTableLayout: { hiddenUrlIds: ['ok', 9] } }).ok,
+    false
+  );
+});
+
+test('extract: categoryTableLayout + typeTableLayout coexist independently', () => {
+  const result = extractTablePreferencesPatch({
+    categoryTableLayout: {
+      categoryOrder: ['Knives'],
+      rowOrderByUrlId: [],
+      hiddenUrlIds: [],
+      hiddenCategoryKeys: [],
+    },
+    typeTableLayout: {
+      typeOrder: ['Fixed blade'],
+      rowOrderByUrlId: [],
+      hiddenUrlIds: [],
+      hiddenTypeKeys: [],
+    },
+  });
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    assert.deepEqual(result.patch.categoryTableLayout?.categoryOrder, ['Knives']);
+    assert.deepEqual(result.patch.typeTableLayout?.typeOrder, ['Fixed blade']);
+  }
+});
+
 // ─── toWireShape ──────────────────────────────────────────────────────
 
 test('toWireShape: coerces JsonValue columns to typed shapes', () => {
@@ -341,6 +407,26 @@ test('toWireShape: categoryTableLayout null → null; object coerced', () => {
     rowOrderByUrlId: ['u1'],
     hiddenUrlIds: [],
     hiddenCategoryKeys: ['Old'],
+  });
+});
+
+test('toWireShape: typeTableLayout null → null; object coerced', () => {
+  assert.equal(toWireShape(makeRow({ typeTableLayout: null })).typeTableLayout, null);
+  const wire = toWireShape(
+    makeRow({
+      typeTableLayout: {
+        typeOrder: ['Fixed blade'],
+        rowOrderByUrlId: ['u1'],
+        hiddenUrlIds: [],
+        hiddenTypeKeys: ['Old'],
+      } as unknown as import('@prisma/client').Prisma.JsonValue,
+    })
+  );
+  assert.deepEqual(wire.typeTableLayout, {
+    typeOrder: ['Fixed blade'],
+    rowOrderByUrlId: ['u1'],
+    hiddenUrlIds: [],
+    hiddenTypeKeys: ['Old'],
   });
 });
 

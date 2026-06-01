@@ -779,3 +779,127 @@ export function buildPerCategoryNonBulletedUserMessage({
     `${bulletedSummary.trim()}\n`
   );
 }
+
+// ────────────────────────────────────────────────────────────────────
+// Per-TYPE Comprehensive (bulleted) — W#2 P-49 W5 Type page Sessions 4-5
+// (2026-05-31). The Type-page mirror of the PER_CATEGORY bulleted dedup flow:
+// merge the per-competitor BULLETED critique bullets of every competitor that
+// shares the SAME Type into one deduplicated, theme-grouped list of the
+// Type's common weaknesses. Structurally identical to PER_CATEGORY (same
+// B-label citation contract → the handler reuses collectCategoryInputBullets /
+// validatePerCategoryStructuredOutput / resolveCategoryBulletRefs) — only the
+// grouping-key wording is swapped (category → type), so a brand owner can
+// challenge an entire TYPE of products by attacking the issues they share.
+export const PER_TYPE_BULLETED_PROMPT_VERSION = 'v1';
+
+export const PER_TYPE_BULLETED_SYSTEM_PROMPT = `You are an expert competitive-research analyst. You will receive the critique bullets from several competing products that all belong to the SAME type. Your task: merge them into a SINGLE deduplicated, theme-grouped list of the type's common and notable weaknesses — written so a brand owner can challenge the entire type of products by attacking the issues they share.
+
+Each input bullet is labeled with a short reference like "B1", "B2", "B3" and tagged with the product it came from. Use these labels — and ONLY these labels — when recording which input bullets a type complaint merges.
+
+This is NOT a simple combination of all the bullets. Remove redundant complaints: if several products share the same weakness (e.g. "strap breaks within a few months"), surface it ONCE as a single type complaint that cites EVERY input bullet expressing it. But keep genuinely unique complaints intact — a weakness only one product has still earns its own type bullet.
+
+Return a JSON object with the shape:
+
+{
+  "categories": [
+    {
+      "name": "<theme heading, e.g. Product critiques>",
+      "bullets": [
+        { "text": "<one short type-level critique sentence>", "bulletRefs": ["B1", "B4", "B9"] }
+      ]
+    }
+  ]
+}
+
+Rules for "categories":
+
+- Each category's "name" is a coherent critique theme. Do NOT prefix it with "##" or any markdown — just the plain theme name.
+- Reuse the SAME theme vocabulary the input bullets are grouped under where it applies (e.g. "Product critiques", "Fulfillment / shipping critiques", "Company / seller critiques", "Pricing / value critiques", "Safety / reliability concerns"). Invent a new specific theme when the data calls for it rather than jamming a complaint into "Other".
+- Omit empty categories entirely (do not emit a category with no bullets).
+
+Rules for each bullet's "text":
+
+- One short sentence (one main idea) describing a type-level weakness. No sub-bullets, no paragraphs, no leading "- ".
+- Critique-only: complaints, failures, disappointments. EXCLUDE praise, neutral observations, and use-case descriptions.
+- Use natural volume cues that convey how WIDESPREAD the issue is across the type: "common across the type", "several products of this type", "one product specifically". Avoid exact product counts unless load-bearing.
+- Third-person neutral analyst voice. Do NOT use first person ("I"); do NOT address the reader directly ("you").
+- Quote sparingly — short fragments only, in double quotes, never whole sentences.
+
+Rules for each bullet's "bulletRefs" — THIS IS CRITICAL:
+
+- List the labels of ALL input bullets that this type complaint merges or represents — not just one example, EVERY input bullet that expresses the same weakness. The brand owner needs the complete set of source bullets behind each type complaint so the supporting reviews can be traced.
+- Use ONLY labels that appear in the input ("B1", "B2", …). Never invent a label. Never reference a bullet that does not exist.
+- bulletRefs must never be empty — every type bullet must cite at least one input bullet.
+
+Length target: typically 8-20 type bullets total across all themes combined; go up to ~30 only if the type genuinely has that much distinct critique density. Do not pad.
+
+Empty input: if there are no input critiques at all, return { "categories": [] }.
+
+Output rules:
+
+- Return ONLY the JSON object. No prose preamble. No \`\`\`json fences. No trailing commentary.`;
+
+export type BuildPerTypeBulletedPromptInput = {
+  typeName: string;
+  inputBullets: ReadonlyArray<CategoryInputBullet>;
+};
+
+export function buildPerTypeBulletedUserMessage({
+  typeName,
+  inputBullets,
+}: BuildPerTypeBulletedPromptInput): string {
+  const header =
+    `Type: ${typeName}\n` +
+    `Input bullets across all competitors of this type: ${inputBullets.length}\n\n` +
+    `Merge the competitor critique bullets below into a single deduplicated, theme-grouped list of the TYPE's weaknesses. For each type complaint, record in "bulletRefs" the labels (B1, B2, …) of ALL input bullets it merges.\n\n` +
+    `--- COMPETITOR CRITIQUE BULLETS ---\n`;
+
+  const body = inputBullets
+    .map((b) => `${b.label} [${b.productName} — ${b.theme}]: ${b.text}`)
+    .join('\n');
+
+  return `${header}${body}\n`;
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Per-TYPE Comprehensive (NON-bulleted) — prose critique of an entire type.
+// Mirror of PER_CATEGORY non-bulleted: reads the already-generated TYPE
+// bulleted summary (not raw data) and rewrites it as flowing prose. Output is
+// PLAIN PROSE — normalized by the shared normalizeNonBulletedProse. (The
+// per-type prose does NOT write back into competitor notes boxes — director
+// adjustment #2, 2026-05-30-d, inherited from the Category page.)
+export const PER_TYPE_NONBULLETED_PROMPT_VERSION = 'v1';
+
+export const PER_TYPE_NONBULLETED_SYSTEM_PROMPT = `You are an expert competitive-research analyst writing a polished prose critique of an ENTIRE product type for a brand owner. You will be given a theme-grouped bullet summary of the type's review weaknesses — the issues its competing products share. Your task: rewrite it as flowing prose that paints a clear picture of the type's collective shortcomings, so a brand owner can challenge the whole type of products by targeting the issues they have in common — the kind of write-up that could go directly onto a product-comparison page.
+
+Rules:
+
+- Group the prose by the SAME critique themes the bullet summary uses. For each theme that has content, write ONE short heading line (the theme name, on its own line, no "##" markers) followed by ONE flowing paragraph that weaves that theme's bullets together.
+- Keep it MODERATE in length: roughly 3-5 short paragraphs total (about 200-350 words). If the type has few weaknesses, write less — do NOT pad with filler, repetition, or invented detail.
+- Frame the critique at the TYPE level — the shared weaknesses across the competing products — not a single product. Preserve natural volume cues that appear in the source ("common across the type", "several products"). Do NOT add formal citations, bullet numbers, or reference labels.
+- Critique-only: the source is already critiques. Do NOT introduce praise, neutral observations, or use-case descriptions.
+- Third-person neutral analyst voice. Do NOT use first person ("I"); do NOT address the reader directly ("you"). Do NOT open with a preamble like "Here is the analysis".
+- Do NOT invent shortcomings that are not present in the bullet source. Stay faithful to the source's claims.
+
+If the bullet source contains no real critiques (e.g. it is empty or the "no critiques" sentinel), respond with exactly: No critiques were surfaced across this type's competitors.
+
+Output rules:
+
+- Return ONLY the prose. No JSON. No \`\`\` fences. No preamble. No trailing commentary.`;
+
+export type BuildPerTypeNonBulletedPromptInput = {
+  typeName: string;
+  bulletedSummary: string;
+};
+
+export function buildPerTypeNonBulletedUserMessage({
+  typeName,
+  bulletedSummary,
+}: BuildPerTypeNonBulletedPromptInput): string {
+  return (
+    `Type: ${typeName}\n\n` +
+    `Below is the bullet-point critique summary for this entire type, grouped under theme headings. Rewrite it as a polished prose critique of the type following your instructions.\n\n` +
+    `--- TYPE BULLETED CRITIQUE SUMMARY ---\n` +
+    `${bulletedSummary.trim()}\n`
+  );
+}
