@@ -608,6 +608,9 @@ model ProjectTablePreferences {
   columnWidths          Json     @default("{}") // { columnId: pixels }
   fontSize              Int      @default(14) // 10-24 range; validated at application layer
   rowOrder              Json     @default("[]") // [competitorUrlId] in arranged order
+  // P-54 Phase 4 (2026-06-01) — "Sort By" row grouping, shared per-Project.
+  groupBy               String   @default("none") // "none" | "platform" | "category" | "type" — validated at application layer
+  groupOrder            Json     @default("{}") // { platform?: [key], category?: [key], type?: [key] } — saved banner order per mode
   lastUsedSortColumn    String?
   lastUsedSortDirection String? // "asc" | "desc" — validated at application layer
   updatedAt             DateTime @updatedAt

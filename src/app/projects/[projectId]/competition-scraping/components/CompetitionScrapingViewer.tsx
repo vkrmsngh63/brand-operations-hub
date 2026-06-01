@@ -55,6 +55,10 @@ import {
   type UpdateCompetitorUrlResponse,
   type WriteProjectTablePreferencesRequest,
 } from '@/lib/shared-types/competition-scraping';
+import type {
+  GroupByMode,
+  ActiveGroupMode,
+} from '@/lib/competition-scraping/main-table-grouping';
 import { ColumnVisibilityBar } from './ColumnVisibilityBar';
 import {
   FONT_SIZE_DEFAULT,
@@ -190,6 +194,11 @@ export function CompetitionScrapingViewer({ projectId }: Props) {
   // arranged left-to-right order). Loaded from + saved to the shared
   // project-table-preferences endpoint along with the other layout fields.
   const [columnOrder, setColumnOrder] = useState<string[]>([]);
+  // P-54 Phase 4 (2026-06-01) — "Sort By" row grouping, shared per-Project.
+  // groupBy = the active grouping mode ('none' = flat). groupOrder = the saved
+  // banner order per mode (drag the group banners to reorder).
+  const [groupBy, setGroupBy] = useState<GroupByMode>('none');
+  const [groupOrder, setGroupOrder] = useState<Record<string, string[]>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -213,6 +222,12 @@ export function CompetitionScrapingViewer({ projectId }: Props) {
         );
         setRowOrder(Array.isArray(data.rowOrder) ? data.rowOrder : []);
         setColumnOrder(Array.isArray(data.columnOrder) ? data.columnOrder : []);
+        setGroupBy(data.groupBy ?? 'none');
+        setGroupOrder(
+          data.groupOrder && typeof data.groupOrder === 'object'
+            ? data.groupOrder
+            : {}
+        );
       } catch {
         // Network error — silently fall back to defaults. Failed prefs
         // shouldn't prevent the table from rendering.
@@ -328,6 +343,36 @@ export function CompetitionScrapingViewer({ projectId }: Props) {
       prefsTimerRef.current = setTimeout(() => {
         void flushPrefsPut({ columnOrder: nextOrder });
       }, PREFS_DEBOUNCE_MS);
+    },
+    [flushPrefsPut]
+  );
+
+  // P-54 Phase 4 (2026-06-01) — "Sort By" grouping mode change. Mutually
+  // exclusive; optimistic local update + debounced PUT (shared per-Project).
+  const handleGroupByChange = useCallback(
+    (mode: GroupByMode) => {
+      setGroupBy(mode);
+      if (prefsTimerRef.current) clearTimeout(prefsTimerRef.current);
+      prefsTimerRef.current = setTimeout(() => {
+        void flushPrefsPut({ groupBy: mode });
+      }, PREFS_DEBOUNCE_MS);
+    },
+    [flushPrefsPut]
+  );
+
+  // P-54 Phase 4 — group-banner drag hands the new ordered banner-key array for
+  // the active mode. We merge it into the per-mode groupOrder map and persist
+  // (so everyone on the Project sees the same banner order for that grouping).
+  const handleGroupReorder = useCallback(
+    (mode: ActiveGroupMode, nextKeys: string[]) => {
+      setGroupOrder((prev) => {
+        const next = { ...prev, [mode]: nextKeys };
+        if (prefsTimerRef.current) clearTimeout(prefsTimerRef.current);
+        prefsTimerRef.current = setTimeout(() => {
+          void flushPrefsPut({ groupOrder: next });
+        }, PREFS_DEBOUNCE_MS);
+        return next;
+      });
     },
     [flushPrefsPut]
   );
@@ -530,6 +575,8 @@ export function CompetitionScrapingViewer({ projectId }: Props) {
         onSelectAllPlatforms={handleSelectAllPlatforms}
         columnVisibility={columnVisibility}
         onToggleColumn={handleToggleColumn}
+        groupBy={groupBy}
+        onGroupByChange={handleGroupByChange}
       />
 
       <div
@@ -574,6 +621,9 @@ export function CompetitionScrapingViewer({ projectId }: Props) {
             onColumnReorder={handleColumnReorder}
             onColumnResize={handleColumnResize}
             onRowReorder={handleRowReorder}
+            groupBy={groupBy}
+            groupOrder={groupOrder}
+            onGroupReorder={handleGroupReorder}
             rows={visibleUrls}
             scopeRows={scopeRows}
             searchText={draftSearch}

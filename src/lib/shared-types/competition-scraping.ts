@@ -1188,6 +1188,14 @@ export interface ProjectTablePreferences {
   columnWidths: Record<string, number>;
   fontSize: number; // 10-24; validated at application layer
   rowOrder: string[];
+  // P-54 Phase 4 (2026-06-01) — "Sort By" row grouping, shared per-Project.
+  // 'none' = the flat ungrouped table (default). The other three group the
+  // rows into banner-row groups by the matching field.
+  groupBy: 'none' | 'platform' | 'category' | 'type';
+  // Saved banner order per mode: { platform?: [key], category?: [key],
+  // type?: [key] }. Keys absent from a mode's list fall back to alphabetical;
+  // the empty (uncategorized / untyped) bucket is always forced last.
+  groupOrder: Record<string, string[]>;
   lastUsedSortColumn: string | null;
   lastUsedSortDirection: 'asc' | 'desc' | null;
   updatedAt: string;
@@ -1206,6 +1214,9 @@ export interface WriteProjectTablePreferencesRequest {
   columnWidths?: Record<string, number>;
   fontSize?: number; // 10-24
   rowOrder?: string[];
+  // P-54 Phase 4 (2026-06-01) — "Sort By" row grouping (shared per-Project).
+  groupBy?: 'none' | 'platform' | 'category' | 'type';
+  groupOrder?: Record<string, string[]>;
   lastUsedSortColumn?: string | null;
   lastUsedSortDirection?: 'asc' | 'desc' | null;
 }

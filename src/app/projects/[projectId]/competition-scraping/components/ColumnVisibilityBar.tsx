@@ -24,7 +24,18 @@
 
 import { useEffect, useRef } from 'react';
 import { PLATFORMS, type Platform } from '@/lib/shared-types/competition-scraping';
+import type { GroupByMode } from '@/lib/competition-scraping/main-table-grouping';
 import { PLATFORM_LABELS, TABLE_COLUMN_DEFS } from './url-table-columns';
+
+// P-54 Phase 4 (2026-06-01) — the "Sort By" box options. 'none' = the flat
+// ungrouped table (default); the other three group rows into banner-row groups
+// by the matching field. Labels are director's wording.
+const SORT_BY_OPTIONS: ReadonlyArray<{ mode: GroupByMode; label: string }> = [
+  { mode: 'none', label: 'None' },
+  { mode: 'platform', label: 'Platform' },
+  { mode: 'category', label: 'Category' },
+  { mode: 'type', label: 'Type' },
+];
 
 interface Props {
   // Set of platforms currently visible in the table. Empty array → none
@@ -41,6 +52,11 @@ interface Props {
 
   columnVisibility: Record<string, boolean>;
   onToggleColumn: (columnId: string, visible: boolean) => void;
+
+  // P-54 Phase 4 (2026-06-01) — "Sort By" row grouping. Mutually exclusive;
+  // 'none' is the flat default. Shared per-Project (persisted by the parent).
+  groupBy: GroupByMode;
+  onGroupByChange: (mode: GroupByMode) => void;
 }
 
 export function ColumnVisibilityBar({
@@ -52,6 +68,8 @@ export function ColumnVisibilityBar({
   onSelectAllPlatforms,
   columnVisibility,
   onToggleColumn,
+  groupBy,
+  onGroupByChange,
 }: Props) {
   const allChecked = selectedPlatforms.length === PLATFORMS.length;
   const someChecked = selectedPlatforms.length > 0 && !allChecked;
@@ -142,6 +160,51 @@ export function ColumnVisibilityBar({
           })}
         </div>
       </div>
+
+      <div style={dividerStyle} aria-hidden />
+
+      {/* P-54 Phase 4 (2026-06-01) — "Sort By" grouping box. Mutually exclusive
+          radio chips; 'None' is the flat default. Picking Platform / Category /
+          Type gathers the rows into banner-row groups (shared per-Project). */}
+      <div
+        style={sortByGroupStyle}
+        data-testid="sort-by-group"
+        role="radiogroup"
+        aria-label="Sort By — group rows"
+      >
+        <span style={groupLabelStyle}>Sort By</span>
+        <div style={chipRowStyle}>
+          {SORT_BY_OPTIONS.map((opt) => {
+            const active = groupBy === opt.mode;
+            return (
+              <label
+                key={opt.mode}
+                style={chipStyle(active)}
+                title={
+                  opt.mode === 'none'
+                    ? 'No grouping — the flat table'
+                    : `Group rows by ${opt.label}`
+                }
+              >
+                <input
+                  type="radio"
+                  name="competition-sort-by"
+                  checked={active}
+                  onChange={() => onGroupByChange(opt.mode)}
+                  style={checkboxStyle}
+                  aria-label={
+                    opt.mode === 'none'
+                      ? 'No grouping'
+                      : `Group rows by ${opt.label}`
+                  }
+                  data-testid={`sort-by-${opt.mode}`}
+                />
+                <span>{opt.label}</span>
+              </label>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
@@ -175,6 +238,15 @@ const groupStyle: React.CSSProperties = {
   gap: '6px',
   flex: 1,
   minWidth: '280px',
+};
+
+// P-54 Phase 4 — the Sort By box is a compact control (4 chips), so it does
+// not flex-grow like the Platforms / Columns groups; it hugs its content.
+const sortByGroupStyle: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '6px',
+  flex: '0 0 auto',
 };
 
 const groupLabelStyle: React.CSSProperties = {

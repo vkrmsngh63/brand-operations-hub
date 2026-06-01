@@ -42,9 +42,10 @@
 //     'manual' mode (rowOrder still persists server-side; just not
 //     applied visually until the user picks 'manual' again by dragging).
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   DndContext,
+  MeasuringStrategy,
   PointerSensor,
   closestCenter,
   useSensor,
@@ -63,6 +64,20 @@ import {
   applyColumnOrder,
   moveColumnKey,
 } from '@/lib/competition-scraping/column-order';
+import {
+  buildMainGroupedRows,
+  reorderableGroupKeys,
+  type GroupByMode,
+  type ActiveGroupMode,
+  type MainGroup,
+} from '@/lib/competition-scraping/main-table-grouping';
+// P-54 Phase 4 — reuse the proven two-level-drag re-rank helpers from the
+// By-Category page (pure string-array operations; the "Category"/"Competitor"
+// names are historical — they apply equally to any banner/row reorder).
+import {
+  applyCategoryDrag,
+  applyCompetitorDrag,
+} from '@/lib/competition-scraping/category-table-layout';
 import { authFetch } from '@/lib/authFetch';
 import type {
   CompetitorUrl,
@@ -135,6 +150,11 @@ type ColumnSortKey =
 
 type SortKey = ColumnSortKey | 'manual';
 
+// P-54 Phase 4 — banner drag ids are prefixed so the single DndContext can tell
+// a group-banner drag apart from a row drag (uuid) or a column drag (column key).
+const GROUP_DRAG_PREFIX = 'grp:';
+const groupDragId = (key: string): string => `${GROUP_DRAG_PREFIX}${key}`;
+
 interface Props {
   // P-46 Workstream 3 Session 1 — per-column visibility map sourced from
   // UserTablePreferences. Missing keys default to visible; this prop is
@@ -169,6 +189,13 @@ interface Props {
   // carries columnVisibility.
   onColumnResize?: (columnId: string, width: number) => void;
   onRowReorder?: (nextOrder: string[]) => void;
+  // P-54 Phase 4 (2026-06-01) — "Sort By" row grouping. groupBy = the active
+  // grouping mode ('none' = the flat table). groupOrder = the saved banner
+  // order per mode (keyed 'platform'|'category'|'type'). onGroupReorder fires
+  // after a banner drag with the new ordered banner-key list for the mode.
+  groupBy?: GroupByMode;
+  groupOrder?: Record<string, string[]>;
+  onGroupReorder?: (mode: ActiveGroupMode, nextKeys: string[]) => void;
   // Rows already filtered by the platform sidebar AND the free-text search
   // box (handled by the parent). Column filters are applied INSIDE this
   // component, after filterless rendering, so the multi-select option lists
@@ -327,6 +354,9 @@ export function UrlTable({
   onColumnReorder,
   onColumnResize,
   onRowReorder,
+  groupBy,
+  groupOrder,
+  onGroupReorder,
   rows,
   scopeRows,
   searchText,
@@ -795,6 +825,30 @@ export function UrlTable({
     }
   };
 
+  // P-54 Phase 4 (2026-06-01) — "Sort By" grouping. When a grouping mode is
+  // active, re-bucket the ALREADY-SORTED rows into banner groups (so the active
+  // column-sort / manual row order flows through as the within-group order).
+  // groupBy === 'none'/undefined → flat table (groups === null), rendered
+  // exactly as before so Phases 1-3 are untouched.
+  const activeGroupMode: ActiveGroupMode | null =
+    groupBy && groupBy !== 'none' ? groupBy : null;
+  const groups = useMemo<MainGroup<CompetitorUrl>[] | null>(() => {
+    if (!activeGroupMode) return null;
+    return buildMainGroupedRows(sorted, activeGroupMode, {
+      groupOrder: groupOrder?.[activeGroupMode],
+      platformLabels: PLATFORM_LABELS,
+    });
+  }, [activeGroupMode, sorted, groupOrder]);
+  // url id → its banner group key (for cross-group drop rejection + retargeting
+  // a banner drop onto a row).
+  const urlIdToGroupKey = useMemo(() => {
+    const map = new Map<string, string>();
+    if (groups) {
+      for (const g of groups) for (const r of g.rows) map.set(r.id, g.key);
+    }
+    return map;
+  }, [groups]);
+
   // P-46 Workstream 3 Session 3 — drop handler for dnd-kit's DndContext.
   // Computes the new id order from the current sorted display, persists it
   // via the parent's debounced PUT, and flips sortKey into 'manual' so the
@@ -823,6 +877,46 @@ export function UrlTable({
         overId
       );
       onColumnReorder?.(nextColumnOrder);
+      return;
+    }
+
+    // P-54 Phase 4 — when grouped, the SAME DndContext also serves two more
+    // axes: banner reorder (ids prefixed `grp:`) and within-group row reorder.
+    if (activeGroupMode && groups) {
+      if (activeId.startsWith(GROUP_DRAG_PREFIX)) {
+        // Banner drag — drop onto another banner OR any row (whose group we map
+        // to). Reuses applyCategoryDrag over the saved per-mode banner order;
+        // the pinned-last empty bucket is excluded from the displayed keys so
+        // it can never be reordered.
+        const activeKey = activeId.slice(GROUP_DRAG_PREFIX.length);
+        const targetKey = overId.startsWith(GROUP_DRAG_PREFIX)
+          ? overId.slice(GROUP_DRAG_PREFIX.length)
+          : urlIdToGroupKey.get(overId);
+        if (!targetKey) return;
+        const next = applyCategoryDrag(
+          groupOrder?.[activeGroupMode] ?? [],
+          reorderableGroupKeys(groups),
+          activeKey,
+          targetKey
+        );
+        onGroupReorder?.(activeGroupMode, next);
+        return;
+      }
+      // Row drag while grouped — only reorder when both ends are rows in the
+      // SAME group (dropping onto a banner or across groups is a no-op).
+      if (overId.startsWith(GROUP_DRAG_PREFIX)) return;
+      if (urlIdToGroupKey.get(activeId) !== urlIdToGroupKey.get(overId)) return;
+      const displayedUrlIds = groups.flatMap((g) => g.rows.map((r) => r.id));
+      const nextOrder = applyCompetitorDrag(
+        effectiveRowOrder,
+        displayedUrlIds,
+        activeId,
+        overId
+      );
+      onRowReorder?.(nextOrder);
+      // Flip to manual so the new within-group order sticks even if a column
+      // sort was active (matches the flat-table drag behavior).
+      setSortKey('manual');
       return;
     }
 
@@ -1017,12 +1111,23 @@ export function UrlTable({
             sensors={sensors}
             collisionDetection={closestCenter}
             onDragEnd={handleDragEnd}
+            // P-54 Phase 4 — when grouped, a banner can be many rows tall so its
+            // sibling banners often sit below the fold. Re-measure droppables
+            // every frame so rows the window auto-scroll reveals register as
+            // valid drop targets (the proven By-Category two-level-drag config).
+            // Flat mode keeps dnd-kit's defaults so Phases 1-3 are untouched.
+            measuring={
+              activeGroupMode
+                ? { droppable: { strategy: MeasuringStrategy.Always } }
+                : undefined
+            }
+            autoScroll={
+              activeGroupMode
+                ? { threshold: { x: 0, y: 0.25 }, acceleration: 15 }
+                : undefined
+            }
           >
-            <SortableContext
-              items={sorted.map((r) => r.id)}
-              strategy={verticalListSortingStrategy}
-            >
-              <table
+            <table
                 ref={tableRef}
                 style={{
                   /* 2026-05-24 fix-forward (Issue 3); P-54 Phase 2 update
@@ -1167,18 +1272,59 @@ export function UrlTable({
                   </tr>
                 </thead>
                 <tbody>
-                  {sorted.map((row) => (
-                    <SortableUrlRow
-                      key={row.id}
-                      row={row}
-                      visibleColumns={visibleColumns}
-                      cellRenderers={cellRenderers}
-                      onTrashClick={handleTrashClick}
-                    />
-                  ))}
+                  {groups === null ? (
+                    /* Flat (ungrouped) — UNCHANGED from Phase 3: one vertical
+                       sortable list over all rows. */
+                    <SortableContext
+                      items={sorted.map((r) => r.id)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      {sorted.map((row) => (
+                        <SortableUrlRow
+                          key={row.id}
+                          row={row}
+                          visibleColumns={visibleColumns}
+                          cellRenderers={cellRenderers}
+                          onTrashClick={handleTrashClick}
+                        />
+                      ))}
+                    </SortableContext>
+                  ) : (
+                    /* Grouped (P-54 Phase 4) — two-level drag: an outer vertical
+                       sortable list of banner rows + a per-group inner vertical
+                       sortable list of competitor rows. Mirrors the By-Category
+                       / By-Type pages. The empty bucket's banner is not
+                       draggable (pinned last). */
+                    <SortableContext
+                      items={reorderableGroupKeys(groups).map(groupDragId)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      {groups.map((group) => (
+                        <Fragment key={group.key || '__bucket__'}>
+                          <GroupBannerRow
+                            group={group}
+                            labelColSpan={visibleColumns.length + 1}
+                          />
+                          <SortableContext
+                            items={group.rows.map((r) => r.id)}
+                            strategy={verticalListSortingStrategy}
+                          >
+                            {group.rows.map((row) => (
+                              <SortableUrlRow
+                                key={row.id}
+                                row={row}
+                                visibleColumns={visibleColumns}
+                                cellRenderers={cellRenderers}
+                                onTrashClick={handleTrashClick}
+                              />
+                            ))}
+                          </SortableContext>
+                        </Fragment>
+                      ))}
+                    </SortableContext>
+                  )}
                 </tbody>
               </table>
-            </SortableContext>
           </DndContext>
         </div>
       )}
@@ -1749,6 +1895,72 @@ function SortableUrlRow({
     </tr>
   );
 }
+
+// P-54 Phase 4 (2026-06-01) — banner row for a "Sort By" group. The group
+// label sits on its own shaded row spanning the table; a grip on the left
+// drags the whole group to reorder (two-level drag, mirroring the By-Category /
+// By-Type pages). The pinned-last empty bucket renders without a grip.
+function GroupBannerRow({
+  group,
+  labelColSpan,
+}: {
+  group: MainGroup<CompetitorUrl>;
+  labelColSpan: number;
+}) {
+  const draggable = !group.isEmptyBucket;
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: groupDragId(group.key), disabled: !draggable });
+  const bg = isDragging ? '#1f6feb22' : '#161b22';
+  const cellBg: React.CSSProperties = { background: bg };
+  return (
+    <tr
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.7 : 1,
+      }}
+      data-testid="url-group-banner-row"
+      {...attributes}
+    >
+      <td style={{ ...dragHandleCellStyle, ...cellBg }}>
+        {draggable ? (
+          <button
+            type="button"
+            {...listeners}
+            style={dragHandleButtonStyle}
+            aria-label={`Drag to reorder the ${group.label} group`}
+            title="Drag to reorder group"
+            data-testid="url-group-banner-drag-handle"
+          >
+            ⠿
+          </button>
+        ) : null}
+      </td>
+      <td colSpan={labelColSpan} style={{ ...groupBannerLabelStyle, ...cellBg }}>
+        <span style={{ fontWeight: 700, color: '#e6edf3' }}>{group.label}</span>
+        <span
+          style={{
+            marginLeft: '8px',
+            color: '#8b949e',
+            fontWeight: 400,
+            fontSize: '0.85em',
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          {group.rows.length}
+        </span>
+      </td>
+    </tr>
+  );
+}
+
+const groupBannerLabelStyle: React.CSSProperties = {
+  padding: '7px 10px',
+  borderTop: '1px solid #30363d',
+  borderBottom: '1px solid #30363d',
+  whiteSpace: 'nowrap',
+};
 
 const dragHandleHeaderStyle: React.CSSProperties = {
   borderBottom: '1px solid #30363d',

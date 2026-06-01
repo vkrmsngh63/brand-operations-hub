@@ -17,6 +17,11 @@ import type {
   ProjectTablePreferences,
 } from '../../shared-types/competition-scraping.ts';
 import { isTablePreferencesSortDirection } from '../../shared-types/competition-scraping.ts';
+import {
+  isGroupByMode,
+  coerceGroupOrderMap,
+  type GroupByMode,
+} from '../main-table-grouping.ts';
 
 import type { HandlerResult, RequestLike } from './shared.ts';
 
@@ -36,6 +41,8 @@ export type ProjectTablePreferencesRow = {
   columnWidths: Prisma.JsonValue;
   fontSize: number;
   rowOrder: Prisma.JsonValue;
+  groupBy: string;
+  groupOrder: Prisma.JsonValue;
   lastUsedSortColumn: string | null;
   lastUsedSortDirection: string | null;
   updatedAt: Date;
@@ -97,6 +104,8 @@ export function toWireShape(
     columnWidths: toNumMap(row.columnWidths),
     fontSize: row.fontSize,
     rowOrder: toStringArray(row.rowOrder),
+    groupBy: isGroupByMode(row.groupBy) ? row.groupBy : 'none',
+    groupOrder: coerceGroupOrderMap(row.groupOrder),
     lastUsedSortColumn: row.lastUsedSortColumn,
     lastUsedSortDirection: isTablePreferencesSortDirection(
       row.lastUsedSortDirection
@@ -140,6 +149,8 @@ export type ValidatedPatch = {
   columnWidths?: Record<string, number>;
   fontSize?: number;
   rowOrder?: string[];
+  groupBy?: GroupByMode;
+  groupOrder?: Record<string, string[]>;
   lastUsedSortColumn?: string | null;
   lastUsedSortDirection?: 'asc' | 'desc' | null;
 };
@@ -235,6 +246,41 @@ export function extractProjectTablePreferencesPatch(
       }
     }
     patch.rowOrder = v as string[];
+  }
+
+  if ('groupBy' in b) {
+    const v = b.groupBy;
+    if (!isGroupByMode(v)) {
+      return {
+        ok: false,
+        error: 'groupBy must be "none", "platform", "category", or "type"',
+      };
+    }
+    patch.groupBy = v;
+  }
+
+  if ('groupOrder' in b) {
+    const v = b.groupOrder;
+    if (!isPlainObject(v)) {
+      return { ok: false, error: 'groupOrder must be an object' };
+    }
+    // Each mode's value must be an array of strings. Unknown keys are
+    // dropped by coerceGroupOrderMap at read time, but reject malformed
+    // values loudly at the write boundary.
+    for (const [k, val] of Object.entries(v)) {
+      if (!Array.isArray(val)) {
+        return { ok: false, error: `groupOrder.${k} must be an array` };
+      }
+      for (const item of val) {
+        if (typeof item !== 'string') {
+          return {
+            ok: false,
+            error: `groupOrder.${k} must be an array of strings`,
+          };
+        }
+      }
+    }
+    patch.groupOrder = coerceGroupOrderMap(v);
   }
 
   if ('lastUsedSortColumn' in b) {
@@ -347,6 +393,8 @@ export function makeProjectTablePreferencesHandlers(
     }
     if (patch.fontSize !== undefined) update.fontSize = patch.fontSize;
     if (patch.rowOrder !== undefined) update.rowOrder = patch.rowOrder;
+    if (patch.groupBy !== undefined) update.groupBy = patch.groupBy;
+    if (patch.groupOrder !== undefined) update.groupOrder = patch.groupOrder;
     if (patch.lastUsedSortColumn !== undefined) {
       update.lastUsedSortColumn = patch.lastUsedSortColumn;
     }
@@ -361,6 +409,8 @@ export function makeProjectTablePreferencesHandlers(
       columnWidths: patch.columnWidths ?? {},
       fontSize: patch.fontSize ?? 14,
       rowOrder: patch.rowOrder ?? [],
+      groupBy: patch.groupBy ?? 'none',
+      groupOrder: patch.groupOrder ?? {},
       lastUsedSortColumn: patch.lastUsedSortColumn ?? null,
       lastUsedSortDirection: patch.lastUsedSortDirection ?? null,
     };
