@@ -3875,4 +3875,24 @@ This session's W5 Session 1.5 design-lock + build work is **PLOS-side AI infrast
 
 ---
 
+## §B 2026-06-01-d — `session_2026-06-01-d_p54-competition-scraping-phase-5-dynamic-category-columns` — P-54 Phase 5: the dynamic content/image/video category columns on the MAIN `/competition-scraping` Competitor URLs table (R7 / R8 / R9 per D3/D4/D5/D7/D8/D9) — append-only design note per Rule 18 (§A frozen) — **CLOSES P-54**
+
+**Informational design note (the canonical phase spec lives in `docs/polish-item-specs/P-54-competition-scraping-main-table-enhancements.md` §3 Phase 5 + §4 Q-F/Q-I resolution; the as-built scoreboard + the reusable Pattern live in `docs/CORRECTIONS_LOG.md` §Entry 2026-06-01-d).**
+
+**Design choices made this session (Q-F + Q-I resolved WITH the director via a 3-question design picker BEFORE coding, per `feedback_plan_output_shape_before_building` — the two DESIGN questions matched recommendations; a 3rd PROCESS question was a director override):**
+- For each captured **content / image / video category**, the MAIN Competitor URLs table grows a locked column-PAIR: the captured text body (R7) or `embeddedText` (R8/R9) on the LEFT + its glued **"[category] Analysis"** column immediately to the right. Multiple items in the same category stack as aligned `rowSpan` sub-rows (D3, reusing the reviews-table pattern), so each item's "Your Analysis" sits exactly beside its text.
+- The columns are SHOWN by default when their content exists; a NEW "Content / Image / Video Categories" group of checkboxes in the Columns box shows/hides each kind (D7).
+- Cells edit IN-table: the captured/embedded TEXT inline (D9), the "Your Analysis" via a click-to-open POP-OUT editor reusing the existing `PerItemAnalysisBox` TipTap surface (Q-I → pop-out, NOT raw inline contenteditable in a narrow cell) — writing back through the EXISTING per-item PATCH routes (`/text/[textId]`, `/images/[imageId]`, `/videos/[videoId]`; D5). The table refetches on tab/window refocus (D4).
+- Each value column + its analysis column move together as a LOCKED PAIR under Phase-3 column reorder (D8) and align in BOTH the flat AND the Phase-4 grouped render paths. New categories auto-append left of "Added On" (Q-F); the user's custom order is kept across category changes; deleted categories drop from the saved order.
+
+**Implementation subtlety (the reusable Pattern):** the locked pairs were delivered with NO schema change — the predicted locked-pair column-order store was AVOIDED. Only the VALUE key is stored as an orderable unit in the EXISTING `ProjectTablePreferences.columnOrder` (and the dynamic keys ride in the existing `columnVisibility` / `columnWidths` maps); the "[category] Analysis" column is synthesized + glued at RENDER immediately to its right, so the existing `moveColumnKey` drags the pair as one for free. Generalizes: when a derived/paired column must travel with an anchor column, make ONLY the anchor orderable + synthesize the partner at render. The dynamic columns are fed via an opt-in `?withCaptures=1` include on the existing GET `/urls` (a lightweight per-URL captured-item projection) — keeping the route count at 71 and the default payload + all other `/urls` consumers unchanged.
+
+**Affected §A sections (INFORMATIONAL — §A is FROZEN per Rule 18; not edited):** the main-table surface description (Competitor URLs table) now also renders dynamic per-category value/analysis column pairs sourced from the per-URL `CapturedText` / `CapturedImage` / `CapturedVideo` items; persistence for the main table remains the shared `ProjectTablePreferences` store (Phase 3), now also carrying the dynamic column keys in its existing Json maps (no new field).
+
+**Cross-references:** spec `docs/polish-item-specs/P-54-competition-scraping-main-table-enhancements.md` (§3 Phase 5 + §4 Q-F/Q-I); `docs/CORRECTIONS_LOG.md` §Entry 2026-06-01-d; the as-built helper `src/lib/competition-scraping/dynamic-columns.ts`; the data path `handlers/urls.ts` (opt-in `?withCaptures=1`); the render `components/UrlTable.tsx` + `ColumnVisibilityBar.tsx` + `CompetitionScrapingViewer.tsx`; the captured-item models + detail-page edit precedent `CapturedText` / `CapturedImage` / `CapturedVideo` + `url/[urlId]/components/UrlDetailContent.tsx` + `PerItemAnalysisBox.tsx` + the per-item PATCH routes; the shared store `handlers/project-table-preferences.ts`; §B 2026-06-01-c above (the Phase-4 grouping seam this Phase-5 work aligns inside).
+
+---
+
+---
+
 END OF DOCUMENT
