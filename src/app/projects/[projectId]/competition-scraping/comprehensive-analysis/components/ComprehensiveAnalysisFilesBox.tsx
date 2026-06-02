@@ -48,10 +48,11 @@ import {
   type CategorySourceReviewMeta,
 } from '@/lib/competition-scraping/reviews-traceability';
 import {
-  buildPrimerFromUrls,
-  renderPrimerToDocxBlob,
+  resolveCurrentPrimer,
+  resolvedPrimerToDocxBlob,
   PRIMER_DOCX_MIME,
 } from './primer-render';
+import { PrimerEditorModal } from './PrimerEditorModal';
 
 interface Props {
   projectId: string;
@@ -251,6 +252,7 @@ export function ComprehensiveAnalysisFilesBox({ projectId, projectNameOrId }: Pr
   const [loadError, setLoadError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null); // file key or 'zip'
   const [actionError, setActionError] = useState<string | null>(null);
+  const [showPrimerEditor, setShowPrimerEditor] = useState(false);
 
   // Fetch the main table's rows (with captures) once on mount. The reviews-
   // analysis files (Phase 2b) will add their own fetches.
@@ -602,15 +604,14 @@ export function ComprehensiveAnalysisFilesBox({ projectId, projectNameOrId }: Pr
     }
   }, [fetchUrlsFresh, fetchReviewsBundle, projectNameOrId]);
 
-  // The teaching primer (.docx) — built fresh from the live competitor data so
-  // its main-table section reflects the project's current custom category
-  // columns, then rendered to a real Word document.
+  // The teaching primer (.docx) — the director's SAVED edit if one exists, else
+  // freshly generated from the live competitor data (so its main-table section
+  // reflects the project's current custom columns). Rendered to a Word document.
   const handleDownloadPrimer = useCallback(async () => {
     setActionError(null);
     setBusy('primer');
     try {
-      const rows = await fetchUrlsFresh();
-      const blob = await renderPrimerToDocxBlob(buildPrimerFromUrls(rows));
+      const blob = await resolvedPrimerToDocxBlob(await resolveCurrentPrimer(projectId));
       triggerDownload(
         new Blob([blob], { type: PRIMER_DOCX_MIME }),
         buildExportFilename('competitive-analysis-primer', projectNameOrId, todayStr(), 'docx')
@@ -620,7 +621,7 @@ export function ComprehensiveAnalysisFilesBox({ projectId, projectNameOrId }: Pr
     } finally {
       setBusy(null);
     }
-  }, [fetchUrlsFresh, projectNameOrId]);
+  }, [projectId, projectNameOrId]);
 
   const handleDownloadAllZip = useCallback(async () => {
     setActionError(null);
@@ -681,9 +682,9 @@ export function ComprehensiveAnalysisFilesBox({ projectId, projectNameOrId }: Pr
           `the reviews-analysis spreadsheets (${err instanceof Error ? err.message : 'error'})`
         );
       }
-      // The teaching primer (.docx). Best-effort like the reviews block.
+      // The teaching primer (.docx) — saved edit or generated. Best-effort.
       try {
-        const primerBlob = await renderPrimerToDocxBlob(buildPrimerFromUrls(rows));
+        const primerBlob = await resolvedPrimerToDocxBlob(await resolveCurrentPrimer(projectId));
         zip.file(
           buildExportFilename('competitive-analysis-primer', projectNameOrId, date, 'docx'),
           primerBlob
@@ -755,6 +756,18 @@ export function ComprehensiveAnalysisFilesBox({ projectId, projectNameOrId }: Pr
                 {f.kind === 'docx' ? '📄' : '📊'}
               </span>
               <span style={fileNameStyle}>{f.name}</span>
+              {f.key === 'primer' && isReady ? (
+                <button
+                  type="button"
+                  onClick={() => setShowPrimerEditor(true)}
+                  disabled={busy !== null}
+                  style={editButtonStyle(busy !== null)}
+                  data-testid="edit-primer"
+                  title="Edit and save your own version of the primer"
+                >
+                  ✎ Edit
+                </button>
+              ) : null}
               {isReady ? (
                 <button
                   type="button"
@@ -778,6 +791,13 @@ export function ComprehensiveAnalysisFilesBox({ projectId, projectNameOrId }: Pr
           );
         })}
       </div>
+
+      {showPrimerEditor && (
+        <PrimerEditorModal
+          projectId={projectId}
+          onClose={() => setShowPrimerEditor(false)}
+        />
+      )}
     </div>
   );
 }
@@ -842,6 +862,21 @@ function fileButtonStyle(disabled: boolean): React.CSSProperties {
     padding: '5px 12px',
     background: disabled ? '#21262d' : '#238636',
     color: disabled ? '#6e7681' : '#fff',
+    border: '1px solid #30363d',
+    borderRadius: '6px',
+    fontSize: '12px',
+    fontWeight: 600,
+    cursor: disabled ? 'not-allowed' : 'pointer',
+    whiteSpace: 'nowrap',
+    fontFamily: 'inherit',
+  };
+}
+
+function editButtonStyle(disabled: boolean): React.CSSProperties {
+  return {
+    padding: '5px 10px',
+    background: 'transparent',
+    color: disabled ? '#6e7681' : '#58a6ff',
     border: '1px solid #30363d',
     borderRadius: '6px',
     fontSize: '12px',

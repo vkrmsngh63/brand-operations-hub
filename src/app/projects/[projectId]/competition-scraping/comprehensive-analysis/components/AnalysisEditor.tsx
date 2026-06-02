@@ -18,10 +18,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Editor, JSONContent } from '@tiptap/react';
 import { authFetch } from '@/lib/authFetch';
-import { renderPrimerToTipTapDoc } from '@/lib/competition-scraping/comprehensive-analysis-primer';
-import type { MainExportUrl } from '@/lib/competition-scraping/comprehensive-analysis-exports';
 import { RichTextEditor } from '../../components/RichTextEditor';
-import { buildPrimerFromUrls } from './primer-render';
+import {
+  resolveCurrentPrimer,
+  resolvedPrimerToTipTapDoc,
+} from './primer-render';
 
 export interface AnalysisEditorProps {
   apiUrl: string;
@@ -184,27 +185,18 @@ export function AnalysisEditor({
     [apiUrl]
   );
 
-  // Insert the teaching primer at the cursor. Built fresh from the live
-  // competitor data each click (so it reflects the project's current custom
-  // category columns) and re-clickable to refresh — NOT a fixed header, NOT
-  // auto-inserted. Mirrors the .docx the Files box offers.
+  // Insert the teaching primer at the cursor. Uses the director's SAVED edit if
+  // one exists, else freshly generated from the live competitor data — the same
+  // version the Files-box .docx offers. Re-clickable to refresh; NOT a fixed
+  // header, NOT auto-inserted.
   const handleInsertPrimer = useCallback(async () => {
     const editor = editorRef.current;
     if (!editor) return;
     setInsertError(null);
     setInserting(true);
     try {
-      const res = await authFetch(
-        `/api/projects/${projectId}/competition-scraping/urls?withCaptures=1`
-      );
-      if (!res.ok) {
-        throw new Error(`Couldn’t load the competitor data (HTTP ${res.status}).`);
-      }
-      const body = (await res.json()) as MainExportUrl[];
-      const rows = Array.isArray(body) ? body : [];
-      const doc = renderPrimerToTipTapDoc(buildPrimerFromUrls(rows)) as {
-        content?: JSONContent[];
-      };
+      const resolved = await resolveCurrentPrimer(projectId);
+      const doc = resolvedPrimerToTipTapDoc(resolved) as { content?: JSONContent[] };
       // Insert the primer's block nodes at the cursor (insertContent on the
       // body array, not the wrapping doc node).
       editor

@@ -488,6 +488,10 @@ model ComprehensiveCompetitorAnalysis {
   id           String   @id @default(uuid())
   projectId    String   @unique // exactly one per Project
   contentJson  Json     @default("{}") // TipTap document JSON per §A.5
+  // P-55 Phase 3 part 3 (2026-06-02-d) — the director's SAVED edit of the
+  // teaching primer (TipTap JSON). NULL = no override → the auto-generated
+  // primer (reflecting current columns) is used. Additive nullable column.
+  primerJson   Json?
   lastEditedBy String
   lastEditedAt DateTime @updatedAt
   createdAt    DateTime @default(now())

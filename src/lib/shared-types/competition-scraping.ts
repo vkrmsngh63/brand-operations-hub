@@ -1098,6 +1098,23 @@ export interface WriteComprehensiveCompetitorAnalysisRequest {
 export type WriteComprehensiveCompetitorAnalysisResponse =
   ComprehensiveCompetitorAnalysis;
 
+// ─── Saved teaching primer (P-55 Phase 3 part 3, 2026-06-02-d) ──────────
+// The director's SAVED edit of the teaching primer, stored in the additive
+// `primerJson` column of the same per-Project ComprehensiveCompetitorAnalysis
+// row. `null` = no override → the page uses the auto-generated primer.
+// GET  /comprehensive-analysis/primer → { primerJson | null }
+// PUT  /comprehensive-analysis/primer  body { primerJson | null } (null resets)
+export interface ComprehensiveAnalysisPrimerDoc {
+  primerJson: Record<string, unknown> | null;
+}
+export type ReadComprehensiveAnalysisPrimerResponse =
+  ComprehensiveAnalysisPrimerDoc;
+export interface WriteComprehensiveAnalysisPrimerRequest {
+  primerJson: Record<string, unknown> | null;
+}
+export type WriteComprehensiveAnalysisPrimerResponse =
+  ComprehensiveAnalysisPrimerDoc;
+
 // ─── CategoryTableLayout (P-49 W5 Category page "interactive batch", ──────
 //     2026-05-30) ──────────────────────────────────────────────────────────
 // Per-user, per-Project "memory" for the Reviews Analysis By Competitor
