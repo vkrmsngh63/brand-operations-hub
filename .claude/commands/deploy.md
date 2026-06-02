@@ -111,7 +111,17 @@ cp extensions/competition-scraping/.output/competition-scraping-extension-0.1.0-
 ls -la plos-extension-<date>-w2-deploy-<N>.zip  # confirm size
 ```
 
-Historical context: prior workaround captured to CORRECTIONS_LOG 2026-05-19-f + 2026-05-19-g; root cause + fix in CORRECTIONS_LOG 2026-05-22-h.
+**P-58 — also refresh the in-app "Download Extension (zip)" served artifact.** The in-app download button (`/competition-scraping/plos-extension-latest.zip`) serves a STABLE committed file under `public/`, so it must be overwritten with the same fresh zip and committed WITH this deploy's build commit (so Vercel serves the new bytes). Do this BEFORE the build commit is made — or amend/add a follow-up commit and re-ff-merge — so the deployed site's download matches the deployed extension:
+
+```bash
+cd /workspaces/brand-operations-hub
+cp extensions/competition-scraping/.output/competition-scraping-extension-0.1.0-chrome.zip public/competition-scraping/plos-extension-latest.zip
+ls -la public/competition-scraping/plos-extension-latest.zip  # confirm ~218 KB
+git add public/competition-scraping/plos-extension-latest.zip
+# commit with (or as part of) the extension build commit, then deploy as normal
+```
+
+Historical context: prior workaround captured to CORRECTIONS_LOG 2026-05-19-f + 2026-05-19-g; root cause + fix in CORRECTIONS_LOG 2026-05-22-h. The `plos-extension-latest.zip` served-artifact wiring is P-58 (2026-06-02-f).
 
 ## Step 9 — Director real-Chrome verification walkthrough
 

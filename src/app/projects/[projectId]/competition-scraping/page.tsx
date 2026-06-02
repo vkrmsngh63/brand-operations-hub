@@ -202,14 +202,18 @@ export default function CompetitionScrapingPage() {
         <DetailedUserGuide />
 
         {/* Deliverables — Resources sub-section with the Chrome extension
-            companion download. Real download URL still pending the Chrome
-            extension build session per ROADMAP W#2 next-session item (c). */}
+            companion download. Serves the LATEST built extension from a
+            stable public path (P-58): /deploy Step 8 copies the freshly
+            built zip to public/competition-scraping/plos-extension-latest.zip
+            and commits it with the build, so vklf.com always hands out the
+            newest build with no per-build re-wiring. The .zip is non-
+            renderable, so target="_blank" triggers a download. */}
         <DeliverablesArea
           resources={
             <CompanionDownload
               label="Download Extension (zip)"
-              url="#download-extension-pending"
-              description="Chrome extension for capturing competitor URLs, text, and images. See the Detailed User Guide above for install and use instructions."
+              url="/competition-scraping/plos-extension-latest.zip"
+              description="Chrome extension for capturing competitor URLs, text, and images — always the latest build. See the Detailed User Guide above for install and use instructions."
             />
           }
         />
