@@ -1,0 +1,153 @@
+#!/usr/bin/env bash
+# catch-up-workflow — re-enter a GRADUATED PLOS workflow to fix or extend it.
+#
+# Usage:
+#   ./catch-up-workflow <N>     where N is the workflow number
+#
+# What it does (per HANDOFF_PROTOCOL.md Rule 33 — Graduated-workflow continuity):
+#   1. Switches to the workflow's branch + pulls latest.
+#   2. Writes a single-use launch prompt to .claude/active-workflow-prompt.md
+#      pointing the session at the workflow's CONTINUITY PRIMER
+#      (docs/<TOOL>_PRIMER.md — the "map + pointers" doc).
+#   3. Launches Claude Code. On your first keystroke the session reads the
+#      primer, follows its pointers to the deep docs as the task needs, and is
+#      caught up enough to continue the workflow seamlessly.
+#
+# This is the GRADUATED-workflow analogue of ./resume (which continues the
+# CURRENTLY-active workflow via docs/NEXT_SESSION.md). Use catch-up-workflow
+# when you want to return to a finished workflow to change something.
+#
+# After launch + your single wake-up keystroke, tell Claude the specific fix or
+# addition you want — the primer makes it ready to take that instruction.
+#
+# Cross-references:
+#   docs/HANDOFF_PROTOCOL.md Rule 33 — graduated-workflow continuity primer + this command
+#   docs/HANDOFF_PROTOCOL.md Rule 22 — graduated-tool re-entry (the deeper-doc load discipline)
+#   docs/templates/WORKFLOW_PRIMER_TEMPLATE.md — the primer template every graduation fills
+#   .claude/hooks/inject-next-session-pointer.sh — reads .claude/active-workflow-prompt.md first
+#   ./resume / ./resume-workflow — the active-workflow session-start siblings
+
+set -euo pipefail
+
+usage() {
+  cat <<EOF
+Usage: ./catch-up-workflow <N>
+
+Re-enter a GRADUATED workflow to fix or extend it. <N> is the workflow number:
+  2   W#2 Competition Scraping  (branch workflow-2-competition-scraping;
+                                 primer docs/COMPETITION_SCRAPING_PRIMER.md)
+
+Workflows not registered below are either not graduated yet or have no primer.
+To continue the CURRENTLY-active workflow instead, use ./resume.
+EOF
+}
+
+if [ $# -ne 1 ]; then
+  usage
+  exit 1
+fi
+
+WORKFLOW="$1"
+
+# Registry: workflow number → branch + continuity-primer doc. Add a row here
+# when a workflow graduates and its docs/<TOOL>_PRIMER.md is created.
+case "$WORKFLOW" in
+  2)
+    BRANCH="workflow-2-competition-scraping"
+    WORKFLOW_NAME="Competition Scraping"
+    PRIMER="docs/COMPETITION_SCRAPING_PRIMER.md"
+    ;;
+  1|3|4|5|6|7|8|9|10|11|12|13|14)
+    cat <<EOF
+W#$WORKFLOW is not registered for catch-up-workflow.
+
+A workflow becomes catch-up-able once it GRADUATES and a continuity primer is
+written at docs/<TOOL>_PRIMER.md (see HANDOFF_PROTOCOL.md Rule 33 +
+docs/templates/WORKFLOW_PRIMER_TEMPLATE.md). To register it, add a case row to
+this script mapping W#$WORKFLOW → its branch + its primer path.
+
+  - For W#1 (Keyword Clustering, graduated): its canonical re-entry path is
+    \`./resume-workflow 1\` (Rule 22 + KEYWORD_CLUSTERING_DATA_CONTRACT.md §7).
+  - For the currently-active workflow: use \`./resume\`.
+EOF
+    exit 1
+    ;;
+  *)
+    echo "Unknown workflow number: '$WORKFLOW' (expected an integer 1-14)"
+    usage
+    exit 1
+    ;;
+esac
+
+echo "── catch-up-workflow — re-entering W#$WORKFLOW ($WORKFLOW_NAME) ──"
+echo "Branch: $BRANCH"
+echo "Primer: $PRIMER"
+echo ""
+
+# ── Git: fetch + checkout + pull the workflow's branch ───────────────────────
+git fetch origin || { echo "❌ git fetch origin failed"; exit 1; }
+git checkout "$BRANCH" || {
+  cat <<EOF
+❌ git checkout $BRANCH failed.
+
+Likely you have uncommitted changes — run \`git status\`, then commit
+(\`git add . && git commit -m 'WIP'\`) or stash (\`git stash\`), and re-run
+./catch-up-workflow $WORKFLOW.
+EOF
+  exit 1
+}
+git pull --rebase origin "$BRANCH" || {
+  echo "❌ git pull --rebase origin $BRANCH failed. Resolve conflicts, then re-run."
+  exit 1
+}
+
+if [ ! -f "$PRIMER" ]; then
+  echo "❌ $PRIMER not found on $BRANCH. The continuity primer should be committed"
+  echo "   on this branch. Restore it (or recreate from"
+  echo "   docs/templates/WORKFLOW_PRIMER_TEMPLATE.md) before catching up."
+  exit 1
+fi
+
+# ── Write the single-use launch prompt the SessionStart hook will inject ─────
+mkdir -p .claude
+cat > .claude/active-workflow-prompt.md <<EOF
+# Workflow #$WORKFLOW ($WORKFLOW_NAME) — graduated-workflow catch-up session
+
+**Branch:** $BRANCH
+
+You are re-entering a GRADUATED workflow to fix or extend it. Get fully caught up
+via its continuity primer BEFORE asking the director for the specific task.
+
+## Launch prompt
+
+Read docs/CLAUDE_CODE_STARTER.md and follow every rule in it. Verify the branch
+with \`git branch --show-current\` first — should be \`$BRANCH\`.
+
+Per HANDOFF_PROTOCOL.md Rule 33 (graduated-workflow continuity), catch up like this:
+
+1. **Read the continuity primer in full:** \`$PRIMER\`. It is the map+pointers
+   front door — what is coded into W#$WORKFLOW + where every deep doc lives.
+2. **Follow its §3 pointers as the task needs** — load the specific design /
+   data-contract / spec / CORRECTIONS_LOG sections relevant to what the director
+   wants to change (don't bulk-load everything; the primer tells you what's where).
+3. Per Rule 22 + Rule 3, treat the CODE as truth over any doc claim — verify
+   against the actual source before proposing a change.
+4. Per Rule 23, run a Change Impact Audit before any code change that moves a
+   data shape; per Rule 9, deploys + schema pushes need explicit director Yes.
+5. Produce the start-of-session drift check + a plain-terms summary of W#$WORKFLOW's
+   current state, THEN wait for the director to name the specific fix/addition.
+EOF
+
+echo ""
+echo "════════════════════════════════════════════════════════════════════"
+echo "  Launching Claude Code now."
+echo ""
+echo "  📌 When Claude finishes loading, type any single word (e.g. 'go')"
+echo "     and press Enter. The SessionStart hook injects the catch-up"
+echo "     launch prompt above, so Claude reads the primer and gets caught"
+echo "     up automatically — NO COPY-PASTE NEEDED. Then tell it the"
+echo "     specific fix or addition you want."
+echo "════════════════════════════════════════════════════════════════════"
+echo ""
+
+exec claude

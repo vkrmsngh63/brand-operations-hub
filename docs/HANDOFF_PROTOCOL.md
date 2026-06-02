@@ -1095,6 +1095,36 @@ Whenever a session adds, moves, or changes a place where a user picks an AI mode
 
 ---
 
+### Rule 33 — Graduated-workflow continuity: a primer + a one-paste catch-up command per graduation (NEW 2026-06-02-d)
+
+When a workflow graduates, it MUST leave behind a **continuity primer** + a registered **catch-up command** so a future session can re-enter it and continue *seamlessly* — fixing or extending it as if work never stopped — **without relying on Claude's auto-memory** (which is not authoritative and has been wiped before; everything load-bearing lives in git-tracked files).
+
+**Why this rule exists.** Director directive 2026-06-02-d (verbatim captured in `docs/WORKFLOW_GRADUATION_CONTINUITY_DESIGN.md` §1): *"…create documents and a primer for the situations where we might want to come back to the workflow to fix or add something … a simple command that will instruct your model to go read a primer which … tell[s] you exactly what we have coded into the workflow but also point[s] you to other documents that give you our full code documentation, full functionality documentation and what rules we followed, what mistakes we wanted to avoid … Don't just rely on your memory files … Everything should be in backed up files … add this new rule to a central document … provid[e] me with … a command after each workflow graduation that I can just paste into the codespaces terminal which will catch you up."* This rule is that central record.
+
+**The two graduation artifacts (produced in the graduation session — extends `docs/DOCUMENTATION_ARCHITECTURE.md` §5 Tool Graduation Ritual).**
+
+1. **The continuity primer — `docs/<TOOL>_PRIMER.md`** (copy `docs/templates/WORKFLOW_PRIMER_TEMPLATE.md`). Design choice (director, 2026-06-02-d): **"map + pointers, kept in sync"** — the primer states WHAT is coded and POINTS to the always-current deep docs (full functionality/design docs, the data contract / archive, the rules in HANDOFF_PROTOCOL + CLAUDE_CODE_STARTER, the mistakes in CORRECTIONS_LOG, the per-feature `polish-item-specs/`, the verification backlog). It does NOT duplicate them — duplication drifts; pointers stay current. Keep it short (~1–2 screens). As part of graduation, ensure the docs it points to actually exist and are complete (do the §5 Archive/Data-Contract split if not yet done).
+2. **The catch-up command — `./catch-up-workflow <N>`** (registry in the script). The paste-able Codespaces-terminal command the director runs to re-enter the workflow. It switches to the workflow's branch, pulls, writes a single-use launch prompt to `.claude/active-workflow-prompt.md` (the SessionStart hook injects it — same mechanism as `./resume-workflow`), and launches Claude pointed at the primer. The injected prompt instructs the session to read the primer, follow its pointers as the task needs (Rule 22 deep-doc discipline), treat code as truth (Rule 3), and produce a drift check + plain-terms state summary BEFORE the director names the specific fix/addition.
+
+**The protocol at graduation.**
+
+1. Do the `docs/DOCUMENTATION_ARCHITECTURE.md` §5 ritual (Archive/Data-Contract split, data-capture interview, DATA_CATALOG entries).
+2. Create `docs/<TOOL>_PRIMER.md` from the template; fill every bracket; verify every pointer resolves to a real doc/section.
+3. Register the workflow in `./catch-up-workflow` (its number → branch + primer path).
+4. **Hand the director the one-paste command in the graduation handoff** (e.g. `./catch-up-workflow 2`). This is mandatory output of every graduation session.
+5. Keep the primer current: when a later re-entry session materially changes the workflow's surfaces or open-items, update `docs/<TOOL>_PRIMER.md` §2/§5 in that session (the pointers themselves are self-updating).
+
+**Relationship to existing machinery.** This EXTENDS, not replaces: Rule 22 (graduated-tool re-entry deep-doc discipline) still governs how much of the Archive/Data-Contract to load; `./resume` / `./resume-workflow` still handle the CURRENTLY-active workflow via `NEXT_SESSION.md`. `catch-up-workflow` is the graduated-workflow analogue whose front door is the primer. W#1 (Keyword Clustering) predates this rule and uses the Rule 22 + `KEYWORD_CLUSTERING_DATA_CONTRACT.md` §7 path via `./resume-workflow 1`; a `KEYWORD_CLUSTERING_PRIMER.md` may be backfilled later to bring it under this rule.
+
+**Cross-references.**
+
+- `docs/WORKFLOW_GRADUATION_CONTINUITY_DESIGN.md` — the design doc (verbatim directive + decisions).
+- `docs/templates/WORKFLOW_PRIMER_TEMPLATE.md` — the primer template.
+- `docs/COMPETITION_SCRAPING_PRIMER.md` — the first instance (W#2).
+- `./catch-up-workflow` — the command; `docs/DOCUMENTATION_ARCHITECTURE.md` §5 — the ritual this extends; Rule 22 — re-entry deep-doc discipline; Rule 29 — the memory-wipe incident that motivates "back it up in files."
+
+---
+
 ## 4. END-OF-CHAT PROTOCOL
 
 ### Tooling — `plos-doc-batch` agent + `track-edited-docs.sh` hook (NEW 2026-05-19-g-3)

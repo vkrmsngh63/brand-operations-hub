@@ -153,6 +153,12 @@ Prepopulated with the goal, required data contracts, initial roadmap, and open q
 ### Step 6: Update NEW_CHAT_PROMPT.md
 Tailored to the next chat: "We are starting work on [NEXT_TOOL]. Load these docs: [list]. Here's Day 1's plan: [steps]."
 
+### Step 7: Write the continuity primer (HANDOFF_PROTOCOL Rule 33)
+Copy `docs/templates/WORKFLOW_PRIMER_TEMPLATE.md` to `docs/<TOOL>_PRIMER.md` and fill it in. It is the **map + pointers** front door for re-entering this graduated workflow later to fix or extend it: what is coded into the tool + pointers to the full functionality docs, the Archive/Data Contract from Step 1, the rules (HANDOFF_PROTOCOL + CLAUDE_CODE_STARTER), the mistakes (CORRECTIONS_LOG), the per-feature specs, and the verification backlog. Map, do not duplicate (pointers stay current; copies drift). Verify every pointer resolves.
+
+### Step 8: Register + hand over the catch-up command (HANDOFF_PROTOCOL Rule 33)
+Register the workflow in `./catch-up-workflow` (number → branch + primer path), and hand the director the one-paste Codespaces-terminal command (e.g. `./catch-up-workflow 2`) in the graduation handoff. Running it switches to the branch, pulls, and launches a session pointed at the primer — so a future return is seamless and does NOT depend on Claude's auto-memory.
+
 ---
 
 ## 6. End-of-Chat Handoff Protocol — Two scenarios
