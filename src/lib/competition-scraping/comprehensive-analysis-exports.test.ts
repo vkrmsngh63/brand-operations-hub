@@ -124,8 +124,9 @@ test('main export: dynamic category pair columns splice in before Overall Compet
   assert.equal(matrix[1][ocaIdx - 1], 'Good');
 });
 
-test('main export: multiple items in a category are numbered + index-aligned across the pair', () => {
+test('main export: multiple items in a category EXPAND into real rows (one item per row), fixed cells repeat', () => {
   const url = baseUrl({
+    productName: 'Widget',
     captures: {
       text: [
         {
@@ -150,10 +151,64 @@ test('main export: multiple items in a category are numbered + index-aligned acr
     },
   });
   const { matrix } = buildMainTableExportMatrix(FIXED, [url], PLATFORM_LABELS);
+  // 2 items → 2 data rows (+ header).
+  assert.equal(matrix.length, 3);
   const header = matrix[0];
   const valIdx = header.indexOf('Content Category: Durability');
-  assert.equal(matrix[1][valIdx], '(1) Holds up\n\n(2) Breaks fast');
-  assert.equal(matrix[1][valIdx + 1], '(1) AnA\n\n(2) AnB');
+  const nameIdx = header.indexOf('Product Name');
+  // Each row carries its own item, in order.
+  assert.equal(matrix[1][valIdx], 'Holds up');
+  assert.equal(matrix[1][valIdx + 1], 'AnA');
+  assert.equal(matrix[2][valIdx], 'Breaks fast');
+  assert.equal(matrix[2][valIdx + 1], 'AnB');
+  // Fixed cell (product name) repeats on BOTH rows.
+  assert.equal(matrix[1][nameIdx], 'Widget');
+  assert.equal(matrix[2][nameIdx], 'Widget');
+});
+
+test('main export: span = longest category list; shorter categories blank past their end', () => {
+  const url = baseUrl({
+    captures: {
+      text: [
+        {
+          id: 't1',
+          competitorUrlId: 'u1',
+          category: 'Durability',
+          body: 'D1',
+          analysis: {},
+          sortOrder: 0,
+        },
+        {
+          id: 't2',
+          competitorUrlId: 'u1',
+          category: 'Durability',
+          body: 'D2',
+          analysis: {},
+          sortOrder: 1,
+        },
+        {
+          id: 't3',
+          competitorUrlId: 'u1',
+          category: 'Comfort',
+          body: 'C1',
+          analysis: {},
+          sortOrder: 2,
+        },
+      ],
+      image: [],
+      video: [],
+    },
+  });
+  const { matrix } = buildMainTableExportMatrix(FIXED, [url], PLATFORM_LABELS);
+  // span = max(2 Durability, 1 Comfort) = 2 → 2 rows.
+  assert.equal(matrix.length, 3);
+  const header = matrix[0];
+  const durIdx = header.indexOf('Content Category: Durability');
+  const comfIdx = header.indexOf('Content Category: Comfort');
+  assert.equal(matrix[1][durIdx], 'D1');
+  assert.equal(matrix[2][durIdx], 'D2');
+  assert.equal(matrix[1][comfIdx], 'C1');
+  assert.equal(matrix[2][comfIdx], ''); // Comfort has no 2nd item → blank
 });
 
 test('main export: wrappedColumnIndexes covers OCA + every dynamic column', () => {

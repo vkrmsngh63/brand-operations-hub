@@ -8,9 +8,13 @@
 // Design (director-locked this session):
 //   - EVERYTHING in the table: all columns + all rows, regardless of the user's
 //     on-screen hide/reorder choices (the export is the full picture for an AI).
-//   - ONE row per competitor; a category with several captured items combines
-//     them into a single, clearly-numbered cell (kept index-aligned between the
-//     captured-text column and its Analysis column).
+//   - Excel has no "sub-rows", so the on-screen stacked sub-rows EXPAND into real
+//     Excel rows (director: "sub-rows should be handled like rows"): a competitor
+//     with N items in a category becomes N rows. Each category column shows its
+//     own item per row (item 1, item 2, … — blank past the end of its list),
+//     exactly mirroring the table's stacked sub-rows. The competitor's shared
+//     (fixed) columns REPEAT on every one of its rows so each row is
+//     self-contained for Excel sorting/filtering + AI row-by-row reading.
 //   - Regenerated fresh from live data on each download (the page fetches, then
 //     calls these builders).
 //
@@ -24,6 +28,7 @@ import {
   buildDynamicColumnPairs,
   collectCategories,
   itemsForCategory,
+  subRowSpan,
   type CapturedKind,
   type DynCapturedItem,
   type DynColumnPair,
@@ -85,16 +90,6 @@ const WRAPPED_FIXED_IDS: ReadonlySet<string> = new Set([
   'description2',
   'overallCompetitorAnalysis',
 ]);
-
-// Combine several captured items' cell strings into one cell. A single item is
-// returned bare; multiple items are numbered "(1) …" / "(2) …" and blank-line
-// separated, kept index-aligned with the paired Analysis column so item N's
-// text always lines up with item N's analysis.
-function combineItemCells(values: ReadonlyArray<string>): string {
-  if (values.length === 0) return '';
-  if (values.length === 1) return values[0];
-  return values.map((v, i) => `(${i + 1}) ${v}`).join('\n\n');
-}
 
 // Resolve one FIXED column's cell string for a URL row. Unknown ids return ''
 // (graceful, mirrors reviewsExportCellValue) so the registry can grow without
@@ -209,17 +204,34 @@ export function buildMainTableExportMatrix(
     return col.kind === 'dynValue' ? col.pair.valueLabel : col.pair.analysisLabel;
   });
 
-  const body = urls.map((u) =>
-    columns.map((col) => {
-      if (col.kind === 'fixed') return fixedCellValue(col.id, u, platformLabels);
-      const bucket = u.captures?.[col.pair.kind] ?? [];
-      const items = itemsForCategory(bucket, col.pair.kind, col.pair.category);
-      if (col.kind === 'dynValue') {
-        return combineItemCells(items.map((it) => it.body ?? ''));
-      }
-      return combineItemCells(items.map((it) => tipTapDocToPlainText(it.analysis)));
-    })
+  // Pre-resolve, per URL, each dynamic VALUE column's item list (the analysis
+  // half reuses it). The row span = the longest list (min 1) — exactly the
+  // table's subRowSpan. Each sub-row expands to a real Excel row; fixed cells
+  // repeat on every row of the competitor.
+  const dynValuePairs = columns.filter(
+    (c): c is Extract<ExportColumn, { kind: 'dynValue' }> => c.kind === 'dynValue'
   );
+  const body: string[][] = [];
+  for (const u of urls) {
+    const itemsByPair = new Map<DynColumnPair, DynCapturedItem[]>();
+    for (const col of dynValuePairs) {
+      const bucket = u.captures?.[col.pair.kind] ?? [];
+      itemsByPair.set(col.pair, itemsForCategory(bucket, col.pair.kind, col.pair.category));
+    }
+    const span = subRowSpan(Array.from(itemsByPair.values()));
+    for (let i = 0; i < span; i++) {
+      body.push(
+        columns.map((col) => {
+          if (col.kind === 'fixed') return fixedCellValue(col.id, u, platformLabels);
+          const item = itemsByPair.get(col.pair)?.[i];
+          if (!item) return '';
+          return col.kind === 'dynValue'
+            ? item.body ?? ''
+            : tipTapDocToPlainText(item.analysis);
+        })
+      );
+    }
+  }
 
   const wrappedColumnIndexes: number[] = [];
   columns.forEach((col, i) => {
