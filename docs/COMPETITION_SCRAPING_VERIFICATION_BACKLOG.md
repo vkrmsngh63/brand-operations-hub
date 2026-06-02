@@ -4113,5 +4113,44 @@ Post-merge scoreboard SKIPPED as deliberate efficiency choice — ff-merge produ
 
 ---
 
+## Deploy session #40 — 2026-06-02-g — P-57 delete-coverage gaps (captured-video delete UI + category-label cascade delete) — VERIFIED PASS (2 deploys)
+
+**Session:** `session_2026-06-02-g_p57-delete-coverage-gaps` (W#2 Competition Scraping). Builds `9c4b548` (deploy 1) + `418e6ca` (deploy 2/FF1); `main` `a6081da → 9c4b548 → 418e6ca`. PLOS-side change; NO extension SOURCE change; NO schema change; ONE NEW route (`competition-scraping/categories`).
+
+**Headline outcome:** the competitor URL detail page now lets you delete a captured VIDEO (per-row, like images/text) AND delete any of the three category labels (content / image / video) via a ✕ on the category pill, which permanently deletes the label AND every tagged item across the project after a count-bearing confirm. **VERIFIED PASS** by the director on real Chrome on vklf.com (across two deploys).
+
+**Drift caught at session-start (the code-truth audit):** a Rule 3 Explore-agent audit of all SEVEN item types found reviews / captured text / captured images ALREADY deletable (the directive's reviews/text/images parts were already satisfied), captured videos had a backend DELETE since P-27 Build #5 but a deferred UI, and the three category types had neither backend nor UI — narrowing the work to the video delete UI + category-label deletion.
+
+**Drift caught mid-session (the audit-shipped-state correction):** deploy 1 placed the category-delete trash inside the `VocabularyPicker`, but the picker is NOT shown inline on the detail page (only inside the "+ Manually add" modals; video-category has no picker), so it was undiscoverable. The director re-picked "✕ on each category pill"; the FF1 built a reusable `CategoryPill` and reverted the picker-trash.
+
+**Fix shape narrative:** Part A (deploy 1) = a per-video trash + `ConfirmDeleteDialog` + `handleVideoDeleted` mirroring the image card. Part B (deploy 1 backend + deploy 2 UI) = a NEW pure helper `category-vocabulary.ts` (+10 node:test) + a NEW `categories` route (GET usage count + DELETE cascade) + the `CategoryPill` ✕-on-pill control with a count-bearing project-wide confirm. Q1 = director override → "delete items too" (Option C); Q2 = director override → "✕ on pill."
+
+**Implementation summary (files + LOC):** NEW `src/lib/competition-scraping/category-vocabulary.ts` (pure helper) + NEW `src/app/api/projects/[projectId]/competition-scraping/categories/route.ts` (GET + DELETE) + MODIFIED `url/[urlId]/components/UrlDetailContent.tsx` (video card delete + `handleVideoDeleted` + `CategoryPill` wired into the 3 cards) + `VocabularyPicker.tsx` (deploy-1 picker-trash added, FF1-reverted) + the NEW reusable `CategoryPill` component. Routes 72 → 73.
+
+**Pre-deploy + post-merge verification scoreboard:**
+
+| Check | Entry (2026-06-02-f) | Exit (2026-06-02-g) | Δ |
+| --- | --- | --- | --- |
+| Root tsc | clean | clean | UNCHANGED |
+| Extension tsc | clean | clean | UNCHANGED (no extension files touched) |
+| Extension `npm test` | 915/915 | 915/915 | UNCHANGED |
+| src/lib `node:test` | 1353/1353 | 1363/1363 | +10 (`category-vocabulary` helper tests) |
+| `npm run build` (routes) | 72 | 73 | +1 (the new `categories` endpoint) |
+| Check 6 Playwright | SKIPPED (Rule 27) | SKIPPED (Rule 27) | destructive-delete + visual judgment = director real-Chrome |
+
+**Director real-Chrome verification narrative:** deploy 1 — the director deleted a captured video on a detail page: "I was able to delete videos" (videos PASS), but found no category trash anywhere → triggered the FF1. Deploy 2/FF1 — the director used the ✕ on a category pill, saw the count-bearing confirm, and confirmed the project-wide cascade: verdict **"pass."** Both parts now verified.
+
+**Process observations captured informationally:** the audit-shipped-state correction (a placement recommendation that assumed the picker renders inline) is the durable lesson — verify WHERE a host component actually renders for the data types in scope before recommending a placement (see CORRECTIONS_LOG §Entry 2026-06-02-g); the NEW reusable PATTERN — a destructive project-wide cascade fired from an inline control must pre-fetch + display the exact affected-item count in the confirm before allowing it.
+
+### Cross-references
+
+- `docs/polish-item-specs/P-57-delete-coverage-gaps.md` — §2 audit table + §3 AS-SHIPPED + §4 Q1/Q2 RESOLVED.
+- `docs/COMPETITION_SCRAPING_DESIGN.md` §B 2026-06-02-g — the category-cascade + ✕-on-pill design note.
+- `docs/CORRECTIONS_LOG.md` §Entry 2026-06-02-g — the audit-shipped-state correction + the count-bearing-confirm PATTERN.
+- `docs/ROADMAP.md` P-57 polish-backlog entry — flipped to ✅ DEPLOYED-AND-VERIFIED + CLOSED this session.
+- Build commits `9c4b548` + `418e6ca` on `workflow-2-competition-scraping`; ff-merges `a6081da..9c4b548` + `9c4b548..418e6ca` on `main`.
+
+---
+
 END OF DOCUMENT
 

@@ -4003,6 +4003,28 @@ This session's W5 Session 1.5 design-lock + build work is **PLOS-side AI infrast
 
 ---
 
+## §B 2026-06-02-g — `session_2026-06-02-g_p57-delete-coverage-gaps` — P-57: captured-video per-item delete is now wired + category labels are deletable project-wide via a ✕-on-the-category-pill control with a "delete items too" cascade — append-only design note per Rule 18 (§A frozen)
+
+**Informational design note (the canonical P-57 spec lives in `docs/polish-item-specs/P-57-delete-coverage-gaps.md` §2 audit / §3 AS-SHIPPED / §4 Q1+Q2 RESOLVED; the session methodology + the reusable PATTERN live in `docs/CORRECTIONS_LOG.md` §Entry 2026-06-02-g; the verification PASS lives in `docs/COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` Deploy session #40). P-57 is a PLOS-side delete-coverage change — NO extension SOURCE change, NO schema change, ONE NEW route. DEPLOYED-AND-VERIFIED on vklf.com (director: deploy 1 "I was able to delete videos" + deploy 2/FF1 "pass").**
+
+**The code-truth audit that scoped the work (the materially-new fact this session):** a Rule 3 Explore-agent audit of all SEVEN item types' delete coverage found reviews / captured text / captured images ALREADY deletable (the directive's reviews/text/images parts were already satisfied), captured videos had a fully-implemented backend DELETE (`videos/[videoId]`, since P-27 Build #5) but a deferred UI, and the three category types (content / image / video) had neither backend nor UI. So P-57 narrowed to TWO real gaps — the video delete UI + category-label deletion.
+
+**Category storage model (the decisive design fact):** categories are NOT per-item entities — they are a project-level shared vocabulary pool (`VocabularyEntry (projectId, vocabularyType, value)`), and each capture row stores the string VALUE in `CapturedText.contentCategory` / `CapturedImage.imageCategory` / `CapturedVideo.videoCategory` (a semantic reference, not a DB-constrained FK). So "delete a category" is a project-wide operation, not a per-URL one.
+
+**Design choices made this session (Rule 14f forced-picker outcomes — both director OVERRIDES of my recommendation):** **Q1 (what happens to capture items when a category label is deleted) → Option C "delete items too"** — the director chose, from a clearly-labeled destructive option warning of data loss, to delete the category label AND every CapturedText / Image / Video tagged with it across the project (with best-effort storage cleanup for images/videos). I had recommended the non-destructive Option A (clear the label, keep the items); this is a deliberate director override. **Q2 (where the control lives) → "✕ on each category pill"** — first picked as "trash inside the `VocabularyPicker`," then re-picked after an audit-shipped-state correction (see below).
+
+**The audit-shipped-state correction (Rule 31):** deploy 1 put the category-delete trash inside the `VocabularyPicker` dropdown for the three category types. Post-deploy the director found no 🗑 anywhere — because the `VocabularyPicker` is NOT shown inline on the detail page; it only appears inside the "+ Manually add captured text/image" modals (content/image-category), and video-category has NO picker at all. So the control was undiscoverable + missing for videos. The FF1 (`418e6ca`) moved the control to a discoverable inline ✕ on the read-only category pill of every captured-item card, via a reusable `CategoryPill` component, and REVERTED the picker-trash so there is exactly ONE category-delete surface.
+
+**Implementation subtlety — the count-bearing confirm (the reusable PATTERN):** because the cascade is destructive AND project-wide AND fired from an inline ✕, the confirm must pre-fetch + display the exact affected-item count before allowing the delete. The categories route's GET returns the usage count; the `CategoryPill` confirm shows that count + an explicit "project-wide and permanent" warning before issuing the DELETE — a misclick mitigation added by Claude, not a re-litigation of the Q1 pick.
+
+**Implementation (as shipped):** (1) NEW pure helper `src/lib/competition-scraping/category-vocabulary.ts` — maps each category-`vocabularyType` to its model / column / display noun + a `categoryDeletionMessage` formatter (+10 node:test); (2) NEW route `src/app/api/projects/[projectId]/competition-scraping/categories/route.ts` — GET = usage count for the confirm; DELETE = cascade-delete the `VocabularyEntry` + every tagged capture row in the project + best-effort storage cleanup for images/videos (route count 72 → 73); (3) the captured-video card in `UrlDetailContent.tsx` gained a per-row trash + `handleVideoDeleted` mirroring the image card; (4) the reusable `CategoryPill` wired into the text / image / video cards.
+
+**Affected §A sections (INFORMATIONAL — §A is FROZEN per Rule 18; not edited):** the competitor URL detail page now supports deleting captured videos (per-item, like images/text) and deleting any of the three category-label types (project-wide cascade via the ✕-on-pill control). The category vocabulary pool now has a delete path (previously GET + POST only).
+
+**Cross-references:** spec `docs/polish-item-specs/P-57-delete-coverage-gaps.md`; `docs/CORRECTIONS_LOG.md` §Entry 2026-06-02-g; `docs/COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` Deploy session #40; builds `9c4b548` + `418e6ca` (`main` `a6081da → 9c4b548 → 418e6ca`); the NEW helper `src/lib/competition-scraping/category-vocabulary.ts`; the NEW route `competition-scraping/categories/route.ts`; the `CategoryPill` component; P-27 (the prior video delete backend).
+
+---
+
 ---
 
 END OF DOCUMENT
