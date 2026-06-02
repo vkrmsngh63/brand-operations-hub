@@ -328,6 +328,8 @@ export function ComprehensiveAnalysisFilesBox({ projectId, projectNameOrId }: Pr
               starRating: number;
               title: string | null;
               body: string;
+              reviewerName: string | null;
+              reviewDate: string | null;
               sortRank: number | null;
               sortRankInReviewsTable: number | null;
             }>;
@@ -339,6 +341,8 @@ export function ComprehensiveAnalysisFilesBox({ projectId, projectNameOrId }: Pr
                 starRating: r.starRating,
                 title: r.title,
                 body: r.body,
+                reviewerName: r.reviewerName ?? null,
+                reviewDate: r.reviewDate ?? null,
               }));
             reviewsByUrlId[u.id] = ordered;
             const productName = productNameByUrlId.get(u.id) ?? '(unknown product)';

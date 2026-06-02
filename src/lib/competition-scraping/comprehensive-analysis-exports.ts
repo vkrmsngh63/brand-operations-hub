@@ -295,12 +295,16 @@ export interface ReviewsAnalysisUrl {
 }
 
 // One captured review (the per-review sub-row data). Already in the table's
-// display order when passed in.
+// display order when passed in. Carries every field the /competitor-reviews-
+// analysis expand panel shows (Stars · Review text · Reviewer · Date · the
+// per-review summary), so the export includes all click-to-reveal data.
 export interface ReviewsAnalysisReview {
   id: string;
   starRating: number;
   title: string | null;
   body: string;
+  reviewerName: string | null;
+  reviewDate: string | null;
 }
 
 // The assembled inputs for the Competition Reviews Analysis spreadsheet. The
@@ -316,6 +320,12 @@ export interface ReviewsAnalysisExportData {
   compNonBulletedByUrlId: Record<string, string>;
 }
 
+// The export matches the on-screen /competitor-reviews-analysis table's columns
+// in order — Platform … URL, the "Reviews Summary" count, then the two
+// Comprehensive columns — with the per-review expand-panel fields (Stars ·
+// Review · Reviewer · Date · Review Summary) spliced in at the "Reviews Summary"
+// cell (the cell whose click reveals them), so every datum the table can show
+// is exported.
 const REVIEWS_ANALYSIS_HEADER: ReadonlyArray<string> = [
   'Platform',
   'Category',
@@ -324,23 +334,41 @@ const REVIEWS_ANALYSIS_HEADER: ReadonlyArray<string> = [
   'Results Rank',
   'Comp. Score',
   'URL',
+  'Reviews Summary',
   'Stars',
   'Review',
+  'Reviewer',
+  'Date',
   'Review Summary',
   'Comprehensive (bulleted)',
   'Comprehensive (non-bulleted)',
 ];
-// Long-text columns: Review (8), Review Summary (9), Comprehensive bulleted (10),
-// Comprehensive non-bulleted (11).
-const REVIEWS_ANALYSIS_WRAPPED = [8, 9, 10, 11];
+// Long-text columns: Review (9), Review Summary (12), Comprehensive bulleted
+// (13), Comprehensive non-bulleted (14).
+const REVIEWS_ANALYSIS_WRAPPED = [9, 12, 13, 14];
+
+// The on-screen "Reviews Summary" count cell text ("N of M summarized"); blank
+// when the competitor has no captured reviews (mirrors the page's
+// computeReviewsSummaryCount → '' for the no-reviews case).
+function reviewsSummaryCountText(
+  reviews: ReadonlyArray<ReviewsAnalysisReview>,
+  perReviewSummaryByReviewId: Record<string, string>
+): string {
+  if (reviews.length === 0) return '';
+  const summarized = reviews.reduce(
+    (n, r) => n + (perReviewSummaryByReviewId[r.id] ? 1 : 0),
+    0
+  );
+  return `${summarized} of ${reviews.length} summarized`;
+}
 
 /**
  * Build the "Competition Reviews Analysis" export matrix. Reviews EXPAND into
- * real rows (director: everything, reviews as rows): a competitor with N
- * captured reviews becomes N rows, each carrying that review's Stars / Review
- * text / per-review Summary; the per-competitor fields + the comprehensive AI
- * summaries REPEAT on every one of the competitor's rows. A competitor with no
- * captured reviews still gets one row (blank review columns).
+ * real rows: a competitor with N captured reviews becomes N rows, each carrying
+ * that review's Stars / Review text / Reviewer / Date / per-review Summary; the
+ * per-competitor fields (incl. the "Reviews Summary" count + the comprehensive
+ * AI summaries) REPEAT on every one of the competitor's rows. A competitor with
+ * no captured reviews still gets one row (blank review columns).
  */
 export function buildReviewsAnalysisExportMatrix(
   data: ReviewsAnalysisExportData,
@@ -358,6 +386,7 @@ export function buildReviewsAnalysisExportMatrix(
       u.resultsPageRank == null ? '' : String(u.resultsPageRank),
       u.competitionScore == null ? '' : String(u.competitionScore),
       u.url ?? '',
+      reviewsSummaryCountText(reviews, data.perReviewSummaryByReviewId),
     ];
     const compBulleted = data.compBulletedByUrlId[u.id] ?? '';
     const compNonBulleted = data.compNonBulletedByUrlId[u.id] ?? '';
@@ -367,6 +396,8 @@ export function buildReviewsAnalysisExportMatrix(
         ...base,
         r ? String(r.starRating) : '',
         r ? mergeTitleAndBody(r.title, r.body) : '',
+        r ? r.reviewerName ?? '' : '',
+        r && r.reviewDate ? r.reviewDate.slice(0, 10) : '',
         r ? data.perReviewSummaryByReviewId[r.id] ?? '' : '',
         compBulleted,
         compNonBulleted,

@@ -298,7 +298,7 @@ function reviewsData(
   };
 }
 
-test('reviews export: header shape', () => {
+test('reviews export: header matches the table columns + the expand-panel fields', () => {
   const { matrix } = buildReviewsAnalysisExportMatrix(reviewsData(), PLATFORM_LABELS);
   assert.deepEqual(matrix[0], [
     'Platform',
@@ -308,8 +308,11 @@ test('reviews export: header shape', () => {
     'Results Rank',
     'Comp. Score',
     'URL',
+    'Reviews Summary',
     'Stars',
     'Review',
+    'Reviewer',
+    'Date',
     'Review Summary',
     'Comprehensive (bulleted)',
     'Comprehensive (non-bulleted)',
@@ -323,38 +326,46 @@ test('reviews export: a competitor with no reviews still gets one row (blank rev
   );
   assert.equal(matrix.length, 2); // header + 1 row
   assert.equal(matrix[1][0], 'Amazon'); // platform label
-  assert.equal(matrix[1][7], ''); // Stars blank
-  assert.equal(matrix[1][8], ''); // Review blank
-  assert.equal(matrix[1][10], 'BULLETS'); // comp bulleted present
+  assert.equal(matrix[1][7], ''); // Reviews Summary count blank (no reviews)
+  assert.equal(matrix[1][8], ''); // Stars blank
+  assert.equal(matrix[1][9], ''); // Review blank
+  assert.equal(matrix[1][13], 'BULLETS'); // comp bulleted present
 });
 
-test('reviews export: reviews EXPAND into rows; per-competitor fields + AI summaries repeat', () => {
+test('reviews export: reviews EXPAND into rows; per-competitor fields + count + AI summaries repeat', () => {
   const data = reviewsData({
     reviewsByUrlId: {
       u1: [
-        { id: 'r1', starRating: 5, title: 'Great', body: 'Loved it' },
-        { id: 'r2', starRating: 2, title: null, body: 'Broke fast' },
+        { id: 'r1', starRating: 5, title: 'Great', body: 'Loved it', reviewerName: 'Ann', reviewDate: '2026-05-01T00:00:00.000Z' },
+        { id: 'r2', starRating: 2, title: null, body: 'Broke fast', reviewerName: null, reviewDate: null },
       ],
     },
-    perReviewSummaryByReviewId: { r1: 'positive', r2: 'durability issue' },
+    perReviewSummaryByReviewId: { r1: 'positive' }, // only r1 summarized → "1 of 2"
     compBulletedByUrlId: { u1: 'BULLETS' },
     compNonBulletedByUrlId: { u1: 'PROSE' },
   });
   const { matrix } = buildReviewsAnalysisExportMatrix(data, PLATFORM_LABELS);
   assert.equal(matrix.length, 3); // header + 2 review rows
-  // Row 1 (review r1)
-  assert.equal(matrix[1][7], '5');
-  assert.equal(matrix[1][8], 'Great. Loved it'); // mergeTitleAndBody adds the period
-  assert.equal(matrix[1][9], 'positive');
-  // Row 2 (review r2 — no title → body alone)
-  assert.equal(matrix[2][7], '2');
-  assert.equal(matrix[2][8], 'Broke fast');
-  assert.equal(matrix[2][9], 'durability issue');
-  // Per-competitor AI summaries repeat on BOTH rows.
-  assert.equal(matrix[1][10], 'BULLETS');
-  assert.equal(matrix[2][10], 'BULLETS');
-  assert.equal(matrix[1][11], 'PROSE');
-  assert.equal(matrix[2][11], 'PROSE');
+  // "Reviews Summary" count (col 7) repeats on every row of the competitor.
+  assert.equal(matrix[1][7], '1 of 2 summarized');
+  assert.equal(matrix[2][7], '1 of 2 summarized');
+  // Row 1 (review r1): Stars(8) Review(9) Reviewer(10) Date(11) Summary(12)
+  assert.equal(matrix[1][8], '5');
+  assert.equal(matrix[1][9], 'Great. Loved it'); // mergeTitleAndBody adds the period
+  assert.equal(matrix[1][10], 'Ann');
+  assert.equal(matrix[1][11], '2026-05-01'); // date sliced to YYYY-MM-DD
+  assert.equal(matrix[1][12], 'positive');
+  // Row 2 (review r2 — no title → body alone; null reviewer/date → blank)
+  assert.equal(matrix[2][8], '2');
+  assert.equal(matrix[2][9], 'Broke fast');
+  assert.equal(matrix[2][10], '');
+  assert.equal(matrix[2][11], '');
+  assert.equal(matrix[2][12], ''); // r2 not summarized → blank per-review summary
+  // Per-competitor AI summaries repeat on BOTH rows (bulleted=13, non-bulleted=14).
+  assert.equal(matrix[1][13], 'BULLETS');
+  assert.equal(matrix[2][13], 'BULLETS');
+  assert.equal(matrix[1][14], 'PROSE');
+  assert.equal(matrix[2][14], 'PROSE');
   // Product name repeats.
   assert.equal(matrix[1][3], 'Widget');
   assert.equal(matrix[2][3], 'Widget');
@@ -458,10 +469,10 @@ test('grouped export: summary rows come first, then competitor review rows expan
     ],
     reviewsByUrlId: {
       u1: [
-        { id: 'r1', starRating: 5, title: 'Great heat', body: 'Sears well' },
-        { id: 'r2', starRating: 2, title: null, body: 'Lid broke' },
+        { id: 'r1', starRating: 5, title: 'Great heat', body: 'Sears well', reviewerName: null, reviewDate: null },
+        { id: 'r2', starRating: 2, title: null, body: 'Lid broke', reviewerName: null, reviewDate: null },
       ],
-      u2: [{ id: 'r3', starRating: 4, title: null, body: 'Solid build' }],
+      u2: [{ id: 'r3', starRating: 4, title: null, body: 'Solid build', reviewerName: null, reviewDate: null }],
     },
     perReviewSummaryByReviewId: { r1: 'praises heat', r2: 'lid complaint', r3: 'sturdy' },
     compBulletedByUrlId: { u1: 'WEBER-BULLETS', u2: 'ACME-BULLETS' },
