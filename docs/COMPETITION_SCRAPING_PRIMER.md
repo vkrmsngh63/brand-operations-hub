@@ -56,7 +56,10 @@ teaching "primer" the director feeds to an external AI.
 ## 5. OPEN items at graduation
 
 Read `docs/ROADMAP.md` (search "W#2" + the P-IDs) for the authoritative list. As of
-graduation the notable open/low-priority residue includes: **P-53** (on-page "Export
+graduation the notable open items include: **P-56** (HIGH — Amazon Highlight Terms
+still flicker on the real site and block selecting sentences for capture; resumes the
+deferred P-20 real-Amazon verification; spec `docs/polish-item-specs/P-56-amazon-highlight-flicker-blocks-selection.md`),
+plus the lower-priority residue: **P-53** (on-page "Export
 Table" button — largely absorbed by P-55), **P-43** (add absolute `cd` prefix to all
 `scoreboard.md` Bash commands — recurring cwd-leak), **P-50** (NEW Condition Pathology
 card), **P-26/P-27** (below-fold scroll / capture bugs, low priority), and the two
