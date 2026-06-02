@@ -311,11 +311,14 @@ export function DetailedUserGuide() {
           }}
         >
           <Para>
-            This guide walks you through installing the Competition Scraping browser extension
-            and using it to capture competitor URLs, text, images, and screenshots into PLOS.
-            The extension works alongside this PLOS page: you capture from competitor pages
-            with the extension, then come back here to view, edit, sort, and filter what you
-            captured.
+            This guide has three parts. <strong>Part 1</strong> installs the Competition
+            Scraping browser extension. <strong>Part 2</strong> uses the extension to capture
+            competitor URLs, text, images, videos, screenshots, and reviews into PLOS.{' '}
+            <strong>Part 3</strong> covers everything you do here on the PLOS website
+            (vklf.com) once things are captured — organizing the tables, reviewing each
+            competitor in detail, running the AI review summaries, and downloading the
+            finished analysis files. The extension and this website work together: you capture
+            with the extension, then come back here to view, edit, analyze, and export.
           </Para>
           <MutedNote>
             New to this workflow? Read top-to-bottom. Coming back to look something up? Use
@@ -545,10 +548,10 @@ export function DetailedUserGuide() {
             <Step n={1}>On the competitor page, find the image you want to capture.</Step>
             <Step
               n={2}
-              screenshotCaption="Right-click context menu on an image showing 'Save image to PLOS — Competition Scraping'."
+              screenshotCaption="Right-click context menu on an image showing 'Add to PLOS — Image'."
             >
               Right-click the image. From the menu that appears, pick{' '}
-              <strong>Save image to PLOS &mdash; Competition Scraping</strong>.
+              <strong>Add to PLOS &mdash; Image</strong>.
             </Step>
             <Step n={3}>
               Pick the <strong>Image Category</strong> when the extension prompts you. Click{' '}
@@ -583,6 +586,62 @@ export function DetailedUserGuide() {
               region is saved as one image against the URL you have open.
             </Step>
           </ol>
+
+          <SubsectionHeading>Capture a video</SubsectionHeading>
+          <Para>
+            You can save a competitor&rsquo;s video two ways, depending on whether it&rsquo;s
+            an online video you can point at or something playing on the page you want to
+            record.
+          </Para>
+          <ol style={{ paddingLeft: 0, margin: '6px 0 0' }}>
+            <Step
+              n={1}
+              screenshotCaption="Right-click menu on a video showing 'Add to PLOS — Captured Video' and 'Record video for PLOS'."
+            >
+              <strong>To save an online video:</strong> right-click the video and pick{' '}
+              <strong>Add to PLOS &mdash; Captured Video</strong>. The extension grabs the
+              video&rsquo;s link.
+            </Step>
+            <Step n={2}>
+              <strong>To record what&rsquo;s on screen instead:</strong> right-click and pick{' '}
+              <strong>Record video for PLOS</strong>, then drag a rectangle around the part of
+              the page you want. Recording starts; click <strong>Stop</strong> when
+              you&rsquo;re done (recordings are capped at about three minutes).
+            </Step>
+            <Step n={3}>
+              Pick the <strong>Video Category</strong> when prompted, then click{' '}
+              <strong>Save</strong>. The video is saved against the URL you have open and shows
+              up in that competitor&rsquo;s detail page on PLOS (see Part 3).
+            </Step>
+          </ol>
+
+          <SubsectionHeading>Capture a competitor&rsquo;s reviews</SubsectionHeading>
+          <Para>
+            On supported shopping platforms, the extension can pull a competitor&rsquo;s
+            customer reviews in for you so you can analyze them later on PLOS.
+          </Para>
+          <ol style={{ paddingLeft: 0, margin: '6px 0 0' }}>
+            <Step n={1}>
+              Open the competitor&rsquo;s product page that you already captured as a URL.
+            </Step>
+            <Step
+              n={2}
+              screenshotCaption="Right-click menu showing 'Scrape reviews for this URL', with the small progress indicator running."
+            >
+              Right-click anywhere on the page and pick{' '}
+              <strong>Scrape reviews for this URL</strong>. A small progress indicator appears
+              while the extension reads through the review pages.
+            </Step>
+            <Step n={3}>
+              When it finishes, the reviews are saved against that URL. You can read, edit, and
+              summarize them on PLOS — see <strong>Capture &amp; manage reviews</strong> and{' '}
+              <strong>The Reviews Analysis tables</strong> in Part 3.
+            </Step>
+          </ol>
+          <MutedNote>
+            You can also add a single review by hand on the competitor&rsquo;s detail page in
+            PLOS (the <strong>+ Add review</strong> button) if you ever need to.
+          </MutedNote>
 
           <SubsectionHeading>Browse what you&rsquo;ve captured</SubsectionHeading>
           <Para>
@@ -657,6 +716,290 @@ export function DetailedUserGuide() {
               extension feels stuck and you want a clean slate.
             </li>
           </ul>
+
+          <SectionHeading>Part 3 — On the PLOS website (vklf.com)</SectionHeading>
+          <Para>
+            Everything you capture flows into this website, where you organize it, dig into
+            each competitor, have the AI summarize their reviews, and download finished
+            analysis files to share. Across the top of the Competition Scraping area there are
+            five tabs.
+          </Para>
+
+          <SubsectionHeading>The five tabs</SubsectionHeading>
+          <ul
+            style={{
+              paddingLeft: '20px',
+              margin: '6px 0',
+              fontSize: '14px',
+              lineHeight: 1.7,
+              color: COLOR_TEXT,
+            }}
+          >
+            <li>
+              <strong>Competitor Content Table</strong> — the main list of every competitor URL
+              you&rsquo;ve captured, with all its details.
+            </li>
+            <li>
+              <strong>Competitor Reviews Analysis Table</strong> — every competitor&rsquo;s
+              reviews, with AI summaries.
+            </li>
+            <li>
+              <strong>Reviews Analysis By Competitor Category Table</strong> — the same reviews,
+              grouped by the category you gave each competitor.
+            </li>
+            <li>
+              <strong>Reviews Analysis By Competitor Type Table</strong> — the same reviews,
+              grouped by type.
+            </li>
+            <li>
+              <strong>Comprehensive Analysis</strong> — download-ready spreadsheets, a teaching
+              primer, and a space to write your overall summary.
+            </li>
+          </ul>
+
+          <SubsectionHeading>The Competitor Content Table (main page)</SubsectionHeading>
+          <Para>
+            Each row is one competitor URL you captured. This is where you tidy everything up
+            and find what you need.
+          </Para>
+          <ul
+            style={{
+              paddingLeft: '20px',
+              margin: '6px 0',
+              fontSize: '14px',
+              lineHeight: 1.7,
+              color: COLOR_TEXT,
+            }}
+          >
+            <li>
+              <strong>Open a competitor&rsquo;s full detail page</strong> — click the small{' '}
+              <strong>↗</strong> at the right of the Product Name, or click anywhere on the row.
+            </li>
+            <li>
+              <strong>Show or hide columns</strong> — use the <strong>Columns</strong> box to
+              turn any column on or off. Your choice is remembered.
+            </li>
+            <li>
+              <strong>Filter by platform</strong> — use the <strong>Platforms</strong> box to
+              show only Amazon, Etsy, and so on.
+            </li>
+            <li>
+              <strong>Search</strong> — type in the search box to find competitors by any text.
+            </li>
+            <li>
+              <strong>Change the text size</strong> — use the font-size buttons if the table
+              feels too small or too large.
+            </li>
+            <li>
+              <strong>Sort</strong> — click a column heading to sort by it; click again to
+              reverse the order.
+            </li>
+            <li>
+              <strong>Filter one column</strong> — click the small funnel on a column heading
+              to pick exactly which values to show.
+            </li>
+            <li>
+              <strong>Reorder columns</strong> — drag a column heading by its grip handle to
+              move it. The order is shared for the whole Project.
+            </li>
+            <li>
+              <strong>Reorder rows</strong> — drag a row by its <strong>⠿</strong> handle on the
+              left to put competitors in the order you want.
+            </li>
+            <li>
+              <strong>Group the rows</strong> — use the <strong>Sort By</strong> box to group
+              competitors by Platform, Category, or Type into banner sections.
+            </li>
+            <li>
+              <strong>Category columns appear automatically</strong> — as you tag captured text,
+              images, and videos with categories, matching columns show up so you can compare
+              them side by side.
+            </li>
+            <li>
+              <strong>Add a URL by hand</strong> — the <strong>+ Add URL</strong> button.
+            </li>
+            <li>
+              <strong>Delete a competitor</strong> — the trash icon on the row. Because this
+              also removes everything captured for it, PLOS tells you how many texts, images,
+              videos, and reviews will be removed before you confirm.
+            </li>
+          </ul>
+          <ScreenshotPlaceholder caption="The Competitor Content Table with the Columns, Platforms, and Sort By boxes." />
+
+          <SubsectionHeading>A competitor&rsquo;s detail page</SubsectionHeading>
+          <Para>
+            Open it with the <strong>↗</strong> icon (or by clicking a row). This is the deep
+            view of one competitor.
+          </Para>
+          <ul
+            style={{
+              paddingLeft: '20px',
+              margin: '6px 0',
+              fontSize: '14px',
+              lineHeight: 1.7,
+              color: COLOR_TEXT,
+            }}
+          >
+            <li>
+              <strong>Edit any detail</strong> — click the <strong>✎</strong> next to a field
+              (product name, brand, category, stars, and so on), change it, and it saves.
+            </li>
+            <li>
+              <strong>Captured Text, Images, Videos, and Reviews</strong> each have their own
+              section. You can change the category on any item, edit it, or delete it with its
+              trash button.
+            </li>
+            <li>
+              <strong>Click an image thumbnail</strong> to see it full-size.
+            </li>
+            <li>
+              <strong>Your Analysis box</strong> — every captured item has one. Type your own
+              notes about it and they save automatically.
+            </li>
+            <li>
+              <strong>Category labels</strong> show as little pills. Each pill has a small{' '}
+              <strong>✕</strong> — clicking it removes that category label across the whole
+              Project. Because that can affect many items, PLOS first tells you exactly how many
+              will be removed and asks you to confirm.
+            </li>
+            <li>
+              <strong>Overall Competitor Analysis box</strong> — at the bottom, a space for your
+              own summary of this competitor. It saves automatically.
+            </li>
+          </ul>
+          <ScreenshotPlaceholder caption="A competitor detail page with the Text, Images, Videos, and Reviews sections." />
+
+          <SubsectionHeading>Capture &amp; manage reviews</SubsectionHeading>
+          <Para>
+            Reviews come in from the extension (Part 2), or you can add one by hand. You work
+            with them on the competitor&rsquo;s detail page:
+          </Para>
+          <ul
+            style={{
+              paddingLeft: '20px',
+              margin: '6px 0',
+              fontSize: '14px',
+              lineHeight: 1.7,
+              color: COLOR_TEXT,
+            }}
+          >
+            <li>
+              <strong>Read or edit any review</strong> — click it to change the stars, title,
+              body, or tags.
+            </li>
+            <li>
+              <strong>Delete a review</strong> with its trash button, or tick several and use{' '}
+              <strong>Delete selected</strong>.
+            </li>
+            <li>
+              <strong>Add one by hand</strong> with <strong>+ Add review</strong>.
+            </li>
+            <li>
+              <strong>Give each review your own note</strong> in its{' '}
+              <strong>Your Analysis</strong> box.
+            </li>
+          </ul>
+          <Para>
+            Once reviews are in, the three Reviews Analysis tabs let the AI summarize them for
+            you.
+          </Para>
+
+          <SubsectionHeading>The Reviews Analysis tables (and the AI summaries)</SubsectionHeading>
+          <Para>
+            Three tabs show the same reviews three ways — per competitor, grouped by category,
+            and grouped by type. Each one can have the AI read the reviews and write summaries
+            for you.
+          </Para>
+          <Para>
+            <strong>What the AI gives you</strong> (each comes as tidy bullet points, and most
+            also have a plain-paragraph version if you prefer prose):
+          </Para>
+          <ul
+            style={{
+              paddingLeft: '20px',
+              margin: '6px 0',
+              fontSize: '14px',
+              lineHeight: 1.7,
+              color: COLOR_TEXT,
+            }}
+          >
+            <li>
+              <strong>Per-review summary</strong> — a one-line gist of each individual review.
+            </li>
+            <li>
+              <strong>Per-competitor summary</strong> — pulls all of one competitor&rsquo;s
+              reviews into a set of themed points (what customers praise and complain about).
+            </li>
+            <li>
+              <strong>By-category and by-type summaries</strong> — the same themed points, but
+              combined across all the competitors in a category or a type, so you see the big
+              picture for a whole group.
+            </li>
+            <li>
+              <strong>All-competitors summary</strong> — one overall summary spanning every
+              competitor.
+            </li>
+          </ul>
+          <Para>
+            <strong>To run one:</strong> open the tab you want, find the AI button on a
+            competitor&rsquo;s row (or on a category/type banner), and click it. A small window
+            opens; confirm, and the summary fills into the table as it&rsquo;s generated. You can
+            edit a summary afterward, or clear it and run it again.
+          </Para>
+          <Para>The tables also let you:</Para>
+          <ul
+            style={{
+              paddingLeft: '20px',
+              margin: '6px 0',
+              fontSize: '14px',
+              lineHeight: 1.7,
+              color: COLOR_TEXT,
+            }}
+          >
+            <li>
+              <strong>Drag to reorder</strong> competitors (and, on the grouped tabs, whole
+              categories or types).
+            </li>
+            <li>
+              <strong>Hide a row or group</strong> you don&rsquo;t want to look at — it&rsquo;s
+              only hidden on that page, never deleted, and a panel lets you bring it back.
+            </li>
+            <li>
+              <strong>Export to Excel</strong> — download the table as a spreadsheet.
+            </li>
+          </ul>
+          <ScreenshotPlaceholder caption="A Reviews Analysis table with the AI summary buttons and a generated summary." />
+
+          <SubsectionHeading>The Comprehensive Analysis page</SubsectionHeading>
+          <Para>This is where you pull everything together and hand it off.</Para>
+          <ul
+            style={{
+              paddingLeft: '20px',
+              margin: '6px 0',
+              fontSize: '14px',
+              lineHeight: 1.7,
+              color: COLOR_TEXT,
+            }}
+          >
+            <li>
+              <strong>Download finished files</strong> — the <strong>Files</strong> box gives
+              you ready-made spreadsheets of every table. There are also slimmer versions{' '}
+              &ldquo;without individual reviews&rdquo; if you only want the summaries, and a{' '}
+              <strong>Download all</strong> button that bundles everything into one zip.
+            </li>
+            <li>
+              <strong>A teaching primer</strong> — a short Word document that explains how to
+              read the files. You can drop it into your write-up with{' '}
+              <strong>Insert primer</strong>, or open <strong>Edit</strong> to change the
+              wording, <strong>Save</strong> your own version, and <strong>Reset to default</strong>{' '}
+              any time.
+            </li>
+            <li>
+              <strong>Your overall write-up</strong> — a rich-text space to write your
+              competitive analysis for the whole Project. It saves as you go.
+            </li>
+          </ul>
+          <ScreenshotPlaceholder caption="The Comprehensive Analysis page with the Files box and the primer controls." />
 
           <SectionHeading>Tips</SectionHeading>
           <ul
