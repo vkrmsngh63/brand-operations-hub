@@ -366,6 +366,8 @@ import {
   buildCategoryReviewsAnalysisExportMatrix,
   buildTypeReviewsAnalysisExportMatrix,
   formatSourceReviewsCell,
+  clampToExcelCellLimit,
+  EXCEL_MAX_CELL_LENGTH,
   type GroupedReviewsAnalysisExportData,
 } from './comprehensive-analysis-exports.ts';
 import type {
@@ -559,6 +561,17 @@ test('grouped export: wrapped column indexes cover the long-text columns', () =>
   // Review(8), Reviews Summary(9), Comp bulleted(10), Comp non-bulleted(11),
   // Category bulleted(12), Source Reviews(13), Category non-bulleted(14).
   assert.deepEqual(wrappedColumnIndexes, [8, 9, 10, 11, 12, 13, 14]);
+});
+
+test('clampToExcelCellLimit: short strings pass through; oversized are clamped to the limit', () => {
+  assert.equal(clampToExcelCellLimit(''), '');
+  assert.equal(clampToExcelCellLimit('hello'), 'hello');
+  const atLimit = 'a'.repeat(EXCEL_MAX_CELL_LENGTH);
+  assert.equal(clampToExcelCellLimit(atLimit), atLimit); // exactly at limit untouched
+  const over = 'b'.repeat(EXCEL_MAX_CELL_LENGTH + 5000);
+  const clamped = clampToExcelCellLimit(over);
+  assert.equal(clamped.length, EXCEL_MAX_CELL_LENGTH); // never exceeds the limit
+  assert.match(clamped, /truncated/);
 });
 
 test('buildExportFilename / buildExportZipFilename: slug + date', () => {

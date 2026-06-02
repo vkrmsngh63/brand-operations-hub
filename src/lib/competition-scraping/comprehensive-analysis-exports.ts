@@ -44,6 +44,25 @@ import {
   type TraceabilityCategory,
 } from './reviews-traceability.ts';
 
+// Excel's hard per-cell limit. A single worksheet cell cannot hold more than
+// 32,767 characters; xlsx throws "Text length must not exceed 32767 characters"
+// at write time otherwise. The grouped "Source Reviews" cell (every review
+// behind every AI complaint across a whole category/type, repeated per row) can
+// exceed this, so every cell is clamped at the write boundary.
+export const EXCEL_MAX_CELL_LENGTH = 32767;
+const EXCEL_TRUNCATION_MARKER =
+  ' …[truncated to fit Excel’s 32,767-character cell limit]';
+
+/** Clamp a cell string to Excel's per-cell character limit, appending a marker
+ *  so the truncation is visible. Strings within the limit pass through. */
+export function clampToExcelCellLimit(text: string): string {
+  if (text.length <= EXCEL_MAX_CELL_LENGTH) return text;
+  return (
+    text.slice(0, EXCEL_MAX_CELL_LENGTH - EXCEL_TRUNCATION_MARKER.length) +
+    EXCEL_TRUNCATION_MARKER
+  );
+}
+
 // The sheet name shown on the single worksheet inside each workbook.
 export const MAIN_TABLE_SHEET_NAME = 'Competition Content Overview';
 export const REVIEWS_ANALYSIS_SHEET_NAME = 'Competition Reviews Analysis';

@@ -30,6 +30,7 @@ import {
   buildTypeReviewsAnalysisExportMatrix,
   buildExportFilename,
   buildExportZipFilename,
+  clampToExcelCellLimit,
   MAIN_TABLE_SHEET_NAME,
   REVIEWS_ANALYSIS_SHEET_NAME,
   CATEGORY_REVIEWS_SHEET_NAME,
@@ -106,7 +107,13 @@ function matrixToXlsxArrayBuffer(
   result: ExportMatrixResult,
   sheetName: string
 ): ArrayBuffer {
-  const worksheet = XLSX.utils.aoa_to_sheet(result.matrix);
+  // Clamp every cell to Excel's 32,767-char per-cell limit before writing
+  // (the Source Reviews / AI-summary cells can exceed it) — xlsx throws
+  // otherwise.
+  const safeMatrix = result.matrix.map((row) =>
+    row.map((cell) => clampToExcelCellLimit(cell))
+  );
+  const worksheet = XLSX.utils.aoa_to_sheet(safeMatrix);
   const range = XLSX.utils.decode_range(worksheet['!ref'] ?? 'A1');
   const wrapped = new Set(result.wrappedColumnIndexes);
   for (let c = range.s.c; c <= range.e.c; c++) {
