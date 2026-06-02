@@ -316,6 +316,45 @@ export function UrlDetailContent({ project, urlId }: Props) {
     [project.id, imagesSlot.data, imagesSlot.error]
   );
 
+  // P-57 (2026-06-02-g) — captured-video delete. Backend route existed since
+  // P-27 Build #5 but the UI control was deferred; this wires it with the
+  // same optimistic-remove + rollback shape as image/review.
+  const handleVideoDeleted = useCallback(
+    async (videoId: string): Promise<void> => {
+      const prevList = videosSlot.data;
+      if (!prevList) {
+        const res = await authFetch(
+          `/api/projects/${project.id}/competition-scraping/videos/${videoId}`,
+          { method: 'DELETE' }
+        );
+        if (!res.ok) {
+          const detail = await readErrorMessage(res, 'Could not delete captured video');
+          throw new Error(detail);
+        }
+        return;
+      }
+      setVideosSlot({
+        data: prevList.filter((v) => v.id !== videoId),
+        error: videosSlot.error,
+      });
+      try {
+        const res = await authFetch(
+          `/api/projects/${project.id}/competition-scraping/videos/${videoId}`,
+          { method: 'DELETE' }
+        );
+        if (!res.ok) {
+          setVideosSlot({ data: prevList, error: videosSlot.error });
+          const detail = await readErrorMessage(res, 'Could not delete captured video');
+          throw new Error(detail);
+        }
+      } catch (err) {
+        setVideosSlot({ data: prevList, error: videosSlot.error });
+        throw err instanceof Error ? err : new Error('Network error');
+      }
+    },
+    [project.id, videosSlot.data, videosSlot.error]
+  );
+
   // P-46 Workstream 2 Session 4 (2026-05-28) — captured-review delete.
   // Same optimistic-remove + rollback shape as text + image; DELETE hits the
   // shallow per-record path competition-scraping/reviews/[reviewId] matching
@@ -668,6 +707,7 @@ export function UrlDetailContent({ project, urlId }: Props) {
               projectId={project.id}
               urlId={urlId}
               overallAnalysisInitial={urlSlot.data.overallAnalyses?.video ?? {}}
+              onVideoDeleted={handleVideoDeleted}
             />
             <CapturedReviewsSection
               slot={reviewsSlot}
@@ -1634,19 +1674,33 @@ function CapturedImageCard({
 // P-46 Workstream 2 (2026-05-25 Session 2) — converted to the same vertical
 // card-list layout as Captured Text + Captured Image per the §C.2 precedent.
 // Each card now carries the inline player + metadata + a per-item Analysis
-// box (PerItemAnalysisBox). Per-row delete dialog still deferred (matches
-// Build #5's scope — no per-video delete in v1).
+// box (PerItemAnalysisBox).
+//
+// P-57 (2026-06-02-g) — per-row delete now wired (the backend route existed
+// since Build #5; only the UI control was deferred). Same pending-delete +
+// ConfirmDeleteDialog (plain variant) shape as the image gallery.
 function CapturedVideosGallery({
   slot,
   projectId,
   urlId,
   overallAnalysisInitial,
+  onVideoDeleted,
 }: {
   slot: FetchSlot<CapturedVideoWithUrls[]>;
   projectId: string;
   urlId: string;
   overallAnalysisInitial: Record<string, unknown>;
+  onVideoDeleted: (videoId: string) => Promise<void>;
 }) {
+  const [pendingDelete, setPendingDelete] =
+    useState<CapturedVideoWithUrls | null>(null);
+
+  const handleConfirmVideoDelete = async (): Promise<void> => {
+    if (!pendingDelete) return;
+    await onVideoDeleted(pendingDelete.id);
+    setPendingDelete(null);
+  };
+
   const videos = slot.data;
   return (
     <section
@@ -1683,7 +1737,12 @@ function CapturedVideosGallery({
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {videos.map((v) => (
-            <CapturedVideoCard key={v.id} video={v} projectId={projectId} />
+            <CapturedVideoCard
+              key={v.id}
+              video={v}
+              projectId={projectId}
+              onDeleteClick={() => setPendingDelete(v)}
+            />
           ))}
         </div>
       )}
@@ -1696,6 +1755,20 @@ function CapturedVideosGallery({
         label="Overall Analysis — Captured Videos"
         placeholder="Synthesize your overall analysis across the captured videos above…"
         testId="overall-analysis-video"
+      />
+      <ConfirmDeleteDialog
+        isOpen={pendingDelete !== null}
+        title="Delete this captured video?"
+        message={
+          pendingDelete
+            ? (pendingDelete.videoCategory ?? 'This video') +
+              ' — this cannot be undone.'
+            : 'This cannot be undone.'
+        }
+        confirmLabel="Delete video"
+        onClose={() => setPendingDelete(null)}
+        onConfirm={handleConfirmVideoDelete}
+        variant={{ kind: 'plain' }}
       />
     </section>
   );
@@ -1714,9 +1787,11 @@ function CapturedVideosGallery({
 function CapturedVideoCard({
   video,
   projectId,
+  onDeleteClick,
 }: {
   video: CapturedVideoWithUrls;
   projectId: string;
+  onDeleteClick: () => void;
 }) {
   return (
     <article
@@ -1755,6 +1830,16 @@ function CapturedVideoCard({
             </span>
           )}
         </div>
+        <button
+          type="button"
+          onClick={onDeleteClick}
+          aria-label="Delete captured video"
+          title="Delete captured video"
+          data-testid="captured-video-delete-button"
+          style={rowTrashButtonStyle}
+        >
+          🗑
+        </button>
       </div>
       <div
         style={{
