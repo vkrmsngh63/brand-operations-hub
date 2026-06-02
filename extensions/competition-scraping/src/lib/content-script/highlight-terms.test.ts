@@ -14,6 +14,7 @@ import {
   buildColorMap,
   buildHighlightRegex,
   hashFingerprintMatches,
+  isActiveTextSelection,
   processInChunks,
   type CancellationSignal,
 } from './highlight-terms.ts';
@@ -418,5 +419,43 @@ describe('hashFingerprintMatches (P-20 fix 2026-05-15)', () => {
     const fp = hashFingerprintMatches(many);
     assert.ok(fp.startsWith('10000:'));
     assert.ok(/^10000:-?\d+$/.test(fp), `fingerprint shape: ${fp}`);
+  });
+});
+
+describe('isActiveTextSelection (P-56 fix 2026-06-02-e)', () => {
+  // Builds a minimal Selection-shaped snapshot for the decision logic.
+  const sel = (
+    over: Partial<{
+      isCollapsed: boolean;
+      rangeCount: number;
+      text: string;
+    }> = {},
+  ): { isCollapsed: boolean; rangeCount: number; toString(): string } => ({
+    isCollapsed: over.isCollapsed ?? false,
+    rangeCount: over.rangeCount ?? 1,
+    toString: () => over.text ?? 'a highlighted sentence',
+  });
+
+  it('returns false for null / undefined', () => {
+    assert.equal(isActiveTextSelection(null), false);
+    assert.equal(isActiveTextSelection(undefined), false);
+  });
+
+  it('returns false for a collapsed caret (no selection)', () => {
+    assert.equal(isActiveTextSelection(sel({ isCollapsed: true })), false);
+  });
+
+  it('returns false when there are no ranges', () => {
+    assert.equal(isActiveTextSelection(sel({ rangeCount: 0 })), false);
+  });
+
+  it('returns false for a non-collapsed but empty/whitespace selection', () => {
+    assert.equal(isActiveTextSelection(sel({ text: '' })), false);
+    assert.equal(isActiveTextSelection(sel({ text: '   \n\t ' })), false);
+  });
+
+  it('returns true for an active non-empty text selection', () => {
+    assert.equal(isActiveTextSelection(sel()), true);
+    assert.equal(isActiveTextSelection(sel({ text: 'bursitis cream' })), true);
   });
 });

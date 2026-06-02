@@ -372,6 +372,34 @@ export function computeMatchableFingerprint(
 }
 
 /**
+ * P-56 fix 2026-06-02-e. True when `sel` is an active, non-empty user text
+ * selection (a drag-select in progress or a held highlight), as opposed to a
+ * collapsed caret or no selection. Pure + DOM-free — it takes a Selection-
+ * shaped snapshot so the decision logic is unit-testable; the live caller
+ * passes `window.getSelection()`.
+ *
+ * The live-highlight controller consults this before every strip-and-reapply
+ * pass. On real amazon.com the page mutates ~once every 2s (see the
+ * `docs/p-20-trace-script.js` real-Amazon trace: ~0.47 would-be rescans/sec
+ * + ~4,600 chars/sec of newly-added text), and a full-page re-wrap of the
+ * <mark> elements collapses a selection the user is dragging across a
+ * highlighted word — the exact P-56 symptom (the sentence "cannot be
+ * selected"). When a selection is active the refresh is DEFERRED until the
+ * selection clears, so an in-progress drag is never interrupted.
+ */
+export function isActiveTextSelection(
+  sel:
+    | { isCollapsed: boolean; rangeCount: number; toString(): string }
+    | null
+    | undefined,
+): boolean {
+  if (!sel) return false;
+  if (sel.isCollapsed) return false;
+  if (sel.rangeCount === 0) return false;
+  return sel.toString().trim().length > 0;
+}
+
+/**
  * Strips every .plos-cs-highlight span from `root`, restoring original text.
  * .normalize() merges the freshly-adjacent text nodes so subsequent walks
  * see clean text.
@@ -456,6 +484,20 @@ export async function startLiveHighlighting(
   // null whenever a forcing event happens (term-list change, no-terms
   // state), so the very next refresh always runs.
   let lastFingerprint: string | null = null;
+  // P-56 fix 2026-06-02-e: set true when a refresh() is skipped because the
+  // user has an active text selection. The 'selectionchange' listener re-runs
+  // refresh() once the selection clears so the deferred highlight work lands.
+  let deferredBySelection = false;
+
+  function getCurrentSelection(): Selection | null {
+    if (
+      typeof window === 'undefined' ||
+      typeof window.getSelection !== 'function'
+    ) {
+      return null;
+    }
+    return window.getSelection();
+  }
 
   async function reload(): Promise<void> {
     if (destroyed) return;
@@ -475,6 +517,20 @@ export async function startLiveHighlighting(
 
   async function refresh(): Promise<void> {
     if (destroyed) return;
+
+    // P-56 fix 2026-06-02-e: never strip-and-reapply while the user has an
+    // active text selection. On real amazon.com the page mutates ~once every
+    // 2s, and each full-page <mark> re-wrap collapses an in-progress drag-
+    // select across a highlighted word — the exact P-56 symptom. Defer the
+    // work; onSelectionChange re-runs refresh() once the selection clears.
+    // Checked BEFORE the fingerprint walk so we skip even that cost while
+    // selecting. We intentionally DO NOT touch lastFingerprint, so the
+    // pending highlight work is preserved and the deferred (or next mutation-
+    // driven) refresh applies it.
+    if (isActiveTextSelection(getCurrentSelection())) {
+      deferredBySelection = true;
+      return;
+    }
 
     // P-20 fix 2026-05-15: short-circuit on unchanged matchable-text
     // fingerprint. The walk is sync + lightweight (one TreeWalker pass
@@ -594,6 +650,22 @@ export async function startLiveHighlighting(
     chrome.storage.onChanged.addListener(onStorageChanged);
   }
 
+  // P-56 fix 2026-06-02-e: when a refresh was deferred because the user was
+  // selecting, re-run it the moment the selection clears. The early
+  // `deferredBySelection` guard keeps this listener near-free during the
+  // frequent selectionchange events that fire while the user is mid-drag —
+  // real work happens only on the transition to "no active selection".
+  const onSelectionChange = (): void => {
+    if (destroyed) return;
+    if (!deferredBySelection) return;
+    if (isActiveTextSelection(getCurrentSelection())) return;
+    deferredBySelection = false;
+    void refresh();
+  };
+  if (typeof document !== 'undefined' && document.addEventListener) {
+    document.addEventListener('selectionchange', onSelectionChange);
+  }
+
   return {
     refresh,
     destroy(): void {
@@ -606,6 +678,10 @@ export async function startLiveHighlighting(
       }
       if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
         chrome.storage.onChanged.removeListener(onStorageChanged);
+      }
+      // P-56 fix 2026-06-02-e: drop the selection listener on teardown.
+      if (typeof document !== 'undefined' && document.removeEventListener) {
+        document.removeEventListener('selectionchange', onSelectionChange);
       }
       removeAllHighlights();
     },
