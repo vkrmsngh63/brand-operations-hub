@@ -404,7 +404,7 @@ function groupedData(
   };
 }
 
-test('grouped export (category): header order — group summaries + trailing Source-for-complaint column', () => {
+test('grouped export (category): header matches the on-screen By-Category table columns/order', () => {
   const { matrix } = buildCategoryReviewsAnalysisExportMatrix(
     groupedData(),
     PLATFORM_LABELS
@@ -418,40 +418,39 @@ test('grouped export (category): header order — group summaries + trailing Sou
     'Comp. Score',
     'URL',
     'Stars',
-    'Review',
     'Reviews Summary',
     'Competitor Comprehensive (bulleted)',
     'Competitor Comprehensive (non-bulleted)',
     'Category Comprehensive (bulleted)',
+    'Source Reviews',
     'Category Comprehensive (non-bulleted)',
-    'Source for AI complaint',
   ]);
 });
 
-test('grouped export (type): Type↔Category column swap + type-worded group labels', () => {
+test('grouped export (type): header matches the By-Type table — Type↔Category swap + type wording', () => {
   const { matrix } = buildTypeReviewsAnalysisExportMatrix(groupedData(), PLATFORM_LABELS);
   assert.equal(matrix[0][0], 'Type'); // grouping column first
   assert.equal(matrix[0][2], 'Category'); // plain category at position 3
-  assert.equal(matrix[0][12], 'Type Comprehensive (bulleted)');
+  assert.equal(matrix[0][11], 'Type Comprehensive (bulleted)');
+  assert.equal(matrix[0][12], 'Source Reviews');
   assert.equal(matrix[0][13], 'Type Comprehensive (non-bulleted)');
-  assert.equal(matrix[0][14], 'Source for AI complaint');
 });
 
-test('grouped export: a competitor with no reviews still gets one row (blank review cols)', () => {
+test('grouped export: a competitor with no reviews + no category summary → one competitor row', () => {
   const { matrix } = buildCategoryReviewsAnalysisExportMatrix(
     groupedData({ compBulletedByUrlId: { u1: 'COMP-BULLETS' } }),
     PLATFORM_LABELS
   );
-  assert.equal(matrix.length, 2); // header + 1 competitor row (no bulleted cats → no source rows)
+  assert.equal(matrix.length, 2); // header + 1 competitor row (no summary rows)
   assert.equal(matrix[1][0], 'Grills'); // category value
   assert.equal(matrix[1][1], 'Amazon'); // platform label
   assert.equal(matrix[1][7], ''); // Stars blank
-  assert.equal(matrix[1][8], ''); // Review blank
-  assert.equal(matrix[1][10], 'COMP-BULLETS'); // competitor bulleted present
-  assert.equal(matrix[1][14], ''); // Source-for-complaint blank on competitor rows
+  assert.equal(matrix[1][8], ''); // Reviews Summary blank
+  assert.equal(matrix[1][9], 'COMP-BULLETS'); // Competitor Comprehensive (bulleted)
+  assert.equal(matrix[1][12], ''); // Source Reviews blank on competitor rows
 });
 
-test('grouped export: two-level expansion — reviews expand; competitor + group fields repeat down', () => {
+test('grouped export: summary rows come first, then competitor review rows expand', () => {
   const data = groupedData({
     urls: [
       groupedUrl('u1', { productName: 'Weber X' }),
@@ -466,25 +465,31 @@ test('grouped export: two-level expansion — reviews expand; competitor + group
     },
     perReviewSummaryByReviewId: { r1: 'praises heat', r2: 'lid complaint', r3: 'sturdy' },
     compBulletedByUrlId: { u1: 'WEBER-BULLETS', u2: 'ACME-BULLETS' },
+    // bulleted summary text present but no per-complaint categories → one banner row
     groupBulletedByKey: { Grills: { summary: 'CATEGORY-BULLETS', categories: [] } },
     groupNonBulletedByKey: { Grills: 'CATEGORY-PROSE' },
   });
   const { matrix } = buildCategoryReviewsAnalysisExportMatrix(data, PLATFORM_LABELS);
-  // header + 2 (u1) + 1 (u2) review rows (no bulleted categories → no source rows)
-  assert.equal(matrix.length, 4);
-  // u1 review rows
-  assert.equal(matrix[1][8], 'Great heat. Sears well');
-  assert.equal(matrix[1][9], 'praises heat');
-  assert.equal(matrix[2][8], 'Lid broke');
-  // competitor bulleted repeats on both u1 rows, differs for u2
-  assert.equal(matrix[1][10], 'WEBER-BULLETS');
-  assert.equal(matrix[2][10], 'WEBER-BULLETS');
-  assert.equal(matrix[3][10], 'ACME-BULLETS');
-  // group-level summaries repeat on EVERY row in the Grills group (bulleted=12,
-  // non-bulleted=13)
-  for (let r = 1; r <= 3; r++) {
-    assert.equal(matrix[r][12], 'CATEGORY-BULLETS');
-    assert.equal(matrix[r][13], 'CATEGORY-PROSE');
+  // header + 1 banner/summary row + 2 (u1) + 1 (u2) competitor review rows
+  assert.equal(matrix.length, 5);
+  // Row 1 = the category summary row (banner): bulleted + non-bulleted filled,
+  // competitor cells blank.
+  assert.equal(matrix[1][0], 'Grills');
+  assert.equal(matrix[1][11], 'CATEGORY-BULLETS'); // Category Comprehensive (bulleted)
+  assert.equal(matrix[1][13], 'CATEGORY-PROSE'); // Category Comprehensive (non-bulleted)
+  assert.equal(matrix[1][7], ''); // Stars blank on summary row
+  // Rows 2-4 = competitor review rows: Stars + Reviews Summary per review;
+  // Competitor Comprehensive (bulleted) at col 9; category-level cells blank.
+  assert.equal(matrix[2][7], '5');
+  assert.equal(matrix[2][8], 'praises heat'); // Reviews Summary (per-review)
+  assert.equal(matrix[3][7], '2');
+  assert.equal(matrix[2][9], 'WEBER-BULLETS');
+  assert.equal(matrix[3][9], 'WEBER-BULLETS');
+  assert.equal(matrix[4][9], 'ACME-BULLETS');
+  for (let r = 2; r <= 4; r++) {
+    assert.equal(matrix[r][11], ''); // category-level cells blank on competitor rows
+    assert.equal(matrix[r][12], '');
+    assert.equal(matrix[r][13], '');
   }
 });
 
@@ -497,21 +502,20 @@ test('grouped export: groups sort alphabetically; uncategorized bucket last; all
     ],
   });
   const { matrix } = buildCategoryReviewsAnalysisExportMatrix(data, PLATFORM_LABELS);
-  // header + 3 rows (one per competitor, no reviews → one row each)
+  // header + 3 competitor rows (no summaries → no banner rows)
   assert.equal(matrix.length, 4);
   assert.equal(matrix[1][0], 'Grills'); // alphabetical first
   assert.equal(matrix[2][0], 'Smokers');
   assert.equal(matrix[3][0], ''); // uncategorized value is empty, pinned last
 });
 
-test('grouped export: each source review behind a complaint becomes its OWN row (no overflow cell)', () => {
+test('grouped export: each source review behind a complaint is its OWN summary row in Source Reviews', () => {
   const reviewMetaById = new Map<string, CategorySourceReviewMeta>([
     ['r1', { starRating: 2, title: 'Lid', body: 'broke', productName: 'Weber X', urlId: 'u1' }],
     ['r9', { starRating: 1, title: null, body: 'flimsy lid', productName: 'Acme Q', urlId: 'u2' }],
   ]);
   const data = groupedData({
     urls: [groupedUrl('u1', { productName: 'Weber X' }), groupedUrl('u2', { productName: 'Acme Q' })],
-    perReviewSummaryByReviewId: { r1: 'lid durability' },
     reviewMetaById,
     groupBulletedByKey: {
       Grills: {
@@ -523,25 +527,19 @@ test('grouped export: each source review behind a complaint becomes its OWN row 
     },
   });
   const { matrix } = buildCategoryReviewsAnalysisExportMatrix(data, PLATFORM_LABELS);
-  // header + 2 competitor rows (1 blank-review row each) + 2 source-review rows
+  // header + 2 summary rows (one per source review) + 2 competitor rows
   assert.equal(matrix.length, 5);
-  // The two competitor rows carry no source-complaint.
-  assert.equal(matrix[1][14], '');
-  assert.equal(matrix[2][14], '');
-  // Source-review row for r1 (Weber X).
-  const r1Row = matrix[3];
-  assert.equal(r1Row[0], 'Grills'); // grouping column repeats
-  assert.equal(r1Row[3], 'Weber X'); // source product
-  assert.equal(r1Row[7], '2'); // source stars
-  assert.equal(r1Row[8], 'Lid. broke'); // merged title+body
-  assert.equal(r1Row[9], 'lid durability'); // per-review summary if present
-  assert.equal(r1Row[14], 'Build quality — Flimsy lid'); // the complaint it supports
-  assert.equal(r1Row[10], ''); // competitor-level columns stay blank
-  assert.equal(r1Row[12], ''); // group-level summary columns stay blank on source rows
-  // Source-review row for r9 (Acme Q).
-  assert.equal(matrix[4][3], 'Acme Q');
-  assert.equal(matrix[4][8], 'flimsy lid');
-  assert.equal(matrix[4][14], 'Build quality — Flimsy lid');
+  // Summary rows come first. Source Reviews column = "<complaint> — <product> ★<stars>: <text>".
+  assert.equal(matrix[1][0], 'Grills'); // grouping column carried on banner rows
+  assert.equal(matrix[1][11], 'CATEGORY-BULLETS'); // bulleted summary repeats down
+  assert.match(matrix[1][12], /Flimsy lid — Weber X ★2: Lid\. broke/);
+  assert.match(matrix[2][12], /Flimsy lid — Acme Q ★1: flimsy lid/);
+  // Summary rows leave the competitor columns blank.
+  assert.equal(matrix[1][1], ''); // Platform blank
+  assert.equal(matrix[1][7], ''); // Stars blank
+  // Competitor rows (3-4) leave Source Reviews blank.
+  assert.equal(matrix[3][12], '');
+  assert.equal(matrix[4][12], '');
 });
 
 test('grouped export: wrapped column indexes cover the long-text columns', () => {
@@ -549,9 +547,9 @@ test('grouped export: wrapped column indexes cover the long-text columns', () =>
     groupedData(),
     PLATFORM_LABELS
   );
-  // Review(8), Reviews Summary(9), Comp bulleted(10), Comp non-bulleted(11),
-  // Category bulleted(12), Category non-bulleted(13), Source-for-complaint(14).
-  assert.deepEqual(wrappedColumnIndexes, [8, 9, 10, 11, 12, 13, 14]);
+  // Reviews Summary(8), Competitor bulleted(9), Competitor non-bulleted(10),
+  // Category bulleted(11), Source Reviews(12), Category non-bulleted(13).
+  assert.deepEqual(wrappedColumnIndexes, [8, 9, 10, 11, 12, 13]);
 });
 
 test('clampToExcelCellLimit: short strings pass through; oversized are clamped to the limit', () => {
