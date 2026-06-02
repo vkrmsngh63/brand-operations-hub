@@ -40,7 +40,6 @@ import { buildTypeGroups } from './type-table-grouping.ts';
 import {
   buildCategorySourceReviewRows,
   type CategorySourceReviewMeta,
-  type CategorySourceTheme,
   type TraceabilityCategory,
 } from './reviews-traceability.ts';
 
@@ -436,6 +435,11 @@ export interface GroupedReviewsAnalysisExportData {
 // "Review" column spliced after "Stars" (the standing reviews-as-rows rule).
 // The By-Type sheet swaps the grouping column to position 1 + the plain
 // category column to position 3, and re-words the group-level labels.
+//
+// 'sourceComplaint' is the trailing marker column: blank on competitor review
+// rows, and on the dedicated source-review rows it names the AI complaint that
+// review is evidence for. The old single "Source Reviews" cell is gone — each
+// source review is now its own row (so no cell can overflow Excel's limit).
 type GroupedColId =
   | 'category'
   | 'type'
@@ -450,25 +454,25 @@ type GroupedColId =
   | 'compBulleted'
   | 'compNonBulleted'
   | 'groupBulleted'
-  | 'sourceReviews'
-  | 'groupNonBulleted';
+  | 'groupNonBulleted'
+  | 'sourceComplaint';
 
 const CATEGORY_COL_IDS: ReadonlyArray<GroupedColId> = [
   'category', 'platform', 'type', 'productName', 'resultsPageRank',
   'competitionScore', 'url', 'stars', 'review', 'reviewsSummary',
-  'compBulleted', 'compNonBulleted', 'groupBulleted', 'sourceReviews',
-  'groupNonBulleted',
+  'compBulleted', 'compNonBulleted', 'groupBulleted', 'groupNonBulleted',
+  'sourceComplaint',
 ];
 const TYPE_COL_IDS: ReadonlyArray<GroupedColId> = [
   'type', 'platform', 'category', 'productName', 'resultsPageRank',
   'competitionScore', 'url', 'stars', 'review', 'reviewsSummary',
-  'compBulleted', 'compNonBulleted', 'groupBulleted', 'sourceReviews',
-  'groupNonBulleted',
+  'compBulleted', 'compNonBulleted', 'groupBulleted', 'groupNonBulleted',
+  'sourceComplaint',
 ];
 // Long free-text columns the page wraps.
 const GROUPED_WRAPPED_IDS: ReadonlySet<GroupedColId> = new Set<GroupedColId>([
   'review', 'reviewsSummary', 'compBulleted', 'compNonBulleted',
-  'groupBulleted', 'sourceReviews', 'groupNonBulleted',
+  'groupBulleted', 'groupNonBulleted', 'sourceComplaint',
 ]);
 
 function groupedColLabel(id: GroupedColId, grouping: 'category' | 'type'): string {
@@ -501,94 +505,97 @@ function groupedColLabel(id: GroupedColId, grouping: 'category' | 'type'): strin
       return grouping === 'category'
         ? 'Category Comprehensive (bulleted)'
         : 'Type Comprehensive (bulleted)';
-    case 'sourceReviews':
-      return 'Source Reviews';
     case 'groupNonBulleted':
       return grouping === 'category'
         ? 'Category Comprehensive (non-bulleted)'
         : 'Type Comprehensive (non-bulleted)';
+    case 'sourceComplaint':
+      return 'Source for AI complaint';
     default:
       return '';
   }
 }
 
-interface GroupedCellCtx {
-  url: GroupedReviewsAnalysisUrl;
-  review: ReviewsAnalysisReview | null;
-  platformLabels: Record<string, string>;
-  perReviewSummary: Record<string, string>;
-  compBulleted: string;
-  compNonBulleted: string;
-  groupBulleted: string;
-  groupNonBulleted: string;
-  sourceReviewsText: string;
+// An empty value for every grouped column — the base each row spreads over so a
+// row only fills the columns relevant to its kind (competitor vs source).
+function emptyGroupedRow(): Record<GroupedColId, string> {
+  return {
+    category: '',
+    type: '',
+    platform: '',
+    productName: '',
+    resultsPageRank: '',
+    competitionScore: '',
+    url: '',
+    stars: '',
+    review: '',
+    reviewsSummary: '',
+    compBulleted: '',
+    compNonBulleted: '',
+    groupBulleted: '',
+    groupNonBulleted: '',
+    sourceComplaint: '',
+  };
 }
 
-function groupedCellValue(id: GroupedColId, c: GroupedCellCtx): string {
-  const u = c.url;
-  switch (id) {
-    case 'category':
-      return u.competitionCategory ?? '';
-    case 'type':
-      return u.type ?? '';
-    case 'platform':
-      return c.platformLabels[u.platform] ?? u.platform ?? '';
-    case 'productName':
-      return u.productName ?? '';
-    case 'resultsPageRank':
-      return u.resultsPageRank == null ? '' : String(u.resultsPageRank);
-    case 'competitionScore':
-      return u.competitionScore == null ? '' : String(u.competitionScore);
-    case 'url':
-      return u.url ?? '';
-    case 'stars':
-      return c.review ? String(c.review.starRating) : '';
-    case 'review':
-      return c.review ? mergeTitleAndBody(c.review.title, c.review.body) : '';
-    case 'reviewsSummary':
-      return c.review ? c.perReviewSummary[c.review.id] ?? '' : '';
-    case 'compBulleted':
-      return c.compBulleted;
-    case 'compNonBulleted':
-      return c.compNonBulleted;
-    case 'groupBulleted':
-      return c.groupBulleted;
-    case 'sourceReviews':
-      return c.sourceReviewsText;
-    case 'groupNonBulleted':
-      return c.groupNonBulleted;
-    default:
-      return '';
-  }
+// A competitor review row: the full per-competitor picture (the group-level
+// summaries repeat down). sourceComplaint stays blank.
+function competitorRowValues(
+  url: GroupedReviewsAnalysisUrl,
+  review: ReviewsAnalysisReview | null,
+  platformLabels: Record<string, string>,
+  perReviewSummary: Record<string, string>,
+  compBulleted: string,
+  compNonBulleted: string,
+  groupBulleted: string,
+  groupNonBulleted: string
+): Record<GroupedColId, string> {
+  return {
+    ...emptyGroupedRow(),
+    category: url.competitionCategory ?? '',
+    type: url.type ?? '',
+    platform: platformLabels[url.platform] ?? url.platform ?? '',
+    productName: url.productName ?? '',
+    resultsPageRank: url.resultsPageRank == null ? '' : String(url.resultsPageRank),
+    competitionScore: url.competitionScore == null ? '' : String(url.competitionScore),
+    url: url.url ?? '',
+    stars: review ? String(review.starRating) : '',
+    review: review ? mergeTitleAndBody(review.title, review.body) : '',
+    reviewsSummary: review ? perReviewSummary[review.id] ?? '' : '',
+    compBulleted,
+    compNonBulleted,
+    groupBulleted,
+    groupNonBulleted,
+  };
 }
 
-/**
- * Flatten a group's resolved Source Reviews (theme → bulleted complaint →
- * the individual reviews behind it, across all in-group competitors) into one
- * readable, word-wrapped Excel cell. Empty when the group has no bulleted
- * category/type summary. Pure + testable.
- */
-export function formatSourceReviewsCell(
-  themes: ReadonlyArray<CategorySourceTheme>
-): string {
-  const blocks: string[] = [];
-  for (const theme of themes) {
-    const lines: string[] = [theme.name];
-    for (const bullet of theme.bullets) {
-      lines.push(`• ${bullet.text}`);
-      for (const s of bullet.sources) {
-        const stars = s.starRating == null ? '' : `${s.starRating}★ `;
-        lines.push(`    – ${s.productName} · ${stars}${s.text}`);
-      }
-    }
-    blocks.push(lines.join('\n'));
-  }
-  return blocks.join('\n\n');
+// A source-review row: one captured review behind one AI complaint. Only the
+// grouping column + the review's own fields + the complaint it supports are
+// filled; everything else is blank (so it reads as traceability, not a
+// competitor row).
+function sourceRowValues(
+  grouping: 'category' | 'type',
+  groupValue: string,
+  source: { reviewId: string; productName: string; starRating: number | null; text: string },
+  complaint: string,
+  perReviewSummary: Record<string, string>
+): Record<GroupedColId, string> {
+  return {
+    ...emptyGroupedRow(),
+    [grouping === 'category' ? 'category' : 'type']: groupValue,
+    productName: source.productName,
+    stars: source.starRating == null ? '' : String(source.starRating),
+    review: source.text,
+    reviewsSummary: perReviewSummary[source.reviewId] ?? '',
+    sourceComplaint: complaint,
+  };
 }
 
 // The shared grouped-export engine. `grouping` selects the column order + the
 // group-level wording; the page-level grouping helper (buildCategoryGroups /
-// buildTypeGroups) supplies the two-level order over ALL rows.
+// buildTypeGroups) supplies the two-level order over ALL rows. Each group emits
+// its competitor review rows first, then its source-review rows (one per
+// captured review behind each AI complaint).
 function buildGroupedReviewsAnalysisExportMatrix(
   grouping: 'category' | 'type',
   data: GroupedReviewsAnalysisExportData,
@@ -615,30 +622,54 @@ function buildGroupedReviewsAnalysisExportMatrix(
   for (const group of groups) {
     const groupBulleted = data.groupBulletedByKey[group.key]?.summary ?? '';
     const groupNonBulleted = data.groupNonBulletedByKey[group.key] ?? '';
-    const sourceReviewsText = formatSourceReviewsCell(
-      buildCategorySourceReviewRows(
-        data.groupBulletedByKey[group.key]?.categories ?? [],
-        data.reviewMetaById
-      )
-    );
+    // The grouping-column value to show on this group's source rows (the raw
+    // value the competitor rows display; '' for the uncategorized/untyped key).
+    const groupValue =
+      (grouping === 'category'
+        ? group.rows[0]?.url.competitionCategory
+        : group.rows[0]?.url.type) ?? '';
+
+    // 1) Competitor review rows — reviews expand; competitor + group fields
+    //    repeat down.
     for (const { url } of group.rows) {
       const reviews = data.reviewsByUrlId[url.id] ?? [];
       const span = Math.max(reviews.length, 1);
       const compBulleted = data.compBulletedByUrlId[url.id] ?? '';
       const compNonBulleted = data.compNonBulletedByUrlId[url.id] ?? '';
       for (let i = 0; i < span; i++) {
-        const ctx: GroupedCellCtx = {
+        const vals = competitorRowValues(
           url,
-          review: reviews[i] ?? null,
+          reviews[i] ?? null,
           platformLabels,
-          perReviewSummary: data.perReviewSummaryByReviewId,
+          data.perReviewSummaryByReviewId,
           compBulleted,
           compNonBulleted,
           groupBulleted,
-          groupNonBulleted,
-          sourceReviewsText,
-        };
-        body.push(colIds.map((id) => groupedCellValue(id, ctx)));
+          groupNonBulleted
+        );
+        body.push(colIds.map((id) => vals[id]));
+      }
+    }
+
+    // 2) Source-review rows — one per captured review behind each AI complaint,
+    //    resolved across every competitor in the group.
+    const themes = buildCategorySourceReviewRows(
+      data.groupBulletedByKey[group.key]?.categories ?? [],
+      data.reviewMetaById
+    );
+    for (const theme of themes) {
+      for (const bullet of theme.bullets) {
+        const complaint = theme.name ? `${theme.name} — ${bullet.text}` : bullet.text;
+        for (const source of bullet.sources) {
+          const vals = sourceRowValues(
+            grouping,
+            groupValue,
+            source,
+            complaint,
+            data.perReviewSummaryByReviewId
+          );
+          body.push(colIds.map((id) => vals[id]));
+        }
       }
     }
   }
