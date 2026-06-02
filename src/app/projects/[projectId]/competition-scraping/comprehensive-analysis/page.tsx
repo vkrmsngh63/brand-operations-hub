@@ -24,6 +24,7 @@ import { useWorkflowContext } from '@/lib/workflow-components';
 import type { ComprehensiveCompetitorAnalysis } from '@/lib/shared-types/competition-scraping';
 import { AnalysisEditor } from './components/AnalysisEditor';
 import { AnalysisReadView } from './components/AnalysisReadView';
+import { ComprehensiveAnalysisFilesBox } from './components/ComprehensiveAnalysisFilesBox';
 import { CompetitionScrapingSurfaceNav } from '../components/CompetitionScrapingSurfaceNav';
 
 const WORKFLOW_SLUG = 'competition-scraping';
@@ -197,6 +198,13 @@ export default function ComprehensiveAnalysisPage() {
           competitors and platforms; hyperlinks back to URL detail pages
           let you cite specific captured items as evidence.
         </p>
+
+        {/* P-55 Phase 2 — downloadable spreadsheets of the four competition
+            tables, above the editor box (director directive). */}
+        <ComprehensiveAnalysisFilesBox
+          projectId={projectId}
+          projectNameOrId={ctx.project.name}
+        />
 
         {loadState.kind === 'loading' && (
           <div style={{ color: '#8b949e', fontSize: '13px' }}>Loading…</div>
