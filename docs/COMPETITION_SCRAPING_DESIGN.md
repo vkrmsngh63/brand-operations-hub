@@ -3935,4 +3935,22 @@ This session's W5 Session 1.5 design-lock + build work is **PLOS-side AI infrast
 
 ---
 
+## §B 2026-06-02-c — `session_2026-06-02-c_p55-without-individual-reviews-export-variants` — P-55 CONTINUED: three NEW "without individual reviews" summary-only export variants in the `/comprehensive-analysis` Files box (+ the four original exports director-verified) — append-only design note per Rule 18 (§A frozen)
+
+**Informational design note (the canonical spec lives in `docs/polish-item-specs/P-55-comprehensive-analysis-files-and-main-table-additions.md` §1 verbatim directive + §2 trim-depth picker + §3.B SEVEN-file spec + §4 RESOLVED; the as-built scoreboard + the P-43 cwd-leak recurrence live in `docs/CORRECTIONS_LOG.md` §Entry 2026-06-02-c; the standing export rule lives in memory `feedback_exports_include_all_table_data`). The four original Files-box exports were director-VERIFIED on vklf.com this session (all four PASS — the verification deferred at 2026-06-02-b is CLOSED); the three trimmed variants were built + DEPLOYED-AND-VERIFIED (`8420739`, director "pass").**
+
+**Design intent change (small, additive):** the "Comprehensive Competitive Analysis Files" box now offers SUMMARY-ONLY variants of the three reviews spreadsheets alongside the full detailed versions — so the director can hand an AI (or read) a clean one-row-per-competitor view without the individual-customer-review detail. The box now lists SEVEN files (the original four UNCHANGED + three "without individual reviews" variants); "Download all (.zip)" bundles all seven; every file still regenerates fresh from live data on each click.
+
+**Design choices made this session (resolved WITH the director — ONE AskUserQuestion picker BEFORE coding):** for the FLAT "Competition Reviews Analysis without individual reviews" file the trim was ambiguous (it has per-review columns beyond the three the director named); the director chose **"Drop ALL review detail (recommended)"** — one row per competitor with identity columns + the two Comprehensive summaries. The two grouped trimmed variants (By Category / By Type) drop exactly the three named columns (Stars / Reviews Summary / Source Reviews), leaving one short banner row per group above one row per competitor.
+
+**Implementation subtlety (the reusable Pattern):** the trimmed variants reuse the SAME builders via a `withoutIndividualReviews` opt (on `buildReviewsAnalysisExportMatrix` + `buildGroupedReviewsAnalysisExportMatrix` + its two wrappers in `comprehensive-analysis-exports.ts`) rather than a parallel code path — registry-driven column filtering (drop `stars` / `reviewsSummary` / `catSourceReviews`|`typeSourceReviews`, skip the per-source-review banner rows, collapse per-review row expansion to one row per competitor) keeps the trimmed files pinned to the same column source-of-truth as the full versions, so a trimmed file CANNOT silently diverge from its source table. The button-onClick dispatch in `ComprehensiveAnalysisFilesBox.tsx` was refactored from an inline ternary into a `downloadHandlers` record keyed by file key. NO schema change — additive client-side download generation + reused existing routes (GET `/urls?withCaptures=1` + `/review-analysis` + each URL's `/reviews`); route count stays 71.
+
+**Affected §A sections (INFORMATIONAL — §A is FROZEN per Rule 18; not edited):** the `/comprehensive-analysis` "Comprehensive Competitive Analysis Files" box now offers SEVEN spreadsheets (the four full exports + three summary-only variants of the reviews files); the planned primer .docx + "Insert primer" button remain Phase 3 part 2.
+
+**Cross-references:** spec `docs/polish-item-specs/P-55-comprehensive-analysis-files-and-main-table-additions.md` (§1 + §2 + §3.B + §4 RESOLVED); memory `feedback_exports_include_all_table_data` + `feedback_plan_output_shape_before_building`; `docs/CORRECTIONS_LOG.md` §Entry 2026-06-02-c (the P-43 cwd-leak recurrence); the as-built `comprehensive-analysis-exports.ts` (the `withoutIndividualReviews` opt) + `ComprehensiveAnalysisFilesBox.tsx` (the `downloadHandlers` record + the 3 trimmed builders); §B 2026-06-02-b above (the four-file audit this builds on) + §B 2026-06-02 (the original P-55 Files-box entry).
+
+---
+
+---
+
 END OF DOCUMENT
