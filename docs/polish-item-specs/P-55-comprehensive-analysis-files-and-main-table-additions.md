@@ -75,6 +75,10 @@ Mid-build refinements:
 
 ### B. `/comprehensive-analysis` Files box (Phase 2)
 
+> **STANDING EXPORT RULES — MANDATORY for ALL four spreadsheets (incl. the not-yet-built By Category + By Type) and any future export file:**
+> 1. **Sub-rows are listed as SEPARATE Excel rows** (Excel has no sub-rows). Every on-screen stacked sub-row expands into a real row; the row's shared/fixed columns REPEAT on each expanded row. For the grouped By Category / By Type tables this means BOTH levels expand — competitors within a category/type, and reviews within a competitor — each as its own row, with the category/type-level + competitor-level fields repeated down.
+> 2. **Every download takes the MOST CURRENT data at click time.** All builders run inside `ComprehensiveAnalysisFilesBox`'s download handlers, which re-fetch the live sources (`/urls?withCaptures=1`, `/review-analysis`, each URL's `/reviews`) on every click — so new export files inherit "fresh on click" automatically; do NOT introduce a cached/mount-fetched data path.
+
 - **"Comprehensive Competitive Analysis Files" box above the editor** (`ComprehensiveAnalysisFilesBox.tsx`), listing the four spreadsheets + a "Download all (.zip)" (JSZip). Each download re-fetches live data at click time.
 - **Spreadsheet builders** (`comprehensive-analysis-exports.ts`, pure + node:tested): all columns/all rows; sub-rows expanded to real rows; shared fields repeated.
   - **Competition Content Overview** (main table — Phase 2a ✅ verified): fixed columns + dynamic category pairs + Overall Competitor Analysis; reuses `dynamic-columns` helpers + `tipTapDocToPlainText`.
