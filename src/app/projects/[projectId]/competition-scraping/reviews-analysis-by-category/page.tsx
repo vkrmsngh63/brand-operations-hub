@@ -1353,6 +1353,7 @@ function CategoryTable({
                           <SortableCategoryRow
                             key={row.url.id}
                             row={row}
+                            projectId={projectId}
                             visibleColumns={visibleColumns}
                             reviewsState={reviewsByUrl[row.url.id]}
                             summaryByReviewId={summaryByReviewId}
@@ -1753,6 +1754,8 @@ function CategoryStarCount({ value }: { value: number | null }): JSX.Element {
 
 interface SortableCategoryRowProps {
   row: CategoryDisplayRow<CompetitorUrl>;
+  // P-60 — needed to build the Product-Name ↗ open-detail link.
+  projectId: string;
   visibleColumns: ReadonlyArray<CategoryTableColumnDef>;
   reviewsState: ReviewsLoadState | undefined;
   summaryByReviewId: Record<string, ReviewSummaryEntry>;
@@ -1764,6 +1767,7 @@ interface SortableCategoryRowProps {
 
 function SortableCategoryRow({
   row,
+  projectId,
   visibleColumns,
   reviewsState,
   summaryByReviewId,
@@ -1867,7 +1871,7 @@ function SortableCategoryRow({
                       position: isAi ? 'relative' : undefined,
                     }}
                   >
-                    {renderDataCell(c, row, u, bulleted, nonBulleted, onUrlCellSave)}
+                    {renderDataCell(c, row, u, bulleted, nonBulleted, onUrlCellSave, projectId)}
                   </td>
                 );
               }
@@ -1908,7 +1912,8 @@ function renderDataCell(
   u: CompetitorUrl,
   bulleted: string,
   nonBulleted: string,
-  onUrlCellSave: (urlId: string, patch: UpdateCompetitorUrlRequest) => Promise<void>
+  onUrlCellSave: (urlId: string, patch: UpdateCompetitorUrlRequest) => Promise<void>,
+  projectId: string
 ): JSX.Element {
   const save = (patch: UpdateCompetitorUrlRequest) => onUrlCellSave(u.id, patch);
 
@@ -1930,13 +1935,27 @@ function renderDataCell(
         <InlineTextCell value={u.type} onSave={(next) => save({ type: next })} placeholder="(type)" />
       );
     case 'productName':
+      // P-60 — mirror the main table's Product-Name ↗ open-detail link.
       return (
-        <InlineTextCell
-          value={u.productName}
-          onSave={(next) => save({ productName: next })}
-          placeholder="(name)"
-          multiline
-        />
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', minWidth: 0 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <InlineTextCell
+              value={u.productName}
+              onSave={(next) => save({ productName: next })}
+              placeholder="(name)"
+              multiline
+            />
+          </div>
+          <a
+            href={`/projects/${projectId}/competition-scraping/url/${u.id}`}
+            title="Open detail page"
+            aria-label={`Open detail page for ${u.productName || u.url}`}
+            data-testid="category-open-detail"
+            style={{ color: '#58a6ff', textDecoration: 'none', fontSize: '13px', flexShrink: 0 }}
+          >
+            ↗
+          </a>
+        </div>
       );
     case 'resultsPageRank':
       return (

@@ -2040,6 +2040,7 @@ function UrlsTable({
                     renderUrlRowCell({
                       col,
                       url: u,
+                      projectId,
                       onUrlCellSave,
                       summarizedReviews,
                       totalReviews,
@@ -2331,6 +2332,8 @@ const tdActionsStyle: React.CSSProperties = {
 interface UrlRowCellArgs {
   col: ReviewsTableColumnDef;
   url: CompetitorUrl;
+  // P-60 — the projectId is needed to build the Product-Name ↗ open-detail link.
+  projectId: string;
   onUrlCellSave: (urlId: string, patch: UpdateCompetitorUrlRequest) => Promise<void>;
   summarizedReviews: number | null;
   totalReviews: number | null;
@@ -2353,6 +2356,7 @@ interface UrlRowCellArgs {
 function renderUrlRowCell({
   col,
   url,
+  projectId,
   onUrlCellSave,
   summarizedReviews,
   totalReviews,
@@ -2411,10 +2415,31 @@ function renderUrlRowCell({
     case 'productName':
       return (
         <td {...tdProps}>
-          <InlineTextCell
-            value={url.productName}
-            onSave={(next) => onUrlCellSave(url.id, { productName: next })}
-          />
+          {/* P-60 — mirror the main table's Product-Name ↗ open-detail link:
+              the cell stays click-to-edit (InlineTextCell at flex:1); a
+              trailing ↗ anchor opens this competitor's detail page. */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <InlineTextCell
+                value={url.productName}
+                onSave={(next) => onUrlCellSave(url.id, { productName: next })}
+              />
+            </div>
+            <a
+              href={`/projects/${projectId}/competition-scraping/url/${url.id}`}
+              title="Open detail page"
+              aria-label={`Open detail page for ${url.productName || url.url}`}
+              data-testid="reviews-analysis-open-detail"
+              style={{
+                color: '#58a6ff',
+                textDecoration: 'none',
+                fontSize: '13px',
+                flexShrink: 0,
+              }}
+            >
+              ↗
+            </a>
+          </div>
         </td>
       );
     case 'resultsPageRank':
