@@ -34,9 +34,11 @@ import {
   type DynColumnPair,
 } from './dynamic-columns.ts';
 import { slugifyForFilename } from './reviews-table-export.ts';
+import { mergeTitleAndBody } from './reviews-analysis-table-columns.ts';
 
 // The sheet name shown on the single worksheet inside each workbook.
 export const MAIN_TABLE_SHEET_NAME = 'Competition Content Overview';
+export const REVIEWS_ANALYSIS_SHEET_NAME = 'Competition Reviews Analysis';
 
 // One fixed (registry) column passed in from the page's TABLE_COLUMN_DEFS so the
 // export header + order track the single column registry (no duplicate list to
@@ -49,6 +51,7 @@ export interface ExportFixedColumn {
 // The minimal per-URL shape the main-table export reads. A structural subset of
 // the wire CompetitorUrl (so the page can pass its rows straight through).
 export interface MainExportUrl {
+  id: string;
   platform: string;
   competitionCategory: string | null;
   type: string | null;
@@ -244,6 +247,106 @@ export function buildMainTableExportMatrix(
   });
 
   return { matrix: [header, ...body], wrappedColumnIndexes };
+}
+
+// ─── Competition Reviews Analysis (Phase 2b-i) ─────────────────────────────
+
+// One competitor URL row for the reviews-analysis export (the per-URL fields
+// shown on the /competitor-reviews-analysis table).
+export interface ReviewsAnalysisUrl {
+  id: string;
+  platform: string;
+  competitionCategory: string | null;
+  type: string | null;
+  productName: string | null;
+  resultsPageRank: number | null;
+  competitionScore: number | null;
+  url: string;
+}
+
+// One captured review (the per-review sub-row data). Already in the table's
+// display order when passed in.
+export interface ReviewsAnalysisReview {
+  id: string;
+  starRating: number;
+  title: string | null;
+  body: string;
+}
+
+// The assembled inputs for the Competition Reviews Analysis spreadsheet. The
+// page fetches /urls + /review-analysis + each URL's /reviews, then derives
+// these maps (PER_REVIEW summaries by reviewId; PER_PRODUCT bulleted +
+// non-bulleted competitor summaries by urlId) exactly as the
+// /competitor-reviews-analysis page hydrates them.
+export interface ReviewsAnalysisExportData {
+  urls: ReadonlyArray<ReviewsAnalysisUrl>;
+  reviewsByUrlId: Record<string, ReadonlyArray<ReviewsAnalysisReview>>;
+  perReviewSummaryByReviewId: Record<string, string>;
+  compBulletedByUrlId: Record<string, string>;
+  compNonBulletedByUrlId: Record<string, string>;
+}
+
+const REVIEWS_ANALYSIS_HEADER: ReadonlyArray<string> = [
+  'Platform',
+  'Category',
+  'Type',
+  'Product Name',
+  'Results Rank',
+  'Comp. Score',
+  'URL',
+  'Stars',
+  'Review',
+  'Review Summary',
+  'Comprehensive (bulleted)',
+  'Comprehensive (non-bulleted)',
+];
+// Long-text columns: Review (8), Review Summary (9), Comprehensive bulleted (10),
+// Comprehensive non-bulleted (11).
+const REVIEWS_ANALYSIS_WRAPPED = [8, 9, 10, 11];
+
+/**
+ * Build the "Competition Reviews Analysis" export matrix. Reviews EXPAND into
+ * real rows (director: everything, reviews as rows): a competitor with N
+ * captured reviews becomes N rows, each carrying that review's Stars / Review
+ * text / per-review Summary; the per-competitor fields + the comprehensive AI
+ * summaries REPEAT on every one of the competitor's rows. A competitor with no
+ * captured reviews still gets one row (blank review columns).
+ */
+export function buildReviewsAnalysisExportMatrix(
+  data: ReviewsAnalysisExportData,
+  platformLabels: Record<string, string>
+): ExportMatrixResult {
+  const body: string[][] = [];
+  for (const u of data.urls) {
+    const reviews = data.reviewsByUrlId[u.id] ?? [];
+    const span = Math.max(reviews.length, 1);
+    const base = [
+      platformLabels[u.platform] ?? u.platform ?? '',
+      u.competitionCategory ?? '',
+      u.type ?? '',
+      u.productName ?? '',
+      u.resultsPageRank == null ? '' : String(u.resultsPageRank),
+      u.competitionScore == null ? '' : String(u.competitionScore),
+      u.url ?? '',
+    ];
+    const compBulleted = data.compBulletedByUrlId[u.id] ?? '';
+    const compNonBulleted = data.compNonBulletedByUrlId[u.id] ?? '';
+    for (let i = 0; i < span; i++) {
+      const r = reviews[i];
+      body.push([
+        ...base,
+        r ? String(r.starRating) : '',
+        r ? mergeTitleAndBody(r.title, r.body) : '',
+        r ? data.perReviewSummaryByReviewId[r.id] ?? '' : '',
+        compBulleted,
+        compNonBulleted,
+      ]);
+    }
+  }
+  return {
+    matrix: [[...REVIEWS_ANALYSIS_HEADER], ...body],
+    wrappedColumnIndexes: [...REVIEWS_ANALYSIS_WRAPPED],
+  };
 }
 
 // Spreadsheet filename: {base}-{project-slug}-{YYYY-MM-DD}.xlsx. `dateStr` is

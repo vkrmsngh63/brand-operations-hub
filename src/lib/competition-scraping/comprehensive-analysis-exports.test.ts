@@ -3,10 +3,12 @@ import assert from 'node:assert/strict';
 
 import {
   buildMainTableExportMatrix,
+  buildReviewsAnalysisExportMatrix,
   buildExportFilename,
   buildExportZipFilename,
   type ExportFixedColumn,
   type MainExportUrl,
+  type ReviewsAnalysisExportData,
 } from './comprehensive-analysis-exports.ts';
 
 const PLATFORM_LABELS: Record<string, string> = {
@@ -34,6 +36,7 @@ function doc(text: string): Record<string, unknown> {
 
 function baseUrl(over: Partial<MainExportUrl> = {}): MainExportUrl {
   return {
+    id: 'u1',
     platform: 'amazon',
     competitionCategory: null,
     type: null,
@@ -267,6 +270,94 @@ test('main export: blank category items are excluded from the dynamic columns', 
   const { matrix } = buildMainTableExportMatrix(FIXED, [url], PLATFORM_LABELS);
   // No dynamic columns added → header is just the fixed labels.
   assert.equal(matrix[0].length, FIXED.length);
+});
+
+// ─── Competition Reviews Analysis export (Phase 2b-i) ──────────────────────
+
+function reviewsData(
+  over: Partial<ReviewsAnalysisExportData> = {}
+): ReviewsAnalysisExportData {
+  return {
+    urls: [
+      {
+        id: 'u1',
+        platform: 'amazon',
+        competitionCategory: 'Cat A',
+        type: 'Type X',
+        productName: 'Widget',
+        resultsPageRank: 3,
+        competitionScore: 70,
+        url: 'https://example.com/p',
+      },
+    ],
+    reviewsByUrlId: {},
+    perReviewSummaryByReviewId: {},
+    compBulletedByUrlId: {},
+    compNonBulletedByUrlId: {},
+    ...over,
+  };
+}
+
+test('reviews export: header shape', () => {
+  const { matrix } = buildReviewsAnalysisExportMatrix(reviewsData(), PLATFORM_LABELS);
+  assert.deepEqual(matrix[0], [
+    'Platform',
+    'Category',
+    'Type',
+    'Product Name',
+    'Results Rank',
+    'Comp. Score',
+    'URL',
+    'Stars',
+    'Review',
+    'Review Summary',
+    'Comprehensive (bulleted)',
+    'Comprehensive (non-bulleted)',
+  ]);
+});
+
+test('reviews export: a competitor with no reviews still gets one row (blank review cols)', () => {
+  const { matrix } = buildReviewsAnalysisExportMatrix(
+    reviewsData({ compBulletedByUrlId: { u1: 'BULLETS' } }),
+    PLATFORM_LABELS
+  );
+  assert.equal(matrix.length, 2); // header + 1 row
+  assert.equal(matrix[1][0], 'Amazon'); // platform label
+  assert.equal(matrix[1][7], ''); // Stars blank
+  assert.equal(matrix[1][8], ''); // Review blank
+  assert.equal(matrix[1][10], 'BULLETS'); // comp bulleted present
+});
+
+test('reviews export: reviews EXPAND into rows; per-competitor fields + AI summaries repeat', () => {
+  const data = reviewsData({
+    reviewsByUrlId: {
+      u1: [
+        { id: 'r1', starRating: 5, title: 'Great', body: 'Loved it' },
+        { id: 'r2', starRating: 2, title: null, body: 'Broke fast' },
+      ],
+    },
+    perReviewSummaryByReviewId: { r1: 'positive', r2: 'durability issue' },
+    compBulletedByUrlId: { u1: 'BULLETS' },
+    compNonBulletedByUrlId: { u1: 'PROSE' },
+  });
+  const { matrix } = buildReviewsAnalysisExportMatrix(data, PLATFORM_LABELS);
+  assert.equal(matrix.length, 3); // header + 2 review rows
+  // Row 1 (review r1)
+  assert.equal(matrix[1][7], '5');
+  assert.equal(matrix[1][8], 'Great. Loved it'); // mergeTitleAndBody adds the period
+  assert.equal(matrix[1][9], 'positive');
+  // Row 2 (review r2 — no title → body alone)
+  assert.equal(matrix[2][7], '2');
+  assert.equal(matrix[2][8], 'Broke fast');
+  assert.equal(matrix[2][9], 'durability issue');
+  // Per-competitor AI summaries repeat on BOTH rows.
+  assert.equal(matrix[1][10], 'BULLETS');
+  assert.equal(matrix[2][10], 'BULLETS');
+  assert.equal(matrix[1][11], 'PROSE');
+  assert.equal(matrix[2][11], 'PROSE');
+  // Product name repeats.
+  assert.equal(matrix[1][3], 'Widget');
+  assert.equal(matrix[2][3], 'Widget');
 });
 
 test('buildExportFilename / buildExportZipFilename: slug + date', () => {
