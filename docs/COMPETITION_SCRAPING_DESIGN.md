@@ -3969,6 +3969,22 @@ This session's W5 Session 1.5 design-lock + build work is **PLOS-side AI infrast
 
 ---
 
+## §B 2026-06-02-e — `session_2026-06-02-e_p56-amazon-highlight-flicker-pause-while-selecting` — P-56: defer the Highlight-Terms re-apply while a text selection is active (Amazon flicker was blocking capture) — append-only design note per Rule 18 (§A frozen)
+
+**Informational design note (the canonical P-56 spec lives in `docs/polish-item-specs/P-56-amazon-highlight-flicker-blocks-selection.md` §2 + §3 + §4 RESOLVED; the session methodology + the reusable PATTERN live in `docs/CORRECTIONS_LOG.md` §Entry 2026-06-02-e; the deferred-verification resolution lives in `docs/COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md`). P-56 is an EXTENSION-side capture-flow fix — NO PLOS route, NO schema change. DEPLOYED-AND-VERIFIED on real Amazon (director "pass").**
+
+**Design choices made this session (Rule 14f forced-picker outcome):** the director picked **Option 1 "Pause while selecting"** over Option 2 "kill the idle flash too / redraw only changed text". Option 1 protects the user-blocking symptom (the in-progress selection) and explicitly accepts a residual faint flicker while merely reading; Option 2 is recorded as the available follow-up.
+
+**The trace evidence that drove the design (the materially-new fact this session):** the FIRST action was the deferred P-20 real-Amazon diagnostic trace (`docs/p-20-trace-script.js` on a real Amazon PDP, product B07V57NDNC). Over 30.0s: ~145 MutationRecord batches; **~137,358 chars of new text added (~4,576 chars/sec)**; **~14 would-be `refresh()` rescans (~one every ~2s)**. This **DISPROVED the assumed root cause** — the P-20 fingerprint short-circuit works as designed; the flicker + selection-break are caused by *legitimate* re-applies (Amazon keeps adding matchable text), so a *correct* full-page strip-and-reapply fires mid-drag and collapses the selection. The design therefore had to protect the selection, NOT strengthen the fingerprint.
+
+**Implementation subtlety (preserve the pending highlight work while deferring):** in `extensions/competition-scraping/src/lib/content-script/highlight-terms.ts`, `refresh()` defers the strip-and-reapply whenever `window.getSelection()` is a non-collapsed, non-empty text selection; a document `'selectionchange'` listener re-runs the deferred refresh the moment the selection clears. Critically, `lastFingerprint` is left UNTOUCHED while deferred, so the deferred refresh still does the right work when it eventually runs (the P-20 short-circuit + the P-14 MutationObserver mute are both KEPT intact — the defer is layered on top). NEW exported pure helper `isActiveTextSelection` is DOM-free (takes a Selection-shaped snapshot) so it is unit-testable (+5 extension tests). Reusable PATTERN (also captured in CORRECTIONS_LOG §Entry 2026-06-02-e): **protect an active text selection by deferring DOM-mutating overlay refreshes until `selectionchange` reports the selection cleared.**
+
+**Affected §A sections (INFORMATIONAL — §A is FROZEN per Rule 18; not edited):** the Highlight-Terms capture flow on real Amazon now allows selecting a sentence that contains a highlighted keyword without the selection being wiped by the overlay re-draw. Residual reading-time flicker is a known accepted trade-off (Option-2 follow-up).
+
+**Cross-references:** spec `docs/polish-item-specs/P-56-amazon-highlight-flicker-blocks-selection.md` (§2 trace numbers + §3 AS-SHIPPED RESOLUTION + §4 RESOLVED); `docs/CORRECTIONS_LOG.md` §Entry 2026-06-02-e; `docs/COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` (the P-20 deferred real-Amazon verification RESOLVED via P-56); `docs/p-20-trace-script.js` (the trace tool); P-14 (2026-05-12) + P-20 (2026-05-14) prior treatments; build `802224f` (`main` `71645bc → 802224f`); the as-built `highlight-terms.ts` (`refresh()` defer + `isActiveTextSelection`); zip `plos-extension-2026-06-02-w2-p56-amazon-flicker-1.zip`.
+
+---
+
 ---
 
 END OF DOCUMENT

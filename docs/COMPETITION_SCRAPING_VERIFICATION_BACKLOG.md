@@ -4036,5 +4036,43 @@ Post-merge scoreboard SKIPPED as deliberate efficiency choice — ff-merge produ
 
 ---
 
+## Deploy session 2026-06-02-e — P-56 — the DEFERRED P-20 real-Amazon Highlight-Terms verification is now RESOLVED
+
+**Headline outcome:** the real-Amazon browser verification of the P-20 fingerprint short-circuit — explicitly DEFERRED at the P-20 build (2026-05-14, scheduled to W#2 deploy session #12 / (a.26)) and never confirmed clean since — is now **RESOLVED via P-56**: the trace was RUN on real Amazon, the actual mechanism was diagnosed, the resulting selection-break was fixed, and the director real-Amazon (real-Chrome) verified the fix ("pass"). The long-open P-20 verification item is CLOSED.
+
+**Drift caught at session-start (the trace disproved the assumed root cause):** entering the session, the assumption was "the P-20 fingerprint short-circuit is broken / not engaging on real Amazon" (the reason the P-56 symptom persisted). The FIRST action — running `docs/p-20-trace-script.js` on a real Amazon PDP (product B07V57NDNC) — **disproved that**. The short-circuit ENGAGES and works as designed; Amazon legitimately adds matchable text roughly every 2 seconds, so the rescans are *correct* re-applies, not short-circuit failures. The real defect was that a correct full-page strip-and-reapply fires mid-drag and collapses the user's in-progress selection.
+
+**Fix shape narrative:** redirected from "widen/strengthen the P-20 fingerprint" (which cannot help — the re-applies are legitimate) to "protect the active selection." `refresh()` now defers the strip-and-reapply whenever `window.getSelection()` is a non-collapsed, non-empty text selection; a document `'selectionchange'` listener re-runs the deferred refresh the moment the selection clears; `lastFingerprint` is left untouched while deferred so the pending highlight work is preserved. Director-picked Option 1 "Pause while selecting" (Rule 14f); residual reading-time flicker accepted as an Option-2 follow-up.
+
+**Implementation summary (files + LOC):** `extensions/competition-scraping/src/lib/content-script/highlight-terms.ts` (the `refresh()` defer + the `'selectionchange'` re-run + the NEW exported pure helper `isActiveTextSelection`, DOM-free) + `extensions/competition-scraping/src/lib/content-script/highlight-terms.test.ts` (+5 unit tests). NO new source module; additive within the existing file. Single build commit `802224f`.
+
+**Pre-deploy + post-merge verification scoreboard:**
+
+| Check | Entry (2026-06-02-d) | Exit (2026-06-02-e) | Δ |
+| --- | --- | --- | --- |
+| Root tsc | clean | clean | UNCHANGED |
+| Extension tsc | clean | clean | UNCHANGED |
+| Extension `npm test` | 910/910 | **915/915** | **+5** (`isActiveTextSelection`) |
+| src/lib `node:test` | 1353/1353 | 1353/1353 | UNCHANGED (extension-side) |
+| `npm run build` (routes) | 72 | 72 | UNCHANGED (no new route) |
+| Check 6 Playwright | SKIPPED (Rule 27) | SKIPPED (Rule 27) | real-Amazon = director real-Chrome |
+
+**Director real-Chrome verification narrative:** the director sideloaded the fresh `plos-extension-2026-06-02-w2-p56-amazon-flicker-1.zip` (218 KB) and verified on a real Amazon product page that a sentence containing a highlighted keyword can now be selected + saved as captured text without the selection being wiped by the overlay re-draw. Verdict: **"pass."**
+
+**Process observations captured informationally:** (1) the trace-before-design methodology paid off — it prevented a wasted fingerprint-strengthening effort by surfacing that the re-applies are legitimate (see CORRECTIONS_LOG §Entry 2026-06-02-e); (2) on the real-site console-trace walkthrough, ambient Amazon console noise was repeatedly pasted before the RESULT block appeared — explicit "here is exactly what the RESULT block looks like" framing unblocked it (handoff-novice-clarity reinforcement).
+
+### Cross-references
+
+- `docs/polish-item-specs/P-56-amazon-highlight-flicker-blocks-selection.md` — §2 trace numbers + §3 AS-SHIPPED RESOLUTION + §4 RESOLVED.
+- `docs/COMPETITION_SCRAPING_DESIGN.md` §B 2026-06-02-e — the defer-while-selecting design note + the trace evidence.
+- `docs/CORRECTIONS_LOG.md` §Entry 2026-06-02-e — the trace-first methodology win + the reusable defer-while-selecting PATTERN.
+- `docs/ROADMAP.md` P-56 polish-backlog entry — flipped to ✅ DEPLOYED-AND-VERIFIED + CLOSED this session.
+- `docs/p-20-trace-script.js` — the real-Amazon MutationObserver trace tool re-used as the first diagnostic.
+- P-14 (2026-05-12) + P-20 (2026-05-14) — the prior Highlight-Terms flicker treatments; P-20's deferred real-Amazon verification is what this session resolved.
+- Build commit `802224f` on `workflow-2-competition-scraping`; ff-merge `71645bc..802224f` on `main`.
+- fresh zip `plos-extension-2026-06-02-w2-p56-amazon-flicker-1.zip` (218 KB; the exact artifact the director sideloaded + real-Amazon verified).
+
+---
+
 END OF DOCUMENT
 
