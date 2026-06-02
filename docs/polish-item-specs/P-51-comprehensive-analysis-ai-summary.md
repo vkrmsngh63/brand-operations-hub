@@ -1,9 +1,11 @@
 # Per-Project competitive landscape AI summary on `/comprehensive-analysis` — full spec
 
+> ⚠️ **SUPERSEDED (2026-06-02) for its UI dimension by P-55.** When the director's deferred `/comprehensive-analysis` work came back around (`session_2026-06-02_p55-comprehensive-analysis-files-and-main-table-additions`), the director gave a CONCRETE direction that REPLACES this spec's central assumption. P-51 assumed an **in-app "AI summarize" button** that writes a Per-Project competitive-landscape summary INTO the editor. P-55 instead **PREPARES downloadable materials** — Excel spreadsheets of the four competition tables + a teaching "primer" — so the director runs the AI of their choice themselves, with the primer also insertable into the editor (an in-app "do it for me" button is a possible LATER step, not P-55). The canonical source-of-truth is now **`docs/polish-item-specs/P-55-comprehensive-analysis-files-and-main-table-additions.md`**. The **`ReviewAnalysis.PER_PROJECT` enum slot** noted in this spec REMAINS UNUSED (P-55 needs no new enum value — it reuses the existing PER_REVIEW / PER_PRODUCT / PER_CATEGORY / PER_TYPE analysis that the source pages already persist). This P-51 doc is retained for traceability of the original §1 directive; do NOT build P-51's in-app-summarize UI without a fresh director directive.
+
 **Polish-item ID:** P-51 (slotted between P-49 and P-50 per director's 2026-05-28 directive)
 **Created:** 2026-05-28
 **Session that captured §1:** `session_2026-05-28_p49-w5-session-4-scope-misread-rollback-and-corrective-planning`
-**Status:** SPEC LOCKED at §1 level. §2/§3 are placeholder skeleton — director's directive is that detailed Q&A + planning happens AT THE START of the P-51 build session, NOT now. This doc is a CAPTURE-ONLY artifact until that session opens.
+**Status:** SPEC LOCKED at §1 level — **UI dimension SUPERSEDED 2026-06-02 by P-55 (see the note above).** §2/§3 are placeholder skeleton — director's directive was that detailed Q&A + planning happens AT THE START of the build session; that session became P-55, which prepares downloadable materials + a primer rather than an in-app summarize button. This doc is now a CAPTURE-ONLY traceability artifact.
 
 ---
 
