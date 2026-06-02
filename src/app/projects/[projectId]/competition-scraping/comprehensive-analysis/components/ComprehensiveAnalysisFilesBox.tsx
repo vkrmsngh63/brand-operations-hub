@@ -15,7 +15,7 @@
 // src/lib/competition-scraping/comprehensive-analysis-exports.ts turn them into
 // a matrix, and XLSX/JSZip turn that into the file(s) the browser downloads.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
 import { authFetch } from '@/lib/authFetch';
@@ -140,6 +140,16 @@ function triggerDownload(blob: Blob, filename: string): void {
 const XLSX_MIME =
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
+function buildMainArrayBuffer(rows: ReadonlyArray<MainExportUrl>): ArrayBuffer {
+  const result = buildMainTableExportMatrix(FIXED_EXPORT_COLUMNS, rows, PLATFORM_LABELS);
+  return matrixToXlsxArrayBuffer(result, MAIN_TABLE_SHEET_NAME);
+}
+
+function buildReviewsArrayBuffer(data: ReviewsAnalysisExportData): ArrayBuffer {
+  const result = buildReviewsAnalysisExportMatrix(data, PLATFORM_LABELS);
+  return matrixToXlsxArrayBuffer(result, REVIEWS_ANALYSIS_SHEET_NAME);
+}
+
 export function ComprehensiveAnalysisFilesBox({ projectId, projectNameOrId }: Props) {
   const [urls, setUrls] = useState<MainExportUrl[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -174,32 +184,29 @@ export function ComprehensiveAnalysisFilesBox({ projectId, projectNameOrId }: Pr
     };
   }, [projectId]);
 
-  // Build the "Competition Content Overview" workbook ArrayBuffer from the
-  // currently-loaded rows. Returns null if the data isn't loaded yet.
-  const buildMainWorkbook = useCallback((): ArrayBuffer | null => {
-    if (!urls) return null;
-    const result = buildMainTableExportMatrix(
-      FIXED_EXPORT_COLUMNS,
-      urls,
-      PLATFORM_LABELS
-    );
-    return matrixToXlsxArrayBuffer(result, MAIN_TABLE_SHEET_NAME);
-  }, [urls]);
-
   const todayStr = (): string => new Date().toISOString().slice(0, 10);
 
-  // Phase 2b-i — the Competition Reviews Analysis spreadsheet needs the stored
-  // review analyses + each URL's captured reviews. Fetched + assembled lazily
-  // (on first download), cached for later downloads / the zip.
-  const reviewsDataRef = useRef<ReviewsAnalysisExportData | null>(null);
+  // Always pull the LATEST competitor URLs (with captures) at download time, so
+  // a download is current even if the tables changed while this page stayed
+  // open (director: "always current on every download").
+  const fetchUrlsFresh = useCallback(async (): Promise<MainExportUrl[]> => {
+    const res = await authFetch(
+      `/api/projects/${projectId}/competition-scraping/urls?withCaptures=1`
+    );
+    if (!res.ok) {
+      throw new Error(`Couldn’t load the competitor data (HTTP ${res.status}).`);
+    }
+    const body = (await res.json()) as MainExportUrl[];
+    return Array.isArray(body) ? body : [];
+  }, [projectId]);
 
-  const ensureReviewsData =
-    useCallback(async (): Promise<ReviewsAnalysisExportData> => {
-      if (reviewsDataRef.current) return reviewsDataRef.current;
-      if (!urls) throw new Error('The competitor data is still loading.');
-
-      // 1. Stored AI analyses → per-review summaries + per-competitor bulleted /
-      //    non-bulleted, derived exactly as /competitor-reviews-analysis hydrates.
+  // Assemble the Competition Reviews Analysis data from FRESH reads: the stored
+  // review analyses (PER_REVIEW summaries + PER_PRODUCT bulleted/non-bulleted,
+  // derived exactly as /competitor-reviews-analysis hydrates) + each URL's
+  // captured reviews (ordered like the table). Takes the freshly-fetched URL
+  // list so the zip can share one /urls read across both files.
+  const fetchReviewsData = useCallback(
+    async (rows: ReadonlyArray<MainExportUrl>): Promise<ReviewsAnalysisExportData> => {
       const perReviewSummaryByReviewId: Record<string, string> = {};
       const compBulletedByUrlId: Record<string, string> = {};
       const compNonBulletedByUrlId: Record<string, string> = {};
@@ -236,10 +243,9 @@ export function ComprehensiveAnalysisFilesBox({ projectId, projectNameOrId }: Pr
         }
       }
 
-      // 2. Each URL's captured reviews (parallel), ordered like the table.
       const reviewsByUrlId: Record<string, ReviewsAnalysisReview[]> = {};
       await Promise.all(
-        urls.map(async (u) => {
+        rows.map(async (u) => {
           try {
             const rRes = await authFetch(
               `/api/projects/${projectId}/competition-scraping/urls/${u.id}/reviews`
@@ -271,8 +277,8 @@ export function ComprehensiveAnalysisFilesBox({ projectId, projectNameOrId }: Pr
         })
       );
 
-      const data: ReviewsAnalysisExportData = {
-        urls: urls.map((u) => ({
+      return {
+        urls: rows.map((u) => ({
           id: u.id,
           platform: u.platform,
           competitionCategory: u.competitionCategory,
@@ -287,43 +293,17 @@ export function ComprehensiveAnalysisFilesBox({ projectId, projectNameOrId }: Pr
         compBulletedByUrlId,
         compNonBulletedByUrlId,
       };
-      reviewsDataRef.current = data;
-      return data;
-    }, [urls, projectId]);
+    },
+    [projectId]
+  );
 
-  const buildReviewsWorkbook = useCallback(async (): Promise<ArrayBuffer> => {
-    const data = await ensureReviewsData();
-    const result = buildReviewsAnalysisExportMatrix(data, PLATFORM_LABELS);
-    return matrixToXlsxArrayBuffer(result, REVIEWS_ANALYSIS_SHEET_NAME);
-  }, [ensureReviewsData]);
-
-  const handleDownloadReviews = useCallback(async () => {
-    setActionError(null);
-    setBusy('reviews');
-    try {
-      const buf = await buildReviewsWorkbook();
-      triggerDownload(
-        new Blob([buf], { type: XLSX_MIME }),
-        buildExportFilename('competition-reviews-analysis', projectNameOrId, todayStr())
-      );
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Could not build the file.');
-    } finally {
-      setBusy(null);
-    }
-  }, [buildReviewsWorkbook, projectNameOrId]);
-
-  const handleDownloadMain = useCallback(() => {
+  const handleDownloadMain = useCallback(async () => {
     setActionError(null);
     setBusy('main');
     try {
-      const buf = buildMainWorkbook();
-      if (!buf) {
-        setActionError('The competitor data is still loading — try again in a moment.');
-        return;
-      }
+      const rows = await fetchUrlsFresh();
       triggerDownload(
-        new Blob([buf], { type: XLSX_MIME }),
+        new Blob([buildMainArrayBuffer(rows)], { type: XLSX_MIME }),
         buildExportFilename('competition-content-overview', projectNameOrId, todayStr())
       );
     } catch (err) {
@@ -331,55 +311,63 @@ export function ComprehensiveAnalysisFilesBox({ projectId, projectNameOrId }: Pr
     } finally {
       setBusy(null);
     }
-  }, [buildMainWorkbook, projectNameOrId]);
+  }, [fetchUrlsFresh, projectNameOrId]);
+
+  const handleDownloadReviews = useCallback(async () => {
+    setActionError(null);
+    setBusy('reviews');
+    try {
+      const rows = await fetchUrlsFresh();
+      const data = await fetchReviewsData(rows);
+      triggerDownload(
+        new Blob([buildReviewsArrayBuffer(data)], { type: XLSX_MIME }),
+        buildExportFilename('competition-reviews-analysis', projectNameOrId, todayStr())
+      );
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not build the file.');
+    } finally {
+      setBusy(null);
+    }
+  }, [fetchUrlsFresh, fetchReviewsData, projectNameOrId]);
 
   const handleDownloadAllZip = useCallback(async () => {
     setActionError(null);
     setBusy('zip');
     try {
       const date = todayStr();
+      const rows = await fetchUrlsFresh();
       const zip = new JSZip();
-      let added = 0;
       const failures: string[] = [];
       // Competition Content Overview (Phase 2a).
-      const mainBuf = buildMainWorkbook();
-      if (mainBuf) {
-        zip.file(
-          buildExportFilename('competition-content-overview', projectNameOrId, date),
-          mainBuf
-        );
-        added++;
-      }
+      zip.file(
+        buildExportFilename('competition-content-overview', projectNameOrId, date),
+        buildMainArrayBuffer(rows)
+      );
       // Competition Reviews Analysis (Phase 2b-i). Best-effort: a reviews
       // failure still lets the rest of the zip download.
       try {
-        const reviewsBuf = await buildReviewsWorkbook();
+        const data = await fetchReviewsData(rows);
         zip.file(
           buildExportFilename('competition-reviews-analysis', projectNameOrId, date),
-          reviewsBuf
+          buildReviewsArrayBuffer(data)
         );
-        added++;
       } catch (err) {
         failures.push(
           `Competition Reviews Analysis (${err instanceof Error ? err.message : 'error'})`
         );
       }
       // The By Category / By Type spreadsheets join here in Phase 2b-ii.
-      if (added === 0) {
-        setActionError('The competitor data is still loading — try again in a moment.');
-        return;
-      }
+      const blob = await zip.generateAsync({ type: 'blob' });
+      triggerDownload(blob, buildExportZipFilename(projectNameOrId, date));
       if (failures.length > 0) {
         setActionError(`Some files couldn’t be added: ${failures.join('; ')}.`);
       }
-      const blob = await zip.generateAsync({ type: 'blob' });
-      triggerDownload(blob, buildExportZipFilename(projectNameOrId, date));
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Could not build the zip.');
     } finally {
       setBusy(null);
     }
-  }, [buildMainWorkbook, buildReviewsWorkbook, projectNameOrId]);
+  }, [fetchUrlsFresh, fetchReviewsData, projectNameOrId]);
 
   const dataReady = urls !== null && !loadError;
 
