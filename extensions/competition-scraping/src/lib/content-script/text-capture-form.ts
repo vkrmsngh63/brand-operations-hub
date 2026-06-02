@@ -25,9 +25,14 @@ import {
   PlosApiError,
   createCapturedText,
   createVocabularyEntry,
+  listCategoryDefaults,
   listCompetitorUrls,
   listVocabularyEntries,
 } from './api-bridge.ts';
+import {
+  attachCategoryDefaultsPicker,
+  type CategoryDefaultsPickerHandle,
+} from './category-defaults-picker.ts';
 import { buildSavedUrlOptionLabel } from '../saved-url-option-label.ts';
 import type { Platform } from '../../../../../src/lib/shared-types/competition-scraping.ts';
 import { getPlatformLabel } from '../platforms.ts';
@@ -380,6 +385,10 @@ export function openTextCaptureForm(
           vocabularyType: 'content-category',
           value: validation.payload.contentCategory ?? '',
         });
+        // P-61 — if "★ Make default" was ticked, pin the new category.
+        await categoryDefaultsHandle?.commitNewCategoryDefault(
+          validation.payload.contentCategory ?? '',
+        );
       }
 
       // P-25: append the selector (snapshotted by the orchestrator at
@@ -446,11 +455,13 @@ export function openTextCaptureForm(
   // in api-bridge.ts. The form stays disabled until both responses arrive
   // (or one fails — surfacing the failure via the inline error banner).
   let loadFailed = false;
+  let categoryDefaultsHandle: CategoryDefaultsPickerHandle | null = null;
   void (async () => {
     try {
-      const [rows, vocab] = await Promise.all([
+      const [rows, vocab, categoryDefaults] = await Promise.all([
         listCompetitorUrls(props.projectId, props.platform),
         listVocabularyEntries(props.projectId, 'content-category'),
+        listCategoryDefaults(props.projectId, props.platform, 'content-category'),
       ]);
 
       // URL picker —
@@ -491,22 +502,19 @@ export function openTextCaptureForm(
         urlSelect.disabled = false;
       }
 
-      // Category picker —
-      categorySelect.innerHTML = '';
-      const placeholderCat = document.createElement('option');
-      placeholderCat.value = '';
-      placeholderCat.textContent = 'Pick a content category…';
-      categorySelect.appendChild(placeholderCat);
-      for (const entry of vocab) {
-        const opt = document.createElement('option');
-        opt.value = entry.value;
-        opt.textContent = entry.value;
-        categorySelect.appendChild(opt);
-      }
-      const addNewOpt = document.createElement('option');
-      addNewOpt.value = ADD_NEW_CATEGORY_VALUE;
-      addNewOpt.textContent = '+ Add new…';
-      categorySelect.appendChild(addNewOpt);
+      // Category picker — P-61: ★ Defaults group + "make default" checkbox.
+      categoryDefaultsHandle = attachCategoryDefaultsPicker({
+        projectId: props.projectId,
+        platform: props.platform,
+        vocabularyType: 'content-category',
+        contentTypeLabel: 'text',
+        categorySelect,
+        addNewSentinel: ADD_NEW_CATEGORY_VALUE,
+        placeholderText: 'Pick a content category…',
+        container: categoryFieldWrap,
+        vocabValues: vocab.map((entry) => entry.value),
+        defaultValues: categoryDefaults.map((d) => d.value),
+      });
       categorySelect.disabled = false;
 
       statusBanner.style.display = 'none';

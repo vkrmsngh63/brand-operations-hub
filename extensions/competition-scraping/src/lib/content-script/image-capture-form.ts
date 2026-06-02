@@ -33,10 +33,15 @@
 import {
   PlosApiError,
   createVocabularyEntry,
+  listCategoryDefaults,
   listCompetitorUrls,
   listVocabularyEntries,
   submitImageCapture,
 } from './api-bridge.ts';
+import {
+  attachCategoryDefaultsPicker,
+  type CategoryDefaultsPickerHandle,
+} from './category-defaults-picker.ts';
 import type { Platform } from '../../../../../src/lib/shared-types/competition-scraping.ts';
 import { ACCEPTED_IMAGE_MIME_TYPES } from '../../../../../src/lib/shared-types/competition-scraping.ts';
 import { getPlatformLabel } from '../platforms.ts';
@@ -443,6 +448,10 @@ export function openImageCaptureForm(
           vocabularyType: 'image-category',
           value: validation.payload.imageCategory,
         });
+        // P-61 — if "★ Make default" was ticked, pin the new category.
+        await categoryDefaultsHandle?.commitNewCategoryDefault(
+          validation.payload.imageCategory,
+        );
       }
 
       await submitImageCapture({
@@ -508,11 +517,13 @@ export function openImageCaptureForm(
   }, 0);
 
   // ── Fetch saved URLs + image-category vocab in parallel ──────────────
+  let categoryDefaultsHandle: CategoryDefaultsPickerHandle | null = null;
   void (async () => {
     try {
-      const [rows, vocab] = await Promise.all([
+      const [rows, vocab, categoryDefaults] = await Promise.all([
         listCompetitorUrls(props.projectId, props.platform),
         listVocabularyEntries(props.projectId, 'image-category'),
+        listCategoryDefaults(props.projectId, props.platform, 'image-category'),
       ]);
 
       // URL picker
@@ -549,22 +560,19 @@ export function openImageCaptureForm(
         urlSelect.disabled = false;
       }
 
-      // Image-category picker
-      categorySelect.innerHTML = '';
-      const placeholderCat = document.createElement('option');
-      placeholderCat.value = '';
-      placeholderCat.textContent = 'Pick an image category…';
-      categorySelect.appendChild(placeholderCat);
-      for (const entry of vocab) {
-        const opt = document.createElement('option');
-        opt.value = entry.value;
-        opt.textContent = entry.value;
-        categorySelect.appendChild(opt);
-      }
-      const addNewOpt = document.createElement('option');
-      addNewOpt.value = ADD_NEW_IMAGE_CATEGORY_VALUE;
-      addNewOpt.textContent = '+ Add new…';
-      categorySelect.appendChild(addNewOpt);
+      // Image-category picker — P-61: ★ Defaults group + "make default" checkbox.
+      categoryDefaultsHandle = attachCategoryDefaultsPicker({
+        projectId: props.projectId,
+        platform: props.platform,
+        vocabularyType: 'image-category',
+        contentTypeLabel: 'image',
+        categorySelect,
+        addNewSentinel: ADD_NEW_IMAGE_CATEGORY_VALUE,
+        placeholderText: 'Pick an image category…',
+        container: categoryFieldWrap,
+        vocabValues: vocab.map((entry) => entry.value),
+        defaultValues: categoryDefaults.map((d) => d.value),
+      });
       categorySelect.disabled = false;
 
       statusBanner.style.display = 'none';

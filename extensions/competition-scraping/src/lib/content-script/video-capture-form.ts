@@ -33,10 +33,15 @@
 import {
   PlosApiError,
   createVocabularyEntry,
+  listCategoryDefaults,
   listCompetitorUrls,
   listVocabularyEntries,
   submitVideoCapture,
 } from './api-bridge.ts';
+import {
+  attachCategoryDefaultsPicker,
+  type CategoryDefaultsPickerHandle,
+} from './category-defaults-picker.ts';
 import type {
   AcceptedVideoMimeType,
   Platform,
@@ -705,6 +710,10 @@ export function openVideoCaptureForm(
           vocabularyType: 'video-category',
           value: validation.payload.videoCategory,
         });
+        // P-61 — if "★ Make default" was ticked, pin the new category.
+        await categoryDefaultsHandle?.commitNewCategoryDefault(
+          validation.payload.videoCategory,
+        );
       }
 
       if (props.kind === 'direct') {
@@ -817,11 +826,13 @@ export function openVideoCaptureForm(
   }, 0);
 
   // ── Fetch saved URLs + video-category vocab in parallel ──────────────
+  let categoryDefaultsHandle: CategoryDefaultsPickerHandle | null = null;
   void (async () => {
     try {
-      const [rows, vocab] = await Promise.all([
+      const [rows, vocab, categoryDefaults] = await Promise.all([
         listCompetitorUrls(props.projectId, w2Platform),
         listVocabularyEntries(props.projectId, 'video-category'),
+        listCategoryDefaults(props.projectId, w2Platform, 'video-category'),
       ]);
 
       urlSelect.innerHTML = '';
@@ -855,21 +866,19 @@ export function openVideoCaptureForm(
         urlSelect.disabled = false;
       }
 
-      categorySelect.innerHTML = '';
-      const placeholderCat = document.createElement('option');
-      placeholderCat.value = '';
-      placeholderCat.textContent = 'Pick a video category…';
-      categorySelect.appendChild(placeholderCat);
-      for (const entry of vocab) {
-        const opt = document.createElement('option');
-        opt.value = entry.value;
-        opt.textContent = entry.value;
-        categorySelect.appendChild(opt);
-      }
-      const addNewOpt = document.createElement('option');
-      addNewOpt.value = ADD_NEW_VIDEO_CATEGORY_VALUE;
-      addNewOpt.textContent = '+ Add new…';
-      categorySelect.appendChild(addNewOpt);
+      // Video-category picker — P-61: ★ Defaults group + "make default" checkbox.
+      categoryDefaultsHandle = attachCategoryDefaultsPicker({
+        projectId: props.projectId,
+        platform: w2Platform,
+        vocabularyType: 'video-category',
+        contentTypeLabel: 'video',
+        categorySelect,
+        addNewSentinel: ADD_NEW_VIDEO_CATEGORY_VALUE,
+        placeholderText: 'Pick a video category…',
+        container: categoryFieldWrap,
+        vocabValues: vocab.map((entry) => entry.value),
+        defaultValues: categoryDefaults.map((d) => d.value),
+      });
       categorySelect.disabled = false;
 
       statusBanner.style.display = 'none';

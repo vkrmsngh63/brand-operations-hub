@@ -298,6 +298,34 @@ export interface CreateVocabularyEntryRequest {
 
 export type CreateVocabularyEntryResponse = VocabularyEntry;
 
+// ─── CategoryDefault (P-61) ─────────────────────────────────────────────
+// A captured-content category pinned as a "default" for a specific platform
+// + content-type, surfaced by the extension capture overlay as a quick-pick.
+// Project-scoped + shared. `vocabularyType` is always a category type
+// (content/image/video-category); the server validates this.
+export interface CategoryDefault {
+  id: string;
+  projectId: string;
+  platform: Platform;
+  vocabularyType: VocabularyType;
+  value: string;
+  addedBy: string;
+  addedAt: string;
+}
+
+// GET /api/projects/[projectId]/competition-scraping/category-defaults?platform=&type=
+export type ListCategoryDefaultsResponse = CategoryDefault[];
+
+// POST /api/projects/[projectId]/competition-scraping/category-defaults —
+// upsert; existing row returned on duplicate (no error).
+export interface CreateCategoryDefaultRequest {
+  platform: Platform;
+  vocabularyType: VocabularyType;
+  value: string;
+}
+
+export type CreateCategoryDefaultResponse = CategoryDefault;
+
 // ─── CompetitorSize ─────────────────────────────────────────────────────
 // Wire shape returned by sizes endpoints. price/shippingCost are Prisma
 // Decimal columns; NextResponse.json serializes Decimal via toJSON →

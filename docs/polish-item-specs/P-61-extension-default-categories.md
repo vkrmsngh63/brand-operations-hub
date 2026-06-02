@@ -14,7 +14,18 @@
 
 ## §2 — Joint-discussion adjustments (append-only, chronological)
 
-- _(none yet — to be filled WITH the director at the build session: storage model, overlay placement, and how "make default" + "remove default" surface in the capture forms.)_
+- **2026-06-02-j — Rule 3 code-truth audit (via Explore agent), before design:**
+  - Categories live in ONE `VocabularyEntry` model (`prisma/schema.prisma`) keyed `@@unique([projectId, vocabularyType, value])` — **project-scoped, shared across ALL platforms, NO platform discriminator, NO "default" flag.** `vocabularyType ∈ {content-category, image-category, video-category, …}`.
+  - The three capture forms (`{text,image,video}-capture-form.ts`) each fetch the full vocab list for their type (`listVocabularyEntries(projectId, type)` → GET `/api/projects/[id]/vocabulary?type=`) and render a native `<select>` with every value + a `+ Add new…` sentinel (`createVocabularyEntry` upserts before save). Forms already have `projectId` + `platform` in scope.
+  - `UserExtensionState` (P-3) is user-scoped (last project + platform only) — NOT a fit for per-(platform, content-type) defaults.
+  - No existing "default"/per-platform concept anywhere — confirmed genuinely new.
+- **2026-06-02-j — design LOCKED WITH the director (4 Rule 14f pickers):**
+  - **Q1 Sharing = per-Project (shared)** [recommended]. Defaults are shared by everyone on the Project (a team convention), not per-user.
+  - **Q2 Show-defaults UX = a "★ Defaults" optgroup pinned at the top of the existing native dropdown** [director OVERRIDE of my recommended quick-pick-chips], then a separator/"all categories", then `+ Add new…`.
+  - **Q3 Make/remove = inline ★ + checkbox-on-add** [recommended] — reconciled in Q4 because native `<option>` rows can't host a tappable star.
+  - **Q4 Reconciliation = a contextual "★ Make default for [platform] · [type]" checkbox BELOW the dropdown** [recommended] that reflects the currently-selected (or newly-typed) category: checked = it's a default; toggling adds/removes it. One control covers make-on-add AND remove-any-time; keeps the native picker (low-risk).
+  - **Scope/keying confirmed:** defaults are keyed by `(projectId, platform, vocabularyType, value)` — a category can be default for Amazon·text but not Etsy·text. **Surfaced as pickable, never force-auto-selected** (per the directive wording).
+- **2026-06-02-j — Change Impact Audit (Rule 23): Additive.** NEW model + NEW route + NEW shared types + extension reads/writes; no change to existing `VocabularyEntry` rows or capture-row category storage. Schema-change-in-flight flips NO→YES for the build, back to NO at the deploy push.
 
 ---
 

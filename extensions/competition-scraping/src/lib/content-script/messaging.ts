@@ -40,6 +40,7 @@ import type {
   CompetitorUrl,
   CreateCapturedReviewRequest,
   CreateCapturedTextRequest,
+  CreateCategoryDefaultRequest,
   CreateCompetitorUrlRequest,
   CreateVocabularyEntryRequest,
   ListCompetitorUrlsResponse,
@@ -293,6 +294,28 @@ export interface CreateVocabularyEntryRequestMessage {
   body: CreateVocabularyEntryRequest;
 }
 
+// P-61 — default-category quick-picks per (platform, content-type).
+export interface ListCategoryDefaultsRequest {
+  kind: 'list-category-defaults';
+  projectId: string;
+  platform: Platform;
+  vocabularyType: VocabularyType;
+}
+
+export interface AddCategoryDefaultRequestMessage {
+  kind: 'add-category-default';
+  projectId: string;
+  body: CreateCategoryDefaultRequest;
+}
+
+export interface RemoveCategoryDefaultRequestMessage {
+  kind: 'remove-category-default';
+  projectId: string;
+  platform: Platform;
+  vocabularyType: VocabularyType;
+  value: string;
+}
+
 /**
  * Session 5 — end-to-end image-capture submit. Content script hands off
  * everything the background needs to fetch the bytes (the image's srcUrl)
@@ -489,6 +512,9 @@ export type BackgroundRequest =
   | CreateCapturedReviewRequestMessage
   | ListVocabularyRequest
   | CreateVocabularyEntryRequestMessage
+  | ListCategoryDefaultsRequest
+  | AddCategoryDefaultRequestMessage
+  | RemoveCategoryDefaultRequestMessage
   | SubmitImageCaptureRequestMessage
   | SubmitVideoCaptureRequestMessage
   | SubmitVideoScreenRecordingRequestUploadRequest
@@ -580,6 +606,7 @@ export function isBackgroundRequest(
     body?: unknown;
     platform?: unknown;
     vocabularyType?: unknown;
+    value?: unknown;
   };
   if (msg.kind === 'list-projects') return true;
   if (msg.kind === 'list-competitor-urls') {
@@ -628,6 +655,28 @@ export function isBackgroundRequest(
       typeof msg.projectId === 'string' &&
       typeof msg.body === 'object' &&
       msg.body !== null
+    );
+  }
+  if (msg.kind === 'list-category-defaults') {
+    return (
+      typeof msg.projectId === 'string' &&
+      typeof msg.platform === 'string' &&
+      typeof msg.vocabularyType === 'string'
+    );
+  }
+  if (msg.kind === 'add-category-default') {
+    return (
+      typeof msg.projectId === 'string' &&
+      typeof msg.body === 'object' &&
+      msg.body !== null
+    );
+  }
+  if (msg.kind === 'remove-category-default') {
+    return (
+      typeof msg.projectId === 'string' &&
+      typeof msg.platform === 'string' &&
+      typeof msg.vocabularyType === 'string' &&
+      typeof msg.value === 'string'
     );
   }
   if (msg.kind === 'submit-image-capture') {

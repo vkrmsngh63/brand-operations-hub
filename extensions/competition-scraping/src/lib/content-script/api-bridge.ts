@@ -29,9 +29,11 @@ import type {
   CapturedText,
   CapturedVideo,
   CapturedVideoWithUrls,
+  CategoryDefault,
   CompetitorUrl,
   CreateCapturedReviewRequest,
   CreateCapturedTextRequest,
+  CreateCategoryDefaultRequest,
   CreateCompetitorUrlRequest,
   CreateVocabularyEntryRequest,
   ImageSourceType,
@@ -229,6 +231,51 @@ export async function createVocabularyEntry(
     kind: 'create-vocabulary-entry',
     projectId,
     body,
+  });
+}
+
+/**
+ * P-61 — lists the DEFAULT categories for one (platform, content-type),
+ * project-scoped + shared. Routed through the background.
+ */
+export async function listCategoryDefaults(
+  projectId: string,
+  platform: Platform,
+  vocabularyType: VocabularyType,
+): Promise<CategoryDefault[]> {
+  return send<CategoryDefault[]>({
+    kind: 'list-category-defaults',
+    projectId,
+    platform,
+    vocabularyType,
+  });
+}
+
+/** P-61 — pins a category as a default (idempotent). Routed through the background. */
+export async function addCategoryDefault(
+  projectId: string,
+  body: CreateCategoryDefaultRequest,
+): Promise<CategoryDefault> {
+  return send<CategoryDefault>({
+    kind: 'add-category-default',
+    projectId,
+    body,
+  });
+}
+
+/** P-61 — un-pins a default category (no-op if not pinned). Routed through the background. */
+export async function removeCategoryDefault(
+  projectId: string,
+  platform: Platform,
+  vocabularyType: VocabularyType,
+  value: string,
+): Promise<{ removed: boolean }> {
+  return send<{ removed: boolean }>({
+    kind: 'remove-category-default',
+    projectId,
+    platform,
+    vocabularyType,
+    value,
   });
 }
 

@@ -17,12 +17,15 @@ import type {
   CapturedText,
   CapturedVideo,
   CapturedVideoWithUrls,
+  CategoryDefault,
   CompetitorUrl,
   CreateCapturedReviewRequest,
   CreateCapturedTextRequest,
+  CreateCategoryDefaultRequest,
   CreateCompetitorUrlRequest,
   CreateVocabularyEntryRequest,
   ExtensionStateDto,
+  ListCategoryDefaultsResponse,
   FinalizeImageUploadRequest,
   FinalizeImageUploadResponse,
   FinalizeVideoUploadRequest,
@@ -661,6 +664,58 @@ export async function createVocabularyEntry(
     },
   );
   return readJsonOrThrow<VocabularyEntry>(res);
+}
+
+// ─── P-61 default categories per (platform, content-type) ─────────────────
+
+function categoryDefaultsBase(projectId: string): string {
+  return `/api/projects/${encodeURIComponent(projectId)}/competition-scraping/category-defaults`;
+}
+
+/**
+ * P-61 — lists the DEFAULT categories for one (platform, content-type),
+ * project-scoped + shared. Used by the three capture forms to pin a
+ * "★ Defaults" group at the top of the category picker.
+ */
+export async function listCategoryDefaults(
+  projectId: string,
+  platform: Platform,
+  vocabularyType: VocabularyType,
+): Promise<CategoryDefault[]> {
+  const res = await authedFetch(
+    `${categoryDefaultsBase(projectId)}?platform=${encodeURIComponent(platform)}&type=${encodeURIComponent(vocabularyType)}`,
+  );
+  const data = await readJsonOrThrow<ListCategoryDefaultsResponse>(res);
+  if (!Array.isArray(data)) {
+    throw new PlosApiError(500, 'Unexpected response shape from category-defaults');
+  }
+  return data;
+}
+
+/** P-61 — pins a category as a default (idempotent; existing row returned on dup). */
+export async function addCategoryDefault(
+  projectId: string,
+  body: CreateCategoryDefaultRequest,
+): Promise<CategoryDefault> {
+  const res = await authedFetch(categoryDefaultsBase(projectId), {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  return readJsonOrThrow<CategoryDefault>(res);
+}
+
+/** P-61 — un-pins a default category (no-op if not currently pinned). */
+export async function removeCategoryDefault(
+  projectId: string,
+  platform: Platform,
+  vocabularyType: VocabularyType,
+  value: string,
+): Promise<{ removed: boolean }> {
+  const res = await authedFetch(
+    `${categoryDefaultsBase(projectId)}?platform=${encodeURIComponent(platform)}&type=${encodeURIComponent(vocabularyType)}&value=${encodeURIComponent(value)}`,
+    { method: 'DELETE' },
+  );
+  return readJsonOrThrow<{ removed: boolean }>(res);
 }
 
 // ─── Image upload — Module 2 two-phase flow (session 5, 2026-05-12-i) ────

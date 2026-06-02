@@ -41,6 +41,7 @@
 import { supabase } from '../lib/supabase';
 import {
   PlosApiError,
+  addCategoryDefault,
   createCapturedReview,
   createCapturedText,
   createCompetitorUrl,
@@ -52,10 +53,12 @@ import {
   listCapturedImages,
   listCapturedTexts,
   listCapturedVideos,
+  listCategoryDefaults,
   listCompetitorUrls,
   listProjects,
   listVocabularyEntries,
   putImageBytesToSignedUrl,
+  removeCategoryDefault,
   putVideoBytesToSignedUrl,
   putVideoThumbnailToSignedUrl,
   requestImageUpload,
@@ -404,6 +407,20 @@ async function handleBackgroundRequest(
   }
   if (req.kind === 'create-vocabulary-entry') {
     return createVocabularyEntry(req.projectId, req.body);
+  }
+  if (req.kind === 'list-category-defaults') {
+    return listCategoryDefaults(req.projectId, req.platform, req.vocabularyType);
+  }
+  if (req.kind === 'add-category-default') {
+    return addCategoryDefault(req.projectId, req.body);
+  }
+  if (req.kind === 'remove-category-default') {
+    return removeCategoryDefault(
+      req.projectId,
+      req.platform,
+      req.vocabularyType,
+      req.value,
+    );
   }
   if (req.kind === 'submit-image-capture') {
     return handleSubmitImageCapture(req);

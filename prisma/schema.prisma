@@ -31,6 +31,7 @@ model Project {
 
   workflows             ProjectWorkflow[]
   vocabularyEntries     VocabularyEntry[]
+  categoryDefaults      CategoryDefault[]
   comprehensiveAnalysis ComprehensiveCompetitorAnalysis?
 
   @@index([userId])
@@ -635,6 +636,30 @@ model VocabularyEntry {
 
   @@unique([projectId, vocabularyType, value])
   @@index([projectId, vocabularyType])
+}
+
+// CategoryDefault — W#2 P-61 (2026-06-02-j). Marks a captured-content
+// category (content/image/video) as a "default" for a specific PLATFORM,
+// so the extension capture overlay surfaces it as a pinned quick-pick the
+// next time that content type is captured on that platform. Project-scoped
+// + shared (a team convention), NOT per-user — director-chosen (Rule 14f).
+// A row's presence = that (platform, vocabularyType, value) is a default;
+// removing the default deletes the row. `value` mirrors a VocabularyEntry
+// value but is NOT FK-bound to it (the vocabulary pool is platform-agnostic;
+// a default is platform-specific). Additive — no change to VocabularyEntry.
+model CategoryDefault {
+  id             String   @id @default(uuid())
+  projectId      String
+  platform       String // Platform slug: amazon | ebay | etsy | walmart | google-shopping | google-ads | independent-website
+  vocabularyType String // category vocabulary type: content-category | image-category | video-category
+  value          String
+  addedBy        String // userId who pinned it
+  addedAt        DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, platform, vocabularyType, value])
+  @@index([projectId, platform, vocabularyType])
 }
 
 // ============================================================
