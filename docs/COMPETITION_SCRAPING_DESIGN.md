@@ -3985,6 +3985,24 @@ This session's W5 Session 1.5 design-lock + build work is **PLOS-side AI infrast
 
 ---
 
+## §B 2026-06-02-f — `session_2026-06-02-f_p58-download-extension-zip-latest-build` — P-58: the in-app extension distribution now serves the LATEST build via a stable committed `public/` path refreshed at deploy-time — append-only design note per Rule 18 (§A frozen)
+
+**Informational design note (the canonical P-58 spec lives in `docs/polish-item-specs/P-58-download-extension-zip-latest-build.md` §3 + §4 Q1 RESOLVED; the session methodology + the reusable PATTERN live in `docs/CORRECTIONS_LOG.md` §Entry 2026-06-02-f; the verification PASS lives in `docs/COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md`). P-58 is a PLOS-side in-app-download change — NO extension SOURCE change, NO schema change, NO new route. DEPLOYED-AND-VERIFIED on vklf.com (director "pass").**
+
+**Design choices made this session (Rule 14f forced-picker outcome):** the director picked **Option A "Deploy-time committed file" (Recommended)** for where the in-app download's "latest build" lives — over Option B (build the extension inside Vercel's web build) and Option C (a dynamic download route). Option A is the most reliable because the extension's separate build toolchain (wxt 0.20.x + Vite 8 + Rolldown, with its own `node_modules` under `extensions/competition-scraping/`) CANNOT run inside the serverless Vercel web build; a committed static asset is the dependable path. Trade-off (recorded + director-accepted): ~218 KB binary added to git history per extension deploy.
+
+**The code-truth finding that reframed the work (the materially-new fact this session):** the Rule 3 audit found the in-app "Download Extension (zip)" button was a DEAD PLACEHOLDER (`url="#download-extension-pending"`) — it downloaded NOTHING. The original capture (2026-06-02-d) had assumed it served a *stale committed artifact*; the truth was it had never been wired at all (an audit-shipped-state correction per Rule 31). This changed the fix from "freshen a stale file" to "wire a never-wired button to a deploy-refreshed artifact."
+
+**Implementation (as shipped, `3dc47fb`):** (1) the served file is `public/competition-scraping/plos-extension-latest.zip` (218 KB committed binary; Next.js serves `public/` statically, reachable on vklf.com at `/competition-scraping/plos-extension-latest.zip`); (2) `src/app/projects/[projectId]/competition-scraping/page.tsx` — the `CompanionDownload url` flipped from the `#download-extension-pending` placeholder to `/competition-scraping/plos-extension-latest.zip` (the frozen 3-prop `CompanionDownload` component is unchanged; its `target="_blank"` downloads the non-renderable `.zip`); (3) `.claude/commands/deploy.md` Step 8 now copies the freshly-built `.output/…-chrome.zip` to that `public/` path AND commits it with the build commit at every extension deploy, so the in-app download always matches the deployed build with no per-build re-wiring. The repo-root dated sideload zip is kept short-term (the director's manual sideload path; the in-app download is additive).
+
+**Affected §A sections (INFORMATIONAL — §A is FROZEN per Rule 18; not edited):** the extension build/distribution flow gains a deploy-time served-artifact step; the in-app "Download Extension (zip)" box (rendered inside `<DeliverablesArea>` on the Competition Scraping workflow page) now hands out the latest build directly from vklf.com.
+
+**Reusable PATTERN (also captured in CORRECTIONS_LOG §Entry 2026-06-02-f):** serve a companion/external-client artifact's latest build via a STABLE committed `public/` path refreshed at deploy-time, rather than running the companion's separate build toolchain inside the web (Vercel) build.
+
+**Cross-references:** spec `docs/polish-item-specs/P-58-download-extension-zip-latest-build.md` (§3 AS-SHIPPED + §4 Q1/Q2/Q3 RESOLVED); `docs/CORRECTIONS_LOG.md` §Entry 2026-06-02-f; `docs/COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` (the P-58 in-app-download verification PASS); `.claude/commands/deploy.md` Step 8; `src/lib/workflow-components/companion-download.tsx` (the frozen `CompanionDownload`); build `3dc47fb` (`main` `ca45eae → 3dc47fb`); the served file `public/competition-scraping/plos-extension-latest.zip`.
+
+---
+
 ---
 
 END OF DOCUMENT

@@ -4074,5 +4074,44 @@ Post-merge scoreboard SKIPPED as deliberate efficiency choice — ff-merge produ
 
 ---
 
+## Deploy session #39 — 2026-06-02-f — P-58 in-app "Download Extension (zip)" serves the LATEST build — VERIFIED PASS
+
+**Session:** `session_2026-06-02-f_p58-download-extension-zip-latest-build` (W#2 Competition Scraping). Build `3dc47fb`; `main` `ca45eae → 3dc47fb`. PLOS-side change (a static `public/` artifact + a deploy-step wiring); NO extension SOURCE change; NO schema change; NO new route.
+
+**Headline outcome:** the in-app "Download Extension (zip)" button on the Competition Scraping workflow page now serves the LATEST built extension and stays current automatically at every deploy. **VERIFIED PASS** by the director on real Chrome on vklf.com.
+
+**Drift caught at session-start (the audit-shipped-state correction):** the original P-58 capture (2026-06-02-d) assumed the button served a *stale committed artifact*. The Rule 3 code-truth audit found the button was a DEAD PLACEHOLDER (`url="#download-extension-pending"`) that downloaded NOTHING — it had never been wired (a Rule 31 audit-shipped-state correction). This reframed the fix from "freshen a stale file" to "wire a never-wired button to a deploy-refreshed artifact."
+
+**Fix shape narrative:** director-picked Option A "Deploy-time committed file" (Rule 14f) — the freshly-built extension zip is committed at a STABLE web path `public/competition-scraping/plos-extension-latest.zip`; the button URL → `/competition-scraping/plos-extension-latest.zip` (a real download — `.zip` non-renderable so `target="_blank"` downloads it); `/deploy` Step 8 overwrites + commits that served artifact at every extension deploy. Options B (build the extension in Vercel's web build) + C (a dynamic download route) rejected — Vercel cannot run the separate wxt/Vite/Rolldown toolchain.
+
+**Implementation summary (files + LOC):** `src/app/projects/[projectId]/competition-scraping/page.tsx` (the `CompanionDownload url` flip + a P-58 comment) + `public/competition-scraping/plos-extension-latest.zip` (NEW, 218 KB committed binary) + `.claude/commands/deploy.md` (Step 8 P-58 refresh-the-served-artifact note) + the NEW spec `docs/polish-item-specs/P-58-download-extension-zip-latest-build.md` (Rule 31). Single build commit `3dc47fb`. NO new source module.
+
+**Pre-deploy + post-merge verification scoreboard (all UNCHANGED):**
+
+| Check | Entry (2026-06-02-e) | Exit (2026-06-02-f) | Δ |
+| --- | --- | --- | --- |
+| Root tsc | clean | clean | UNCHANGED |
+| Extension tsc | clean | clean | UNCHANGED |
+| Extension `npm test` | 915/915 | 915/915 | UNCHANGED (no extension source change) |
+| src/lib `node:test` | 1353/1353 | 1353/1353 | UNCHANGED |
+| `npm run build` (routes) | 72 | 72 | UNCHANGED (static `public/` asset; no new route) |
+| Check 6 Playwright | SKIPPED (Rule 27) | SKIPPED (Rule 27) | file-download / URL wiring = director real-Chrome |
+
+**Director real-Chrome verification narrative:** the director clicked the in-app ↓ Download button on vklf.com; the latest extension zip downloaded. Verdict: **"pass."**
+
+**Process observations captured informationally:** the audit-shipped-state correction (the dead placeholder vs. the assumed stale artifact) is the durable lesson — verify the actual shipped state before designing the fix (see CORRECTIONS_LOG §Entry 2026-06-02-f); the NEW reusable PATTERN — serve a companion artifact's latest build via a committed `public/` path refreshed at deploy-time, not a Vercel cross-toolchain build.
+
+### Cross-references
+
+- `docs/polish-item-specs/P-58-download-extension-zip-latest-build.md` — §3 AS-SHIPPED + §4 Q1/Q2/Q3 RESOLVED.
+- `docs/COMPETITION_SCRAPING_DESIGN.md` §B 2026-06-02-f — the served-`public/`-artifact design note.
+- `docs/CORRECTIONS_LOG.md` §Entry 2026-06-02-f — the audit-shipped-state correction + the reusable PATTERN.
+- `docs/ROADMAP.md` P-58 polish-backlog entry — flipped to ✅ DEPLOYED-AND-VERIFIED + CLOSED this session.
+- `.claude/commands/deploy.md` Step 8 — the refresh-the-served-artifact step.
+- Build commit `3dc47fb` on `workflow-2-competition-scraping`; ff-merge `ca45eae..3dc47fb` on `main`.
+- the served file `public/competition-scraping/plos-extension-latest.zip` (218 KB).
+
+---
+
 END OF DOCUMENT
 

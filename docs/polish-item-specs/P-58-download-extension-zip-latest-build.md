@@ -1,8 +1,8 @@
 # P-58 — The "Download Extension (zip)" box should serve the LATEST extension build
 
-**Status:** 🟡 IN-PROGRESS 2026-06-02-f (`session_2026-06-02-f_p58-download-extension-zip-latest-build`) — spec created as the session's first artifact per Rule 31. W#2 Competition Scraping; in-app extension-download surface. NO schema change anticipated. _(Captured 2026-06-02-d as ROADMAP entry P-58; this spec doc created 2026-06-02-f — it did not exist before.)_
+**Status:** ✅ DEPLOYED-AND-VERIFIED 2026-06-02-f (`session_2026-06-02-f_p58-download-extension-zip-latest-build`) — director real-Chrome verified the in-app download on vklf.com ("pass"); **P-58 CLOSED.** Shipped as Option A (deploy-time committed `public/` artifact) in build `3dc47fb` (`main` `ca45eae → 3dc47fb`). W#2 Competition Scraping; in-app extension-download surface. NO schema change; NO new route. _(Spec created as the session's first artifact per Rule 31 — it did not exist before; captured 2026-06-02-d as ROADMAP entry P-58.)_
 
-**Severity:** MEDIUM — today the in-app download button serves **nothing** (a dead placeholder anchor); workers cannot get the extension from the app at all, and any future "latest build" must not go stale.
+**Severity:** MEDIUM — until this shipped, the in-app download button served **nothing** (a dead placeholder anchor); workers could not get the extension from the app at all, and any future "latest build" must not go stale.
 
 ---
 
@@ -26,6 +26,13 @@ The in-app **"Download Extension (zip)"** box (rendered inside `<DeliverablesAre
   - Next.js serves static files from `public/` (e.g. `public/competition-scraping/guide-screenshots/`). A file at `public/competition-scraping/<name>.zip` is reachable on vklf.com at `/competition-scraping/<name>.zip`.
   - **Why Vercel can't build the extension at web-build time:** the extension is a separate toolchain (wxt 0.20.x + Vite 8 + Rolldown) with its own `node_modules` under `extensions/competition-scraping/`; `npm run build` (the Next.js/Vercel build) does NOT build the extension. So "always latest" must come from a deploy-time committed artifact, NOT from the Vercel build running wxt. _(See §4 Q1 design fork.)_
 
+- **2026-06-02-f — Q1 RESOLVED WITH the director via a Rule 14f AskUserQuestion picker → Option A "Deploy-time committed file" (Recommended).** AS SHIPPED (`3dc47fb`):
+  1. The served artifact lives at the STABLE web path `public/competition-scraping/plos-extension-latest.zip` (218 KB committed binary).
+  2. `page.tsx` `CompanionDownload url` flipped from `#download-extension-pending` → `/competition-scraping/plos-extension-latest.zip`. The `.zip` is non-renderable, so the frozen component's `target="_blank"` triggers a download (no `download` attr needed; the component stays unchanged).
+  3. `.claude/commands/deploy.md` Step 8 was updated with a P-58 note: at every extension deploy, the freshly-built `.output/…-chrome.zip` is copied to `public/competition-scraping/plos-extension-latest.zip` AND committed with the build commit, so Vercel serves the new bytes on the next deploy and the in-app download always matches the deployed build.
+  4. The existing repo-root dated sideload zip (`plos-extension-<date>-w2-deploy-<N>.zip`) is KEPT short-term (Q2 — the director's manual sideload path; the in-app download is additive).
+- **2026-06-02-f — director real-Chrome verification:** the director clicked the in-app ↓ Download button on vklf.com; the latest zip downloaded. Verdict: **"pass."** (Check 6 Playwright SKIPPED per Rule 27 — file-download + URL wiring = visual judgment.)
+
 ---
 
 ## §3 — Current consolidated spec (rolled-up source-of-truth)
@@ -46,12 +53,12 @@ The in-app **"Download Extension (zip)"** box (rendered inside `<DeliverablesAre
 
 ## §4 — Open questions (resolve BEFORE / DURING code; Rule 14f where a real fork)
 
-- **Q1 (THE design fork) — where does "the latest build" live + how does the download stay current?**
-  - **Option A (RECOMMENDED) — committed `public/` artifact refreshed at deploy:** the `/deploy` fresh-zip step writes the built zip to `public/competition-scraping/plos-extension-latest.zip`, committed with the build commit; the button points at the stable path. MOST RELIABLE: always matches the deployed build, no Vercel cross-toolchain build, reuses the existing deploy step, stable URL = no re-wiring. Cost: ~218 KB binary added to git history per extension deploy.
+- **Q1 (THE design fork) — where does "the latest build" live + how does the download stay current?** ✅ **RESOLVED 2026-06-02-f — director chose Option A (Recommended) via a Rule 14f picker; shipped in `3dc47fb`.**
+  - **Option A (RECOMMENDED — CHOSEN + SHIPPED) — committed `public/` artifact refreshed at deploy:** the `/deploy` fresh-zip step writes the built zip to `public/competition-scraping/plos-extension-latest.zip`, committed with the build commit; the button points at the stable path. MOST RELIABLE: always matches the deployed build, no Vercel cross-toolchain build, reuses the existing deploy step, stable URL = no re-wiring. Cost: ~218 KB binary added to git history per extension deploy (director-accepted).
   - **Option B — Vercel builds the extension at web-build time:** add an extension `build → zip → copy into public/` step to the Next.js/Vercel build. Avoids git binary bloat. RISK: runs the separate wxt/Vite/Rolldown toolchain inside Vercel's build (extra install + the P-44 hang class); fragile + slower builds. NOT recommended.
   - **Option C — dynamic download route:** an API route streams the latest zip on request. Overkill; Vercel serverless cannot run wxt; needs the bytes to already exist somewhere → collapses back to A. NOT recommended.
-- **Q2 — keep the dated repo-root sideload zip too?** Whether to ALSO keep producing `plos-extension-<date>-w2-deploy-<N>.zip` at repo root (director's current manual sideload path) once the in-app download is live, or retire it. (Lean: keep it short-term; the in-app download is additive.)
-- **Q3 — show the build version/date by the button?** Nice-to-have surfacing of freshness; defer unless the director wants it now.
+- **Q2 — keep the dated repo-root sideload zip too?** ✅ **RESOLVED 2026-06-02-f — KEEP it short-term.** The `/deploy` Step 8 still produces `plos-extension-<date>-w2-deploy-<N>.zip` at repo root (the director's manual sideload path); the in-app download is additive. (Re-evaluate retiring it once the in-app download is the established path.)
+- **Q3 — show the build version/date by the button?** ✅ **RESOLVED 2026-06-02-f — DEFERRED.** Build-version/date surfacing next to the button is not shipped; revisit if the director wants the freshness made visible.
 
 ---
 

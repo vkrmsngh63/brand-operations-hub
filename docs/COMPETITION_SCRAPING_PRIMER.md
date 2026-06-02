@@ -56,9 +56,8 @@ teaching "primer" the director feeds to an external AI.
 ## 5. OPEN items at graduation
 
 Read `docs/ROADMAP.md` (search "W#2" + the P-IDs) for the authoritative list. As of
-graduation the notable open items include: **P-58** (MEDIUM — the in-app
-Download-Extension button should serve the LATEST build; the next pick), **P-57** (MEDIUM
-— fill the delete-coverage gaps for reviews / videos / category-labels), **P-61** (MEDIUM
+graduation the notable open items include: **P-57** (MEDIUM — fill the delete-coverage
+gaps for reviews / videos / category-labels; the next pick), **P-61** (MEDIUM
 — extension server-side default categories per platform per content-type;
 spec `docs/polish-item-specs/P-61-extension-default-categories.md`), plus the
 lower-priority residue: **P-59** (update `DetailedUserGuide.tsx`), **P-60** (open-detail
@@ -67,6 +66,10 @@ absorbed by P-55), **P-43** (add absolute `cd` prefix to all `scoreboard.md` Bas
 commands — recurring cwd-leak), **P-50** (NEW Condition Pathology card), **P-26/P-27**
 (below-fold scroll / capture bugs, low priority), and the two **P-52** carry-overs
 (Opus 4.8 pricing numbers + the W#1 `AutoAnalyze.tsx` shared-list migration).
+**P-58** (the in-app "Download Extension (zip)" button serving the LATEST build) is now
+✅ CLOSED — DEPLOYED-AND-VERIFIED 2026-06-02-f on vklf.com (Option A: the freshly-built
+extension zip is committed at `public/competition-scraping/plos-extension-latest.zip` +
+refreshed at every deploy).
 **P-56** (the Amazon Highlight-Terms flicker that blocked selecting sentences for
 capture) is now ✅ CLOSED — DEPLOYED-AND-VERIFIED 2026-06-02-e on real Amazon (the
 deferred P-20 real-Amazon verification is resolved); the only residue is an optional
