@@ -53,6 +53,11 @@ export interface RichTextEditorProps {
   // − / Npt / + stepper (clamped 10-24).
   fontSize?: number;
   onFontSizeChange?: (next: number) => void;
+
+  // Called once with the live editor instance when it becomes ready (and
+  // again if it is recreated). Lets a consumer drive imperative commands —
+  // e.g. the "Insert primer" button inserts content at the cursor.
+  onEditorReady?: (editor: Editor) => void;
 }
 
 const DEFAULT_DEBOUNCE_MS = 500;
@@ -71,6 +76,7 @@ export function RichTextEditor({
   projectId,
   fontSize = DEFAULT_FONT_SIZE_PX,
   onFontSizeChange,
+  onEditorReady,
 }: RichTextEditorProps) {
   const router = useRouter();
   // Pending-debounce timer + latest-content ref so blur can flush without
@@ -198,6 +204,17 @@ export function RichTextEditor({
     if (!editor) return;
     editor.setEditable(!readOnly);
   }, [editor, readOnly]);
+
+  // Hand the live editor instance up so a consumer can run imperative
+  // commands (e.g. the "Insert primer" button). Kept in a ref so passing a
+  // fresh callback doesn't refire the effect each render.
+  const onEditorReadyRef = useRef(onEditorReady);
+  useEffect(() => {
+    onEditorReadyRef.current = onEditorReady;
+  }, [onEditorReady]);
+  useEffect(() => {
+    if (editor && onEditorReadyRef.current) onEditorReadyRef.current(editor);
+  }, [editor]);
 
   if (!editor) {
     return (

@@ -209,6 +209,32 @@ function buildExportColumns(
 }
 
 /**
+ * The project's dynamic category column LABELS on the main Competitor URLs
+ * table — each captured-content value column followed by its paired analysis
+ * column, in the same default order the main export uses. Feeds the primer's
+ * main-table section so it reflects the project's ACTUAL custom columns. When
+ * the project has no captured categories yet, returns an empty list.
+ */
+export function buildPrimerDynamicColumnLabels(
+  urls: ReadonlyArray<MainExportUrl>
+): string[] {
+  const catsByKind: Record<CapturedKind, string[]> = { text: [], image: [], video: [] };
+  for (const kind of CAPTURED_KINDS) {
+    const items: DynCapturedItem[] = [];
+    for (const u of urls) {
+      const bucket = u.captures?.[kind];
+      if (bucket) items.push(...bucket);
+    }
+    catsByKind[kind] = collectCategories(items);
+  }
+  const labels: string[] = [];
+  for (const pair of buildDynamicColumnPairs(catsByKind)) {
+    labels.push(pair.valueLabel, pair.analysisLabel);
+  }
+  return labels;
+}
+
+/**
  * Build the "Competition Content Overview" export matrix from the live
  * Competitor URLs (with captures). `fixedColumns` is the page's
  * TABLE_COLUMN_DEFS (id+label); `platformLabels` is the page's PLATFORM_LABELS.
@@ -699,14 +725,16 @@ export function buildTypeReviewsAnalysisExportMatrix(
   return buildGroupedReviewsAnalysisExportMatrix('type', data, platformLabels, opts);
 }
 
-// Spreadsheet filename: {base}-{project-slug}-{YYYY-MM-DD}.xlsx. `dateStr` is
-// passed in (YYYY-MM-DD) so this stays pure + testable.
+// Export filename: {base}-{project-slug}-{YYYY-MM-DD}.{ext} (ext defaults to
+// 'xlsx'; the primer passes 'docx'). `dateStr` is passed in (YYYY-MM-DD) so
+// this stays pure + testable.
 export function buildExportFilename(
   base: string,
   projectNameOrId: string,
-  dateStr: string
+  dateStr: string,
+  ext: string = 'xlsx'
 ): string {
-  return `${base}-${slugifyForFilename(projectNameOrId)}-${dateStr}.xlsx`;
+  return `${base}-${slugifyForFilename(projectNameOrId)}-${dateStr}.${ext}`;
 }
 
 // The zip filename bundling all available spreadsheets.

@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   buildMainTableExportMatrix,
   buildReviewsAnalysisExportMatrix,
+  buildPrimerDynamicColumnLabels,
   buildExportFilename,
   buildExportZipFilename,
   type ExportFixedColumn,
@@ -97,6 +98,32 @@ test('main export: one row per competitor', () => {
   );
   assert.equal(matrix.length, 3); // header + 2 rows
   assert.equal(matrix[2][1], 'Gadget');
+});
+
+test('primer dynamic labels: empty when no captures; value+analysis pair per category otherwise', () => {
+  assert.deepEqual(buildPrimerDynamicColumnLabels([baseUrl()]), []);
+  const url = baseUrl({
+    captures: {
+      text: [
+        {
+          id: 't1',
+          competitorUrlId: 'u1',
+          category: 'Durability',
+          body: 'Holds up well',
+          analysis: doc('Good'),
+          sortOrder: 0,
+        },
+      ],
+      image: [],
+      video: [],
+    },
+  });
+  // One text category → its value label then its analysis label, in order, and
+  // it matches the labels the main export emits for the same column-pair.
+  assert.deepEqual(buildPrimerDynamicColumnLabels([url]), [
+    'Content Category: Durability',
+    'Durability Analysis',
+  ]);
 });
 
 test('main export: dynamic category pair columns splice in before Overall Competitor Analysis', () => {

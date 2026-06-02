@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   buildPrimer,
   renderPrimerToPlainText,
+  renderPrimerToTipTapDoc,
   type PrimerMainColumn,
 } from './comprehensive-analysis-primer.ts';
 
@@ -84,4 +85,55 @@ test('primer: plain-text render includes the title, the how-to-read note, and a 
   assert.match(text, /Competitive Analysis Primer/);
   assert.match(text, /HOW TO READ THESE SPREADSHEETS/);
   assert.match(text, /Source Reviews:/);
+});
+
+test('primer: explains the "without individual reviews" summary-only variants of all three reviews files', () => {
+  const text = renderPrimerToPlainText(buildPrimer({ mainColumns: MAIN_COLUMNS }));
+  // The intro names the summary-only set.
+  assert.match(text, /without individual reviews/);
+  // Each of the three reviews files names its trimmed companion.
+  assert.match(text, /Competition Reviews Analysis without individual reviews/);
+  assert.match(text, /Reviews Analysis By Competitor Category without individual reviews/);
+  assert.match(text, /Reviews Analysis By Competitor Type without individual reviews/);
+});
+
+test('primer: TipTap render is a doc whose first node is the title heading', () => {
+  const doc = renderPrimerToTipTapDoc(buildPrimer({ mainColumns: MAIN_COLUMNS })) as {
+    type: string;
+    content: Array<{ type: string; attrs?: { level?: number }; content?: unknown[] }>;
+  };
+  assert.equal(doc.type, 'doc');
+  const first = doc.content[0];
+  assert.equal(first.type, 'heading');
+  assert.equal(first.attrs?.level, 1);
+  // one bulletList per spreadsheet section (4)
+  const bulletLists = doc.content.filter((n) => n.type === 'bulletList');
+  assert.equal(bulletLists.length, 4);
+  // every heading is within the editor's enabled levels (1-3)
+  for (const n of doc.content) {
+    if (n.type === 'heading') {
+      const lvl = n.attrs?.level ?? 0;
+      assert.ok(lvl >= 1 && lvl <= 3, `heading level ${lvl} in range`);
+    }
+  }
+});
+
+test('primer: each column bullet leads with a bold name run, then the description', () => {
+  const doc = renderPrimerToTipTapDoc(buildPrimer({ mainColumns: MAIN_COLUMNS })) as {
+    content: Array<{
+      type: string;
+      content?: Array<{
+        type: string;
+        content?: Array<{ content?: Array<{ marks?: Array<{ type: string }>; text?: string }> }>;
+      }>;
+    }>;
+  };
+  const firstList = doc.content.find((n) => n.type === 'bulletList');
+  assert.ok(firstList, 'a bullet list exists');
+  const firstItem = firstList!.content?.[0];
+  const para = firstItem?.content?.[0];
+  const runs = para?.content ?? [];
+  assert.equal(runs[0]?.marks?.[0]?.type, 'bold');
+  assert.ok((runs[0]?.text ?? '').includes(':'), 'bold run carries the "Name: " label');
+  assert.ok((runs[1]?.text ?? '').length > 0, 'a plain-text description run follows');
 });

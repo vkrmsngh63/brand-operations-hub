@@ -47,6 +47,11 @@ import {
   validateCategoriesInput,
   type CategorySourceReviewMeta,
 } from '@/lib/competition-scraping/reviews-traceability';
+import {
+  buildPrimerFromUrls,
+  renderPrimerToDocxBlob,
+  PRIMER_DOCX_MIME,
+} from './primer-render';
 
 interface Props {
   projectId: string;
@@ -54,14 +59,18 @@ interface Props {
   projectNameOrId: string;
 }
 
-// The four files in the box. `status: 'ready'` ships in Phase 2a; the reviews-
-// analysis trio flips to ready in Phase 2b.
+// The files in the box. `status: 'ready'` ships in Phase 2a; the reviews-
+// analysis trio flips to ready in Phase 2b; the primer .docx joins in Phase 3.
+// `kind` switches the spreadsheets (.xlsx) from the teaching primer (.docx).
 type FileStatus = 'ready' | 'pending';
+type FileKind = 'xlsx' | 'docx';
 interface FileDescriptor {
   key: string;
   name: string;
   filenameBase: string;
-  sheetName: string;
+  // The Excel sheet name (spreadsheets only; the .docx primer has none).
+  sheetName?: string;
+  kind: FileKind;
   status: FileStatus;
 }
 const FILES: ReadonlyArray<FileDescriptor> = [
@@ -70,6 +79,7 @@ const FILES: ReadonlyArray<FileDescriptor> = [
     name: 'Competition Content Overview',
     filenameBase: 'competition-content-overview',
     sheetName: MAIN_TABLE_SHEET_NAME,
+    kind: 'xlsx',
     status: 'ready',
   },
   {
@@ -77,6 +87,7 @@ const FILES: ReadonlyArray<FileDescriptor> = [
     name: 'Competition Reviews Analysis',
     filenameBase: 'competition-reviews-analysis',
     sheetName: REVIEWS_ANALYSIS_SHEET_NAME,
+    kind: 'xlsx',
     status: 'ready',
   },
   {
@@ -84,6 +95,7 @@ const FILES: ReadonlyArray<FileDescriptor> = [
     name: 'Competition Reviews Analysis without individual reviews',
     filenameBase: 'competition-reviews-analysis-without-individual-reviews',
     sheetName: REVIEWS_ANALYSIS_SHEET_NAME,
+    kind: 'xlsx',
     status: 'ready',
   },
   {
@@ -91,6 +103,7 @@ const FILES: ReadonlyArray<FileDescriptor> = [
     name: 'Reviews Analysis By Competitor Category',
     filenameBase: 'reviews-analysis-by-category',
     sheetName: CATEGORY_REVIEWS_SHEET_NAME,
+    kind: 'xlsx',
     status: 'ready',
   },
   {
@@ -98,6 +111,7 @@ const FILES: ReadonlyArray<FileDescriptor> = [
     name: 'Reviews Analysis By Competitor Category without individual reviews',
     filenameBase: 'reviews-analysis-by-category-without-individual-reviews',
     sheetName: CATEGORY_REVIEWS_SHEET_NAME,
+    kind: 'xlsx',
     status: 'ready',
   },
   {
@@ -105,6 +119,7 @@ const FILES: ReadonlyArray<FileDescriptor> = [
     name: 'Reviews Analysis By Competitor Type',
     filenameBase: 'reviews-analysis-by-type',
     sheetName: TYPE_REVIEWS_SHEET_NAME,
+    kind: 'xlsx',
     status: 'ready',
   },
   {
@@ -112,6 +127,14 @@ const FILES: ReadonlyArray<FileDescriptor> = [
     name: 'Reviews Analysis By Competitor Type without individual reviews',
     filenameBase: 'reviews-analysis-by-type-without-individual-reviews',
     sheetName: TYPE_REVIEWS_SHEET_NAME,
+    kind: 'xlsx',
+    status: 'ready',
+  },
+  {
+    key: 'primer',
+    name: 'Competitive Analysis Primer (how to read these files)',
+    filenameBase: 'competitive-analysis-primer',
+    kind: 'docx',
     status: 'ready',
   },
 ];
@@ -579,6 +602,26 @@ export function ComprehensiveAnalysisFilesBox({ projectId, projectNameOrId }: Pr
     }
   }, [fetchUrlsFresh, fetchReviewsBundle, projectNameOrId]);
 
+  // The teaching primer (.docx) — built fresh from the live competitor data so
+  // its main-table section reflects the project's current custom category
+  // columns, then rendered to a real Word document.
+  const handleDownloadPrimer = useCallback(async () => {
+    setActionError(null);
+    setBusy('primer');
+    try {
+      const rows = await fetchUrlsFresh();
+      const blob = await renderPrimerToDocxBlob(buildPrimerFromUrls(rows));
+      triggerDownload(
+        new Blob([blob], { type: PRIMER_DOCX_MIME }),
+        buildExportFilename('competitive-analysis-primer', projectNameOrId, todayStr(), 'docx')
+      );
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not build the primer.');
+    } finally {
+      setBusy(null);
+    }
+  }, [fetchUrlsFresh, projectNameOrId]);
+
   const handleDownloadAllZip = useCallback(async () => {
     setActionError(null);
     setBusy('zip');
@@ -638,6 +681,16 @@ export function ComprehensiveAnalysisFilesBox({ projectId, projectNameOrId }: Pr
           `the reviews-analysis spreadsheets (${err instanceof Error ? err.message : 'error'})`
         );
       }
+      // The teaching primer (.docx). Best-effort like the reviews block.
+      try {
+        const primerBlob = await renderPrimerToDocxBlob(buildPrimerFromUrls(rows));
+        zip.file(
+          buildExportFilename('competitive-analysis-primer', projectNameOrId, date, 'docx'),
+          primerBlob
+        );
+      } catch (err) {
+        failures.push(`the primer (${err instanceof Error ? err.message : 'error'})`);
+      }
       const blob = await zip.generateAsync({ type: 'blob' });
       triggerDownload(blob, buildExportZipFilename(projectNameOrId, date));
       if (failures.length > 0) {
@@ -661,6 +714,7 @@ export function ComprehensiveAnalysisFilesBox({ projectId, projectNameOrId }: Pr
     'category-no-individual': handleDownloadCategoryNoIndividual,
     type: handleDownloadType,
     'type-no-individual': handleDownloadTypeNoIndividual,
+    primer: handleDownloadPrimer,
   };
 
   return (
@@ -680,9 +734,10 @@ export function ComprehensiveAnalysisFilesBox({ projectId, projectNameOrId }: Pr
       </div>
 
       <p style={blurbStyle}>
-        Spreadsheets of your competition tables, built fresh from your live data.
-        Download them to feed into an AI for a comprehensive competitive-landscape
-        analysis. The teaching “primer” document joins this box in the next update.
+        Spreadsheets of your competition tables, built fresh from your live data,
+        plus a teaching “primer” (a Word document explaining each spreadsheet and
+        column). Download them to feed into an AI for a comprehensive
+        competitive-landscape analysis.
       </p>
 
       {loadError ? (
@@ -697,7 +752,7 @@ export function ComprehensiveAnalysisFilesBox({ projectId, projectNameOrId }: Pr
           return (
             <div key={f.key} style={rowStyle} data-testid={`file-row-${f.key}`}>
               <span style={fileIconStyle} aria-hidden>
-                📊
+                {f.kind === 'docx' ? '📄' : '📊'}
               </span>
               <span style={fileNameStyle}>{f.name}</span>
               {isReady ? (
@@ -708,7 +763,11 @@ export function ComprehensiveAnalysisFilesBox({ projectId, projectNameOrId }: Pr
                   style={fileButtonStyle(!dataReady || busy !== null)}
                   data-testid={`download-${f.key}`}
                 >
-                  {isBusy ? 'Preparing…' : '↓ Excel (.xlsx)'}
+                  {isBusy
+                    ? 'Preparing…'
+                    : f.kind === 'docx'
+                      ? '↓ Word (.docx)'
+                      : '↓ Excel (.xlsx)'}
                 </button>
               ) : (
                 <span style={pendingTagStyle} title="Coming in the next update">

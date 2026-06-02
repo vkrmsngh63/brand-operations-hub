@@ -16,8 +16,12 @@
 // in CORRECTIONS_LOG 2026-05-25 (PerItemAnalysisBox extraction).
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { Editor, JSONContent } from '@tiptap/react';
 import { authFetch } from '@/lib/authFetch';
+import { renderPrimerToTipTapDoc } from '@/lib/competition-scraping/comprehensive-analysis-primer';
+import type { MainExportUrl } from '@/lib/competition-scraping/comprehensive-analysis-exports';
 import { RichTextEditor } from '../../components/RichTextEditor';
+import { buildPrimerFromUrls } from './primer-render';
 
 export interface AnalysisEditorProps {
   apiUrl: string;
@@ -86,6 +90,10 @@ export function AnalysisEditor({
   const [fontSize, setFontSize] = useState<number>(DEFAULT_EDITOR_FONT_SIZE_PX);
   const inFlightGen = useRef(0);
   const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Live editor instance (for the "Insert primer" command) + the insert state.
+  const editorRef = useRef<Editor | null>(null);
+  const [inserting, setInserting] = useState(false);
+  const [insertError, setInsertError] = useState<string | null>(null);
 
   // Hydrate font size from localStorage on mount (client-only to keep SSR
   // hydration stable — default is used during SSR + initial render).
@@ -176,6 +184,41 @@ export function AnalysisEditor({
     [apiUrl]
   );
 
+  // Insert the teaching primer at the cursor. Built fresh from the live
+  // competitor data each click (so it reflects the project's current custom
+  // category columns) and re-clickable to refresh — NOT a fixed header, NOT
+  // auto-inserted. Mirrors the .docx the Files box offers.
+  const handleInsertPrimer = useCallback(async () => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    setInsertError(null);
+    setInserting(true);
+    try {
+      const res = await authFetch(
+        `/api/projects/${projectId}/competition-scraping/urls?withCaptures=1`
+      );
+      if (!res.ok) {
+        throw new Error(`Couldn’t load the competitor data (HTTP ${res.status}).`);
+      }
+      const body = (await res.json()) as MainExportUrl[];
+      const rows = Array.isArray(body) ? body : [];
+      const doc = renderPrimerToTipTapDoc(buildPrimerFromUrls(rows)) as {
+        content?: JSONContent[];
+      };
+      // Insert the primer's block nodes at the cursor (insertContent on the
+      // body array, not the wrapping doc node).
+      editor
+        .chain()
+        .focus()
+        .insertContent(doc.content ?? [])
+        .run();
+    } catch (err) {
+      setInsertError(err instanceof Error ? err.message : 'Could not insert the primer.');
+    } finally {
+      setInserting(false);
+    }
+  }, [projectId]);
+
   return (
     <div>
       <div
@@ -193,7 +236,45 @@ export function AnalysisEditor({
       >
         <span>Edit Mode</span>
         <SaveStateIndicator state={saveState} error={saveError} />
+        <span style={{ flex: 1 }} aria-hidden />
+        <button
+          type="button"
+          onClick={handleInsertPrimer}
+          disabled={inserting}
+          data-testid="insert-primer-button"
+          title="Insert the teaching primer (what each spreadsheet + column means) at the cursor. Re-click to insert an up-to-date copy."
+          style={{
+            padding: '4px 12px',
+            background: inserting ? '#21262d' : '#238636',
+            color: inserting ? '#6e7681' : '#fff',
+            border: '1px solid #30363d',
+            borderRadius: '6px',
+            fontSize: '11px',
+            fontWeight: 600,
+            textTransform: 'none',
+            letterSpacing: 0,
+            cursor: inserting ? 'not-allowed' : 'pointer',
+            fontFamily: 'inherit',
+          }}
+        >
+          {inserting ? 'Inserting…' : '↡ Insert primer'}
+        </button>
       </div>
+      {insertError && (
+        <div
+          style={{
+            marginBottom: '8px',
+            padding: '6px 10px',
+            background: '#1a0d0d',
+            border: '1px solid #f85149',
+            borderRadius: '6px',
+            color: '#f85149',
+            fontSize: '12px',
+          }}
+        >
+          {insertError}
+        </div>
+      )}
       <RichTextEditor
         initialContent={initialContent}
         onChange={handleChange}
@@ -203,6 +284,9 @@ export function AnalysisEditor({
         projectId={projectId}
         fontSize={fontSize}
         onFontSizeChange={handleFontSizeChange}
+        onEditorReady={(editor) => {
+          editorRef.current = editor;
+        }}
       />
     </div>
   );

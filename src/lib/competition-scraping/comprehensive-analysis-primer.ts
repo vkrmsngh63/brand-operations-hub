@@ -196,7 +196,7 @@ function groupedSection(g: 'Category' | 'Type'): PrimerSection {
     heading: `Reviews Analysis By Competitor ${g}`,
     whatItIs: `Customer reviews grouped by ${gl}: for each ${gl}, the AI's ${gl}-wide review summary and the reviews behind each issue, followed by each competitor in that ${gl} and its individual reviews.`,
     columns,
-    note: `Each individual review is its own row; each review behind a ${gl}-wide issue is its own row; the ${gl}-level and competitor-level values repeat down their rows.`,
+    note: `Each individual review is its own row; each review behind a ${gl}-wide issue is its own row; the ${gl}-level and competitor-level values repeat down their rows. A summary-only companion, "Reviews Analysis By Competitor ${g} without individual reviews", drops the per-review columns (Stars, Reviews Summary, Source Reviews) so each ${gl} shows one banner row of its two Comprehensive summaries above one row per competitor.`,
   };
 }
 
@@ -211,6 +211,7 @@ export function buildPrimer(opts: BuildPrimerOptions): Primer {
     intro: [
       'This primer explains the spreadsheets in the Comprehensive Competitive Analysis Files. Read it first, then use the spreadsheets to analyze the competition.',
       'Each spreadsheet is exported from a competition-research tool. Together they describe a set of competitor products and what their customers say about them.',
+      'Seven spreadsheets are provided: the four described below in full, plus "summary-only" versions of the three reviews spreadsheets (their file names end in "without individual reviews"). The summary-only versions keep each competitor’s identity columns and the AI review summaries but leave out the individual customer reviews — use them when you want the high-level picture without the per-review detail, and use the full versions when you need the underlying reviews.',
       'You can focus the analysis however the goal requires — for example, analyze only a particular product Type or Category, or only competitors above a certain Competition Score. Use the columns below to decide what to include and what to ignore.',
     ],
     howToRead: [
@@ -224,7 +225,7 @@ export function buildPrimer(opts: BuildPrimerOptions): Primer {
         whatItIs:
           "Every captured customer review, one per row, grouped under its competitor, with the AI's per-review and per-competitor summaries.",
         columns: REVIEWS_COLUMNS,
-        note: 'Each review is its own row; the competitor-level columns and the per-competitor summaries repeat down that competitor’s rows.',
+        note: 'Each review is its own row; the competitor-level columns and the per-competitor summaries repeat down that competitor’s rows. A summary-only companion, "Competition Reviews Analysis without individual reviews", drops every per-review column (Stars, Reviews Summary, Review, Reviewer, Date, Review Summary) to give one row per competitor — just the identity columns and the two Comprehensive summaries.',
       },
       groupedSection('Category'),
       groupedSection('Type'),
@@ -233,8 +234,8 @@ export function buildPrimer(opts: BuildPrimerOptions): Primer {
 }
 
 // Render the primer to plain text (used for the wording preview + as a simple
-// fallback). The .docx + editor renderers live in the page and reuse the same
-// structure.
+// fallback). The .docx renderer lives in the page (it needs the docx lib); the
+// editor renderer below is pure JSON so node:test can pin its shape.
 export function renderPrimerToPlainText(primer: Primer): string {
   const lines: string[] = [primer.title, ''];
   for (const p of primer.intro) lines.push(p, '');
@@ -247,4 +248,51 @@ export function renderPrimerToPlainText(primer: Primer): string {
     lines.push('');
   }
   return lines.join('\n').trim();
+}
+
+// ─── TipTap / ProseMirror renderer (the "Insert primer" button) ────────────
+// Pure: builds the same document the .docx renders, as TipTap JSON, so the
+// editor's insertContent can drop it at the cursor. Headings use levels 1-2
+// (the 'full' editor variant enables 1-3); each spreadsheet's columns become a
+// bullet list with the column name in bold. Returned as a full `doc` node —
+// editor.insertContent inserts its content at the cursor.
+
+type TipTapNode = Record<string, unknown>;
+
+function textNode(text: string): TipTapNode {
+  return { type: 'text', text };
+}
+function boldTextNode(text: string): TipTapNode {
+  return { type: 'text', marks: [{ type: 'bold' }], text };
+}
+function paragraph(children: TipTapNode[]): TipTapNode {
+  return { type: 'paragraph', content: children };
+}
+function heading(level: 1 | 2 | 3, text: string): TipTapNode {
+  return { type: 'heading', attrs: { level }, content: [textNode(text)] };
+}
+// One bullet whose first run (the column name) is bold, then ": description".
+function columnBullet(name: string, description: string): TipTapNode {
+  return {
+    type: 'listItem',
+    content: [paragraph([boldTextNode(`${name}: `), textNode(description)])],
+  };
+}
+
+export function renderPrimerToTipTapDoc(primer: Primer): Record<string, unknown> {
+  const content: TipTapNode[] = [];
+  content.push(heading(1, primer.title));
+  for (const p of primer.intro) content.push(paragraph([textNode(p)]));
+  content.push(heading(2, 'How to read these spreadsheets'));
+  for (const p of primer.howToRead) content.push(paragraph([textNode(p)]));
+  for (const s of primer.sections) {
+    content.push(heading(2, s.heading));
+    content.push(paragraph([textNode(s.whatItIs)]));
+    content.push({
+      type: 'bulletList',
+      content: s.columns.map((c) => columnBullet(c.name, c.description)),
+    });
+    if (s.note) content.push(paragraph([textNode(s.note)]));
+  }
+  return { type: 'doc', content };
 }
