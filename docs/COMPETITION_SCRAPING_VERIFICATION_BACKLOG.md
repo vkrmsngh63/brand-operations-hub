@@ -4189,5 +4189,42 @@ Post-merge scoreboard SKIPPED as deliberate efficiency choice — ff-merge produ
 
 ---
 
+## Deploy session #42 — 2026-06-02-i — P-59 the in-app "Detailed User Guide" brought current with all Competition Scraping functionality (PLOS-side + extension) — VERIFIED PASS (1 deploy)
+
+**Session:** `session_2026-06-02-i_p59-detailed-user-guide-update` (W#2 Competition Scraping). Build `3741078`; `main` `ba31ec3 → 3741078`. PLOS-side content-only change to ONE existing component (`DetailedUserGuide.tsx`); NO extension SOURCE change; NO schema change; NO new route.
+
+**Headline outcome:** the in-app "Detailed User Guide" now walks the user through everything the Competition Scraping area can do — not just installing the extension and basic capture, but the new video + reviews capture in the extension AND a whole new "Part 3 — On the PLOS website" covering the tables + their show/hide/sort/filter/drag controls, the competitor detail page, reviews capture + the three levels of AI analysis, and the Comprehensive Analysis page with its editable primer — and it now uses the same button names the user actually sees. **VERIFIED PASS** by the director on real Chrome on vklf.com.
+
+**Drift caught at session-start (the code-truth feature-inventory):** a Rule 3 Explore-agent inventory of the shipped surfaces, diffed against the existing guide, found the guide covered only extension install + basic capture and was SILENT on ~70% of the shipped PLOS-side surface (the five-tab nav, the Competitor Content Table tools, the competitor detail page, capture & manage reviews, the three Reviews Analysis tables + AI summaries, the Comprehensive Analysis page), AND it caught a STALE extension label — the image-capture context-menu copy "Save image to PLOS — Competition Scraping" no longer matched the code-true "Add to PLOS — Image".
+
+**Fix shape narrative:** add a comprehensive NEW "Part 3 — On the PLOS website (vklf.com)" + fill the Part 2 extension gaps (NEW "Capture a video" + "Capture a competitor's reviews") + correct the stale image label + rewrite the intro to a 3-part shape; gray screenshot placeholders consistent with the existing guide. Because this is user-facing COPY, the output shape was planned WITH the director via THREE Rule 14f plan-shape pickers BEFORE writing — Q1 scope = Comprehensive / Q2 AI-flow depth = Plain / Q3 = gray screenshot placeholders (all the recommended option).
+
+**Implementation summary (files + LOC):** MODIFIED `src/app/projects/[projectId]/competition-scraping/components/DetailedUserGuide.tsx` only (a content-only addition of the new Part 3 section + the Part 2 video/reviews capture subsections + the stale-label correction + the intro rewrite). NEW spec `docs/polish-item-specs/P-59-detailed-user-guide-update.md` (the Rule 31 first artifact). No new helper/test file (content-only, no extractable pure logic). Route count UNCHANGED (73).
+
+**Pre-deploy + post-merge verification scoreboard:**
+
+| Check | Entry (2026-06-02-h) | Exit (2026-06-02-i) | Δ |
+| --- | --- | --- | --- |
+| Root tsc | clean | clean | UNCHANGED |
+| Extension tsc | clean | clean | UNCHANGED (no extension files touched) |
+| Extension `npm test` | 915/915 | 915/915 | UNCHANGED (not re-run — no extension source touched) |
+| src/lib `node:test` | 1363/1363 | 1363/1363 | UNCHANGED (no lib touched) |
+| `npm run build` (routes) | 73 | 73 | UNCHANGED (content-only edit; no new route) |
+| Check 6 Playwright | SKIPPED (Rule 27) | SKIPPED (Rule 27) | prose content = director read-through |
+
+**Director real-Chrome verification narrative:** the director expanded the Detailed User Guide on vklf.com and read through it (the new 3-part shape — extension install, extension capture flows incl. the new video + reviews capture, and the new "Part 3 — On the PLOS website"), confirming it now accurately covers the shipped Competition Scraping surfaces + the extension. Verdict: **"PASS."**
+
+**Process observations captured informationally:** in-app docs drift silently as features ship (the doc is not exercised by tsc or tests, so nothing flags it); the NEW reusable PATTERN — for a docs/content surface, run a code-truth feature-inventory (Explore) and diff it against the current doc to enumerate gaps + stale labels before writing, then plan the output shape WITH the director per `feedback_plan_output_shape_before_building` (see CORRECTIONS_LOG §Entry 2026-06-02-i).
+
+### Cross-references
+
+- `docs/polish-item-specs/P-59-detailed-user-guide-update.md` — §2 feature-inventory + §3 plan-shape + §4 the 3 pickers + §6 verification PASS.
+- `docs/COMPETITION_SCRAPING_DESIGN.md` §B 2026-06-02-i — the feature-inventory-diff + plan-shape design note.
+- `docs/CORRECTIONS_LOG.md` §Entry 2026-06-02-i — the docs-drift finding + the inventory-diff-then-plan-shape PATTERN.
+- `docs/ROADMAP.md` P-59 polish-backlog entry — flipped to ✅ DEPLOYED-AND-VERIFIED + CLOSED this session.
+- Build commit `3741078` on `workflow-2-competition-scraping`; ff-merge `ba31ec3..3741078` on `main`.
+
+---
+
 END OF DOCUMENT
 

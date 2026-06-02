@@ -4043,6 +4043,26 @@ This session's W5 Session 1.5 design-lock + build work is **PLOS-side AI infrast
 
 ---
 
+## §B 2026-06-02-i — `session_2026-06-02-i_p59-detailed-user-guide-update` — P-59: the in-app "Detailed User Guide" brought current with all Competition Scraping functionality (PLOS-side + extension) — append-only design note per Rule 18 (§A frozen)
+
+**Informational design note (the canonical P-59 spec lives in `docs/polish-item-specs/P-59-detailed-user-guide-update.md` §2 feature-inventory / §3 plan-shape / §4 the 3 pickers / §6 verification; the session methodology + the reusable PATTERN live in `docs/CORRECTIONS_LOG.md` §Entry 2026-06-02-i; the verification PASS lives in `docs/COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` Deploy session #42). P-59 is a PLOS-side content-only change to ONE existing component (`DetailedUserGuide.tsx`) — NO extension SOURCE change, NO schema change, NO new route. DEPLOYED-AND-VERIFIED on vklf.com (director "PASS").**
+
+**What the change does (docs currency):** the in-app "Detailed User Guide" (`DetailedUserGuide.tsx`) previously documented only the extension install + basic capture. P-59 brings it current with every shipped Competition Scraping surface — PLOS-side AND the companion extension — and corrects a stale extension label.
+
+**The code-truth feature-inventory that scoped the work (the materially-new fact this session):** a Rule 3 Explore-agent inventory of the shipped surfaces, diffed against what the guide actually documented, found the guide silent on ~70% of the shipped PLOS-side surface and caught a STALE extension context-menu label (the image-capture copy "Save image to PLOS — Competition Scraping" no longer matched the code-true "Add to PLOS — Image"). In-app docs are not exercised by tsc or the test suite, so nothing flagged the drift; the inventory-vs-guide diff did.
+
+**Design choice (Rule 14f forced-picker outcomes — `feedback_plan_output_shape_before_building`):** because this is user-facing COPY, the output shape was planned WITH the director via THREE plan-shape pickers BEFORE any copy was written — Q1 scope = **Comprehensive** (the full new Part 3); Q2 AI-flow depth = **Plain** ("what you get + how to run it", no model/cost/batch internals); Q3 = **gray screenshot placeholders** consistent with the existing guide — all the recommended option.
+
+**Implementation (as shipped, `3741078`):** a comprehensive NEW "Part 3 — On the PLOS website (vklf.com)" covering the 5-tab nav, the Competitor Content Table tools (↗ open-detail / show-hide columns / platform filter / search / font size / click-sort + per-column funnel filter / drag-reorder columns + rows / the Sort By grouping box / dynamic category columns / +Add URL / delete-with-cascade), the competitor detail page (Text/Image/Video/Review sections + per-item Your Analysis + image viewer + category-pill ✕ delete + Overall Analysis box), capture & manage reviews, the three Reviews Analysis tables + the AI summaries (PLAIN depth), and the Comprehensive Analysis page (Files box + editable primer + analysis editor); PLUS the Part 2 extension gaps filled (NEW "Capture a video" — right-click → "Add to PLOS — Captured Video" / "Record video for PLOS" — and "Capture a competitor's reviews" — right-click → "Scrape reviews for this URL"); the stale image context-menu label corrected to the code-true "Add to PLOS — Image"; the intro rewritten to the 3-part shape; gray screenshot placeholders throughout. Content-only edit of ONE component; route count UNCHANGED (73); no new helper/test.
+
+**Subtlety:** the guide describes user-facing behavior, not implementation — so the inventory's job was to enumerate WHAT a user can do on each surface, then translate it into plain prose at the agreed depth (PLAIN for the AI flows: what you get + how to run it, not model/cost/batch internals).
+
+**Affected §A sections (INFORMATIONAL — §A is FROZEN per Rule 18; not edited):** the in-app onboarding/help surface now documents the full Competition Scraping feature set (PLOS-side tables + detail page + reviews capture + AI analysis + Comprehensive Analysis page) alongside the extension capture flows (text / image / video / reviews) it already covered.
+
+**Cross-references:** spec `docs/polish-item-specs/P-59-detailed-user-guide-update.md`; `docs/CORRECTIONS_LOG.md` §Entry 2026-06-02-i; `docs/COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` Deploy session #42; build `3741078` (`main` `ba31ec3 → 3741078`); the modified component `src/app/projects/[projectId]/competition-scraping/components/DetailedUserGuide.tsx`.
+
+---
+
 ---
 
 END OF DOCUMENT

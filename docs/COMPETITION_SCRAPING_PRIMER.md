@@ -56,17 +56,21 @@ teaching "primer" the director feeds to an external AI.
 ## 5. OPEN items at graduation
 
 Read `docs/ROADMAP.md` (search "W#2" + the P-IDs) for the authoritative list. As of
-graduation the notable open items include: **P-59** (LOW/MEDIUM — update the existing
-`DetailedUserGuide.tsx` so the in-app user guide matches recently-shipped features
-[P-54 main-table enhancements, P-55 comprehensive-analysis files + editable primer,
-P-57 deletes, P-60 ↗ nav icons]; the next pick), **P-61** (MEDIUM
-— extension server-side default categories per platform per content-type;
-spec `docs/polish-item-specs/P-61-extension-default-categories.md`), plus the
-lower-priority residue: **P-53** (on-page "Export Table" button — largely
+graduation the notable open items include: **P-61** (MEDIUM
+— extension server-side default categories per platform per content-type so workers
+start from sensible category lists; spec `docs/polish-item-specs/P-61-extension-default-categories.md`;
+**the next pick — and the LAST substantive W#2 polish item, after which W#2 graduation is fully clear**),
+plus the lower-priority residue: **P-53** (on-page "Export Table" button — largely
 absorbed by P-55), **P-43** (add absolute `cd` prefix to all `scoreboard.md` Bash
 commands — recurring cwd-leak), **P-50** (NEW Condition Pathology card), **P-26/P-27**
 (below-fold scroll / capture bugs, low priority), and the two **P-52** carry-overs
 (Opus 4.8 pricing numbers + the W#1 `AutoAnalyze.tsx` shared-list migration).
+**P-59** (the in-app "Detailed User Guide" brought current with all Competition Scraping
+functionality — PLOS-side + extension) is now ✅ CLOSED — DEPLOYED-AND-VERIFIED 2026-06-02-i
+on vklf.com (director "PASS"; a NEW "Part 3 — On the PLOS website" covering the tables +
+controls + detail page + reviews capture + AI analysis + the Comprehensive Analysis page,
+the Part 2 extension gaps filled with video + reviews capture, and a stale image-capture
+label corrected; PLOS-side content-only, no schema change, no new route).
 **P-60** (the open-detail ↗ icon on the Product Name column of the three reviews-analysis
 tables) is now ✅ CLOSED — DEPLOYED-AND-VERIFIED 2026-06-02-h on vklf.com (director "PASS";
 each Product Name cell now jumps to that competitor's detail page via a ↗ that mirrors
