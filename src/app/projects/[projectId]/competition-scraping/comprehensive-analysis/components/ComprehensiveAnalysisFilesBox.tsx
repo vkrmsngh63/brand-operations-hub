@@ -80,6 +80,13 @@ const FILES: ReadonlyArray<FileDescriptor> = [
     status: 'ready',
   },
   {
+    key: 'reviews-no-individual',
+    name: 'Competition Reviews Analysis without individual reviews',
+    filenameBase: 'competition-reviews-analysis-without-individual-reviews',
+    sheetName: REVIEWS_ANALYSIS_SHEET_NAME,
+    status: 'ready',
+  },
+  {
     key: 'category',
     name: 'Reviews Analysis By Competitor Category',
     filenameBase: 'reviews-analysis-by-category',
@@ -87,9 +94,23 @@ const FILES: ReadonlyArray<FileDescriptor> = [
     status: 'ready',
   },
   {
+    key: 'category-no-individual',
+    name: 'Reviews Analysis By Competitor Category without individual reviews',
+    filenameBase: 'reviews-analysis-by-category-without-individual-reviews',
+    sheetName: CATEGORY_REVIEWS_SHEET_NAME,
+    status: 'ready',
+  },
+  {
     key: 'type',
     name: 'Reviews Analysis By Competitor Type',
     filenameBase: 'reviews-analysis-by-type',
+    sheetName: TYPE_REVIEWS_SHEET_NAME,
+    status: 'ready',
+  },
+  {
+    key: 'type-no-individual',
+    name: 'Reviews Analysis By Competitor Type without individual reviews',
+    filenameBase: 'reviews-analysis-by-type-without-individual-reviews',
     sheetName: TYPE_REVIEWS_SHEET_NAME,
     status: 'ready',
   },
@@ -175,6 +196,30 @@ function buildCategoryArrayBuffer(data: GroupedReviewsAnalysisExportData): Array
 
 function buildTypeArrayBuffer(data: GroupedReviewsAnalysisExportData): ArrayBuffer {
   const result = buildTypeReviewsAnalysisExportMatrix(data, PLATFORM_LABELS);
+  return matrixToXlsxArrayBuffer(result, TYPE_REVIEWS_SHEET_NAME);
+}
+
+// The "without individual reviews" variants drop the per-review columns (Stars /
+// Reviews Summary / Source Reviews + the flat per-review fields), leaving the
+// per-competitor + per-group summary columns.
+const NO_INDIVIDUAL = { withoutIndividualReviews: true } as const;
+
+function buildReviewsNoIndividualArrayBuffer(data: ReviewsAnalysisExportData): ArrayBuffer {
+  const result = buildReviewsAnalysisExportMatrix(data, PLATFORM_LABELS, NO_INDIVIDUAL);
+  return matrixToXlsxArrayBuffer(result, REVIEWS_ANALYSIS_SHEET_NAME);
+}
+
+function buildCategoryNoIndividualArrayBuffer(
+  data: GroupedReviewsAnalysisExportData
+): ArrayBuffer {
+  const result = buildCategoryReviewsAnalysisExportMatrix(data, PLATFORM_LABELS, NO_INDIVIDUAL);
+  return matrixToXlsxArrayBuffer(result, CATEGORY_REVIEWS_SHEET_NAME);
+}
+
+function buildTypeNoIndividualArrayBuffer(
+  data: GroupedReviewsAnalysisExportData
+): ArrayBuffer {
+  const result = buildTypeReviewsAnalysisExportMatrix(data, PLATFORM_LABELS, NO_INDIVIDUAL);
   return matrixToXlsxArrayBuffer(result, TYPE_REVIEWS_SHEET_NAME);
 }
 
@@ -471,6 +516,69 @@ export function ComprehensiveAnalysisFilesBox({ projectId, projectNameOrId }: Pr
     }
   }, [fetchUrlsFresh, fetchReviewsBundle, projectNameOrId]);
 
+  const handleDownloadReviewsNoIndividual = useCallback(async () => {
+    setActionError(null);
+    setBusy('reviews-no-individual');
+    try {
+      const rows = await fetchUrlsFresh();
+      const { reviews } = await fetchReviewsBundle(rows);
+      triggerDownload(
+        new Blob([buildReviewsNoIndividualArrayBuffer(reviews)], { type: XLSX_MIME }),
+        buildExportFilename(
+          'competition-reviews-analysis-without-individual-reviews',
+          projectNameOrId,
+          todayStr()
+        )
+      );
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not build the file.');
+    } finally {
+      setBusy(null);
+    }
+  }, [fetchUrlsFresh, fetchReviewsBundle, projectNameOrId]);
+
+  const handleDownloadCategoryNoIndividual = useCallback(async () => {
+    setActionError(null);
+    setBusy('category-no-individual');
+    try {
+      const rows = await fetchUrlsFresh();
+      const { category } = await fetchReviewsBundle(rows);
+      triggerDownload(
+        new Blob([buildCategoryNoIndividualArrayBuffer(category)], { type: XLSX_MIME }),
+        buildExportFilename(
+          'reviews-analysis-by-category-without-individual-reviews',
+          projectNameOrId,
+          todayStr()
+        )
+      );
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not build the file.');
+    } finally {
+      setBusy(null);
+    }
+  }, [fetchUrlsFresh, fetchReviewsBundle, projectNameOrId]);
+
+  const handleDownloadTypeNoIndividual = useCallback(async () => {
+    setActionError(null);
+    setBusy('type-no-individual');
+    try {
+      const rows = await fetchUrlsFresh();
+      const { type } = await fetchReviewsBundle(rows);
+      triggerDownload(
+        new Blob([buildTypeNoIndividualArrayBuffer(type)], { type: XLSX_MIME }),
+        buildExportFilename(
+          'reviews-analysis-by-type-without-individual-reviews',
+          projectNameOrId,
+          todayStr()
+        )
+      );
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not build the file.');
+    } finally {
+      setBusy(null);
+    }
+  }, [fetchUrlsFresh, fetchReviewsBundle, projectNameOrId]);
+
   const handleDownloadAllZip = useCallback(async () => {
     setActionError(null);
     setBusy('zip');
@@ -500,6 +608,31 @@ export function ComprehensiveAnalysisFilesBox({ projectId, projectNameOrId }: Pr
           buildExportFilename('reviews-analysis-by-type', projectNameOrId, date),
           buildTypeArrayBuffer(type)
         );
+        // The "without individual reviews" variants of the three reviews files.
+        zip.file(
+          buildExportFilename(
+            'competition-reviews-analysis-without-individual-reviews',
+            projectNameOrId,
+            date
+          ),
+          buildReviewsNoIndividualArrayBuffer(reviews)
+        );
+        zip.file(
+          buildExportFilename(
+            'reviews-analysis-by-category-without-individual-reviews',
+            projectNameOrId,
+            date
+          ),
+          buildCategoryNoIndividualArrayBuffer(category)
+        );
+        zip.file(
+          buildExportFilename(
+            'reviews-analysis-by-type-without-individual-reviews',
+            projectNameOrId,
+            date
+          ),
+          buildTypeNoIndividualArrayBuffer(type)
+        );
       } catch (err) {
         failures.push(
           `the reviews-analysis spreadsheets (${err instanceof Error ? err.message : 'error'})`
@@ -518,6 +651,17 @@ export function ComprehensiveAnalysisFilesBox({ projectId, projectNameOrId }: Pr
   }, [fetchUrlsFresh, fetchReviewsBundle, projectNameOrId]);
 
   const dataReady = urls !== null && !loadError;
+
+  // Map each file row's key to its download handler.
+  const downloadHandlers: Record<string, () => void> = {
+    main: handleDownloadMain,
+    reviews: handleDownloadReviews,
+    'reviews-no-individual': handleDownloadReviewsNoIndividual,
+    category: handleDownloadCategory,
+    'category-no-individual': handleDownloadCategoryNoIndividual,
+    type: handleDownloadType,
+    'type-no-individual': handleDownloadTypeNoIndividual,
+  };
 
   return (
     <div style={boxStyle} data-testid="comprehensive-analysis-files-box">
@@ -559,17 +703,7 @@ export function ComprehensiveAnalysisFilesBox({ projectId, projectNameOrId }: Pr
               {isReady ? (
                 <button
                   type="button"
-                  onClick={
-                    f.key === 'main'
-                      ? handleDownloadMain
-                      : f.key === 'reviews'
-                        ? handleDownloadReviews
-                        : f.key === 'category'
-                          ? handleDownloadCategory
-                          : f.key === 'type'
-                            ? handleDownloadType
-                            : undefined
-                  }
+                  onClick={downloadHandlers[f.key]}
                   disabled={!dataReady || busy !== null}
                   style={fileButtonStyle(!dataReady || busy !== null)}
                   data-testid={`download-${f.key}`}

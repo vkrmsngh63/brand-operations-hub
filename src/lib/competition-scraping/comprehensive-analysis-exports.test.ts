@@ -371,6 +371,50 @@ test('reviews export: reviews EXPAND into rows; per-competitor fields + count + 
   assert.equal(matrix[2][3], 'Widget');
 });
 
+// ─── "Without individual reviews" flat variant (2026-06-02-b) ──────────────
+
+test('reviews export (without individual reviews): header drops every per-review column', () => {
+  const { matrix, wrappedColumnIndexes } = buildReviewsAnalysisExportMatrix(
+    reviewsData(),
+    PLATFORM_LABELS,
+    { withoutIndividualReviews: true }
+  );
+  assert.deepEqual(matrix[0], [
+    'Platform',
+    'Category',
+    'Type',
+    'Product Name',
+    'Results Rank',
+    'Comp. Score',
+    'URL',
+    'Comprehensive (bulleted)',
+    'Comprehensive (non-bulleted)',
+  ]);
+  // Comprehensive bulleted (7) + non-bulleted (8) wrap.
+  assert.deepEqual(wrappedColumnIndexes, [7, 8]);
+});
+
+test('reviews export (without individual reviews): one row per competitor — reviews do NOT expand', () => {
+  const data = reviewsData({
+    reviewsByUrlId: {
+      u1: [
+        { id: 'r1', starRating: 5, title: 'Great', body: 'Loved it', reviewerName: 'Ann', reviewDate: null },
+        { id: 'r2', starRating: 2, title: null, body: 'Broke', reviewerName: null, reviewDate: null },
+      ],
+    },
+    compBulletedByUrlId: { u1: 'BULLETS' },
+    compNonBulletedByUrlId: { u1: 'PROSE' },
+  });
+  const { matrix } = buildReviewsAnalysisExportMatrix(data, PLATFORM_LABELS, {
+    withoutIndividualReviews: true,
+  });
+  assert.equal(matrix.length, 2); // header + 1 competitor row (2 reviews collapsed)
+  assert.equal(matrix[1][0], 'Amazon');
+  assert.equal(matrix[1][3], 'Widget');
+  assert.equal(matrix[1][7], 'BULLETS');
+  assert.equal(matrix[1][8], 'PROSE');
+});
+
 // ─── Reviews Analysis By Category / By Type exports (Phase 2b-ii) ──────────
 
 import {
@@ -561,6 +605,87 @@ test('grouped export: wrapped column indexes cover the long-text columns', () =>
   // Reviews Summary(8), Competitor bulleted(9), Competitor non-bulleted(10),
   // Category bulleted(11), Source Reviews(12), Category non-bulleted(13).
   assert.deepEqual(wrappedColumnIndexes, [8, 9, 10, 11, 12, 13]);
+});
+
+// ─── "Without individual reviews" grouped variants (2026-06-02-b) ──────────
+
+test('grouped export (category, without individual reviews): drops Stars / Reviews Summary / Source Reviews', () => {
+  const { matrix, wrappedColumnIndexes } = buildCategoryReviewsAnalysisExportMatrix(
+    groupedData(),
+    PLATFORM_LABELS,
+    { withoutIndividualReviews: true }
+  );
+  assert.deepEqual(matrix[0], [
+    'Category',
+    'Platform',
+    'Type',
+    'Product Name',
+    'Results Rank',
+    'Comp. Score',
+    'URL',
+    'Competitor Comprehensive (bulleted)',
+    'Competitor Comprehensive (non-bulleted)',
+    'Category Comprehensive (bulleted)',
+    'Category Comprehensive (non-bulleted)',
+  ]);
+  // Wrapped: competitor bulleted(7), competitor non-bulleted(8), category
+  // bulleted(9), category non-bulleted(10) — Source Reviews is gone.
+  assert.deepEqual(wrappedColumnIndexes, [7, 8, 9, 10]);
+});
+
+test('grouped export (type, without individual reviews): Type↔Category swap preserved; review cols dropped', () => {
+  const { matrix } = buildTypeReviewsAnalysisExportMatrix(groupedData(), PLATFORM_LABELS, {
+    withoutIndividualReviews: true,
+  });
+  assert.equal(matrix[0][0], 'Type');
+  assert.equal(matrix[0][2], 'Category');
+  assert.ok(!matrix[0].includes('Stars'));
+  assert.ok(!matrix[0].includes('Reviews Summary'));
+  assert.ok(!matrix[0].includes('Source Reviews'));
+  assert.equal(matrix[0][9], 'Type Comprehensive (bulleted)');
+  assert.equal(matrix[0][10], 'Type Comprehensive (non-bulleted)');
+});
+
+test('grouped export (without individual reviews): one banner row per group (summaries only) + one row per competitor', () => {
+  const data = groupedData({
+    urls: [
+      groupedUrl('u1', { productName: 'Weber X' }),
+      groupedUrl('u2', { productName: 'Acme Q' }),
+    ],
+    // Two reviews on u1 + per-complaint source reviews would normally expand —
+    // here they must NOT, because the trimmed file has no per-review/source cols.
+    reviewsByUrlId: {
+      u1: [
+        { id: 'r1', starRating: 5, title: null, body: 'Sears well', reviewerName: null, reviewDate: null },
+        { id: 'r2', starRating: 2, title: null, body: 'Lid broke', reviewerName: null, reviewDate: null },
+      ],
+    },
+    compBulletedByUrlId: { u1: 'WEBER-BULLETS', u2: 'ACME-BULLETS' },
+    groupBulletedByKey: {
+      Grills: {
+        summary: 'CATEGORY-BULLETS',
+        categories: [{ name: 'Build', bullets: [{ text: 'Flimsy lid', reviewIds: ['r2'] }] }],
+      },
+    },
+    groupNonBulletedByKey: { Grills: 'CATEGORY-PROSE' },
+  });
+  const { matrix } = buildCategoryReviewsAnalysisExportMatrix(data, PLATFORM_LABELS, {
+    withoutIndividualReviews: true,
+  });
+  // header + 1 banner row + 1 row each for u1 + u2 (reviews collapsed)
+  assert.equal(matrix.length, 4);
+  // Banner row: category summaries present, competitor columns blank.
+  assert.equal(matrix[1][0], 'Grills');
+  assert.equal(matrix[1][9], 'CATEGORY-BULLETS'); // Category Comprehensive (bulleted)
+  assert.equal(matrix[1][10], 'CATEGORY-PROSE'); // Category Comprehensive (non-bulleted)
+  assert.equal(matrix[1][3], ''); // Product Name blank on banner row
+  // Competitor rows: identity + competitor summaries; category cells blank.
+  assert.equal(matrix[2][3], 'Weber X');
+  assert.equal(matrix[2][7], 'WEBER-BULLETS'); // Competitor Comprehensive (bulleted)
+  assert.equal(matrix[3][3], 'Acme Q');
+  assert.equal(matrix[3][7], 'ACME-BULLETS');
+  assert.equal(matrix[2][9], ''); // category-level cells blank on competitor rows
+  assert.equal(matrix[3][9], '');
 });
 
 test('clampToExcelCellLimit: short strings pass through; oversized are clamped to the limit', () => {

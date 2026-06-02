@@ -347,6 +347,25 @@ const REVIEWS_ANALYSIS_HEADER: ReadonlyArray<string> = [
 // (13), Comprehensive non-bulleted (14).
 const REVIEWS_ANALYSIS_WRAPPED = [9, 12, 13, 14];
 
+// The "without individual reviews" variant (director 2026-06-02-b): the same
+// per-competitor summary file with EVERY individual-review column removed — no
+// Stars, no Reviews Summary count, and no per-review Review / Reviewer / Date /
+// Review Summary — so each competitor collapses to ONE row carrying just its
+// identity columns + the two comprehensive AI summaries.
+const REVIEWS_ANALYSIS_NO_INDIVIDUAL_HEADER: ReadonlyArray<string> = [
+  'Platform',
+  'Category',
+  'Type',
+  'Product Name',
+  'Results Rank',
+  'Comp. Score',
+  'URL',
+  'Comprehensive (bulleted)',
+  'Comprehensive (non-bulleted)',
+];
+// Long-text columns: Comprehensive bulleted (7), non-bulleted (8).
+const REVIEWS_ANALYSIS_NO_INDIVIDUAL_WRAPPED = [7, 8];
+
 // The on-screen "Reviews Summary" count cell text ("N of M summarized"); blank
 // when the competitor has no captured reviews (mirrors the page's
 // computeReviewsSummaryCount → '' for the no-reviews case).
@@ -372,8 +391,27 @@ function reviewsSummaryCountText(
  */
 export function buildReviewsAnalysisExportMatrix(
   data: ReviewsAnalysisExportData,
-  platformLabels: Record<string, string>
+  platformLabels: Record<string, string>,
+  opts: { withoutIndividualReviews?: boolean } = {}
 ): ExportMatrixResult {
+  // "Without individual reviews": one row per competitor, no per-review columns.
+  if (opts.withoutIndividualReviews) {
+    const body: string[][] = data.urls.map((u) => [
+      platformLabels[u.platform] ?? u.platform ?? '',
+      u.competitionCategory ?? '',
+      u.type ?? '',
+      u.productName ?? '',
+      u.resultsPageRank == null ? '' : String(u.resultsPageRank),
+      u.competitionScore == null ? '' : String(u.competitionScore),
+      u.url ?? '',
+      data.compBulletedByUrlId[u.id] ?? '',
+      data.compNonBulletedByUrlId[u.id] ?? '',
+    ]);
+    return {
+      matrix: [[...REVIEWS_ANALYSIS_NO_INDIVIDUAL_HEADER], ...body],
+      wrappedColumnIndexes: [...REVIEWS_ANALYSIS_NO_INDIVIDUAL_WRAPPED],
+    };
+  }
   const body: string[][] = [];
   for (const u of data.urls) {
     const reviews = data.reviewsByUrlId[u.id] ?? [];
@@ -516,16 +554,10 @@ function formatSourceReviewCell(
 function buildGroupedReviewsAnalysisExportMatrix(
   grouping: 'category' | 'type',
   data: GroupedReviewsAnalysisExportData,
-  platformLabels: Record<string, string>
+  platformLabels: Record<string, string>,
+  opts: { withoutIndividualReviews?: boolean } = {}
 ): ExportMatrixResult {
-  const columns = grouping === 'category' ? CATEGORY_TABLE_COLUMNS : TYPE_TABLE_COLUMNS;
-  const colIds = columns.map((c) => c.id);
-  const header = columns.map((c) => c.label);
-  const wrappedColumnIndexes: number[] = [];
-  colIds.forEach((id, i) => {
-    if (GROUPED_WRAPPED_IDS.has(id)) wrappedColumnIndexes.push(i);
-  });
-
+  const trimmed = opts.withoutIndividualReviews === true;
   // The registry column ids that vary by page (the grouping column + the three
   // group-level AI columns).
   const groupingColId = grouping === 'category' ? 'competitionCategory' : 'type';
@@ -534,6 +566,21 @@ function buildGroupedReviewsAnalysisExportMatrix(
     grouping === 'category' ? 'catSourceReviews' : 'typeSourceReviews';
   const groupNonBulletedColId =
     grouping === 'category' ? 'catNonBulleted' : 'typeNonBulleted';
+
+  // "Without individual reviews" drops the per-review columns (Stars + Reviews
+  // Summary) AND the Source Reviews column (the individual reviews behind each
+  // complaint) — leaving the competitor + group summary columns only.
+  const allColumns = grouping === 'category' ? CATEGORY_TABLE_COLUMNS : TYPE_TABLE_COLUMNS;
+  const excludedIds: ReadonlySet<string> = trimmed
+    ? new Set<string>(['stars', 'reviewsSummary', sourceReviewsColId])
+    : new Set<string>();
+  const columns = allColumns.filter((c) => !excludedIds.has(c.id));
+  const colIds = columns.map((c) => c.id);
+  const header = columns.map((c) => c.label);
+  const wrappedColumnIndexes: number[] = [];
+  colIds.forEach((id, i) => {
+    if (GROUPED_WRAPPED_IDS.has(id)) wrappedColumnIndexes.push(i);
+  });
 
   const emptyRow = (): Record<string, string> => {
     const row: Record<string, string> = {};
@@ -572,7 +619,9 @@ function buildGroupedReviewsAnalysisExportMatrix(
       data.reviewMetaById
     );
     let emittedSummaryRow = false;
-    for (const theme of themes) {
+    // When trimmed, the Source Reviews column is gone, so the per-source-review
+    // banner rows collapse to the single-summary-row fallback below.
+    for (const theme of trimmed ? [] : themes) {
       for (const bullet of theme.bullets) {
         const complaint = theme.name ? `${theme.name} — ${bullet.text}` : bullet.text;
         const sources = bullet.sources.length > 0 ? bullet.sources : [null];
@@ -604,11 +653,12 @@ function buildGroupedReviewsAnalysisExportMatrix(
     //    category/type-level cells blank).
     for (const { url } of group.rows) {
       const reviews = data.reviewsByUrlId[url.id] ?? [];
-      const span = Math.max(reviews.length, 1);
+      // Trimmed has no per-review columns → one row per competitor.
+      const span = trimmed ? 1 : Math.max(reviews.length, 1);
       const compBulleted = data.compBulletedByUrlId[url.id] ?? '';
       const compNonBulleted = data.compNonBulletedByUrlId[url.id] ?? '';
       for (let i = 0; i < span; i++) {
-        const review = reviews[i] ?? null;
+        const review = trimmed ? null : reviews[i] ?? null;
         const row = emptyRow();
         row.competitionCategory = url.competitionCategory ?? '';
         row.type = url.type ?? '';
@@ -634,17 +684,19 @@ function buildGroupedReviewsAnalysisExportMatrix(
 /** Build the "Reviews Analysis By Competitor Category" export matrix. */
 export function buildCategoryReviewsAnalysisExportMatrix(
   data: GroupedReviewsAnalysisExportData,
-  platformLabels: Record<string, string>
+  platformLabels: Record<string, string>,
+  opts: { withoutIndividualReviews?: boolean } = {}
 ): ExportMatrixResult {
-  return buildGroupedReviewsAnalysisExportMatrix('category', data, platformLabels);
+  return buildGroupedReviewsAnalysisExportMatrix('category', data, platformLabels, opts);
 }
 
 /** Build the "Reviews Analysis By Competitor Type" export matrix. */
 export function buildTypeReviewsAnalysisExportMatrix(
   data: GroupedReviewsAnalysisExportData,
-  platformLabels: Record<string, string>
+  platformLabels: Record<string, string>,
+  opts: { withoutIndividualReviews?: boolean } = {}
 ): ExportMatrixResult {
-  return buildGroupedReviewsAnalysisExportMatrix('type', data, platformLabels);
+  return buildGroupedReviewsAnalysisExportMatrix('type', data, platformLabels, opts);
 }
 
 // Spreadsheet filename: {base}-{project-slug}-{YYYY-MM-DD}.xlsx. `dateStr` is
