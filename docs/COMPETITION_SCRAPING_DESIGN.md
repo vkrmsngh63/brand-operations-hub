@@ -4025,6 +4025,24 @@ This session's W5 Session 1.5 design-lock + build work is **PLOS-side AI infrast
 
 ---
 
+## §B 2026-06-02-h — `session_2026-06-02-h_p60-open-detail-icon-analysis-tables` — P-60: the open-detail ↗ icon is mirrored onto the Product Name column of all three reviews-analysis tables — append-only design note per Rule 18 (§A frozen)
+
+**Informational design note (the canonical P-60 spec lives in `docs/polish-item-specs/P-60-open-detail-icon-analysis-tables.md` §2 audit / §3 AS-BUILT / §5 verification; the session methodology + the reusable PATTERN live in `docs/CORRECTIONS_LOG.md` §Entry 2026-06-02-h; the verification PASS lives in `docs/COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` Deploy session #41). P-60 is a PLOS-side UI-only navigation-parity change — NO extension SOURCE change, NO schema change, NO new route. DEPLOYED-AND-VERIFIED on vklf.com (director "PASS").**
+
+**What the change does (navigation parity):** the main Competitor URLs table (`UrlTable.tsx`) already lets a user jump from a row's Product Name to that competitor's detail page (`url/[urlId]`) via a trailing ↗. The three reviews-analysis tables (the per-competitor `competitor-reviews-analysis` page, the `reviews-analysis-by-category` page, and the `reviews-analysis-by-type` page) did NOT. P-60 mirrors that ↗ onto the Product Name cell of all three.
+
+**The code-truth audit that scoped the work (the materially-new fact this session):** a Rule 3 Explore-agent audit of the four table surfaces confirmed the premise with one clarification — the by-category/by-type pages DID already have a ↗, but it is the `data-testid="*-source-review-jump"` anchor that lives in the AI comprehensive-summary BANNER cell (`CategorySourceReviewsCell` / its type analogue), jumps to a specific review (`…/url/${urlId}#review-${reviewId}`), and is NOT on the Product Name cell. The `competitor-reviews-analysis` page had no ↗ at all. So all three Product Name cells genuinely lacked an open-detail ↗. There is no shared Product-Name cell component across the three pages → three independent edits. All three rows have `urlId` available (`url.id` / `u.id`).
+
+**Design choice (the decisive design fact — no Rule 14f picker fired):** the directive ("the same icon in the same column") was verbatim and unambiguous, and the mirror pattern was fully determined by the main table, so per `feedback_default_to_recommendation` NO design picker was warranted. The reusable PATTERN applied: rather than import the main page's `<button>` + `router.push` mechanism, the open-detail ↗ was rendered the same way the target pages ALREADY navigate — a plain `<a href>` anchor (matching the local source-review-jump convention) — for local consistency and ZERO new imports.
+
+**Implementation (as shipped, `e08684a`):** each Product Name cell wraps its existing click-to-edit `InlineTextCell` (`flex:1; minWidth:0`) and a trailing ↗ `<a>` (`flexShrink:0`, `href={\`/projects/${projectId}/competition-scraping/url/${id}\`}`, `color:#58a6ff`, `fontSize:13px`, `textDecoration:none`, `title="Open detail page"`, page-scoped `data-testid` = `reviews-analysis-open-detail` / `category-open-detail` / `type-open-detail`) in a `display:flex; align-items:center; gap:6px; minWidth:0` container. `projectId` was threaded into `renderUrlRowCell` (competitor-reviews-analysis, via the already-`projectId`-bearing `UrlsTable`) and into `SortableCategoryRow`/`SortableTypeRow` → `renderDataCell` (by-category/by-type, which previously did not receive it). Same-tab navigation (matching the main table). NO extractable pure logic → no new helper/test file; route count UNCHANGED (73).
+
+**Affected §A sections (INFORMATIONAL — §A is FROZEN per Rule 18; not edited):** the three reviews-analysis tables now offer the same open-detail ↗ navigation from a Product Name cell to that competitor's detail page that the main Competitor URLs table already provides.
+
+**Cross-references:** spec `docs/polish-item-specs/P-60-open-detail-icon-analysis-tables.md`; `docs/CORRECTIONS_LOG.md` §Entry 2026-06-02-h; `docs/COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` Deploy session #41; build `e08684a` (`main` `2e9c0c5 → e08684a`); the modified pages `competitor-reviews-analysis/page.tsx` + `reviews-analysis-by-category/page.tsx` + `reviews-analysis-by-type/page.tsx`; the main-table pattern `UrlTable.tsx` (the mirrored ↗).
+
+---
+
 ---
 
 END OF DOCUMENT

@@ -4152,5 +4152,42 @@ Post-merge scoreboard SKIPPED as deliberate efficiency choice — ff-merge produ
 
 ---
 
+## Deploy session #41 — 2026-06-02-h — P-60 open-detail ↗ icon on the Product Name column of the three reviews-analysis tables — VERIFIED PASS (1 deploy)
+
+**Session:** `session_2026-06-02-h_p60-open-detail-icon-analysis-tables` (W#2 Competition Scraping). Build `e08684a`; `main` `2e9c0c5 → e08684a`. PLOS-side UI-only change; NO extension SOURCE change; NO schema change; NO new route.
+
+**Headline outcome:** each of the three reviews-analysis tables (the per-competitor `competitor-reviews-analysis` page, the `reviews-analysis-by-category` page, and the `reviews-analysis-by-type` page) now shows a small open-detail ↗ at the right of each Product Name cell that jumps straight to that competitor's detail page (`url/[urlId]`) — mirroring the ↗ that already exists on the main Competitor URLs table. **VERIFIED PASS** by the director on real Chrome on vklf.com.
+
+**Drift caught at session-start (the code-truth audit):** a Rule 3 Explore-agent audit of the four table surfaces confirmed the premise with one clarification — the by-category/by-type pages DID already have a ↗, but it is the `data-testid="*-source-review-jump"` anchor in the AI comprehensive-summary BANNER cell (jumps to `…/url/${urlId}#review-${reviewId}`), NOT on the Product Name cell; the `competitor-reviews-analysis` page had no ↗ at all — so all three Product Name cells genuinely lacked an open-detail ↗ (scope unchanged: add it to all three).
+
+**Fix shape narrative:** mirror the main table's ↗ onto the Product Name cell of all three analysis tables, rendered as a plain `<a href>` anchor (NOT a button+router) to MATCH the LOCAL source-review-jump anchor convention already on those pages (zero new imports). NO design picker fired — the directive ("same icon, same column") was verbatim + unambiguous (the default-to-recommendation exception).
+
+**Implementation summary (files + LOC):** MODIFIED `competitor-reviews-analysis/page.tsx` (the `productName` cell in `renderUrlRowCell` gains the ↗ `<a>`; `projectId` already available via `UrlsTable`) + `reviews-analysis-by-category/page.tsx` (the ↗ in `renderDataCell`; `projectId` threaded into `SortableCategoryRow` → `renderDataCell`) + `reviews-analysis-by-type/page.tsx` (same via `SortableTypeRow`). The cell wraps `InlineTextCell` (`flex:1`) + a trailing ↗ `<a>` (`flexShrink:0`, `color:#58a6ff`, `fontSize:13px`, `title="Open detail page"`, page-scoped `data-testid`) in a `display:flex; align-items:center; gap:6px` container. No new helper/test file (no extractable pure logic). Route count UNCHANGED (73).
+
+**Pre-deploy + post-merge verification scoreboard:**
+
+| Check | Entry (2026-06-02-g) | Exit (2026-06-02-h) | Δ |
+| --- | --- | --- | --- |
+| Root tsc | clean | clean | UNCHANGED |
+| Extension tsc | clean | clean | UNCHANGED (no extension files touched) |
+| Extension `npm test` | 915/915 | 915/915 | UNCHANGED (not re-run — no extension source touched) |
+| src/lib `node:test` | 1363/1363 | 1363/1363 | UNCHANGED (no new helper) |
+| `npm run build` (routes) | 73 | 73 | UNCHANGED (client-side anchor; no new route) |
+| Check 6 Playwright | SKIPPED (Rule 27) | SKIPPED (Rule 27) | table-render + navigation = director real-Chrome |
+
+**Director real-Chrome verification narrative:** the director opened each of the three analysis pages on vklf.com, confirmed the ↗ now sits at the right of each Product Name cell, and clicked it to land on the correct competitor detail page. Verdict: **"PASS."**
+
+**Process observations captured informationally:** the Rule 3 audit clarified a ROADMAP premise (the existing by-category/by-type ↗ was the source-review-jump in the BANNER cell, not a Product-Name open-detail link); the NEW reusable PATTERN — mirror an existing cross-page navigation affordance by matching the LOCAL anchor convention of the target pages rather than importing the source page's mechanism (see CORRECTIONS_LOG §Entry 2026-06-02-h).
+
+### Cross-references
+
+- `docs/polish-item-specs/P-60-open-detail-icon-analysis-tables.md` — §2 audit + §3 AS-BUILT + §5 verification PASS.
+- `docs/COMPETITION_SCRAPING_DESIGN.md` §B 2026-06-02-h — the local-anchor-convention design note.
+- `docs/CORRECTIONS_LOG.md` §Entry 2026-06-02-h — the audit premise-clarification + the reusable PATTERN.
+- `docs/ROADMAP.md` P-60 polish-backlog entry — flipped to ✅ DEPLOYED-AND-VERIFIED + CLOSED this session.
+- Build commit `e08684a` on `workflow-2-competition-scraping`; ff-merge `2e9c0c5..e08684a` on `main`.
+
+---
+
 END OF DOCUMENT
 

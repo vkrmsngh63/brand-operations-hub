@@ -1,6 +1,6 @@
 # P-60 — The open-detail ↗ icon in the Product Name column on the three analysis tables
 
-**Status:** 🔴 OPEN (spec created 2026-06-02-h as the session's first artifact per Rule 31 — it did not exist before; captured 2026-06-02-d as ROADMAP entry P-60). W#2 Competition Scraping; the three reviews-analysis table pages. NO schema change anticipated; NO new route anticipated (a client-side navigation anchor).
+**Status:** ✅ **DEPLOYED-AND-VERIFIED 2026-06-02-h — P-60 CLOSED.** (Spec created 2026-06-02-h as the session's first artifact per Rule 31 — it did not exist before; captured 2026-06-02-d as ROADMAP entry P-60.) W#2 Competition Scraping; the three reviews-analysis table pages. NO schema change; NO new route (a client-side navigation anchor). ONE build commit `e08684a`; `main` went `2e9c0c5 → e08684a` (clean ff-merge of the exact verified commit); ONE Rule 9 deploy gate (director "Deploy to main"). **Director real-Chrome verdict on vklf.com: "PASS"** (the ↗ appears at the right of each Product Name cell on all three analysis pages and lands on the correct competitor detail page). Scoreboard UNCHANGED (915 ext / 1363 src/lib / 73 routes); Check 6 Playwright SKIPPED per Rule 27.
 
 **Severity:** LOW-MEDIUM — navigation parity. The main Competitor URLs table lets a user jump from a row's Product Name straight to that competitor's detail page via a ↗ icon; the three analysis tables do not, so the user has to navigate back to the main table to open a competitor's detail page.
 
@@ -52,4 +52,4 @@ None substantive. The directive is verbatim and unambiguous ("the same icon in t
 
 ## §5 — Verification
 
-Director opens each of the three analysis pages on vklf.com, confirms a ↗ now sits at the right of each Product Name cell, clicks it, and lands on that competitor's detail page. PASS/FAIL recorded in `COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md`.
+**✅ VERIFIED PASS 2026-06-02-h.** The director opened each of the three analysis pages on vklf.com, confirmed a ↗ now sits at the right of each Product Name cell, clicked it, and landed on that competitor's detail page (`url/[urlId]`). Director verbatim verdict: **"PASS."** Recorded in `docs/COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` Deploy session #41. Build `e08684a`; `main` `2e9c0c5 → e08684a`.
