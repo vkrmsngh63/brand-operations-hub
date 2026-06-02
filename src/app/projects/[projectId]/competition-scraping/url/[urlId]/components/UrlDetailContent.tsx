@@ -84,6 +84,11 @@ import {
   ConfirmDeleteDialog,
   type CascadeCounts,
 } from '../../../components/ConfirmDeleteDialog';
+import {
+  categoryDeletionMessage,
+  categoryFieldMapping,
+  type CategoryVocabularyType,
+} from '@/lib/competition-scraping/category-vocabulary';
 
 interface Props {
   project: { id: string; name: string };
@@ -1251,6 +1256,119 @@ function CapturedTextSubsection({
   );
 }
 
+// P-57 (2026-06-02-g) — category pill with an inline ✕ that deletes the
+// category label AND every item tagged with it across the WHOLE project
+// (director Rule 14f: "delete items too"; control = ✕ on the pill). The ✕
+// opens a count-bearing confirm (count fetched from the categories route) so
+// a stray click can't silently mass-delete; on confirm it cascades + reloads
+// so every section reflects the removed category + deleted items. Reused by
+// all three captured-item cards (content / image / video category).
+function CategoryPill({
+  projectId,
+  vocabularyType,
+  value,
+}: {
+  projectId: string;
+  vocabularyType: CategoryVocabularyType;
+  value: string;
+}) {
+  const [pendingDelete, setPendingDelete] = useState(false);
+  const [count, setCount] = useState<number | null>(null);
+  const [countError, setCountError] = useState<string | null>(null);
+  const mapping = categoryFieldMapping(vocabularyType)!;
+
+  const categoriesUrl = `/api/projects/${projectId}/competition-scraping/categories?type=${encodeURIComponent(
+    vocabularyType
+  )}&value=${encodeURIComponent(value)}`;
+
+  const beginDelete = () => {
+    setPendingDelete(true);
+    setCount(null);
+    setCountError(null);
+    void (async () => {
+      try {
+        const res = await authFetch(categoriesUrl);
+        if (!res.ok) {
+          setCountError(`HTTP ${res.status}`);
+          return;
+        }
+        const json = (await res.json()) as { count: number };
+        setCount(typeof json.count === 'number' ? json.count : 0);
+      } catch (e) {
+        setCountError(e instanceof Error ? e.message : 'network error');
+      }
+    })();
+  };
+
+  const handleConfirm = async (): Promise<void> => {
+    const res = await authFetch(categoriesUrl, { method: 'DELETE' });
+    if (!res.ok) {
+      throw new Error(`Could not delete category (HTTP ${res.status}).`);
+    }
+    // Destructive project-wide cascade: reload so every section reflects the
+    // removed category + deleted items.
+    window.location.reload();
+  };
+
+  const message =
+    countError !== null
+      ? `Couldn't count affected items (${countError}). This still permanently deletes “${value}” and every ${mapping.noun} tagged with it across this entire project. This cannot be undone.`
+      : count === null
+        ? `Counting affected items… This permanently deletes “${value}” and every ${mapping.noun} tagged with it across this entire project. This cannot be undone.`
+        : categoryDeletionMessage(mapping, value, count);
+
+  return (
+    <span style={categoryPillStyle}>
+      {value}
+      <button
+        type="button"
+        onClick={beginDelete}
+        aria-label={`Delete category “${value}”`}
+        title="Delete this category and all its items (project-wide)"
+        data-testid="category-pill-delete-button"
+        style={categoryPillDeleteStyle}
+      >
+        ×
+      </button>
+      <ConfirmDeleteDialog
+        isOpen={pendingDelete}
+        title="Delete this category?"
+        message={message}
+        confirmLabel="Delete category"
+        onClose={() => setPendingDelete(false)}
+        onConfirm={handleConfirm}
+        variant={{ kind: 'plain' }}
+      />
+    </span>
+  );
+}
+
+const categoryPillStyle: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '4px',
+  background: '#21262d',
+  padding: '2px 4px 2px 8px',
+  borderRadius: '999px',
+  color: '#e6edf3',
+};
+
+const categoryPillDeleteStyle: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: '15px',
+  height: '15px',
+  padding: 0,
+  background: 'transparent',
+  border: 'none',
+  borderRadius: '999px',
+  color: '#8b949e',
+  fontSize: '13px',
+  lineHeight: 1,
+  cursor: 'pointer',
+};
+
 // P-46 Workstream 2 (2026-05-25) — per-card render for one captured text row.
 // Holds: content-category pill (top-right) / text body / tags row / added-at /
 // trash button / PerItemAnalysisBox. Mirrors the layout pattern that
@@ -1286,16 +1404,11 @@ function CapturedTextCard({
       >
         <div style={{ fontSize: '11px', color: '#8b949e', fontWeight: 600 }}>
           {row.contentCategory ? (
-            <span
-              style={{
-                background: '#21262d',
-                padding: '2px 8px',
-                borderRadius: '999px',
-                color: '#e6edf3',
-              }}
-            >
-              {row.contentCategory}
-            </span>
+            <CategoryPill
+              projectId={projectId}
+              vocabularyType="content-category"
+              value={row.contentCategory}
+            />
           ) : (
             <span style={{ fontStyle: 'italic', color: '#6e7681' }}>
               (no category)
@@ -1593,16 +1706,11 @@ function CapturedImageCard({
       >
         <div style={{ fontSize: '11px', color: '#8b949e', fontWeight: 600 }}>
           {image.imageCategory ? (
-            <span
-              style={{
-                background: '#21262d',
-                padding: '2px 8px',
-                borderRadius: '999px',
-                color: '#e6edf3',
-              }}
-            >
-              {image.imageCategory}
-            </span>
+            <CategoryPill
+              projectId={projectId}
+              vocabularyType="image-category"
+              value={image.imageCategory}
+            />
           ) : (
             <span style={{ fontStyle: 'italic', color: '#6e7681' }}>
               (no category)
@@ -1814,16 +1922,11 @@ function CapturedVideoCard({
       >
         <div style={{ fontSize: '11px', color: '#8b949e', fontWeight: 600 }}>
           {video.videoCategory ? (
-            <span
-              style={{
-                background: '#21262d',
-                padding: '2px 8px',
-                borderRadius: '999px',
-                color: '#e6edf3',
-              }}
-            >
-              {video.videoCategory}
-            </span>
+            <CategoryPill
+              projectId={projectId}
+              vocabularyType="video-category"
+              value={video.videoCategory}
+            />
           ) : (
             <span style={{ fontStyle: 'italic', color: '#6e7681' }}>
               (no category)

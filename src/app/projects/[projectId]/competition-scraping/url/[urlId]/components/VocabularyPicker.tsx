@@ -29,12 +29,6 @@ import type {
   VocabularyEntry,
   VocabularyType,
 } from '@/lib/shared-types/competition-scraping';
-import {
-  categoryDeletionMessage,
-  categoryFieldMapping,
-  isCategoryVocabularyType,
-} from '@/lib/competition-scraping/category-vocabulary';
-import { ConfirmDeleteDialog } from '../../../components/ConfirmDeleteDialog';
 
 interface Props {
   projectId: string;
@@ -70,66 +64,6 @@ export function VocabularyPicker({
   const [open, setOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-
-  // P-57 (2026-06-02-g) — category-label delete (the three category vocab
-  // types only). Clicking the trash on a suggestion opens a confirm that
-  // first fetches how many items would be cascade-deleted project-wide.
-  const canDeleteCategories = isCategoryVocabularyType(vocabularyType);
-  const categoryMapping = categoryFieldMapping(vocabularyType);
-  const [pendingDelete, setPendingDelete] = useState<VocabularyEntry | null>(null);
-  const [deleteCount, setDeleteCount] = useState<number | null>(null);
-  const [deleteCountError, setDeleteCountError] = useState<string | null>(null);
-
-  const beginDelete = (entry: VocabularyEntry) => {
-    setPendingDelete(entry);
-    setDeleteCount(null);
-    setDeleteCountError(null);
-    setOpen(false);
-    (async () => {
-      try {
-        const res = await authFetch(
-          `/api/projects/${projectId}/competition-scraping/categories?type=${encodeURIComponent(
-            vocabularyType
-          )}&value=${encodeURIComponent(entry.value)}`
-        );
-        if (!res.ok) {
-          setDeleteCountError(`HTTP ${res.status}`);
-          return;
-        }
-        const json = (await res.json()) as { count: number };
-        setDeleteCount(typeof json.count === 'number' ? json.count : 0);
-      } catch (e) {
-        setDeleteCountError(e instanceof Error ? e.message : 'network error');
-      }
-    })();
-  };
-
-  const handleConfirmDelete = async (): Promise<void> => {
-    if (!pendingDelete) return;
-    const res = await authFetch(
-      `/api/projects/${projectId}/competition-scraping/categories?type=${encodeURIComponent(
-        vocabularyType
-      )}&value=${encodeURIComponent(pendingDelete.value)}`,
-      { method: 'DELETE' }
-    );
-    if (!res.ok) {
-      throw new Error(`Could not delete category (HTTP ${res.status}).`);
-    }
-    // Destructive project-wide cascade: reload so every section reflects the
-    // removed category + deleted items (the picker doesn't own those slots).
-    window.location.reload();
-  };
-
-  const deleteMessage = (() => {
-    if (!pendingDelete || !categoryMapping) return 'This cannot be undone.';
-    if (deleteCountError !== null) {
-      return `Couldn't count affected items (${deleteCountError}). This still permanently deletes “${pendingDelete.value}” and every ${categoryMapping.noun} tagged with it across this entire project. This cannot be undone.`;
-    }
-    if (deleteCount === null) {
-      return `Counting affected items… This permanently deletes “${pendingDelete.value}” and every ${categoryMapping.noun} tagged with it across this entire project. This cannot be undone.`;
-    }
-    return categoryDeletionMessage(categoryMapping, pendingDelete.value, deleteCount);
-  })();
 
   useEffect(() => {
     if (autoFocus) inputRef.current?.focus();
@@ -261,41 +195,23 @@ export function VocabularyPicker({
           ) : null}
 
           {filtered.map((entry) => (
-            <div key={entry.id} style={popoverRowContainerStyle}>
-              <button
-                type="button"
-                role="option"
-                aria-selected={entry.value === value}
-                onMouseDown={(e) => {
-                  // mousedown (not click) so the input doesn't lose focus
-                  // before we set the value — without this, blur runs first
-                  // and the parent FieldShell can collapse the picker.
-                  e.preventDefault();
-                  onChange(entry.value);
-                  setOpen(false);
-                }}
-                style={popoverOptionButtonStyle(entry.value === value)}
-              >
-                {entry.value}
-              </button>
-              {/* P-57 — delete a category label (+ cascade its tagged items).
-                  Only the three category vocab types get the trash. */}
-              {canDeleteCategories ? (
-                <button
-                  type="button"
-                  aria-label={`Delete category “${entry.value}”`}
-                  title="Delete category (and its tagged items, project-wide)"
-                  data-testid="vocabulary-category-delete-button"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    beginDelete(entry);
-                  }}
-                  style={popoverTrashButtonStyle}
-                >
-                  🗑
-                </button>
-              ) : null}
-            </div>
+            <button
+              key={entry.id}
+              type="button"
+              role="option"
+              aria-selected={entry.value === value}
+              onMouseDown={(e) => {
+                // mousedown (not click) so the input doesn't lose focus
+                // before we set the value — without this, blur runs first
+                // and the parent FieldShell can collapse the picker.
+                e.preventDefault();
+                onChange(entry.value);
+                setOpen(false);
+              }}
+              style={popoverRowStyle(entry.value === value)}
+            >
+              {entry.value}
+            </button>
           ))}
 
           {showCreateRow ? (
@@ -320,18 +236,6 @@ export function VocabularyPicker({
             <div style={{ ...popoverInfoStyle, color: '#f85149' }}>{createError}</div>
           ) : null}
         </div>
-      ) : null}
-
-      {canDeleteCategories ? (
-        <ConfirmDeleteDialog
-          isOpen={pendingDelete !== null}
-          title="Delete this category?"
-          message={deleteMessage}
-          confirmLabel="Delete category"
-          onClose={() => setPendingDelete(null)}
-          onConfirm={handleConfirmDelete}
-          variant={{ kind: 'plain' }}
-        />
       ) : null}
     </div>
   );
@@ -377,42 +281,22 @@ const popoverInfoStyle: React.CSSProperties = {
   fontStyle: 'italic',
 };
 
-// P-57 — a suggestion row is now a flex container (option button + optional
-// trash) so the row divider + selected background live on the container while
-// the option button fills the remaining width.
-const popoverRowContainerStyle: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'stretch',
-  width: '100%',
-  borderBottom: '1px solid #373d44',
-};
-
-function popoverOptionButtonStyle(selected: boolean): React.CSSProperties {
+function popoverRowStyle(selected: boolean): React.CSSProperties {
   return {
     display: 'block',
-    flex: 1,
-    minWidth: 0,
+    width: '100%',
     textAlign: 'left',
     padding: '6px 10px',
     background: selected ? '#1f3a5f' : 'transparent',
     border: 'none',
+    // Row divider visible on the new #21262d popover bg.
+    borderBottom: '1px solid #373d44',
     color: '#e6edf3',
     fontSize: '13px',
     cursor: 'pointer',
     fontFamily: 'inherit',
   };
 }
-
-const popoverTrashButtonStyle: React.CSSProperties = {
-  flex: '0 0 auto',
-  padding: '6px 10px',
-  background: 'transparent',
-  border: 'none',
-  color: '#8b949e',
-  fontSize: '13px',
-  cursor: 'pointer',
-  fontFamily: 'inherit',
-};
 
 function createRowStyle(disabled: boolean): React.CSSProperties {
   return {
