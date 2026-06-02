@@ -35,10 +35,20 @@ import {
 } from './dynamic-columns.ts';
 import { slugifyForFilename } from './reviews-table-export.ts';
 import { mergeTitleAndBody } from './reviews-analysis-table-columns.ts';
+import { buildCategoryGroups } from './category-table-grouping.ts';
+import { buildTypeGroups } from './type-table-grouping.ts';
+import {
+  buildCategorySourceReviewRows,
+  type CategorySourceReviewMeta,
+  type CategorySourceTheme,
+  type TraceabilityCategory,
+} from './reviews-traceability.ts';
 
 // The sheet name shown on the single worksheet inside each workbook.
 export const MAIN_TABLE_SHEET_NAME = 'Competition Content Overview';
 export const REVIEWS_ANALYSIS_SHEET_NAME = 'Competition Reviews Analysis';
+export const CATEGORY_REVIEWS_SHEET_NAME = 'Reviews Analysis By Category';
+export const TYPE_REVIEWS_SHEET_NAME = 'Reviews Analysis By Type';
 
 // One fixed (registry) column passed in from the page's TABLE_COLUMN_DEFS so the
 // export header + order track the single column registry (no duplicate list to
@@ -347,6 +357,289 @@ export function buildReviewsAnalysisExportMatrix(
     matrix: [[...REVIEWS_ANALYSIS_HEADER], ...body],
     wrappedColumnIndexes: [...REVIEWS_ANALYSIS_WRAPPED],
   };
+}
+
+// ─── Reviews Analysis By Competitor Category / Type (Phase 2b-ii) ──────────
+//
+// The grouped spreadsheets are the Excel forms of the /reviews-analysis-by-
+// category + /reviews-analysis-by-type pages. Those pages bunch competitors
+// under a category/type banner, with each competitor's captured reviews stacked
+// beneath it, and add per-category/per-type AI summaries + a "Source Reviews"
+// cell (the individual reviews behind each bulleted complaint, across every
+// competitor in the group).
+//
+// Excel has no banners or sub-rows, so the two-level grouping FLATTENS (the
+// standing export rule, director-locked): every captured review becomes its own
+// row; the competitor-level fields (the product columns + the two Competitor
+// Comprehensive summaries) REPEAT on each of that competitor's review rows; and
+// the group-level fields (the Category/Type Comprehensive summaries + the
+// Source Reviews cell) REPEAT on EVERY row in the group. A competitor with no
+// captured reviews still gets one row (blank review columns).
+//
+// Per the director's "reviews as rows" rule the export carries the raw Review
+// text too (a "Review" column after Stars), even though the on-screen grouped
+// page shows only Stars + Reviews Summary — the spreadsheet is the full picture.
+//
+// Ordering: the rows follow the page's DEFAULT grouped order (alphabetical
+// groups, uncategorized/untyped last, input order within a group) over ALL rows
+// — on-screen hide/reorder choices never narrow the export.
+
+// One competitor URL row for the grouped exports. Carries id +
+// competitionCategory + type, so the same rows feed buildCategoryGroups OR
+// buildTypeGroups (same per-URL shape as the flat Reviews Analysis export).
+export type GroupedReviewsAnalysisUrl = ReviewsAnalysisUrl;
+
+// A group-level (per-category / per-type) bulleted AI summary plus its
+// structured categories (the bullet→reviewId shape that resolves Source
+// Reviews). Mirrors the page's CategoryBulletedEntry / TypeBulletedEntry.
+export interface GroupBulletedEntry {
+  summary: string;
+  categories: TraceabilityCategory[];
+}
+
+// The assembled inputs for a grouped reviews spreadsheet. Shares the per-review
+// + per-competitor maps with the flat Reviews Analysis export, and adds the
+// group-level summaries (keyed by the normalized category/type key — the same
+// key buildCategoryGroups/buildTypeGroups emit + the page looks up) and the
+// reviewId→meta map the Source Reviews cell resolves against.
+export interface GroupedReviewsAnalysisExportData {
+  urls: ReadonlyArray<GroupedReviewsAnalysisUrl>;
+  reviewsByUrlId: Record<string, ReadonlyArray<ReviewsAnalysisReview>>;
+  perReviewSummaryByReviewId: Record<string, string>;
+  compBulletedByUrlId: Record<string, string>;
+  compNonBulletedByUrlId: Record<string, string>;
+  groupBulletedByKey: Record<string, GroupBulletedEntry>;
+  groupNonBulletedByKey: Record<string, string>;
+  reviewMetaById: ReadonlyMap<string, CategorySourceReviewMeta>;
+}
+
+// The grouped export columns, in the page's left-to-right order, with the raw
+// "Review" column spliced after "Stars" (the standing reviews-as-rows rule).
+// The By-Type sheet swaps the grouping column to position 1 + the plain
+// category column to position 3, and re-words the group-level labels.
+type GroupedColId =
+  | 'category'
+  | 'type'
+  | 'platform'
+  | 'productName'
+  | 'resultsPageRank'
+  | 'competitionScore'
+  | 'url'
+  | 'stars'
+  | 'review'
+  | 'reviewsSummary'
+  | 'compBulleted'
+  | 'compNonBulleted'
+  | 'groupBulleted'
+  | 'sourceReviews'
+  | 'groupNonBulleted';
+
+const CATEGORY_COL_IDS: ReadonlyArray<GroupedColId> = [
+  'category', 'platform', 'type', 'productName', 'resultsPageRank',
+  'competitionScore', 'url', 'stars', 'review', 'reviewsSummary',
+  'compBulleted', 'compNonBulleted', 'groupBulleted', 'sourceReviews',
+  'groupNonBulleted',
+];
+const TYPE_COL_IDS: ReadonlyArray<GroupedColId> = [
+  'type', 'platform', 'category', 'productName', 'resultsPageRank',
+  'competitionScore', 'url', 'stars', 'review', 'reviewsSummary',
+  'compBulleted', 'compNonBulleted', 'groupBulleted', 'sourceReviews',
+  'groupNonBulleted',
+];
+// Long free-text columns the page wraps.
+const GROUPED_WRAPPED_IDS: ReadonlySet<GroupedColId> = new Set<GroupedColId>([
+  'review', 'reviewsSummary', 'compBulleted', 'compNonBulleted',
+  'groupBulleted', 'sourceReviews', 'groupNonBulleted',
+]);
+
+function groupedColLabel(id: GroupedColId, grouping: 'category' | 'type'): string {
+  switch (id) {
+    case 'category':
+      return 'Category';
+    case 'type':
+      return 'Type';
+    case 'platform':
+      return 'Platform';
+    case 'productName':
+      return 'Product Name';
+    case 'resultsPageRank':
+      return 'Results Rank';
+    case 'competitionScore':
+      return 'Comp. Score';
+    case 'url':
+      return 'URL';
+    case 'stars':
+      return 'Stars';
+    case 'review':
+      return 'Review';
+    case 'reviewsSummary':
+      return 'Reviews Summary';
+    case 'compBulleted':
+      return 'Competitor Comprehensive (bulleted)';
+    case 'compNonBulleted':
+      return 'Competitor Comprehensive (non-bulleted)';
+    case 'groupBulleted':
+      return grouping === 'category'
+        ? 'Category Comprehensive (bulleted)'
+        : 'Type Comprehensive (bulleted)';
+    case 'sourceReviews':
+      return 'Source Reviews';
+    case 'groupNonBulleted':
+      return grouping === 'category'
+        ? 'Category Comprehensive (non-bulleted)'
+        : 'Type Comprehensive (non-bulleted)';
+    default:
+      return '';
+  }
+}
+
+interface GroupedCellCtx {
+  url: GroupedReviewsAnalysisUrl;
+  review: ReviewsAnalysisReview | null;
+  platformLabels: Record<string, string>;
+  perReviewSummary: Record<string, string>;
+  compBulleted: string;
+  compNonBulleted: string;
+  groupBulleted: string;
+  groupNonBulleted: string;
+  sourceReviewsText: string;
+}
+
+function groupedCellValue(id: GroupedColId, c: GroupedCellCtx): string {
+  const u = c.url;
+  switch (id) {
+    case 'category':
+      return u.competitionCategory ?? '';
+    case 'type':
+      return u.type ?? '';
+    case 'platform':
+      return c.platformLabels[u.platform] ?? u.platform ?? '';
+    case 'productName':
+      return u.productName ?? '';
+    case 'resultsPageRank':
+      return u.resultsPageRank == null ? '' : String(u.resultsPageRank);
+    case 'competitionScore':
+      return u.competitionScore == null ? '' : String(u.competitionScore);
+    case 'url':
+      return u.url ?? '';
+    case 'stars':
+      return c.review ? String(c.review.starRating) : '';
+    case 'review':
+      return c.review ? mergeTitleAndBody(c.review.title, c.review.body) : '';
+    case 'reviewsSummary':
+      return c.review ? c.perReviewSummary[c.review.id] ?? '' : '';
+    case 'compBulleted':
+      return c.compBulleted;
+    case 'compNonBulleted':
+      return c.compNonBulleted;
+    case 'groupBulleted':
+      return c.groupBulleted;
+    case 'sourceReviews':
+      return c.sourceReviewsText;
+    case 'groupNonBulleted':
+      return c.groupNonBulleted;
+    default:
+      return '';
+  }
+}
+
+/**
+ * Flatten a group's resolved Source Reviews (theme → bulleted complaint →
+ * the individual reviews behind it, across all in-group competitors) into one
+ * readable, word-wrapped Excel cell. Empty when the group has no bulleted
+ * category/type summary. Pure + testable.
+ */
+export function formatSourceReviewsCell(
+  themes: ReadonlyArray<CategorySourceTheme>
+): string {
+  const blocks: string[] = [];
+  for (const theme of themes) {
+    const lines: string[] = [theme.name];
+    for (const bullet of theme.bullets) {
+      lines.push(`• ${bullet.text}`);
+      for (const s of bullet.sources) {
+        const stars = s.starRating == null ? '' : `${s.starRating}★ `;
+        lines.push(`    – ${s.productName} · ${stars}${s.text}`);
+      }
+    }
+    blocks.push(lines.join('\n'));
+  }
+  return blocks.join('\n\n');
+}
+
+// The shared grouped-export engine. `grouping` selects the column order + the
+// group-level wording; the page-level grouping helper (buildCategoryGroups /
+// buildTypeGroups) supplies the two-level order over ALL rows.
+function buildGroupedReviewsAnalysisExportMatrix(
+  grouping: 'category' | 'type',
+  data: GroupedReviewsAnalysisExportData,
+  platformLabels: Record<string, string>
+): ExportMatrixResult {
+  const colIds = grouping === 'category' ? CATEGORY_COL_IDS : TYPE_COL_IDS;
+  const header = colIds.map((id) => groupedColLabel(id, grouping));
+  const wrappedColumnIndexes: number[] = [];
+  colIds.forEach((id, i) => {
+    if (GROUPED_WRAPPED_IDS.has(id)) wrappedColumnIndexes.push(i);
+  });
+
+  // Order + bucket ALL rows into the page's grouped order. Both group shapes
+  // expose { key, rows: [{ url }] }, so the engine reads them uniformly.
+  const groups: ReadonlyArray<{
+    key: string;
+    rows: ReadonlyArray<{ url: GroupedReviewsAnalysisUrl }>;
+  }> =
+    grouping === 'category'
+      ? buildCategoryGroups(data.urls)
+      : buildTypeGroups(data.urls);
+
+  const body: string[][] = [];
+  for (const group of groups) {
+    const groupBulleted = data.groupBulletedByKey[group.key]?.summary ?? '';
+    const groupNonBulleted = data.groupNonBulletedByKey[group.key] ?? '';
+    const sourceReviewsText = formatSourceReviewsCell(
+      buildCategorySourceReviewRows(
+        data.groupBulletedByKey[group.key]?.categories ?? [],
+        data.reviewMetaById
+      )
+    );
+    for (const { url } of group.rows) {
+      const reviews = data.reviewsByUrlId[url.id] ?? [];
+      const span = Math.max(reviews.length, 1);
+      const compBulleted = data.compBulletedByUrlId[url.id] ?? '';
+      const compNonBulleted = data.compNonBulletedByUrlId[url.id] ?? '';
+      for (let i = 0; i < span; i++) {
+        const ctx: GroupedCellCtx = {
+          url,
+          review: reviews[i] ?? null,
+          platformLabels,
+          perReviewSummary: data.perReviewSummaryByReviewId,
+          compBulleted,
+          compNonBulleted,
+          groupBulleted,
+          groupNonBulleted,
+          sourceReviewsText,
+        };
+        body.push(colIds.map((id) => groupedCellValue(id, ctx)));
+      }
+    }
+  }
+  return { matrix: [header, ...body], wrappedColumnIndexes };
+}
+
+/** Build the "Reviews Analysis By Competitor Category" export matrix. */
+export function buildCategoryReviewsAnalysisExportMatrix(
+  data: GroupedReviewsAnalysisExportData,
+  platformLabels: Record<string, string>
+): ExportMatrixResult {
+  return buildGroupedReviewsAnalysisExportMatrix('category', data, platformLabels);
+}
+
+/** Build the "Reviews Analysis By Competitor Type" export matrix. */
+export function buildTypeReviewsAnalysisExportMatrix(
+  data: GroupedReviewsAnalysisExportData,
+  platformLabels: Record<string, string>
+): ExportMatrixResult {
+  return buildGroupedReviewsAnalysisExportMatrix('type', data, platformLabels);
 }
 
 // Spreadsheet filename: {base}-{project-slug}-{YYYY-MM-DD}.xlsx. `dateStr` is

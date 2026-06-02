@@ -360,6 +360,207 @@ test('reviews export: reviews EXPAND into rows; per-competitor fields + AI summa
   assert.equal(matrix[2][3], 'Widget');
 });
 
+// ─── Reviews Analysis By Category / By Type exports (Phase 2b-ii) ──────────
+
+import {
+  buildCategoryReviewsAnalysisExportMatrix,
+  buildTypeReviewsAnalysisExportMatrix,
+  formatSourceReviewsCell,
+  type GroupedReviewsAnalysisExportData,
+} from './comprehensive-analysis-exports.ts';
+import type {
+  CategorySourceReviewMeta,
+  CategorySourceTheme,
+} from './reviews-traceability.ts';
+
+function groupedUrl(
+  id: string,
+  over: Partial<GroupedReviewsAnalysisExportData['urls'][number]> = {}
+): GroupedReviewsAnalysisExportData['urls'][number] {
+  return {
+    id,
+    platform: 'amazon',
+    competitionCategory: 'Grills',
+    type: 'Gas',
+    productName: `Product ${id}`,
+    resultsPageRank: null,
+    competitionScore: null,
+    url: `https://example.com/${id}`,
+    ...over,
+  };
+}
+
+function groupedData(
+  over: Partial<GroupedReviewsAnalysisExportData> = {}
+): GroupedReviewsAnalysisExportData {
+  return {
+    urls: [groupedUrl('u1')],
+    reviewsByUrlId: {},
+    perReviewSummaryByReviewId: {},
+    compBulletedByUrlId: {},
+    compNonBulletedByUrlId: {},
+    groupBulletedByKey: {},
+    groupNonBulletedByKey: {},
+    reviewMetaById: new Map<string, CategorySourceReviewMeta>(),
+    ...over,
+  };
+}
+
+test('grouped export (category): header order with Source Reviews + Review columns', () => {
+  const { matrix } = buildCategoryReviewsAnalysisExportMatrix(
+    groupedData(),
+    PLATFORM_LABELS
+  );
+  assert.deepEqual(matrix[0], [
+    'Category',
+    'Platform',
+    'Type',
+    'Product Name',
+    'Results Rank',
+    'Comp. Score',
+    'URL',
+    'Stars',
+    'Review',
+    'Reviews Summary',
+    'Competitor Comprehensive (bulleted)',
+    'Competitor Comprehensive (non-bulleted)',
+    'Category Comprehensive (bulleted)',
+    'Source Reviews',
+    'Category Comprehensive (non-bulleted)',
+  ]);
+});
+
+test('grouped export (type): Type↔Category column swap + type-worded group labels', () => {
+  const { matrix } = buildTypeReviewsAnalysisExportMatrix(groupedData(), PLATFORM_LABELS);
+  assert.equal(matrix[0][0], 'Type'); // grouping column first
+  assert.equal(matrix[0][2], 'Category'); // plain category at position 3
+  assert.equal(matrix[0][12], 'Type Comprehensive (bulleted)');
+  assert.equal(matrix[0][14], 'Type Comprehensive (non-bulleted)');
+});
+
+test('grouped export: a competitor with no reviews still gets one row (blank review cols)', () => {
+  const { matrix } = buildCategoryReviewsAnalysisExportMatrix(
+    groupedData({ compBulletedByUrlId: { u1: 'COMP-BULLETS' } }),
+    PLATFORM_LABELS
+  );
+  assert.equal(matrix.length, 2); // header + 1 row
+  assert.equal(matrix[1][0], 'Grills'); // category value
+  assert.equal(matrix[1][1], 'Amazon'); // platform label
+  assert.equal(matrix[1][7], ''); // Stars blank
+  assert.equal(matrix[1][8], ''); // Review blank
+  assert.equal(matrix[1][10], 'COMP-BULLETS'); // competitor bulleted present
+});
+
+test('grouped export: two-level expansion — reviews expand; competitor + group fields repeat down', () => {
+  const data = groupedData({
+    urls: [
+      groupedUrl('u1', { productName: 'Weber X' }),
+      groupedUrl('u2', { productName: 'Acme Q' }),
+    ],
+    reviewsByUrlId: {
+      u1: [
+        { id: 'r1', starRating: 5, title: 'Great heat', body: 'Sears well' },
+        { id: 'r2', starRating: 2, title: null, body: 'Lid broke' },
+      ],
+      u2: [{ id: 'r3', starRating: 4, title: null, body: 'Solid build' }],
+    },
+    perReviewSummaryByReviewId: { r1: 'praises heat', r2: 'lid complaint', r3: 'sturdy' },
+    compBulletedByUrlId: { u1: 'WEBER-BULLETS', u2: 'ACME-BULLETS' },
+    groupBulletedByKey: { Grills: { summary: 'CATEGORY-BULLETS', categories: [] } },
+    groupNonBulletedByKey: { Grills: 'CATEGORY-PROSE' },
+  });
+  const { matrix } = buildCategoryReviewsAnalysisExportMatrix(data, PLATFORM_LABELS);
+  // header + 2 (u1) + 1 (u2) review rows
+  assert.equal(matrix.length, 4);
+  // u1 review rows
+  assert.equal(matrix[1][8], 'Great heat. Sears well');
+  assert.equal(matrix[1][9], 'praises heat');
+  assert.equal(matrix[2][8], 'Lid broke');
+  // competitor bulleted repeats on both u1 rows, differs for u2
+  assert.equal(matrix[1][10], 'WEBER-BULLETS');
+  assert.equal(matrix[2][10], 'WEBER-BULLETS');
+  assert.equal(matrix[3][10], 'ACME-BULLETS');
+  // group-level summaries repeat on EVERY row in the Grills group
+  for (let r = 1; r <= 3; r++) {
+    assert.equal(matrix[r][12], 'CATEGORY-BULLETS');
+    assert.equal(matrix[r][14], 'CATEGORY-PROSE');
+  }
+});
+
+test('grouped export: groups sort alphabetically; uncategorized bucket last; all rows kept', () => {
+  const data = groupedData({
+    urls: [
+      groupedUrl('u1', { competitionCategory: 'Smokers' }),
+      groupedUrl('u2', { competitionCategory: null }), // uncategorized
+      groupedUrl('u3', { competitionCategory: 'Grills' }),
+    ],
+  });
+  const { matrix } = buildCategoryReviewsAnalysisExportMatrix(data, PLATFORM_LABELS);
+  // header + 3 rows (one per competitor, no reviews → one row each)
+  assert.equal(matrix.length, 4);
+  assert.equal(matrix[1][0], 'Grills'); // alphabetical first
+  assert.equal(matrix[2][0], 'Smokers');
+  assert.equal(matrix[3][0], ''); // uncategorized value is empty, pinned last
+});
+
+test('grouped export: Source Reviews cell resolves bullets → in-group reviews across competitors', () => {
+  const reviewMetaById = new Map<string, CategorySourceReviewMeta>([
+    ['r1', { starRating: 2, title: 'Lid', body: 'broke', productName: 'Weber X', urlId: 'u1' }],
+    ['r9', { starRating: 1, title: null, body: 'flimsy lid', productName: 'Acme Q', urlId: 'u2' }],
+  ]);
+  const data = groupedData({
+    urls: [groupedUrl('u1'), groupedUrl('u2', { productName: 'Acme Q' })],
+    reviewMetaById,
+    groupBulletedByKey: {
+      Grills: {
+        summary: 'CATEGORY-BULLETS',
+        categories: [
+          { name: 'Build quality', bullets: [{ text: 'Flimsy lid', reviewIds: ['r1', 'r9'] }] },
+        ],
+      },
+    },
+  });
+  const { matrix } = buildCategoryReviewsAnalysisExportMatrix(data, PLATFORM_LABELS);
+  const sourceCell = matrix[1][13]; // Source Reviews column
+  assert.match(sourceCell, /Build quality/);
+  assert.match(sourceCell, /Flimsy lid/);
+  assert.match(sourceCell, /Weber X/);
+  assert.match(sourceCell, /Acme Q/);
+  // repeats identically on every row in the group
+  assert.equal(matrix[2][13], sourceCell);
+});
+
+test('formatSourceReviewsCell: empty themes → empty string; formats theme/bullet/sources', () => {
+  assert.equal(formatSourceReviewsCell([]), '');
+  const themes: CategorySourceTheme[] = [
+    {
+      name: 'Durability',
+      bullets: [
+        {
+          text: 'Cracks early',
+          sources: [
+            { reviewId: 'r1', urlId: 'u1', productName: 'Weber X', starRating: 2, text: 'Cracked', missing: false },
+          ],
+        },
+      ],
+    },
+  ];
+  const out = formatSourceReviewsCell(themes);
+  assert.match(out, /Durability/);
+  assert.match(out, /• Cracks early/);
+  assert.match(out, /– Weber X · 2★ Cracked/);
+});
+
+test('grouped export: wrapped column indexes cover the long-text columns', () => {
+  const { wrappedColumnIndexes } = buildCategoryReviewsAnalysisExportMatrix(
+    groupedData(),
+    PLATFORM_LABELS
+  );
+  // Review(8), Reviews Summary(9), Comp bulleted(10), Comp non-bulleted(11),
+  // Category bulleted(12), Source Reviews(13), Category non-bulleted(14).
+  assert.deepEqual(wrappedColumnIndexes, [8, 9, 10, 11, 12, 13, 14]);
+});
+
 test('buildExportFilename / buildExportZipFilename: slug + date', () => {
   assert.equal(
     buildExportFilename('competition-content-overview', 'My Project!', '2026-06-02'),

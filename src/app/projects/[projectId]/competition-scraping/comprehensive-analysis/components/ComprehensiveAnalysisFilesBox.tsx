@@ -26,15 +26,26 @@ import {
 import {
   buildMainTableExportMatrix,
   buildReviewsAnalysisExportMatrix,
+  buildCategoryReviewsAnalysisExportMatrix,
+  buildTypeReviewsAnalysisExportMatrix,
   buildExportFilename,
   buildExportZipFilename,
   MAIN_TABLE_SHEET_NAME,
   REVIEWS_ANALYSIS_SHEET_NAME,
+  CATEGORY_REVIEWS_SHEET_NAME,
+  TYPE_REVIEWS_SHEET_NAME,
   type ExportMatrixResult,
   type MainExportUrl,
   type ReviewsAnalysisExportData,
   type ReviewsAnalysisReview,
+  type ReviewsAnalysisUrl,
+  type GroupedReviewsAnalysisExportData,
+  type GroupBulletedEntry,
 } from '@/lib/competition-scraping/comprehensive-analysis-exports';
+import {
+  validateCategoriesInput,
+  type CategorySourceReviewMeta,
+} from '@/lib/competition-scraping/reviews-traceability';
 
 interface Props {
   projectId: string;
@@ -71,15 +82,15 @@ const FILES: ReadonlyArray<FileDescriptor> = [
     key: 'category',
     name: 'Reviews Analysis By Competitor Category',
     filenameBase: 'reviews-analysis-by-category',
-    sheetName: 'Reviews Analysis By Category',
-    status: 'pending',
+    sheetName: CATEGORY_REVIEWS_SHEET_NAME,
+    status: 'ready',
   },
   {
     key: 'type',
     name: 'Reviews Analysis By Competitor Type',
     filenameBase: 'reviews-analysis-by-type',
-    sheetName: 'Reviews Analysis By Type',
-    status: 'pending',
+    sheetName: TYPE_REVIEWS_SHEET_NAME,
+    status: 'ready',
   },
 ];
 
@@ -150,6 +161,16 @@ function buildReviewsArrayBuffer(data: ReviewsAnalysisExportData): ArrayBuffer {
   return matrixToXlsxArrayBuffer(result, REVIEWS_ANALYSIS_SHEET_NAME);
 }
 
+function buildCategoryArrayBuffer(data: GroupedReviewsAnalysisExportData): ArrayBuffer {
+  const result = buildCategoryReviewsAnalysisExportMatrix(data, PLATFORM_LABELS);
+  return matrixToXlsxArrayBuffer(result, CATEGORY_REVIEWS_SHEET_NAME);
+}
+
+function buildTypeArrayBuffer(data: GroupedReviewsAnalysisExportData): ArrayBuffer {
+  const result = buildTypeReviewsAnalysisExportMatrix(data, PLATFORM_LABELS);
+  return matrixToXlsxArrayBuffer(result, TYPE_REVIEWS_SHEET_NAME);
+}
+
 export function ComprehensiveAnalysisFilesBox({ projectId, projectNameOrId }: Props) {
   const [urls, setUrls] = useState<MainExportUrl[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -200,16 +221,31 @@ export function ComprehensiveAnalysisFilesBox({ projectId, projectNameOrId }: Pr
     return Array.isArray(body) ? body : [];
   }, [projectId]);
 
-  // Assemble the Competition Reviews Analysis data from FRESH reads: the stored
-  // review analyses (PER_REVIEW summaries + PER_PRODUCT bulleted/non-bulleted,
-  // derived exactly as /competitor-reviews-analysis hydrates) + each URL's
-  // captured reviews (ordered like the table). Takes the freshly-fetched URL
-  // list so the zip can share one /urls read across both files.
-  const fetchReviewsData = useCallback(
-    async (rows: ReadonlyArray<MainExportUrl>): Promise<ReviewsAnalysisExportData> => {
+  // Assemble ALL THREE reviews spreadsheets from ONE set of fresh reads: the
+  // stored review analyses (PER_REVIEW summaries + PER_PRODUCT bulleted/non-
+  // bulleted + the per-category/per-type summaries, derived exactly as the
+  // /competitor-reviews-analysis + by-category + by-type pages hydrate) and each
+  // URL's captured reviews (ordered like the tables). One bundle keeps the zip
+  // to a single review-analysis read; each individual download re-fetches it so
+  // every file is current at click time. Takes the freshly-fetched URL list so
+  // the /urls read is shared too.
+  const fetchReviewsBundle = useCallback(
+    async (
+      rows: ReadonlyArray<MainExportUrl>
+    ): Promise<{
+      reviews: ReviewsAnalysisExportData;
+      category: GroupedReviewsAnalysisExportData;
+      type: GroupedReviewsAnalysisExportData;
+    }> => {
       const perReviewSummaryByReviewId: Record<string, string> = {};
       const compBulletedByUrlId: Record<string, string> = {};
       const compNonBulletedByUrlId: Record<string, string> = {};
+      // Group-level summaries, keyed by the normalized category/type key (the
+      // analysis row's typeFilter — the same key the grouping helpers emit).
+      const categoryBulletedByKey: Record<string, GroupBulletedEntry> = {};
+      const categoryNonBulletedByKey: Record<string, string> = {};
+      const typeBulletedByKey: Record<string, GroupBulletedEntry> = {};
+      const typeNonBulletedByKey: Record<string, string> = {};
       const aRes = await authFetch(
         `/api/projects/${projectId}/competition-scraping/review-analysis`
       );
@@ -221,6 +257,7 @@ export function ComprehensiveAnalysisFilesBox({ projectId, projectNameOrId }: Pr
           id: string;
           level: string;
           urlId: string | null;
+          typeFilter: string | null;
           analysisJson: unknown;
         }>;
       };
@@ -240,10 +277,35 @@ export function ComprehensiveAnalysisFilesBox({ projectId, projectNameOrId }: Pr
           } else {
             compBulletedByUrlId[item.urlId] = summary;
           }
+        } else if (item.level === 'PER_CATEGORY' && item.typeFilter != null) {
+          if (aj.flow === 'per-category-nonbulleted') {
+            categoryNonBulletedByKey[item.typeFilter] = summary;
+          } else {
+            categoryBulletedByKey[item.typeFilter] = {
+              summary,
+              categories: validateCategoriesInput(aj.categories) ?? [],
+            };
+          }
+        } else if (item.level === 'PER_TYPE' && item.typeFilter != null) {
+          if (aj.flow === 'per-type-nonbulleted') {
+            typeNonBulletedByKey[item.typeFilter] = summary;
+          } else {
+            typeBulletedByKey[item.typeFilter] = {
+              summary,
+              categories: validateCategoriesInput(aj.categories) ?? [],
+            };
+          }
         }
       }
 
       const reviewsByUrlId: Record<string, ReviewsAnalysisReview[]> = {};
+      // reviewId → meta for the Source Reviews cell (cross-competitor: a group
+      // bullet's cited reviews can come from any competitor in the group).
+      const reviewMetaById = new Map<string, CategorySourceReviewMeta>();
+      const productNameByUrlId = new Map<string, string>();
+      for (const u of rows) {
+        productNameByUrlId.set(u.id, u.productName?.trim() || u.url);
+      }
       await Promise.all(
         rows.map(async (u) => {
           try {
@@ -262,7 +324,7 @@ export function ComprehensiveAnalysisFilesBox({ projectId, projectNameOrId }: Pr
               sortRank: number | null;
               sortRankInReviewsTable: number | null;
             }>;
-            reviewsByUrlId[u.id] = (Array.isArray(list) ? list : [])
+            const ordered = (Array.isArray(list) ? list : [])
               .map((r, idx) => ({ r, idx }))
               .sort((a, b) => reviewRank(a.r) - reviewRank(b.r) || a.idx - b.idx)
               .map(({ r }) => ({
@@ -271,28 +333,62 @@ export function ComprehensiveAnalysisFilesBox({ projectId, projectNameOrId }: Pr
                 title: r.title,
                 body: r.body,
               }));
+            reviewsByUrlId[u.id] = ordered;
+            const productName = productNameByUrlId.get(u.id) ?? '(unknown product)';
+            for (const r of ordered) {
+              reviewMetaById.set(r.id, {
+                starRating: r.starRating,
+                title: r.title,
+                body: r.body,
+                productName,
+                urlId: u.id,
+              });
+            }
           } catch {
             reviewsByUrlId[u.id] = [];
           }
         })
       );
 
-      return {
-        urls: rows.map((u) => ({
-          id: u.id,
-          platform: u.platform,
-          competitionCategory: u.competitionCategory,
-          type: u.type,
-          productName: u.productName,
-          resultsPageRank: u.resultsPageRank,
-          competitionScore: u.competitionScore,
-          url: u.url,
-        })),
+      const urls: ReviewsAnalysisUrl[] = rows.map((u) => ({
+        id: u.id,
+        platform: u.platform,
+        competitionCategory: u.competitionCategory,
+        type: u.type,
+        productName: u.productName,
+        resultsPageRank: u.resultsPageRank,
+        competitionScore: u.competitionScore,
+        url: u.url,
+      }));
+
+      const reviews: ReviewsAnalysisExportData = {
+        urls,
         reviewsByUrlId,
         perReviewSummaryByReviewId,
         compBulletedByUrlId,
         compNonBulletedByUrlId,
       };
+      const category: GroupedReviewsAnalysisExportData = {
+        urls,
+        reviewsByUrlId,
+        perReviewSummaryByReviewId,
+        compBulletedByUrlId,
+        compNonBulletedByUrlId,
+        groupBulletedByKey: categoryBulletedByKey,
+        groupNonBulletedByKey: categoryNonBulletedByKey,
+        reviewMetaById,
+      };
+      const type: GroupedReviewsAnalysisExportData = {
+        urls,
+        reviewsByUrlId,
+        perReviewSummaryByReviewId,
+        compBulletedByUrlId,
+        compNonBulletedByUrlId,
+        groupBulletedByKey: typeBulletedByKey,
+        groupNonBulletedByKey: typeNonBulletedByKey,
+        reviewMetaById,
+      };
+      return { reviews, category, type };
     },
     [projectId]
   );
@@ -318,9 +414,9 @@ export function ComprehensiveAnalysisFilesBox({ projectId, projectNameOrId }: Pr
     setBusy('reviews');
     try {
       const rows = await fetchUrlsFresh();
-      const data = await fetchReviewsData(rows);
+      const { reviews } = await fetchReviewsBundle(rows);
       triggerDownload(
-        new Blob([buildReviewsArrayBuffer(data)], { type: XLSX_MIME }),
+        new Blob([buildReviewsArrayBuffer(reviews)], { type: XLSX_MIME }),
         buildExportFilename('competition-reviews-analysis', projectNameOrId, todayStr())
       );
     } catch (err) {
@@ -328,7 +424,41 @@ export function ComprehensiveAnalysisFilesBox({ projectId, projectNameOrId }: Pr
     } finally {
       setBusy(null);
     }
-  }, [fetchUrlsFresh, fetchReviewsData, projectNameOrId]);
+  }, [fetchUrlsFresh, fetchReviewsBundle, projectNameOrId]);
+
+  const handleDownloadCategory = useCallback(async () => {
+    setActionError(null);
+    setBusy('category');
+    try {
+      const rows = await fetchUrlsFresh();
+      const { category } = await fetchReviewsBundle(rows);
+      triggerDownload(
+        new Blob([buildCategoryArrayBuffer(category)], { type: XLSX_MIME }),
+        buildExportFilename('reviews-analysis-by-category', projectNameOrId, todayStr())
+      );
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not build the file.');
+    } finally {
+      setBusy(null);
+    }
+  }, [fetchUrlsFresh, fetchReviewsBundle, projectNameOrId]);
+
+  const handleDownloadType = useCallback(async () => {
+    setActionError(null);
+    setBusy('type');
+    try {
+      const rows = await fetchUrlsFresh();
+      const { type } = await fetchReviewsBundle(rows);
+      triggerDownload(
+        new Blob([buildTypeArrayBuffer(type)], { type: XLSX_MIME }),
+        buildExportFilename('reviews-analysis-by-type', projectNameOrId, todayStr())
+      );
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not build the file.');
+    } finally {
+      setBusy(null);
+    }
+  }, [fetchUrlsFresh, fetchReviewsBundle, projectNameOrId]);
 
   const handleDownloadAllZip = useCallback(async () => {
     setActionError(null);
@@ -343,20 +473,27 @@ export function ComprehensiveAnalysisFilesBox({ projectId, projectNameOrId }: Pr
         buildExportFilename('competition-content-overview', projectNameOrId, date),
         buildMainArrayBuffer(rows)
       );
-      // Competition Reviews Analysis (Phase 2b-i). Best-effort: a reviews
-      // failure still lets the rest of the zip download.
+      // The three reviews spreadsheets share ONE bundle read. Best-effort: a
+      // reviews failure still lets the rest of the zip download.
       try {
-        const data = await fetchReviewsData(rows);
+        const { reviews, category, type } = await fetchReviewsBundle(rows);
         zip.file(
           buildExportFilename('competition-reviews-analysis', projectNameOrId, date),
-          buildReviewsArrayBuffer(data)
+          buildReviewsArrayBuffer(reviews)
+        );
+        zip.file(
+          buildExportFilename('reviews-analysis-by-category', projectNameOrId, date),
+          buildCategoryArrayBuffer(category)
+        );
+        zip.file(
+          buildExportFilename('reviews-analysis-by-type', projectNameOrId, date),
+          buildTypeArrayBuffer(type)
         );
       } catch (err) {
         failures.push(
-          `Competition Reviews Analysis (${err instanceof Error ? err.message : 'error'})`
+          `the reviews-analysis spreadsheets (${err instanceof Error ? err.message : 'error'})`
         );
       }
-      // The By Category / By Type spreadsheets join here in Phase 2b-ii.
       const blob = await zip.generateAsync({ type: 'blob' });
       triggerDownload(blob, buildExportZipFilename(projectNameOrId, date));
       if (failures.length > 0) {
@@ -367,7 +504,7 @@ export function ComprehensiveAnalysisFilesBox({ projectId, projectNameOrId }: Pr
     } finally {
       setBusy(null);
     }
-  }, [fetchUrlsFresh, fetchReviewsData, projectNameOrId]);
+  }, [fetchUrlsFresh, fetchReviewsBundle, projectNameOrId]);
 
   const dataReady = urls !== null && !loadError;
 
@@ -416,7 +553,11 @@ export function ComprehensiveAnalysisFilesBox({ projectId, projectNameOrId }: Pr
                       ? handleDownloadMain
                       : f.key === 'reviews'
                         ? handleDownloadReviews
-                        : undefined
+                        : f.key === 'category'
+                          ? handleDownloadCategory
+                          : f.key === 'type'
+                            ? handleDownloadType
+                            : undefined
                   }
                   disabled={!dataReady || busy !== null}
                   style={fileButtonStyle(!dataReady || busy !== null)}
