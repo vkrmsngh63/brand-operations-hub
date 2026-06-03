@@ -10,6 +10,10 @@ import {
   type VerifyAuthFn,
 } from '@/lib/competition-scraping/handlers/review-analysis-run-batch';
 import { getAnthropicClient } from '@/lib/competition-scraping/review-analysis/client';
+import {
+  getRunnableModelIdsForMenu,
+  getModelPricingFromDb,
+} from '@/lib/ai-models/server-registry';
 
 // W#2 P-49 Workstream 5 Session 2 — per-batch AI review analysis (POST).
 // Spec: docs/REVIEWS_PHASE_2_DESIGN.md §B 2026-05-27 (Reviews Phase 3
@@ -81,6 +85,16 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     anthropicClient,
     recordFlake,
     withRetry,
+    // P-63 Phase 2d — let a self-serve-added W#2 model actually run: a model is
+    // accepted if it's a runnable review-analysis model in the live DB registry
+    // (the static Opus list is always accepted too, inside the handler).
+    isModelAllowedForReviewAnalysis: async (modelId) => {
+      const ids = await getRunnableModelIdsForMenu(prisma, 'review-analysis');
+      return ids.includes(modelId);
+    },
+    // Cost math uses the director-entered registry pricing for a self-serve
+    // model (null → handler falls back to the static MODEL_PRICING table).
+    resolveModelPricing: (modelId) => getModelPricingFromDb(prisma, modelId),
   });
 
   const result = await inner.POST(req, ctx);

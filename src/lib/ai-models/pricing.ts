@@ -100,10 +100,18 @@ export function getPricingForModel(modelVersion: string): ModelPricing {
 // in dollars; callers that need to persist to the DB convert to microdollars
 // via toCostUsdMicros below.
 export function calculateCostUsd(
-  modelVersion: string,
+  // Accepts either a model id (static MODEL_PRICING lookup) OR an explicit
+  // ModelPricing object. The object form (P-63 Phase 2d) lets callers pass
+  // pricing resolved from the live DB registry, so a self-serve-added model's
+  // cost is computed from the numbers the director entered — not the static
+  // table (which only knows the built-in models).
+  modelVersionOrPricing: string | ModelPricing,
   usage: TokenUsage
 ): number {
-  const p = getPricingForModel(modelVersion);
+  const p =
+    typeof modelVersionOrPricing === 'string'
+      ? getPricingForModel(modelVersionOrPricing)
+      : modelVersionOrPricing;
   const inputCost = (usage.inputTokens * p.inputPerMillion) / 1_000_000;
   const outputCost = (usage.outputTokens * p.outputPerMillion) / 1_000_000;
   const cacheWriteCost =
@@ -117,11 +125,11 @@ export function calculateCostUsd(
 // count + an estimated output budget. No cache hits yet (first run), so
 // estimate is conservative.
 export function estimateCostUsd(
-  modelVersion: string,
+  modelVersionOrPricing: string | ModelPricing,
   estimatedInputTokens: number,
   estimatedOutputTokens: number
 ): number {
-  return calculateCostUsd(modelVersion, {
+  return calculateCostUsd(modelVersionOrPricing, {
     inputTokens: estimatedInputTokens,
     outputTokens: estimatedOutputTokens,
     cacheCreationInputTokens: 0,

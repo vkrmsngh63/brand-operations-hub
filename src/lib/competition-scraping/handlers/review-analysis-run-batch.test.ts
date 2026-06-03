@@ -427,7 +427,9 @@ test('POST 400 when modelVersion is unsupported', async () => {
     makeCtx('proj-1')
   );
   assert.equal(r.status, 400);
-  assert.match(JSON.stringify(r.body), /modelVersion must be one of/);
+  // P-63 Phase 2d — with no registry dep wired, only the static Opus list is
+  // accepted, so an unknown model (gpt-9) is still rejected (new message shape).
+  assert.match(JSON.stringify(r.body), /is not an available review-analysis model/);
 });
 
 // ─── URL + review scoping ───────────────────────────────────────────
@@ -916,6 +918,46 @@ test('POST honors modelVersion override', async () => {
   );
   const createInput = clientState.createCalls[0] as { model: string };
   assert.equal(createInput.model, 'claude-opus-4-6');
+});
+
+test('POST accepts a non-static model when the registry allows it (P-63 Phase 2d)', async () => {
+  const reviews = [sampleReview('rev-a')];
+  const { prisma } = makePrisma({ reviews });
+  const { client, state: clientState } = makeAnthropicClient({
+    createResult: makeAnthropicMessage(
+      JSON.stringify({ summaries: [{ reviewId: 'rev-a', summary: 'A' }] })
+    ),
+  });
+  const deps = makeDeps({
+    prisma,
+    anthropicClient: client,
+    // Self-serve-added model: not in the static Opus list, but runnable in the
+    // live registry — must be accepted and dispatched to Anthropic.
+    isModelAllowedForReviewAnalysis: async (id) => id === 'claude-opus-9-9',
+    // Its pricing comes from the registry (not the static MODEL_PRICING table).
+    resolveModelPricing: async (id) =>
+      id === 'claude-opus-9-9'
+        ? {
+            inputPerMillion: 7,
+            outputPerMillion: 35,
+            cacheWrite5mPerMillion: 8.75,
+            cacheReadPerMillion: 0.7,
+          }
+        : null,
+  });
+  const { POST } = makeReviewAnalysisRunBatchHandlers(deps);
+  const r = await POST(
+    makeRequest({
+      flow: 'per-review-summarize',
+      urlId: 'url-1',
+      reviewIds: ['rev-a'],
+      modelVersion: 'claude-opus-9-9',
+    }),
+    makeCtx('proj-1')
+  );
+  assert.equal(r.status, 200);
+  const createInput = clientState.createCalls[0] as { model: string };
+  assert.equal(createInput.model, 'claude-opus-9-9');
 });
 
 // ────────────────────────────────────────────────────────────────────

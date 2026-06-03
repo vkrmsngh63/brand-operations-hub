@@ -49,7 +49,9 @@ import {
 import {
   calculateCostUsd,
   estimateCostUsd,
+  getPricingForModel,
   toCostUsdMicros,
+  type ModelPricing,
 } from '../review-analysis/pricing.ts';
 import {
   PER_REVIEW_SUMMARIZE_PROMPT_VERSION,
@@ -307,6 +309,20 @@ export type ReviewAnalysisRunBatchHandlerDeps = {
   anthropicClient: AnthropicClientLike;
   recordFlake: (op: string, err: unknown, ctx: object) => void;
   withRetry: <T>(fn: () => Promise<T>) => Promise<T>;
+  // P-63 Phase 2d (2026-06-03) — registry-driven model validation. When wired
+  // (production), returns whether a model id is a runnable review-analysis model
+  // in the live DB registry, so a self-serve-added W#2 model can actually run.
+  // The static SUPPORTED_MODEL_VERSIONS list is ALWAYS allowed in addition (so
+  // the 3 Opus models run even if the registry table is empty or the lookup
+  // throws). Optional: when omitted (unit tests), only the static list is
+  // accepted — preserving the original behavior.
+  isModelAllowedForReviewAnalysis?: (modelId: string) => Promise<boolean>;
+  // P-63 Phase 2d — resolve a model's pricing from the live DB registry so a
+  // self-serve-added model's cost is computed from the director-entered numbers.
+  // Returns null when the model isn't in the registry; the handler then falls
+  // back to the static MODEL_PRICING table (which covers the built-in models).
+  // Optional: when omitted (unit tests), only the static table is used.
+  resolveModelPricing?: (modelId: string) => Promise<ModelPricing | null>;
 };
 
 // Wire-shape entry returned to the browser. `source` lets the client
@@ -490,6 +506,37 @@ export function makeReviewAnalysisRunBatchHandlers(
 ) {
   const { prisma, verifyAuth, anthropicClient, recordFlake, withRetry } = deps;
 
+  // P-63 Phase 2d — a model is allowed if it's in the static Opus list (always,
+  // so the 3 Opus run even with an empty/unavailable registry) OR it's a
+  // runnable review-analysis model in the live DB registry (self-serve adds).
+  async function isModelAllowed(modelId: string): Promise<boolean> {
+    if (isSupportedModelVersion(modelId)) return true;
+    if (deps.isModelAllowedForReviewAnalysis) {
+      try {
+        return await deps.isModelAllowedForReviewAnalysis(modelId);
+      } catch {
+        return false; // DB hiccup → only the static list (checked above) runs
+      }
+    }
+    return false;
+  }
+
+  // P-63 Phase 2d — resolve a model's pricing for cost math: prefer the live DB
+  // registry (so a self-serve model uses the director-entered numbers), and fall
+  // back to the static MODEL_PRICING table (which covers the built-in models, and
+  // is the only source in unit tests where the dep is unwired).
+  async function resolvePricing(modelId: string): Promise<ModelPricing> {
+    if (deps.resolveModelPricing) {
+      try {
+        const p = await deps.resolveModelPricing(modelId);
+        if (p) return p;
+      } catch {
+        /* fall through to the static table */
+      }
+    }
+    return getPricingForModel(modelId);
+  }
+
   async function POST(req: RequestLike, ctx: Ctx): Promise<HandlerResult> {
     const { projectId } = await ctx.params;
     const auth = await verifyAuth(req, projectId, WORKFLOW);
@@ -608,14 +655,15 @@ export function makeReviewAnalysisRunBatchHandlers(
         typeof body.modelVersion === 'string' && body.modelVersion.trim()
           ? body.modelVersion.trim()
           : DEFAULT_MODEL_VERSION;
-      if (!isSupportedModelVersion(catModelVersion)) {
+      if (!(await isModelAllowed(catModelVersion))) {
         return {
           status: 400,
           body: {
-            error: `modelVersion must be one of: claude-opus-4-7, claude-opus-4-6`,
+            error: `modelVersion "${catModelVersion}" is not an available review-analysis model`,
           },
         };
       }
+      const catModelPricing = await resolvePricing(catModelVersion);
 
       // Narrow view of `prisma` carrying the category-specific queries the
       // rigid per-url deps type doesn't declare (see CategoryQueryPrisma).
@@ -795,7 +843,7 @@ export function makeReviewAnalysisRunBatchHandlers(
             projectId,
           });
         }
-        const estCost = estimateCostUsd(catModelVersion, estInputTokens, 4_000);
+        const estCost = estimateCostUsd(catModelPricing, estInputTokens, 4_000);
 
         let resp: Anthropic.Message;
         try {
@@ -867,7 +915,7 @@ export function makeReviewAnalysisRunBatchHandlers(
           });
         }
 
-        const actualCost = calculateCostUsd(catModelVersion, {
+        const actualCost = calculateCostUsd(catModelPricing, {
           inputTokens: resp.usage.input_tokens,
           outputTokens: resp.usage.output_tokens,
           cacheCreationInputTokens: resp.usage.cache_creation_input_tokens ?? 0,
@@ -967,7 +1015,7 @@ export function makeReviewAnalysisRunBatchHandlers(
           projectId,
         });
       }
-      const nbEstCost = estimateCostUsd(catModelVersion, nbEstInputTokens, 4_000);
+      const nbEstCost = estimateCostUsd(catModelPricing, nbEstInputTokens, 4_000);
 
       let nbResp: Anthropic.Message;
       try {
@@ -1035,7 +1083,7 @@ export function makeReviewAnalysisRunBatchHandlers(
       // (The per-COMPETITOR non-bulleted flow's own write-back below is
       // unaffected — that one stays, it's per-competitor critique.)
 
-      const nbActualCost = calculateCostUsd(catModelVersion, {
+      const nbActualCost = calculateCostUsd(catModelPricing, {
         inputTokens: nbResp.usage.input_tokens,
         outputTokens: nbResp.usage.output_tokens,
         cacheCreationInputTokens: nbResp.usage.cache_creation_input_tokens ?? 0,
@@ -1100,14 +1148,15 @@ export function makeReviewAnalysisRunBatchHandlers(
       typeof body.modelVersion === 'string' && body.modelVersion.trim()
         ? body.modelVersion.trim()
         : DEFAULT_MODEL_VERSION;
-    if (!isSupportedModelVersion(modelVersion)) {
+    if (!(await isModelAllowed(modelVersion))) {
       return {
         status: 400,
         body: {
-          error: `modelVersion must be one of: claude-opus-4-7, claude-opus-4-6`,
+          error: `modelVersion "${modelVersion}" is not an available review-analysis model`,
         },
       };
     }
+    const modelPricing = await resolvePricing(modelVersion);
 
     let url: CompetitorUrlForBatchRow | null;
     let reviews: CapturedReviewForBatchRow[] = [];
@@ -1269,7 +1318,7 @@ export function makeReviewAnalysisRunBatchHandlers(
       // for headroom on dense sources.
       const estimatedOutputTokensNB = 2_000;
       const estimatedCostUsdNB = estimateCostUsd(
-        modelVersion,
+        modelPricing,
         estimatedInputTokensNB,
         estimatedOutputTokensNB
       );
@@ -1365,7 +1414,7 @@ export function makeReviewAnalysisRunBatchHandlers(
         });
       }
 
-      const actualCostUsdNB = calculateCostUsd(modelVersion, {
+      const actualCostUsdNB = calculateCostUsd(modelPricing, {
         inputTokens: responseNB.usage.input_tokens,
         outputTokens: responseNB.usage.output_tokens,
         cacheCreationInputTokens: responseNB.usage.cache_creation_input_tokens ?? 0,
@@ -1508,7 +1557,7 @@ export function makeReviewAnalysisRunBatchHandlers(
       // factor of ~10× covers theme-heading overhead + outlier corpora.
       const estimatedOutputTokensPC = 4_000;
       const estimatedCostUsdPC = estimateCostUsd(
-        modelVersion,
+        modelPricing,
         estimatedInputTokensPC,
         estimatedOutputTokensPC
       );
@@ -1610,7 +1659,7 @@ export function makeReviewAnalysisRunBatchHandlers(
         // this run (best effort vs. lying about a non-existent id).
       }
 
-      const actualCostUsdPC = calculateCostUsd(modelVersion, {
+      const actualCostUsdPC = calculateCostUsd(modelPricing, {
         inputTokens: responsePC.usage.input_tokens,
         outputTokens: responsePC.usage.output_tokens,
         cacheCreationInputTokens: responsePC.usage.cache_creation_input_tokens ?? 0,
@@ -1787,7 +1836,7 @@ export function makeReviewAnalysisRunBatchHandlers(
       PER_BATCH_MAX_OUTPUT_TOKENS
     );
     const estimatedCostUsd = estimateCostUsd(
-      modelVersion,
+      modelPricing,
       estimatedInputTokens,
       estimatedOutputTokens
     );
@@ -1916,7 +1965,7 @@ export function makeReviewAnalysisRunBatchHandlers(
       // and either hit cache (if some persisted) or re-pay.
     }
 
-    const actualCostUsd = calculateCostUsd(modelVersion, {
+    const actualCostUsd = calculateCostUsd(modelPricing, {
       inputTokens: response.usage.input_tokens,
       outputTokens: response.usage.output_tokens,
       cacheCreationInputTokens: response.usage.cache_creation_input_tokens ?? 0,
