@@ -294,6 +294,23 @@ export default function DashboardPage() {
           }}
         >
           <button
+            onClick={() => router.push("/ai-models")}
+            title="AI Models — manage which models appear in every dropdown"
+            style={{
+              padding: "6px 14px",
+              background: "transparent",
+              border: "1px solid #30363d",
+              borderRadius: "6px",
+              color: "#8b949e",
+              fontSize: "11px",
+              fontWeight: 600,
+              cursor: "pointer",
+              fontFamily: "'IBM Plex Sans', sans-serif",
+            }}
+          >
+            🤖 AI Models
+          </button>
+          <button
             onClick={() => router.push("/dashboard/notes")}
             title="Admin Notes"
             style={{
