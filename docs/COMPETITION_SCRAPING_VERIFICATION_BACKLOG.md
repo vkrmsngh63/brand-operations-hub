@@ -4261,5 +4261,41 @@ Post-merge scoreboard SKIPPED as deliberate efficiency choice — ff-merge produ
 
 ---
 
+## Deploy session #44 — 2026-06-03-f — P-63 Phase 1 (PLATFORM-WIDE registry plumbing) — the 7 W#2 review-analysis modals repointed to the central AI-model registry — VERIFIED PASS (3 deploys, ZERO behavior change)
+
+**Why this is logged here (a platform deploy, not a W#2-product-feature deploy):** P-63 is a platform-wide AI-model-registry consolidation (it touches W#2 pickers AND W#1's `AutoAnalyze.tsx`), not a W#2 feature. It earns a brief entry here only because Deploy 2 repointed every W#2 review-analysis modal's model dropdown — so a future W#2 reader needs to know the W#2 pickers now read from the central registry (no behavior change). The full record is in the P-63 spec + ROADMAP P-63 + `docs/AI_MODEL_REGISTRY.md`.
+
+**Headline outcome:** all SEVEN W#2 review-analysis run-modals (PerReview / PerCompetitor[+NonBulleted] / GlobalCompetitor[+NonBulleted] / Category / Type) now render their model `<option>` list from the central registry via `getModelsForMenu('review-analysis')` instead of mapping the local `SUPPORTED_MODEL_VERSIONS` constant. The dropdowns show the EXACT same Opus-only models (4.8 / 4.7 / 4.6), same order, same raw-id labels, same default — byte-identical DOM. **Plumbing only — ZERO visible change.** A per-record `menus` tag keeps the W#2 menu Opus-only (W#1's wider Sonnet/Haiku menu can never leak in). **VERIFIED PASS** by the director on real Chrome (vklf.com).
+
+**Count correction caught at session-start:** the AI_MODEL_REGISTRY §2 consumers table listed "6 W#2 modals" — the actual count is **7** (`TypeAiRunModal` was missing). Corrected in `AI_MODEL_REGISTRY.md` §2 this session.
+
+**Fix shape narrative:** the model list + pricing/cost-math were physically MOVED into `src/lib/ai-models/{models,pricing}.ts` (the canonical home) with back-compat re-export shims at the old W#2 paths `competition-scraping/review-analysis/{models,pricing}.ts`, so every existing importer keeps working unchanged (Deploy 1). The 7 W#2 modals were then repointed to `getModelsForMenu('review-analysis')` (Deploy 2). W#1's `AutoAnalyze.tsx` was migrated separately (Deploy 3 — not a W#2 surface). One surface at a time, scoreboard green between each.
+
+**Pre-deploy + post-merge verification scoreboard:**
+
+| Check | Entry (2026-06-03-e) | Exit (2026-06-03-f) | Δ |
+| --- | --- | --- | --- |
+| Root tsc | clean | clean | UNCHANGED |
+| Extension tsc | clean | clean | UNCHANGED |
+| Extension `npm test` | 915/915 | 915/915 | UNCHANGED (PLOS-side change; no extension source touched) |
+| src/lib `node:test` | 1384/1384 | 1387/1387 | +3 (Deploy 2 +2 menu-accessor tests, Deploy 3 +1 W#1-menu-tagging test) |
+| `npm run build` (routes) | 74 | 74 | UNCHANGED (no new route) |
+| Check 6 Playwright | SKIPPED (Rule 27) | SKIPPED (Rule 27) | render-wiring producing byte-identical DOM — director real-Chrome verification |
+
+**Director real-Chrome verification narrative:** the director verified all three deploys on real Chrome (vklf.com), confirming the AI model pickers (both the W#2 review-analysis modals and the W#1 Auto-Analyze picker) still show the same models and run exactly as before. Deploy 3 included a live test analysis run. Verdict: **"PASS" / "Pass" / "pass"** (one per deploy).
+
+**Process observations captured informationally:** (a) the dependency-inversion-via-shims pattern (move the canonical declarations DOWN into the new central module, leave back-compat re-export shims at the old paths → every consumer untouched + the scoreboard proves zero behavior change); (b) the per-record `menus`-tag mechanism that lets ONE registry back surfaces with different model menus without leakage; (c) the migrate-one-surface-at-a-time-with-scoreboard-green-between-each discipline (the director picked "Cautious — 3 deploys"). See CORRECTIONS_LOG §Entry 2026-06-03-f.
+
+### Cross-references
+
+- `docs/polish-item-specs/P-63-central-ai-model-registry-self-serve.md` §6.1 — the Phase 1 as-built.
+- `docs/AI_MODEL_REGISTRY.md` §2 — the consumers table (all 7 W#2 modals + W#1 AutoAnalyze) + the `menus`-tag / `getModelsForMenu` notes.
+- `docs/AI_MODEL_REGISTRY_PRIMER.md` — the NEW add/remove/edit-a-model catch-up guide.
+- `docs/CORRECTIONS_LOG.md` §Entry 2026-06-03-f — the reusable plumbing patterns.
+- `docs/ROADMAP.md` P-63 — Phase 1 ✅ DEPLOYED-AND-VERIFIED; Phase 2 (the self-serve admin screen + DB storage) is the (a.137) RECOMMENDED-NEXT.
+- Deploy commits `256306b` (Deploy 1) / `474ac4b` (Deploy 2) / `8d4099e` (Deploy 3) on `main`.
+
+---
+
 END OF DOCUMENT
 

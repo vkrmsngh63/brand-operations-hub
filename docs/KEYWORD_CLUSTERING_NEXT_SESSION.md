@@ -6,6 +6,8 @@
 
 **Queued next task:** **H-1 — Action history table + per-action undo** (highest-priority OPEN item in `docs/KEYWORD_CLUSTERING_POLISH_BACKLOG.md`). Estimated 3-5 sessions; largely additive; doesn't gate downstream workflows so can run parallel with W#2 polish.
 
+> **NOTE (2026-06-03-f — platform-wide change touched W#1, NOT via this pointer):** W#1's `AutoAnalyze.tsx` model picker was migrated to the central AI-model registry by **P-63 Phase 1** (a platform-wide consolidation developed on `workflow-2-competition-scraping`, NOT a W#1 backlog session). The picker now reads its models via `getModelsForMenu('keyword-clustering')` (6 models, Sonnet 4.6 default preserved — byte-identical behavior); inline `AA_PRICING` → `aaPrice()` off the central `MODEL_PRICING`; thinking routed through `anthropicAdapter.mapThinkingOption`. This is plumbing only — no behavior change, no W#1 backlog item closed. The H-1 queued task below is UNAFFECTED. See `docs/AI_MODEL_REGISTRY.md` (site #3 = W#1 consumer) + `docs/polish-item-specs/P-63-central-ai-model-registry-self-serve.md`.
+
 ---
 
 ## Branch
