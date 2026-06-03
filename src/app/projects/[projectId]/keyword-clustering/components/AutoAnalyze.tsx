@@ -25,7 +25,7 @@ import {
 } from '@/lib/forensic-log';
 import { runPreflight, type PreflightCheckResult } from '@/lib/preflight';
 import { runRefreshWithRetry } from '@/lib/post-rebuild-fetch-retry';
-import { getModelsForMenu } from '@/lib/ai-models/registry';
+import { useModelsForMenu } from '@/lib/ai-models/useModelsForMenu';
 import { MODEL_PRICING } from '@/lib/ai-models/pricing';
 import { anthropicAdapter } from '@/lib/ai-models/provider-adapter';
 import './auto-analyze.css';
@@ -131,6 +131,7 @@ export default function AutoAnalyze({
   const [apiMode, setApiMode] = useState<'direct' | 'server'>('direct');
   const [apiKey, setApiKey] = useState('');
   const [model, setModel] = useState('claude-sonnet-4-6');
+  const models = useModelsForMenu('keyword-clustering');
   const [seedWords, setSeedWords] = useState('');
   const [volumeThreshold, setVolumeThreshold] = useState(1000);
   const [batchSize, setBatchSize] = useState(8);
@@ -2123,7 +2124,7 @@ export default function AutoAnalyze({
             <div className="aa-row">
               <span className="aa-label">Model<span className="aa-help">ⓘ<span className="aa-tip">Which Claude model to use. Opus is most capable but slower/costlier. Sonnet is a good balance. Haiku is fastest/cheapest.</span></span></span>
               <select className="aa-select" value={model} onChange={e => setModel(e.target.value)} disabled={aaState !== 'IDLE'}>
-                {getModelsForMenu('keyword-clustering').map(m => (
+                {models.map(m => (
                   <option key={m.id} value={m.modelId}>{m.displayLabel}</option>
                 ))}
               </select>

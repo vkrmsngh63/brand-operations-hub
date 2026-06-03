@@ -23,7 +23,7 @@ import {
 } from '@/lib/workflow-components/execution-mode';
 import { ExecutionModeSelect } from '@/lib/workflow-components/execution-mode-select';
 import { type SupportedModelVersion } from '@/lib/competition-scraping/review-analysis/models';
-import { getModelsForMenu } from '@/lib/ai-models/registry';
+import { useModelsForMenu } from '@/lib/ai-models/useModelsForMenu';
 import { PER_COMPETITOR_NONBULLETED_SYSTEM_PROMPT } from '@/lib/competition-scraping/review-analysis/prompts';
 
 type ModelVersion = SupportedModelVersion;
@@ -67,6 +67,7 @@ export function PerCompetitorNonBulletedModal({
   onSummary,
 }: PerCompetitorNonBulletedModalProps): JSX.Element {
   const [modelVersion, setModelVersion] = useState<ModelVersion>('claude-opus-4-7');
+  const models = useModelsForMenu('review-analysis');
   const [executionMode, setExecutionMode] =
     useState<ExecutionMode>(EXECUTION_MODE_SERVER);
   const [runState, setRunState] = useState<RunState>({ kind: 'idle' });
@@ -307,7 +308,7 @@ export function PerCompetitorNonBulletedModal({
             disabled={isRunning || isDone}
             style={selectStyle}
           >
-            {getModelsForMenu('review-analysis').map((m) => (
+            {models.map((m) => (
               <option key={m.id} value={m.modelId}>
                 {m.modelId}
               </option>

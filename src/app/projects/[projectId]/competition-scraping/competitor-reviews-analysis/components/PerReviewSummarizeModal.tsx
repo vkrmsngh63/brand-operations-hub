@@ -20,7 +20,7 @@ import {
 } from '@/lib/workflow-components/execution-mode';
 import { ExecutionModeSelect } from '@/lib/workflow-components/execution-mode-select';
 import { type SupportedModelVersion } from '@/lib/competition-scraping/review-analysis/models';
-import { getModelsForMenu } from '@/lib/ai-models/registry';
+import { useModelsForMenu } from '@/lib/ai-models/useModelsForMenu';
 import {
   PER_REVIEW_SUMMARIZE_SYSTEM_PROMPT,
   buildPerReviewBatchUserMessage,
@@ -34,8 +34,8 @@ import type { CapturedReview } from '@/lib/shared-types/competition-scraping';
 const DEFAULT_BATCH_SIZE = 20;
 
 // Model menu now loads from the central platform AI-model registry
-// (src/lib/ai-models/registry.ts → getModelsForMenu('review-analysis')) per
-// HANDOFF_PROTOCOL Rule 32 + P-63 Phase 1 — no local copy to drift.
+// (live via useModelsForMenu('review-analysis') → /api/ai-models, DB-backed) per
+// HANDOFF_PROTOCOL Rule 32 + P-63 Phase 2c — admin edits propagate with no deploy.
 type ModelVersion = SupportedModelVersion;
 
 export interface PerReviewSummarizeModalProps {
@@ -116,6 +116,7 @@ export function PerReviewSummarizeModal({
 }: PerReviewSummarizeModalProps): JSX.Element {
   const reviewIds = useMemo(() => reviews.map((r) => r.id), [reviews]);
   const [modelVersion, setModelVersion] = useState<ModelVersion>('claude-opus-4-7');
+  const models = useModelsForMenu('review-analysis');
   const [batchSize, setBatchSize] = useState<number>(DEFAULT_BATCH_SIZE);
   // Server mode = browser → Vercel → Anthropic (server's API key, per-
   // batch endpoint). Direct mode reserved for the future migration off
@@ -423,7 +424,7 @@ export function PerReviewSummarizeModal({
             disabled={isRunning || isDone}
             style={selectStyle}
           >
-            {getModelsForMenu('review-analysis').map((m) => (
+            {models.map((m) => (
               <option key={m.id} value={m.modelId}>
                 {m.modelId}
               </option>

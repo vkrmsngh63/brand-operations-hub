@@ -31,15 +31,15 @@ import {
 } from '@/lib/workflow-components/execution-mode';
 import { ExecutionModeSelect } from '@/lib/workflow-components/execution-mode-select';
 import { type SupportedModelVersion } from '@/lib/competition-scraping/review-analysis/models';
-import { getModelsForMenu } from '@/lib/ai-models/registry';
+import { useModelsForMenu } from '@/lib/ai-models/useModelsForMenu';
 import type {
   CapturedReview,
   CompetitorUrl,
 } from '@/lib/shared-types/competition-scraping';
 
 // Model menu now loads from the central platform AI-model registry
-// (src/lib/ai-models/registry.ts → getModelsForMenu('review-analysis')) per
-// HANDOFF_PROTOCOL Rule 32 + P-63 Phase 1 — no local copy to drift.
+// (live via useModelsForMenu('review-analysis') → /api/ai-models, DB-backed) per
+// HANDOFF_PROTOCOL Rule 32 + P-63 Phase 2c — admin edits propagate with no deploy.
 type ModelVersion = SupportedModelVersion;
 
 // Minimum review count for inclusion in the global loop. Director's
@@ -95,6 +95,7 @@ export function GlobalCompetitorSummarizeModal({
   onSummary,
 }: GlobalCompetitorSummarizeModalProps): JSX.Element {
   const [modelVersion, setModelVersion] = useState<ModelVersion>('claude-opus-4-7');
+  const models = useModelsForMenu('review-analysis');
   const [executionMode, setExecutionMode] =
     useState<ExecutionMode>(EXECUTION_MODE_SERVER);
   const [runState, setRunState] = useState<RunState>({ kind: 'idle' });
@@ -439,7 +440,7 @@ export function GlobalCompetitorSummarizeModal({
             disabled={isRunning || isDone}
             style={selectStyle}
           >
-            {getModelsForMenu('review-analysis').map((m) => (
+            {models.map((m) => (
               <option key={m.id} value={m.modelId}>
                 {m.modelId}
               </option>

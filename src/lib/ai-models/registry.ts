@@ -115,6 +115,22 @@ export function getModelsForMenu(menu: AiPickerMenuId): AiModelRecord[] {
   return getEnabledModels().filter((m) => m.menus.includes(menu));
 }
 
+// Filter an ARBITRARY model list (e.g. one fetched live from the DB by the
+// client hook) down to the models a given picker menu should offer: enabled,
+// runnable, and tagged for that menu — preserving input order. This is the
+// issue-free gate for the live pickers: an integration-pending or disabled model
+// can never become selectable. For the in-code seed (all runnable) this returns
+// the same set/order as getModelsForMenu, so swapping a picker from the seed to
+// the live list is behavior-identical for today's data. (P-63 Phase 2c.)
+export function selectMenuModels(
+  models: AiModelRecord[],
+  menu: AiPickerMenuId
+): AiModelRecord[] {
+  return models.filter(
+    (m) => m.enabled && m.runnableStatus === 'runnable' && m.menus.includes(menu)
+  );
+}
+
 export function getModelById(id: string): AiModelRecord | undefined {
   return getAiModelRegistry().find((m) => m.id === id);
 }
