@@ -11,8 +11,8 @@
 import {
   DEFAULT_MODEL_VERSION,
   SUPPORTED_MODEL_VERSIONS,
-} from '../competition-scraping/review-analysis/models.ts';
-import { MODEL_PRICING } from '../competition-scraping/review-analysis/pricing.ts';
+} from './models.ts';
+import { MODEL_PRICING } from './pricing.ts';
 import type { AiModelRecord } from './types.ts';
 
 // Human labels for the currently-wired Anthropic models. Kept here (not in the

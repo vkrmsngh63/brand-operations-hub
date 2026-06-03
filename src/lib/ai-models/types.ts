@@ -11,11 +11,10 @@
 // REGISTERED in docs/AI_MODEL_REGISTRY.md per HANDOFF_PROTOCOL Rule 32.
 // See docs/polish-item-specs/P-63-central-ai-model-registry-self-serve.md.
 
-// Pricing math + token-usage shape are reused verbatim from the existing W#2
-// pricing module so there is exactly ONE source of pricing numbers + cost math
-// during Phase 0 (no duplication / no drift). Phase 1 physically moves that
-// module under ai-models/ and leaves a back-compat re-export at the old path.
-export type { ModelPricing, TokenUsage } from '../competition-scraping/review-analysis/pricing.ts';
+// Pricing math + token-usage shape live in the sibling ai-models/pricing.ts —
+// the canonical home as of P-63 Phase 1 (the old W#2 path is now a back-compat
+// re-export shim). Exactly ONE source of pricing numbers + cost math, no drift.
+export type { ModelPricing, TokenUsage } from './pricing.ts';
 
 // The AI companies the platform can represent. A provider only becomes RUNNABLE
 // once a provider adapter ships for it (see provider-adapter.ts); until then a
@@ -36,7 +35,7 @@ export type ThinkingOptionId = 'none' | 'fast' | 'auto' | 'extended';
 //                          add-a-model flow issue-free (no silent-failure trap).
 export type RunnableStatus = 'runnable' | 'integration-pending';
 
-import type { ModelPricing } from '../competition-scraping/review-analysis/pricing.ts';
+import type { ModelPricing } from './pricing.ts';
 
 // One model as it appears throughout the platform. This is the unit the admin
 // "add a model" wizard creates (company → model → thinking options → pricing)
