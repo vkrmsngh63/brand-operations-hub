@@ -86,6 +86,8 @@ export type AiModelEntryUpdateData = {
   pricing?: ModelPricing;
   enabled?: boolean;
   runnableStatus?: RunnableStatus;
+  // P-64 — set by the reorder handler only (not the PUT validator).
+  sortOrder?: number;
 };
 
 // Minimal Prisma surface the handler exercises. The route passes an adapter over
@@ -449,6 +451,56 @@ function validatePricing(
   return { ok: true, value: out as unknown as ModelPricing };
 }
 
+// P-64 — validate a reorder body: { orderedIds: string[] } (the registry ids in
+// the new top-to-bottom order). Duplicates rejected; unknown ids are tolerated
+// (filtered against the live table by the handler).
+export type ReorderValidation =
+  | { ok: true; orderedIds: string[] }
+  | { ok: false; error: string };
+
+export function validateReorderBody(body: unknown): ReorderValidation {
+  if (!isPlainObject(body) || !Array.isArray(body.orderedIds)) {
+    return { ok: false, error: 'orderedIds must be an array of registry ids' };
+  }
+  const ids: string[] = [];
+  const seen = new Set<string>();
+  for (const v of body.orderedIds) {
+    if (typeof v !== 'string' || v.trim() === '') {
+      return { ok: false, error: 'orderedIds entries must be non-empty strings' };
+    }
+    if (seen.has(v)) {
+      return { ok: false, error: `orderedIds contains a duplicate: ${v}` };
+    }
+    seen.add(v);
+    ids.push(v);
+  }
+  if (ids.length === 0) {
+    return { ok: false, error: 'orderedIds must not be empty' };
+  }
+  return { ok: true, orderedIds: ids };
+}
+
+// Resolve the final write order: the requested ids that actually exist, in
+// requested order, followed by any existing ids the request omitted (keeping
+// their current relative order) so no model ever loses its sortOrder. Pure +
+// unit-tested. (P-64.)
+export function resolveReorder(
+  requestedIds: string[],
+  existingIdsInOrder: string[]
+): string[] {
+  const existing = new Set(existingIdsInOrder);
+  const taken = new Set<string>();
+  const head: string[] = [];
+  for (const id of requestedIds) {
+    if (existing.has(id) && !taken.has(id)) {
+      head.push(id);
+      taken.add(id);
+    }
+  }
+  const tail = existingIdsInOrder.filter((id) => !taken.has(id));
+  return [...head, ...tail];
+}
+
 // --- Handlers ----------------------------------------------------------------
 
 export function makeAiModelRegistryHandlers(deps: AiModelRegistryHandlerDeps) {
@@ -584,5 +636,48 @@ export function makeAiModelRegistryHandlers(deps: AiModelRegistryHandlerDeps) {
     }
   }
 
-  return { GET, POST, PUT, DELETE };
+  // PATCH /api/ai-models — reorder. Body { orderedIds }. Writes each model's
+  // sortOrder to its position in the resolved order; the dropdowns then render in
+  // that order via the live hook (no picker changes). Does NOT touch any model's
+  // enabled/runnable/default — order only. (P-64.)
+  async function REORDER(req: RequestLike): Promise<HandlerResult> {
+    const auth = await verifyAuth(req);
+    if (auth.error) return auth.error;
+
+    let raw: unknown;
+    try {
+      raw = await req.json();
+    } catch {
+      return { status: 400, body: { error: 'Invalid JSON body' } };
+    }
+    const result = validateReorderBody(raw);
+    if (!result.ok) return { status: 400, body: { error: result.error } };
+
+    try {
+      const current = await withRetry(() =>
+        prisma.aiModelRegistryEntry.findMany({ orderBy: { sortOrder: 'asc' } })
+      );
+      const finalOrder = resolveReorder(
+        result.orderedIds,
+        current.map((r) => r.id)
+      );
+      for (let i = 0; i < finalOrder.length; i++) {
+        await withRetry(() =>
+          prisma.aiModelRegistryEntry.update({
+            where: { id: finalOrder[i] },
+            data: { sortOrder: i },
+          })
+        );
+      }
+      const rows = await withRetry(() =>
+        prisma.aiModelRegistryEntry.findMany({ orderBy: { sortOrder: 'asc' } })
+      );
+      return { status: 200, body: { models: rows.map(toWireShape) } };
+    } catch (error) {
+      recordFlake('PATCH ai-models reorder', error);
+      return { status: 500, body: { error: 'Failed to reorder AI models' } };
+    }
+  }
+
+  return { GET, POST, PUT, DELETE, REORDER };
 }

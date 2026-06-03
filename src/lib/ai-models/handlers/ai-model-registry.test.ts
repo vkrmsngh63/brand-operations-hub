@@ -8,8 +8,10 @@ import assert from 'node:assert/strict';
 import {
   buildSeedCreateData,
   makeAiModelRegistryHandlers,
+  resolveReorder,
   toWireShape,
   validateCreateBody,
+  validateReorderBody,
   validateUpdateBody,
   type AiModelEntryCreateData,
   type AiModelRegistryPrismaLike,
@@ -359,4 +361,61 @@ test('DELETE returns 404 for an unknown id', async () => {
     params: Promise.resolve({ id: 'anthropic:missing' }),
   });
   assert.equal(res.status, 404);
+});
+
+// --- Reorder (P-64) ----------------------------------------------------------
+
+test('validateReorderBody accepts an id array and rejects bad shapes', () => {
+  assert.ok(validateReorderBody({ orderedIds: ['a', 'b'] }).ok);
+  assert.equal(validateReorderBody({ orderedIds: [] }).ok, false);
+  assert.equal(validateReorderBody({ orderedIds: 'x' }).ok, false);
+  assert.equal(validateReorderBody({ orderedIds: ['a', 'a'] }).ok, false);
+  assert.equal(validateReorderBody({ orderedIds: ['a', 2] }).ok, false);
+  assert.equal(validateReorderBody({}).ok, false);
+});
+
+test('resolveReorder keeps requested order then appends omitted existing ids', () => {
+  // Full reorder.
+  assert.deepEqual(resolveReorder(['c', 'a', 'b'], ['a', 'b', 'c']), ['c', 'a', 'b']);
+  // Partial request → omitted ids keep their relative order, appended at the end.
+  assert.deepEqual(resolveReorder(['c'], ['a', 'b', 'c']), ['c', 'a', 'b']);
+  // Unknown requested ids are dropped.
+  assert.deepEqual(resolveReorder(['z', 'b'], ['a', 'b', 'c']), ['b', 'a', 'c']);
+});
+
+test('REORDER writes sortOrder by position and returns the new order', async () => {
+  const seedRows = buildSeedCreateData().map((d) => rowFrom(d));
+  const originalIds = seedRows.map((r) => r.id);
+  const reversed = [...originalIds].reverse();
+  const { prisma, state } = makeFakePrisma(seedRows);
+  const h = makeAiModelRegistryHandlers(deps(prisma));
+  const res = await h.REORDER(makeReq({ orderedIds: reversed }));
+  assert.equal(res.status, 200);
+  const body = res.body as { models: { id: string }[] };
+  assert.deepEqual(body.models.map((m) => m.id), reversed);
+  // sortOrder persisted as 0..n-1 in the new order.
+  for (let i = 0; i < reversed.length; i++) {
+    const row = state.rows.find((r) => r.id === reversed[i]);
+    assert.equal(row?.sortOrder, i);
+  }
+});
+
+test('REORDER tolerates a partial id list without dropping models', async () => {
+  const seedRows = buildSeedCreateData().map((d) => rowFrom(d));
+  const last = seedRows[seedRows.length - 1].id;
+  const { prisma } = makeFakePrisma(seedRows);
+  const h = makeAiModelRegistryHandlers(deps(prisma));
+  const res = await h.REORDER(makeReq({ orderedIds: [last] }));
+  assert.equal(res.status, 200);
+  const body = res.body as { models: { id: string }[] };
+  assert.equal(body.models[0].id, last); // moved to top
+  assert.equal(body.models.length, seedRows.length); // none lost
+});
+
+test('REORDER returns 400 on a bad body and 401 when unauthenticated', async () => {
+  const { prisma } = makeFakePrisma(buildSeedCreateData().map((d) => rowFrom(d)));
+  const h = makeAiModelRegistryHandlers(deps(prisma));
+  assert.equal((await h.REORDER(makeReq({ orderedIds: [] }))).status, 400);
+  const denied = makeAiModelRegistryHandlers(deps(prisma, denyAuth));
+  assert.equal((await denied.REORDER(makeReq({ orderedIds: ['x'] }))).status, 401);
 });

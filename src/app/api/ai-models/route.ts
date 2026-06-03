@@ -16,3 +16,10 @@ export async function POST(req: NextRequest) {
   const result = await aiModelHandlers.POST(req as RequestLike);
   return NextResponse.json(result.body, { status: result.status });
 }
+
+// P-64 — reorder models (body { orderedIds }). The saved order drives every AI
+// task dropdown (the live useModelsForMenu hook fetches in sortOrder order).
+export async function PATCH(req: NextRequest) {
+  const result = await aiModelHandlers.REORDER(req as RequestLike);
+  return NextResponse.json(result.body, { status: result.status });
+}

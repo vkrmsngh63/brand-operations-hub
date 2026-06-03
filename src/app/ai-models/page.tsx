@@ -9,6 +9,21 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import {
+  DndContext,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/authFetch";
 import type {
@@ -92,6 +107,34 @@ export default function AiModelsPage() {
     });
   }, [router, load]);
 
+  // P-64 — persist a new global model order. Optimistic: show the new order
+  // immediately, PATCH it, revert + surface an error on failure.
+  const persistOrder = useCallback(
+    async (ordered: AiModelRecord[]) => {
+      const prev = models;
+      setModels(ordered);
+      try {
+        const res = await authFetch("/api/ai-models", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ orderedIds: ordered.map((m) => m.id) }),
+        });
+        if (!res.ok) {
+          setModels(prev);
+          setError(`Could not save the new order (${res.status}).`);
+          return;
+        }
+        const data = (await res.json()) as { models?: AiModelRecord[] };
+        if (data.models) setModels(data.models);
+        setError(null);
+      } catch {
+        setModels(prev);
+        setError("Could not save the new order (network).");
+      }
+    },
+    [models]
+  );
+
   if (loading) {
     return (
       <Centered>
@@ -129,11 +172,16 @@ export default function AiModelsPage() {
           </div>
         )}
 
+        <p style={{ color: "#6e7681", fontSize: 12, margin: "0 0 10px" }}>
+          Drag a row by its <span style={{ color: "#8b949e" }}>⠿</span> handle to
+          reorder models — this is the order they appear in every AI task dropdown.
+        </p>
         <ModelsTable
           models={models}
           onEdit={setEditing}
           onDelete={setDeleting}
           onShowPending={(m) => setPendingNotice(integrationPendingInstruction(m.providerLabel))}
+          onReorder={persistOrder}
         />
       </div>
 
@@ -190,78 +238,130 @@ function Centered({ children }: { children: React.ReactNode }) {
 
 // --- Table -------------------------------------------------------------------
 
+const th: React.CSSProperties = { textAlign: "left", padding: "10px 12px", color: "#8b949e", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4, borderBottom: "1px solid #30363d" };
+const td: React.CSSProperties = { padding: "12px", color: "#e6edf3", fontSize: 13, borderBottom: "1px solid #21262d", verticalAlign: "top" };
+
 function ModelsTable({
   models,
   onEdit,
   onDelete,
   onShowPending,
+  onReorder,
 }: {
   models: AiModelRecord[];
   onEdit: (m: AiModelRecord) => void;
   onDelete: (m: AiModelRecord) => void;
   onShowPending: (m: AiModelRecord) => void;
+  onReorder: (ordered: AiModelRecord[]) => void;
 }) {
-  const th: React.CSSProperties = { textAlign: "left", padding: "10px 12px", color: "#8b949e", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4, borderBottom: "1px solid #30363d" };
-  const td: React.CSSProperties = { padding: "12px", color: "#e6edf3", fontSize: 13, borderBottom: "1px solid #21262d", verticalAlign: "top" };
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } })
+  );
 
   if (models.length === 0) {
     return <p style={{ color: "#8b949e", fontSize: 14 }}>No models yet. Click “+ Add a model”.</p>;
   }
 
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = models.findIndex((m) => m.id === active.id);
+    const newIndex = models.findIndex((m) => m.id === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
+    onReorder(arrayMove(models, oldIndex, newIndex));
+  }
+
   return (
     <div style={{ overflowX: "auto", border: "1px solid #30363d", borderRadius: 8 }}>
-      <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 880 }}>
-        <thead>
-          <tr>
-            <th style={th}>Company</th>
-            <th style={th}>Model</th>
-            <th style={th}>Appears in</th>
-            <th style={th}>Thinking</th>
-            <th style={th}>Pricing (in / out)</th>
-            <th style={th}>Status</th>
-            <th style={th}>On</th>
-            <th style={th}>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {models.map((m) => (
-            <tr key={m.id}>
-              <td style={td}>{m.providerLabel}</td>
-              <td style={td}>
-                <div style={{ fontWeight: 600 }}>{m.displayLabel}</div>
-                <div style={{ color: "#6e7681", fontSize: 11 }}>{m.modelId}</div>
-              </td>
-              <td style={td}>{m.menus.map((x) => menuShort(x)).join(", ") || "—"}</td>
-              <td style={td}>{m.thinkingOptions.join(", ")}</td>
-              <td style={td}>
-                ${m.pricing.inputPerMillion} / ${m.pricing.outputPerMillion}
-                <span style={{ color: "#6e7681", fontSize: 11 }}> per 1M</span>
-              </td>
-              <td style={td}>
-                {m.runnableStatus === "runnable" ? (
-                  <span style={{ color: "#3fb950", fontSize: 12, fontWeight: 600 }}>● runnable</span>
-                ) : (
-                  <button
-                    onClick={() => onShowPending(m)}
-                    title="Click for the instruction to make this live"
-                    style={{ color: "#d29922", fontSize: 12, fontWeight: 600, background: "transparent", border: "none", cursor: "pointer", fontFamily: FONT, textDecoration: "underline", padding: 0 }}
-                  >
-                    ◐ integration pending
-                  </button>
-                )}
-              </td>
-              <td style={td}>{m.enabled ? "Yes" : "No"}</td>
-              <td style={td}>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button onClick={() => onEdit(m)} style={{ ...btn("ghost"), padding: "5px 10px" }}>Edit</button>
-                  <button onClick={() => onDelete(m)} style={{ ...btn("ghost"), padding: "5px 10px", color: "#ff7b72", borderColor: "#5a2426" }}>Delete</button>
-                </div>
-              </td>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 920 }}>
+          <thead>
+            <tr>
+              <th style={{ ...th, width: 32 }} aria-label="Reorder"></th>
+              <th style={th}>Company</th>
+              <th style={th}>Model</th>
+              <th style={th}>Appears in</th>
+              <th style={th}>Thinking</th>
+              <th style={th}>Pricing (in / out)</th>
+              <th style={th}>Status</th>
+              <th style={th}>On</th>
+              <th style={th}>Actions</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            <SortableContext items={models.map((m) => m.id)} strategy={verticalListSortingStrategy}>
+              {models.map((m) => (
+                <SortableModelRow
+                  key={m.id}
+                  model={m}
+                  onEdit={onEdit}
+                  onDelete={onDelete}
+                  onShowPending={onShowPending}
+                />
+              ))}
+            </SortableContext>
+          </tbody>
+        </table>
+      </DndContext>
     </div>
+  );
+}
+
+function SortableModelRow({
+  model: m,
+  onEdit,
+  onDelete,
+  onShowPending,
+}: {
+  model: AiModelRecord;
+  onEdit: (m: AiModelRecord) => void;
+  onDelete: (m: AiModelRecord) => void;
+  onShowPending: (m: AiModelRecord) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: m.id });
+  const rowStyle: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    background: isDragging ? "#1c2333" : undefined,
+  };
+  return (
+    <tr ref={setNodeRef} style={rowStyle}>
+      <td style={{ ...td, cursor: "grab", color: "#6e7681", textAlign: "center" }} {...attributes} {...listeners} title="Drag to reorder">
+        ⠿
+      </td>
+      <td style={td}>{m.providerLabel}</td>
+      <td style={td}>
+        <div style={{ fontWeight: 600 }}>{m.displayLabel}</div>
+        <div style={{ color: "#6e7681", fontSize: 11 }}>{m.modelId}</div>
+      </td>
+      <td style={td}>{m.menus.map((x) => menuShort(x)).join(", ") || "—"}</td>
+      <td style={td}>{m.thinkingOptions.join(", ")}</td>
+      <td style={td}>
+        ${m.pricing.inputPerMillion} / ${m.pricing.outputPerMillion}
+        <span style={{ color: "#6e7681", fontSize: 11 }}> per 1M</span>
+      </td>
+      <td style={td}>
+        {m.runnableStatus === "runnable" ? (
+          <span style={{ color: "#3fb950", fontSize: 12, fontWeight: 600 }}>● runnable</span>
+        ) : (
+          <button
+            onClick={() => onShowPending(m)}
+            title="Click for the instruction to make this live"
+            style={{ color: "#d29922", fontSize: 12, fontWeight: 600, background: "transparent", border: "none", cursor: "pointer", fontFamily: FONT, textDecoration: "underline", padding: 0 }}
+          >
+            ◐ integration pending
+          </button>
+        )}
+      </td>
+      <td style={td}>{m.enabled ? "Yes" : "No"}</td>
+      <td style={td}>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={() => onEdit(m)} style={{ ...btn("ghost"), padding: "5px 10px" }}>Edit</button>
+          <button onClick={() => onDelete(m)} style={{ ...btn("ghost"), padding: "5px 10px", color: "#ff7b72", borderColor: "#5a2426" }}>Delete</button>
+        </div>
+      </td>
+    </tr>
   );
 }
 
