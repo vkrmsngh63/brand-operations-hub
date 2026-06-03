@@ -621,6 +621,32 @@ model ProjectTablePreferences {
   updatedAt             DateTime @updatedAt
 }
 
+// AiModelRegistryEntry — P-63 Phase 2a (2026-06-03) — DB-backed home for the
+// platform-wide AI-model registry (the self-serve source of truth behind every
+// model picker on the platform). ADDITIVE: the in-code SEED_REGISTRY in
+// src/lib/ai-models/registry.ts seeds this table on first read (seed-on-read,
+// mirroring ProjectTablePreferences); the /ai-models admin screen then edits it.
+// `id` is the registry id (provider-namespaced, e.g. "anthropic:claude-opus-4-8").
+// sortOrder preserves picker display order. The provider-adapter gate keeps
+// runnableStatus honest: a model may be "runnable" only if its provider has a
+// shipped adapter (else it is stored "integration-pending"). JSON columns hold
+// the same shapes the in-code registry uses (validated at the application layer).
+model AiModelRegistryEntry {
+  id              String   @id // provider-namespaced registry id, e.g. "anthropic:claude-opus-4-8"
+  provider        String // AiProviderId — "anthropic" | "openai" | "google"
+  providerLabel   String // human company name, e.g. "Anthropic"
+  modelId         String // raw provider model string, e.g. "claude-opus-4-8"
+  displayLabel    String // friendly label shown in pickers
+  thinkingOptions Json     @default("[]") // ThinkingOptionId[] offered for this model
+  menus           Json     @default("[]") // AiPickerMenuId[] — which pickers offer it
+  pricing         Json // ModelPricing { inputPerMillion, outputPerMillion, cacheWrite5mPerMillion, cacheReadPerMillion }
+  enabled         Boolean  @default(true) // soft show/hide in pickers
+  runnableStatus  String   @default("integration-pending") // "runnable" | "integration-pending"
+  sortOrder       Int      @default(0) // picker display order
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
 // VocabularyEntry — platform-shared vocabularies per PLATFORM_REQUIREMENTS.md §8.4.
 // Project-scoped, NOT workflow-scoped. Any workflow on the same Project can READ + ADD.
 model VocabularyEntry {
