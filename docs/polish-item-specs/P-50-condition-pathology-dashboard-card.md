@@ -1,6 +1,6 @@
 # P-50 — Add a new "Condition Pathology" card to the PLOS dashboard
 
-**Status:** 🟢 BUILT 2026-06-03-e (`session_2026-06-03-e_p50-condition-pathology-card`) — code edited on `workflow-2-competition-scraping`, pending `/scoreboard` → Rule 9 deploy gate → director real-Chrome verification. _(Originally captured 2026-05-25 as NEW/UNSCHEDULED alongside the Reviews Phase 2 scope-expansion session.)_
+**Status:** ✅ DEPLOYED-AND-VERIFIED 2026-06-03-e (`session_2026-06-03-e_p50-condition-pathology-card`) — **P-50 CLOSED.** Build `a107e42`; `main` went `a51eea2 → a107e42`; director real-Chrome verdict on vklf.com: "PASS" (🩺 card at position 3 on both the project-list page and a project landing page, non-clickable). PLOS-side static card-array edit; NO schema change; NO new route (74 unchanged); NO extension change. _(Originally captured 2026-05-25 as NEW/UNSCHEDULED alongside the Reviews Phase 2 scope-expansion session.)_
 
 **Severity:** LOW — cosmetic UI; placeholder card; ~2 LOC across 2 files; trivially reversible. No schema change, no route, no workflow renumbering.
 
