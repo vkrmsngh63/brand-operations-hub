@@ -24,13 +24,13 @@ If anything's off → STOP and flag to director.
 
 Run `/scoreboard` to verify the 6-check pre-deploy state. All should be GREEN. Capture the deltas vs. baseline for the doc-batch later.
 
-Expected baselines as of 2026-05-22-g (update if you see drift):
+Expected baselines as of 2026-06-03 (update if you see drift):
 - Root tsc: clean
 - Extension tsc: clean
-- npm run build: 57 routes
-- src/lib node:test: 590/590
-- extension `npm test`: 558/558
-- Playwright: 94/94
+- npm run build: 74 routes
+- src/lib node:test: 1369/1369
+- extension `npm test`: 915/915
+- Playwright: not re-run this session (Check 6 routinely SKIPPED per Rule 27); last recorded full-suite baseline 94/94 (2026-05-22-g) — re-verify before relying on it
 
 If anything is RED → STOP. Fix the failure before deploying.
 
@@ -98,7 +98,7 @@ Both branches should be at the same SHA on origin now.
 If this deploy includes Chrome extension code changes, build a fresh zip the director will sideload:
 
 ```bash
-cd /workspaces/brand-operations-hub/extensions/competition-scraping && rm -rf .output && npm run zip
+(cd /workspaces/brand-operations-hub/extensions/competition-scraping && rm -rf .output && npm run zip)
 ```
 
 **`npm run zip` exits cleanly in ~3-5 seconds** since P-44 shipped 2026-05-22-h — the script routes through `extensions/competition-scraping/scripts/wxt-zip.mjs` (a programmatic-API wrapper around wxt's exported `zip()` function that force-exits with `process.exit(0)` after the zip promise resolves, bypassing the Vite 8 + Rolldown native-handle event-loop-drain bug). No `pkill -f "wxt zip"` workaround needed. If you see a hang regress, check `extensions/competition-scraping/scripts/wxt-zip.mjs` first.
@@ -106,18 +106,22 @@ cd /workspaces/brand-operations-hub/extensions/competition-scraping && rm -rf .o
 Rename the zip to the canonical filename:
 
 ```bash
-cd /workspaces/brand-operations-hub
-cp extensions/competition-scraping/.output/competition-scraping-extension-0.1.0-chrome.zip plos-extension-<date>-w2-deploy-<N>.zip
-ls -la plos-extension-<date>-w2-deploy-<N>.zip  # confirm size
+(
+  cd /workspaces/brand-operations-hub
+  cp extensions/competition-scraping/.output/competition-scraping-extension-0.1.0-chrome.zip plos-extension-<date>-w2-deploy-<N>.zip
+  ls -la plos-extension-<date>-w2-deploy-<N>.zip  # confirm size
+)
 ```
 
 **P-58 — also refresh the in-app "Download Extension (zip)" served artifact.** The in-app download button (`/competition-scraping/plos-extension-latest.zip`) serves a STABLE committed file under `public/`, so it must be overwritten with the same fresh zip and committed WITH this deploy's build commit (so Vercel serves the new bytes). Do this BEFORE the build commit is made — or amend/add a follow-up commit and re-ff-merge — so the deployed site's download matches the deployed extension:
 
 ```bash
-cd /workspaces/brand-operations-hub
-cp extensions/competition-scraping/.output/competition-scraping-extension-0.1.0-chrome.zip public/competition-scraping/plos-extension-latest.zip
-ls -la public/competition-scraping/plos-extension-latest.zip  # confirm ~218 KB
-git add public/competition-scraping/plos-extension-latest.zip
+(
+  cd /workspaces/brand-operations-hub
+  cp extensions/competition-scraping/.output/competition-scraping-extension-0.1.0-chrome.zip public/competition-scraping/plos-extension-latest.zip
+  ls -la public/competition-scraping/plos-extension-latest.zip  # confirm ~218 KB
+  git add public/competition-scraping/plos-extension-latest.zip
+)
 # commit with (or as part of) the extension build commit, then deploy as normal
 ```
 
