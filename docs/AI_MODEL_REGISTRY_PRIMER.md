@@ -33,7 +33,11 @@ All under `src/lib/ai-models/`:
 | `pricing.ts` | The pricing table (`MODEL_PRICING`, 4 per-MTok rates) + the cost math. |
 | `types.ts` | The shape of a model record (`AiModelRecord`), the menu ids (`AiPickerMenuId`), the thinking options (`ThinkingOptionId`), the runnable status. |
 | `provider-adapter.ts` | The connection layer — the `AiProviderAdapter` interface + each company's shipped adapter (today: `anthropicAdapter`). `isProviderIntegrated` is the safety gate. |
-| `registry.test.ts`, `provider-adapter.test.ts` | The guardrail tests — including the invariant "every runnable model has a shipped connection." |
+| `handlers/ai-model-registry.ts` | The DI-seam handler behind the CRUD + reorder API (`/api/ai-models` GET/POST/PATCH-reorder, `/api/ai-models/[id]` PUT/DELETE) — reads/writes the DB table `AiModelRegistryEntry` with seed-on-read. (Phase 2a/2/P-64.) |
+| `server-registry.ts` | Server-only registry reads for the W#2 run path (validation + cost-math resolution from the DB). (Phase 2d.) |
+| `admin-ui.ts` | The pure logic behind the `/ai-models` admin screen (the Add-a-model wizard + table). (Phase 2b.) |
+| `useModelsForMenu` (client hook) + `selectMenuModels` (pure) | The live client fetch every picker uses — pulls the DB registry (seed fallback) + filters enabled+runnable+menu. (Phase 2c.) |
+| `registry.test.ts`, `provider-adapter.test.ts`, + the handler / admin-ui / server-registry / reorder tests | The guardrail tests — including the invariant "every runnable model has a shipped connection." |
 
 The canonical site map + per-surface consumer list is `docs/AI_MODEL_REGISTRY.md` (§1 declaration sites, §2 consumers, §3 the add-a-model checklist). This primer is the friendly companion to that reference.
 
@@ -77,11 +81,12 @@ This one needs a connection built — and **this is exactly where you upload tha
 
 ---
 
-## Status (as of P-63 Phase 1)
+## Status (as of P-63 Phase 2 — SELF-SERVE IS NOW LIVE)
 
 - **Connected companies:** Anthropic (Claude) — the only adapter shipped today.
-- **Models in the registry:** Opus 4.8 / 4.7 / 4.6 (both menus), Sonnet 4.6 / Opus 4.5 / Haiku 4.5 (Keyword Clustering only) — all runnable.
-- **Pickers reading from the registry:** the 7 W#2 review-analysis modals + W#1 Auto-Analyze.
-- **Still to come (Phase 2):** a self-serve "AI Models" admin screen so you can add/remove/edit models in the browser (saved in the database), plus the in-dropdown "integration pending" popover that hands you the exact instruction to give Claude. Until Phase 2, adding/removing a model is a quick guided edit via this primer.
+- **Models in the registry:** Opus 4.8 / 4.7 / 4.6 (both menus), Sonnet 4.6 / Opus 4.5 / Haiku 4.5 (Keyword Clustering only) — all runnable. **The live runtime source is now the database table `AiModelRegistryEntry`** (seeded from the in-code list on first read, then editable in the browser); the in-code seed + accessors remain the fallback.
+- **Pickers reading from the registry:** the 7 W#2 review-analysis modals + W#1 Auto-Analyze — all now read the database LIVE via the `useModelsForMenu` client hook, so your admin-screen edits show up in every dropdown with NO code deploy.
+- **✅ SHIPPED (Phase 2, 2026-06-03-g):** the self-serve **`/ai-models` admin screen** at vklf.com — a models table where you **add** (a 4-step wizard: company → model → which screens + thinking options → pricing), **edit**, **remove**, and **drag-to-reorder** models yourself (the saved order drives every dropdown — P-64). Adding a model from a not-yet-connected company saves it as **integration pending** and shows the in-screen popover that hands you the exact instruction to give Claude to get it LIVE. The W#2 run path (validation + cost math) now reads the registry too, so a model you add yourself runs end-to-end without crashing. **You no longer need this primer for everyday add/remove/edit/reorder — do it on the screen.** This primer is still the reference for HOW the system works and for connecting a brand-new AI company (Phase 3).
+- **Still to come (Phase 3 — a FUTURE task, not yet built):** the OpenAI (ChatGPT) + Google Gemini **provider adapters** (the "connection" code) so their models can flip from *integration pending* to *runnable*. This is the docs-driven build described in "Add a model from a NEW company" above — point Claude at this primer + upload that company's API/SDK docs when you want a non-Anthropic model live.
 
 See `docs/polish-item-specs/P-63-central-ai-model-registry-self-serve.md` for the full design + phase plan, and `docs/AI_MODEL_REGISTRY.md` for the technical site map.

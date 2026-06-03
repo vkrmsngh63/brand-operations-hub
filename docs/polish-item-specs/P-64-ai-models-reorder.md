@@ -1,7 +1,7 @@
 # P-64 — Reorder models on the /ai-models screen → drives AI task dropdown order
 
-**Status:** 🔴 OPEN — captured 2026-06-03-g per Rule 31 (verbatim director ask). NOT yet built.
-**Severity / effort:** LOW (small; the persistence column already exists — see §3). Enhancement to the P-63 self-serve registry admin screen.
+**Status:** ✅ **SHIPPED-AND-VERIFIED 2026-06-03-g** — captured AND built+shipped+verified the SAME session per the director's §4 Step 1c directive. Build `835543d` (main `d793179→835543d`, carried the Rule-32 drift fix `b4c3ab1`); director real-Chrome PASS on vklf.com. **As built:** drag-reorder models on `/ai-models` — ONE global order (D-A), @dnd-kit vertical drag with a ⠿ handle (D-B), reordering does NOT change the picker default (D-C confirmed) — plus a NEW `PATCH /api/ai-models` reorder endpoint that writes each row's `sortOrder` by position via the pure helper `resolveReorder` (through the `ai-model-registry` DI-seam handler, +5 node:test); the dropdowns follow automatically via the P-63 Phase-2c live `useModelsForMenu` hook (no picker changes). NO new route (PATCH on the existing `/api/ai-models`), NO schema change (`sortOrder` already existed from P-63 Phase 2a). The three design Qs (D-A/D-B/D-C) were confirmed WITH the director via a Rule 14f picker before coding. _(Was: 🔴 OPEN — captured 2026-06-03-g per Rule 31 (verbatim director ask); NOT yet built — see §1 below for the verbatim ask, preserved.)_
+**Severity / effort:** LOW (small; the persistence column already existed — see §3). Enhancement to the P-63 self-serve registry admin screen.
 **Cross-references:** P-63 (the central AI-model registry + the `/ai-models` admin screen this extends) · `docs/AI_MODEL_REGISTRY.md` · `docs/AI_MODEL_REGISTRY_PRIMER.md`.
 
 ---
@@ -66,3 +66,15 @@ is a small build:
   across reloads.
 - Opening any W#1/W#2 model dropdown shows the models in the saved order.
 - Existing models' selectability, pricing, runnable gating unchanged.
+
+## §5 — As built (2026-06-03-g) — ✅ SHIPPED-AND-VERIFIED
+
+Built+shipped+verified the SAME session it was captured (director's §4 Step 1c directive). Build `835543d` (main `d793179→835543d`), director real-Chrome PASS.
+
+- **D-A resolved = ONE global order** (recommended option — `sortOrder` is already global; per-menu was deferred as unneeded).
+- **D-B resolved = drag** (@dnd-kit vertical drag with a ⠿ handle on each row of the `/ai-models` table, matching P-54's existing @dnd-kit usage).
+- **D-C confirmed = reordering does NOT change the picker default** (the W#1/W#2 defaults are separate `useState` values; only display order changes).
+- **Reorder endpoint:** a NEW `PATCH /api/ai-models` taking the ordered list of registry ids → writes each row's `sortOrder` by position, computed by the pure helper `resolveReorder` (unit-tested), through the `ai-model-registry` DI-seam handler. NO new route file (PATCH added to the existing `/api/ai-models` route from P-63 Phase 2a).
+- **Propagation:** the dropdowns follow automatically via the P-63 Phase-2c live `useModelsForMenu` hook (which already fetches `findMany({ orderBy: { sortOrder: 'asc' } })`) — no picker changes needed.
+- **Scoreboard delta:** +5 src/lib node:test (the `resolveReorder` + reorder-handler tests); NO new route; NO schema change; build stayed at 77 routes.
+- **Cross-references:** ROADMAP P-64 + P-63 spec §7 (the admin screen this extends) + `docs/AI_MODEL_REGISTRY.md` + CORRECTIONS_LOG §Entry 2026-06-03-g.
