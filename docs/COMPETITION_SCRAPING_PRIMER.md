@@ -55,12 +55,19 @@ teaching "primer" the director feeds to an external AI.
 
 ## 5. OPEN items at graduation
 
-Read `docs/ROADMAP.md` (search "W#2" + the P-IDs) for the authoritative list. As of
-graduation the notable open items include: **P-61** (MEDIUM
-— extension server-side default categories per platform per content-type so workers
-start from sensible category lists; spec `docs/polish-item-specs/P-61-extension-default-categories.md`;
-**the next pick — and the LAST substantive W#2 polish item, after which W#2 graduation is fully clear**),
-plus the lower-priority residue: **P-53** (on-page "Export Table" button — largely
+Read `docs/ROADMAP.md` (search "W#2" + the P-IDs) for the authoritative list. **As of
+2026-06-03 the W#2 polish queue is DRAINED — every substantive polish item is CLOSED
+(P-54 / P-55 / P-56 / P-57 / P-58 / P-59 / P-60 / P-61), so W#2 graduation is now FULLY
+CLEAR and is the (a.132) next pick.** **P-61** (extension server-side default categories
+per platform per content-type so workers start from sensible category lists; spec
+`docs/polish-item-specs/P-61-extension-default-categories.md`) is now ✅ CLOSED —
+DEPLOYED-AND-VERIFIED 2026-06-03 on real Chrome (director "Pass"; a user can pin a
+category as a default for a specific platform + content type via a "★ Make default"
+checkbox, and the extension surfaces those defaults as a "★ Defaults" optgroup at the top
+of the category dropdown; defaults are project-scoped + shared, stored server-side in a
+NEW additive `CategoryDefault` model + a NEW `category-defaults` route — it was the LAST
+substantive W#2 polish item). The only remaining items are the lower-priority residue:
+**P-53** (on-page "Export Table" button — largely
 absorbed by P-55), **P-43** (add absolute `cd` prefix to all `scoreboard.md` Bash
 commands — recurring cwd-leak), **P-50** (NEW Condition Pathology card), **P-26/P-27**
 (below-fold scroll / capture bugs, low priority), and the two **P-52** carry-overs

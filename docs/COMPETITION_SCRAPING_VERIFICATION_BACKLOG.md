@@ -4226,5 +4226,40 @@ Post-merge scoreboard SKIPPED as deliberate efficiency choice — ff-merge produ
 
 ---
 
+## Deploy session #43 — 2026-06-03 — P-61 server-side DEFAULT categories per platform per content-type — VERIFIED PASS (1 deploy, 2 build commits)
+
+**Headline outcome:** you can now pin a category as a default for a specific platform and content type. When you create a new category (or pick an existing one) in the extension capture overlay, a one-click "★ Make default for [platform] · [type]" checkbox sits right below the dropdown; the next time you capture that type of content on that platform, your pinned defaults show up in a "★ Defaults" group at the top of the category dropdown — so you start from useful categories instead of a blank list. The defaults are saved on the server and shared with your team (project-scoped), and you can un-pin any time with the same checkbox. **VERIFIED PASS** by the director on real Chrome (sideloaded extension build).
+
+**Drift caught at session-start (the code-truth audit):** a Rule 3 Explore-agent audit confirmed categories live in ONE project-scoped `VocabularyEntry` table (no platform discriminator, no "default" flag), the three capture forms render a native `<select>` with a "+ Add new…" sentinel, and `UserExtensionState` (P-3) is user-scoped (not a fit) — so per-(platform, content-type) defaults are genuinely NEW (Rule 24 confirmed). No drift in the existing code; the work is purely additive.
+
+**Fix shape narrative:** a NEW additive `CategoryDefault` server store + a new endpoint + the extension overlay surfacing. The design was settled WITH the director via FOUR Rule 14f pickers BEFORE coding — Q1 sharing = per-Project (recommended); Q2 show-defaults = a "★ Defaults" optgroup pinned at the top of the existing native dropdown (a director OVERRIDE of the recommended quick-pick chips); Q3 make/remove = inline ★ + checkbox-on-add (recommended); Q4 reconciliation (a native `<option>` row can't host a tappable star) = a contextual "★ Make default for [platform] · [type]" checkbox BELOW the dropdown (recommended). The P-61 spec ALREADY EXISTED — READ, not re-created (Rule 31); §2 was updated with the audit + the 4-picker design + the Rule 23 Additive classification.
+
+**Implementation summary (files + LOC):** NEW additive Prisma model `CategoryDefault` (keyed `projectId + platform + vocabularyType + value`; shipped to prod via `prisma db push`, 1.29s, zero data loss). NEW route `src/app/api/projects/[projectId]/competition-scraping/category-defaults/route.ts` (GET/POST/DELETE; route 73 → 74). NEW shared types (the message/response shapes). NEW pure helper `src/lib/competition-scraping/category-defaults.ts` (`buildCategoryPickerOptions` + `isDefaultCategory`; +6 node:test). Extension api-client + api-bridge + 3 background handlers + messaging union/validation (the request/response plumbing). NEW shared content-script DOM helper `extensions/competition-scraping/src/lib/content-script/category-defaults-picker.ts` (the optgroup + the contextual checkbox), wired into the three capture forms (`{text,image,video}-capture-form.ts`). TWO build commits — `fdedaa5` (the P-61 feature) + `60f9455` (the P-58 in-app served-artifact refresh).
+
+**Pre-deploy + post-merge verification scoreboard:**
+
+| Check | Entry (2026-06-02-i) | Exit (2026-06-03) | Δ |
+| --- | --- | --- | --- |
+| Root tsc | clean | clean | UNCHANGED |
+| Extension tsc | clean | clean | UNCHANGED |
+| Extension `npm test` | 915/915 | 915/915 | UNCHANGED (plumbing covered by tsc; no messaging.test to extend) |
+| src/lib `node:test` | 1363/1363 | 1369/1369 | +6 (the `category-defaults` helper tests) |
+| `npm run build` (routes) | 73 | 74 | +1 (the new `category-defaults` endpoint) |
+| Check 6 Playwright | SKIPPED (Rule 27) | SKIPPED (Rule 27) | overlay + server-state = director real-Chrome verification |
+
+**Director real-Chrome verification narrative:** the director sideloaded the fresh extension build `plos-extension-2026-06-02-w2-p61-default-categories.zip` (219 KB) into real Chrome, captured content on a competitor's page, pinned a category as a default via the "★ Make default" checkbox, and confirmed the pinned defaults appeared in the "★ Defaults" optgroup at the top of the category dropdown on the next capture of that type on that platform. Verdict: **"Pass."**
+
+**Process observations captured informationally:** (a) the DATE-BOUNDARY crossing (the session opened 2026-06-02 as in-flight `-j`; the harness `currentDate` rolled to 2026-06-03 mid-deploy; stamped 2026-06-03 per trust-the-harness; in-flight artifacts carry `-j` — expected); (b) the NEW reusable PATTERN — when two design picks conflict against a platform constraint (a "★ Defaults" optgroup in a NATIVE `<select>` + a requested per-row star toggle, which native `<option>` rows can't host), surface the tension and reconcile WITH the director via one focused follow-up picker (see CORRECTIONS_LOG §Entry 2026-06-03); (c) the additive-schema-via-`prisma db push` flow ran clean (flag NO→YES→NO; the Rule 9 gate authorized the push).
+
+### Cross-references
+
+- `docs/polish-item-specs/P-61-extension-default-categories.md` — §2 the audit + the 4-picker design + §3b the as-shipped.
+- `docs/COMPETITION_SCRAPING_DESIGN.md` §B 2026-06-03 — the `CategoryDefault` store + the optgroup+checkbox overlay design note.
+- `docs/CORRECTIONS_LOG.md` §Entry 2026-06-03 — the DATE-BOUNDARY crossing + the reconcile-conflicting-picks PATTERN + the clean additive `prisma db push`.
+- `docs/ROADMAP.md` P-61 polish-backlog entry — flipped to ✅ DEPLOYED-AND-VERIFIED + CLOSED this session (the LAST substantive W#2 polish item; W#2 graduation now fully clear).
+- Build commits `fdedaa5` + `60f9455` on `workflow-2-competition-scraping`; ff-merge `8e71cda..60f9455` on `main`.
+
+---
+
 END OF DOCUMENT
 

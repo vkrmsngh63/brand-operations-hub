@@ -4063,6 +4063,24 @@ This session's W5 Session 1.5 design-lock + build work is **PLOS-side AI infrast
 
 ---
 
+## §B 2026-06-03 — `session_2026-06-03_p61-extension-default-categories` — P-61: server-side DEFAULT categories per platform per content-type — append-only design note per Rule 18 (§A frozen)
+
+**Informational design note (the canonical P-61 spec lives in `docs/polish-item-specs/P-61-extension-default-categories.md` §2 audit + 4-picker design / §3b as-shipped; the session methodology + the reusable PATTERN live in `docs/CORRECTIONS_LOG.md` §Entry 2026-06-03; the verification PASS lives in `docs/COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` Deploy session #43). P-61 is an EXTENSION + PLOS-server change — a NEW additive Prisma model `CategoryDefault` + ONE NEW PLOS route + the extension overlay surfacing. DEPLOYED-AND-VERIFIED on real Chrome (director "Pass"). P-61 is the LAST substantive W#2 polish item — W#2 graduation is now fully clear.**
+
+**What the change does:** a user can pin a captured-content category (content / image / video) as a DEFAULT for a specific platform; the extension capture overlay then surfaces those defaults as a pinned "★ Defaults" optgroup at the top of the category dropdown, plus a contextual "★ Make default for [platform] · [type]" checkbox below it. Defaults are project-scoped + shared, stored server-side, and surfaced as pickable (never force-auto-selected, per the directive). This removes the recurring per-capture friction of re-picking/re-typing the same categories on a given platform.
+
+**The code-truth audit that scoped the work (Rule 3):** categories live in ONE project-scoped `VocabularyEntry` table (keyed `@@unique([projectId, vocabularyType, value])` — no platform discriminator, no "default" flag); the three capture forms (`{text,image,video}-capture-form.ts`) each fetch the full vocab list for their type and render a native `<select>` with a "+ Add new…" sentinel; `UserExtensionState` (P-3) is user-scoped (not a fit). Per-(platform, content-type) defaults are genuinely NEW.
+
+**The store (the design choice — `CategoryDefault`):** a NEW additive Prisma model keyed `(projectId, platform, vocabularyType, value)` so a category can be a default for Amazon·text but not Etsy·text. Per-Project (shared, a team convention — Q1, recommended). Additive only (Rule 23) — no change to existing `VocabularyEntry` rows or capture-row category storage; shipped to prod via `prisma db push` (1.29s, zero data loss).
+
+**The overlay pattern (the materially-new design subtlety — optgroup + reconciling checkbox):** the four Rule 14f pickers produced a tension. Q2 chose to show the defaults as a "★ Defaults" optgroup pinned at the top of the EXISTING native `<select>` (a director OVERRIDE of the recommended quick-pick chips — keeps the low-risk native picker), and Q3 asked for an inline ★ make/remove control on the category itself. But a native `<option>` row CANNOT host a tappable star. The reconciliation (Q4) is a contextual "★ Make default for [platform] · [type]" checkbox rendered BELOW the dropdown that reflects the currently-selected (or newly-typed) category — ONE control covers make-on-add AND remove-any-time. The pure helper `category-defaults.ts` (`buildCategoryPickerOptions` + `isDefaultCategory`) computes the picker shape + the checkbox state; the shared content-script DOM helper `category-defaults-picker.ts` renders both and is wired into all three capture forms. **PATTERN (also in CORRECTIONS_LOG §Entry 2026-06-03): when two design picks conflict against a platform/UI constraint, surface the tension and reconcile WITH the director via one focused follow-up picker rather than silently choosing.**
+
+**Affected §A sections (INFORMATIONAL — §A is FROZEN per Rule 18; not edited):** the extension category-capture flow (text / image / video) now offers per-(platform, content-type) server-side default categories surfaced in the overlay, layered on top of the existing project-scoped `VocabularyEntry` category vocabulary.
+
+**Cross-references:** spec `docs/polish-item-specs/P-61-extension-default-categories.md`; `docs/CORRECTIONS_LOG.md` §Entry 2026-06-03; `docs/COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` Deploy session #43; builds `fdedaa5` + `60f9455` (`main` `8e71cda → fdedaa5 → 60f9455`); the NEW model `CategoryDefault`, the NEW route `competition-scraping/category-defaults`, the NEW helpers `src/lib/competition-scraping/category-defaults.ts` + `extensions/competition-scraping/src/lib/content-script/category-defaults-picker.ts`, and the modified capture forms `{text,image,video}-capture-form.ts`.
+
+---
+
 ---
 
 END OF DOCUMENT
