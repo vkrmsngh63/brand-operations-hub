@@ -75,7 +75,7 @@ Authoritative entries live in `docs/ROADMAP.md`.
 | Item | What it is | Priority |
 |---|---|---|
 | **P-53** | On-page "Export Table" button for the Category + Type pages — largely ABSORBED by P-55's grouped spreadsheets | LOW (residue only) |
-| **P-43** | Add an absolute `cd /workspaces/brand-operations-hub` prefix to ALL Bash commands in `.claude/commands/scoreboard.md` (recurring cwd-leak) | LOW — single-session fix |
+| **P-43** | ✅ RESOLVED 2026-06-03-d — the recurring cwd-leak class is STRUCTURALLY KILLED. The original absolute-`cd` fix (2026-05-22-g) was already in place but the leak kept recurring because absolute `cd /abs && cmd` LEAVES the persistent-shell cwd in `/abs` for the next command; this session wrapped every cd-bearing command in all three `.claude/commands/` templates (`scoreboard.md` + `deploy.md` + `ship-polish-item.md`) in a disposable sub-shell `( cd /abs && ... )` so the change is discarded on exit + refreshed the stale baselines. Build `ac9c8bf`; see ROADMAP P-43 + CORRECTIONS_LOG §Entry 2026-06-03-d. | ✅ RESOLVED |
 | **P-50** | NEW "Condition Pathology" card — small single-session UI addition (director already approved scope) | LOW |
 | **P-26 / P-27** | Below-fold scroll capture bugs + capture bugs #9 / #15 | LOW |
 | **P-52 carry-overs** | Official Opus 4.8 pricing numbers + the deferred W#1 `AutoAnalyze.tsx` shared-list migration (the W#1 piece is W#1-owned per Rule 3) | LOW |
