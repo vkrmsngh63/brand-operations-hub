@@ -22,14 +22,29 @@ import {
 } from '../competition-scraping/review-analysis/models.ts';
 import { MODEL_PRICING } from '../competition-scraping/review-analysis/pricing.ts';
 
-test('seed registry mirrors the existing W#2 model list (no duplication / no drift)', () => {
-  const reg = getAiModelRegistry();
-  assert.equal(reg.length, SUPPORTED_MODEL_VERSIONS.length);
+test('registry contains every W#2 Opus model; the review-analysis menu IS that list', () => {
   for (const v of SUPPORTED_MODEL_VERSIONS) {
     const rec = getModelByModelId(v);
     assert.ok(rec, `${v} should be present in the registry`);
     assert.equal(rec.provider, 'anthropic');
     assert.equal(rec.id, `anthropic:${v}`);
+  }
+  // W#2 is Opus-only: the review-analysis menu equals SUPPORTED_MODEL_VERSIONS.
+  assert.deepEqual(
+    getModelsForMenu('review-analysis').map((m) => m.modelId),
+    [...SUPPORTED_MODEL_VERSIONS]
+  );
+});
+
+test('the wider-menu W#1 models are tagged keyword-clustering only, NOT review-analysis', () => {
+  for (const id of ['claude-sonnet-4-6', 'claude-opus-4-5', 'claude-haiku-4-5']) {
+    const rec = getModelByModelId(id);
+    assert.ok(rec, `${id} should be present in the registry`);
+    assert.ok(rec.menus.includes('keyword-clustering'), `${id} must be in the W#1 menu`);
+    assert.ok(
+      !rec.menus.includes('review-analysis'),
+      `${id} must NOT leak into W#2's Opus-only menu`
+    );
   }
 });
 
@@ -75,8 +90,8 @@ test('getRunnableModels returns only enabled AND runnable records', () => {
     assert.equal(m.enabled, true);
     assert.equal(m.runnableStatus, 'runnable');
   }
-  // All three seed models are runnable today.
-  assert.equal(getRunnableModels().length, SUPPORTED_MODEL_VERSIONS.length);
+  // Every seed model is runnable today (the Anthropic adapter is shipped).
+  assert.equal(getRunnableModels().length, getAiModelRegistry().length);
 });
 
 test('isModelRunnable gates on both enabled + runnable + existence', () => {
@@ -101,6 +116,7 @@ test('getModelsForMenu only returns models tagged for that menu, all enabled', (
       assert.ok(m.menus.includes(menu), `${m.id} returned for ${menu} but not tagged for it`);
     }
   }
-  // Today all three seed models are offered in both menus.
-  assert.equal(getModelsForMenu('keyword-clustering').length, SUPPORTED_MODEL_VERSIONS.length);
+  // The keyword-clustering menu is W#1's wider menu: the 3 shared Opus models
+  // plus the 3 wider-menu models = every record in the registry today.
+  assert.equal(getModelsForMenu('keyword-clustering').length, getAiModelRegistry().length);
 });

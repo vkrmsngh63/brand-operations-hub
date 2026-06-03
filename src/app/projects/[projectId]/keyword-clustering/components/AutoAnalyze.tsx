@@ -25,6 +25,9 @@ import {
 } from '@/lib/forensic-log';
 import { runPreflight, type PreflightCheckResult } from '@/lib/preflight';
 import { runRefreshWithRetry } from '@/lib/post-rebuild-fetch-retry';
+import { getModelsForMenu } from '@/lib/ai-models/registry';
+import { MODEL_PRICING } from '@/lib/ai-models/pricing';
+import { anthropicAdapter } from '@/lib/ai-models/provider-adapter';
 import './auto-analyze.css';
 
 /* ── Types ─────────────────────────────────────────────────── */
@@ -92,17 +95,15 @@ const AA_BATCH_TIERS = [
   { size: 18, name: 'Placement',  trigger: { windowSize: 5, maxAvgNewTopics: 1.5 } },
 ];
 
-// Registered in docs/AI_MODEL_REGISTRY.md per HANDOFF_PROTOCOL Rule 32.
-// Opus 4.8 priced at the Opus-tier placeholder (same as 4.7/4.6) pending
-// official numbers — see ROADMAP P-52.
-const AA_PRICING: Record<string, { inputPer1M: number; outputPer1M: number }> = {
-  'claude-opus-4-8':   { inputPer1M: 5.00, outputPer1M: 25.00 },
-  'claude-opus-4-7':   { inputPer1M: 5.00, outputPer1M: 25.00 },
-  'claude-opus-4-6':   { inputPer1M: 5.00, outputPer1M: 25.00 },
-  'claude-sonnet-4-6': { inputPer1M: 3.00, outputPer1M: 15.00 },
-  'claude-opus-4-5':   { inputPer1M: 5.00, outputPer1M: 25.00 },
-  'claude-haiku-4-5':  { inputPer1M: 1.00, outputPer1M: 5.00 },
-};
+// Per-model pricing now comes from the central AI-model registry (P-63 Phase 1
+// Deploy 3) — no local table to drift. W#1's cost math only needs input/output
+// per-MTok rates, so we project them out of the registry's 4-rate ModelPricing.
+// The input/output numbers are identical to W#1's prior inline AA_PRICING, so
+// cost estimates are unchanged. Registered in docs/AI_MODEL_REGISTRY.md (Rule 32).
+function aaPrice(modelId: string): { inputPer1M: number; outputPer1M: number } {
+  const p = MODEL_PRICING[modelId] ?? MODEL_PRICING['claude-sonnet-4-6'];
+  return { inputPer1M: p.inputPerMillion, outputPer1M: p.outputPerMillion };
+}
 
 /* ── Props ──────────────────────────────────────────────────── */
 interface AutoAnalyzeProps {
@@ -560,7 +561,7 @@ export default function AutoAnalyze({
 
   /* ── Cost helpers ──────────────────────────────────────────── */
   function calcCost(tokensUsed: { input: number; output: number }) {
-    const p = AA_PRICING[model] || AA_PRICING['claude-sonnet-4-6'];
+    const p = aaPrice(model);
     return (tokensUsed.input / 1e6) * p.inputPer1M + (tokensUsed.output / 1e6) * p.outputPer1M;
   }
 
@@ -568,7 +569,7 @@ export default function AutoAnalyze({
     const unsorted = getUnsortedKws();
     const size = processingMode === 'adaptive' ? AA_BATCH_TIERS[0].size : batchSize;
     const nBatches = Math.ceil(unsorted.length / size);
-    const p = AA_PRICING[model] || AA_PRICING['claude-sonnet-4-6'];
+    const p = aaPrice(model);
     const estInputPerBatch = 8000;
     const estOutputPerBatch = 4000;
     const costPerBatch = (estInputPerBatch / 1e6) * p.inputPer1M + (estOutputPerBatch / 1e6) * p.outputPer1M;
@@ -583,11 +584,16 @@ export default function AutoAnalyze({
       system: [{ type: 'text', text: systemText, cache_control: { type: 'ephemeral', ttl: '1h' } }],
       messages: [{ role: 'user', content: userContent }],
     };
-    if (thinkingMode === 'adaptive') {
-      body.thinking = { type: 'adaptive' };
-      body.temperature = 1;
-    } else if (thinkingMode === 'enabled') {
-      body.thinking = { type: 'enabled', budget_tokens: Math.max(1024, thinkingBudget) };
+    // Thinking param is built by the central provider adapter (P-63 Phase 1
+    // Deploy 3) so every Anthropic call site maps thinking identically. W#1's
+    // three modes map to the registry's ThinkingOptionId set: adaptive→auto,
+    // enabled→extended, disabled→none. The resulting request shape is unchanged.
+    const thinkingParam = anthropicAdapter.mapThinkingOption(
+      thinkingMode === 'adaptive' ? 'auto' : thinkingMode === 'enabled' ? 'extended' : 'none',
+      thinkingBudget
+    );
+    if (thinkingParam) {
+      body.thinking = thinkingParam;
       body.temperature = 1;
     } else {
       body.temperature = 0.3;
@@ -2117,12 +2123,9 @@ export default function AutoAnalyze({
             <div className="aa-row">
               <span className="aa-label">Model<span className="aa-help">ⓘ<span className="aa-tip">Which Claude model to use. Opus is most capable but slower/costlier. Sonnet is a good balance. Haiku is fastest/cheapest.</span></span></span>
               <select className="aa-select" value={model} onChange={e => setModel(e.target.value)} disabled={aaState !== 'IDLE'}>
-                <option value="claude-opus-4-8">Claude Opus 4.8</option>
-                <option value="claude-opus-4-7">Claude Opus 4.7</option>
-                <option value="claude-opus-4-6">Claude Opus 4.6</option>
-                <option value="claude-sonnet-4-6">Claude Sonnet 4.6</option>
-                <option value="claude-opus-4-5">Claude Opus 4.5</option>
-                <option value="claude-haiku-4-5">Claude Haiku 4.5</option>
+                {getModelsForMenu('keyword-clustering').map(m => (
+                  <option key={m.id} value={m.modelId}>{m.displayLabel}</option>
+                ))}
               </select>
               <span className="aa-label" style={{minWidth:"auto",marginLeft:"12px"}}>Scope<span className="aa-help">ⓘ<span className="aa-tip">Which keywords to include. "Unsorted + Reshuffled" picks up never-sorted keywords plus ones the AI bumped off the canvas during reshuffling. "All" re-analyzes everything.</span></span></span>
               <select className="aa-select" value={keywordScope} onChange={e => setKeywordScope(e.target.value as typeof keywordScope)} disabled={aaState !== 'IDLE'}>

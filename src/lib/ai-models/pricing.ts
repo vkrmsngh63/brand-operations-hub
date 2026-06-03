@@ -59,10 +59,30 @@ export const MODEL_PRICING: Record<string, ModelPricing> = {
     cacheWrite5mPerMillion: 6.25,
     cacheReadPerMillion: 0.5,
   },
-  // NOTE (P-63 Phase 1): W#1 Keyword Clustering offers a wider menu than W#2's
-  // Opus-only list (Sonnet 4.6 / Opus 4.5 / Haiku 4.5). Those pricing rows are
-  // reconciled into this table in Deploy 3 (the W#1 AutoAnalyze migration), kept
-  // out of this invisible Deploy-1 move so the relocation changes zero data.
+  // W#1 Keyword Clustering offers a wider menu than W#2's Opus-only list
+  // (Sonnet 4.6 / Opus 4.5 / Haiku 4.5). Reconciled into this table in P-63
+  // Phase 1 Deploy 3. The input/output rates mirror W#1's prior inline
+  // AA_PRICING exactly (so its cost estimates are unchanged); W#1 reads only the
+  // input/output rates, so the cache rates below — derived from the standard
+  // prefix-cache contract (1.25× write / 0.1× read) — are informational today.
+  'claude-sonnet-4-6': {
+    inputPerMillion: 3,
+    outputPerMillion: 15,
+    cacheWrite5mPerMillion: 3.75,
+    cacheReadPerMillion: 0.3,
+  },
+  'claude-opus-4-5': {
+    inputPerMillion: 5,
+    outputPerMillion: 25,
+    cacheWrite5mPerMillion: 6.25,
+    cacheReadPerMillion: 0.5,
+  },
+  'claude-haiku-4-5': {
+    inputPerMillion: 1,
+    outputPerMillion: 5,
+    cacheWrite5mPerMillion: 1.25,
+    cacheReadPerMillion: 0.1,
+  },
 };
 
 export function getPricingForModel(modelVersion: string): ModelPricing {
