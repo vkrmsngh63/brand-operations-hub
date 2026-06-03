@@ -4081,6 +4081,20 @@ This session's W5 Session 1.5 design-lock + build work is **PLOS-side AI infrast
 
 ---
 
+## §B 2026-06-03-b — `session_2026-06-03-b_w2-graduation-continuity-first` — W#2 FORMALLY GRADUATED (continuity-first, per HANDOFF_PROTOCOL Rule 33) — append-only design note per Rule 18 (§A frozen)
+
+**Informational design note (DOCS-ONLY — no code, no schema, no deploy). The canonical graduation record lives in `docs/COMPETITION_SCRAPING_PRIMER.md` (Status line + §5 "State at graduation + post-graduation residue"), `docs/WORKFLOW_GRADUATION_CONTINUITY_DESIGN.md` §2/§4, `docs/DATA_CATALOG.md` §6.1, and the ROADMAP Current Active Tools W#2 row; the session methodology + the reusable PATTERN live in `docs/CORRECTIONS_LOG.md` §Entry 2026-06-03-b. With the W#2 polish queue fully drained (P-54 / P-55 / P-56 / P-57 / P-58 / P-59 / P-60 / P-61 all closed), W#2 is now ✅ GRADUATED.**
+
+**The graduation design choices made this session (the Rule 14f forced-picker outcomes):** (1) **graduation depth = continuity-first** — the load-bearing re-entry artifacts are the continuity primer (`docs/COMPETITION_SCRAPING_PRIMER.md`) + the one-paste `./catch-up-workflow 2` command; W#2 is marked ✅ GRADUATED on those alone. (2) **residue = one consolidated section** — the low-priority leftovers (P-53 / P-43 / P-50 / P-26 / P-27 / the two P-52 carry-overs / the optional P-56 Option-2 idle-flicker follow-up) were folded into a single non-blocking "post-graduation residue" table in the primer §5 rather than scattered.
+
+**The materially-new graduation subtlety — defer the Data-Contract split until downstream need.** The DOCUMENTATION_ARCHITECTURE §5 Step 1 Archive/Data-Contract split + the finalized-HRL Data Capture Interview were intentionally NOT authored at graduation. The W#2 schema (the shipped P-23/P-49/P-61 Prisma models) is already the LIVE, authoritative source-of-truth; per the §4 "create the Data Contract on downstream need" rule, the contract is DEFERRED until W#3 starts and discovers a need to read W#2 data — authoring a contract now, with no consumer, would only drift. **PATTERN (also in CORRECTIONS_LOG §Entry 2026-06-03-b): at workflow graduation, defer the Archive/Data-Contract split + the finalized-HRL Data Capture Interview until a downstream workflow discovers a need to read the data; the continuity PRIMER is sufficient at graduation.**
+
+**Affected §A sections (INFORMATIONAL — §A is FROZEN per Rule 18; not edited):** none — graduation does not change the W#2 design; it freezes the current design docs as authoritative and points the primer at them.
+
+**Cross-references:** `docs/COMPETITION_SCRAPING_PRIMER.md` (Status + §5); `docs/WORKFLOW_GRADUATION_CONTINUITY_DESIGN.md` §2/§4 (the formal W#2 graduation flipped to ✅ RESOLVED 2026-06-03, continuity-first, split deferred to W#3); `docs/DATA_CATALOG.md` §6.1; `docs/CORRECTIONS_LOG.md` §Entry 2026-06-03-b; HANDOFF_PROTOCOL Rule 33; the (a.133) next pick = Backfill W#1 (Keyword Clustering) under Rule 33 on `main`.
+
+---
+
 ---
 
 END OF DOCUMENT

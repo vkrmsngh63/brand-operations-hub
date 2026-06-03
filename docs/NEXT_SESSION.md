@@ -1,203 +1,206 @@
 # Next session
 
-**Written:** 2026-06-03 (`session_2026-06-03_p61-extension-default-categories` — W#2 polish P-61 — server-side DEFAULT categories per platform per content-type ✅ DEPLOYED-AND-VERIFIED end-to-end on real Chrome via `workflow-2-competition-scraping` → `main` (director verbatim "Pass") — **P-61 is now CLOSED — it was the LAST substantive W#2 polish item, so W#2 graduation is now fully clear (P-54 / P-55 / P-56 / P-57 / P-58 / P-59 / P-60 / P-61 all closed).** EXTENSION + PLOS-server change; NEW additive Prisma model `CategoryDefault`; ONE NEW PLOS route (`competition-scraping/category-defaults`). `main` went `8e71cda → fdedaa5 → 60f9455`. **Closes (a.131) = P-61 ✅ DEPLOYED-AND-VERIFIED → P-61 CLOSED. Opens (a.132) RECOMMENDED-NEXT = Begin W#2 graduation (Rule 33)** — start the workflow-graduation continuity process for Competition Scraping: write the graduation/handoff materials, run `./catch-up-workflow 2`, and formally mark W#2 essentially complete now that the polish queue is drained. On `workflow-2-competition-scraping` — this was the director's §4 Step 1c forced-picker choice. **FIRST action next session = read `docs/HANDOFF_PROTOCOL.md` Rule 33 (workflow-graduation continuity) + the graduation methodology BEFORE doing anything else.**)
+**Written:** 2026-06-03-b (`session_2026-06-03-b_w2-graduation-continuity-first` — W#2 (Competition Scraping & Deep Analysis) was FORMALLY GRADUATED — continuity-first, per HANDOFF_PROTOCOL Rule 33 — a DOCS-ONLY session (no code, no schema, no deploy, no in-session commits). Now that the W#2 polish queue is fully drained (P-54 / P-55 / P-56 / P-57 / P-58 / P-59 / P-60 / P-61 all closed), the director — via two AskUserQuestion picks — chose graduation depth = **continuity-first** (finalize the continuity primer + `./catch-up-workflow 2`, mark W#2 ✅ GRADUATED, DEFER the DOCUMENTATION_ARCHITECTURE §5 Step 1 Archive/Data-Contract split + the finalized-HRL Data Capture Interview until W#3 needs to read W#2 data per the §4 create-on-need rule) + residue = **one consolidated section** (folded into the primer §5 "post-graduation residue" table); verified all 14 primer pointers resolve. **Closes (a.132) = Begin W#2 graduation (Rule 33) → ✅ DONE (W#2 graduated continuity-first). Opens (a.133) RECOMMENDED-NEXT = Backfill W#1 (Keyword Clustering) under Rule 33** — write `docs/KEYWORD_CLUSTERING_PRIMER.md` (a map+pointers front door; copy `docs/templates/WORKFLOW_PRIMER_TEMPLATE.md`) + register `./catch-up-workflow 1` so graduated W#1 gets the same one-paste re-entry kit W#2 now has. **W#1's branch is `main` per the resume-workflow registry — so the NEXT SESSION RUNS ON `main`; start command `./resume` (or `./resume-workflow 1`).** This was the director's §4 Step 1c forced-picker choice, confirmed via a disambiguation follow-up. **FIRST action next session = read `docs/HANDOFF_PROTOCOL.md` Rule 33 + `docs/WORKFLOW_GRADUATION_CONTINUITY_DESIGN.md` §4 + the existing W#1 docs BEFORE writing the primer.**)
 
-> ⚠️ **DATE-STAMPS: TRUST THE HARNESS `currentDate`.** This session OPENED on 2026-06-02 (it was the 10th session of that day, in-flight stamped `-j`) and the harness `currentDate` rolled to **2026-06-03 MID-DEPLOY**. Per the trust-the-harness convention (precedent: `session_2026-06-01` + `session_2026-06-02` both crossed midnight and stamped to the new day), this session is STAMPED **2026-06-03** — the FIRST session of 2026-06-03 (NO suffix). The IN-FLIGHT artifacts (the P-61 spec §2 text + the build commit `fdedaa5` message) carry the earlier `2026-06-02-j` stamp — that is EXPECTED and harmless (work done late 2026-06-02, finalized after midnight). **Next session: keep trusting the harness `currentDate`; do NOT regress or invent a suffix ahead of it.** The fabricated/reverted `session_2026-05-31` is recorded ONLY as the CORRECTIONS_LOG §Entry 2026-05-31 TOP-TIER SLIP — NOT a normal prior session.
+> ⚠️ **DATE-STAMPS: TRUST THE HARNESS `currentDate`.** This session is `session_2026-06-03-b` — the SECOND session of 2026-06-03 (suffix `-b`); the FIRST was `session_2026-06-03` (no suffix) = P-61. The harness `currentDate` = 2026-06-03. **Next session: keep trusting the harness `currentDate`; do NOT regress or invent a suffix ahead of it.** The fabricated/reverted `session_2026-05-31` is recorded ONLY as the CORRECTIONS_LOG §Entry 2026-05-31 TOP-TIER SLIP — NOT a normal prior session.
 
-> ⚠️ **BRANCH: next session stays on `workflow-2-competition-scraping`.** W#2 graduation is W#2-only. The `./resume` / `./resume-workflow 2` scripts switch to the workflow-2 branch automatically.
+> ⚠️ **BRANCH: next session runs on `main`.** The (a.133) pick is the W#1 (Keyword Clustering) Rule-33 backfill, and **W#1's branch is `main`** per the `resume-workflow` registry (W#1 is graduated; it lives on main, not on a feature branch). The `./resume` / `./resume-workflow 1` scripts switch to `main` automatically. This is a DELIBERATE branch CHANGE from this session (`workflow-2-competition-scraping`) to `main` — confirm `git branch --show-current` shows `main` immediately after entry.
 
-> ⚠️ **BRANCH STATE — NOTHING HELD BACK.** This session's deploy (the 2 build commits `fdedaa5` + `60f9455`) is on main. After this session's end-of-session doc-batch ff-merge, `main` and `workflow-2-competition-scraping` are both at `60f9455` + the doc-batch SHA. Expect `git log origin/main..HEAD --oneline` to show 0 at next session entry.
+> ⚠️ **BRANCH STATE — NOTHING HELD BACK.** This was a DOCS-ONLY session: no code, no deploy, no in-session commits. After this session's end-of-session doc-batch ff-merge to `main`, `main` and `workflow-2-competition-scraping` are both at `60f9455` (the prior P-61 deploy) + the 2026-06-03-b doc-batch SHA. Expect `git log origin/main..HEAD --oneline` to show 0 at next session entry (you'll be on `main`).
 
-> ⚠️ **SCHEMA-CHANGE-IN-FLIGHT = NO at entry next session.** This (P-61) session went NO → YES (the new `CategoryDefault` model) → YES→NO at the deploy `prisma db push` (1.29s, additive, zero data loss) → NO at exit. **W#2 graduation is a DOCS/METHODOLOGY unit — NO schema change anticipated.** If graduation surfaces any residual code cleanup that touches the schema, run the Rule 23 Change Impact Audit + get explicit director authorization via the Rule 9 deploy gate BEFORE any `prisma db push` (additive only; never `migrate reset` against prod).
+> ⚠️ **SCHEMA-CHANGE-IN-FLIGHT = NO at entry next session.** This (graduation) session was docs-only: NO → STAYED NO → NO at exit; zero `prisma db push`. **The W#1 backfill is a DOCS unit (write a primer + register a catch-up command) — NO schema change anticipated.** W#1 is a graduated tool; do NOT touch its schema or its `src/lib/keyword-clustering/*` code unless the director explicitly asks. If anything code-adjacent surfaces, run the Rule 23 Change Impact Audit + get explicit director authorization via the Rule 9 deploy gate BEFORE any `prisma db push` (additive only; never `migrate reset` against prod).
 
-> ⚠️ **NO OWED VERIFICATION.** P-61 was director-verified on real Chrome this session ("Pass"). There is NO owed verification carried into next session. W#2 graduation is a NEW unit.
+> ⚠️ **NO OWED VERIFICATION.** Nothing was deployed this session (docs-only). There is NO owed verification carried into next session. The W#1 backfill is a NEW docs unit.
 
-> ⚠️ **W#2 POLISH QUEUE IS DRAINED.** P-54 + P-55 + P-56 + P-57 + P-58 + P-59 + P-60 + P-61 are ALL closed. The only residue is the lower-priority backlog (P-53 absorbed-export-button, P-43 scoreboard `cd` prefix, P-50 Condition Pathology card, P-26/P-27 low-priority capture bugs, the two P-52 carry-overs, the optional P-56 Option-2 idle-flicker follow-up) + the future-workflow P-62 (W#11 surveillance card). **W#2 graduation does NOT require any of these to ship first** — they ride along as documented residue.
+> ⚠️ **W#2 IS GRADUATED — DO NOT REOPEN IT.** W#2 (Competition Scraping) is ✅ GRADUATED 2026-06-03 (continuity-first). Its re-entry front door is `docs/COMPETITION_SCRAPING_PRIMER.md` + `./catch-up-workflow 2`. The low-priority residue (P-53 / P-43 / P-50 / P-26 / P-27 / the two P-52 carry-overs / the optional P-56 Option-2 idle-flicker follow-up) is in the primer §5 "post-graduation residue" table and is explicitly NON-BLOCKING. The deferred W#2 Archive/Data-Contract split is intentionally held until W#3 needs to read W#2 data — do NOT author it now.
 
 ---
 
 ## What we did this session (in plain terms)
 
-This session gave the extension a sensible starting set of category labels.
+This session "graduated" Workflow #2 (Competition Scraping) — meaning we declared it essentially complete and wrote the materials that let anyone pick it back up later with full context.
 
-**Until now, when you started tagging a competitor's captured content (text, an image, or a video) in the extension, the category list was whatever you had typed before — there was no way to "pin" a category as a go-to default for a particular shopping site.** So you re-picked or re-typed the same categories over and over.
+**Until now, W#2 was still in active "polish" mode — a long list of small improvements (P-54 through P-61).** With the last of those shipped and verified, the whole list is now done.
 
-**Now you can pin any category as a default for a specific platform and a specific type of content.** When you create a new category (or pick an existing one) you get a one-click "★ Make default for [platform] · [type]" checkbox right below the dropdown. The next time you capture that type of content on that platform, your pinned defaults show up in a "★ Defaults" group right at the top of the category dropdown, so you start from useful choices instead of a blank list. The defaults are saved on the server and shared with your team (everyone on the project sees the same defaults), and you can un-pin a default any time with the same checkbox.
+**So we did the formal "graduation."** We finalized a single front-door document (the continuity primer) that explains what W#2 does, how it's built, and what's left over as low-priority odds-and-ends — and we made sure a one-line command (`./catch-up-workflow 2`) hands a future session everything it needs to resume. We checked that all 14 of the primer's internal pointers actually lead somewhere valid.
 
-**You sideloaded the new extension build and verified it live on real Chrome.** Verdict: **"Pass."**
+**We made two judgment calls with you (the director):**
+1. **How thorough to be right now: "continuity-first."** We finalized the re-entry primer and marked W#2 graduated, but we deliberately held off on writing a formal "data contract" (a precise spec of W#2's stored data for other workflows to read). The reasoning: nobody needs to read W#2's data yet, so writing that contract now would just go stale — we'll write it when a later workflow (W#3) actually needs it.
+2. **How to handle the leftovers: "one consolidated section."** All the small low-priority leftovers are listed together in one clearly-marked, non-blocking spot in the primer, instead of scattered around.
 
-**This was the last substantive polish item for Workflow #2 (Competition Scraping).** With it closed, the whole W#2 polish queue is drained — so the next session begins the formal "graduation" of W#2 (writing the continuity/handoff materials so the workflow is considered essentially complete).
+**This was a documentation-only session — no app code changed, nothing was deployed.**
 
 ## What's pending from prior sessions
 
-Captured across `docs/ROADMAP.md` (the P-61 entry now ✅ CLOSED + the P-62 + the lower-priority residue) + `docs/polish-item-specs/` (the per-item specs) + `docs/COMPETITION_SCRAPING_PRIMER.md` (the W#2 continuity primer).
+Captured across `docs/ROADMAP.md` (the W#2 graduation + the residue) + `docs/COMPETITION_SCRAPING_PRIMER.md` (the W#2 continuity primer §5 residue table) + `docs/WORKFLOW_GRADUATION_CONTINUITY_DESIGN.md` (the graduation methodology + the W#1-backfill open item in §4) + `docs/DATA_CATALOG.md` §6.1 (the deferred W#2 Data Contract).
 
-- **(a.132) = Begin W#2 graduation (Rule 33)** — **NEXT SESSION (see below).**
-- **(P-62, under Workflow 11)** "Post Launch Optimization & Surveillance" card rename + hub page + "Continued Competitive Surveillance" page with the verbatim 5-question checklist (spec doc exists) — future-workflow.
-- **(P-56 Option-2 follow-up)** the optional "kill the idle flash too" (redraw only changed text) for the residual reading-time flicker on Amazon Highlight Terms; raise only if the director wants it.
-- **(P-53)** Excel "Export Table" for the Category + Type pages — effectively ABSORBED by P-55's grouped spreadsheets; LOW residue only.
+- **(a.133) = Backfill W#1 (Keyword Clustering) under Rule 33** — **NEXT SESSION (see below).**
+- **The deferred W#2 Archive/Data-Contract split + finalized-HRL Data Capture Interview** — intentionally held until W#3 starts and needs to read W#2 data (DOCUMENTATION_ARCHITECTURE §4 create-on-need). NOT a blocker.
+- **(P-62, under Workflow 11)** "Post Launch Optimization & Surveillance" card rename + hub page + "Continued Competitive Surveillance" page (spec doc exists) — future-workflow.
+- **(P-56 Option-2 follow-up)** the optional "kill the idle flash too" for the residual Amazon Highlight-Terms flicker; raise only if the director wants it.
+- **(P-53)** Excel "Export Table" for the Category + Type pages — effectively ABSORBED by P-55; LOW residue only.
 - **(P-43 mechanical prevention small fix)** — add an absolute `cd /workspaces/brand-operations-hub` prefix to ALL Bash commands in `.claude/commands/scoreboard.md`; single-session fix.
+- **(P-50 NEW Condition Pathology card)** — small single-session UI addition; director already approved scope.
 - **Opus 4.8 pricing numbers + W#1 `AutoAnalyze.tsx` shared-list migration** — the two P-52 carry-overs.
-- **W#2 graduation** — now FULLY CLEAR (the entire polish queue is drained); **the (a.132) next pick.**
 
 ## What we'll do next session (in plain terms)
 
-1. **We formally "graduate" Workflow #2 (Competition Scraping).** Now that every substantive polish item is shipped and verified, we write the continuity/handoff materials so anyone (or any future session) can pick W#2 back up with full context — what it does, how it's built, what's still open as low-priority residue.
-2. **We run the graduation tooling** (`./catch-up-workflow 2`) and follow the Rule 33 methodology so the handoff is consistent with how the other workflows are documented.
-3. **We mark W#2 essentially complete** in the roadmap + the primer, leaving the low-priority residue clearly listed but not blocking.
+1. **We give Workflow #1 (Keyword Clustering) the same "front-door" treatment W#2 just got.** W#1 was graduated a while ago but it never got the new one-page continuity primer or the one-line re-entry command. We write `docs/KEYWORD_CLUSTERING_PRIMER.md` (starting from the shared template) so it has a single map+pointers front door.
+2. **We register the `./catch-up-workflow 1` command** so a future session can re-enter W#1 with one paste, exactly like W#2 now has.
+3. **We do NOT touch W#1's app code or data** — this is purely catching its documentation up to the new standard. It's marked "low priority" but it's the natural next consistency step.
 
 ## What's still left in the total roadmap (in plain terms)
 
-- **P-61 (extension default categories) — ✅ CLOSED 2026-06-03.** You can now pin categories as defaults per platform per content-type; verified live on real Chrome. **The LAST substantive W#2 polish item.**
-- **W#2 graduation — NEXT, the (a.132) pick.** Now FULLY CLEAR (the polish queue is drained).
-- **P-59 (update the Detailed User Guide) — ✅ CLOSED 2026-06-02-i.** The in-app guide now covers everything; verified live.
-- **P-60 (open-detail ↗ icon on the 3 analysis tables) — ✅ CLOSED 2026-06-02-h.** Verified live.
-- **P-57 (fill the delete-coverage gaps — videos + category labels) — ✅ CLOSED 2026-06-02-g.** Verified live.
-- **P-58 (Download-Extension-zip serves the latest build) — ✅ CLOSED 2026-06-02-f.** Verified live.
-- **P-56 (Amazon Highlight Terms flicker blocks text selection) — ✅ CLOSED 2026-06-02-e.** Verified on real Amazon; only residue is the optional Option-2 idle-flicker follow-up.
-- **P-55 (Comprehensive Analysis downloadable materials + primer + main-table additions) — ✅ ESSENTIALLY COMPLETE 2026-06-02-d.** Only the absorbed P-53 on-page button could remain.
-- **P-54 (main Competitor URLs table enhancements) — ✅ CLOSED 2026-06-01-d.** All 5 phases shipped + verified.
-- **P-49 W#2 Reviews Phase 2 — ✅ CLOSED 2026-06-01.** All three analysis pages shipped + verified.
+- **W#2 graduation — ✅ DONE 2026-06-03 (continuity-first).** Workflow #2 is officially essentially complete; re-entry via the primer + `./catch-up-workflow 2`.
+- **W#1 (Keyword Clustering) Rule-33 backfill — NEXT, the (a.133) pick.** Give graduated W#1 the same primer + catch-up command. On `main`.
+- **The deferred W#2 Data Contract** — held until W#3 needs to read W#2 data; NOT a blocker.
+- **P-61 (extension default categories) — ✅ CLOSED 2026-06-03.** The LAST substantive W#2 polish item.
+- **P-54 / P-55 / P-56 / P-57 / P-58 / P-59 / P-60 — ✅ ALL CLOSED.** The full W#2 polish queue is drained.
+- **P-49 W#2 Reviews Phase 2 — ✅ CLOSED 2026-06-01.**
 - **P-52 (AI model registry + Rule 32 + Opus 4.8 rollout)** — ✅ DEPLOYED-AND-VERIFIED. TWO carry-overs OPEN: official Opus 4.8 pricing numbers + the deferred W#1 shared-list migration.
 - **P-62 (NEW capture)** — the Workflow-11 surveillance card + page. Future-workflow.
 - **P-50 NEW Condition Pathology card** — small single-session UI addition; director already approved scope.
 - **P-43 mechanical prevention small fix** — add absolute `cd /workspaces/brand-operations-hub` prefix to ALL Bash commands in `.claude/commands/scoreboard.md`. Single-session fix.
 - **P-26 below-fold scroll capture bugs** + **P-27 capture bugs #9 + #15** — LOW priority.
-- **W#3-W#14 future workflows** — Therapeutic Strategy + the rest of the 14-workflow lineup; design phases not yet started (P-62 seeds part of W#11).
+- **W#3-W#14 future workflows** — Therapeutic Strategy + the rest of the 14-workflow lineup; design phases not yet started (P-62 seeds part of W#11). W#3 kickoff is also the trigger to author the deferred W#2 Data Contract.
 - **Infrastructure TODOs** — Supabase pool sizing under AI-batch load + Supabase file-size offline check.
 
 ---
 
 ## Status of last session
 
-**W#2 polish P-61 — server-side DEFAULT categories per platform per content-type — ✅ DEPLOYED-AND-VERIFIED 2026-06-03** on real Chrome via `workflow-2-competition-scraping` → `main`; director verdict "Pass". `main` went `8e71cda → fdedaa5 → 60f9455` (one clean ff-merge of the two verified build commits). **An AUDIT-then-DESIGN-then-BUILD-then-DEPLOY session: TWO build commits (`fdedaa5` the P-61 feature + `60f9455` the P-58 served-artifact refresh), ONE deploy, ONE Rule 9 deploy gate (director "Deploy + run db push" — authorized BOTH the deploy AND the additive `prisma db push`), SIX Rule 14f pickers total (FOUR design — Q1 sharing = per-Project / Q2 show-defaults = "★ Defaults" optgroup [director OVERRIDE of my recommended quick-pick chips] / Q3 inline ★ + checkbox-on-add / Q4 contextual "★ Make default" checkbox — + the deploy gate + the §4 Step 1c next-pick → W#2 graduation). EXTENSION + PLOS-server change; NEW additive Prisma model `CategoryDefault`; ONE NEW PLOS route.**
+**W#2 (Competition Scraping & Deep Analysis) was FORMALLY GRADUATED — continuity-first, per HANDOFF_PROTOCOL Rule 33 — 2026-06-03.** A DOCS-ONLY session: NO code, NO schema, NO deploy, NO in-session commits. With the W#2 polish queue fully drained (P-54 / P-55 / P-56 / P-57 / P-58 / P-59 / P-60 / P-61 all closed), the director — via two AskUserQuestion picks — chose: (1) **graduation depth = continuity-first** (finalize the continuity primer + `./catch-up-workflow 2`, mark W#2 ✅ GRADUATED, DEFER the DOCUMENTATION_ARCHITECTURE §5 Step 1 Archive/Data-Contract split + the finalized-HRL Data Capture Interview until W#3 needs to read W#2 data per the §4 create-on-need rule); (2) **residue = one consolidated section** (folded into the primer §5 "post-graduation residue" table). All 14 primer pointers were verified to resolve.
 
-**Session shape (Rule 3 code-truth audit → read the EXISTING P-61 spec [Rule 31] → 4 design pickers → build → scoreboard → deploy + db push → real-Chrome verify → end-of-session doc-batch):**
+**Session shape (read Rule 33 + the graduation methodology → confirm `./catch-up-workflow 2` → two graduation-depth/residue pickers → finalize the primer + DESIGN §B + WORKFLOW_GRADUATION_CONTINUITY_DESIGN §2/§4 + DATA_CATALOG §6.1 + the ROADMAP Active Tools W#2 row → verify pointers → end-of-session doc-batch):**
 
-- **The Rule 3 code-truth audit (FIRST action):** an Explore agent confirmed categories live in ONE project-scoped `VocabularyEntry` table (keyed `@@unique([projectId, vocabularyType, value])` — no platform, no default flag); the three capture forms (`{text,image,video}-capture-form.ts`) each fetch the full vocab list for their type and render a native `<select>` with a "+ Add new…" sentinel; `UserExtensionState` (P-3) is user-scoped (not a fit). Per-(platform, content-type) defaults are genuinely NEW (Rule 24 confirmed).
-- **The P-61 spec (READ, not re-created):** `docs/polish-item-specs/P-61-extension-default-categories.md` ALREADY EXISTED (the 2026-06-02-d capture batch) — per Rule 31 it was READ, and §2 was UPDATED this session with the audit findings + the 4-picker design + the Rule 23 Additive classification; Status → ✅ DEPLOYED-AND-VERIFIED 2026-06-03.
-- **The 4 design pickers (WITH the director per `feedback_plan_output_shape_before_building`):** Q1 sharing = per-Project (recommended); Q2 show-defaults = a "★ Defaults" optgroup pinned at the top of the existing native dropdown (a director OVERRIDE); Q3 make/remove = inline ★ + checkbox-on-add (recommended); Q4 reconciliation (native `<option>` rows can't host a tappable star) = a contextual "★ Make default for [platform] · [type]" checkbox BELOW the dropdown (recommended). The Q2↔Q3 conflict was surfaced + reconciled via the focused Q4 picker (the NEW reusable PATTERN).
-- **The build (`fdedaa5`):** NEW additive Prisma model `CategoryDefault` (keyed `projectId + platform + vocabularyType + value`) shipped to prod via `prisma db push` (1.29s, zero data loss); NEW route `competition-scraping/category-defaults` (GET/POST/DELETE; route 73 → 74); NEW shared types; NEW pure helper `src/lib/competition-scraping/category-defaults.ts` (`buildCategoryPickerOptions` + `isDefaultCategory`, +6 node:test); extension api-client + api-bridge + 3 background handlers + messaging union/validation; NEW shared content-script DOM helper `category-defaults-picker.ts` wired into the text / image / video capture forms. `60f9455` = the P-58 in-app Download-Extension served-artifact refresh. `main` went `8e71cda → fdedaa5 → 60f9455`.
-- **The fresh sideload zip:** `plos-extension-2026-06-02-w2-p61-default-categories.zip` (219 KB) at repo root — the director sideloaded + real-Chrome verified this exact artifact (untracked; NOT committed per Rule 11).
-- **1 PENDING:** the end-of-session doc-batch commit (this doc-batch agent's output) — the Group A bundle (ROADMAP + CHAT_REGISTRY + DOCUMENT_MANIFEST + CORRECTIONS_LOG + CLAUDE_CODE_STARTER + this NEXT_SESSION + AI_MODEL_REGISTRY [unchanged]) + HANDOFF_PROTOCOL header bump + the EXISTING P-61 Group B polish-item-spec update + a NEW §B 2026-06-03 note in `docs/COMPETITION_SCRAPING_DESIGN.md` + the VERIFICATION_BACKLOG Deploy session #43 + the PRIMER §5 update. **This doc-batch commit ff-merges to main per the standard 3-push pattern.**
+- **Read-first:** `docs/HANDOFF_PROTOCOL.md` Rule 33 (workflow-graduation continuity) + the graduation methodology + `docs/COMPETITION_SCRAPING_PRIMER.md` + `docs/WORKFLOW_GRADUATION_CONTINUITY_DESIGN.md`.
+- **Two Rule 14f graduation pickers (WITH the director):** graduation depth = continuity-first (DEFER the Data-Contract split until downstream need); residue = one consolidated non-blocking primer §5 section.
+- **The §4 Step 1c next-pick (a third picker):** Backfill W#1 (Keyword Clustering) under Rule 33 — confirmed via a disambiguation follow-up (the bare answer token "3" was ambiguous because option 1 was literally about 'W#3', so Claude confirmed "Backfill W#1 under Rule 33" BEFORE acting, per `feedback_no_fabricated_instructions`).
+- **No code, no deploy, no commits in-session.**
+- **1 PENDING:** the end-of-session doc-batch commit (this doc-batch agent's output) — the Group A bundle (ROADMAP + CHAT_REGISTRY + DOCUMENT_MANIFEST + CORRECTIONS_LOG + CLAUDE_CODE_STARTER + this NEXT_SESSION + AI_MODEL_REGISTRY [unchanged]) + HANDOFF_PROTOCOL header bump + the Group B graduation updates (PRIMER + WORKFLOW_GRADUATION_CONTINUITY_DESIGN + DATA_CATALOG + COMPETITION_SCRAPING_DESIGN §B). **This doc-batch commit ff-merges to `main` per the standard 3-push pattern; ONE push only (no prior deploy push — docs-only).**
 
-**Schema-change-in-flight flag NO at entry → flipped YES (the new `CategoryDefault` model) → flipped YES→NO at the deploy `prisma db push` → NO at exit. NEXT session (W#2 graduation) = NO at entry anticipated** (a docs/methodology unit).
+**Schema-change-in-flight flag NO at entry → STAYED NO entire session → NO at exit. NEXT session (W#1 backfill) = NO at entry anticipated** (a docs unit).
 
-**ZERO open DEFERRED items at exit (Rule 26):** TaskList returned EMPTY at entry AND exit; the 5 in-session build tasks (#4–#8) all completed. P-62 + the small carry-overs (P-43, the P-52 carry-overs, the P-56 Option-2 follow-up) are documented roadmap continuation, NOT TaskList DEFERRED items.
+**ZERO open DEFERRED items at exit (Rule 26):** TaskList returned EMPTY at entry; 4 in-session tasks were created + all completed (verify `./catch-up-workflow 2`; primer §5; ROADMAP graduated stamp; design-doc §4 + DATA_CATALOG). The deferred W#2 Data Contract + P-62 + the small carry-overs are documented roadmap continuation, NOT TaskList DEFERRED items.
 
-**Baselines locked from this session:** root tsc clean (UNCHANGED) + extension tsc clean (UNCHANGED) + extension `npm test` = **915/915 UNCHANGED** (plumbing covered by tsc; no new extension test — no messaging.test exists to extend) + src/lib `node:test` = **1369/1369** (+6 — the `category-defaults` helper tests) + `npm run build` = **74 routes** (+1 — the new `category-defaults` endpoint); Check 6 Playwright SKIPPED per Rule 27 (overlay + server-state = director real-Chrome verification).
+**Baselines UNCHANGED by definition (DOCS-ONLY — not re-run):** extension `npm test` = **915/915 UNCHANGED** + src/lib `node:test` = **1369/1369 UNCHANGED** + `npm run build` = **74 routes UNCHANGED**; Check 6 Playwright SKIPPED per Rule 27.
 
-**ONE NEW INFORMATIONAL CORRECTIONS_LOG §Entry 2026-06-03** (no top-tier slip — the deploy passed; the director verified "Pass") capturing: (a) the DATE-BOUNDARY crossing (opened 2026-06-02 as in-flight `-j`; harness rolled to 2026-06-03 mid-deploy; stamped 2026-06-03 per trust-the-harness; in-flight artifacts carry `-j` — expected/harmless); (b) NEW reusable PATTERN — "when two design picks conflict against a platform constraint (a '★ Defaults' optgroup in a NATIVE `<select>` + a requested per-row star toggle, which native `<option>` rows can't host), surface the tension and reconcile WITH the director via one focused follow-up picker rather than silently choosing — the resolution was a contextual checkbox tied to the selection"; (c) the additive-schema-via-`prisma db push` flow ran clean (flag NO→YES→NO; the Rule 9 gate authorized the push). **The earlier 2026-05-31 TOP-TIER SLIP §Entry is PRESERVED verbatim and is a SEPARATE, distinct session.** **NO new memory file this session.**
+**ONE NEW INFORMATIONAL CORRECTIONS_LOG §Entry 2026-06-03-b** (NO top-tier slip — a clean docs-only session) capturing: (a) W#2 graduated continuity-first; (b) NEW reusable PATTERN — "at workflow graduation, defer the Archive/Data-Contract split + the finalized-HRL Data Capture Interview until a downstream workflow discovers a need to read the data (DOCUMENTATION_ARCHITECTURE §4 create-on-need), rather than authoring a contract no consumer reads yet — the continuity PRIMER is the load-bearing re-entry artifact and is sufficient at graduation"; (c) a process-good note — the ambiguous bare-token "3" answer was disambiguated with a confirmation picker BEFORE acting (per `feedback_no_fabricated_instructions`). **The earlier 2026-05-31 TOP-TIER SLIP §Entry is PRESERVED verbatim and is a SEPARATE, distinct session.** **NO new memory file this session.**
 
-**Group B docs updated** — `docs/polish-item-specs/P-61-extension-default-categories.md` (the EXISTING spec; Status → ✅ DEPLOYED-AND-VERIFIED 2026-06-03; §2 the audit + the 4-picker design; the as-shipped note — the `CategoryDefault` model + the `category-defaults` route + the `category-defaults-picker` helper + the director "Pass") + a NEW §B 2026-06-03 note in `docs/COMPETITION_SCRAPING_DESIGN.md` + `docs/COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` (Deploy session #43 — default-categories real-Chrome PASS) + `docs/COMPETITION_SCRAPING_PRIMER.md` (§5 open-items — P-61 now CLOSED; ALL W#2 polish drained; W#2 graduation the next pick). `docs/REVIEWS_PHASE_2_DESIGN.md` UNCHANGED. `docs/COMPETITION_DATA_V2_DESIGN.md` UNCHANGED. `docs/AI_MODEL_REGISTRY.md` UNCHANGED.
+**Group B docs updated** — `docs/COMPETITION_SCRAPING_PRIMER.md` (Status → ✅ GRADUATED 2026-06-03 continuity-first; §5 rewritten into "State at graduation + post-graduation residue" with a consolidated residue table + a "deferred graduation step (by design)" note) + `docs/WORKFLOW_GRADUATION_CONTINUITY_DESIGN.md` (Status notes W#2 graduated; §2 new 2026-06-03 chronological entry; §4 "formal W#2 graduation" → ✅ RESOLVED 2026-06-03 — continuity-first, split deferred to W#3) + `docs/DATA_CATALOG.md` (§6.1 W#2 Status — schema SHIPPED+LIVE+authoritative; the finalized-HRL Data Capture Interview + Data Contract DEFERRED to W#3-need) + `docs/COMPETITION_SCRAPING_DESIGN.md` (NEW §B 2026-06-03-b graduation note). `docs/COMPETITION_SCRAPING_VERIFICATION_BACKLOG.md` UNCHANGED (no deploy/verification this session). `docs/REVIEWS_PHASE_2_DESIGN.md` UNCHANGED. `docs/COMPETITION_DATA_V2_DESIGN.md` UNCHANGED. `docs/AI_MODEL_REGISTRY.md` UNCHANGED.
 
-**ROADMAP P-61 polish-backlog entry flipped** to ✅ SHIPPED-AT-DEPLOY-LEVEL + DEPLOYED-AND-VERIFIED + CLOSED (with the as-shipped narrative + the 4-picker design + the last-substantive-W#2-polish-item note + the original capture preserved) + (a.131) CLOSED / (a.132) opens = Begin W#2 graduation.
+**ROADMAP Current Active Tools W#2 row flipped** to ✅ GRADUATED 2026-06-03 (continuity-first; the continuity primer + `./catch-up-workflow 2` as the re-entry front door; the Archive/Data-Contract split deferred to W#3-need) with prior active-dev history preserved + (a.132) CLOSED / (a.133) opens = Backfill W#1 (Keyword Clustering) under Rule 33.
 
-**SEVENTY-FIFTH end-of-session run under the Rule 30 + §4 Step 4b extended template.**
+**SEVENTY-SIXTH end-of-session run under the Rule 30 + §4 Step 4b extended template.**
 
 ---
 
 ## Destructive-ops handoff audit (per `feedback_destructive_ops_confirmation.md`)
 
-- **THIS session:** ONE additive-schema DEV op — the `CategoryDefault` `prisma db push` (additive, 1.29s, zero data loss), authorized by the single Rule 9 deploy gate (director "Deploy + run db push"). NO `migrate reset`, NO drop, NO dev-data deletes. NO new memory file created; zero memory deletions. All memory files at `/home/codespace/.claude/projects/-workspaces-brand-operations-hub/memory/` + the `.codespace-backup/memory/` mirror are intact (verified present this session).
-- **NEXT session (W#2 graduation):** **NO schema change anticipated** — graduation is a docs/methodology unit. If a residual code cleanup touches the schema, it is ADDITIVE only; run the Rule 23 Change Impact Audit + get explicit director authorization via the Rule 9 deploy gate BEFORE any `prisma db push` (never `migrate reset` against prod). No other Rule 8/9/29 triggers anticipated.
-- **Critical files affirmed intact:** ROADMAP / CHAT_REGISTRY / DOCUMENT_MANIFEST / CORRECTIONS_LOG / HANDOFF_PROTOCOL / CLAUDE_CODE_STARTER / NEXT_SESSION + the P-61 spec (updated this session) + the W#2 continuity primer + the memory directory.
+- **THIS session:** ZERO destructive ops — DOCS-ONLY. NO `prisma db push`, NO `migrate reset`, NO drop, NO dev-data deletes, NO in-session commits. NO new memory file created; zero memory deletions. All memory files at `/home/codespace/.claude/projects/-workspaces-brand-operations-hub/memory/` + the `.codespace-backup/memory/` mirror are intact (verified present this session).
+- **NEXT session (W#1 backfill):** **NO schema change, NO destructive op anticipated** — writing `docs/KEYWORD_CLUSTERING_PRIMER.md` + registering `./catch-up-workflow 1` is a docs unit. W#1 is a graduated tool: do NOT touch its schema or its `src/lib/keyword-clustering/*` code unless the director explicitly asks (Rule 3 ownership — W#1 is W#1-owned). If a residual code cleanup surfaces, it is ADDITIVE only; run the Rule 23 Change Impact Audit + get explicit director authorization via the Rule 9 deploy gate BEFORE any `prisma db push` (never `migrate reset` against prod). No other Rule 8/9/29 triggers anticipated.
+- **Critical files affirmed intact:** ROADMAP / CHAT_REGISTRY / DOCUMENT_MANIFEST / CORRECTIONS_LOG / HANDOFF_PROTOCOL / CLAUDE_CODE_STARTER / NEXT_SESSION + the W#2 continuity primer + `docs/WORKFLOW_GRADUATION_CONTINUITY_DESIGN.md` + `docs/DATA_CATALOG.md` + the memory directory + the `docs/templates/WORKFLOW_PRIMER_TEMPLATE.md` (the template the next session copies).
 
 ---
 
 ## Branch
 
-**`workflow-2-competition-scraping`** — entered at start of next session. W#2 graduation is W#2-only. The `./resume` / `./resume-workflow 2` scripts switch to the workflow-2 branch automatically. Verify with `git branch --show-current` immediately after entry; should be on `workflow-2-competition-scraping`.
+**`main`** — entered at start of next session. The (a.133) pick is the W#1 (Keyword Clustering) Rule-33 backfill, and **W#1's branch is `main`** per the `resume-workflow` registry (W#1 is graduated; it lives on main). The `./resume` / `./resume-workflow 1` scripts switch to `main` automatically. This is a DELIBERATE branch CHANGE from this session's `workflow-2-competition-scraping` to `main`. Verify with `git branch --show-current` immediately after entry; should be on `main`.
 
-**Expected branch state on entry** (after this session's end-of-session doc-batch ff-merges to main): `main` and `workflow-2-competition-scraping` BOTH at `60f9455` (the P-61 + P-58-refresh deploy) + the end-of-session doc-batch SHA. **Verify with `git log origin/main..HEAD --oneline` showing 0** (everything is on main after the doc-batch ff-merge); `git status` clean apart from historical untracked .zip + .html artifacts at repo root (now incl. `plos-extension-2026-06-02-w2-p61-default-categories.zip`).
+**Expected branch state on entry** (after this session's end-of-session doc-batch ff-merges to main): `main` and `workflow-2-competition-scraping` BOTH at `60f9455` (the prior P-61 deploy) + the 2026-06-03-b doc-batch SHA. **Verify with `git log origin/main..HEAD --oneline` showing 0** (you'll be on `main`; everything is on `main` after the doc-batch ff-merge); `git status` clean apart from historical untracked .zip + .html artifacts at repo root.
 
-**Pre-build read list for next session** (the SessionStart hook auto-emits the 🔵 RULE 31 MANDATORY READ block; W#2 graduation has no polish-item-spec — the canonical reads are Rule 33 + the graduation methodology):
+**Pre-build read list for next session** (the SessionStart hook auto-emits the 🔵 RULE 31 MANDATORY READ block; the W#1 backfill has no polish-item-spec — the canonical reads are Rule 33 + the graduation methodology + the W#1 docs + the primer template):
 
 - `docs/CLAUDE_CODE_STARTER.md` (mandatory; Step 7b plain-terms summary REQUIRED before any heavy reads or code mechanics).
-- **`docs/HANDOFF_PROTOCOL.md` Rule 33 (workflow-graduation continuity) — the FIRST read this session** + the graduation methodology + Rule 25 (multi-workflow) + Rule 26 + Rule 30 (Session bookends) + §4 Step 4b extended template. (If any residual code cleanup is in scope: Rule 14f + Rule 9 + Rule 23 + Rule 31 as well.)
-- **`docs/COMPETITION_SCRAPING_PRIMER.md`** — the W#2 continuity primer (§5 open-items now reflects P-61 CLOSED + the drained polish queue); the graduation materials build on this.
-- **`./catch-up-workflow 2`** — the graduation tooling per Rule 33 (added 2026-06-02-d).
-- `docs/ROADMAP.md` — the W#2 polish backlog (all P-IDs now CLOSED except the lower-priority residue + P-62) for the graduation summary.
-- `docs/CORRECTIONS_LOG.md` §Entry 2026-06-03 (this session — the DATE-BOUNDARY crossing + the reconcile-conflicting-picks PATTERN) + §Entry 2026-05-31 (the TOP-TIER SLIP — never act on an instruction that is not verbatim in a director message; honor explicit picker choices; restart on degraded tooling).
+- **`docs/HANDOFF_PROTOCOL.md` Rule 33 (workflow-graduation continuity) — the FIRST read** + the graduation methodology + Rule 22 (graduated-tool Resume Prompt / Data Contract) + Rule 25 (multi-workflow) + Rule 26 + Rule 30 (Session bookends) + §4 Step 4b extended template.
+- **`docs/WORKFLOW_GRADUATION_CONTINUITY_DESIGN.md` §4** — the "OPEN (low priority) — W#1 backfill" item that this session's (a.133) pick fulfills + the §2 chronology (W#2 graduated 2026-06-03) + the continuity-design rationale (the same kit W#2 now has).
+- **`docs/templates/WORKFLOW_PRIMER_TEMPLATE.md`** — the canonical primer template to COPY for `docs/KEYWORD_CLUSTERING_PRIMER.md`.
+- **`docs/COMPETITION_SCRAPING_PRIMER.md`** — the W#2 primer is the WORKED EXAMPLE of a finished continuity primer (front door + map + pointers + §5 residue); mirror its shape for W#1.
+- **The existing W#1 docs the primer must point at:** `docs/KEYWORD_CLUSTERING_ARCHIVE.md` + `docs/KEYWORD_CLUSTERING_DATA_CONTRACT.md` + `docs/KEYWORD_CLUSTERING_POLISH_BACKLOG.md` + `docs/KEYWORD_CLUSTERING_NEXT_SESSION.md` (W#1 already has Archive / Data-Contract / Polish-Backlog — the gap is ONLY the primer + the catch-up command).
+- **`./catch-up-workflow` + `./resume-workflow`** — read how W#2 (`./catch-up-workflow 2`) is wired so W#1 (`./catch-up-workflow 1`) is registered identically; the registry already lists W#1 → `main`.
+- `docs/ROADMAP.md` — the W#2 graduation record + the total-roadmap summary.
+- `docs/CORRECTIONS_LOG.md` §Entry 2026-06-03-b (this session — the graduation + the defer-the-Data-Contract PATTERN + the disambiguation process-good) + §Entry 2026-05-31 (the TOP-TIER SLIP — never act on an instruction that is not verbatim in a director message; honor explicit picker choices; restart on degraded tooling).
 - **All existing memory files** at `/home/codespace/.claude/projects/-workspaces-brand-operations-hub/memory/`:
-  - **`feedback_no_fabricated_instructions.md`** — act only on verbatim directives; graduation is a process, not a new feature ask.
-  - **`feedback_remaining_roadmap_summary.md`** + **`feedback_handoff_carryovers_to_roadmap.md`** — the graduation handoff must summarize the total remaining roadmap + capture every carry-over as a ROADMAP entry.
-  - **`feedback_session_bookends_plain_summary.md`** — bookend with plain-terms summaries (graduation is a director-facing milestone).
+  - **`feedback_no_fabricated_instructions.md`** — act only on verbatim directives; the W#1 backfill is the confirmed (a.133) pick.
+  - **`feedback_remaining_roadmap_summary.md`** + **`feedback_handoff_carryovers_to_roadmap.md`** — the handoff must summarize the total remaining roadmap + capture every carry-over as a ROADMAP entry.
+  - **`feedback_session_bookends_plain_summary.md`** — bookend with plain-terms summaries.
   - `feedback_default_to_recommendation.md` + `feedback_recommendation_style.md` + `feedback_approval_scope_per_decision_unit.md` + `feedback_destructive_ops_confirmation.md` + `feedback_trust_director_setup_confirmation.md` + `feedback_deferred_items_registry.md` + `feedback_plan_output_shape_before_building.md` + `feedback_playwright_for_repeatable_walkthroughs.md` + `feedback_browser_first_ai_with_server_migration.md` + `feedback_exports_include_all_table_data.md`.
 
 ---
 
 ## Launch prompt
 
-Read `docs/CLAUDE_CODE_STARTER.md` and follow every rule in it. **Per Step 7b, produce the plain-terms summary of what this session will do BEFORE I give go-ahead.** **Per Rule 31, the SessionStart hook will auto-emit a 🔵 RULE 31 MANDATORY READ block; for W#2 graduation there is no polish-item-spec — instead the FIRST read is `docs/HANDOFF_PROTOCOL.md` Rule 33 (workflow-graduation continuity) + the graduation methodology + `docs/COMPETITION_SCRAPING_PRIMER.md`.** **This session is on `workflow-2-competition-scraping` — verify the branch first.** **Trust the harness `currentDate` for date-stamps; do NOT regress.**
+Read `docs/CLAUDE_CODE_STARTER.md` and follow every rule in it. **Per Step 7b, produce the plain-terms summary of what this session will do BEFORE I give go-ahead.** **Per Rule 31, the SessionStart hook will auto-emit a 🔵 RULE 31 MANDATORY READ block; for the W#1 Rule-33 backfill there is no polish-item-spec — instead the FIRST read is `docs/HANDOFF_PROTOCOL.md` Rule 33 (workflow-graduation continuity) + the graduation methodology + `docs/WORKFLOW_GRADUATION_CONTINUITY_DESIGN.md` §4 + the existing W#1 docs + `docs/templates/WORKFLOW_PRIMER_TEMPLATE.md`.** **This session runs on `main` — verify the branch first (this is a deliberate change from W#2's branch).** **Trust the harness `currentDate` for date-stamps; do NOT regress.**
 
-**Session goal ((a.132) = Begin W#2 graduation, Rule 33):** now that every substantive W#2 (Competition Scraping) polish item is shipped and verified (P-54 / P-55 / P-56 / P-57 / P-58 / P-59 / P-60 / P-61 all closed), begin the formal workflow-graduation continuity process — write the graduation/handoff materials, run `./catch-up-workflow 2`, and formally mark W#2 essentially complete in the roadmap + the primer, listing the low-priority residue clearly but not as blockers. This was your §4 Step 1c forced-picker choice. **P-61 is CLOSED — do NOT reopen it.**
+**Session goal ((a.133) = Backfill W#1 (Keyword Clustering) under Rule 33):** graduated W#1 never got the new one-page continuity primer or the one-line re-entry command that W#2 just received. Write `docs/KEYWORD_CLUSTERING_PRIMER.md` (a map+pointers front door — copy `docs/templates/WORKFLOW_PRIMER_TEMPLATE.md` and fill it from the existing W#1 Archive / Data-Contract / Polish-Backlog docs) + register `./catch-up-workflow 1` so a future session can re-enter W#1 with one paste exactly like W#2 now has. This was your §4 Step 1c forced-picker choice (confirmed via a disambiguation follow-up). **W#2 is GRADUATED — do NOT reopen it. Do NOT touch W#1's app code or schema — this is a DOCS unit (Rule 3: W#1-owned).**
 
 **Branch verify (do this immediately after entry):**
 
 ```bash
 git branch --show-current
-# Expected: workflow-2-competition-scraping
+# Expected: main   (deliberate change from this session's workflow-2-competition-scraping)
 
 git status
-# Expected: clean working tree (apart from historical untracked .zip + .html artifacts at repo root, incl. plos-extension-2026-06-02-w2-p61-default-categories.zip)
+# Expected: clean working tree (apart from historical untracked .zip + .html artifacts at repo root)
 
 git log origin/main..HEAD --oneline
-# Expected: 0 — main and workflow-2 are both at 60f9455 + the 2026-06-03 doc-batch SHA; nothing is held back
+# Expected: 0 — main and workflow-2 are both at 60f9455 + the 2026-06-03-b doc-batch SHA; nothing is held back
 ```
 
-If `git branch --show-current` shows `main`, run `./resume-workflow 2`.
+If `git branch --show-current` shows `workflow-2-competition-scraping` (or anything other than `main`), run `./resume-workflow 1` (or `./resume`).
 
-**FIRST step (read Rule 33 + the graduation methodology — BEFORE any work):** read `docs/HANDOFF_PROTOCOL.md` Rule 33 (workflow-graduation continuity, added 2026-06-02-d) and the graduation methodology fully, then read `docs/COMPETITION_SCRAPING_PRIMER.md` (the W#2 continuity primer the graduation materials build on). Confirm what `./catch-up-workflow 2` does before running it.
+**FIRST step (read Rule 33 + the graduation methodology + the W#1 inputs — BEFORE any writing):** read `docs/HANDOFF_PROTOCOL.md` Rule 33 + the graduation methodology fully; then `docs/WORKFLOW_GRADUATION_CONTINUITY_DESIGN.md` §4 (the W#1-backfill open item this pick fulfills) + §2; then the existing W#1 docs (`docs/KEYWORD_CLUSTERING_ARCHIVE.md` + `docs/KEYWORD_CLUSTERING_DATA_CONTRACT.md` + `docs/KEYWORD_CLUSTERING_POLISH_BACKLOG.md` + `docs/KEYWORD_CLUSTERING_NEXT_SESSION.md`); then `docs/templates/WORKFLOW_PRIMER_TEMPLATE.md` (the shape to copy) and `docs/COMPETITION_SCRAPING_PRIMER.md` (the worked example). Confirm what `./catch-up-workflow 2` does (and how `./resume-workflow` already lists W#1 → `main`) BEFORE wiring `./catch-up-workflow 1`.
 
-**Schema-change-in-flight flag:** **NO at entry.** W#2 graduation is a docs/methodology unit — NO schema change anticipated. If any residual code cleanup is in scope and touches the schema, it is ADDITIVE only; run the Rule 23 Change Impact Audit + get explicit director authorization via the Rule 9 deploy gate BEFORE any `prisma db push` (never `migrate reset` against prod).
+**Schema-change-in-flight flag:** **NO at entry.** The W#1 backfill is a docs unit — NO schema change anticipated. Do NOT touch W#1's schema or `src/lib/keyword-clustering/*` code (Rule 3: W#1-owned, graduated). If anything code-adjacent is genuinely required and touches the schema, it is ADDITIVE only; run the Rule 23 Change Impact Audit + get explicit director authorization via the Rule 9 deploy gate BEFORE any `prisma db push` (never `migrate reset` against prod).
 
-**Output-shape (plan WITH the director per `feedback_plan_output_shape_before_building` + `feedback_session_bookends_plain_summary`):** graduation is a director-facing milestone — bookend with plain-terms summaries (what graduation means, what's complete, what residue remains). If the graduation materials have a real shape fork (e.g. how detailed the continuity primer is, whether to fold the residue into a single "W#2 residue" section), plan the shape WITH me; otherwise describe the recommended shape plainly and proceed per `feedback_default_to_recommendation`.
+**Output-shape (plan WITH the director per `feedback_plan_output_shape_before_building` + `feedback_session_bookends_plain_summary`):** the W#1 primer should MIRROR the W#2 primer's shape (front door + status line + map + pointers + a §5 residue section drawn from `KEYWORD_CLUSTERING_POLISH_BACKLOG.md`). If there's a real shape fork (e.g. how much W#1 history to fold in vs. point at, whether W#1 even has residue worth a §5), plan the shape WITH me; otherwise describe the recommended shape plainly and proceed per `feedback_default_to_recommendation` (the template + the W#2 worked example largely settle the shape).
 
-**Forced-picker shape (before coding/writing):** fire a Rule 14f AskUserQuestion only if there is a real fork (e.g. graduate-now vs. clear the lower-priority residue first; how much of the residue to fold into graduation). If the recommended shape is obvious + default-approved, describe it plainly and proceed.
+**Forced-picker shape (before writing):** fire a Rule 14f AskUserQuestion only if there is a real fork (e.g. how the W#1 residue is presented, or whether to also refresh `KEYWORD_CLUSTERING_NEXT_SESSION.md`). If the recommended shape is obvious + default-approved (copy the template, mirror the W#2 primer), describe it plainly and proceed.
 
-**Test coverage decision:** graduation is docs/methodology — likely NO new tests. If any residual code cleanup adds a pure helper, add node:test coverage. Check 6 Playwright per Rule 27 (likely SKIPPED — no new UI surface).
+**Test coverage decision:** the W#1 backfill is docs/methodology — NO new tests expected. If any residual code cleanup adds a pure helper (unlikely — W#1 is W#1-owned and graduated), add node:test coverage. Check 6 Playwright per Rule 27 (SKIPPED — no UI surface).
 
 **Scoreboard targets** (entry baselines = this session's exit baselines):
 
 - Root tsc clean (expect UNCHANGED)
-- Extension tsc clean (expect UNCHANGED unless extension code is touched)
-- Extension `npm test` = 915 (entry 915; +N only if new extension tests)
-- src/lib `node:test` = 1369 (entry 1369; +N only if a new pure helper)
-- `npm run build` = 74 routes (+1 only if a new endpoint is added — unlikely for a docs unit)
+- Extension tsc clean (expect UNCHANGED — no extension code touched)
+- Extension `npm test` = 915 (entry 915; expect UNCHANGED — docs unit)
+- src/lib `node:test` = 1369 (entry 1369; expect UNCHANGED — docs unit)
+- `npm run build` = 74 routes (expect UNCHANGED — no new endpoint for a docs unit)
 - Check 6 Playwright SKIPPED per Rule 27
-- **Run `npm run build` with an explicit absolute `cd /workspaces/brand-operations-hub` prefix** — the P-43 cwd-leak recurred recently; treat a route count of 0 as the cwd-leak tell-tale.
+- **Run `npm run build` with an explicit absolute `cd /workspaces/brand-operations-hub` prefix** — the P-43 cwd-leak recurred recently; treat a route count of 0 as the cwd-leak tell-tale. (For a pure docs session you may legitimately skip re-running the scoreboard — baselines are UNCHANGED by definition — but state that you're skipping it.)
 
-**Deploy mechanics:** graduation is primarily a docs/methodology unit — likely NO deploy. If any residual code cleanup ships, it follows the standard Rule 9 gate + 3-push pattern (and a fresh sideload zip + director sideload-verification if extension SOURCE changes).
+**Deploy mechanics:** the W#1 backfill is a docs/methodology unit — NO deploy expected. If any residual code cleanup ships, it follows the standard Rule 9 gate + 3-push pattern. Otherwise the only push is the end-of-session doc-batch ff-merge to `main` + ping-pong (W#1 IS `main`, so the ping-pong target may collapse — verify the `./resume-workflow 1` registry).
 
-**Group A docs to update at session end:** ROADMAP header bump + the W#2-graduation status + (a.132) status + CHAT_REGISTRY header bump (198th session) + DOCUMENT_MANIFEST header + flags + CORRECTIONS_LOG header (+ 1 NEW §Entry if anything notable) + HANDOFF_PROTOCOL header bump + CLAUDE_CODE_STARTER header bump + NEXT_SESSION full rewrite.
+**Group A docs to update at session end:** ROADMAP header bump + (a.133) status + CHAT_REGISTRY header bump (199th session) + DOCUMENT_MANIFEST header + flags + the NEW `docs/KEYWORD_CLUSTERING_PRIMER.md` registered + CORRECTIONS_LOG header (+ 1 NEW §Entry only if anything notable) + HANDOFF_PROTOCOL header bump + CLAUDE_CODE_STARTER header bump + NEXT_SESSION full rewrite.
 
-**Group B docs to update at session end:** `docs/COMPETITION_SCRAPING_PRIMER.md` (the graduation status) + `docs/COMPETITION_SCRAPING_DESIGN.md` (a §B graduation note if warranted) + whatever new graduation/continuity materials Rule 33 + `./catch-up-workflow 2` prescribe.
+**Group B docs to update at session end:** the NEW `docs/KEYWORD_CLUSTERING_PRIMER.md` (the deliverable) + `docs/WORKFLOW_GRADUATION_CONTINUITY_DESIGN.md` §4 (flip the W#1-backfill open item to ✅ RESOLVED) + `docs/KEYWORD_CLUSTERING_NEXT_SESSION.md` if the re-entry kit warrants it (sparse per Rule 22) + the `./catch-up-workflow` script (register W#1).
 
 **Standing carry-overs into this session:**
 
-- **(a.132) = Begin W#2 graduation (Rule 33)** — read Rule 33 + the graduation methodology FIRST; run `./catch-up-workflow 2`; plan the materials' shape WITH me if there's a fork.
-- **P-62** — the Workflow-11 surveillance card+page (future-workflow). Behind graduation.
-- **P-56 Option-2 follow-up** — the optional "kill the idle flash too" (redraw only changed text); raise only if you want it.
+- **(a.133) = Backfill W#1 (Keyword Clustering) under Rule 33** — read Rule 33 + WORKFLOW_GRADUATION_CONTINUITY_DESIGN §4 + the W#1 docs FIRST; copy the primer template; register `./catch-up-workflow 1`; on `main`.
+- **The deferred W#2 Archive/Data-Contract split** — held until W#3 needs to read W#2 data; do NOT author now.
+- **P-62** — the Workflow-11 surveillance card+page (future-workflow).
+- **P-56 Option-2 follow-up** — the optional "kill the idle flash too"; raise only if you want it.
 - **P-43 mechanical prevention small fix** — add absolute `cd /workspaces/brand-operations-hub` prefix to ALL Bash commands in `.claude/commands/scoreboard.md`; single-session fix / palate-cleanser.
-- **Opus 4.8 pricing numbers + W#1 `AutoAnalyze.tsx` shared-list migration** — the two P-52 carry-overs.
 - **P-50 NEW Condition Pathology card** — small single-session UI addition; director already approved scope.
+- **Opus 4.8 pricing numbers + W#1 `AutoAnalyze.tsx` shared-list migration** — the two P-52 carry-overs (note the W#1 piece is W#1-owned per Rule 3).
 
 ---
 
 ## Why this pointer was written this way (debug aid)
 
-- **(a.132) = Begin W#2 graduation is the PICK because it was the director's §4 Step 1c forced-picker choice this session.** With P-61 closed — the LAST substantive W#2 polish item — the entire polish queue is drained, so graduating W#2 is the natural next unit; the director picked it over the future-workflow P-62 and the lower-priority residue.
-- **The FIRST action is to READ Rule 33 + the graduation methodology, not to write materials blind.** Rule 33 (workflow-graduation continuity) + `./catch-up-workflow 2` were added 2026-06-02-d precisely for this moment; follow the prescribed methodology so the W#2 handoff matches how the other workflows are documented.
-- **The Schema-change-in-flight flag is NO at entry and expected to stay NO** — graduation is a docs/methodology unit. The flag last flipped YES→NO this session for the `CategoryDefault` additive push.
-- **Plan the shape WITH the director** — graduation is a director-facing milestone; `feedback_session_bookends_plain_summary` + `feedback_plan_output_shape_before_building` apply (what "graduated" means + what residue remains, in plain terms).
-- **Nothing is held back** — the P-61 deploy is on main, and the doc-batch ff-merges this session. Expect `git log origin/main..HEAD` = 0 at entry.
+- **(a.133) = Backfill W#1 under Rule 33 is the PICK because it was the director's §4 Step 1c forced-picker choice this session, confirmed via a disambiguation follow-up.** The bare answer token "3" was ambiguous (option 1 was literally about 'W#3'), so rather than guess, Claude fired a confirmation picker and the director confirmed "Backfill W#1 under Rule 33." With W#2 graduated, giving the OTHER graduated tool (W#1) the same continuity kit is the natural consistency step.
+- **The branch CHANGES to `main` this session** — W#1 is a graduated tool that lives on `main` (per the `resume-workflow` registry), not on a feature branch. This is the first session in a while to run on `main`; verify the branch immediately and use `./resume` / `./resume-workflow 1`.
+- **The FIRST action is to READ Rule 33 + WORKFLOW_GRADUATION_CONTINUITY_DESIGN §4 + the W#1 docs, not to write the primer blind.** The W#1 backfill is explicitly tracked as the "OPEN (low priority) — W#1 backfill" item in §4; the primer must be filled from the existing W#1 Archive / Data-Contract / Polish-Backlog docs and mirror the W#2 primer's shape.
+- **The Schema-change-in-flight flag is NO at entry and expected to stay NO** — the backfill is a docs unit; W#1's code + schema are W#1-owned and must not be touched.
+- **W#2's deferred Data Contract is intentionally NOT authored now** — it's held until W#3 needs to read W#2 data (DOCUMENTATION_ARCHITECTURE §4 create-on-need). Do NOT confuse the W#1 backfill (write W#1's primer) with the deferred W#2 contract.
+- **Nothing is held back** — this was a docs-only session; the doc-batch ff-merges this session. Expect `git log origin/main..HEAD` = 0 at entry.
 
 ## Alternate next-session candidates if director shifts priorities at session start
 
-- **(a.132.alt1) Begin W#2 graduation** (current PICK — pre-loaded above). Read Rule 33 + the graduation methodology first; run `./catch-up-workflow 2`; on `workflow-2-competition-scraping`.
-- **(a.132.alt2) P-56 Option-2 follow-up** (the optional "kill the idle flash too" / redraw only changed text for the residual reading-time flicker; on `workflow-2-competition-scraping`).
-- **(a.132.alt3) P-43 mechanical prevention small fix** (single-session — add absolute `cd /workspaces/brand-operations-hub` prefix to ALL Bash commands in `.claude/commands/scoreboard.md`; quick palate-cleanser).
-- **(a.132.alt4) P-50 NEW Condition Pathology card** (small single-session UI addition; director already approved scope; on `workflow-2-competition-scraping`).
-- **(a.132.alt5) The two P-52 carry-overs** (official Opus 4.8 pricing numbers + the deferred W#1 `AutoAnalyze.tsx` shared-list migration — note the W#1 piece is W#1-owned per Rule 3).
-- **(a.132.alt6) P-62 Workflow-11 surveillance card + page** (future-workflow seed; the spec exists; design WITH the director when W#11 kicks off).
+- **(a.133.alt1) Backfill W#1 (Keyword Clustering) under Rule 33** (current PICK — pre-loaded above). Write `docs/KEYWORD_CLUSTERING_PRIMER.md` + register `./catch-up-workflow 1`; on `main`; read Rule 33 + WORKFLOW_GRADUATION_CONTINUITY_DESIGN §4 + the W#1 docs first.
+- **(a.133.alt2) P-43 mechanical prevention small fix** (single-session — add absolute `cd /workspaces/brand-operations-hub` prefix to ALL Bash commands in `.claude/commands/scoreboard.md`; quick palate-cleanser).
+- **(a.133.alt3) P-50 NEW Condition Pathology card** (small single-session UI addition; director already approved scope; on `workflow-2-competition-scraping`).
+- **(a.133.alt4) P-56 Option-2 follow-up** (the optional "kill the idle flash too" / redraw only changed text for the residual Amazon Highlight-Terms flicker; on `workflow-2-competition-scraping`).
+- **(a.133.alt5) The two P-52 carry-overs** (official Opus 4.8 pricing numbers + the deferred W#1 `AutoAnalyze.tsx` shared-list migration — the W#1 piece is W#1-owned per Rule 3, on `main`).
+- **(a.133.alt6) P-62 Workflow-11 surveillance card + page** (future-workflow seed; the spec exists; design WITH the director when W#11 kicks off).

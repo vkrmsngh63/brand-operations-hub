@@ -1,6 +1,6 @@
 # Workflow Graduation Continuity — design + methodology
 
-**Status:** ✅ BUILT 2026-06-02-d (`session_2026-06-02-d`) — methodology shipped: HANDOFF_PROTOCOL Rule 33 + DOCUMENTATION_ARCHITECTURE §5 Steps 7-8 + `docs/templates/WORKFLOW_PRIMER_TEMPLATE.md` + `docs/COMPETITION_SCRAPING_PRIMER.md` (W#2 first instance) + `./catch-up-workflow`. §1 is the director's verbatim directive (append-only).
+**Status:** ✅ BUILT 2026-06-02-d (`session_2026-06-02-d`) — methodology shipped: HANDOFF_PROTOCOL Rule 33 + DOCUMENTATION_ARCHITECTURE §5 Steps 7-8 + `docs/templates/WORKFLOW_PRIMER_TEMPLATE.md` + `docs/COMPETITION_SCRAPING_PRIMER.md` (W#2 first instance) + `./catch-up-workflow`. **W#2 FORMALLY GRADUATED under this methodology 2026-06-03 (continuity-first; Archive/Data-Contract split deferred to W#3 — see §2 + §4).** §1 is the director's verbatim directive (append-only).
 
 **One-line goal:** when a workflow graduates, leave behind a reliable, file-backed "continuity primer" + a single paste-able catch-up command, so a future session can seamlessly re-enter that workflow to fix or extend it — without relying on Claude's memory files.
 
@@ -31,6 +31,7 @@
 - **2026-06-02-d — Central-doc home:** the new rule is **HANDOFF_PROTOCOL.md Rule 33**, with the Tool Graduation Ritual in **DOCUMENTATION_ARCHITECTURE.md §5** extended (Steps 7 + 8).
 - **2026-06-02-d — Backup reliability:** git-tracked `docs/` already lives under `/workspaces/` (survives container rebuilds, unlike the home-dir memory that was once wiped — Rule 29). So no separate `.codespace-backup/` mirror is needed for the primer/template/docs; git is the reliable backup. (This directly answers the director's "don't rely on memory files" concern.)
 - **2026-06-02-d — First instance = W#2.** Built the methodology generically AND produced W#2's primer (`docs/COMPETITION_SCRAPING_PRIMER.md`) + registered `./catch-up-workflow 2` as the first real instance.
+- **2026-06-03 — W#2 formally GRADUATED (continuity-first; director AskUserQuestion pick).** With the W#2 polish queue drained (P-54…P-61 all closed), W#2 was stamped ✅ GRADUATED. Two director picks: (1) **graduation depth = continuity-first** — finalize the primer + `./catch-up-workflow 2`, mark graduated, but DEFER the §5 Step 1 Archive/Data-Contract split + Data Capture Interview until W#3 needs to read W#2 data (avoids authoring a soon-to-drift contract no consumer reads; consistent with DOCUMENTATION_ARCHITECTURE §4 "create the Data Contract on downstream need"); (2) **residue = one consolidated section** — the low-priority leftovers (P-53 / P-43 / P-50 / P-26 / P-27 / the two P-52 carry-overs / the optional P-56 Option-2 follow-up) folded into a single non-blocking "post-graduation residue" table in the primer §5. Docs-only session — no code, no schema, no deploy. See §4 ✅ RESOLVED entry.
 
 ---
 
@@ -62,7 +63,7 @@
 - **Q4 — Backup reliability — ✅ RESOLVED 2026-06-02-d:** git-tracked `docs/` under `/workspaces/` is the reliable backup (survives container rebuild); no `.codespace-backup/` mirror needed.
 - **Q5 — Apply to W#2 now — ✅ RESOLVED 2026-06-02-d:** done — `docs/COMPETITION_SCRAPING_PRIMER.md` + `./catch-up-workflow 2`.
 - **OPEN (low priority) — W#1 backfill:** optionally write `docs/KEYWORD_CLUSTERING_PRIMER.md` + register `./catch-up-workflow 1` to bring the already-graduated W#1 under Rule 33 (today W#1 re-entry uses Rule 22 + `KEYWORD_CLUSTERING_DATA_CONTRACT.md` §7 via `./resume-workflow 1`).
-- **OPEN — formal W#2 graduation:** Rule 33's primer is in place, but the §5 Archive/Data-Contract split for W#2 (`COMPETITION_SCRAPING_DESIGN.md` → archive + a `COMPETITION_SCRAPING_DATA_CONTRACT.md`) is not yet done; do it when W#2 formally graduates. The primer already points at the current design docs in the meantime.
+- **✅ RESOLVED 2026-06-03 — formal W#2 graduation (continuity-first):** W#2 was formally graduated 2026-06-03 once its polish queue drained (P-54…P-61 all closed). Director pick (AskUserQuestion): **continuity-first** — verify + finalize the primer (`docs/COMPETITION_SCRAPING_PRIMER.md`) + the catch-up command (`./catch-up-workflow 2`), consolidate the low-priority residue into one primer §5 section, and stamp W#2 ✅ GRADUATED in the ROADMAP Current Active Tools table — while **DEFERRING the §5 Step 1 Archive/Data-Contract split** (`COMPETITION_SCRAPING_DESIGN.md` → `*_ARCHIVE.md` + `*_DATA_CONTRACT.md`) **and the finalized Data Capture Interview until W#3 is started and discovers a need to read W#2 data.** Rationale: DOCUMENTATION_ARCHITECTURE §4 creates a Data Contract "when a downstream tool discovers a need"; no W#3 exists yet, so authoring it now would risk drift before any consumer reads it. The primer's §3 pointers go straight to the current (authoritative) design docs in the meantime. **When W#3 starts:** do the Archive/Data-Contract split + the Data Capture Interview + finalize the DATA_CATALOG §6.1 HRL as part of W#3's upstream-contract setup.
 
 ---
 

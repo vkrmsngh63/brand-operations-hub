@@ -7,6 +7,7 @@ without relying on Claude's auto-memory (which is not authoritative; everything
 load-bearing is in these git-tracked files).
 
 **Branch:** `workflow-2-competition-scraping` · **Live at:** vklf.com
+**Status:** ✅ **GRADUATED 2026-06-03** (continuity-first, per HANDOFF_PROTOCOL Rule 33). Every substantive polish item is shipped + director-verified; this primer + `./catch-up-workflow 2` are the re-entry front door. The DOCUMENTATION_ARCHITECTURE §5 Step 1 Archive/Data-Contract split is intentionally DEFERRED until W#3 needs to read W#2 data (director pick 2026-06-03) — until then this primer points straight at the current design docs, which stay authoritative.
 **Status / current baselines / open items — ALWAYS read these for live numbers:**
 `docs/ROADMAP.md` + the `docs/CLAUDE_CODE_STARTER.md` header (test counts, route count, and the latest session's state live there; do NOT trust any number hard-coded in this primer).
 
@@ -53,50 +54,44 @@ teaching "primer" the director feeds to an external AI.
 - Keep green before every deploy (run `/scoreboard`): root `tsc`, extension `tsc`, `src/lib` node:test, extension `npm test`, `npm run build` route count. Current pass counts live in the `docs/CLAUDE_CODE_STARTER.md` header — read them there.
 - **Schema changes:** additive + `prisma db push` ONLY with explicit director authorization (Rule 8/9); never `migrate reset` against prod. The `ComprehensiveCompetitorAnalysis.primerJson` column (P-55 Phase 3 part 3) is the most recent example of the additive-nullable pattern.
 
-## 5. OPEN items at graduation
+## 5. State at graduation + post-graduation residue
 
-Read `docs/ROADMAP.md` (search "W#2" + the P-IDs) for the authoritative list. **As of
-2026-06-03 the W#2 polish queue is DRAINED — every substantive polish item is CLOSED
-(P-54 / P-55 / P-56 / P-57 / P-58 / P-59 / P-60 / P-61), so W#2 graduation is now FULLY
-CLEAR and is the (a.132) next pick.** **P-61** (extension server-side default categories
-per platform per content-type so workers start from sensible category lists; spec
-`docs/polish-item-specs/P-61-extension-default-categories.md`) is now ✅ CLOSED —
-DEPLOYED-AND-VERIFIED 2026-06-03 on real Chrome (director "Pass"; a user can pin a
-category as a default for a specific platform + content type via a "★ Make default"
-checkbox, and the extension surfaces those defaults as a "★ Defaults" optgroup at the top
-of the category dropdown; defaults are project-scoped + shared, stored server-side in a
-NEW additive `CategoryDefault` model + a NEW `category-defaults` route — it was the LAST
-substantive W#2 polish item). The only remaining items are the lower-priority residue:
-**P-53** (on-page "Export Table" button — largely
-absorbed by P-55), **P-43** (add absolute `cd` prefix to all `scoreboard.md` Bash
-commands — recurring cwd-leak), **P-50** (NEW Condition Pathology card), **P-26/P-27**
-(below-fold scroll / capture bugs, low priority), and the two **P-52** carry-overs
-(Opus 4.8 pricing numbers + the W#1 `AutoAnalyze.tsx` shared-list migration).
-**P-59** (the in-app "Detailed User Guide" brought current with all Competition Scraping
-functionality — PLOS-side + extension) is now ✅ CLOSED — DEPLOYED-AND-VERIFIED 2026-06-02-i
-on vklf.com (director "PASS"; a NEW "Part 3 — On the PLOS website" covering the tables +
-controls + detail page + reviews capture + AI analysis + the Comprehensive Analysis page,
-the Part 2 extension gaps filled with video + reviews capture, and a stale image-capture
-label corrected; PLOS-side content-only, no schema change, no new route).
-**P-60** (the open-detail ↗ icon on the Product Name column of the three reviews-analysis
-tables) is now ✅ CLOSED — DEPLOYED-AND-VERIFIED 2026-06-02-h on vklf.com (director "PASS";
-each Product Name cell now jumps to that competitor's detail page via a ↗ that mirrors
-the main Competitor URLs table; PLOS-side UI-only, no schema change, no new route).
-**P-57** (the delete-coverage gaps on the competitor detail page) is now ✅ CLOSED —
-DEPLOYED-AND-VERIFIED 2026-06-02-g on vklf.com (captured videos are now deletable
-per-row, and category labels are deletable project-wide via a ✕ on the category pill
-with a count-bearing "delete items too" confirm; the audit found reviews / text / images
-were already deletable). **P-58** (the in-app "Download Extension (zip)" button serving
-the LATEST build) is now
-✅ CLOSED — DEPLOYED-AND-VERIFIED 2026-06-02-f on vklf.com (Option A: the freshly-built
-extension zip is committed at `public/competition-scraping/plos-extension-latest.zip` +
-refreshed at every deploy).
-**P-56** (the Amazon Highlight-Terms flicker that blocked selecting sentences for
-capture) is now ✅ CLOSED — DEPLOYED-AND-VERIFIED 2026-06-02-e on real Amazon (the
-deferred P-20 real-Amazon verification is resolved); the only residue is an optional
-"kill the idle reading-time flash too" Option-2 follow-up. **P-55** (Comprehensive
-Analysis files + editable primer) is essentially complete. **P-54** + **P-49 W#2** are
-CLOSED.
+**W#2 GRADUATED 2026-06-03 — the polish queue is DRAINED.** Every substantive polish
+item is shipped + director-verified on real Chrome / vklf.com: **P-49 W#2** (reviews
+analysis tables), **P-54** (main-table enhancements), **P-55** (Comprehensive Analysis
+files + editable primer), **P-56** (Amazon highlight-flicker selection fix), **P-57**
+(delete-coverage gaps), **P-58** (Download-Extension serves the latest build), **P-59**
+(in-app Detailed User Guide brought current), **P-60** (open-detail ↗ on the three
+analysis tables), **P-61** (server-side default categories per platform + content-type).
+For the authoritative, always-current per-item detail, read `docs/ROADMAP.md` (search
+"W#2" + the P-IDs) — this primer deliberately does NOT restate it (pointers stay current;
+copies drift).
+
+### Post-graduation residue — NON-BLOCKING, pick any when you return
+
+None of these block graduation; they ride along as documented low-priority continuation.
+Authoritative entries live in `docs/ROADMAP.md`.
+
+| Item | What it is | Priority |
+|---|---|---|
+| **P-53** | On-page "Export Table" button for the Category + Type pages — largely ABSORBED by P-55's grouped spreadsheets | LOW (residue only) |
+| **P-43** | Add an absolute `cd /workspaces/brand-operations-hub` prefix to ALL Bash commands in `.claude/commands/scoreboard.md` (recurring cwd-leak) | LOW — single-session fix |
+| **P-50** | NEW "Condition Pathology" card — small single-session UI addition (director already approved scope) | LOW |
+| **P-26 / P-27** | Below-fold scroll capture bugs + capture bugs #9 / #15 | LOW |
+| **P-52 carry-overs** | Official Opus 4.8 pricing numbers + the deferred W#1 `AutoAnalyze.tsx` shared-list migration (the W#1 piece is W#1-owned per Rule 3) | LOW |
+| **P-56 Option-2** | Optional "kill the idle reading-time flash too" (redraw only changed text) — raise only if the director wants it | OPTIONAL |
+| **P-62** | Workflow-11 "Post Launch Optimization & Surveillance" card + page (spec exists) | FUTURE-WORKFLOW (not W#2) |
+
+### Deferred graduation step (by design)
+
+The DOCUMENTATION_ARCHITECTURE §5 Step 1 **Archive/Data-Contract split** for W#2
+(`COMPETITION_SCRAPING_DESIGN.md` → a shelved `*_ARCHIVE.md` + a small
+`*_DATA_CONTRACT.md`) and the finalized Human-Reference-Language Data Capture Interview
+are intentionally **DEFERRED until W#3 is started and discovers a need to read W#2 data**
+(director pick 2026-06-03; consistent with the architecture's own "create the Data
+Contract on downstream need" rule). Until then, this primer's §3 pointers go straight to
+the current design docs, which remain authoritative. See
+`docs/WORKFLOW_GRADUATION_CONTINUITY_DESIGN.md` §4 for the tracking entry.
 
 ---
 
