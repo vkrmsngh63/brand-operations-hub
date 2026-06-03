@@ -22,10 +22,8 @@ import {
   type ExecutionMode,
 } from '@/lib/workflow-components/execution-mode';
 import { ExecutionModeSelect } from '@/lib/workflow-components/execution-mode-select';
-import {
-  SUPPORTED_MODEL_VERSIONS,
-  type SupportedModelVersion,
-} from '@/lib/competition-scraping/review-analysis/models';
+import { type SupportedModelVersion } from '@/lib/competition-scraping/review-analysis/models';
+import { getModelsForMenu } from '@/lib/ai-models/registry';
 import { PER_COMPETITOR_NONBULLETED_SYSTEM_PROMPT } from '@/lib/competition-scraping/review-analysis/prompts';
 
 type ModelVersion = SupportedModelVersion;
@@ -309,9 +307,9 @@ export function PerCompetitorNonBulletedModal({
             disabled={isRunning || isDone}
             style={selectStyle}
           >
-            {SUPPORTED_MODEL_VERSIONS.map((m) => (
-              <option key={m} value={m}>
-                {m}
+            {getModelsForMenu('review-analysis').map((m) => (
+              <option key={m.id} value={m.modelId}>
+                {m.modelId}
               </option>
             ))}
           </select>

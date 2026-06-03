@@ -30,17 +30,16 @@ import {
   type ExecutionMode,
 } from '@/lib/workflow-components/execution-mode';
 import { ExecutionModeSelect } from '@/lib/workflow-components/execution-mode-select';
-import {
-  SUPPORTED_MODEL_VERSIONS,
-  type SupportedModelVersion,
-} from '@/lib/competition-scraping/review-analysis/models';
+import { type SupportedModelVersion } from '@/lib/competition-scraping/review-analysis/models';
+import { getModelsForMenu } from '@/lib/ai-models/registry';
 import type {
   CapturedReview,
   CompetitorUrl,
 } from '@/lib/shared-types/competition-scraping';
 
-// SUPPORTED_MODEL_VERSIONS imported from the central registry (models.ts)
-// per HANDOFF_PROTOCOL Rule 32 — no local copy to drift.
+// Model menu now loads from the central platform AI-model registry
+// (src/lib/ai-models/registry.ts → getModelsForMenu('review-analysis')) per
+// HANDOFF_PROTOCOL Rule 32 + P-63 Phase 1 — no local copy to drift.
 type ModelVersion = SupportedModelVersion;
 
 // Minimum review count for inclusion in the global loop. Director's
@@ -440,9 +439,9 @@ export function GlobalCompetitorSummarizeModal({
             disabled={isRunning || isDone}
             style={selectStyle}
           >
-            {SUPPORTED_MODEL_VERSIONS.map((m) => (
-              <option key={m} value={m}>
-                {m}
+            {getModelsForMenu('review-analysis').map((m) => (
+              <option key={m.id} value={m.modelId}>
+                {m.modelId}
               </option>
             ))}
           </select>

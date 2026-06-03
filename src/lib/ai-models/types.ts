@@ -35,6 +35,13 @@ export type ThinkingOptionId = 'none' | 'fast' | 'auto' | 'extended';
 //                          add-a-model flow issue-free (no silent-failure trap).
 export type RunnableStatus = 'runnable' | 'integration-pending';
 
+// The platform pickers a model can appear in. This is what lets W#2 (Opus-only
+// review-analysis) and W#1 (a wider keyword-clustering menu) share ONE registry:
+// each record declares which menus offer it, and each picker renders only the
+// models tagged for its menu. The future self-serve admin UI toggles these per
+// model, so adding a model to a menu is data — never code.
+export type AiPickerMenuId = 'review-analysis' | 'keyword-clustering';
+
 import type { ModelPricing } from './pricing.ts';
 
 // One model as it appears throughout the platform. This is the unit the admin
@@ -55,6 +62,10 @@ export type AiModelRecord = {
   // The thinking modes offered for THIS model (always >= 1 entry; use ['none']
   // when the model offers no extended thinking).
   thinkingOptions: ThinkingOptionId[];
+  // Which platform pickers offer this model (always >= 1 entry). A picker
+  // renders only the models whose `menus` include its own menu id, so one
+  // registry can back surfaces with different menus (W#2 Opus-only vs W#1 wider).
+  menus: AiPickerMenuId[];
   pricing: ModelPricing;
   // Whether the model is shown in pickers at all (a soft enable/disable that is
   // independent of runnableStatus — a runnable model can still be hidden).

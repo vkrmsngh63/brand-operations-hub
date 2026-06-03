@@ -13,7 +13,7 @@ import {
   SUPPORTED_MODEL_VERSIONS,
 } from './models.ts';
 import { MODEL_PRICING } from './pricing.ts';
-import type { AiModelRecord } from './types.ts';
+import type { AiModelRecord, AiPickerMenuId } from './types.ts';
 
 // Human labels for the currently-wired Anthropic models. Kept here (not in the
 // raw model-string list) so the picker can show friendly names.
@@ -23,12 +23,16 @@ const ANTHROPIC_LABELS: Record<string, string> = {
   'claude-opus-4-6': 'Claude Opus 4.6',
 };
 
-// Phase 0 seed — the three currently-runnable Anthropic models, derived from the
-// EXISTING W#2 source-of-truth (models.ts list + pricing.ts numbers) so there is
-// no duplication of either the model list or the pricing numbers. Every entry is
-// `runnable` because the Anthropic adapter is shipped. The W#2 modals offer no
-// thinking options today, so thinkingOptions is ['none'] here; W#1's extended-
-// thinking surface is reconciled in Phase 1.
+// Seed — the three currently-runnable Anthropic Opus models, derived from the
+// W#2 source-of-truth (models.ts list + pricing.ts numbers) so there is no
+// duplication of either the model list or the pricing numbers. Every entry is
+// `runnable` because the Anthropic adapter is shipped.
+//
+// These three Opus models are offered in BOTH platform menus today — W#2's
+// review-analysis picker AND W#1's keyword-clustering picker both list Opus
+// 4.8/4.7/4.6 — so each is tagged for both menus. (W#1's wider-menu-only models
+// — Sonnet 4.6 / Opus 4.5 / Haiku 4.5 — and W#1's extended-thinking options are
+// reconciled into the registry in Phase 1 Deploy 3.)
 const SEED_REGISTRY: AiModelRecord[] = SUPPORTED_MODEL_VERSIONS.map(
   (modelId): AiModelRecord => ({
     id: `anthropic:${modelId}`,
@@ -37,6 +41,7 @@ const SEED_REGISTRY: AiModelRecord[] = SUPPORTED_MODEL_VERSIONS.map(
     modelId,
     displayLabel: ANTHROPIC_LABELS[modelId] ?? modelId,
     thinkingOptions: ['none'],
+    menus: ['review-analysis', 'keyword-clustering'],
     pricing: MODEL_PRICING[modelId],
     enabled: true,
     runnableStatus: 'runnable',
@@ -66,6 +71,14 @@ export function getRunnableModels(): AiModelRecord[] {
   return getAiModelRegistry().filter(
     (m) => m.enabled && m.runnableStatus === 'runnable'
   );
+}
+
+// The enabled models a given platform picker should render, in registry order.
+// Every model-selection surface calls this with its own menu id, so adding a
+// model to (or removing it from) a menu is a registry data change that
+// propagates to that picker automatically — no picker code edit.
+export function getModelsForMenu(menu: AiPickerMenuId): AiModelRecord[] {
+  return getEnabledModels().filter((m) => m.menus.includes(menu));
 }
 
 export function getModelById(id: string): AiModelRecord | undefined {

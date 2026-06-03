@@ -20,18 +20,17 @@ import {
   type ExecutionMode,
 } from '@/lib/workflow-components/execution-mode';
 import { ExecutionModeSelect } from '@/lib/workflow-components/execution-mode-select';
-import {
-  SUPPORTED_MODEL_VERSIONS,
-  type SupportedModelVersion,
-} from '@/lib/competition-scraping/review-analysis/models';
+import { type SupportedModelVersion } from '@/lib/competition-scraping/review-analysis/models';
+import { getModelsForMenu } from '@/lib/ai-models/registry';
 import {
   PER_COMPETITOR_BULLETED_SYSTEM_PROMPT,
   buildPerCompetitorBulletedUserMessage,
 } from '@/lib/competition-scraping/review-analysis/prompts';
 import type { CapturedReview } from '@/lib/shared-types/competition-scraping';
 
-// SUPPORTED_MODEL_VERSIONS imported from the central registry (models.ts)
-// per HANDOFF_PROTOCOL Rule 32 — no local copy to drift.
+// Model menu now loads from the central platform AI-model registry
+// (src/lib/ai-models/registry.ts → getModelsForMenu('review-analysis')) per
+// HANDOFF_PROTOCOL Rule 32 + P-63 Phase 1 — no local copy to drift.
 type ModelVersion = SupportedModelVersion;
 
 export interface PerCompetitorSummarizeModalProps {
@@ -360,9 +359,9 @@ export function PerCompetitorSummarizeModal({
             disabled={isRunning || isDone}
             style={selectStyle}
           >
-            {SUPPORTED_MODEL_VERSIONS.map((m) => (
-              <option key={m} value={m}>
-                {m}
+            {getModelsForMenu('review-analysis').map((m) => (
+              <option key={m.id} value={m.modelId}>
+                {m.modelId}
               </option>
             ))}
           </select>

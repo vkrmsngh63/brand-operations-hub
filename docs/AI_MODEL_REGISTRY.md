@@ -36,14 +36,17 @@ These surfaces import from a declaration site rather than keeping their own copy
 
 | Surface | File | Reads from |
 |---|---|---|
-| Per-review summarize modal | `…/competitor-reviews-analysis/components/PerReviewSummarizeModal.tsx` | `models.ts` (`SUPPORTED_MODEL_VERSIONS`) |
-| Per-competitor summarize modal | `…/competitor-reviews-analysis/components/PerCompetitorSummarizeModal.tsx` | `models.ts` |
-| Global competitor summarize modal | `…/competitor-reviews-analysis/components/GlobalCompetitorSummarizeModal.tsx` | `models.ts` |
-| Per-competitor NON-bulleted (prose) modal | `…/competitor-reviews-analysis/components/PerCompetitorNonBulletedModal.tsx` | `models.ts` (`SUPPORTED_MODEL_VERSIONS`) |
-| Global competitor NON-bulleted (prose) modal | `…/competitor-reviews-analysis/components/GlobalCompetitorNonBulletedModal.tsx` | `models.ts` (`SUPPORTED_MODEL_VERSIONS`) |
-| Category AI run modal (bulleted + non-bulleted) | `…/reviews-analysis-by-category/components/CategoryAiRunModal.tsx` | `models.ts` (`SUPPORTED_MODEL_VERSIONS`) |
-| SDK client seam (back-compat re-export) | `src/lib/competition-scraping/review-analysis/client.ts` | re-exports `models.ts` |
-| Review-analysis batch handler (validator) | `src/lib/competition-scraping/handlers/review-analysis-run-batch.ts` | `client.ts` → `models.ts` (`DEFAULT_MODEL_VERSION` + `isSupportedModelVersion`) |
+| Per-review summarize modal | `…/competitor-reviews-analysis/components/PerReviewSummarizeModal.tsx` | **site #4** `ai-models/registry.ts` (`getModelsForMenu('review-analysis')`) |
+| Per-competitor summarize modal | `…/competitor-reviews-analysis/components/PerCompetitorSummarizeModal.tsx` | **site #4** (`getModelsForMenu('review-analysis')`) |
+| Global competitor summarize modal | `…/competitor-reviews-analysis/components/GlobalCompetitorSummarizeModal.tsx` | **site #4** (`getModelsForMenu('review-analysis')`) |
+| Per-competitor NON-bulleted (prose) modal | `…/competitor-reviews-analysis/components/PerCompetitorNonBulletedModal.tsx` | **site #4** (`getModelsForMenu('review-analysis')`) |
+| Global competitor NON-bulleted (prose) modal | `…/competitor-reviews-analysis/components/GlobalCompetitorNonBulletedModal.tsx` | **site #4** (`getModelsForMenu('review-analysis')`) |
+| Category AI run modal (bulleted + non-bulleted) | `…/reviews-analysis-by-category/components/CategoryAiRunModal.tsx` | **site #4** (`getModelsForMenu('review-analysis')`) |
+| Type AI run modal (bulleted + non-bulleted) | `…/reviews-analysis-by-type/components/TypeAiRunModal.tsx` | **site #4** (`getModelsForMenu('review-analysis')`) |
+| SDK client seam (back-compat re-export) | `src/lib/competition-scraping/review-analysis/client.ts` | re-exports `models.ts` shim → site #4 |
+| Review-analysis batch handler (validator) | `src/lib/competition-scraping/handlers/review-analysis-run-batch.ts` | `client.ts` → `models.ts` shim → site #4 (`DEFAULT_MODEL_VERSION` + `isSupportedModelVersion`) |
+
+**P-63 Phase 1 Deploy 2 (current):** all 7 W#2 review-analysis modals now render their model `<option>` list from site #4 via `getModelsForMenu('review-analysis')` instead of mapping `SUPPORTED_MODEL_VERSIONS` directly. Behaviour is identical (the menu still resolves to the 3 Opus ids in the same order, shown as raw ids). The per-menu `menus` tag on each registry record is what keeps W#2 Opus-only once W#1's wider menu lands in Deploy 3.
 
 The browser extension has **no** model selection — nothing to register there.
 

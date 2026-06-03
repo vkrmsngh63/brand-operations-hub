@@ -9,6 +9,7 @@ import {
   getAiModelRegistry,
   getEnabledModels,
   getRunnableModels,
+  getModelsForMenu,
   getModelById,
   getModelByModelId,
   isModelRunnable,
@@ -39,6 +40,7 @@ test('every record has a valid, complete shape', () => {
     assert.ok(m.displayLabel.length > 0);
     assert.ok(m.providerLabel.length > 0);
     assert.ok(m.thinkingOptions.length >= 1, `${m.id} must offer >=1 thinking option`);
+    assert.ok(m.menus.length >= 1, `${m.id} must belong to >=1 picker menu`);
     assert.ok(m.pricing && typeof m.pricing.inputPerMillion === 'number');
     assert.equal(typeof m.enabled, 'boolean');
     assert.ok(m.runnableStatus === 'runnable' || m.runnableStatus === 'integration-pending');
@@ -84,4 +86,21 @@ test('isModelRunnable gates on both enabled + runnable + existence', () => {
 
 test('getModelById returns undefined for an unknown id', () => {
   assert.equal(getModelById('openai:gpt-4'), undefined);
+});
+
+test('getModelsForMenu(review-analysis) returns the W#2 Opus list in registry order', () => {
+  const ids = getModelsForMenu('review-analysis').map((m) => m.modelId);
+  // W#2 is Opus-only — must match SUPPORTED_MODEL_VERSIONS exactly (same order).
+  assert.deepEqual(ids, [...SUPPORTED_MODEL_VERSIONS]);
+});
+
+test('getModelsForMenu only returns models tagged for that menu, all enabled', () => {
+  for (const menu of ['review-analysis', 'keyword-clustering'] as const) {
+    for (const m of getModelsForMenu(menu)) {
+      assert.equal(m.enabled, true);
+      assert.ok(m.menus.includes(menu), `${m.id} returned for ${menu} but not tagged for it`);
+    }
+  }
+  // Today all three seed models are offered in both menus.
+  assert.equal(getModelsForMenu('keyword-clustering').length, SUPPORTED_MODEL_VERSIONS.length);
 });
