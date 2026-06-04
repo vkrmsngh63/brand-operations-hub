@@ -7,7 +7,7 @@ without relying on Claude's auto-memory (which is not authoritative; everything
 load-bearing is in these git-tracked files).
 
 **Branch:** `workflow-2-competition-scraping` · **Live at:** vklf.com
-**Status:** ✅ **GRADUATED 2026-06-03** (continuity-first, per HANDOFF_PROTOCOL Rule 33). Every substantive polish item is shipped + director-verified; this primer + `./catch-up-workflow 2` are the re-entry front door. The DOCUMENTATION_ARCHITECTURE §5 Step 1 Archive/Data-Contract split is intentionally DEFERRED until W#3 needs to read W#2 data (director pick 2026-06-03) — until then this primer points straight at the current design docs, which stay authoritative.
+**Status:** ✅ **GRADUATED 2026-06-03** (continuity-first, per HANDOFF_PROTOCOL Rule 33) · **W#2 is now COMPLETE as of 2026-06-03-h** — the entire residue (P-26 / P-27 / P-53) was formally retired won't-do via alternate methods; the residue is now FULLY EMPTY (see §5). Every substantive polish item is shipped + director-verified; this primer + `./catch-up-workflow 2` are the re-entry front door. The DOCUMENTATION_ARCHITECTURE §5 Step 1 Archive/Data-Contract split is intentionally DEFERRED until W#3 needs to read W#2 data (director pick 2026-06-03) — until then this primer points straight at the current design docs, which stay authoritative.
 **Status / current baselines / open items — ALWAYS read these for live numbers:**
 `docs/ROADMAP.md` + the `docs/CLAUDE_CODE_STARTER.md` header (test counts, route count, and the latest session's state live there; do NOT trust any number hard-coded in this primer).
 

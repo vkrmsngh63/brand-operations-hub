@@ -6,7 +6,7 @@
 
 **Loading rule:** read this doc fully if your Rule 22 re-entry task touches a polish item. Otherwise, the Data Contract is sufficient.
 
-**Last updated:** 2026-05-12 (W#1 graduation session — sidecar created).
+**Last updated:** 2026-06-03-h (M-2 → ✅ DONE — Auto-Analyze cost forecasting + spend cap + out-of-credit handling DEPLOYED-AND-VERIFIED on real Chrome across two deploys to `main`; H-1 is now the RECOMMENDED-NEXT HIGH item). Prior: 2026-05-12 (W#1 graduation session — sidecar created).
 
 ---
 
@@ -54,15 +54,13 @@
 
 ### M-2. Auto-Analyze cost forecasting + credit-balance check
 
-**Status:** spec captured in ROADMAP 2026-05-05-d. NOT STARTED.
+**Status:** ✅ **DONE 2026-06-03-h** — DEPLOYED-AND-VERIFIED on real Chrome (vklf.com, director "Pass") across TWO deploys to `main` (`129cfcb` feature + `ab24154` FF1 "No cap" checkbox).
 
-**What it is:** Auto-Analyze overlay shows running cumulative cost but no estimated remaining or estimated total. No pre-flight Anthropic-credit check, no in-run heartbeat warning. Bursitis Test 2 D3 RESUME hit this at batch 85 — three retries failed with `credit balance too low` and the run halted ~36 min until director topped up.
+**As built (2026-06-03-h):** A NEW node:tested pure helper `src/lib/cost-estimator.ts` (+19 node:test in `cost-estimator.test.ts`) wired into `AutoAnalyze.tsx`, delivering three things — (a) an **inline live cost forecast** in the progress header + minibar ("$X · est. total ~$Y · ~$Z left") via `projectRunCost` (the sliding-window est-total/remaining estimator); (b) an **optional spend cap** (`evaluateSpendCap` → ok/warn/over) that warns near the cap + PAUSES before a batch when reached (resumable, editable mid-pause) — with an explicit **"No cap" checkbox** (default on; the cap number input disables when checked; effective cap = `noCap ? 0 : spendCapUsd`; default cap seeded at $25) added in FF1 to replace the unintuitive "0 = no cap" sentinel; (c) **smart out-of-credit handling** via `classifyAnthropicError` — a "credit balance too low" error now STOPS immediately with a top-up-and-Resume message + requeues the batch WITHOUT consuming a retry, instead of the naive 3× backoff that produced the original ~36-min halt.
 
-**Director-proposed algorithm:** sliding-window estimator (average of last 10 successful batches' cost × batches remaining + sliding-avg consolidation cost × consolidations remaining).
+**Design note (the pre-flight balance check was NOT built — and shouldn't be):** the original spec imagined a pre-flight Anthropic credit-balance query, but the Anthropic SDK exposes no credit-balance endpoint — you can't pre-check what you can't query. So the safety net is built from what IS observable: the forecast + the user-set spend cap + the reactive out-of-credit classification. See CORRECTIONS_LOG §Entry 2026-06-03-h pattern #2.
 
-**Work scope:** ~50–100 LOC in `AutoAnalyze.tsx` for the in-run cost projection + small Anthropic API balance query helper for pre-flight + warning threshold logic for mid-run heartbeat.
-
-**Estimated:** 1 session.
+**ORIGINAL CAPTURE (preserved for traceability):** spec captured in ROADMAP 2026-05-05-d. Auto-Analyze overlay showed running cumulative cost but no estimated remaining or estimated total; no pre-flight Anthropic-credit check, no in-run heartbeat warning. Bursitis Test 2 D3 RESUME hit this at batch 85 — three retries failed with `credit balance too low` and the run halted ~36 min until director topped up. Director-proposed algorithm: sliding-window estimator (average of last 10 successful batches' cost × batches remaining + sliding-avg consolidation cost × consolidations remaining). Original work scope estimate: ~50–100 LOC in `AutoAnalyze.tsx` + a small balance query helper + warning-threshold logic; estimated 1 session.
 
 ### M-3. Late-run validation-retry rate telemetry
 

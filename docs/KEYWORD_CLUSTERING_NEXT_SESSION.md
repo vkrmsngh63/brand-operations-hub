@@ -4,7 +4,9 @@
 
 **For:** the next W#1 (Keyword Clustering graduated tool) re-entry session.
 
-**Queued next task:** **H-1 — Action history table + per-action undo** (highest-priority OPEN item in `docs/KEYWORD_CLUSTERING_POLISH_BACKLOG.md`). Estimated 3-5 sessions; largely additive; doesn't gate downstream workflows so can run parallel with W#2 polish.
+**Queued next task:** **H-1 — Action history table + per-action undo** (highest-priority OPEN item in `docs/KEYWORD_CLUSTERING_POLISH_BACKLOG.md`). Estimated 3-5 sessions; largely additive; doesn't gate downstream workflows. **This is the director's confirmed (a.139) RECOMMENDED-NEXT pick (§4 Step 1c, 2026-06-03-h).** The primary `./resume` pointer `docs/NEXT_SESSION.md` is also written for H-1.
+
+> **NOTE (2026-06-03-h — M-2 now ✅ DONE):** W#1 polish item **M-2 (Auto-Analyze cost forecasting + spend cap + out-of-credit handling)** shipped + was director-verified on real Chrome (commits `129cfcb` + `ab24154`, two deploys to `main`). It added the pure helper `src/lib/cost-estimator.ts` (+19 node:test) wired into `AutoAnalyze.tsx`. See `docs/KEYWORD_CLUSTERING_POLISH_BACKLOG.md` M-2 (✅ DONE). H-1 below is the next W#1 item.
 
 > **NOTE (2026-06-03-f — platform-wide change touched W#1, NOT via this pointer):** W#1's `AutoAnalyze.tsx` model picker was migrated to the central AI-model registry by **P-63 Phase 1** (a platform-wide consolidation developed on `workflow-2-competition-scraping`, NOT a W#1 backlog session). The picker now reads its models via `getModelsForMenu('keyword-clustering')` (6 models, Sonnet 4.6 default preserved — byte-identical behavior); inline `AA_PRICING` → `aaPrice()` off the central `MODEL_PRICING`; thinking routed through `anthropicAdapter.mapThinkingOption`. This is plumbing only — no behavior change, no W#1 backlog item closed. The H-1 queued task below is UNAFFECTED. See `docs/AI_MODEL_REGISTRY.md` (site #3 = W#1 consumer) + `docs/polish-item-specs/P-63-central-ai-model-registry-self-serve.md`.
 
