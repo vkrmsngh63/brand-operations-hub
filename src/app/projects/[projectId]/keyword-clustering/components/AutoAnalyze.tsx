@@ -158,11 +158,15 @@ export default function AutoAnalyze({
   const [consolidationPrimerPrompt, setConsolidationPrimerPrompt] = useState('');
   const [consolidationCadence, setConsolidationCadence] = useState(10);
   const [consolidationMinCanvasSize, setConsolidationMinCanvasSize] = useState(100);
-  // M-2 — optional spend cap (USD). 0 = no cap. The run warns as it nears the
-  // cap and pauses when it reaches it (Anthropic exposes no balance API, so a
-  // user-set cap is the only way to bound a run's spend). Persists per-project
-  // alongside the other settings. See KEYWORD_CLUSTERING_POLISH_BACKLOG.md M-2.
-  const [spendCapUsd, setSpendCapUsd] = useState(0);
+  // M-2 — optional spend cap (USD). The run warns as it nears the cap and
+  // pauses when it reaches it (Anthropic exposes no balance API, so a user-set
+  // cap is the only way to bound a run's spend). `noCap` is an explicit toggle
+  // (clearer than a magic 0): when checked the cap is OFF; when unchecked,
+  // spendCapUsd is the active cap. The effective cap fed to the run loop + UI
+  // is `noCap ? 0 : spendCapUsd`. Both persist per-project alongside the other
+  // settings. See KEYWORD_CLUSTERING_POLISH_BACKLOG.md M-2.
+  const [spendCapUsd, setSpendCapUsd] = useState(25);
+  const [noCap, setNoCap] = useState(true);
 
   /* ── Runtime state ─────────────────────────────────────────── */
   const [aaState, setAaState] = useState<AAState>('IDLE');
@@ -260,7 +264,7 @@ export default function AutoAnalyze({
   useEffect(() => { currentIdxRef.current = currentIdx; }, [currentIdx]);
   useEffect(() => { batchTierRef.current = batchTier; }, [batchTier]);
   useEffect(() => { totalSpentRef.current = totalSpent; }, [totalSpent]);
-  useEffect(() => { spendCapRef.current = spendCapUsd; }, [spendCapUsd]);
+  useEffect(() => { spendCapRef.current = noCap ? 0 : spendCapUsd; }, [noCap, spendCapUsd]);
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
   useEffect(() => { keywordsRef.current = allKeywords; }, [allKeywords]);
   useEffect(() => { sisterLinksRef.current = sisterLinks; }, [sisterLinks]);
@@ -307,6 +311,7 @@ export default function AutoAnalyze({
         if (typeof s.consolidationCadence === 'number' && s.consolidationCadence >= 0) setConsolidationCadence(s.consolidationCadence);
         if (typeof s.consolidationMinCanvasSize === 'number' && s.consolidationMinCanvasSize >= 0) setConsolidationMinCanvasSize(s.consolidationMinCanvasSize);
         if (typeof s.spendCapUsd === 'number' && s.spendCapUsd >= 0) setSpendCapUsd(s.spendCapUsd);
+        if (typeof s.noCap === 'boolean') setNoCap(s.noCap);
       } catch (e) {
         console.warn('Failed to load AA settings', e);
       } finally {
@@ -330,7 +335,7 @@ export default function AutoAnalyze({
         processingMode, thinkingMode, thinkingBudget, keywordScope,
         stallTimeout, reviewMode, initialPrompt, primerPrompt, recencyWindow,
         consolidationInitialPrompt, consolidationPrimerPrompt,
-        consolidationCadence, consolidationMinCanvasSize, spendCapUsd,
+        consolidationCadence, consolidationMinCanvasSize, spendCapUsd, noCap,
       };
       authFetch('/api/user-preferences/' + encodeURIComponent(settingsDbKey), {
         method: 'PUT',
@@ -343,7 +348,7 @@ export default function AutoAnalyze({
       processingMode, thinkingMode, thinkingBudget, keywordScope,
       stallTimeout, reviewMode, initialPrompt, primerPrompt, recencyWindow,
       consolidationInitialPrompt, consolidationPrimerPrompt,
-      consolidationCadence, consolidationMinCanvasSize, spendCapUsd]);
+      consolidationCadence, consolidationMinCanvasSize, spendCapUsd, noCap]);
 
   const logRef = useRef<HTMLDivElement>(null);
 
@@ -2162,7 +2167,8 @@ export default function AutoAnalyze({
     fallbackBatchCost: perBatchFallback,
     fallbackConsolidationCost: perBatchFallback * 3, // a consolidation reads the whole canvas
   });
-  const spendCapStatus = evaluateSpendCap(totalSpent, costProjection.estTotal, spendCapUsd);
+  const effectiveCap = noCap ? 0 : spendCapUsd;
+  const spendCapStatus = evaluateSpendCap(totalSpent, costProjection.estTotal, effectiveCap);
   const spendCapColor = spendCapStatus === 'over' ? '#fca5a5' : spendCapStatus === 'warn' ? '#fbbf24' : '#94a3b8';
   const showForecast = costProjection.estTotal > totalSpent + 0.005;
 
@@ -2388,17 +2394,21 @@ export default function AutoAnalyze({
 
           {/* ── M-2 spend cap ── (editable mid-run/pause so the cap can be raised, then Resume) */}
           <div className="aa-row">
-            <span className="aa-label">Spend cap (USD)<span className="aa-help">ⓘ<span className="aa-tip">Optional safety limit. The run warns as it nears this dollar amount and pauses when it reaches it — then raise or clear the cap and click Resume. 0 = no cap. (Anthropic has no balance API, so a cap is the only way to bound a run&rsquo;s spend.)</span></span></span>
+            <span className="aa-label">Spend cap (USD)<span className="aa-help">ⓘ<span className="aa-tip">Optional safety limit. Tick &ldquo;No cap&rdquo; for no limit. With a cap set, the run warns as it nears the amount and pauses when it reaches it — then raise/clear the cap and click Resume. (Anthropic has no balance API, so a cap is the only way to bound a run&rsquo;s spend.)</span></span></span>
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: '#cbd5e1', marginRight: '10px' }}>
+              <input type="checkbox" checked={noCap} onChange={e => setNoCap(e.target.checked)} /> No cap
+            </label>
             <input
               className="aa-input aa-input-sm"
               type="number"
               min={0}
               step={1}
               value={spendCapUsd || ''}
-              placeholder="0 = no cap"
+              placeholder="e.g. 25"
+              disabled={noCap}
               onChange={e => setSpendCapUsd(Math.max(0, Number(e.target.value) || 0))}
             />
-            {spendCapUsd > 0 && (
+            {!noCap && spendCapUsd > 0 && (
               <span style={{ fontSize: '10px', color: spendCapColor, marginLeft: '8px' }}>
                 {spendCapStatus === 'over' ? 'cap reached — run pauses' : spendCapStatus === 'warn' ? 'nearing cap' : 'pauses at $' + spendCapUsd.toFixed(0)}
               </span>
@@ -2448,7 +2458,7 @@ export default function AutoAnalyze({
                     {showForecast && (
                       <span style={{ color: spendCapColor }}> · est. total ~${costProjection.estTotal.toFixed(2)} · ~${costProjection.estRemaining.toFixed(2)} left</span>
                     )}
-                    {spendCapUsd > 0 && (
+                    {!noCap && spendCapUsd > 0 && (
                       <span style={{ color: spendCapColor }}> · cap ${spendCapUsd.toFixed(0)}{spendCapStatus === 'over' ? ' (reached)' : spendCapStatus === 'warn' ? ' (near)' : ''}</span>
                     )}
                     {' · '}{fmtTime(elapsed)}
