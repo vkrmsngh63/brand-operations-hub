@@ -26,6 +26,19 @@ export async function PATCH(
 
   try {
     const body = await req.json();
+
+    // H-1 slice 3: snapshot the keyword's PRE-edit state so the history can show
+    // "from → to". Best-effort + guarded; must run before the update.
+    let beforeKw: Record<string, unknown> | undefined;
+    try {
+      const row = await prisma.keyword.findFirst({
+        where: { id: keywordId, projectWorkflowId },
+      });
+      if (row) beforeKw = row as unknown as Record<string, unknown>;
+    } catch {
+      /* best-effort: lose before-state, keep the edit */
+    }
+
     // Wrapped in withRetry per the 2026-05-05 apply-pipeline rate-fix.
     // .update is idempotent (same data → same result); P2025 record-not-found
     // is non-transient and won't trigger a retry.
@@ -50,10 +63,11 @@ export async function PATCH(
     );
 
     await markWorkflowActive(projectId, WORKFLOW);
-    // H-1 slice 2: record the manual keyword edit (best-effort, post-commit).
+    // H-1 slice 2/3: record the manual keyword edit with before → after
+    // (best-effort, post-commit).
     await recordServerAuditEvents(
       { projectId, userId },
-      keywordUpdateEvents({ id: keywordId, ...body })
+      keywordUpdateEvents({ id: keywordId, ...body }, beforeKw)
     );
     return NextResponse.json(keyword);
   } catch (error) {
@@ -85,6 +99,19 @@ export async function DELETE(
   const { projectWorkflowId, userId } = auth;
 
   try {
+    // H-1 slice 3: snapshot the keyword's text BEFORE deleting so the history
+    // can name what was removed. Best-effort + guarded.
+    let deletedText: string | undefined;
+    try {
+      const row = await prisma.keyword.findFirst({
+        where: { id: keywordId, projectWorkflowId },
+        select: { keyword: true },
+      });
+      deletedText = row?.keyword;
+    } catch {
+      /* best-effort: lose the text, keep the delete */
+    }
+
     // Wrapped in withRetry per the 2026-05-05 apply-pipeline rate-fix.
     // .delete is idempotent under retry — P2025 (already deleted) is
     // non-transient and won't trigger a retry.
@@ -94,9 +121,14 @@ export async function DELETE(
       })
     );
     await markWorkflowActive(projectId, WORKFLOW);
-    // H-1 slice 2: record the manual keyword deletion (best-effort, post-commit).
+    // H-1 slice 2/3: record the manual keyword deletion with the removed text
+    // (best-effort, post-commit).
     await recordServerAuditEvents({ projectId, userId }, [
-      manualEvent({ eventType: 'DELETE_KEYWORD', detail: { keywordId } }),
+      manualEvent({
+        eventType: 'DELETE_KEYWORD',
+        ...(deletedText ? { before: { keyword: deletedText } } : {}),
+        detail: { keywordId, ...(deletedText ? { keyword: deletedText } : {}) },
+      }),
     ]);
     return NextResponse.json({ success: true });
   } catch (error) {

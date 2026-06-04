@@ -220,6 +220,27 @@ export async function PATCH(
       })
     );
 
+    // H-1 slice 3: snapshot each patched node's PRE-edit state so the action
+    // history can show "from → to". Best-effort + fully guarded — a failure
+    // here must never affect the user's edit; we just fall back to after-only.
+    // Must run BEFORE the transaction mutates the rows.
+    let beforeNodeMap = new Map<string, Record<string, unknown>>();
+    try {
+      const ids = (body.nodes as Record<string, unknown>[])
+        .map(n => n.id)
+        .filter((x): x is string => typeof x === 'string');
+      if (ids.length > 0) {
+        const rows = await prisma.canvasNode.findMany({
+          where: { id: { in: ids }, projectWorkflowId: _projectWorkflowId },
+        });
+        beforeNodeMap = new Map(
+          rows.map(r => [r.id, r as unknown as Record<string, unknown>])
+        );
+      }
+    } catch {
+      /* best-effort: lose before-state, keep the edit */
+    }
+
     // Wrapped in withRetry per the 2026-05-05 apply-pipeline rate-fix.
     // The transaction is atomic; the .update calls inside are idempotent
     // under retry (same data → same result; row-not-found errors are
@@ -227,13 +248,14 @@ export async function PATCH(
     const results = await withRetry(() => prisma.$transaction(ops));
     await markWorkflowActive(projectId, WORKFLOW);
 
-    // H-1 slice 2: record manual content/structure edits (rename, re-describe,
-    // reparent, reorder, keyword-link). Pure layout patches (x/y/w/h-only —
-    // a drag/resize) diff to [] and cost nothing. Best-effort, post-commit.
+    // H-1 slice 2/3: record manual content/structure edits (rename, re-describe,
+    // reparent, reorder, keyword-link) with their before → after values. Pure
+    // layout patches (x/y/w/h-only — a drag/resize) diff to [] and cost
+    // nothing. Best-effort, post-commit.
     await recordServerAuditEvents(
       { projectId, userId },
       (body.nodes as Record<string, unknown>[]).flatMap(n =>
-        topicUpdateEvents(n)
+        topicUpdateEvents(n, beforeNodeMap.get(n.id as string))
       )
     );
 
@@ -274,6 +296,19 @@ export async function DELETE(
       );
     }
 
+    // H-1 slice 3: snapshot each node's title BEFORE deleting so the history
+    // can name what was removed ("Deleted topic 'X'"). Best-effort + guarded.
+    let titleById = new Map<string, string>();
+    try {
+      const rows = await prisma.canvasNode.findMany({
+        where: { id: { in: ids }, projectWorkflowId },
+        select: { id: true, title: true },
+      });
+      titleById = new Map(rows.map(r => [r.id, r.title]));
+    } catch {
+      /* best-effort: lose the title, keep the delete */
+    }
+
     // Wrapped in withRetry per the 2026-05-05 apply-pipeline rate-fix.
     // deleteMany is idempotent — repeating it after partial commit either
     // finishes the delete or finds nothing to delete (count=0).
@@ -284,12 +319,18 @@ export async function DELETE(
     );
 
     await markWorkflowActive(projectId, WORKFLOW);
-    // H-1 slice 2: record the manual topic deletion(s) (best-effort, post-commit).
+    // H-1 slice 2/3: record the manual topic deletion(s) with the removed
+    // title (best-effort, post-commit).
     await recordServerAuditEvents(
       { projectId, userId },
-      ids.map(id =>
-        manualEvent({ eventType: 'DELETE_TOPIC', detail: { topicId: id } })
-      )
+      ids.map(id => {
+        const title = titleById.get(id);
+        return manualEvent({
+          eventType: 'DELETE_TOPIC',
+          ...(title ? { before: { title } } : {}),
+          detail: { topicId: id, ...(title ? { title } : {}) },
+        });
+      })
     );
     return NextResponse.json({ success: true, deleted: ids });
   } catch (error) {

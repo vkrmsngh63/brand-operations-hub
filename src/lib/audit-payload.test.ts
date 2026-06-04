@@ -237,3 +237,54 @@ test('keywordUpdateEvents — layout/metadata-only patch yields no events', () =
   assert.deepEqual(keywordUpdateEvents({ id: 'k1', topicApproved: {} }), []);
   assert.deepEqual(keywordUpdateEvents({ id: 'k1' }), []);
 });
+
+/* ── topicUpdateEvents / keywordUpdateEvents — before/after (slice 3) ── */
+test('topicUpdateEvents — rename with before records from → to', () => {
+  const events = topicUpdateEvents(
+    { id: 'n1', title: 'New name' },
+    { title: 'Old name', description: 'd' }
+  );
+  assert.equal(events.length, 1);
+  assert.equal(events[0].payload.before, 'Old name');
+  assert.equal(events[0].payload.after, 'New name');
+});
+
+test('topicUpdateEvents — before omitted stays after-only (back-compat)', () => {
+  const events = topicUpdateEvents({ id: 'n1', title: 'New name' });
+  assert.equal(events[0].payload.before, undefined);
+  assert.equal(events[0].payload.after, 'New name');
+});
+
+test('topicUpdateEvents — reparent + reorder carry their before values', () => {
+  const reparent = topicUpdateEvents(
+    { id: 'n1', parentId: 'p2' },
+    { parentId: 'p1', sortOrder: 3 }
+  );
+  assert.equal(reparent[0].eventType, 'MOVE_TOPIC');
+  assert.equal(reparent[0].payload.before, 'p1');
+  assert.equal(reparent[0].payload.after, 'p2');
+
+  const reorder = topicUpdateEvents(
+    { id: 'n1', sortOrder: 5 },
+    { sortOrder: 2 }
+  );
+  assert.equal(reorder[0].payload.before, 2);
+  assert.equal(reorder[0].payload.after, 5);
+});
+
+test('keywordUpdateEvents — before records prior values of changed fields only', () => {
+  const events = keywordUpdateEvents(
+    { id: 'k1', volume: 200, tags: 'x' },
+    { volume: 100, tags: 'old', keyword: 'unchanged', sortOrder: 9 }
+  );
+  assert.equal(events.length, 1);
+  assert.deepEqual(events[0].payload.after, { volume: 200, tags: 'x' });
+  // Only the fields that actually changed appear in before — not sortOrder/keyword.
+  assert.deepEqual(events[0].payload.before, { volume: 100, tags: 'old' });
+});
+
+test('keywordUpdateEvents — before omitted stays after-only (back-compat)', () => {
+  const events = keywordUpdateEvents({ id: 'k1', volume: 200 });
+  assert.equal(events[0].payload.before, undefined);
+  assert.deepEqual(events[0].payload.after, { volume: 200 });
+});

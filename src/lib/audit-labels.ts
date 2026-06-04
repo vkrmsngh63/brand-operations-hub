@@ -138,6 +138,150 @@ export function affectedItem(payload: AuditPayload | null | undefined): string {
   return opId ?? '';
 }
 
+/* ── DESCRIBE: one full-context sentence per change ────────────── */
+
+/** Trim + stringify a value to plain text; '' when nothing meaningful. */
+function asText(v: unknown): string {
+  if (v === null || v === undefined) return '';
+  if (typeof v === 'string') return v.trim();
+  if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+  return '';
+}
+
+/** Shorten long text (e.g. a topic description) for a one-line sentence. */
+function shorten(s: string, max = 60): string {
+  return s.length > max ? `${s.slice(0, max).trimEnd()}…` : s;
+}
+
+/** Wrap a value in curly quotes, e.g. “Trail shoes”. '' when empty. */
+function q(v: unknown): string {
+  const t = asText(v);
+  return t ? `“${t}”` : '';
+}
+
+function pick(obj: unknown, keys: string[]): string {
+  if (!obj || typeof obj !== 'object') return '';
+  return firstString(obj as Record<string, unknown>, keys) ?? '';
+}
+
+/** Friendly field labels for a keyword edit. */
+const KEYWORD_FIELD_LABEL: Record<string, string> = {
+  keyword: 'text',
+  volume: 'search volume',
+  tags: 'tags',
+  sortingStatus: 'status',
+  topic: 'topic',
+  sortOrder: 'order',
+};
+
+function describeKeywordUpdate(before: unknown, after: unknown): string {
+  const a = (after && typeof after === 'object' ? after : {}) as Record<string, unknown>;
+  const b = (before && typeof before === 'object' ? before : {}) as Record<string, unknown>;
+  const fields = Object.keys(a);
+  if (fields.length === 0) return 'Edited a keyword';
+
+  // A text rename is the clearest single case.
+  if ('keyword' in a) {
+    const to = q(a.keyword);
+    const from = q(b.keyword);
+    if (from && to) return `Renamed keyword from ${from} to ${to}`;
+    if (to) return `Renamed keyword to ${to}`;
+  }
+
+  // A single non-text field change reads as a clean from → to.
+  const nonText = fields.filter((f) => f !== 'keyword');
+  if (nonText.length === 1) {
+    const f = nonText[0];
+    const label = KEYWORD_FIELD_LABEL[f] ?? f;
+    const to = q(a[f]);
+    const from = q(b[f]);
+    if (from && to) return `Changed keyword ${label} from ${from} to ${to}`;
+    if (to) return `Changed keyword ${label} to ${to}`;
+  }
+
+  // Several fields at once — name them.
+  const labels = fields.map((f) => KEYWORD_FIELD_LABEL[f] ?? f).join(', ');
+  return `Edited keyword (${labels})`;
+}
+
+/**
+ * A single, plain-English sentence describing exactly what one change did, in
+ * full context — including the prior value as "from → to" where it was recorded
+ * (renames, edits), and the affected item's name where available (adds,
+ * deletes). The "who" (AI vs You) is shown by the separate badge column, so the
+ * sentence stays actor-free. Falls back to the plain label for anything unmapped.
+ */
+export function describeEvent(row: AuditEventRow): string {
+  const p = row.payload;
+  const type = row.eventType;
+  if (!p || typeof p !== 'object') return eventTypeLabel(type);
+
+  const { before, after, op } = p;
+  const detail = (p.detail ?? undefined) as Record<string, unknown> | undefined;
+
+  // Best-effort affected-item name across the recorded shapes.
+  const name =
+    pick(after, ['title', 'keyword', 'name']) ||
+    pick(op as unknown, ['title', 'newTitle', 'name', 'keyword']) ||
+    pick(detail, ['title', 'keyword']) ||
+    pick(before, ['title', 'keyword', 'name']);
+
+  switch (type) {
+    case 'ADD_TOPIC':
+      return name ? `Added topic ${q(name)}` : 'Added a topic';
+    case 'UPDATE_TOPIC_TITLE': {
+      const to = q(after);
+      const from = q(before);
+      if (from && to) return `Renamed topic from ${from} to ${to}`;
+      if (to) return `Renamed topic to ${to}`;
+      return 'Renamed a topic';
+    }
+    case 'UPDATE_TOPIC_DESCRIPTION': {
+      const to = asText(after) ? q(shorten(asText(after))) : '';
+      const from = asText(before) ? q(shorten(asText(before))) : '';
+      if (from && to) return `Changed topic description from ${from} to ${to}`;
+      if (to) return `Changed topic description to ${to}`;
+      return 'Changed a topic description';
+    }
+    case 'MOVE_TOPIC':
+      return detail?.kind === 'reorder'
+        ? 'Reordered a topic'
+        : 'Moved a topic to a different group';
+    case 'MERGE_TOPICS':
+      return 'Merged topics together';
+    case 'SPLIT_TOPIC':
+      return 'Split a topic into multiple';
+    case 'DELETE_TOPIC':
+      return name ? `Deleted topic ${q(name)}` : 'Deleted a topic';
+    case 'ADD_KEYWORD':
+      return name ? `Added keyword ${q(name)}` : 'Added a keyword';
+    case 'MOVE_KEYWORD':
+      return 'Moved keyword(s) to a different topic';
+    case 'REMOVE_KEYWORD':
+      return name ? `Removed keyword ${q(name)}` : 'Removed a keyword';
+    case 'ARCHIVE_KEYWORD':
+      return name ? `Archived keyword ${q(name)}` : 'Archived a keyword';
+    case 'ADD_SISTER_LINK':
+      return 'Linked two related topics';
+    case 'REMOVE_SISTER_LINK':
+      return 'Unlinked two related topics';
+    case 'CREATE_KEYWORD':
+      return name ? `Created keyword ${q(name)}` : 'Created a keyword';
+    case 'DELETE_KEYWORD':
+      return name ? `Deleted keyword ${q(name)}` : 'Deleted a keyword';
+    case 'RESTORE_KEYWORD':
+      return name ? `Restored keyword ${q(name)}` : 'Restored a keyword';
+    case 'UPDATE_KEYWORD':
+      return describeKeywordUpdate(before, after);
+    case 'ADD_PATHWAY':
+      return 'Added a pathway';
+    case 'REMOVE_PATHWAY':
+      return 'Removed a pathway';
+    default:
+      return eventTypeLabel(type);
+  }
+}
+
 /* ── FILTER: by source + change type ───────────────────────────── */
 
 export type SourceFilter = 'all' | AuditSource;

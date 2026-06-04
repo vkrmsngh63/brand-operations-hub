@@ -188,17 +188,37 @@ export async function PATCH(
       });
     });
 
+    // H-1 slice 3: snapshot each keyword's PRE-edit state so the history can
+    // show "from → to". Best-effort + guarded; must run before the transaction.
+    let beforeKwMap = new Map<string, Record<string, unknown>>();
+    try {
+      const ids = (body.keywords as Record<string, unknown>[])
+        .map(k => k.id)
+        .filter((x): x is string => typeof x === 'string');
+      if (ids.length > 0) {
+        const rows = await prisma.keyword.findMany({
+          where: { id: { in: ids }, projectWorkflowId },
+        });
+        beforeKwMap = new Map(
+          rows.map(r => [r.id, r as unknown as Record<string, unknown>])
+        );
+      }
+    } catch {
+      /* best-effort: lose before-state, keep the edit */
+    }
+
     // Wrapped in withRetry per the 2026-05-05 apply-pipeline rate-fix.
     // Atomic transaction; .update calls inside are idempotent under retry.
     const results = await withRetry(() => prisma.$transaction(ops));
     await markWorkflowActive(projectId, WORKFLOW);
 
-    // H-1 slice 2: record manual keyword edits/reorders (best-effort). A patch
-    // touching only layout (canvasLoc) / metadata (topicApproved) diffs to [].
+    // H-1 slice 2/3: record manual keyword edits/reorders with before → after
+    // (best-effort). A patch touching only layout (canvasLoc) / metadata
+    // (topicApproved) diffs to [].
     await recordServerAuditEvents(
       { projectId, userId },
       (body.keywords as Record<string, unknown>[]).flatMap(k =>
-        keywordUpdateEvents(k)
+        keywordUpdateEvents(k, beforeKwMap.get(k.id as string))
       )
     );
 
@@ -237,6 +257,19 @@ export async function DELETE(
       );
     }
 
+    // H-1 slice 3: snapshot each keyword's text BEFORE deleting so the history
+    // can name what was removed ("Deleted keyword 'X'"). Best-effort + guarded.
+    let kwTextById = new Map<string, string>();
+    try {
+      const rows = await prisma.keyword.findMany({
+        where: { projectWorkflowId, id: { in: body.ids } },
+        select: { id: true, keyword: true },
+      });
+      kwTextById = new Map(rows.map(r => [r.id, r.keyword]));
+    } catch {
+      /* best-effort: lose the text, keep the delete */
+    }
+
     // Wrapped in withRetry per the 2026-05-05 apply-pipeline rate-fix.
     const result = await withRetry(() =>
       prisma.keyword.deleteMany({
@@ -245,12 +278,18 @@ export async function DELETE(
     );
 
     await markWorkflowActive(projectId, WORKFLOW);
-    // H-1 slice 2: record the manual keyword deletion(s) (best-effort).
+    // H-1 slice 2/3: record the manual keyword deletion(s) with the removed
+    // text (best-effort).
     await recordServerAuditEvents(
       { projectId, userId },
-      (body.ids as string[]).map(id =>
-        manualEvent({ eventType: 'DELETE_KEYWORD', detail: { keywordId: id } })
-      )
+      (body.ids as string[]).map(id => {
+        const keyword = kwTextById.get(id);
+        return manualEvent({
+          eventType: 'DELETE_KEYWORD',
+          ...(keyword ? { before: { keyword } } : {}),
+          detail: { keywordId: id, ...(keyword ? { keyword } : {}) },
+        });
+      })
     );
     return NextResponse.json({ deleted: result.count });
   } catch (error) {

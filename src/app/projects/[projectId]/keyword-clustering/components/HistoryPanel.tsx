@@ -20,9 +20,8 @@ import {
   type AuditEventRow,
   type AuditGroup,
   type SourceFilter,
-  affectedItem,
   changeTypeOptions,
-  eventTypeLabel,
+  describeEvent,
   filterAuditEvents,
   groupAuditEvents,
   sourceLabel,
@@ -109,7 +108,7 @@ function EventDetail({ row }: { row: AuditEventRow }) {
   );
 }
 
-const ROW_GRID = '120px 48px 1fr 1.2fr';
+const ROW_GRID = '120px 48px 1fr';
 
 /** One leaf change row (a manual edit OR one op inside an AI run). */
 function LeafRow({
@@ -122,7 +121,6 @@ function LeafRow({
   indent: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const item = affectedItem(row.payload);
   return (
     <div style={{ borderTop: '1px solid #1f2937' }}>
       <button
@@ -146,12 +144,9 @@ function LeafRow({
       >
         <span style={{ color: '#9ca3af' }}>{showWhen ? formatWhen(row.timestamp) : ''}</span>
         <Badge source={row.payload?.source} />
-        <span style={{ fontWeight: 600 }}>
+        <span style={{ color: '#e5e7eb' }}>
           <span style={{ color: '#6b7280', marginRight: 4 }}>{open ? '▾' : '▸'}</span>
-          {eventTypeLabel(row.eventType)}
-        </span>
-        <span style={{ color: '#9ca3af', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {item || '—'}
+          {describeEvent(row)}
         </span>
       </button>
       {open && (
@@ -193,9 +188,9 @@ function BatchRow({ group }: { group: AuditGroup }) {
         <span style={{ fontWeight: 700 }}>
           <span style={{ color: '#6b7280', marginRight: 4 }}>{open ? '▾' : '▸'}</span>
           Auto-Analyze run
-        </span>
-        <span style={{ color: '#9ca3af' }}>
-          {n} change{n === 1 ? '' : 's'}
+          <span style={{ color: '#9ca3af', fontWeight: 400, marginLeft: 8 }}>
+            · {n} change{n === 1 ? '' : 's'}
+          </span>
         </span>
       </button>
       {open &&
@@ -311,8 +306,7 @@ export default function HistoryPanel({ projectId }: HistoryPanelProps) {
       >
         <span>When</span>
         <span>Who</span>
-        <span>What changed</span>
-        <span>Which item</span>
+        <span>What happened</span>
       </div>
 
       {/* ── List ─────────────────────────────────────────────── */}

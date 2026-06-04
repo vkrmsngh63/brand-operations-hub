@@ -5,6 +5,7 @@ import {
   changeTypeOptions,
   sourceLabel,
   affectedItem,
+  describeEvent,
   filterAuditEvents,
   groupAuditEvents,
   type AuditEventRow,
@@ -149,4 +150,68 @@ test('groupAuditEvents — AI event with no batchId is its own group', () => {
 
 test('groupAuditEvents — empty input → empty output', () => {
   assert.deepEqual(groupAuditEvents([]), []);
+});
+
+/* ── describeEvent ─────────────────────────────────────────────── */
+
+function row(eventType: string, payload: Record<string, unknown>): AuditEventRow {
+  return { id: 'x', eventType, timestamp: '2026-06-04T00:00:00Z', payload: payload as never };
+}
+
+test('describeEvent — rename shows from → to when before is recorded', () => {
+  assert.equal(
+    describeEvent(row('UPDATE_TOPIC_TITLE', { source: 'manual', action: 'UPDATE_TOPIC_TITLE', before: 'Trail running', after: 'Trail shoes' })),
+    'Renamed topic from “Trail running” to “Trail shoes”'
+  );
+});
+
+test('describeEvent — rename without before shows only the new value', () => {
+  assert.equal(
+    describeEvent(row('UPDATE_TOPIC_TITLE', { source: 'manual', action: 'UPDATE_TOPIC_TITLE', after: 'Trail shoes' })),
+    'Renamed topic to “Trail shoes”'
+  );
+});
+
+test('describeEvent — add/delete name the affected item', () => {
+  assert.equal(
+    describeEvent(row('ADD_TOPIC', { source: 'ai', action: 'ADD_TOPIC', op: { type: 'ADD_TOPIC', title: 'Hiking boots' } as never })),
+    'Added topic “Hiking boots”'
+  );
+  assert.equal(
+    describeEvent(row('DELETE_TOPIC', { source: 'manual', action: 'DELETE_TOPIC', before: { title: 'Old topic' } })),
+    'Deleted topic “Old topic”'
+  );
+  assert.equal(
+    describeEvent(row('REMOVE_KEYWORD', { source: 'manual', action: 'REMOVE_KEYWORD', detail: { keyword: 'running shoe' } })),
+    'Removed keyword “running shoe”'
+  );
+});
+
+test('describeEvent — keyword field edit reads as from → to', () => {
+  assert.equal(
+    describeEvent(row('UPDATE_KEYWORD', { source: 'manual', action: 'UPDATE_KEYWORD', before: { volume: 100 }, after: { volume: 200 } })),
+    'Changed keyword search volume from “100” to “200”'
+  );
+  assert.equal(
+    describeEvent(row('UPDATE_KEYWORD', { source: 'manual', action: 'UPDATE_KEYWORD', before: { keyword: 'shoe' }, after: { keyword: 'shoes' } })),
+    'Renamed keyword from “shoe” to “shoes”'
+  );
+});
+
+test('describeEvent — move/merge/split read in plain words', () => {
+  assert.equal(describeEvent(row('MOVE_TOPIC', { source: 'manual', action: 'MOVE_TOPIC', detail: { kind: 'reorder' } })), 'Reordered a topic');
+  assert.equal(describeEvent(row('MOVE_TOPIC', { source: 'manual', action: 'MOVE_TOPIC', detail: { kind: 'reparent' } })), 'Moved a topic to a different group');
+  assert.equal(describeEvent(row('MERGE_TOPICS', { source: 'ai', action: 'MERGE_TOPICS' })), 'Merged topics together');
+});
+
+test('describeEvent — every vocabulary type produces a non-empty sentence', () => {
+  for (const t of AUDIT_EVENT_TYPES) {
+    const s = describeEvent(row(t, { source: 'manual', action: t }));
+    assert.ok(s.length > 0, `${t} → "${s}"`);
+    assert.ok(!/[A-Z]{2,}_/.test(s), `${t} → "${s}" is not a raw token`);
+  }
+});
+
+test('describeEvent — missing payload falls back to the plain label', () => {
+  assert.equal(describeEvent({ id: 'x', eventType: 'ADD_TOPIC', timestamp: 't', payload: null }), 'Added topic');
 });

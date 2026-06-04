@@ -176,14 +176,19 @@ export function manualEvent(args: ManualEventArgs): AuditEventInput {
  * on its own, kwPlacements, altTitles, intentFingerprint) produce NO events,
  * so `topicUpdateEvents({ id, x, y })` from a drag returns [].
  *
- * Snapshots are AFTER-only (the new value), matching slice 1's "before/after
- * where cheaply available" — the per-action-undo slice enriches before-state
- * later. Relies on the client sending PARTIAL patches (verified in
- * CanvasPanel/CanvasTableMode: a drag sends { id, x, y }; a rename sends
- * { id, title }; a reparent sends { id, parentId, relationshipType }).
+ * BEFORE/AFTER (H-1 slice 3, 2026-06-04-c): the optional `before` arg is the
+ * topic's pre-edit row (fetched by the route immediately before it mutates).
+ * When supplied, each event also carries the prior value so the Action-History
+ * UI can render "from → to" (e.g. a rename shows the old AND new title). When
+ * `before` is omitted (or a field is absent from it) the event stays after-only
+ * — fully back-compatible with slice 2's after-only recording. Relies on the
+ * client sending PARTIAL patches (verified in CanvasPanel/CanvasTableMode: a
+ * drag sends { id, x, y }; a rename sends { id, title }; a reparent sends
+ * { id, parentId, relationshipType }).
  */
 export function topicUpdateEvents(
-  update: Record<string, unknown>
+  update: Record<string, unknown>,
+  before?: Record<string, unknown>
 ): AuditEventInput[] {
   const topicId = update.id;
   const events: AuditEventInput[] = [];
@@ -192,6 +197,7 @@ export function topicUpdateEvents(
     events.push(
       manualEvent({
         eventType: 'UPDATE_TOPIC_TITLE',
+        before: before?.title,
         after: update.title,
         detail: { topicId },
       })
@@ -201,6 +207,7 @@ export function topicUpdateEvents(
     events.push(
       manualEvent({
         eventType: 'UPDATE_TOPIC_DESCRIPTION',
+        before: before?.description,
         after: update.description,
         detail: { topicId },
       })
@@ -215,12 +222,18 @@ export function topicUpdateEvents(
     }
     if ('sortOrder' in update) detail.sortOrder = update.sortOrder;
     events.push(
-      manualEvent({ eventType: 'MOVE_TOPIC', after: update.parentId, detail })
+      manualEvent({
+        eventType: 'MOVE_TOPIC',
+        before: before?.parentId,
+        after: update.parentId,
+        detail,
+      })
     );
   } else if ('sortOrder' in update) {
     events.push(
       manualEvent({
         eventType: 'MOVE_TOPIC',
+        before: before?.sortOrder,
         after: update.sortOrder,
         detail: { topicId, kind: 'reorder' },
       })
@@ -232,6 +245,7 @@ export function topicUpdateEvents(
     events.push(
       manualEvent({
         eventType: 'MOVE_KEYWORD',
+        before: before?.linkedKwIds,
         after: update.linkedKwIds,
         detail: { topicId, via: 'topic-link' },
       })
@@ -257,18 +271,31 @@ const AUDITABLE_KEYWORD_FIELDS = [
  * (`{ id, ...changedFields }`). Emits a single UPDATE_KEYWORD carrying the
  * changed content fields; pure-layout (`canvasLoc`) and metadata
  * (`topicApproved`) are ignored. Returns [] when nothing auditable changed.
+ *
+ * BEFORE/AFTER (H-1 slice 3): the optional `before` arg is the keyword's
+ * pre-edit row. When supplied, the event also carries the prior value of each
+ * changed field so the Action-History UI can render "from → to" (e.g. an edited
+ * search volume shows the old AND new number). After-only when `before` is
+ * omitted — fully back-compatible with slice 2.
  */
 export function keywordUpdateEvents(
-  update: Record<string, unknown>
+  update: Record<string, unknown>,
+  before?: Record<string, unknown>
 ): AuditEventInput[] {
   const after: Record<string, unknown> = {};
+  const beforeFields: Record<string, unknown> = {};
   for (const f of AUDITABLE_KEYWORD_FIELDS) {
-    if (f in update) after[f] = update[f];
+    if (f in update) {
+      after[f] = update[f];
+      if (before && f in before) beforeFields[f] = before[f];
+    }
   }
   if (Object.keys(after).length === 0) return [];
   return [
     manualEvent({
       eventType: 'UPDATE_KEYWORD',
+      before:
+        Object.keys(beforeFields).length > 0 ? beforeFields : undefined,
       after,
       detail: { keywordId: update.id },
     }),
