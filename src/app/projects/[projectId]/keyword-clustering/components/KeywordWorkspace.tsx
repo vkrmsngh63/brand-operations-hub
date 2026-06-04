@@ -9,6 +9,7 @@ import CanvasPanel from './CanvasPanel';
 import TVTTable from './TVTTable';
 import KASTable from './KASTable';
 import AutoAnalyze from './AutoAnalyze';
+import HistoryPanel from './HistoryPanel';
 import ScrollArrows from './ScrollArrows';
 import FloatingPanel from './FloatingPanel';
 import { useKeywords } from '@/hooks/useKeywords';
@@ -270,18 +271,23 @@ export default function KeywordWorkspace({ projectId, userId, aiMode }: KeywordW
   const [showAST, setShowAST] = useState(true);
   const [showMT, setShowMT] = useState(true);
   const [showTIF, setShowTIF] = useState(true);
+  // History is opt-in (default off) so the standard 3-panel view isn't crowded
+  // on first load; the director toggles it on when they want the change log.
+  const [showHistory, setShowHistory] = useState(false);
   const [showCanvas, setShowCanvas] = useState(true);
 
   // ── Detached panels ──────────────────────────────────────────
   const [detachedAST, setDetachedAST] = useState(false);
   const [detachedMT, setDetachedMT] = useState(false);
   const [detachedTIF, setDetachedTIF] = useState(false);
+  const [detachedHistory, setDetachedHistory] = useState(false);
   const [detachedCanvas, setDetachedCanvas] = useState(false);
 
   // ── Panel sizes ──────────────────────────────────────────────
   const containerRef = useRef<HTMLDivElement>(null);
   const leftPanelRef = useRef<HTMLDivElement>(null);
-  const [panelFlex, setPanelFlex] = useState<[number, number, number]>([1, 1, 1]);
+  // One flex weight per stackable left panel: [AST, MT, TIF, History].
+  const [panelFlex, setPanelFlex] = useState<number[]>([1, 1, 1, 1]);
   const [leftFrac, setLeftFrac] = useState(0.58);
 
   const addToTif = useCallback((kws: string[]) => {
@@ -314,10 +320,15 @@ export default function KeywordWorkspace({ projectId, userId, aiMode }: KeywordW
     if (totalH <= 0) return;
 
     setPanelFlex(prev => {
-      const next: [number, number, number] = [...prev];
+      const next: number[] = [...prev];
       const totalFlex = next.reduce((a, b) => a + b, 0);
       const deltaFrac = delta / totalH * totalFlex;
-      const visiblePanels = [showAST && !detachedAST, showMT && !detachedMT, showTIF && !detachedTIF];
+      const visiblePanels = [
+        showAST && !detachedAST,
+        showMT && !detachedMT,
+        showTIF && !detachedTIF,
+        showHistory && !detachedHistory,
+      ];
       const upper = dividerIdx;
       const lower = dividerIdx + 1;
       if (!visiblePanels[upper] || !visiblePanels[lower]) return prev;
@@ -390,16 +401,22 @@ export default function KeywordWorkspace({ projectId, userId, aiMode }: KeywordW
     return <CanvasPanel projectId={projectId} allKeywords={keywords} canvas={canvas} />;
   }
 
+  function renderHistoryContent() {
+    return <HistoryPanel projectId={projectId} />;
+  }
+
   // ── Compute visible inline panels ────────────────────────────
   const inlineAST = showAST && !detachedAST;
   const inlineMT = showMT && !detachedMT;
   const inlineTIF = showTIF && !detachedTIF;
+  const inlineHistory = showHistory && !detachedHistory;
   const inlineCanvas = showCanvas && !detachedCanvas;
 
   const panelMap: { key: string; flex: number; idx: number }[] = [];
   if (inlineAST) panelMap.push({ key: 'ast', flex: panelFlex[0], idx: 0 });
   if (inlineMT) panelMap.push({ key: 'mt', flex: panelFlex[1], idx: 1 });
   if (inlineTIF) panelMap.push({ key: 'tif', flex: panelFlex[2], idx: 2 });
+  if (inlineHistory) panelMap.push({ key: 'history', flex: panelFlex[3], idx: 3 });
 
   const showLeftPanel = panelMap.length > 0;
 
@@ -503,6 +520,10 @@ export default function KeywordWorkspace({ projectId, userId, aiMode }: KeywordW
               <input type="checkbox" checked={showTIF} onChange={e => { setShowTIF(e.target.checked); if (!e.target.checked) setDetachedTIF(false); }} />
               <span>TIF</span>
             </label>
+            <label className="ws-topbar-cb">
+              <input type="checkbox" checked={showHistory} onChange={e => { setShowHistory(e.target.checked); if (!e.target.checked) setDetachedHistory(false); }} />
+              <span>History</span>
+            </label>
           </>
         )}
         <label className="ws-topbar-cb">
@@ -539,12 +560,14 @@ export default function KeywordWorkspace({ projectId, userId, aiMode }: KeywordW
                           if (p.key === 'ast') setDetachedAST(true);
                           if (p.key === 'mt') setDetachedMT(true);
                           if (p.key === 'tif') setDetachedTIF(true);
+                          if (p.key === 'history') setDetachedHistory(true);
                         }}
                         title="Detach to floating window"
                       >⊞</button>
                       {p.key === 'ast' && renderAST()}
                       {p.key === 'mt' && renderMT()}
                       {p.key === 'tif' && renderTIFContent()}
+                      {p.key === 'history' && renderHistoryContent()}
                     </div>
                   </div>
                 ))}
@@ -612,6 +635,11 @@ export default function KeywordWorkspace({ projectId, userId, aiMode }: KeywordW
       {detachedTIF && showTIF && (
         <FloatingPanel title="Terms In Focus" onClose={() => setDetachedTIF(false)}>
           {renderTIFContent()}
+        </FloatingPanel>
+      )}
+      {detachedHistory && showHistory && (
+        <FloatingPanel title="Action History" onClose={() => setDetachedHistory(false)}>
+          {renderHistoryContent()}
         </FloatingPanel>
       )}
       <AutoAnalyze
