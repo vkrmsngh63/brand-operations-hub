@@ -1,12 +1,14 @@
 # W#1 next session — Keyword Clustering
 
-**Written:** 2026-05-19-g-7 (initial population — created alongside the `./resume-workflow 1` enhancement to make W#1 re-entry roadmap-driven rather than interactive-prompt-driven; future W#1 sessions update this file at end-of-session per HANDOFF_PROTOCOL §4 Step 1).
+**Written:** 2026-06-04 (rewritten at the end of `session_2026-06-04_w1-h1-slice-1-action-history-recorder` — H-1 slice 1 shipped; this file now queues H-1 slice 2). Initial population 2026-05-19-g-7. Future W#1 sessions update this file at end-of-session per HANDOFF_PROTOCOL §4 Step 1.
 
 **For:** the next W#1 (Keyword Clustering graduated tool) re-entry session.
 
-**Queued next task:** **H-1 — Action history table + per-action undo** (highest-priority OPEN item in `docs/KEYWORD_CLUSTERING_POLISH_BACKLOG.md`). Estimated 3-5 sessions; largely additive; doesn't gate downstream workflows. **This is the director's confirmed (a.139) RECOMMENDED-NEXT pick (§4 Step 1c, 2026-06-03-h).** The primary `./resume` pointer `docs/NEXT_SESSION.md` is also written for H-1.
+**Queued next task:** **H-1 SLICE 2 — record MANUAL edits at the server save-points** (the next slice of the H-1 action-history epic in `docs/KEYWORD_CLUSTERING_POLISH_BACKLOG.md`). **This is the director's confirmed (a.140) RECOMMENDED-NEXT pick (§4 Step 1c, 2026-06-04).** The primary `./resume` pointer `docs/NEXT_SESSION.md` is also written for H-1 slice 2.
 
-> **NOTE (2026-06-03-h — M-2 now ✅ DONE):** W#1 polish item **M-2 (Auto-Analyze cost forecasting + spend cap + out-of-credit handling)** shipped + was director-verified on real Chrome (commits `129cfcb` + `ab24154`, two deploys to `main`). It added the pure helper `src/lib/cost-estimator.ts` (+19 node:test) wired into `AutoAnalyze.tsx`. See `docs/KEYWORD_CLUSTERING_POLISH_BACKLOG.md` M-2 (✅ DONE). H-1 below is the next W#1 item.
+> **NOTE (2026-06-04 — H-1 SLICE 1 now ✅ DONE + VERIFIED):** the action-history recorder foundation + AI-run recording shipped + was director-verified on real Chrome (commit `8bad366`, one deploy to `main`; a live Auto-Analyze run on project `c270927b-0241-445d-a648-c36c9887b934` landed 22 `AuditEvent` rows; director "Done"). It added NEW `src/lib/audit-payload.ts` (the W#1 audit-event vocabulary + `{eventType, payload}` builders; +10 node:test) + `src/lib/audit-recorder.ts` (best-effort batched client sender) + the route `src/app/api/projects/[projectId]/audit-events/route.ts` (POST validate+insert / GET history) + `AutoAnalyze.tsx` wiring. **KEY as-built (Rule 3):** the shared `AuditEvent` table ALREADY existed in BOTH `prisma/schema.prisma` (line 715) AND the live DB (added 2026-05-06, commit `701775f`, UNUSED since) — so slice 1 shipped with **NO schema change**, and W#1 records via its OWN keyword-clustering route, NOT the library `useEmitAuditEvent()` hook. See `docs/KEYWORD_CLUSTERING_POLISH_BACKLOG.md` H-1 (slice 1 ✅ DONE).
+
+> **NOTE (2026-06-03-h — M-2 ✅ DONE):** W#1 polish item **M-2 (Auto-Analyze cost forecasting + spend cap + out-of-credit handling)** shipped + was director-verified (commits `129cfcb` + `ab24154`). See `docs/KEYWORD_CLUSTERING_POLISH_BACKLOG.md` M-2 (✅ DONE).
 
 > **NOTE (2026-06-03-f — platform-wide change touched W#1, NOT via this pointer):** W#1's `AutoAnalyze.tsx` model picker was migrated to the central AI-model registry by **P-63 Phase 1** (a platform-wide consolidation developed on `workflow-2-competition-scraping`, NOT a W#1 backlog session). The picker now reads its models via `getModelsForMenu('keyword-clustering')` (6 models, Sonnet 4.6 default preserved — byte-identical behavior); inline `AA_PRICING` → `aaPrice()` off the central `MODEL_PRICING`; thinking routed through `anthropicAdapter.mapThinkingOption`. This is plumbing only — no behavior change, no W#1 backlog item closed. The H-1 queued task below is UNAFFECTED. See `docs/AI_MODEL_REGISTRY.md` (site #3 = W#1 consumer) + `docs/polish-item-specs/P-63-central-ai-model-registry-self-serve.md`.
 
@@ -21,24 +23,21 @@ W#1 is graduated and lives on `main` per Rule 22. Verify with `git branch --show
 ## Launch prompt
 
 Read docs/CLAUDE_CODE_STARTER.md and follow every rule in it.
-Today's task: return to Workflow #1 (Keyword Clustering) — start H-1 (Action history table + per-action undo) per `KEYWORD_CLUSTERING_POLISH_BACKLOG.md` H-1 entry. This is a graduated-tool re-entry session, NOT a transition session. Verify branch state with `git branch --show-current` before any doc reads — should be `main`.
+Today's task: return to Workflow #1 (Keyword Clustering) — H-1 SLICE 2 (record MANUAL edits at the server save-points), the next slice of the H-1 action-history epic per `KEYWORD_CLUSTERING_POLISH_BACKLOG.md` H-1 entry. This is a graduated-tool re-entry session, NOT a transition session. Verify branch state with `git branch --show-current` before any doc reads — should be `main`.
 
 Per HANDOFF_PROTOCOL.md Rule 22 (Graduated-Tool Re-Entry Protocol):
 
 1. Run the mandatory start-of-session sequence (Group A docs + branch verification per CLAUDE_CODE_STARTER.md Step 2).
 2. Additionally load these Group B docs:
    - `docs/KEYWORD_CLUSTERING_DATA_CONTRACT.md` (read fully — canonical small/stable artifact downstream consumers reference)
-   - `docs/KEYWORD_CLUSTERING_POLISH_BACKLOG.md` (read fully — H-1 entry has the work-split breakdown)
+   - `docs/KEYWORD_CLUSTERING_POLISH_BACKLOG.md` (read fully — the H-1 entry has the slice-by-slice status; slice 1 ✅ DONE, slice 2 = (b) below)
    - `docs/KEYWORD_CLUSTERING_ARCHIVE.md` (skim table of contents; load specific STATE blocks only when needed — the Archive is ~4600 lines and intentionally not loaded by default)
-3. Per Rule 21, scan ROADMAP.md + DATA_CATALOG.md for any director directives addressed to W#1 captured since graduation.
-4. Per Rule 23, run a Change Impact Audit before any code change: identify affected data items (`AuditEvent` is a new table; `useEmitAuditEvent()` currently a stub no-op), look up downstream consumers in DATA_CATALOG.md Cross-Tool Data Flow Map §7.2.1, classify the change (Additive for H-1 — new optional `AuditEvent` table doesn't break any consumer; downstream tools can read or ignore).
-5. Walk director through H-1's 4-part work split:
-   - **(a) `AuditEvent` schema** — per-action audit row with op type, payload, timestamp, user, before/after state.
-   - **(b) Wire `useEmitAuditEvent()` to real DB inserts** in operation-applier paths (every ADD_TOPIC / MOVE_KEYWORD / etc.).
-   - **(c) Action History UI tab in the AST panel** — chronological list of every op with filter/search.
-   - **(d) Per-action undo DESIGN SESSION BEFORE build** — some ops easy reverses (ADD_TOPIC ↔ DELETE_TOPIC); others compose nontrivially (SPLIT_TOPIC, MERGE_TOPICS with auto-reparenting). Director-confirmed design session must precede build per Rule 18 mid-build directive Read-It-Back.
-6. Pick which slice of (a)-(d) to ship in this session via Rule 14f forced-picker — small + reversible + audit-table-first is the conservative shape (schema + minimal wiring; UI + undo follow in subsequent sessions).
-7. Produce the drift check with this added context. Wait for go-ahead.
+   - **`src/lib/audit-payload.ts` + `src/app/api/projects/[projectId]/audit-events/route.ts`** (the slice-1 as-built — reuse these; do NOT re-create them)
+3. Per Rule 21, scan ROADMAP.md + DATA_CATALOG.md for any director directives addressed to W#1 captured since slice 1. The `AuditEvent` data item is now LIVE in DATA_CATALOG §4.10 (W#1 first consumer).
+4. Per Rule 23, run a Change Impact Audit before any code change. **NOTE (Rule 3, established slice 1): the `AuditEvent` table ALREADY exists in `prisma/schema.prisma` (line 715) + the live DB — slice 2 reuses it and expects NO schema change.** Classify Additive (recording manual edits adds rows to an existing table; breaks no consumer).
+5. **H-1 SLICE 2 scope — record MANUAL edits at the ~10 server mutation routes:** canvas/nodes POST/PATCH/DELETE, keywords POST/PATCH + keywords/[id] PATCH/DELETE, removed-keywords POST, removed-keywords/[id]/restore, canvas/sister-links POST/DELETE. Instrument BEST-EFFORT and OUTSIDE the DB transaction so a recorder failure never rolls back a user's edit. Reuse `src/lib/audit-payload.ts` (add a pure `topicUpdateEvents(before, update)` helper + tests for the content-field diff → events). **SKIP pure layout changes** — node x/y drag, pan/zoom, resize (those are not action-history-worthy). The existing `AuditEvent` table + the GET `/api/projects/[projectId]/audit-events` read surface are ready.
+6. Plan the slice-2 shape WITH the director via a Rule 14f forced-picker BEFORE coding (per `feedback_plan_output_shape_before_building` — confirm which routes are in scope + the content-field diff vs layout-skip boundary). Add node:test coverage for any new pure logic (`topicUpdateEvents`).
+7. Produce the drift check with this added context. Wait for go-ahead. The FUTURE slices after slice 2 = (c) the Action-History UI tab (reads the GET) + (d) the per-action undo design + engine (design WITH the director before build).
 
 ## How to override
 
@@ -59,4 +58,4 @@ Per HANDOFF_PROTOCOL §4 Step 1 W#1-additional-row (NEW 2026-05-19-g-7):
 
 Initial population 2026-05-19-g-7. The director's directive that triggered creating this file (verbatim): *"I don't want to tell the session what item to work on. I want it to check the roadmap to know what the next item on the roadmap is. Normally I simply tell you to add new fixes, features, etc to the roadmap and then you give me choices on when we should tackle them (for example right away or at some later point). So please tell me exactly what I should type in the terminal to have you know where to pick up from with full context and instructions based on the roadmap for each workflow."*
 
-H-1 was picked as the initial queued item because it's the highest-priority OPEN entry in `docs/KEYWORD_CLUSTERING_POLISH_BACKLOG.md` (under "🚨 HIGH priority") and has been queued at top since graduation 2026-05-12 without anyone yet starting it. The director may legitimately want to do a different W#1 task instead — see "How to override" above.
+H-1 was picked as the initial queued item because it's the highest-priority OPEN entry in `docs/KEYWORD_CLUSTERING_POLISH_BACKLOG.md` (under "🚨 HIGH priority"). As of 2026-06-04, H-1 slice 1 (the recorder foundation + AI-run recording) is ✅ DONE + director-verified, so this pointer now queues **H-1 slice 2 (manual-edit recording at the server save-points)** — the director's confirmed (a.140) §4 Step 1c pick. H-1 remains the active epic (slices 3+ = the History UI tab + the per-action undo engine). The director may legitimately want to do a different W#1 task instead — see "How to override" above.

@@ -1,7 +1,7 @@
 # DATA CATALOG
 ## Master index of all data captured across the PLOS platform, with Human Reference Language
 
-**Last updated:** 2026-05-20-b (P-27 captured-videos design session — §7.2.2 W#2 row extended with NEW "Captured video library" output entry per `docs/CAPTURED_VIDEOS_DESIGN.md` §A.15 + §A.16 reciprocal output declaration; new `video-category` vocabulary type captured as upstream-input dependency (read by W#2 capture forms); anticipated downstream consumers W#4 Brand Identity (visual references) + W#6 Content Development (video inspiration) + W#7 Multi-Media Assets (style references) mirroring captured-image-library's downstream pattern. Three Living Questions (Rule 7) answers folded into the new entry: (i) upstream data needed = Project + Platform + CompetitorUrl + new `video-category` vocabulary; (ii) read-only by W#3+; (iii) N/A on edits-back. DOC-ONLY session — no schema this session; the actual `CapturedVideo` table + new `VideoSourceType` enum + new `video-category` value land at the future Build session #1 per design doc §A.2 implementation arc table. Schema-change-in-flight stayed "No" this session — design + DATA_CATALOG capture only; flips to "Yes" at next session start when P-27 Build #1 begins the `prisma db push`. NEW Group B design doc `docs/CAPTURED_VIDEOS_DESIGN.md` shipped 2026-05-20-b is the binding source for this DATA_CATALOG entry.)
+**Last updated:** 2026-06-04 (W#1 H-1 slice 1 — the `AuditEvent` data item flipped from PLANNED to LIVE: W#1 (Keyword Clustering) is its FIRST consumer. The shared generic `AuditEvent` table — already in `prisma/schema.prisma` line 715 + the live DB since 2026-05-06 (commit `701775f`), UNUSED until now — now records W#1 action-history events with `workflowType='keyword-clustering'` and `payload` = `{source, action, op, before, after, batchId, seq, detail}`. AI-run recording shipped this session; manual-edit recording is queued. Read surface: GET `/api/projects/[projectId]/audit-events`. **NO schema migration this session** (the table pre-existed). Three Living Questions (Rule 7) answers folded into §4.10 below. See `docs/KEYWORD_CLUSTERING_POLISH_BACKLOG.md` H-1 + `docs/WORKFLOW_COMPONENTS_LIBRARY_DESIGN.md` §3.10. Prior: 2026-05-20-b (P-27 captured-videos design session — §7.2.2 W#2 row extended with NEW "Captured video library" output entry per `docs/CAPTURED_VIDEOS_DESIGN.md` §A.15 + §A.16 reciprocal output declaration; new `video-category` vocabulary type captured as upstream-input dependency (read by W#2 capture forms); anticipated downstream consumers W#4 Brand Identity (visual references) + W#6 Content Development (video inspiration) + W#7 Multi-Media Assets (style references) mirroring captured-image-library's downstream pattern. Three Living Questions (Rule 7) answers folded into the new entry: (i) upstream data needed = Project + Platform + CompetitorUrl + new `video-category` vocabulary; (ii) read-only by W#3+; (iii) N/A on edits-back. DOC-ONLY session — no schema this session; the actual `CapturedVideo` table + new `VideoSourceType` enum + new `video-category` value land at the future Build session #1 per design doc §A.2 implementation arc table. Schema-change-in-flight stayed "No" this session — design + DATA_CATALOG capture only; flips to "Yes" at next session start when P-27 Build #1 begins the `prisma db push`. NEW Group B design doc `docs/CAPTURED_VIDEOS_DESIGN.md` shipped 2026-05-20-b is the binding source for this DATA_CATALOG entry.)
 
 **Previously updated:** 2026-05-15-b (W#2 P-29 Slice #1 BUILD session — `source` String column added to §6.1.1 + §6.1.3 + §6.1.4 wire-shape FIELDS lists; default `"extension"` so existing rows backfill via column default; closed-vocabulary `"extension" | "manual"` validated via `isSource` from shared-types. Captures the new audit-trail dimension that distinguishes Chrome-extension capture from vklf.com manual-add modal entry — per `COMPETITION_SCRAPING_DESIGN.md` §B 2026-05-15 design entry Q3 outcome.)
 
@@ -158,12 +158,15 @@ These data items are required for Phase 2 (multi-user infrastructure) per `PLATF
 - **SHARED WITH:** Worker (for the assignment they own); admin; possibly audit queries
 
 ### 4.10 Audit Events
-- **HUMAN REF (provisional):** "the audit log" / "the history of changes" / "who did what"
-- **CAPTURED IN:** Automatically emitted by workflow tools that opt into audit (Phase 2)
-- **TECHNICAL NAME:** `AuditEvent` table (PLANNED; see `PLATFORM_ARCHITECTURE.md §13.3`)
-- **FIELDS (planned):** projectId, workflow, userId, eventType, payload (JSON), createdAt
-- **OPT-IN:** Per-workflow; declared at workflow design time per `PLATFORM_REQUIREMENTS.md §5`
-- **SHARED WITH:** Admin monitoring dashboards; per-workflow audit views; possibly exported for external analysis
+- **HUMAN REF:** "the audit log" / "the action history" / "the history of changes" / "who did what"
+- **CAPTURED IN:** Automatically emitted by workflow tools that opt into audit (Phase 2). **LIVE as of 2026-06-04 — W#1 (Keyword Clustering) is the FIRST consumer** (H-1 action history). W#1 records via the keyword-clustering server route (POST `/api/projects/[projectId]/audit-events`), NOT the library `useEmitAuditEvent()` hook (W#1 predates the library context).
+- **TECHNICAL NAME:** `AuditEvent` table — **EXISTS in `prisma/schema.prisma` (line 715) + the live DB** (added 2026-05-06, commit `701775f`, during a W#2 build slice; UNUSED until W#1 consumed it 2026-06-04). NO schema migration was needed at W#1 first-consume (the table pre-existed). Cross-ref `PLATFORM_ARCHITECTURE.md §13.3`.
+- **FIELDS (7 columns, verified live via `information_schema`):** id, workflowType, projectId, userId, eventType, payload (JSON), createdAt (the original sketch's `timestamp` is `createdAt` as built). For W#1, `workflowType='keyword-clustering'` and `payload` = `{source, action, op, before, after, batchId, seq, detail}`.
+- **W#1 EVENT VOCABULARY (`src/lib/audit-payload.ts`):** the 13 operation-applier op types + 3 manual-only (CREATE/DELETE/RESTORE_KEYWORD). AI-run recording = one batch per Auto-Analyze apply pass (best-effort, fire-and-forget). Manual-edit recording at the server save-points = queued (H-1 slice 2).
+- **READ SURFACE:** GET `/api/projects/[projectId]/audit-events` — recent history, newest-first (used for verification today + the future Action-History UI tab).
+- **Three Living Questions (Rule 7) — W#1 `AuditEvent`:** (i) upstream data needed = Project + userId + the W#1 operation stream (op type, before/after topic state) — all already in-tool; no cross-workflow upstream read; (ii) read-only by any future consumer (Admin monitoring / per-workflow history views) — system-write only; (iii) N/A on edits-back (audit rows are append-only and never edited).
+- **OPT-IN:** Per-workflow; declared at workflow design time per `PLATFORM_REQUIREMENTS.md §5`. W#1 opted in via H-1.
+- **SHARED WITH:** Admin monitoring dashboards; per-workflow audit views; possibly exported for external analysis (all TBD/future — W#1 is currently the only writer + reader).
 
 ### 4.11 User Role
 - **HUMAN REF (provisional):** "my role" / "admin vs. worker"
@@ -563,10 +566,10 @@ These are platform-level shared items — not workflow-to-workflow data, but cro
 - CONSUMING: Worker UI (their revision context), admin history
 - R/W: Admin write; worker read-only for their assignments
 
-**AuditEvents** — shared (for workflows that opt in)
-- FROM: Automatic emission from instrumented workflow mutations
-- CONSUMING: Admin audit views; possibly worker "my history" views (TBD)
-- R/W: System-write only; read by admin and possibly workers for their own events
+**AuditEvents** — shared (for workflows that opt in) — **LIVE 2026-06-04; W#1 is the FIRST consumer**
+- FROM: Automatic emission from instrumented workflow mutations. W#1 (Keyword Clustering) writes via POST `/api/projects/[projectId]/audit-events` (its keyword-clustering route, not the library hook — W#1 predates the library context). AI-run recording live; manual-edit recording queued (H-1 slice 2).
+- CONSUMING: Admin audit views; possibly worker "my history" views (TBD); the future W#1 Action-History UI tab (reads GET `/api/projects/[projectId]/audit-events`). Currently W#1 is the only writer + reader.
+- R/W: System-write only (append-only; rows never edited); read by admin and possibly workers for their own events
 
 **Workflow Deliverables** — shared across workflows
 - FROM: Uploaded by the workflow that produces them

@@ -6,7 +6,7 @@
 
 **Loading rule:** read this doc fully if your Rule 22 re-entry task touches a polish item. Otherwise, the Data Contract is sufficient.
 
-**Last updated:** 2026-06-03-h (M-2 → ✅ DONE — Auto-Analyze cost forecasting + spend cap + out-of-credit handling DEPLOYED-AND-VERIFIED on real Chrome across two deploys to `main`; H-1 is now the RECOMMENDED-NEXT HIGH item). Prior: 2026-05-12 (W#1 graduation session — sidecar created).
+**Last updated:** 2026-06-04 (H-1 SLICE 1 → ✅ DONE — the action-history recorder foundation + AI-run recording DEPLOYED-AND-VERIFIED on real Chrome [22 `AuditEvent` rows confirmed on a live Auto-Analyze run]; slice 2 = manual-edit recording at the server save-points is now queued. KEY as-built note: the `AuditEvent` table ALREADY existed — no schema change shipped). Prior: 2026-06-03-h (M-2 → ✅ DONE). Prior: 2026-05-12 (W#1 graduation session — sidecar created).
 
 ---
 
@@ -14,17 +14,20 @@
 
 ### H-1. Action history table + per-action undo
 
-**Status:** NOT STARTED. Feature confirmed missing in 2026-05-05-d investigation.
+**Status:** IN PROGRESS — a 3–5 session epic. **SLICE 1 ✅ DONE 2026-06-04 (DEPLOYED-AND-VERIFIED).** SLICE 2 (manual-edit recording) = next, queued as (a.140). SLICES 3+ (History UI tab + per-action undo engine) follow.
 
-**What it is:** today's `useEmitAuditEvent()` is explicitly a Phase-2 stub no-op (`src/lib/workflow-components/use-workflow-context.tsx:193-206`); there is no `AuditEvent` table in `prisma/schema.prisma`; the activity log during runs is in-memory only (cleared when overlay closes); no per-action undo exists (only destructive Reset Workflow). A D3 run executes hundreds of AI ops with zero persistent record.
+**What it is (original capture, PRESERVED):** today's `useEmitAuditEvent()` is explicitly a Phase-2 stub no-op (`src/lib/workflow-components/use-workflow-context.tsx:193-206`); the activity log during runs is in-memory only (cleared when overlay closes); no per-action undo exists (only destructive Reset Workflow). A D3 run executes hundreds of AI ops with zero persistent record.
 
-**Work split:**
-- (a) `AuditEvent` schema (per-action audit row with op type, payload, timestamp, user, before/after state)
-- (b) Wire `useEmitAuditEvent()` to real DB inserts in operation-applier paths (every ADD_TOPIC / MOVE_KEYWORD / etc.)
-- (c) Action History UI tab in the AST panel — chronological list of every op with filter/search
-- (d) Per-action undo design session BEFORE build — some ops easy reverses (ADD_TOPIC ↔ DELETE_TOPIC), others compose nontrivially (SPLIT_TOPIC, MERGE_TOPICS with auto-reparenting)
+**⚠️ Rule 3 CORRECTION (2026-06-04):** the original capture said *"there is no `AuditEvent` table in `prisma/schema.prisma`"* — that is FALSE. The shared generic `AuditEvent` table already existed in BOTH the schema (line 715) AND the live DB; it was added 2026-05-06 (commit `701775f`) during a W#2 build slice and had been UNUSED until W#1 became its first consumer this session. So slice 1 needed **NO schema change** (verified by reading the schema line + a read-only `information_schema` query — all 7 columns present).
 
-**Estimated:** 3–5 sessions total. Largely additive — doesn't gate downstream workflows; can run parallel with other work.
+**Work split (status flagged):**
+- (a) ✅ DONE 2026-06-04 — `AuditEvent` storage. **NO schema migration** (the table pre-existed). The slice instead added: NEW `src/lib/audit-payload.ts` (pure W#1 audit-event vocabulary — the 13 operation-applier op types + 3 manual-only CREATE/DELETE/RESTORE_KEYWORD + `{eventType, payload}` builders; +10 node:test) + NEW `src/lib/audit-recorder.ts` (best-effort, non-throwing, batched [chunk 200] client sender `recordAuditEvents()` + `newAuditBatchId()`) + NEW route `src/app/api/projects/[projectId]/audit-events/route.ts` (POST records a batch [validates eventType against the vocab, skips unknowns, inserts `AuditEvent` rows] + GET recent-history newest-first for verification + the future History UI tab).
+- (a-AI) ✅ DONE 2026-06-04 — AI-run recording. `AutoAnalyze.tsx` `doApplyV3` records every applied AI op (one batch per apply pass) after a committed rebuild; fire-and-forget, never blocks/fails the run. **As-built notes:** recording is best-effort (a recorder failure never breaks the run); W#1 does NOT use the library `useEmitAuditEvent()` hook (it has its own auth/userId flow in `page.tsx`; manual edits flow through `src/hooks/useCanvas.ts` + `src/hooks/useKeywords.ts`), so recording goes through the dedicated W#1 `audit-recorder.ts` + the keyword-clustering `audit-events` route, NOT the library hook. Verified live: a real Auto-Analyze run on project `c270927b-0241-445d-a648-c36c9887b934` landed 22 `AuditEvent` rows; director "Done".
+- (b) **SLICE 2 — NEXT, (a.140): record MANUAL edits at the ~10 server mutation routes** — canvas/nodes POST/PATCH/DELETE, keywords POST/PATCH + keywords/[id] PATCH/DELETE, removed-keywords POST, removed-keywords/[id]/restore, canvas/sister-links POST/DELETE. Best-effort/OUTSIDE the transaction so a recorder failure never rolls back a user's edit. Reuse `audit-payload.ts` (add a pure `topicUpdateEvents(before, update)` helper + tests for the content-field diff → events; SKIP pure layout changes — node x/y drag, pan/zoom, resize). The existing `AuditEvent` table + the `/audit-events` GET are ready. Expects NO schema change (reuses the same table).
+- (c) Action History UI tab in the AST panel — chronological list of every op with filter/search (reads the `/audit-events` GET). FUTURE slice.
+- (d) Per-action undo design session BEFORE build — some ops easy reverses (ADD_TOPIC ↔ DELETE_TOPIC), others compose nontrivially (SPLIT_TOPIC, MERGE_TOPICS with auto-reparenting). FUTURE slice.
+
+**Estimated:** 3–5 sessions total (slice 1 done). Largely additive — doesn't gate downstream workflows; can run parallel with other work.
 
 ---
 
