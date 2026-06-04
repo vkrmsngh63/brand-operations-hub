@@ -4,6 +4,8 @@ import { verifyProjectWorkflowAuth } from '@/lib/auth';
 import { markWorkflowActive } from '@/lib/workflow-status';
 import { recordFlake } from '@/lib/flake-counter';
 import { withRetry } from '@/lib/prisma-retry';
+import { recordServerAuditEvents } from '@/lib/audit-recorder-server';
+import { manualEvent } from '@/lib/audit-payload';
 
 const WORKFLOW = 'keyword-clustering';
 
@@ -108,6 +110,21 @@ export async function POST(
     );
 
     await markWorkflowActive(projectId, WORKFLOW);
+    // H-1 slice 2: record MANUAL removals only (best-effort, post-commit). The
+    // 'auto-ai-detected-irrelevant' source is an AI archive, not a hand-edit —
+    // out of scope for this manual-edit slice.
+    if (removedSource === 'manual') {
+      await recordServerAuditEvents(
+        { projectId, userId },
+        created.map(r =>
+          manualEvent({
+            eventType: 'REMOVE_KEYWORD',
+            before: { keyword: r.keyword, originalKeywordId: r.originalKeywordId },
+            detail: { removedKeywordId: r.id, keyword: r.keyword },
+          })
+        )
+      );
+    }
     return NextResponse.json({ archived: created.length, removed: created }, { status: 201 });
   } catch (error) {
     recordFlake('POST /api/projects/[projectId]/removed-keywords', error, {

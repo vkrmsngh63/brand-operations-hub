@@ -4,6 +4,8 @@ import { verifyProjectWorkflowAuth } from '@/lib/auth';
 import { markWorkflowActive } from '@/lib/workflow-status';
 import { withRetry } from '@/lib/prisma-retry';
 import { recordFlake } from '@/lib/flake-counter';
+import { recordServerAuditEvents } from '@/lib/audit-recorder-server';
+import { manualEvent, topicUpdateEvents } from '@/lib/audit-payload';
 
 const WORKFLOW = 'keyword-clustering';
 
@@ -58,7 +60,7 @@ export async function POST(
   const { projectId } = await params;
   const auth = await verifyProjectWorkflowAuth(req, projectId, WORKFLOW);
   if (auth.error) return auth.error;
-  const { projectWorkflowId } = auth;
+  const { projectWorkflowId, userId } = auth;
 
   try {
     const body = await req.json();
@@ -108,6 +110,14 @@ export async function POST(
     );
 
     await markWorkflowActive(projectId, WORKFLOW);
+    // H-1 slice 2: record the manual topic creation (best-effort, post-commit).
+    await recordServerAuditEvents({ projectId, userId }, [
+      manualEvent({
+        eventType: 'ADD_TOPIC',
+        after: { id: node.id, stableId: node.stableId, title: node.title },
+        detail: { topicId: node.id, stableId: node.stableId },
+      }),
+    ]);
     return NextResponse.json(node, { status: 201 });
   } catch (error) {
     recordFlake('POST /api/projects/[projectId]/canvas/nodes', error, {
@@ -132,7 +142,7 @@ export async function PATCH(
   const { projectId } = await params;
   const auth = await verifyProjectWorkflowAuth(req, projectId, WORKFLOW);
   if (auth.error) return auth.error;
-  const { projectWorkflowId: _projectWorkflowId } = auth;
+  const { projectWorkflowId: _projectWorkflowId, userId } = auth;
 
   try {
     const body = await req.json();
@@ -217,6 +227,16 @@ export async function PATCH(
     const results = await withRetry(() => prisma.$transaction(ops));
     await markWorkflowActive(projectId, WORKFLOW);
 
+    // H-1 slice 2: record manual content/structure edits (rename, re-describe,
+    // reparent, reorder, keyword-link). Pure layout patches (x/y/w/h-only —
+    // a drag/resize) diff to [] and cost nothing. Best-effort, post-commit.
+    await recordServerAuditEvents(
+      { projectId, userId },
+      (body.nodes as Record<string, unknown>[]).flatMap(n =>
+        topicUpdateEvents(n)
+      )
+    );
+
     return NextResponse.json(results);
   } catch (error) {
     recordFlake('PATCH /api/projects/[projectId]/canvas/nodes', error, {
@@ -240,7 +260,7 @@ export async function DELETE(
   const { projectId } = await params;
   const auth = await verifyProjectWorkflowAuth(req, projectId, WORKFLOW);
   if (auth.error) return auth.error;
-  const { projectWorkflowId } = auth;
+  const { projectWorkflowId, userId } = auth;
 
   try {
     const body = await req.json();
@@ -264,6 +284,13 @@ export async function DELETE(
     );
 
     await markWorkflowActive(projectId, WORKFLOW);
+    // H-1 slice 2: record the manual topic deletion(s) (best-effort, post-commit).
+    await recordServerAuditEvents(
+      { projectId, userId },
+      ids.map(id =>
+        manualEvent({ eventType: 'DELETE_TOPIC', detail: { topicId: id } })
+      )
+    );
     return NextResponse.json({ success: true, deleted: ids });
   } catch (error) {
     recordFlake('DELETE /api/projects/[projectId]/canvas/nodes', error, {

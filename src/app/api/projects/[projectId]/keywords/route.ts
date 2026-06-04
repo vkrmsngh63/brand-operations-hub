@@ -4,6 +4,8 @@ import { verifyProjectWorkflowAuth } from '@/lib/auth';
 import { markWorkflowActive } from '@/lib/workflow-status';
 import { recordFlake } from '@/lib/flake-counter';
 import { withRetry } from '@/lib/prisma-retry';
+import { recordServerAuditEvents } from '@/lib/audit-recorder-server';
+import { manualEvent, keywordUpdateEvents } from '@/lib/audit-payload';
 
 const WORKFLOW = 'keyword-clustering';
 
@@ -46,7 +48,7 @@ export async function POST(
   const { projectId } = await params;
   const auth = await verifyProjectWorkflowAuth(req, projectId, WORKFLOW);
   if (auth.error) return auth.error;
-  const { projectWorkflowId } = auth;
+  const { projectWorkflowId, userId } = auth;
 
   try {
     const body = await req.json();
@@ -77,6 +79,18 @@ export async function POST(
         prisma.keyword.createMany({ data })
       );
       await markWorkflowActive(projectId, WORKFLOW);
+      // H-1 slice 2: record each manually-imported keyword (best-effort).
+      // createMany returns no ids, so the snapshot keys on keyword text.
+      await recordServerAuditEvents(
+        { projectId, userId },
+        data.map((d: { keyword: string }) =>
+          manualEvent({
+            eventType: 'CREATE_KEYWORD',
+            after: { keyword: d.keyword },
+            detail: { keyword: d.keyword, bulk: true },
+          })
+        )
+      );
       return NextResponse.json({ created: result.count }, { status: 201 });
     }
 
@@ -101,6 +115,14 @@ export async function POST(
     );
 
     await markWorkflowActive(projectId, WORKFLOW);
+    // H-1 slice 2: record the manual single-keyword creation (best-effort).
+    await recordServerAuditEvents({ projectId, userId }, [
+      manualEvent({
+        eventType: 'CREATE_KEYWORD',
+        after: { id: keyword.id, keyword: keyword.keyword },
+        detail: { keywordId: keyword.id, keyword: keyword.keyword },
+      }),
+    ]);
     return NextResponse.json(keyword, { status: 201 });
   } catch (error) {
     recordFlake('POST /api/projects/[projectId]/keywords', error, {
@@ -126,7 +148,7 @@ export async function PATCH(
   const { projectId } = await params;
   const auth = await verifyProjectWorkflowAuth(req, projectId, WORKFLOW);
   if (auth.error) return auth.error;
-  const { projectWorkflowId } = auth;
+  const { projectWorkflowId, userId } = auth;
 
   try {
     const body = await req.json();
@@ -171,6 +193,15 @@ export async function PATCH(
     const results = await withRetry(() => prisma.$transaction(ops));
     await markWorkflowActive(projectId, WORKFLOW);
 
+    // H-1 slice 2: record manual keyword edits/reorders (best-effort). A patch
+    // touching only layout (canvasLoc) / metadata (topicApproved) diffs to [].
+    await recordServerAuditEvents(
+      { projectId, userId },
+      (body.keywords as Record<string, unknown>[]).flatMap(k =>
+        keywordUpdateEvents(k)
+      )
+    );
+
     return NextResponse.json({ updated: results.length });
   } catch (error) {
     recordFlake('PATCH /api/projects/[projectId]/keywords', error, {
@@ -195,7 +226,7 @@ export async function DELETE(
   const { projectId } = await params;
   const auth = await verifyProjectWorkflowAuth(req, projectId, WORKFLOW);
   if (auth.error) return auth.error;
-  const { projectWorkflowId } = auth;
+  const { projectWorkflowId, userId } = auth;
 
   try {
     const body = await req.json();
@@ -214,6 +245,13 @@ export async function DELETE(
     );
 
     await markWorkflowActive(projectId, WORKFLOW);
+    // H-1 slice 2: record the manual keyword deletion(s) (best-effort).
+    await recordServerAuditEvents(
+      { projectId, userId },
+      (body.ids as string[]).map(id =>
+        manualEvent({ eventType: 'DELETE_KEYWORD', detail: { keywordId: id } })
+      )
+    );
     return NextResponse.json({ deleted: result.count });
   } catch (error) {
     recordFlake('DELETE /api/projects/[projectId]/keywords', error, {

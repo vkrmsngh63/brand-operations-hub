@@ -4,6 +4,8 @@ import { verifyProjectWorkflowAuth } from '@/lib/auth';
 import { markWorkflowActive } from '@/lib/workflow-status';
 import { recordFlake } from '@/lib/flake-counter';
 import { withRetry } from '@/lib/prisma-retry';
+import { recordServerAuditEvents } from '@/lib/audit-recorder-server';
+import { manualEvent } from '@/lib/audit-payload';
 
 const WORKFLOW = 'keyword-clustering';
 
@@ -17,7 +19,7 @@ export async function POST(
   const { projectId } = await params;
   const auth = await verifyProjectWorkflowAuth(req, projectId, WORKFLOW);
   if (auth.error) return auth.error;
-  const { projectWorkflowId } = auth;
+  const { projectWorkflowId, userId } = auth;
 
   try {
     const body = await req.json();
@@ -40,6 +42,16 @@ export async function POST(
     );
 
     await markWorkflowActive(projectId, WORKFLOW);
+    // H-1 slice 2 (future-proof): no manual UI calls this route today — sister
+    // links are recomputed wholesale by the AI rebuild. Wired now so a future
+    // manual link editor records automatically. Best-effort, post-commit.
+    await recordServerAuditEvents({ projectId, userId }, [
+      manualEvent({
+        eventType: 'ADD_SISTER_LINK',
+        after: { id: link.id, nodeA: link.nodeA, nodeB: link.nodeB },
+        detail: { sisterLinkId: link.id },
+      }),
+    ]);
     return NextResponse.json(link, { status: 201 });
   } catch (error) {
     recordFlake('POST /api/projects/[projectId]/canvas/sister-links', error, {
@@ -64,7 +76,7 @@ export async function DELETE(
   const { projectId } = await params;
   const auth = await verifyProjectWorkflowAuth(req, projectId, WORKFLOW);
   if (auth.error) return auth.error;
-  const { projectWorkflowId } = auth;
+  const { projectWorkflowId, userId } = auth;
 
   try {
     const body = await req.json();
@@ -77,6 +89,13 @@ export async function DELETE(
     );
 
     await markWorkflowActive(projectId, WORKFLOW);
+    // H-1 slice 2 (future-proof): see the POST note above.
+    await recordServerAuditEvents({ projectId, userId }, [
+      manualEvent({
+        eventType: 'REMOVE_SISTER_LINK',
+        detail: { sisterLinkId: body.id },
+      }),
+    ]);
     return NextResponse.json({ success: true });
   } catch (error) {
     recordFlake('DELETE /api/projects/[projectId]/canvas/sister-links', error, {

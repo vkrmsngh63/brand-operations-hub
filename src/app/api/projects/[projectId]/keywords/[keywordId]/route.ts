@@ -4,6 +4,8 @@ import { verifyProjectWorkflowAuth } from '@/lib/auth';
 import { markWorkflowActive } from '@/lib/workflow-status';
 import { recordFlake } from '@/lib/flake-counter';
 import { withRetry } from '@/lib/prisma-retry';
+import { recordServerAuditEvents } from '@/lib/audit-recorder-server';
+import { manualEvent, keywordUpdateEvents } from '@/lib/audit-payload';
 
 const WORKFLOW = 'keyword-clustering';
 
@@ -20,7 +22,7 @@ export async function PATCH(
   const { projectId, keywordId } = await params;
   const auth = await verifyProjectWorkflowAuth(req, projectId, WORKFLOW);
   if (auth.error) return auth.error;
-  const { projectWorkflowId } = auth;
+  const { projectWorkflowId, userId } = auth;
 
   try {
     const body = await req.json();
@@ -48,6 +50,11 @@ export async function PATCH(
     );
 
     await markWorkflowActive(projectId, WORKFLOW);
+    // H-1 slice 2: record the manual keyword edit (best-effort, post-commit).
+    await recordServerAuditEvents(
+      { projectId, userId },
+      keywordUpdateEvents({ id: keywordId, ...body })
+    );
     return NextResponse.json(keyword);
   } catch (error) {
     recordFlake('PATCH /api/projects/[projectId]/keywords/[keywordId]', error, {
@@ -75,7 +82,7 @@ export async function DELETE(
   const { projectId, keywordId } = await params;
   const auth = await verifyProjectWorkflowAuth(req, projectId, WORKFLOW);
   if (auth.error) return auth.error;
-  const { projectWorkflowId } = auth;
+  const { projectWorkflowId, userId } = auth;
 
   try {
     // Wrapped in withRetry per the 2026-05-05 apply-pipeline rate-fix.
@@ -87,6 +94,10 @@ export async function DELETE(
       })
     );
     await markWorkflowActive(projectId, WORKFLOW);
+    // H-1 slice 2: record the manual keyword deletion (best-effort, post-commit).
+    await recordServerAuditEvents({ projectId, userId }, [
+      manualEvent({ eventType: 'DELETE_KEYWORD', detail: { keywordId } }),
+    ]);
     return NextResponse.json({ success: true });
   } catch (error) {
     recordFlake('DELETE /api/projects/[projectId]/keywords/[keywordId]', error, {

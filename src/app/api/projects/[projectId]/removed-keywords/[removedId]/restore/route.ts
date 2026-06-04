@@ -4,6 +4,8 @@ import { verifyProjectWorkflowAuth } from '@/lib/auth';
 import { markWorkflowActive } from '@/lib/workflow-status';
 import { recordFlake } from '@/lib/flake-counter';
 import { withRetry } from '@/lib/prisma-retry';
+import { recordServerAuditEvents } from '@/lib/audit-recorder-server';
+import { manualEvent } from '@/lib/audit-payload';
 
 const WORKFLOW = 'keyword-clustering';
 
@@ -20,7 +22,7 @@ export async function POST(
   const { projectId, removedId } = await params;
   const auth = await verifyProjectWorkflowAuth(req, projectId, WORKFLOW);
   if (auth.error) return auth.error;
-  const { projectWorkflowId } = auth;
+  const { projectWorkflowId, userId } = auth;
 
   try {
     // Wrapped in withRetry per the 2026-05-05 apply-pipeline rate-fix.
@@ -77,6 +79,14 @@ export async function POST(
     );
 
     await markWorkflowActive(projectId, WORKFLOW);
+    // H-1 slice 2: record the manual restore (best-effort, post-commit).
+    await recordServerAuditEvents({ projectId, userId }, [
+      manualEvent({
+        eventType: 'RESTORE_KEYWORD',
+        after: { id: restored.id, keyword: restored.keyword },
+        detail: { keywordId: restored.id, keyword: restored.keyword },
+      }),
+    ]);
     return NextResponse.json({ restored }, { status: 201 });
   } catch (error) {
     recordFlake(

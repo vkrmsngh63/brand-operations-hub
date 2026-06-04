@@ -4,6 +4,8 @@ import { verifyProjectWorkflowAuth } from '@/lib/auth';
 import { markWorkflowActive } from '@/lib/workflow-status';
 import { recordFlake } from '@/lib/flake-counter';
 import { withRetry } from '@/lib/prisma-retry';
+import { recordServerAuditEvents } from '@/lib/audit-recorder-server';
+import { manualEvent } from '@/lib/audit-payload';
 
 const WORKFLOW = 'keyword-clustering';
 
@@ -16,7 +18,7 @@ export async function POST(
   const { projectId } = await params;
   const auth = await verifyProjectWorkflowAuth(req, projectId, WORKFLOW);
   if (auth.error) return auth.error;
-  const { projectWorkflowId } = auth;
+  const { projectWorkflowId, userId } = auth;
 
   try {
     // Wrapped in withRetry per the 2026-05-05 apply-pipeline rate-fix.
@@ -30,6 +32,16 @@ export async function POST(
     );
 
     await markWorkflowActive(projectId, WORKFLOW);
+    // H-1 slice 2 (future-proof): no manual UI calls this route today —
+    // pathways are recomputed wholesale by the AI rebuild. Wired now so a
+    // future manual pathway editor records automatically. Best-effort.
+    await recordServerAuditEvents({ projectId, userId }, [
+      manualEvent({
+        eventType: 'ADD_PATHWAY',
+        after: { id: pathway.id },
+        detail: { pathwayId: pathway.id },
+      }),
+    ]);
     return NextResponse.json(pathway, { status: 201 });
   } catch (error) {
     recordFlake('POST /api/projects/[projectId]/canvas/pathways', error, {
@@ -53,7 +65,7 @@ export async function DELETE(
   const { projectId } = await params;
   const auth = await verifyProjectWorkflowAuth(req, projectId, WORKFLOW);
   if (auth.error) return auth.error;
-  const { projectWorkflowId } = auth;
+  const { projectWorkflowId, userId } = auth;
 
   try {
     const body = await req.json();
@@ -65,6 +77,10 @@ export async function DELETE(
     );
 
     await markWorkflowActive(projectId, WORKFLOW);
+    // H-1 slice 2 (future-proof): see the POST note above.
+    await recordServerAuditEvents({ projectId, userId }, [
+      manualEvent({ eventType: 'REMOVE_PATHWAY', detail: { pathwayId: body.id } }),
+    ]);
     return NextResponse.json({ success: true });
   } catch (error) {
     recordFlake('DELETE /api/projects/[projectId]/canvas/pathways', error, {

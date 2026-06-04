@@ -51,6 +51,12 @@ export const AUDIT_EVENT_TYPES = [
   'CREATE_KEYWORD', // director imports/types a brand-new keyword row
   'DELETE_KEYWORD', // director hard-deletes a keyword (distinct from ARCHIVE)
   'RESTORE_KEYWORD', // director restores an archived keyword
+  'UPDATE_KEYWORD', // director edits a keyword's own fields (volume/tags/status/text/order)
+  // Pathway grouping (slice 2). Today only the AI rebuild recomputes pathways
+  // wholesale, so the manual canvas/pathways route is instrumented future-proof
+  // — no manual UI calls it yet (see KEYWORD_CLUSTERING_POLISH_BACKLOG H-1).
+  'ADD_PATHWAY',
+  'REMOVE_PATHWAY',
 ] as const;
 
 export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];
@@ -159,4 +165,112 @@ export function manualEvent(args: ManualEventArgs): AuditEventInput {
     payload.detail = args.detail;
   }
   return { eventType: args.eventType, payload };
+}
+
+/* ── Manual canvas-node (topic) update diff ─────────────────────── */
+
+/**
+ * Build manual audit events from ONE canvas-node PATCH entry
+ * (`{ id, ...changedFields }`). Records only content/structure edits; a pure
+ * layout change (x/y/w/h, resize) and AI-managed metadata (relationshipType
+ * on its own, kwPlacements, altTitles, intentFingerprint) produce NO events,
+ * so `topicUpdateEvents({ id, x, y })` from a drag returns [].
+ *
+ * Snapshots are AFTER-only (the new value), matching slice 1's "before/after
+ * where cheaply available" — the per-action-undo slice enriches before-state
+ * later. Relies on the client sending PARTIAL patches (verified in
+ * CanvasPanel/CanvasTableMode: a drag sends { id, x, y }; a rename sends
+ * { id, title }; a reparent sends { id, parentId, relationshipType }).
+ */
+export function topicUpdateEvents(
+  update: Record<string, unknown>
+): AuditEventInput[] {
+  const topicId = update.id;
+  const events: AuditEventInput[] = [];
+
+  if (typeof update.title === 'string') {
+    events.push(
+      manualEvent({
+        eventType: 'UPDATE_TOPIC_TITLE',
+        after: update.title,
+        detail: { topicId },
+      })
+    );
+  }
+  if (typeof update.description === 'string') {
+    events.push(
+      manualEvent({
+        eventType: 'UPDATE_TOPIC_DESCRIPTION',
+        after: update.description,
+        detail: { topicId },
+      })
+    );
+  }
+  // A reparent (parentId present) takes precedence over a same-patch reorder
+  // so a single drag-into-group records ONE MOVE_TOPIC, not two.
+  if ('parentId' in update) {
+    const detail: Record<string, unknown> = { topicId, kind: 'reparent' };
+    if (typeof update.relationshipType === 'string') {
+      detail.relationshipType = update.relationshipType;
+    }
+    if ('sortOrder' in update) detail.sortOrder = update.sortOrder;
+    events.push(
+      manualEvent({ eventType: 'MOVE_TOPIC', after: update.parentId, detail })
+    );
+  } else if ('sortOrder' in update) {
+    events.push(
+      manualEvent({
+        eventType: 'MOVE_TOPIC',
+        after: update.sortOrder,
+        detail: { topicId, kind: 'reorder' },
+      })
+    );
+  }
+  // A change to a node's linked-keyword membership IS a keyword move
+  // (dragging a keyword onto a topic re-writes linkedKwIds on that node).
+  if ('linkedKwIds' in update) {
+    events.push(
+      manualEvent({
+        eventType: 'MOVE_KEYWORD',
+        after: update.linkedKwIds,
+        detail: { topicId, via: 'topic-link' },
+      })
+    );
+  }
+  return events;
+}
+
+/* ── Manual keyword update diff ─────────────────────────────────── */
+
+/** Keyword fields worth recording (content); excludes layout + metadata. */
+const AUDITABLE_KEYWORD_FIELDS = [
+  'keyword',
+  'volume',
+  'sortingStatus',
+  'tags',
+  'topic',
+  'sortOrder',
+] as const;
+
+/**
+ * Build a manual audit event from ONE keyword-PATCH entry
+ * (`{ id, ...changedFields }`). Emits a single UPDATE_KEYWORD carrying the
+ * changed content fields; pure-layout (`canvasLoc`) and metadata
+ * (`topicApproved`) are ignored. Returns [] when nothing auditable changed.
+ */
+export function keywordUpdateEvents(
+  update: Record<string, unknown>
+): AuditEventInput[] {
+  const after: Record<string, unknown> = {};
+  for (const f of AUDITABLE_KEYWORD_FIELDS) {
+    if (f in update) after[f] = update[f];
+  }
+  if (Object.keys(after).length === 0) return [];
+  return [
+    manualEvent({
+      eventType: 'UPDATE_KEYWORD',
+      after,
+      detail: { keywordId: update.id },
+    }),
+  ];
 }
