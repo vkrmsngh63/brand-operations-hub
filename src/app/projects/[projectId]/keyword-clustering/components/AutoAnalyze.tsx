@@ -28,6 +28,7 @@ import { runRefreshWithRetry } from '@/lib/post-rebuild-fetch-retry';
 import { useModelsForMenu } from '@/lib/ai-models/useModelsForMenu';
 import { MODEL_PRICING } from '@/lib/ai-models/pricing';
 import { anthropicAdapter } from '@/lib/ai-models/provider-adapter';
+import { projectRunCost, classifyAnthropicError, evaluateSpendCap } from '@/lib/cost-estimator';
 import './auto-analyze.css';
 
 /* ── Types ─────────────────────────────────────────────────── */
@@ -157,6 +158,11 @@ export default function AutoAnalyze({
   const [consolidationPrimerPrompt, setConsolidationPrimerPrompt] = useState('');
   const [consolidationCadence, setConsolidationCadence] = useState(10);
   const [consolidationMinCanvasSize, setConsolidationMinCanvasSize] = useState(100);
+  // M-2 — optional spend cap (USD). 0 = no cap. The run warns as it nears the
+  // cap and pauses when it reaches it (Anthropic exposes no balance API, so a
+  // user-set cap is the only way to bound a run's spend). Persists per-project
+  // alongside the other settings. See KEYWORD_CLUSTERING_POLISH_BACKLOG.md M-2.
+  const [spendCapUsd, setSpendCapUsd] = useState(0);
 
   /* ── Runtime state ─────────────────────────────────────────── */
   const [aaState, setAaState] = useState<AAState>('IDLE');
@@ -179,6 +185,14 @@ export default function AutoAnalyze({
   const currentIdxRef = useRef(currentIdx);
   const batchTierRef = useRef(batchTier);
   const totalSpentRef = useRef(totalSpent);
+  // M-2 — loop-readable mirror of the spend cap + one-shot "approaching cap"
+  // warning latch + the per-pass consolidation costs (the regular-batch costs
+  // already live on each batch object; consolidation cost isn't otherwise
+  // retained, so the sliding-window forecast needs this list). All three are
+  // reset in startRunLoop.
+  const spendCapRef = useRef(spendCapUsd);
+  const capWarnedRef = useRef(false);
+  const consolidationCostsRef = useRef<number[]>([]);
   const nodesRef = useRef(nodes);
   const keywordsRef = useRef(allKeywords);
   const sisterLinksRef = useRef(sisterLinks);
@@ -246,6 +260,7 @@ export default function AutoAnalyze({
   useEffect(() => { currentIdxRef.current = currentIdx; }, [currentIdx]);
   useEffect(() => { batchTierRef.current = batchTier; }, [batchTier]);
   useEffect(() => { totalSpentRef.current = totalSpent; }, [totalSpent]);
+  useEffect(() => { spendCapRef.current = spendCapUsd; }, [spendCapUsd]);
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
   useEffect(() => { keywordsRef.current = allKeywords; }, [allKeywords]);
   useEffect(() => { sisterLinksRef.current = sisterLinks; }, [sisterLinks]);
@@ -291,6 +306,7 @@ export default function AutoAnalyze({
         if (typeof s.consolidationPrimerPrompt === 'string') setConsolidationPrimerPrompt(s.consolidationPrimerPrompt);
         if (typeof s.consolidationCadence === 'number' && s.consolidationCadence >= 0) setConsolidationCadence(s.consolidationCadence);
         if (typeof s.consolidationMinCanvasSize === 'number' && s.consolidationMinCanvasSize >= 0) setConsolidationMinCanvasSize(s.consolidationMinCanvasSize);
+        if (typeof s.spendCapUsd === 'number' && s.spendCapUsd >= 0) setSpendCapUsd(s.spendCapUsd);
       } catch (e) {
         console.warn('Failed to load AA settings', e);
       } finally {
@@ -314,7 +330,7 @@ export default function AutoAnalyze({
         processingMode, thinkingMode, thinkingBudget, keywordScope,
         stallTimeout, reviewMode, initialPrompt, primerPrompt, recencyWindow,
         consolidationInitialPrompt, consolidationPrimerPrompt,
-        consolidationCadence, consolidationMinCanvasSize,
+        consolidationCadence, consolidationMinCanvasSize, spendCapUsd,
       };
       authFetch('/api/user-preferences/' + encodeURIComponent(settingsDbKey), {
         method: 'PUT',
@@ -327,7 +343,7 @@ export default function AutoAnalyze({
       processingMode, thinkingMode, thinkingBudget, keywordScope,
       stallTimeout, reviewMode, initialPrompt, primerPrompt, recencyWindow,
       consolidationInitialPrompt, consolidationPrimerPrompt,
-      consolidationCadence, consolidationMinCanvasSize]);
+      consolidationCadence, consolidationMinCanvasSize, spendCapUsd]);
 
   const logRef = useRef<HTMLDivElement>(null);
 
@@ -1388,6 +1404,8 @@ export default function AutoAnalyze({
       const consolCost = calcCost(tokensUsed);
       setTotalSpent((prev) => prev + consolCost);
       totalSpentRef.current += consolCost;
+      // M-2 — retain per-pass consolidation cost for the sliding-window forecast.
+      consolidationCostsRef.current.push(consolCost);
       if (apiResponse.usage.cache_read_input_tokens > 0) {
         aaLog('  Cache hit: ' + apiResponse.usage.cache_read_input_tokens + ' tokens', 'info');
       }
@@ -1509,6 +1527,23 @@ export default function AutoAnalyze({
         continue;
       }
 
+      // M-2 (A) — spend-cap guard. Checked BEFORE starting a batch so the run
+      // never overshoots the cap by a whole batch. Pause (resumable) and let
+      // the director raise/clear the cap in Configuration, then Resume.
+      if (spendCapRef.current > 0 && totalSpentRef.current >= spendCapRef.current) {
+        aaLog(
+          '⏸ Spend cap reached: $' + totalSpentRef.current.toFixed(2) + ' of $' +
+          spendCapRef.current.toFixed(2) + ' cap. Run paused before batch ' +
+          batch.batchNum + '. Raise or clear the Spend cap in Configuration, then Resume.',
+          'warn',
+        );
+        setAaState('API_ERROR');
+        runningRef.current = false;
+        saveCheckpoint();
+        setBatches([...batchesRef.current]);
+        return;
+      }
+
       // Scale Session D — stamp the current batch number for the tier
       // decider's recency math. saveCheckpoint persists this so Pause/Resume
       // doesn't drift the touch-tracker frame of reference.
@@ -1530,6 +1565,21 @@ export default function AutoAnalyze({
         setTotalSpent(prev => prev + v3AttemptCost);
         totalSpentRef.current += v3AttemptCost;
         aaLog('  Batch ' + batch.batchNum + ' attempt ' + batch.attempts + ' — API call complete. Cost: $' + v3AttemptCost.toFixed(3), 'info');
+
+        // M-2 (A) — one-shot heads-up as spend approaches the cap (the actual
+        // pause happens at the top of the next iteration via the cap guard).
+        if (
+          !capWarnedRef.current && spendCapRef.current > 0 &&
+          totalSpentRef.current >= spendCapRef.current * 0.8 &&
+          totalSpentRef.current < spendCapRef.current
+        ) {
+          capWarnedRef.current = true;
+          aaLog(
+            '⚠ Approaching spend cap: $' + totalSpentRef.current.toFixed(2) + ' of $' +
+            spendCapRef.current.toFixed(2) + ' cap. The run will pause when the cap is reached.',
+            'warn',
+          );
+        }
 
         const v3Validation = validateResultV3(v3Result, batch);
         if (!v3Validation.ok) {
@@ -1640,6 +1690,28 @@ export default function AutoAnalyze({
           canvasKeywordCount: keywordsRef.current.length,
           errors: [errMsg],
         });
+
+        // M-2 (B) — out-of-credit / billing errors are NOT transient. The naive
+        // 3× backoff retry just burns ~65s before failing the run (the ~36-min
+        // halt the director hit was repeated retries against a drained balance).
+        // Detect it, requeue this batch without consuming a retry, and pause
+        // (resumable) with a clear top-up instruction. Anthropic has no balance
+        // endpoint, so reacting to this error is the only signal we get.
+        if (classifyAnthropicError(errMsg) === 'credit') {
+          batch.attempts--; // a topped-up Resume gets this batch's full retries
+          batch.status = 'queued';
+          aaLog(
+            '⛔ Anthropic credit balance too low — run paused at batch ' + batch.batchNum +
+            '. Top up your credit at console.anthropic.com (Plans & Billing), then click ' +
+            'Resume to continue from this batch. Detail: ' + errMsg,
+            'error',
+          );
+          setAaState('API_ERROR');
+          runningRef.current = false;
+          saveCheckpoint();
+          setBatches([...batchesRef.current]);
+          return;
+        }
 
         // Post-rebuild fetch failed despite the helper's retries: the
         // atomic rebuild succeeded, so the SERVER state is canonical
@@ -1769,6 +1841,10 @@ export default function AutoAnalyze({
     // at 0 so the first consolidation pass fires after `consolidationCadence`
     // successful batches.
     batchesSinceConsolidationRef.current = 0;
+    // M-2 — fresh run: clear the consolidation-cost history feeding the cost
+    // forecast + re-arm the one-shot "approaching spend cap" warning.
+    consolidationCostsRef.current = [];
+    capWarnedRef.current = false;
 
     aaLog('Auto-Analyze started. ' + queue.length + ' batches, ' + unsortedCount + ' keywords.', 'info');
     const scopeLabel =
@@ -2064,6 +2140,32 @@ export default function AutoAnalyze({
   const progressPct = batches.length > 0 ? Math.round(((completedCount + failedCount) / batches.length) * 100) : 0;
   const est = costEstimate();
 
+  /* ── M-2 cost forecast ─────────────────────────────────────────
+     Sliding-window "estimated total / remaining" projection for the live
+     run, plus the spend-cap status that colours it. Recomputed each render —
+     totalSpent + batches both change on every batch boundary, so it stays
+     current. Falls back to the pre-run per-unit estimate until real batch
+     data lands. consolidationCostsRef is a ref (no extra re-render), but the
+     totalSpent state change that accompanies each pass re-runs this. */
+  const completedBatchCosts = batches.filter(b => b.status === 'complete' && b.cost > 0).map(b => b.cost);
+  const batchesRemainingForEst = batches.filter(
+    b => b.status !== 'complete' && b.status !== 'failed' && b.status !== 'skipped',
+  ).length;
+  const perBatchFallback = est.nBatches > 0 ? est.estCost / est.nBatches : 0;
+  const costProjection = projectRunCost({
+    spent: totalSpent,
+    batchCosts: completedBatchCosts,
+    batchesRemaining: batchesRemainingForEst,
+    consolidationCosts: consolidationCostsRef.current,
+    // A consolidation fires every `consolidationCadence` batches (0 = disabled).
+    consolidationsRemaining: consolidationCadence > 0 ? Math.floor(batchesRemainingForEst / consolidationCadence) : 0,
+    fallbackBatchCost: perBatchFallback,
+    fallbackConsolidationCost: perBatchFallback * 3, // a consolidation reads the whole canvas
+  });
+  const spendCapStatus = evaluateSpendCap(totalSpent, costProjection.estTotal, spendCapUsd);
+  const spendCapColor = spendCapStatus === 'over' ? '#fca5a5' : spendCapStatus === 'warn' ? '#fbbf24' : '#94a3b8';
+  const showForecast = costProjection.estTotal > totalSpent + 0.005;
+
   /* ── Render ────────────────────────────────────────────────── */
   if (!open) return null;
 
@@ -2072,7 +2174,7 @@ export default function AutoAnalyze({
       {/* Minimized bar */}
       <div className="aa-minibar" onClick={() => setMinimized(false)}>
         <span className="aa-minibar-status">{aaState === 'RUNNING' ? '⚡ Running' : aaState === 'PAUSED' ? '⏸ Paused' : aaState}</span>
-        <span className="aa-minibar-progress">{completedCount}/{batches.length} batches · ${totalSpent.toFixed(2)} · {fmtTime(elapsed)}</span>
+        <span className="aa-minibar-progress">{completedCount}/{batches.length} batches · ${totalSpent.toFixed(2)}{showForecast ? ' / ~$' + costProjection.estTotal.toFixed(0) : ''} · {fmtTime(elapsed)}</span>
       </div>
 
       {/* Main panel */}
@@ -2284,6 +2386,25 @@ export default function AutoAnalyze({
             </div>
           )}
 
+          {/* ── M-2 spend cap ── (editable mid-run/pause so the cap can be raised, then Resume) */}
+          <div className="aa-row">
+            <span className="aa-label">Spend cap (USD)<span className="aa-help">ⓘ<span className="aa-tip">Optional safety limit. The run warns as it nears this dollar amount and pauses when it reaches it — then raise or clear the cap and click Resume. 0 = no cap. (Anthropic has no balance API, so a cap is the only way to bound a run&rsquo;s spend.)</span></span></span>
+            <input
+              className="aa-input aa-input-sm"
+              type="number"
+              min={0}
+              step={1}
+              value={spendCapUsd || ''}
+              placeholder="0 = no cap"
+              onChange={e => setSpendCapUsd(Math.max(0, Number(e.target.value) || 0))}
+            />
+            {spendCapUsd > 0 && (
+              <span style={{ fontSize: '10px', color: spendCapColor, marginLeft: '8px' }}>
+                {spendCapStatus === 'over' ? 'cap reached — run pauses' : spendCapStatus === 'warn' ? 'nearing cap' : 'pauses at $' + spendCapUsd.toFixed(0)}
+              </span>
+            )}
+          </div>
+
           {/* ── Pre-flight self-test (DEFENSE_IN_DEPTH_AUDIT_DESIGN §6) ── */}
           {(preflightRunning || preflightChecks.length > 0) && (
             <div className="aa-section">
@@ -2322,7 +2443,16 @@ export default function AutoAnalyze({
                 <div className="aa-progress-bar"><div className="aa-progress-fill" style={{ width: progressPct + '%' }} /></div>
                 <div className="aa-progress-label">
                   <span>{completedCount}/{batches.length} batches ({failedCount > 0 ? failedCount + ' failed' : 'none failed'})</span>
-                  <span>${totalSpent.toFixed(2)} · {fmtTime(elapsed)}</span>
+                  <span>
+                    ${totalSpent.toFixed(2)}
+                    {showForecast && (
+                      <span style={{ color: spendCapColor }}> · est. total ~${costProjection.estTotal.toFixed(2)} · ~${costProjection.estRemaining.toFixed(2)} left</span>
+                    )}
+                    {spendCapUsd > 0 && (
+                      <span style={{ color: spendCapColor }}> · cap ${spendCapUsd.toFixed(0)}{spendCapStatus === 'over' ? ' (reached)' : spendCapStatus === 'warn' ? ' (near)' : ''}</span>
+                    )}
+                    {' · '}{fmtTime(elapsed)}
+                  </span>
                 </div>
               </div>
               <div className="aa-batch-list" style={{ marginTop: '6px' }}>
