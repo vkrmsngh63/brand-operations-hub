@@ -29,6 +29,8 @@ import { useModelsForMenu } from '@/lib/ai-models/useModelsForMenu';
 import { MODEL_PRICING } from '@/lib/ai-models/pricing';
 import { anthropicAdapter } from '@/lib/ai-models/provider-adapter';
 import { projectRunCost, classifyAnthropicError, evaluateSpendCap } from '@/lib/cost-estimator';
+import { aiBatchEvents } from '@/lib/audit-payload';
+import { recordAuditEvents, newAuditBatchId } from '@/lib/audit-recorder';
 import './auto-analyze.css';
 
 /* ── Types ─────────────────────────────────────────────────── */
@@ -1184,6 +1186,20 @@ export default function AutoAnalyze({
       aaLog('  ✗ Canvas rebuild FAILED — all changes rolled back. ' + (e instanceof Error ? e.message : ''), 'error');
       throw e;
     }
+
+    // H-1 slice 1 — record this apply pass to the action history. The rebuild
+    // above committed atomically (a failure re-threw in the catch), so every
+    // op in `ops` is now persisted; record them as one batch. BEST-EFFORT and
+    // fire-and-forget: recordAuditEvents never throws and we do not await it,
+    // so a recorder hiccup can never block or fail the run. Manual hand-edits
+    // are a later slice. See docs/KEYWORD_CLUSTERING_POLISH_BACKLOG.md H-1.
+    void recordAuditEvents(
+      projectId,
+      aiBatchEvents(ops, {
+        batchId: newAuditBatchId(),
+        aliasResolutions: applyResult.aliasResolutions,
+      }),
+    );
 
     // Per-archive log lines (preserved for director visibility — same shape
     // as the prior per-archive POST loop, just emitted after the atomic
