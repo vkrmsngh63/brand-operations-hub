@@ -25,7 +25,10 @@ interface BulkImportRow {
 }
 
 // ── Hook ───────────────────────────────────────────────────────
-export function useKeywords(projectId: string | null) {
+// `workflow` selects which keyword-clustering workspace to read/write:
+// undefined ⇒ AI 1 ('keyword-clustering', the route default); pass
+// 'keyword-clustering-vb' for AI 2 / Variant B's isolated keyword set.
+export function useKeywords(projectId: string | null, workflow?: string) {
   const [keywords, setKeywords] = useState<Keyword[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,6 +39,9 @@ export function useKeywords(projectId: string | null) {
   const nextSortRef = useRef(0);
 
   const base = projectId ? `/api/projects/${projectId}/keywords` : null;
+  // Workspace selector appended at the END of each URL (after any /:id suffix),
+  // so it survives the `${base}/${id}` single-row routes. Empty ⇒ AI 1 default.
+  const q = workflow ? `?workflow=${encodeURIComponent(workflow)}` : '';
 
   // ── Fetch all ────────────────────────────────────────────────
   const fetchKeywords = useCallback(async () => {
@@ -43,7 +49,7 @@ export function useKeywords(projectId: string | null) {
     setLoading(true);
     setError(null);
     try {
-      const res = await authFetch(base);
+      const res = await authFetch(base + q);
       if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
       const data: Keyword[] = await res.json();
       data.sort((a, b) => a.sortOrder - b.sortOrder);
@@ -56,7 +62,7 @@ export function useKeywords(projectId: string | null) {
     } finally {
       setLoading(false);
     }
-  }, [base]);
+  }, [base, q]);
 
   // ── Add single keyword ───────────────────────────────────────
   const addKeyword = useCallback(async (kw: string, vol: string): Promise<boolean> => {
@@ -71,7 +77,7 @@ export function useKeywords(projectId: string | null) {
 
     try {
       startSave();
-      const res = await authFetch(base, {
+      const res = await authFetch(base + q, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ keyword: kw, volume: v, sortOrder: nextSortRef.current }),
@@ -86,7 +92,7 @@ export function useKeywords(projectId: string | null) {
       endSave();
       return false;
     }
-  }, [base, keywords]);
+  }, [base, q, keywords]);
 
   // ── Bulk import (paste from Excel) ───────────────────────────
   const bulkImport = useCallback(async (rows: BulkImportRow[]): Promise<{ added: number; dupes: number }> => {
@@ -117,7 +123,7 @@ export function useKeywords(projectId: string | null) {
     });
 
     try {
-      const res = await authFetch(base, {
+      const res = await authFetch(base + q, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ keywords: payload }),
@@ -131,14 +137,14 @@ export function useKeywords(projectId: string | null) {
     } catch {
       return { added: 0, dupes };
     }
-  }, [base, keywords]);
+  }, [base, q, keywords]);
 
   // ── Update single keyword ────────────────────────────────────
   const updateKeyword = useCallback(async (id: string, patch: Partial<Keyword>) => {
     if (!base) return;
     try {
       startSave();
-      const res = await authFetch(`${base}/${id}`, {
+      const res = await authFetch(`${base}/${id}${q}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(patch),
@@ -151,7 +157,7 @@ export function useKeywords(projectId: string | null) {
       endSave();
       setError(e instanceof Error ? e.message : 'Update error');
     }
-  }, [base]);
+  }, [base, q]);
 
   // ── Batch update (single bulk request with transaction) ──────
   const batchUpdate = useCallback(async (ids: string[], patch: Partial<Keyword>) => {
@@ -162,7 +168,7 @@ export function useKeywords(projectId: string | null) {
     );
     try {
       startSave();
-      const res = await authFetch(base, {
+      const res = await authFetch(base + q, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -176,27 +182,27 @@ export function useKeywords(projectId: string | null) {
       setError(e instanceof Error ? e.message : 'Batch update error');
       await fetchKeywords();
     }
-  }, [base]);
+  }, [base, q]);
 
   // ── Delete single ────────────────────────────────────────────
   const deleteKeyword = useCallback(async (id: string) => {
     if (!base) return;
     setKeywords(prev => prev.filter(k => k.id !== id));
-    await authFetch(`${base}/${id}`, {
+    await authFetch(`${base}/${id}${q}`, {
       method: 'DELETE',
     });
-  }, [base]);
+  }, [base, q]);
 
   // ── Bulk delete ──────────────────────────────────────────────
   const bulkDelete = useCallback(async (ids: string[]) => {
     if (!base) return;
     setKeywords(prev => prev.filter(k => !ids.includes(k.id)));
-    await authFetch(base, {
+    await authFetch(base + q, {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ids }),
     });
-  }, [base]);
+  }, [base, q]);
 
   // ── Reorder (single bulk request with transaction) ───────────
   const reorder = useCallback(async (reorderedKeywords: Keyword[]) => {
@@ -213,7 +219,7 @@ export function useKeywords(projectId: string | null) {
       });
       if (toUpdate.length > 0) {
         startSave();
-        const res = await authFetch(base, {
+        const res = await authFetch(base + q, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -227,7 +233,7 @@ export function useKeywords(projectId: string | null) {
       endSave();
       // Reorder saved locally — server sync will retry on next page load
     }
-  }, [base]);
+  }, [base, q]);
 
   return {
     keywords,

@@ -6,8 +6,7 @@ import { recordFlake } from '@/lib/flake-counter';
 import { withRetry } from '@/lib/prisma-retry';
 import { recordServerAuditEvents } from '@/lib/audit-recorder-server';
 import { manualEvent, keywordUpdateEvents } from '@/lib/audit-payload';
-
-const WORKFLOW = 'keyword-clustering';
+import { resolveKcWorkflow } from '@/lib/kc-workflow';
 
 // GET /api/projects/[projectId]/keywords — list all keywords for this
 // project's keyword-clustering workspace.
@@ -17,7 +16,8 @@ export async function GET(
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   const { projectId } = await params;
-  const auth = await verifyProjectWorkflowAuth(req, projectId, WORKFLOW);
+  const workflow = resolveKcWorkflow(req);
+  const auth = await verifyProjectWorkflowAuth(req, projectId, workflow);
   if (auth.error) return auth.error;
 
   try {
@@ -46,7 +46,8 @@ export async function POST(
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   const { projectId } = await params;
-  const auth = await verifyProjectWorkflowAuth(req, projectId, WORKFLOW);
+  const workflow = resolveKcWorkflow(req);
+  const auth = await verifyProjectWorkflowAuth(req, projectId, workflow);
   if (auth.error) return auth.error;
   const { projectWorkflowId, userId } = auth;
 
@@ -78,7 +79,7 @@ export async function POST(
       const result = await withRetry(() =>
         prisma.keyword.createMany({ data })
       );
-      await markWorkflowActive(projectId, WORKFLOW);
+      await markWorkflowActive(projectId, workflow);
       // H-1 slice 2: record each manually-imported keyword (best-effort).
       // createMany returns no ids, so the snapshot keys on keyword text.
       await recordServerAuditEvents(
@@ -114,7 +115,7 @@ export async function POST(
       })
     );
 
-    await markWorkflowActive(projectId, WORKFLOW);
+    await markWorkflowActive(projectId, workflow);
     // H-1 slice 2: record the manual single-keyword creation (best-effort).
     await recordServerAuditEvents({ projectId, userId }, [
       manualEvent({
@@ -146,7 +147,8 @@ export async function PATCH(
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   const { projectId } = await params;
-  const auth = await verifyProjectWorkflowAuth(req, projectId, WORKFLOW);
+  const workflow = resolveKcWorkflow(req);
+  const auth = await verifyProjectWorkflowAuth(req, projectId, workflow);
   if (auth.error) return auth.error;
   const { projectWorkflowId, userId } = auth;
 
@@ -210,7 +212,7 @@ export async function PATCH(
     // Wrapped in withRetry per the 2026-05-05 apply-pipeline rate-fix.
     // Atomic transaction; .update calls inside are idempotent under retry.
     const results = await withRetry(() => prisma.$transaction(ops));
-    await markWorkflowActive(projectId, WORKFLOW);
+    await markWorkflowActive(projectId, workflow);
 
     // H-1 slice 2/3: record manual keyword edits/reorders with before → after
     // (best-effort). A patch touching only layout (canvasLoc) / metadata
@@ -244,7 +246,8 @@ export async function DELETE(
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   const { projectId } = await params;
-  const auth = await verifyProjectWorkflowAuth(req, projectId, WORKFLOW);
+  const workflow = resolveKcWorkflow(req);
+  const auth = await verifyProjectWorkflowAuth(req, projectId, workflow);
   if (auth.error) return auth.error;
   const { projectWorkflowId, userId } = auth;
 
@@ -277,7 +280,7 @@ export async function DELETE(
       })
     );
 
-    await markWorkflowActive(projectId, WORKFLOW);
+    await markWorkflowActive(projectId, workflow);
     // H-1 slice 2/3: record the manual keyword deletion(s) with the removed
     // text (best-effort).
     await recordServerAuditEvents(

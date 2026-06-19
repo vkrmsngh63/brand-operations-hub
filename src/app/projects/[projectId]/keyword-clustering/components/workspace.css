@@ -384,3 +384,36 @@
   font-size: 10px;
   color: #6e7681;
 }
+
+/* ── Variant B (AI 2) bar — re-sync action + clone/re-sync notice ── */
+.ws-vb-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 6px;
+  flex-wrap: wrap;
+}
+.ws-vb-notice {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  color: #93c5fd;
+  background: rgba(59,130,246,0.12);
+  border: 1px solid rgba(59,130,246,0.4);
+  border-radius: 3px;
+  padding: 2px 6px;
+  font-family: var(--fn-ui, 'IBM Plex Sans', sans-serif);
+}
+.ws-vb-notice-x {
+  background: none;
+  border: none;
+  color: #93c5fd;
+  cursor: pointer;
+  font-size: 10px;
+  line-height: 1;
+  padding: 0;
+}
+.ws-vb-notice-x:hover {
+  color: #fff;
+}

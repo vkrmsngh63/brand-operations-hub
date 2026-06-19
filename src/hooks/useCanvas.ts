@@ -72,7 +72,10 @@ export interface SisterLink {
  *   the `API_ERROR` aaState (pause + retry) instead of silently rolling
  *   forward into the next batch.
  */
-export function useCanvas(projectId: string) {
+// `workflow` selects which keyword-clustering workspace's canvas to read/write:
+// undefined ⇒ AI 1 ('keyword-clustering', the route default); pass
+// 'keyword-clustering-vb' for AI 2 / Variant B's isolated canvas.
+export function useCanvas(projectId: string, workflow?: string) {
   const [nodes, setNodes] = useState<CanvasNode[]>([]);
   const [canvasState, setCanvasState] = useState<CanvasState | null>(null);
   const [pathways, setPathways] = useState<Pathway[]>([]);
@@ -81,6 +84,9 @@ export function useCanvas(projectId: string) {
   const [error, setError] = useState<string | null>(null);
 
   const base = `/api/projects/${projectId}/canvas`;
+  // Workspace selector appended at the END of each URL (after any /nodes
+  // suffix). Empty ⇒ AI 1 default.
+  const q = workflow ? `?workflow=${encodeURIComponent(workflow)}` : '';
 
   /* ── Helpers ──────────────────────────────────────────────── */
   /**
@@ -105,8 +111,8 @@ export function useCanvas(projectId: string) {
     setLoading(true);
     try {
       const [nodesRes, stateRes] = await Promise.all([
-        authFetch(`${base}/nodes`),
-        authFetch(base),
+        authFetch(`${base}/nodes${q}`),
+        authFetch(base + q),
       ]);
       const [nodesRaw, stateRaw] = await Promise.all([
         readBody(nodesRes),
@@ -126,11 +132,11 @@ export function useCanvas(projectId: string) {
     } finally {
       setLoading(false);
     }
-  }, [base]);
+  }, [base, q]);
 
   /* ── Add node ──────────────────────────────────────────────── */
   const addNode = useCallback(async (data: Partial<CanvasNode>) => {
-    const res = await authFetch(`${base}/nodes`, {
+    const res = await authFetch(`${base}/nodes${q}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -144,11 +150,11 @@ export function useCanvas(projectId: string) {
     setError(null);
     setNodes(prev => [...prev, node]);
     return node as CanvasNode;
-  }, [base]);
+  }, [base, q]);
 
   /* ── Update nodes (bulk) ───────────────────────────────────── */
   const updateNodes = useCallback(async (updates: Partial<CanvasNode>[]) => {
-    const res = await authFetch(`${base}/nodes`, {
+    const res = await authFetch(`${base}/nodes${q}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ nodes: updates }),
@@ -165,7 +171,7 @@ export function useCanvas(projectId: string) {
         return u ? { ...n, ...u } : n;
       })
     );
-  }, [base]);
+  }, [base, q]);
 
   /* ── Delete node ───────────────────────────────────────────── */
   const deleteNode = useCallback(async (nodeId: string) => {
@@ -176,7 +182,7 @@ export function useCanvas(projectId: string) {
       snapshot = prev;
       return prev.filter(n => n.id !== nodeId);
     });
-    const res = await authFetch(`${base}/nodes`, {
+    const res = await authFetch(`${base}/nodes${q}`, {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: nodeId }),
@@ -190,11 +196,11 @@ export function useCanvas(projectId: string) {
       throw new Error(msg);
     }
     setError(null);
-  }, [base]);
+  }, [base, q]);
 
   /* ── Update canvas state (viewport, zoom) ──────────────────── */
   const updateCanvasState = useCallback(async (data: Partial<CanvasState>) => {
-    const res = await authFetch(base, {
+    const res = await authFetch(base + q, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -206,7 +212,7 @@ export function useCanvas(projectId: string) {
     }
     setError(null);
     setCanvasState(prev => prev ? { ...prev, ...data } : prev);
-  }, [base]);
+  }, [base, q]);
 
   return {
     nodes, setNodes, canvasState, pathways, sisterLinks, loading, error,

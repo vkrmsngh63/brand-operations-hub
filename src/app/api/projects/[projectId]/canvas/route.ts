@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { verifyProjectWorkflowAuth } from '@/lib/auth';
+import { resolveKcWorkflow } from '@/lib/kc-workflow';
 import { withRetry } from '@/lib/prisma-retry';
 import { recordFlake } from '@/lib/flake-counter';
 
-const WORKFLOW = 'keyword-clustering';
 
 // GET /api/projects/[projectId]/canvas — fetch canvas state, pathways, sister links.
 //
@@ -20,7 +20,8 @@ export async function GET(
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   const { projectId } = await params;
-  const auth = await verifyProjectWorkflowAuth(req, projectId, WORKFLOW);
+  const workflow = resolveKcWorkflow(req);
+  const auth = await verifyProjectWorkflowAuth(req, projectId, workflow);
   if (auth.error) return auth.error;
   const { projectWorkflowId } = auth;
 
@@ -64,7 +65,8 @@ export async function PATCH(
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   const { projectId } = await params;
-  const auth = await verifyProjectWorkflowAuth(req, projectId, WORKFLOW);
+  const workflow = resolveKcWorkflow(req);
+  const auth = await verifyProjectWorkflowAuth(req, projectId, workflow);
   if (auth.error) return auth.error;
   const { projectWorkflowId } = auth;
 

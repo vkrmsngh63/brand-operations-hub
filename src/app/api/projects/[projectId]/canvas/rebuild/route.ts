@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { verifyProjectWorkflowAuth } from '@/lib/auth';
+import { resolveKcWorkflow } from '@/lib/kc-workflow';
 import { markWorkflowActive } from '@/lib/workflow-status';
 import { evaluateRebuildPayload } from '@/lib/canvas-rebuild-guard';
 import { recordFlake } from '@/lib/flake-counter';
 import { withRetry } from '@/lib/prisma-retry';
 
-const WORKFLOW = 'keyword-clustering';
 
 // POST /api/projects/[projectId]/canvas/rebuild — atomic canvas rebuild.
 // Accepts full canvas state and applies it in a single transaction.
@@ -38,7 +38,8 @@ export async function POST(
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   const { projectId } = await params;
-  const auth = await verifyProjectWorkflowAuth(req, projectId, WORKFLOW);
+  const workflow = resolveKcWorkflow(req);
+  const auth = await verifyProjectWorkflowAuth(req, projectId, workflow);
   if (auth.error) return auth.error;
   const { projectWorkflowId, userId } = auth;
 
@@ -435,7 +436,7 @@ export async function POST(
       )
     );
 
-    await markWorkflowActive(projectId, WORKFLOW);
+    await markWorkflowActive(projectId, workflow);
 
     return NextResponse.json({
       success: true,

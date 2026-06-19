@@ -9,6 +9,7 @@ import CanvasPanel from './CanvasPanel';
 import TVTTable from './TVTTable';
 import KASTable from './KASTable';
 import AutoAnalyze from './AutoAnalyze';
+import VariantBAutoAnalyze from './variant-b/VariantBAutoAnalyze';
 import HistoryPanel from './HistoryPanel';
 import ScrollArrows from './ScrollArrows';
 import FloatingPanel from './FloatingPanel';
@@ -16,6 +17,8 @@ import { useKeywords } from '@/hooks/useKeywords';
 import type { Keyword } from '@/hooks/useKeywords';
 import { useCanvas } from '@/hooks/useCanvas';
 import { authFetch } from '@/lib/authFetch';
+import { KC_WORKFLOW_VB } from '@/lib/kc-workflow';
+import { shouldCloneFromAi1, keywordsMissingFromVb } from '@/lib/variant-b/keyword-sync';
 import { runColdStartFetchWithRetry } from '@/lib/cold-start-fetch-retry';
 import './workspace.css';
 
@@ -50,7 +53,11 @@ const COLD_START_FETCH_LABEL: Record<ColdStartFetchKey, string> = {
 interface KeywordWorkspaceProps {
   projectId: string;
   userId: string;
-  aiMode: boolean;
+  // Which workspace the user is in. 'manual' + 'ai1' share AI 1's data
+  // ('keyword-clustering'); 'ai2' is Variant B's isolated workspace
+  // ('keyword-clustering-vb'). page.tsx remounts this component when crossing
+  // the AI 1 ↔ AI 2 boundary, so `mode` is effectively constant per instance.
+  mode: 'manual' | 'ai1' | 'ai2';
 }
 
 type AITableView = 'normal' | 'common' | 'analysis' | 'topics';
@@ -144,13 +151,24 @@ function AIActionsPane({ view, onSetView, onOpenAA }: {
   );
 }
 
-export default function KeywordWorkspace({ projectId, userId, aiMode }: KeywordWorkspaceProps) {
+export default function KeywordWorkspace({ projectId, userId, mode }: KeywordWorkspaceProps) {
+  // `aiMode` (Manual vs. AI layout) is preserved as the old boolean so every
+  // existing branch keeps working; `isVB` is the new AI-2 distinction.
+  const aiMode = mode !== 'manual';
+  const isVB = mode === 'ai2';
+  const workflow = isVB ? KC_WORKFLOW_VB : undefined;
+
   const {
     keywords, loading, saving, fetchKeywords, addKeyword, bulkImport,
     updateKeyword, batchUpdate, reorder, setKeywords,
-  } = useKeywords(projectId);
+  } = useKeywords(projectId, workflow);
 
-  const canvas = useCanvas(projectId);
+  const canvas = useCanvas(projectId, workflow);
+
+  // ── Variant B (AI 2) keyword-clone + re-sync ─────────────────
+  const [vbNotice, setVbNotice] = useState<string | null>(null);
+  const [vbBusy, setVbBusy] = useState(false);
+  const vbBootRef = useRef(false);
 
   // ── Removed-keywords (soft archive) state ────────────────────
   const [removedKeywords, setRemovedKeywords] = useState<RemovedKeyword[]>([]);
@@ -311,6 +329,76 @@ export default function KeywordWorkspace({ projectId, userId, aiMode }: KeywordW
   useEffect(() => {
     void (async () => { await loadCanvasWithRetry(); })();
   }, [loadCanvasWithRetry]);
+
+  // ── AI 2 first-activation: copy keywords from AI 1 into AI 2's own set ──
+  // Idempotent: the server-side "does AI 2 already have keywords?" check makes
+  // this safe to run on every AI-2 mount; it only clones into an empty AI-2
+  // workspace. Director choice (2026-06-19-e): copy automatically, then notice.
+  useEffect(() => {
+    if (!isVB || vbBootRef.current) return;
+    vbBootRef.current = true;
+    void (async () => {
+      try {
+        const vbRes = await authFetch(
+          `/api/projects/${projectId}/keywords?workflow=${KC_WORKFLOW_VB}`
+        );
+        const vbKw: Keyword[] = vbRes.ok ? await vbRes.json() : [];
+        const a1Res = await authFetch(`/api/projects/${projectId}/keywords`);
+        const a1Kw: Keyword[] = a1Res.ok ? await a1Res.json() : [];
+        if (!shouldCloneFromAi1(vbKw.length, a1Kw.length)) return;
+        const res = await authFetch(
+          `/api/projects/${projectId}/keywords?workflow=${KC_WORKFLOW_VB}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              keywords: a1Kw.map(k => ({ keyword: k.keyword, volume: k.volume })),
+            }),
+          }
+        );
+        if (!res.ok) return;
+        setVbNotice(
+          `Copied ${a1Kw.length} keyword${a1Kw.length === 1 ? '' : 's'} from AI 1 into AI 2.`
+        );
+        await fetchKeywords();
+      } catch (err) {
+        console.error('AI 2 keyword clone failed:', err);
+      }
+    })();
+  }, [isVB, projectId, fetchKeywords]);
+
+  // ── AI 2 "Re-sync from AI 1" — add-only set difference by keyword text ──
+  // Director choice (2026-06-19-e): show a confirm preview of the count first.
+  const handleResync = useCallback(async () => {
+    if (vbBusy) return;
+    setVbBusy(true);
+    try {
+      const a1Res = await authFetch(`/api/projects/${projectId}/keywords`);
+      const a1Kw: Keyword[] = a1Res.ok ? await a1Res.json() : [];
+      const missing = keywordsMissingFromVb(a1Kw, keywords);
+      if (missing.length === 0) {
+        setVbNotice("You're already up to date — AI 1 has no keywords that AI 2 is missing.");
+        return;
+      }
+      const ok = window.confirm(
+        `${missing.length} new keyword${missing.length === 1 ? '' : 's'} in AI 1 ` +
+        `${missing.length === 1 ? 'is' : 'are'} not in AI 2 yet. ` +
+        `Add ${missing.length === 1 ? 'it' : 'them'} to AI 2? (This only adds — nothing is removed.)`
+      );
+      if (!ok) return;
+      const { added } = await bulkImport(
+        missing.map(k => ({ keyword: k.keyword, volume: k.volume }))
+      );
+      setVbNotice(
+        `Re-synced ${added} new keyword${added === 1 ? '' : 's'} from AI 1 into AI 2.`
+      );
+    } catch (err) {
+      console.error('AI 2 re-sync failed:', err);
+      setVbNotice('Re-sync failed — please try again.');
+    } finally {
+      setVbBusy(false);
+    }
+  }, [vbBusy, projectId, keywords, bulkImport]);
 
   // ── Horizontal divider drag ──────────────────────────────────
   function handleHDividerDrag(dividerIdx: number, delta: number) {
@@ -600,6 +688,30 @@ export default function KeywordWorkspace({ projectId, userId, aiMode }: KeywordW
               className="ws-left ws-ai-left"
               style={{ flex: inlineCanvas ? `0 0 ${leftFrac * 100}%` : '1' }}
             >
+              {isVB && (
+                <div className="ws-vb-bar">
+                  <button
+                    className="ai-act-btn"
+                    title="Pull any new keywords from AI 1 into AI 2 (adds only — never removes)"
+                    onClick={handleResync}
+                    disabled={vbBusy}
+                  >
+                    🔄 {vbBusy ? 'Re-syncing…' : 'Re-sync from AI 1'}
+                  </button>
+                  {vbNotice && (
+                    <span className="ws-vb-notice">
+                      {vbNotice}
+                      <button
+                        className="ws-vb-notice-x"
+                        title="Dismiss"
+                        onClick={() => setVbNotice(null)}
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  )}
+                </div>
+              )}
               <AIActionsPane view={aiTableView} onSetView={setAiTableView} onOpenAA={() => setAaOpen(true)} />
               <div className="ws-panel ws-ai-table-area" style={{ flex: 1, minHeight: 0 }}>
                 {renderAITableContent()}
@@ -642,20 +754,29 @@ export default function KeywordWorkspace({ projectId, userId, aiMode }: KeywordW
           {renderHistoryContent()}
         </FloatingPanel>
       )}
-      <AutoAnalyze
-        open={aaOpen}
-        onClose={() => setAaOpen(false)}
-        allKeywords={keywords}
-        nodes={canvas.nodes}
-        pathways={canvas.pathways}
-        sisterLinks={canvas.sisterLinks}
-        onUpdateNodes={canvas.updateNodes}
-        onAddNode={canvas.addNode}
-        onDeleteNode={canvas.deleteNode}
-        projectId={projectId}
-        onRefreshCanvas={canvas.fetchCanvas}
-        onRefreshKeywords={fetchKeywords}
-      />
+      {isVB ? (
+        <VariantBAutoAnalyze
+          open={aaOpen}
+          onClose={() => setAaOpen(false)}
+          allKeywords={keywords}
+          projectId={projectId}
+        />
+      ) : (
+        <AutoAnalyze
+          open={aaOpen}
+          onClose={() => setAaOpen(false)}
+          allKeywords={keywords}
+          nodes={canvas.nodes}
+          pathways={canvas.pathways}
+          sisterLinks={canvas.sisterLinks}
+          onUpdateNodes={canvas.updateNodes}
+          onAddNode={canvas.addNode}
+          onDeleteNode={canvas.deleteNode}
+          projectId={projectId}
+          onRefreshCanvas={canvas.fetchCanvas}
+          onRefreshKeywords={fetchKeywords}
+        />
+      )}
       {detachedCanvas && showCanvas && (
         <FloatingPanel title="Topics Layout Canvas" onClose={() => setDetachedCanvas(false)}>
           {renderCanvasContent()}

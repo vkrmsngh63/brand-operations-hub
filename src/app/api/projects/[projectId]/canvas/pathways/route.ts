@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { verifyProjectWorkflowAuth } from '@/lib/auth';
+import { resolveKcWorkflow } from '@/lib/kc-workflow';
 import { markWorkflowActive } from '@/lib/workflow-status';
 import { recordFlake } from '@/lib/flake-counter';
 import { withRetry } from '@/lib/prisma-retry';
 import { recordServerAuditEvents } from '@/lib/audit-recorder-server';
 import { manualEvent } from '@/lib/audit-payload';
 
-const WORKFLOW = 'keyword-clustering';
 
 // POST /api/projects/[projectId]/canvas/pathways — create a pathway.
 // Database assigns the UUID id.
@@ -16,7 +16,8 @@ export async function POST(
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   const { projectId } = await params;
-  const auth = await verifyProjectWorkflowAuth(req, projectId, WORKFLOW);
+  const workflow = resolveKcWorkflow(req);
+  const auth = await verifyProjectWorkflowAuth(req, projectId, workflow);
   if (auth.error) return auth.error;
   const { projectWorkflowId, userId } = auth;
 
@@ -31,7 +32,7 @@ export async function POST(
       })
     );
 
-    await markWorkflowActive(projectId, WORKFLOW);
+    await markWorkflowActive(projectId, workflow);
     // H-1 slice 2 (future-proof): no manual UI calls this route today —
     // pathways are recomputed wholesale by the AI rebuild. Wired now so a
     // future manual pathway editor records automatically. Best-effort.
@@ -63,7 +64,8 @@ export async function DELETE(
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   const { projectId } = await params;
-  const auth = await verifyProjectWorkflowAuth(req, projectId, WORKFLOW);
+  const workflow = resolveKcWorkflow(req);
+  const auth = await verifyProjectWorkflowAuth(req, projectId, workflow);
   if (auth.error) return auth.error;
   const { projectWorkflowId, userId } = auth;
 
@@ -76,7 +78,7 @@ export async function DELETE(
       })
     );
 
-    await markWorkflowActive(projectId, WORKFLOW);
+    await markWorkflowActive(projectId, workflow);
     // H-1 slice 2 (future-proof): see the POST note above.
     await recordServerAuditEvents({ projectId, userId }, [
       manualEvent({ eventType: 'REMOVE_PATHWAY', detail: { pathwayId: body.id } }),

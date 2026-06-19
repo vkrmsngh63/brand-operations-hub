@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { verifyProjectWorkflowAuth } from '@/lib/auth';
+import { resolveKcWorkflow } from '@/lib/kc-workflow';
 import { markWorkflowActive } from '@/lib/workflow-status';
 import { withRetry } from '@/lib/prisma-retry';
 import { recordFlake } from '@/lib/flake-counter';
 import { recordServerAuditEvents } from '@/lib/audit-recorder-server';
 import { manualEvent, topicUpdateEvents } from '@/lib/audit-payload';
 
-const WORKFLOW = 'keyword-clustering';
 
 // GET /api/projects/[projectId]/canvas/nodes — list all canvas nodes.
 //
@@ -23,7 +23,8 @@ export async function GET(
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   const { projectId } = await params;
-  const auth = await verifyProjectWorkflowAuth(req, projectId, WORKFLOW);
+  const workflow = resolveKcWorkflow(req);
+  const auth = await verifyProjectWorkflowAuth(req, projectId, workflow);
   if (auth.error) return auth.error;
   const { projectWorkflowId } = auth;
 
@@ -58,7 +59,8 @@ export async function POST(
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   const { projectId } = await params;
-  const auth = await verifyProjectWorkflowAuth(req, projectId, WORKFLOW);
+  const workflow = resolveKcWorkflow(req);
+  const auth = await verifyProjectWorkflowAuth(req, projectId, workflow);
   if (auth.error) return auth.error;
   const { projectWorkflowId, userId } = auth;
 
@@ -109,7 +111,7 @@ export async function POST(
       })
     );
 
-    await markWorkflowActive(projectId, WORKFLOW);
+    await markWorkflowActive(projectId, workflow);
     // H-1 slice 2: record the manual topic creation (best-effort, post-commit).
     await recordServerAuditEvents({ projectId, userId }, [
       manualEvent({
@@ -140,7 +142,8 @@ export async function PATCH(
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   const { projectId } = await params;
-  const auth = await verifyProjectWorkflowAuth(req, projectId, WORKFLOW);
+  const workflow = resolveKcWorkflow(req);
+  const auth = await verifyProjectWorkflowAuth(req, projectId, workflow);
   if (auth.error) return auth.error;
   const { projectWorkflowId: _projectWorkflowId, userId } = auth;
 
@@ -246,7 +249,7 @@ export async function PATCH(
     // under retry (same data → same result; row-not-found errors are
     // P2025 which is non-transient and won't trigger a retry).
     const results = await withRetry(() => prisma.$transaction(ops));
-    await markWorkflowActive(projectId, WORKFLOW);
+    await markWorkflowActive(projectId, workflow);
 
     // H-1 slice 2/3: record manual content/structure edits (rename, re-describe,
     // reparent, reorder, keyword-link) with their before → after values. Pure
@@ -280,7 +283,8 @@ export async function DELETE(
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   const { projectId } = await params;
-  const auth = await verifyProjectWorkflowAuth(req, projectId, WORKFLOW);
+  const workflow = resolveKcWorkflow(req);
+  const auth = await verifyProjectWorkflowAuth(req, projectId, workflow);
   if (auth.error) return auth.error;
   const { projectWorkflowId, userId } = auth;
 
@@ -318,7 +322,7 @@ export async function DELETE(
       })
     );
 
-    await markWorkflowActive(projectId, WORKFLOW);
+    await markWorkflowActive(projectId, workflow);
     // H-1 slice 2/3: record the manual topic deletion(s) with the removed
     // title (best-effort, post-commit).
     await recordServerAuditEvents(
