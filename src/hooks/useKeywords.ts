@@ -19,7 +19,9 @@ export interface Keyword {
 
 interface BulkImportRow {
   keyword: string;
-  volume?: string;
+  // Accepts number too: the keyword API returns volume as an Int, so callers
+  // re-importing fetched rows (e.g. AI 2 "Re-sync from AI 1") pass numbers.
+  volume?: string | number;
   sortingStatus?: string;
   tags?: string;
 }
@@ -110,7 +112,7 @@ export function useKeywords(projectId: string | null, workflow?: string) {
     if (deduped.length === 0) return { added: 0, dupes };
 
     const payload = deduped.map((r, i) => {
-      let v = (r.volume || '').trim();
+      let v = String(r.volume ?? '').trim();
       if (/^\d+(\.\d+)?[Kk]$/.test(v)) v = String(parseFloat(v) * 1000);
       if (/^\d+(\.\d+)?[Mm]$/.test(v)) v = String(parseFloat(v) * 1_000_000);
       return {
