@@ -77,3 +77,58 @@ export interface CarrierDedupConfig {
    */
   aliases?: Record<string, string>;
 }
+
+// ============================================================
+// Step 3 — Intent enumeration (rulebook §1, spec §3 Step 3)
+// ============================================================
+
+/**
+ * A filled descriptor profile for ONE intent (rulebook §1). Keys are descriptor
+ * keys (see DESCRIPTORS in rulebook.ts); values come from each descriptor's
+ * controlled vocabulary or are normalized free text for `valueMenu:'open'`.
+ *
+ * `summary` is the one reserved free-text meta descriptor — always present.
+ * The other D-meta items (D1 search volume, D2 clarity, D3 confidence, D4
+ * multiplicity) are NOT descriptors — they live on `IntentInstance` below
+ * (rulebook §1 note / plan §8 P4) and persist in `CanvasNode.variantBMeta`.
+ */
+export interface DescriptorProfile {
+  subject_type?: string;
+  named_entity?: string;
+  body_location?: string;
+  approach?: string;
+  onset_duration?: string;
+  severity?: string;
+  demographic_context?: string;
+  trigger_context?: string;
+  awareness_level?: string;
+  primary_action?: string;
+  concern_driver?: string;
+  commercial_orientation?: string;
+  /** reserved meta descriptor — always filled (rulebook §1). */
+  summary: string;
+}
+
+/**
+ * One enumerated intent behind a carrier cluster (spec §1.5). Pipeline-internal
+ * browser state — NOT a DB table. High-recall enumeration: a single keyword may
+ * fan out to several IntentInstances (multiplicity); over-enumeration is kept and
+ * pruned downstream, never auto-deleted (plan locked-resolution #2).
+ */
+export interface IntentInstance {
+  id: string;
+  /** the carrier cluster this intent was enumerated from. */
+  carrierId: string;
+  /** the carrier's representative keyword (provenance/debug). */
+  sourceKeyword: string;
+  profile: DescriptorProfile;
+  /** D1 — reachable volume attributed to this intent (full carrier reach; a
+   *  keyword in N intents contributes its volume to each — `volume_full`). */
+  searchVolume: number;
+  /** D2 — how clearly the keyword expressed this intent (0..1), if scored. */
+  clarity?: number;
+  /** D3 — model confidence in this enumeration (0..1), if scored. */
+  confidence?: number;
+  /** D4 — multiplicity: how many intents this keyword fanned out to. */
+  multiplicity: number;
+}

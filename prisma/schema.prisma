@@ -26,6 +26,9 @@ model Project {
   name        String   @default("Untitled Project")
   description String   @default("") @db.Text
   sortOrder   Int      @default(0)
+  // Variant B ("AI 2") health-niche anchor — nullable; AI 1 ignores it.
+  // CLR rulebook niche scope = "niche:" + nicheSlug (see CLREntry.scope).
+  nicheSlug   String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -126,6 +129,15 @@ model CanvasNode {
   // Serialization (Scale Sessions B–E in INPUT_CONTEXT_SCALING_DESIGN.md).
   // Scale Session B Step 1: nullable. Step 2: AI backfill. Step 3: NOT NULL.
   intentFingerprint String
+  // Variant B ("AI 2") funnel placement — all nullable; AI 1's read/write/render
+  // paths never reference these, so AI 1 is byte-for-byte unchanged. AI 1 keeps
+  // using `sortOrder`; VB uses `siblingOrder`/`verticalRank` (rulebook §10).
+  zone              String?  // CLR zone key (rulebook §2)
+  stage             String?  // CLR stage key (rulebook §3)
+  verticalRank      Float?   // journey order = zoneRank.stageRank (rulebook §10)
+  siblingOrder      Int?     // horizontal order within parent (rulebook §10)
+  isSpine           Boolean? // top-level major parent
+  variantBMeta      Json?    // canonical profile, boundary belongs/excludes, title_voice, summary, dedup bookkeeping
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
@@ -133,6 +145,28 @@ model CanvasNode {
 
   @@unique([projectWorkflowId, stableId])
   @@index([projectWorkflowId])
+}
+
+// ============================================================
+// CLREntry — Variant B ("AI 2") DB-backed rulebook (Closed-Loop
+// Rulebook). Scoped ("universal" | "niche:<slug>") + versioned;
+// rows are NEVER overwritten — a change writes a new version row
+// pointing at its predecessor (supersedesId). Brand-new isolated
+// table; AI 1 and Manual never reference it.
+// ============================================================
+model CLREntry {
+  id           String   @id @default(uuid())
+  type         String   // descriptor | value | value_ladder | zone | stage | placement_rule | naming_convention | merge_policy | ignorable_set
+  payload      Json     // type-specific (DescriptorDef / ValueLadder / placement_rule / …)
+  scope        String   // "universal" | "niche:<slug>"
+  status       String   @default("active") // candidate | active | retired
+  version      Int      @default(1)
+  supersedesId String?  // ref(CLREntry) the new version replaces
+  createdFrom  String   @default("bootstrap") // bootstrap | manual | lesson:<id>
+  createdAt    DateTime @default(now())
+
+  @@index([scope, type, status])
+  @@index([version])
 }
 
 // ============================================================
