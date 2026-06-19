@@ -182,51 +182,24 @@ EOF
     echo ""
     cat "$W1_POINTER"
 
-    # Build the launch prompt by substituting into the Rule 22 template.
-    # This is the canonical W#1 re-entry shape from
-    # docs/KEYWORD_CLUSTERING_DATA_CONTRACT.md §7 with the bracketed reason filled in.
-    mkdir -p .claude
-    cat > .claude/active-workflow-prompt.md <<EOF
-# Workflow #1 (Keyword Clustering) — graduated-tool re-entry session
-
-**Branch:** $BRANCH
-
-**Director's task this session:** $TASK_REASON
-
-## Launch prompt
-
-Read docs/CLAUDE_CODE_STARTER.md and follow every rule in it.
-Today's task: return to Workflow #1 (Keyword Clustering) — $TASK_REASON.
-This is a graduated-tool re-entry session, NOT a transition session.
-Verify branch state with \`git branch --show-current\` before any doc reads — should be \`main\`.
-
-Per HANDOFF_PROTOCOL.md Rule 22 (Graduated-Tool Re-Entry Protocol):
-
-1. Run the mandatory start-of-session sequence (Group A docs + branch
-   verification per CLAUDE_CODE_STARTER.md Step 2).
-2. Additionally load these Group B docs:
-   - docs/KEYWORD_CLUSTERING_DATA_CONTRACT.md  (read fully — the canonical
-     small/stable artifact downstream consumers reference)
-   - docs/KEYWORD_CLUSTERING_ARCHIVE.md  (skim table of contents; load
-     specific STATE blocks only if the change requires them — the Archive
-     is ~4600 lines and intentionally not loaded by default)
-   - docs/KEYWORD_CLUSTERING_POLISH_BACKLOG.md  (read fully if your task
-     touches a polish item)
-3. Per Rule 21, scan ROADMAP.md + DATA_CATALOG.md for any director
-   directives addressed to W#1 captured since graduation.
-4. Per Rule 23, run a Change Impact Audit before any code change: identify
-   affected data items, look up downstream consumers in DATA_CATALOG.md
-   Cross-Tool Data Flow Map §7.2.1, classify the change
-   (Additive / Compatible-modifying / Breaking), surface the audit before
-   coding.
-5. Produce the drift check with this added context. Wait for go-ahead.
-EOF
+    # The cp above already placed the correct launch prompt
+    # (docs/KEYWORD_CLUSTERING_NEXT_SESSION.md — the W#1 queued-next pointer) into
+    # .claude/active-workflow-prompt.md, which the SessionStart hook reads FIRST
+    # (PRIORITY 1) and deletes after read (single-use). We intentionally do NOT
+    # overwrite it here.
+    #
+    # BUGFIX 2026-06-19: a previous version overwrote the file with a generic Rule-22
+    # heredoc that interpolated an interactive `$TASK_REASON` variable. That variable
+    # was removed when interactive task-prompting was dropped (per director directive,
+    # see the SETUP_MODE comment above), but the heredoc was left behind. Under
+    # `set -euo pipefail` the unbound `$TASK_REASON` aborted the script right here —
+    # AFTER printing the pointer but BEFORE `exec claude` — so `./resume-workflow 1`
+    # showed the instructions yet never launched Claude. Removing the dead heredoc
+    # lets execution fall through to `exec claude` with the cp'd pointer intact.
 
     echo ""
     echo "── W#1 launch prompt prepared in .claude/active-workflow-prompt.md ──"
     echo "(single-use; the SessionStart hook reads + deletes this file after Claude launches)"
-    echo ""
-    cat .claude/active-workflow-prompt.md
     ;;
 
   next-session)
